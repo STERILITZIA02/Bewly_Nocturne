@@ -141,7 +141,7 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
             {{ $t('settings.dock_content_adjustment') }}
             <Button size="small" type="secondary" @click="resetDockContent">
               <template #left>
-                <div i-mingcute:back-line />
+                <div i-tabler:arrow-back-up />
               </template>
               {{ $t('common.operation.reset') }}
             </Button>
@@ -156,7 +156,7 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
             mb-2
           >
             <div flex="~ gap-2 items-center">
-              <div i-mingcute:layout-top-line />
+              <div i-tabler:layout-navbar />
               <div w-80px text-ellipsis>
                 {{ $t('settings.topbar_mode') }}
               </div>

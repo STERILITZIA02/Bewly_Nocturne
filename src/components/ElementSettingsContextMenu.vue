@@ -22,7 +22,7 @@ const trigger = shallowRef<HTMLElement | null>(null)
 const anchor = ref({ x: 0, y: 0 })
 const generation = ref(0)
 const actions = computed(() => target.value ? getElementSettingsActions(target.value.descriptor, mainStore.dockItems, settingsStore, t) : [])
-const options = computed(() => [...actions.value, { value: 'settings', label: t('dock.settings'), icon: 'i-mingcute:settings-3-line' }])
+const options = computed(() => [...actions.value, { value: 'settings', label: t('dock.settings'), icon: 'i-tabler:settings' }])
 function close() {
   target.value = undefined
 }

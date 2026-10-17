@@ -22,8 +22,8 @@ html.topicPage.remove-top-bar:not(.remove-top-bar-without-placeholder) {
   // Increase the priority of the style inside by writing a non-existent selector in `:not()`
   :not(foobar) {
     .topic-nav button {
-      background-color: var(--bew-theme-color);
-      color: var(--bew-on-theme-color);
+      background-color: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
 
     .bili-topic-selector__bulletin__clear {
@@ -31,7 +31,7 @@ html.topicPage.remove-top-bar:not(.remove-top-bar-without-placeholder) {
     }
 
     .topic-detail__header {
-      background: linear-gradient(var(--bew-theme-color-10), transparent) !important;
+      background: linear-gradient(var(--bew-fill-1), transparent) !important;
     }
 
     .launch-user__name:hover,

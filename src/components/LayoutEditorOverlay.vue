@@ -664,13 +664,13 @@ onBeforeUnmount(() => {
           @click="beginSelectedPreview"
         >
           <template #left>
-            <Icon icon="mingcute:edit-3-line" />
+            <Icon icon="tabler:edit" />
           </template>
           {{ t('layout_editor.adjust_target') }}
         </Button>
         <Button type="secondary" size="small" data-layout-editor-control @click="openSelectedSetting">
           <template #left>
-            <Icon icon="mingcute:settings-3-line" />
+            <Icon icon="tabler:settings" />
           </template>
           {{ t('layout_editor.open_setting') }}
         </Button>
@@ -718,11 +718,11 @@ onBeforeUnmount(() => {
       role="menu"
     >
       <button type="button" data-layout-editor-control role="menuitem" @click="editContextTarget">
-        <Icon icon="mingcute:edit-3-line" />
+        <Icon icon="tabler:edit" />
         <span>{{ t('layout_editor.edit_layout') }}</span>
       </button>
       <button type="button" data-layout-editor-control role="menuitem" @click="openContextSetting">
-        <Icon icon="mingcute:settings-3-line" />
+        <Icon icon="tabler:settings" />
         <span>{{ t('layout_editor.open_setting') }}</span>
       </button>
     </section>
@@ -745,8 +745,8 @@ onBeforeUnmount(() => {
 
   span {
     padding: var(--bew-space-2) var(--bew-space-4);
-    color: var(--bew-on-theme-color);
-    background: var(--bew-theme-color);
+    color: var(--bew-text-1);
+    background: var(--bew-selected-bg);
     border-radius: var(--bew-badge-radius);
     corner-shape: var(--bew-corner-shape-round);
     box-shadow: var(--bew-shadow-2);

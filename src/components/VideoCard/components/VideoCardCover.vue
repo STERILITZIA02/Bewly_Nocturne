@@ -384,7 +384,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="video-card-cover group/cover bew-shape-smooth-rect bew-surface-border"
+    class="video-card-cover group/cover bew-shape-smooth-rect"
     shrink-0
     relative bg="$bew-skeleton" rounded="$bew-media-radius"
     overflow-hidden
@@ -492,9 +492,9 @@ onBeforeUnmount(() => {
         <div
           v-if="Number(video?.rank) <= 3"
           class="bew-shape-circle"
-          bg="$bew-theme-color" text-center lh-0 h-28px w-28px
-          text="$bew-on-theme-color xl" shadow="$bew-shadow-1"
-          border="1 $bew-theme-color"
+          bg="$bew-selected-bg" text-center lh-0 h-28px w-28px
+          text="$bew-text-1 xl" shadow="$bew-shadow-1"
+          border="1 $bew-surface-border-color"
           grid="~ place-content-center"
           fw-bold
         >
@@ -526,7 +526,7 @@ onBeforeUnmount(() => {
           v-if="video?.liveStatus === 1"
           class="video-card-overlay-transition bew-shape-pill group-hover:opacity-0"
 
-          pos="absolute left-0 top-0" bg="$bew-theme-color" text="xs $bew-on-theme-color" fw-bold
+          pos="absolute left-0 top-0" bg="$bew-selected-bg" text="xs $bew-text-1" fw-bold
           p="x-2 y-1" m="$bew-cover-overlay-inset" inline-block
         >
           LIVE
@@ -541,7 +541,7 @@ onBeforeUnmount(() => {
             backgroundColor: video?.badge?.bgColor,
             color: video?.badge?.color,
           }"
-          pos="absolute right-0 top-0" bg="$bew-theme-color" text="xs $bew-on-theme-color"
+          pos="absolute right-0 top-0" bg="$bew-selected-bg" text="xs $bew-text-1"
           p="x-2 y-1" m="$bew-cover-overlay-inset" inline-block
         >
           {{ video?.badge?.text }}
@@ -559,10 +559,10 @@ onBeforeUnmount(() => {
           @keydown.space.prevent.stop="emit('toggleWatchLater')"
         >
           <Tooltip v-if="!isInWatchLater" :content="isInWatchLater === undefined ? $t('common.watch_later_status_unknown') : $t('common.save_to_watch_later')" placement="bottom-right" type="dark">
-            <div i-mingcute:carplay-line />
+            <div i-tabler:playlist />
           </Tooltip>
           <Tooltip v-else :content="$t('common.added')" placement="bottom-right" type="dark">
-            <Icon icon="line-md:confirm" />
+            <Icon icon="tabler:check" />
           </Tooltip>
         </button>
 
@@ -579,7 +579,7 @@ onBeforeUnmount(() => {
               v-if="coverStatsVisibility?.view"
               class="video-card-cover-stats__item cover-stat-view"
             >
-              <Icon icon="mingcute:play-circle-line" class="video-card-cover-stats__icon" aria-hidden="true" />
+              <Icon icon="tabler:player-play" class="video-card-cover-stats__icon" aria-hidden="true" />
               <span class="video-card-cover-stats__value">{{ coverStatValues?.view }}</span>
             </span>
 
@@ -587,7 +587,7 @@ onBeforeUnmount(() => {
               v-if="coverStatsVisibility?.danmaku"
               class="video-card-cover-stats__item cover-stat-danmaku"
             >
-              <Icon icon="mingcute:danmaku-line" class="video-card-cover-stats__icon" aria-hidden="true" />
+              <Icon icon="tabler:message" class="video-card-cover-stats__icon" aria-hidden="true" />
               <span class="video-card-cover-stats__value">{{ coverStatValues?.danmaku }}</span>
             </span>
 
@@ -595,7 +595,7 @@ onBeforeUnmount(() => {
               v-if="coverStatsVisibility?.like"
               class="video-card-cover-stats__item cover-stat-like"
             >
-              <Icon icon="mingcute:thumb-up-2-line" class="video-card-cover-stats__icon" aria-hidden="true" />
+              <Icon icon="tabler:thumb-up" class="video-card-cover-stats__icon" aria-hidden="true" />
               <span class="video-card-cover-stats__value">{{ coverStatValues?.like }}</span>
             </span>
           </div>
@@ -666,8 +666,8 @@ onBeforeUnmount(() => {
 
 .video-card-watch-later:hover,
 .video-card-watch-later:focus-visible {
-  color: var(--bew-on-theme-color);
-  background-color: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background-color: var(--bew-selected-bg);
   box-shadow: var(--bew-shadow-1);
 }
 

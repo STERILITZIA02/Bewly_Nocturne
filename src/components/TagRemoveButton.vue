@@ -10,7 +10,7 @@ defineProps<{
 
 <template>
   <IconButton class="bew-tag-remove-button" :label="label">
-    <Icon icon="mingcute:close-line" aria-hidden="true" />
+    <Icon icon="tabler:x" aria-hidden="true" />
   </IconButton>
 </template>
 

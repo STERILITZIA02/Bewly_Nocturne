@@ -3,14 +3,18 @@ import { useEventListener } from '@vueuse/core'
 
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
+import { usePanelTrigger } from '~/composables/usePanelOrigin'
+import { syncRouteState } from '~/composables/useRouteState'
 import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_IFRAME_DRAWER_HOST_CLASS, IFRAME_PLAYER_CONTEXT } from '~/constants/globalEvents'
 import { DRAWER_TRANSITION_MS, ESC_CONFIRM_WINDOW_MS } from '~/constants/timing'
 import { settings } from '~/logic'
 import type { IframePlaybackContext } from '~/logic/iframePageState'
 import type { DefaultVideoPlayerMode } from '~/logic/storage'
 import { isBewlyWidescreenEngaged } from '~/utils/bewlyWidescreen'
+import { getDeepActiveElement } from '~/utils/dialogFocus'
 import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveDrawerEscapeBehavior, shouldHandleDrawerEscape } from '~/utils/drawerEscape'
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
+import { clearIframeDrawerHistory, createIframeDrawerHistory, readIframeDrawerHistory } from '~/utils/iframeDrawerHistory'
 import { resolveIframeExternalUrl } from '~/utils/iframeExternalUrl'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { hasNavigationModifier } from '~/utils/linkNavigation'
@@ -32,6 +36,7 @@ const emit = defineEmits<{
 }>()
 
 const { activeDrawer, setActiveDrawer } = useBewlyApp()
+const sourceTrigger = usePanelTrigger()() ?? getDeepActiveElement(document)
 
 const show = ref(false)
 const headerShow = ref(true)
@@ -43,6 +48,8 @@ const iframeKey = ref(0)
 const delayCloseTimer = ref<NodeJS.Timeout | null>(null)
 const removeTopBarClassInjected = ref<boolean>(false)
 const originUrl = ref<string>()
+let historyEntryId: string | undefined
+let historyEntryDeparted = false
 const isPageFullscreen = ref<boolean>(false)
 const isPageScrollLocked = ref(false)
 const isEscPressed = ref<boolean>(false)
@@ -120,7 +127,8 @@ watch(() => props.url, async (newUrl, oldUrl) => {
   if (disposed || closing || !show.value || newUrl === oldUrl)
     return
 
-  history.replaceState(null, '', newUrl.replace(/\/$/, ''))
+  history.replaceState(history.state, '', newUrl.replace(/\/$/, ''))
+  syncRouteState()
   await remountIframe(newUrl)
 })
 
@@ -172,8 +180,11 @@ function claimIframeDrawerHost() {
 }
 
 function restoreOriginUrl() {
-  if (originUrl.value && window.location.href !== originUrl.value)
-    history.replaceState(null, '', originUrl.value)
+  // Never overwrite a browser-back destination or a newer navigation.
+  if (!historyEntryDeparted && originUrl.value && readIframeDrawerHistory(history.state, window.location.href)?.id === historyEntryId) {
+    history.replaceState(clearIframeDrawerHistory(history.state), '', originUrl.value)
+    syncRouteState()
+  }
 }
 
 function releaseIframeDrawerHost() {
@@ -284,10 +295,14 @@ async function remountIframe(url: string) {
 }
 
 onMounted(() => {
-  originUrl.value = window.location.href
+  const restored = readIframeDrawerHistory(history.state, window.location.href)
+  originUrl.value = restored?.origin ?? window.location.href
   claimIframeDrawerHost()
   try {
-    history.pushState(null, '', props.url)
+    if (!restored)
+      history.pushState(createIframeDrawerHistory(history.state, originUrl.value, props.playbackContext), '', props.url)
+    historyEntryId = readIframeDrawerHistory(history.state, window.location.href)?.id
+    syncRouteState()
   }
   catch (error) {
     releaseIframeDrawerHost()
@@ -338,14 +353,17 @@ function updateCurrentUrl(e: any) {
   }
   newUrl = newUrl.replace(/\/$/, '')
   if (newUrl && newUrl !== 'about:blank') {
-    history.replaceState(null, '', newUrl)
+    history.replaceState(history.state, '', newUrl)
+    syncRouteState()
   }
 }
 
 async function updateIframeUrl() {
+  if (readIframeDrawerHistory(history.state, window.location.href)?.id !== historyEntryId)
+    historyEntryDeparted = true
   if (disposed || closing)
     return
-  if (isHomePage()) {
+  if (isHomePage() || readIframeDrawerHistory(history.state, window.location.href)?.id !== historyEntryId) {
     await handleClose()
     return
   }
@@ -372,9 +390,15 @@ async function handleClose() {
   show.value = false
   headerShow.value = false
   setActiveDrawer(DrawerType.None) // 清除活跃抽屉状态
+  if (readIframeDrawerHistory(history.state, window.location.href)?.id === historyEntryId)
+    history.back()
   delayCloseTimer.value = setTimeout(() => {
     releaseIframeDrawerHost()
     emit('close')
+    void nextTick(() => {
+      if (!readIframeDrawerHistory(history.state, window.location.href) && sourceTrigger instanceof HTMLElement && sourceTrigger.isConnected && !sourceTrigger.closest('[inert]'))
+        sourceTrigger.focus({ preventScroll: true })
+    })
   }, DRAWER_TRANSITION_MS)
 }
 
@@ -523,6 +547,7 @@ function handleIframeMessage(event: MessageEvent) {
 }
 
 disposers.push(useEventListener(window, 'message', handleIframeMessage))
+defineExpose({ close: handleClose })
 </script>
 
 <template>
@@ -558,7 +583,7 @@ disposers.push(useEventListener(window, 'message', handleIframeMessage))
           @pointerdown="syncExternalHref" @focus="syncExternalHref" @contextmenu="syncExternalHref"
           @click="handleOpenInNewTab"
         >
-          <i i-mingcute:external-link-line />
+          <i i-tabler:external-link />
           {{ $t('iframe_drawer.open_in_new_tab') }}
         </a>
         <Button
@@ -571,7 +596,7 @@ disposers.push(useEventListener(window, 'message', handleIframeMessage))
           @click="handleClose"
         >
           <template #left>
-            <i i-mingcute:close-line />
+            <i i-tabler:x />
           </template>
           {{ $t('iframe_drawer.close') }}
           <kbd>Esc</kbd>
@@ -582,7 +607,7 @@ disposers.push(useEventListener(window, 'message', handleIframeMessage))
           @click="handleClose"
         >
           <template #left>
-            <i i-mingcute:close-line />
+            <i i-tabler:x />
           </template>
           {{ $t('iframe_drawer.press_esc_again_to_close') }}
           <kbd>Esc</kbd>

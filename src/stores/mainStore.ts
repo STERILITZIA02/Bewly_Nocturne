@@ -26,8 +26,8 @@ export const useMainStore = defineStore('main', () => {
     return [
       {
         i18nKey: 'dock.home',
-        icon: 'i-mingcute:home-5-line',
-        iconActivated: 'i-mingcute:home-5-fill',
+        icon: 'i-tabler:home',
+        iconActivated: 'i-tabler:home-filled',
         page: AppPage.Home,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Home),
@@ -36,8 +36,8 @@ export const useMainStore = defineStore('main', () => {
       },
       {
         i18nKey: 'dock.search',
-        icon: 'i-mingcute:search-2-line',
-        iconActivated: 'i-mingcute:search-2-fill',
+        icon: 'i-tabler:search',
+        iconActivated: 'i-tabler:search',
         page: AppPage.Search,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Search),
@@ -46,8 +46,8 @@ export const useMainStore = defineStore('main', () => {
       },
       {
         i18nKey: 'dock.anime',
-        icon: 'i-mingcute:tv-2-line',
-        iconActivated: 'i-mingcute:tv-2-fill',
+        icon: 'i-tabler:device-tv',
+        iconActivated: 'i-tabler:device-tv-filled',
         page: AppPage.Anime,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Anime),
@@ -56,8 +56,8 @@ export const useMainStore = defineStore('main', () => {
       },
       {
         i18nKey: 'dock.favorites',
-        icon: 'i-mingcute:star-line',
-        iconActivated: 'i-mingcute:star-fill',
+        icon: 'i-tabler:star',
+        iconActivated: 'i-tabler:star-filled',
         page: AppPage.Favorites,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Favorites),
@@ -66,8 +66,8 @@ export const useMainStore = defineStore('main', () => {
       },
       {
         i18nKey: 'dock.history',
-        icon: 'i-mingcute:time-line',
-        iconActivated: 'i-mingcute:time-fill',
+        icon: 'i-tabler:clock',
+        iconActivated: 'i-tabler:clock-filled',
         page: AppPage.History,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.History),
@@ -76,8 +76,8 @@ export const useMainStore = defineStore('main', () => {
       },
       {
         i18nKey: 'dock.watch_later',
-        icon: 'i-mingcute:carplay-line',
-        iconActivated: 'i-mingcute:carplay-fill',
+        icon: 'i-tabler:playlist',
+        iconActivated: 'i-tabler:playlist',
         page: AppPage.WatchLater,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.WatchLater),
@@ -96,8 +96,8 @@ export const useMainStore = defineStore('main', () => {
       },
       {
         i18nKey: 'dock.notifications',
-        icon: 'i-mingcute:message-3-line',
-        iconActivated: 'i-mingcute:message-3-fill',
+        icon: 'i-tabler:message-circle',
+        iconActivated: 'i-tabler:message-circle-filled',
         page: AppPage.Notifications,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Notifications),

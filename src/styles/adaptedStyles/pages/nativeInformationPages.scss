@@ -549,7 +549,7 @@ html.bewly-design[data-bewly-native-site="topics"] {
       &.on {
         background: var(--bew-theme-surface);
         color: var(--bew-on-theme-surface);
-        border-color: var(--bew-theme-foreground);
+        border-color: var(--bew-focus-ring-color);
       }
 
       &:hover {
@@ -566,8 +566,8 @@ html.bewly-design[data-bewly-native-site="topics"] {
     corner-shape: var(--bew-corner-shape);
 
     &.active {
-      background: var(--bew-theme-color);
-      color: var(--bew-on-theme-color);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
   }
 

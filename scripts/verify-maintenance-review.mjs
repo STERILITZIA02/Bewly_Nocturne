@@ -83,7 +83,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       '@vueuse/core': { onKeyStroke() {}, useMediaQuery: () => Vue.ref(false), useMouseInElement: () => ({ isOutside: Vue.ref(true) }) },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ reachTop: Vue.ref(true), scrollViewportRef, activatedPage }) },
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => Vue.ref(window.location.href) },
-      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }) },
+      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }) },
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/enums/appEnums': await import('../src/enums/appEnums'),
       '~/logic': { settings },
@@ -271,6 +271,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     } })
     const settings = Vue.ref({ theme: 'light', themeScheduleStart: '06:00', themeScheduleEnd: '18:00', darkModeBaseColor: '#181818', adaptToOtherPageStyles: true, videoPageDarkMode: false, enableOledDarkMode: false })
     const module = await loadSourceModule('../src/composables/useDark.ts', {
+      '~/utils/darkModeTint': await import('../src/utils/darkModeTint'),
       'vue': Vue,
       '@vueuse/core': { usePreferredDark: () => Vue.ref(false) },
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => Vue.ref(window.location.href) },

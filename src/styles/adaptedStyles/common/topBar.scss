@@ -26,6 +26,10 @@
   :not(foobar) {
     .bili-header .header-upload-entry {
       background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color) !important;
+      :is(span, svg) {
+        color: inherit;
+      }
     }
 
     .bili-header .header-upload-entry:hover {

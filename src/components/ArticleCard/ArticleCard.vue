@@ -129,7 +129,7 @@ function formatDate(timestamp: number | string | undefined) {
     <!-- 右侧图片 -->
     <div
       v-if="cover"
-      class="article-cover bew-surface-border"
+      class="article-cover"
       rounded="$bew-card-inset-radius"
       overflow-hidden
       flex-shrink-0

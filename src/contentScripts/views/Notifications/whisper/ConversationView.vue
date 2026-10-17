@@ -609,7 +609,6 @@ defineExpose({
     <footer
       v-if="writeState"
       ref="composerRef"
-      v-liquid-glass="active"
       class="conversation-view__floating-composer"
       :data-entering="!conversationExpanded"
       :inert="entryPhase === 'opening' ? true : undefined"
@@ -653,6 +652,7 @@ defineExpose({
 
 <style scoped lang="scss">
 @use "../../../../styles/breakpoints";
+@use "../../../../styles/composer";
 
 .conversation-view {
   --conversation-message-inline-space: var(--bew-space-4);
@@ -943,13 +943,8 @@ defineExpose({
     corner-shape var(--bew-duration-normal) var(--bew-ease-standard);
 }
 
-.conversation-view__floating-composer:has(.message-composer[data-expanded="false"]) {
-  // Half the single-line bar height, its outer padding and border: a finite capsule radius.
-  border-radius: calc((var(--bew-control-height) + var(--bew-space-2)) / 2 + var(--bew-space-2) + 1px);
-  corner-shape: var(--bew-corner-shape-round);
-}
-
 .conversation-view__floating-composer {
+  @include composer.surface;
   transform: translateY(0);
   transition:
     translate var(--bew-duration-moderate) var(--bew-ease-standard),
@@ -991,6 +986,9 @@ defineExpose({
   background: var(--bew-elevated-alt-solid);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+.conversation-view--solid .conversation-view__floating-composer {
+  background: var(--bew-elevated-solid);
 }
 
 .conversation-view__test-send {
@@ -1063,7 +1061,7 @@ defineExpose({
 }
 
 .conversation-view__latest-action:hover {
-  color: var(--bew-theme-foreground);
+  color: var(--bew-message-icon-hover);
 }
 
 .conversation-view__latest-action svg {

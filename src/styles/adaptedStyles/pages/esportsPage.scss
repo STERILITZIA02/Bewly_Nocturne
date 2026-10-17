@@ -74,7 +74,7 @@ html.bewly-design:is(.esportsPage, [data-bewly-native-site="esports"]) {
   .bili-game-local .default-btn {
     background: var(--bew-theme-surface);
     color: var(--bew-on-theme-surface);
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -89,7 +89,7 @@ html.bewly-design:is(.esportsPage, [data-bewly-native-site="esports"]) {
   .bili-game-local .match-operate.live {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -100,7 +100,7 @@ html.bewly-design:is(.esportsPage, [data-bewly-native-site="esports"]) {
 
   .game-next .season-item.active .season-item-title,
   .game-next .season-content-item-active .season-content-item-title {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   @media (max-width: 1335px) {

@@ -35,7 +35,7 @@
 
   &[aria-checked="true"],
   &[aria-pressed="true"] {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
   &:disabled {
     background: transparent;

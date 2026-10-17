@@ -628,7 +628,7 @@ async function handleFollowClick(e: Event) {
 }
 
 .live-status-badge {
-  color: var(--bew-theme-foreground);
+  color: var(--bew-text-1);
   font-weight: var(--bew-font-weight-medium);
 }
 

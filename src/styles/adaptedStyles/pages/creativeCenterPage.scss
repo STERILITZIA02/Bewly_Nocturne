@@ -97,12 +97,12 @@
   }
 
   .cc-nav-wrp .router_wrap.active :is(.menu-title, .menu-icon) {
-    color: var(--bew-theme-foreground) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .data-wrp .data-tab.current,
   .material-wrp .tabs__header-item.is-active {
-    color: var(--bew-theme-foreground) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .data-wrp .query-trigger {
@@ -133,7 +133,7 @@
   .nav-upload-btn,
   .nav-upload-btn > a {
     background: var(--bew-theme-color) !important;
-    border-color: var(--bew-theme-color) !important;
+    border-color: var(--bew-focus-ring-color) !important;
     border-radius: var(--bew-interactive-radius) !important;
     corner-shape: var(--bew-corner-shape);
   }
@@ -143,8 +143,8 @@
   }
 
   .cc-nav-wrp .bcc-nav-slider-item__wrap.is-active > .bcc-nav-slider-item__content {
-    background: var(--bew-theme-color);
-    color: var(--bew-on-theme-color);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
 
     :is(.router-item, .menu-title, .menu-icon) {
       color: inherit !important;
@@ -207,7 +207,7 @@
     .upload-nav-item.active,
     .footer-item a {
       color: var(--bew-theme-foreground);
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .upload-wrp,
@@ -251,8 +251,8 @@
 
     .link-top-item.active,
     .article-header .txt-item.current {
-      color: var(--bew-theme-foreground);
-      border-color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .article-header .secondTabs .txt-item {
@@ -344,8 +344,8 @@
     color: var(--bew-text-2);
 
     &.active {
-      color: var(--bew-theme-foreground);
-      border-color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -420,7 +420,7 @@
     &.bcc-button--primary:not(.is-disabled, :disabled) {
       background: var(--bew-theme-color);
       color: var(--bew-on-theme-color);
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
 
     &.del:not(.is-disabled, :disabled) {
@@ -443,7 +443,7 @@
 
     .bili-btn:not(.followed) {
       color: var(--bew-theme-foreground);
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .bili-btn.followed {
@@ -489,11 +489,11 @@
 
     // Native filter headers add order/type and scoped selectors to this state.
     .manage-wrap .fans-header .dropdown .dropdown-menu > ul > li > span.selected {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
 
     :is(.help, .bcc-pagination-item.selected) {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
   }
 
@@ -502,8 +502,8 @@
       color: var(--bew-text-2);
 
       &.active {
-        color: var(--bew-theme-foreground);
-        border-color: var(--bew-theme-foreground);
+        color: var(--bew-text-1);
+        border-color: var(--bew-focus-ring-color);
       }
     }
 
@@ -561,8 +561,8 @@
       color: var(--bew-text-2);
 
       &.is-active {
-        color: var(--bew-theme-foreground);
-        border-color: var(--bew-theme-foreground);
+        color: var(--bew-text-1);
+        border-color: var(--bew-focus-ring-color);
       }
     }
 
@@ -596,7 +596,7 @@
       .bili-btn.ok {
         background: var(--bew-theme-color);
         color: var(--bew-on-theme-color);
-        border-color: var(--bew-theme-color);
+        border-color: var(--bew-focus-ring-color);
         border-radius: var(--bew-interactive-radius);
         corner-shape: var(--bew-corner-shape);
       }
@@ -744,9 +744,9 @@
         }
 
         &.selected {
-          color: var(--bew-on-theme-color);
-          background: var(--bew-theme-color);
-          border-color: var(--bew-theme-color);
+          color: var(--bew-text-1);
+          background: var(--bew-selected-bg);
+          border-color: var(--bew-focus-ring-color);
         }
 
         &.flatpickr-disabled {
@@ -764,7 +764,7 @@
         &.blue-radius {
           color: var(--bew-on-theme-color);
           background: var(--bew-theme-color);
-          border-color: var(--bew-theme-color);
+          border-color: var(--bew-focus-ring-color);
         }
       }
     }
@@ -787,7 +787,7 @@
 
     &.checked {
       background-color: var(--bew-theme-color);
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -825,7 +825,7 @@
     }
 
     .income-grow-amount {
-      color: var(--bew-theme-foreground) !important;
+      color: var(--bew-text-1) !important;
     }
 
     .income-tab {
@@ -902,7 +902,7 @@
     color: var(--bew-text-2);
 
     &:is(.income-tab-color-highlight, .item-active, .active) {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
   }
 
@@ -921,7 +921,7 @@
   :is(.withdraw-btn, .signment-btn, .task-item-button, .empty-guide-upload-btn) {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -953,11 +953,11 @@
   }
 
   .creator-dashboard .ant-tabs-tab-active .ant-tabs-tab-btn {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .creator-dashboard .ant-tabs-ink-bar {
-    background: var(--bew-theme-color);
+    background: var(--bew-text-1);
   }
 
   .home-payload {
@@ -1030,11 +1030,11 @@
     }
 
     .ant-tabs-tab-active .ant-tabs-tab-btn {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
 
     .ant-tabs-ink-bar {
-      background: var(--bew-theme-color);
+      background: var(--bew-text-1);
     }
   }
 
@@ -1196,7 +1196,7 @@
         color: var(--bew-text-2);
 
         &.item-active {
-          color: var(--bew-theme-foreground);
+          color: var(--bew-text-1);
 
           &::after {
             background: var(--bew-theme-foreground);
@@ -1353,8 +1353,8 @@
         color: var(--bew-text-2);
 
         &.is-active {
-          color: var(--bew-theme-foreground);
-          border-color: var(--bew-theme-foreground);
+          color: var(--bew-text-1);
+          border-color: var(--bew-focus-ring-color);
 
           &::after {
             background: var(--bew-theme-foreground);
@@ -1420,7 +1420,7 @@
 
     .empty-guide-step-num {
       background: none;
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
       -webkit-text-fill-color: currentColor;
     }
 

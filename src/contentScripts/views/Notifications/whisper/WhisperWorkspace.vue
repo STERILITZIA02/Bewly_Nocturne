@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { usePageViewState } from '~/composables/usePageViewState'
+import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { useSidebarRail } from '~/composables/useSidebarHost'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -40,6 +42,7 @@ const props = defineProps<{
   recipientSearch: PrivateRecipientSearchController
   historySearch?: PrivateHistorySearchController
   transientRecipient: TransientPrivateRecipient | null
+  targetState?: { loading: boolean, failed: boolean }
   writeController: PrivateMessageWriteController | null
   readAll?: MarkAllMessagesReadController
 }>()
@@ -50,6 +53,7 @@ const emit = defineEmits<{
   (event: 'selectRecipient', recipient: TransientPrivateRecipient): void
   (event: 'selectSession', session: DisplayPrivateSession): void
   (event: 'transientSendConfirmed', talkerId: string): void
+  (event: 'retryTarget'): void
 }>()
 
 const sidebarHost = useSidebarRail()
@@ -68,11 +72,14 @@ interface ConversationListExposed {
 
 const { t } = useI18n()
 const topBarStore = useTopBarStore()
+const viewState = usePageViewState('notification-search-ui')
 let pendingDetailFocusKey = ''
 const conversationListRef = ref<ConversationListExposed | null>(null)
-const searchQuery = ref('')
-const searchMode = ref<'people' | 'messages'>('people')
-const searchTypeFilter = ref<PrivateSessionTypeFilter>('all')
+const searchQuery = viewState.ref('query', '')
+const searchMode = viewState.ref<'people' | 'messages'>('mode', 'people')
+const searchTypeFilter = viewState.ref<PrivateSessionTypeFilter>('type', 'all')
+const historyWasRunning = viewState.ref('historyWasRunning', false)
+const outletTransition = useReadyPageTransition(() => props.view, async () => {})
 const sessionActions = inject(privateSessionActionsKey, undefined)
 const menuOpen = ref(false)
 const menuTrigger = ref<HTMLElement | null>(null)
@@ -91,7 +98,7 @@ function closeSessionMenu() {
   sessionActions?.close()
 }
 onBeforeUnmount(closeSessionMenu)
-watch(searchTypeFilter, filter => props.historySearch?.setTypeFilter(filter), { flush: 'sync' })
+watch(searchTypeFilter, filter => props.historySearch?.setTypeFilter(filter), { flush: 'sync', immediate: true })
 const messageSearchActive = computed(() => searchMode.value === 'messages' && Boolean(searchQuery.value.trim()))
 let resumeHistoryOnReturn = false
 watch(searchQuery, () => {
@@ -104,11 +111,35 @@ watch(searchQuery, () => {
   else
     props.historySearch?.reset()
 })
-watch(() => [props.active, topBarStore.userInfo.mid], () => {
+watch(() => topBarStore.userInfo.mid, () => {
   searchQuery.value = ''
   searchTypeFilter.value = 'all'
+  historyWasRunning.value = false
   props.historySearch?.reset()
 })
+watch(() => props.historySearch?.state.running, (running) => {
+  if (props.active && props.historySearch?.state.query === searchQuery.value.normalize('NFKC').trim())
+    historyWasRunning.value = running === true
+}, { flush: 'sync' })
+watch(() => [props.active, props.accountState] as const, ([active, accountState]) => {
+  if (!active) {
+    props.historySearch?.suspend()
+    return
+  }
+  if (accountState !== 'ready' || !messageSearchActive.value || !props.historySearch)
+    return
+  const resume = historyWasRunning.value
+  if (props.historySearch.state.query !== searchQuery.value.normalize('NFKC').trim()) {
+    // Restore only the query/UI. Private result bodies remain owned by the
+    // current message page and are discarded when it is left.
+    void props.historySearch.search(searchQuery.value, PRIVATE_SEARCH_DEBOUNCE_MS)
+    if (!resume)
+      props.historySearch.stop()
+  }
+  else if (resume) {
+    void props.historySearch.resume()
+  }
+}, { immediate: true })
 function searchMessages(direction?: number) {
   if (direction && props.historySearch?.state.query === searchQuery.value.normalize('NFKC').trim() && props.historySearch.filteredResults.value.length) {
     selectSearchMatch(props.historySearch.nextKey(direction), false)
@@ -391,6 +422,15 @@ defineExpose({ refresh })
                 {{ t('notifications.actions.retry') }}
               </button>
             </div>
+            <div v-if="targetState?.loading || targetState?.failed" class="whisper-workspace__inline-error" role="status" :aria-label="targetState.loading ? t('common.loading') : undefined">
+              <SkeletonBlock v-if="targetState.loading" width="70%" height="var(--bew-line-height-control)" />
+              <template v-else>
+                <span>{{ t('common.load_failed') }}</span>
+                <button type="button" @click="emit('retryTarget')">
+                  {{ t('notifications.actions.retry') }}
+                </button>
+              </template>
+            </div>
             <ConversationList
               ref="conversationListRef"
               v-model:query="searchQuery"
@@ -405,6 +445,7 @@ defineExpose({ refresh })
               :recipient-search="recipientSearch"
               :load-more-failed="controller.state.failedOperation === 'load-more'"
               :selected-session-key="controller.selectedSessionKey.value"
+              :selected-recipient="transientRecipient"
               :show-official-assistants="settings.showOfficialPrivateAssistants"
               @search-mode="changeSearchMode"
               @search-messages="searchMessages"
@@ -434,50 +475,54 @@ defineExpose({ refresh })
       tabindex="0"
       :aria-label="t(`notifications.sections.${view}.label`)"
     >
-      <slot v-if="view !== 'whisper'" />
-      <Transition
-        v-else
-        :key="`${topBarStore.userInfo.mid}:${accountState}`" name="whisper-detail" mode="out-in"
-        @before-leave="beginDetailLeave"
-      >
-        <ConversationDetailSkeleton
-          v-if="accountState === 'profile-pending' || (controller.state.loading && !controller.state.loaded)"
-          :compact="settings.privateMessageDensity === 'compact'"
-          :label="accountState === 'profile-pending'
-            ? t('notifications.whisper.profile_pending')
-            : t('notifications.whisper.loading')"
-        />
-        <ConversationInsights
-          v-else-if="!selectedSession && !transientRecipient && accountState === 'ready'"
-          :sessions="controller.state.items" :loaded="controller.state.loaded"
-          :read-all="readAll"
-          @select-session="selectSession" @select-view="emit('selectView', $event)"
-        />
-        <ConversationEmptyState v-else-if="!selectedSession && !transientRecipient" />
-        <ConversationView
-          v-else-if="nativeSelectedSession || transientRecipient"
-          ref="conversationDetailRef"
-          :active="active"
-          :controller="messagesController"
-          :emote-controller="emoteController"
-          :session="nativeSelectedSession"
-          :recipient="transientRecipient"
-          :write-controller="writeController"
-          :search-mode="messageSearchActive"
-          :history-search="historySearch"
-          @move-search="selectSearchMatch(historySearch?.nextKey($event) ?? '', false)"
-          @close-search="closeSearch"
-          @back="emit('closeConversation')"
-          @send-confirmed="emit('transientSendConfirmed', $event)"
-        />
-        <ConversationOriginalFallback
-          v-else-if="selectedSession"
-          :key="selectedSession.key"
-          ref="conversationDetailRef"
-          class="whisper-workspace__fallback"
-          :session="selectedSession"
-          @back="emit('closeConversation')"
-        />
+      <Transition mode="out-in" v-bind="outletTransition">
+        <div :key="view" class="whisper-workspace__outlet-page">
+          <slot v-if="view !== 'whisper'" />
+          <Transition
+            v-else
+            :key="`${topBarStore.userInfo.mid}:${accountState}`" name="whisper-detail" mode="out-in"
+            @before-leave="beginDetailLeave"
+          >
+            <ConversationDetailSkeleton
+              v-if="accountState === 'profile-pending' || (controller.state.loading && !controller.state.loaded)"
+              :compact="settings.privateMessageDensity === 'compact'"
+              :label="accountState === 'profile-pending'
+                ? t('notifications.whisper.profile_pending')
+                : t('notifications.whisper.loading')"
+            />
+            <ConversationInsights
+              v-else-if="!selectedSession && !transientRecipient && accountState === 'ready'"
+              :sessions="controller.state.items" :loaded="controller.state.loaded"
+              :read-all="readAll"
+              @select-session="selectSession" @select-view="emit('selectView', $event)"
+            />
+            <ConversationEmptyState v-else-if="!selectedSession && !transientRecipient" />
+            <ConversationView
+              v-else-if="nativeSelectedSession || transientRecipient"
+              ref="conversationDetailRef"
+              :active="active"
+              :controller="messagesController"
+              :emote-controller="emoteController"
+              :session="nativeSelectedSession"
+              :recipient="transientRecipient"
+              :write-controller="writeController"
+              :search-mode="messageSearchActive"
+              :history-search="historySearch"
+              @move-search="selectSearchMatch(historySearch?.nextKey($event) ?? '', false)"
+              @close-search="closeSearch"
+              @back="emit('closeConversation')"
+              @send-confirmed="emit('transientSendConfirmed', $event)"
+            />
+            <ConversationOriginalFallback
+              v-else-if="selectedSession"
+              :key="selectedSession.key"
+              ref="conversationDetailRef"
+              class="whisper-workspace__fallback"
+              :session="selectedSession"
+              @back="emit('closeConversation')"
+            />
+          </Transition>
+        </div>
       </Transition>
     </div>
     <PrivateConversationMenu v-if="menuOpen" :anchor="menuAnchor" :trigger="menuTrigger" @close="closeSessionMenu" />
@@ -487,6 +532,15 @@ defineExpose({ refresh })
 <style scoped lang="scss">
 @use "../../../../styles/breakpoints";
 @use "../../../../styles/sidebarSurface";
+
+.whisper-workspace__outlet-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
 
 .whisper-workspace {
   --notifications-workspace-gap: var(--bew-space-4);

@@ -34,7 +34,7 @@ function acknowledgeCurrentVersion() {
       type="button"
       @click="dialogVisible = true"
     >
-      <span class="version-reminder-trigger__icon" i-mingcute:notification-newdot-line />
+      <span class="version-reminder-trigger__icon" i-tabler:bell-ringing />
       <span class="version-reminder-trigger__text">
         <strong>{{ $t('version_reminder.trigger') }}</strong>
         <small>v{{ version }}</small>
@@ -66,12 +66,12 @@ function acknowledgeCurrentVersion() {
           rel="noopener noreferrer"
           class="version-reminder-dialog__link"
         >
-          <span class="version-reminder-dialog__link-icon version-reminder-dialog__link-icon--github" i-mingcute:github-line />
+          <span class="version-reminder-dialog__link-icon version-reminder-dialog__link-icon--github" i-tabler:brand-github />
           <span>
             <strong>{{ $t('version_reminder.github_releases') }}</strong>
             <small>{{ $t('version_reminder.github_releases_desc') }}</small>
           </span>
-          <span class="version-reminder-dialog__arrow" i-mingcute:external-link-line />
+          <span class="version-reminder-dialog__arrow" i-tabler:external-link />
         </a>
 
         <a
@@ -80,12 +80,12 @@ function acknowledgeCurrentVersion() {
           rel="noopener noreferrer"
           class="version-reminder-dialog__link"
         >
-          <span class="version-reminder-dialog__link-icon version-reminder-dialog__link-icon--bilibili" i-mingcute:bilibili-line />
+          <span class="version-reminder-dialog__link-icon version-reminder-dialog__link-icon--bilibili" i-tabler:brand-bilibili />
           <span>
             <strong>{{ $t('version_reminder.bilibili_dynamic') }}</strong>
             <small>{{ $t('version_reminder.bilibili_dynamic_desc') }}</small>
           </span>
-          <span class="version-reminder-dialog__arrow" i-mingcute:external-link-line />
+          <span class="version-reminder-dialog__arrow" i-tabler:external-link />
         </a>
       </div>
 
@@ -130,7 +130,7 @@ function acknowledgeCurrentVersion() {
 .version-reminder-trigger:hover {
   color: var(--bew-on-theme-color);
   background: var(--bew-theme-color);
-  border-color: var(--bew-theme-foreground);
+  border-color: var(--bew-focus-ring-color);
   box-shadow: var(--bew-shadow-4);
 }
 
@@ -209,7 +209,7 @@ function acknowledgeCurrentVersion() {
 .version-reminder-dialog__link:hover {
   color: var(--bew-on-theme-surface);
   background: var(--bew-theme-surface);
-  border-color: var(--bew-theme-color);
+  border-color: var(--bew-focus-ring-color);
 }
 
 .version-reminder-dialog__link-icon {

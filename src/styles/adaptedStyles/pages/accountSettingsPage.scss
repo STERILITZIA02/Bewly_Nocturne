@@ -47,11 +47,11 @@
   }
 
   .security-right-title-text {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .security-right-title-icon {
-    background-color: var(--bew-theme-color);
+    background-color: var(--bew-text-1);
   }
 
   .security_content .el-button,
@@ -69,9 +69,9 @@
   .security_content .el-button--primary:not(.is-disabled),
   .security_content .el-radio-button.is-active:not(.is-disabled) .el-radio-button__inner {
     // The native account form marks its blue backgrounds and borders important.
-    background: var(--bew-theme-color) !important;
-    color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color) !important;
+    background: var(--bew-selected-bg) !important;
+    color: var(--bew-text-1);
+    border-color: var(--bew-focus-ring-color) !important;
     box-shadow: none;
   }
 
@@ -123,7 +123,8 @@
   }
 
   .security-left .on {
-    background: var(--bew-theme-color) !important;
+    background: var(--bew-selected-bg) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .security-left .on .security-nav-name {
@@ -170,7 +171,7 @@
   .btn-ok:hover {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -248,8 +249,8 @@
   }
 
   .security-left ul.security-list a.bg-blue {
-    background: var(--bew-theme-color) !important;
-    color: var(--bew-on-theme-color);
+    background: var(--bew-selected-bg) !important;
+    color: var(--bew-text-1);
 
     span {
       color: inherit;
@@ -267,8 +268,8 @@
     corner-shape: var(--bew-corner-shape);
 
     &:is(.on, .active, :hover) {
-      color: var(--bew-theme-foreground);
-      border-color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -282,7 +283,7 @@
     min-height: var(--bew-control-height);
 
     &.active {
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -312,11 +313,11 @@
     }
 
     &.current {
-      background: var(--bew-theme-color);
+      background: var(--bew-selected-bg);
 
       > a,
       > a:hover {
-        color: var(--bew-on-theme-color);
+        color: var(--bew-text-1);
       }
     }
   }
@@ -332,14 +333,14 @@
       min-height: var(--bew-control-height);
       background: var(--bew-theme-color);
       color: var(--bew-on-theme-color);
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
     }
   }
 
   .sr-t .tit-b {
-    background-color: var(--bew-theme-color);
+    background-color: var(--bew-text-1);
   }
 
   :is(.face-g-block-title, .mp-title, .mp-block .title),
@@ -354,7 +355,7 @@
 
   .mp-img,
   #face-g-list .mp-block .mp-img {
-    border-color: var(--bew-border-color);
+    border: 0;
     border-radius: var(--bew-media-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -367,7 +368,7 @@
   .tool-change-face {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -453,7 +454,7 @@
   }
 
   :is(.record-content .noHover-link, .points-info .points-num, .go-movie, .bottom-help a, .mp-mine-takedown) {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .record-content .table-wrapper {
@@ -503,7 +504,7 @@
     }
 
     > .points-num {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
   }
 
@@ -564,7 +565,7 @@
   .points-btn {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -771,7 +772,7 @@
   .notice-item .el-switch.is-checked:not(.is-disabled) .el-switch__core {
     // The account component writes its active blue directly to element.style.
     background: var(--bew-theme-color) !important;
-    border-color: var(--bew-theme-color) !important;
+    border-color: var(--bew-focus-ring-color) !important;
 
     &::after {
       background: var(--bew-switch-thumb-active) !important;
@@ -852,8 +853,8 @@
 
   .coin-nav-item.on,
   .coin-nav-item:hover {
-    color: var(--bew-theme-foreground);
-    border-color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .coin-content .table-wrapper {
@@ -896,7 +897,7 @@
   }
 
   .coin-i {
-    background: var(--bew-theme-foreground);
+    background: var(--bew-text-1);
     border-radius: var(--bew-radius-full);
     corner-shape: var(--bew-corner-shape-round);
   }

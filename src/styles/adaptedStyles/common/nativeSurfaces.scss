@@ -216,12 +216,12 @@ html.bewly-design:not(.bewly-video-dark-only) {
     .filter-item.on,
     .sort-item.on,
     .bangumi-index-crumb .on {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
 
     .sort-item .active {
-      border-top-color: var(--bew-theme-foreground);
-      border-bottom-color: var(--bew-theme-foreground);
+      border-top-color: var(--bew-focus-ring-color);
+      border-bottom-color: var(--bew-focus-ring-color);
     }
 
     .pagelistbox .p,
@@ -234,9 +234,9 @@ html.bewly-design:not(.bewly-video-dark-only) {
     }
 
     .pagelistbox .p.active {
-      background: var(--bew-theme-color);
-      color: var(--bew-on-theme-color);
-      border-color: var(--bew-theme-color);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 

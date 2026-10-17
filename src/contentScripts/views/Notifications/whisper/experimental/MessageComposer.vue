@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onClickOutside, useResizeObserver } from '@vueuse/core'
+import { onClickOutside } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
 import { PRIVATE_MESSAGE_IMAGE_ACCEPT, validatePrivateMessageImage } from '~/utils/privateMessageImage'
@@ -33,16 +33,6 @@ const emit = defineEmits<{
 
 const { locale, t } = useI18n()
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const multiline = ref(false)
-useResizeObserver(textareaRef, () => {
-  const input = textareaRef.value
-  if (!input)
-    return
-  const style = getComputedStyle(input)
-  const singleLineHeight = Number.parseFloat(style.lineHeight)
-    + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)
-  multiline.value = input.clientHeight > singleLineHeight + 1
-})
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const emoteControlRef = ref<HTMLElement | null>(null)
 const isComposing = ref(false)
@@ -198,10 +188,25 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 <template>
   <form
     class="message-composer"
-    :data-expanded="multiline || Boolean(imageDraft) || Boolean(imageValidationError)"
     @keydown.esc.stop="closeEmotePicker"
     @submit.prevent="submitCurrent"
   >
+    <div class="message-composer__inputbar">
+      <textarea
+        ref="textareaRef"
+        class="message-composer__input"
+        :value="disabledReason ? '' : modelValue"
+        :disabled="Boolean(disabledReason)"
+        :placeholder="disabledReason || t('notifications.whisper.messages.composer_placeholder')"
+        :aria-label="t('notifications.whisper.messages.composer_aria')"
+        rows="2"
+        @input="updateValue"
+        @keydown="handleKeydown"
+        @compositionstart="isComposing = true"
+        @compositionend="isComposing = false"
+        @paste="handlePaste"
+      />
+    </div>
     <span v-if="imageValidationError" class="message-composer__error" role="status">{{ imageValidationError }}</span>
     <div v-if="imageDraft" class="message-composer__image-preview" role="status">
       <img
@@ -229,7 +234,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
           :label="t('notifications.whisper.messages.remove_image')"
           @click="emit('removeImage', imageDraft.localId)"
         >
-          <i i-mingcute:close-line aria-hidden="true" />
+          <i i-tabler:x aria-hidden="true" />
         </IconButton>
       </Tooltip>
     </div>
@@ -246,7 +251,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
             aria-controls="private-message-emote-picker"
             @click="toggleEmotePicker"
           >
-            <i i-mingcute:emoji-line aria-hidden="true" />
+            <i i-tabler:mood-smile aria-hidden="true" />
           </IconButton>
         </Tooltip>
         <PrivateEmotePicker
@@ -278,42 +283,25 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
           :disabled="!canSelectImage"
           @click="openImagePicker"
         >
-          <i i-mingcute:pic-line aria-hidden="true" />
+          <i i-tabler:photo aria-hidden="true" />
         </IconButton>
       </Tooltip>
 
-      <div class="message-composer__inputbar" :class="{ 'is-multiline': multiline }">
-        <textarea
-          ref="textareaRef"
-          class="message-composer__input"
-          :value="disabledReason ? '' : modelValue"
-          :disabled="Boolean(disabledReason)"
-          :placeholder="disabledReason || t('notifications.whisper.messages.composer_placeholder')"
-          :aria-label="t('notifications.whisper.messages.composer_aria')"
-          rows="1"
-          @input="updateValue"
-          @keydown="handleKeydown"
-          @compositionstart="isComposing = true"
-          @compositionend="isComposing = false"
-          @paste="handlePaste"
-        />
-
-        <button
-          class="message-composer__send bew-send-button"
-          type="submit"
-          :disabled="!canSubmit"
-          :data-bew-send-state="sendState"
-          :aria-busy="sendState === 'pending'"
-          :aria-label="disabledReason || t(sending ? 'notifications.whisper.messages.sending' : 'notifications.whisper.messages.send')"
-          :title="disabledReason || t('notifications.whisper.messages.send')"
-        />
-      </div>
+      <button
+        class="message-composer__send bew-send-button"
+        type="submit"
+        :disabled="!canSubmit"
+        :data-bew-send-state="sendState"
+        :aria-busy="sendState === 'pending'"
+        :aria-label="disabledReason || t(sending ? 'notifications.whisper.messages.sending' : 'notifications.whisper.messages.send')"
+        :title="disabledReason || t('notifications.whisper.messages.send')"
+      />
     </div>
   </form>
 </template>
 
 <style scoped lang="scss">
-@use "../../../../../styles/breakpoints";
+@use "../../../../../styles/composer";
 
 .message-composer {
   display: grid;
@@ -323,25 +311,8 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 }
 
 .message-composer__input {
-  box-sizing: border-box;
-  flex: 1 1 auto;
-  width: 100%;
-  min-width: 0;
+  @include composer.input;
   height: auto;
-  min-height: var(--bew-control-height);
-  max-height: calc(var(--bew-space-12) * 2);
-  padding: calc((var(--bew-control-height) - var(--bew-line-height-control)) / 2) var(--bew-space-2);
-  field-sizing: content;
-  resize: none;
-  color: var(--bew-text-1);
-  font-family: var(--bew-font-family);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-control);
-  background: transparent;
-  border: 0;
-  border-radius: inherit;
-  corner-shape: inherit;
 }
 
 .message-composer__error {
@@ -401,65 +372,19 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   display: none;
 }
 
-.message-composer__input::placeholder {
-  color: var(--bew-text-3);
-}
-
-.message-composer__input:focus-visible {
-  /* The whole input bar provides the shared focus ring. */
-  outline: none;
-}
-
 .message-composer__inputbar {
-  display: flex;
-  flex: 1 1 auto;
-  align-items: flex-start;
   min-width: 0;
-  min-height: var(--bew-message-input-height);
-  padding: var(--bew-space-1);
-  gap: var(--bew-space-1);
-  box-sizing: border-box;
-  background: var(--bew-elevated-alt-solid);
-  border-radius: calc(var(--bew-message-input-height) / 2);
-  corner-shape: var(--bew-corner-shape-round);
-  transition:
-    border-radius var(--bew-duration-normal) var(--bew-ease-standard),
-    corner-shape var(--bew-duration-normal) var(--bew-ease-standard),
-    box-shadow var(--bew-duration-fast) var(--bew-ease-standard);
-}
-
-.message-composer__inputbar.is-multiline {
-  border-radius: var(--bew-radius-xl);
-  corner-shape: var(--bew-corner-shape);
-}
-
-.message-composer__inputbar.is-multiline .message-composer__send {
-  --bew-send-height: auto;
-  --bew-send-radius: var(--bew-radius-lg);
-  --bew-send-corner-shape: var(--bew-corner-shape);
-  align-self: stretch;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .message-composer__inputbar {
-    transition: none;
-  }
-}
-
-.message-composer__inputbar:focus-within {
-  box-shadow: var(--bew-focus-shadow);
 }
 
 .message-composer__actions {
   display: flex;
-  grid-row: 1;
   min-width: 0;
   gap: var(--bew-space-2);
-  align-items: flex-start;
+  align-items: center;
 }
 
-.message-composer__actions .message-composer__action {
-  margin-top: var(--bew-space-1);
+.message-composer__send {
+  margin-inline-start: auto !important;
 }
 
 .message-composer__emote-control {
@@ -469,29 +394,18 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 
 .message-composer__action {
   flex: 0 0 auto;
-  width: var(--bew-control-height);
-  height: var(--bew-control-height);
+  width: var(--bew-control-height-sm);
+  height: var(--bew-control-height-sm);
   color: var(--bew-text-2);
-  background: var(--bew-fill-1);
+  background: transparent;
 }
 
 .message-composer__action:hover:not(:disabled) {
   color: var(--bew-text-1);
-  background: var(--bew-fill-2);
+  background: var(--bew-hover-bg);
 }
 
 .message-composer__action i {
-  font-size: var(--bew-icon-size-md);
-}
-
-@media (max-width: breakpoints.$grid-sm) {
-  .message-composer__actions {
-    gap: var(--bew-space-1);
-  }
-  .message-composer__actions .message-composer__action {
-    width: var(--bew-control-height-sm);
-    height: var(--bew-control-height-sm);
-    margin-top: var(--bew-space-2);
-  }
+  font-size: var(--bew-icon-size-sm);
 }
 </style>

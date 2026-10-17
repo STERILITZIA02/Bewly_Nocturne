@@ -113,7 +113,7 @@ onKeyStroke('Escape', (e: KeyboardEvent) => {
         @click="handleAddFilter"
       >
         <template #left>
-          <i i-mingcute:add-line />
+          <i i-tabler:plus />
         </template>
         {{ $t('common.operation.add') }}
       </Button>
@@ -173,24 +173,24 @@ onKeyStroke('Escape', (e: KeyboardEvent) => {
           <template v-if="editingIndex === index">
             <Button size="small" type="tertiary" @click="handleConfirmFilter(index)">
               <template #left>
-                <i i-mingcute:check-line />
+                <i i-tabler:check />
               </template>
             </Button>
             <Button size="small" type="tertiary" @click="editingIndex = -2">
               <template #left>
-                <i i-mingcute:close-line />
+                <i i-tabler:x />
               </template>
             </Button>
           </template>
           <template v-else>
             <Button size="small" type="tertiary" @click="handleEditFilter(index)">
               <template #left>
-                <i i-mingcute:edit-2-line />
+                <i i-tabler:edit />
               </template>
             </Button>
             <Button size="small" type="tertiary" @click="handleDeleteFilter(index)">
               <template #left>
-                <i i-mingcute:delete-2-line />
+                <i i-tabler:trash />
               </template>
             </Button>
           </template>

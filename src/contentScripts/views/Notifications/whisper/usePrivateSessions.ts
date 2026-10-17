@@ -70,6 +70,7 @@ export interface PrivateSessionsController {
   observeUnreadCount: (unreadCount: number) => Promise<void>
   updateScrollTop: (scrollTop: number) => void
   selectSession: (session: DisplayPrivateSession) => void
+  includeRouteSession: (session: DisplayPrivateSession) => void
   clearSelectedSession: () => void
   markSessionRead: (talkerId: string, ackSeqno: string) => void
   markSessionSent: (talkerId: string, summary: string, timestamp: number) => void
@@ -158,6 +159,7 @@ export function usePrivateSessions(
   ))
   const userCardCache = new Map<string, CachedPrivateUserCard>()
   const confirmedAckSeqnos = new Map<string, string>()
+  const routeSessionKeys = new Set<string>()
   const now = dependencies.now ?? Date.now
   let firstPageRequest: Promise<void> | null = null
   let olderSessionsRequest: Promise<void> | null = null
@@ -191,7 +193,7 @@ export function usePrivateSessions(
   }
 
   function updateBounds() {
-    const bounds = getPrivateSessionTimeBounds(state.items)
+    const bounds = getPrivateSessionTimeBounds(state.items.filter(item => !routeSessionKeys.has(item.key)))
     state.oldestSessionTs = bounds.oldestSessionTs
     state.newestSessionTs = bounds.newestSessionTs
   }
@@ -216,6 +218,7 @@ export function usePrivateSessions(
     selectedSessionKey.value = ''
     userCardCache.clear()
     confirmedAckSeqnos.clear()
+    routeSessionKeys.clear()
     contentGeneration++
     incrementalGeneration++
     firstPageRequest = null
@@ -331,7 +334,9 @@ export function usePrivateSessions(
         if (!isCurrentRequest(mid, generation, requestContentGeneration))
           return
 
-        state.items = incoming
+        const retained = state.items.filter(item => routeSessionKeys.has(item.key) && item.key === selectedSessionKey.value)
+        incoming.forEach(item => routeSessionKeys.delete(item.key))
+        state.items = mergePrivateSessions(retained, incoming)
         state.loaded = true
         state.noMore = page.hasMore === 0
         state.paginationStalled = false
@@ -418,6 +423,7 @@ export function usePrivateSessions(
           return
         }
 
+        incoming.forEach(item => routeSessionKeys.delete(item.key))
         state.items = mergePrivateSessions(state.items, incoming)
         state.loadedAt = now()
         updateBounds()
@@ -492,6 +498,7 @@ export function usePrivateSessions(
         const incomingOldest = getPrivateSessionTimeBounds(incoming).oldestSessionTs
         const madeProgress = newItemCount > 0 || (incomingOldest > 0 && incomingOldest < endTs)
 
+        incoming.forEach(item => routeSessionKeys.delete(item.key))
         state.items = appendPrivateSessions(state.items, incoming)
         if (page.hasMore !== 0 && !madeProgress) {
           state.paginationStalled = true
@@ -593,6 +600,13 @@ export function usePrivateSessions(
       selectedSessionKey.value = session.key
   }
 
+  function includeRouteSession(session: DisplayPrivateSession) {
+    if (state.items.some(item => item.key === session.key))
+      return
+    routeSessionKeys.add(session.key)
+    state.items = mergePrivateSessions(state.items, preserveConfirmedReadState([session]))
+  }
+
   function updateScrollTop(scrollTop: number) {
     state.scrollTop = Number.isFinite(scrollTop) ? Math.max(0, scrollTop) : 0
   }
@@ -656,6 +670,7 @@ export function usePrivateSessions(
     reconcileSessionSettings,
     removeSession,
     selectedSessionKey,
+    includeRouteSession,
     selectedTalkerId,
     loadInitial,
     loadMore,

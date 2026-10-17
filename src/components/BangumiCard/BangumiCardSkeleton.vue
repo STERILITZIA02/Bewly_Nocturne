@@ -11,7 +11,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
 
 <template>
   <article class="bangumi-card-skeleton" :class="{ 'bangumi-card-skeleton--horizontal': horizontal }" aria-hidden="true">
-    <div class="bangumi-card-skeleton__media bew-surface-border">
+    <div class="bangumi-card-skeleton__media">
       <SkeletonBlock class="bangumi-card-skeleton__image" height="auto" radius="media" />
     </div>
     <div class="bangumi-card-skeleton__content">

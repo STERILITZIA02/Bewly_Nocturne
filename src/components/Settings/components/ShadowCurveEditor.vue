@@ -25,7 +25,7 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 const { isDark, isOledDark } = useDark()
 const selectedPointIndex = ref<number | null>(null)
 const isDragging = ref(false)
-const padding = 16
+const padding = 24
 
 // Sort points by position for rendering
 const sortedPoints = computed(() => {
@@ -110,9 +110,11 @@ function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
   const canvasStyle = getComputedStyle(canvas)
-  const borderColor = resolveCanvasCssColor(canvasStyle, '--bew-border-color', 'rgba(128, 128, 128, 0.35)')
-  const themeColor = resolveCanvasCssColor(canvasStyle, '--bew-theme-color', '#00a1d6')
-  const textColor = resolveCanvasCssColor(canvasStyle, '--bew-text-2', 'rgba(128, 128, 128, 0.8)')
+  const borderColor = resolveCanvasCssColor(canvasStyle, '--bew-chart-grid', '#888888')
+  const dataColor = resolveCanvasCssColor(canvasStyle, '--bew-chart-primary', '#888888')
+  const textColor = resolveCanvasCssColor(canvasStyle, '--bew-text-2', '#888888')
+  const surfaceColor = resolveCanvasCssColor(canvasStyle, '--bew-chart-surface', '#ffffff')
+  const accentColor = resolveCanvasCssColor(canvasStyle, '--bew-chart-accent', dataColor)
 
   // Clear canvas
   ctx.clearRect(0, 0, props.width, props.height)
@@ -125,8 +127,8 @@ function draw() {
   ctx.lineWidth = 1
 
   // Vertical grid lines (position)
-  for (let i = 0; i <= 10; i++) {
-    const x = padding + (i / 10) * drawWidth
+  for (let i = 0; i <= 4; i++) {
+    const x = padding + (i / 4) * drawWidth
     ctx.beginPath()
     ctx.moveTo(x, padding)
     ctx.lineTo(x, padding + drawHeight)
@@ -134,43 +136,18 @@ function draw() {
   }
 
   // Horizontal grid lines (opacity)
-  for (let i = 0; i <= 10; i++) {
-    const y = padding + (i / 10) * drawHeight
+  for (let i = 0; i <= 4; i++) {
+    const y = padding + (i / 4) * drawHeight
     ctx.beginPath()
     ctx.moveTo(padding, y)
     ctx.lineTo(padding + drawWidth, y)
     ctx.stroke()
   }
 
-  // Draw border
-  ctx.strokeStyle = borderColor
-  ctx.lineWidth = 1.5
-  ctx.strokeRect(padding, padding, drawWidth, drawHeight)
-
-  // Draw filled area under curve
-  if (sortedPoints.value.length >= 2) {
-    ctx.beginPath()
-    const firstPoint = pointToCanvas(sortedPoints.value[0])
-    ctx.moveTo(firstPoint.x, padding + drawHeight)
-    ctx.lineTo(firstPoint.x, firstPoint.y)
-
-    for (const point of sortedPoints.value) {
-      const pos = pointToCanvas(point)
-      ctx.lineTo(pos.x, pos.y)
-    }
-
-    const lastPoint = pointToCanvas(sortedPoints.value[sortedPoints.value.length - 1])
-    ctx.lineTo(lastPoint.x, padding + drawHeight)
-    ctx.closePath()
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'
-    ctx.fill()
-  }
-
-  // Draw curve line (thicker for easier dragging)
+  // The hit area remains generous independently of the thin visual line.
   ctx.beginPath()
-  ctx.strokeStyle = themeColor
-  ctx.lineWidth = 3
+  ctx.strokeStyle = dataColor
+  ctx.lineWidth = Number.parseFloat(canvasStyle.getPropertyValue('--bew-chart-line-width')) || 1.5
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
 
@@ -199,22 +176,22 @@ function draw() {
     ctx.arc(pos.x, pos.y, isSelected ? 7 : 5, 0, Math.PI * 2)
 
     if (isSelected) {
-      ctx.fillStyle = themeColor
-      ctx.strokeStyle = '#fff'
+      ctx.fillStyle = accentColor
+      ctx.strokeStyle = surfaceColor
       ctx.lineWidth = 2
       ctx.fill()
       ctx.stroke()
     }
     else if (isEndpoint) {
-      ctx.fillStyle = 'rgba(128, 128, 128, 0.8)'
-      ctx.strokeStyle = '#fff'
+      ctx.fillStyle = dataColor
+      ctx.strokeStyle = surfaceColor
       ctx.lineWidth = 2
       ctx.fill()
       ctx.stroke()
     }
     else {
-      ctx.fillStyle = '#fff'
-      ctx.strokeStyle = themeColor
+      ctx.fillStyle = surfaceColor
+      ctx.strokeStyle = dataColor
       ctx.lineWidth = 2
       ctx.fill()
       ctx.stroke()
@@ -223,7 +200,7 @@ function draw() {
 
   // Draw labels
   ctx.fillStyle = textColor
-  ctx.font = '10px sans-serif'
+  ctx.font = `${canvasStyle.getPropertyValue('--bew-font-size-caption').trim() || '12px'} ${canvasStyle.fontFamily}`
   ctx.textAlign = 'center'
   ctx.fillText('0%', padding, props.height - 2)
   ctx.fillText('100%', props.width - padding, props.height - 2)
@@ -239,8 +216,8 @@ function handleMouseDown(e: MouseEvent) {
   if (!rect)
     return
 
-  const x = e.clientX - rect.left
-  const y = e.clientY - rect.top
+  const x = (e.clientX - rect.left) * props.width / rect.width
+  const y = (e.clientY - rect.top) * props.height / rect.height
   const pointIndex = findPointAt(x, y)
 
   if (pointIndex !== null) {
@@ -280,8 +257,8 @@ function handleMouseMove(e: MouseEvent) {
   if (!rect)
     return
 
-  const x = e.clientX - rect.left
-  const y = e.clientY - rect.top
+  const x = (e.clientX - rect.left) * props.width / rect.width
+  const y = (e.clientY - rect.top) * props.height / rect.height
 
   // Update cursor based on whether we're near a point or the line
   if (canvasRef.value && !isDragging.value) {
@@ -341,8 +318,8 @@ function handleContextMenu(e: MouseEvent) {
   if (!rect)
     return
 
-  const x = e.clientX - rect.left
-  const y = e.clientY - rect.top
+  const x = (e.clientX - rect.left) * props.width / rect.width
+  const y = (e.clientY - rect.top) * props.height / rect.height
   const pointIndex = findPointAt(x, y)
 
   if (pointIndex !== null) {
@@ -437,7 +414,7 @@ watch(
       ref="canvasRef"
       :width="width"
       :height="height"
-      :style="{ width: `${width}px`, height: `${height}px` }"
+      :style="{ width: `${width}px`, height: 'auto', aspectRatio: `${width} / ${height}` }"
       class="curve-canvas"
       tabindex="0"
       role="application"
@@ -458,12 +435,14 @@ watch(
   flex-direction: column;
   gap: var(--bew-space-2);
   width: fit-content;
+  max-width: 100%;
 }
 
 .curve-canvas {
+  max-width: 100%;
   border-radius: var(--bew-radius);
   corner-shape: var(--bew-corner-shape);
-  background: var(--bew-fill-1);
+  background: var(--bew-chart-surface);
 }
 
 .hint {

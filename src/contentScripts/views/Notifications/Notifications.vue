@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import { useBewlyApp } from '~/composables/useAppProvider'
+import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useRouteState } from '~/composables/useRouteState'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { AppPage } from '~/enums/appEnums'
@@ -40,6 +40,7 @@ import { createSystemNotificationPageFetcher } from './systemNotificationFeed'
 import { getMessageInsights } from './whisper/messageInsights'
 import type { TransientPrivateRecipient } from './whisper/privateRecipientSearch'
 import type { DisplayPrivateSession } from './whisper/privateSession'
+import { usePrivateConversationTarget } from './whisper/usePrivateConversationTarget'
 import { usePrivateEmotePanel } from './whisper/usePrivateEmotePanel'
 import { usePrivateHistorySearch } from './whisper/usePrivateHistorySearch'
 import { usePrivateMessageWorkspace } from './whisper/usePrivateMessageWorkspace'
@@ -57,7 +58,7 @@ interface WhisperWorkspaceExposed {
 }
 
 const { t } = useI18n()
-const { activatedPage, handlePageRefresh, openSettingsAt, scrollViewportRef } = useBewlyApp()
+const { activatedPage, handlePageRefresh, openSettingsAt, scrollViewportRef, activeDrawer } = useBewlyApp()
 const routeState = useRouteState()
 const topBarStore = useTopBarStore()
 
@@ -71,6 +72,7 @@ const privateConversationRestoreAttempted = ref(false)
 const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
 const accountState = computed(() => resolveNotificationAccountState(topBarStore.isLogin, currentMid.value))
 const isPageActive = ref(false)
+const isContentActive = computed(() => isPageActive.value && activeDrawer?.value !== DrawerType.IframeDrawer)
 const privateEmotes = usePrivateEmotePanel(currentMid, () => api.moment.getMomentEmotes({ business: 'reply' }))
 const privateSessions = usePrivateSessions(currentMid, {
   fetchSessions: () => api.privateMessage.getPrivateSessions(),
@@ -78,6 +80,15 @@ const privateSessions = usePrivateSessions(currentMid, {
   fetchNewSessions: beginTs => api.privateMessage.getNewPrivateSessions({ beginTs }),
   fetchUserCards: uids => api.privateMessage.getPrivateUserCards({ uids }),
   getFallbackName: talkerId => t('notifications.whisper.user_fallback', { talkerId }),
+})
+const privateConversationTarget = usePrivateConversationTarget({
+  account: currentMid,
+  route: pendingPrivateConversationRoute,
+  active: () => isContentActive.value && accountState.value === 'ready' && currentView.value === 'whisper' && String(getUserID() ?? '') === currentMid.value,
+  sessions: privateSessions,
+  fetchTarget: route => api.privateMessage.getPrivateConversationTarget(route),
+  fetchCards: uids => api.privateMessage.getPrivateUserCards({ uids }),
+  selectRecipient: recipient => transientPrivateRecipient.value = recipient,
 })
 const privateRecipientSearch = usePrivateRecipientSearch(currentMid, {
   fetchFollowing: params => api.user.searchUserFollowings(params),
@@ -89,11 +100,11 @@ const privateRecipientSearch = usePrivateRecipientSearch(currentMid, {
 })
 const privateHistorySearch = usePrivateHistorySearch(currentMid, {
   sessions: privateSessions,
-  active: () => isPageActive.value && accountState.value === 'ready',
+  active: () => isContentActive.value && accountState.value === 'ready',
   fetchMessages: options => api.privateMessage.getPrivateMessages(options),
 })
 const privateSessionActions = usePrivateSessionActions(currentMid, {
-  active: () => isPageActive.value && accountState.value === 'ready' && String(getUserID() ?? '') === currentMid.value,
+  active: () => isContentActive.value && accountState.value === 'ready' && String(getUserID() ?? '') === currentMid.value,
   getCsrf: getCSRF,
   detail: target => api.privateMessage.getPrivateSessionDetail(target),
   settings: target => api.privateMessage.getPrivateSessionSettings(target),
@@ -136,7 +147,7 @@ const privateMessageWorkspace = usePrivateMessageWorkspace(currentMid, activePri
 const { messages: privateMessages, writes: privateMessageWrites } = privateMessageWorkspace
 const fetchSystemNotificationPage = createSystemNotificationPageFetcher({
   getAccount: () => String(getUserID() ?? ''),
-  isActive: () => isPageActive.value,
+  isActive: () => isContentActive.value,
   fetchUnified: () => api.notification.getSystemUnifiedNotifications(),
   fetchUser: () => api.notification.getSystemUserNotifications(),
   fetchHistory: cursor => api.notification.getSystemNotificationHistory({ cursor }),
@@ -146,7 +157,7 @@ const notificationFeeds = useNotificationFeeds(currentMid, {
   fetchPage: fetchNotificationPage,
 })
 const markAllMessagesRead = useMarkAllMessagesRead(currentMid, {
-  active: () => isPageActive.value && accountState.value === 'ready',
+  active: () => isContentActive.value && accountState.value === 'ready',
   currentAccount: () => String(getUserID() ?? ''),
   fetchSessions: endTs => endTs === undefined
     ? api.privateMessage.getPrivateSessions()
@@ -245,15 +256,7 @@ function applyPendingPrivateConversationRoute() {
     item => item.key === expectedSessionKey,
   )
   if (!session) {
-    if (
-      privateSessions.state.loaded
-      && privateSessions.state.noMore
-      && !privateSessions.state.loadingMore
-    ) {
-      pendingPrivateConversationRoute.value = null
-      privateSessions.clearSelectedSession()
-      replacePrivateConversationUrl(clearPrivateConversationRoute(window.location.href))
-    }
+    void privateConversationTarget.resolve()
     return
   }
   transientPrivateRecipient.value = null
@@ -271,6 +274,7 @@ function syncPrivateConversationFromRoute(url: URL, view: NotificationView) {
   const route = parsePrivateConversationRoute(url)
   if (!route) {
     pendingPrivateConversationRoute.value = null
+    transientPrivateRecipient.value = null
     privateSessions.clearSelectedSession()
     if (hasPrivateConversationRouteParams(url))
       replacePrivateConversationUrl(clearPrivateConversationRoute(url))
@@ -481,6 +485,13 @@ function deactivatePage() {
 }
 
 watch(() => routeState.navigationId, () => syncViewFromRoute(routeState.href))
+watch(isContentActive, (active) => {
+  if (!active) {
+    privateMessageWorkspace.release()
+    privateHistorySearch.suspend()
+    privateRecipientSearch.pause()
+  }
+}, { flush: 'sync' })
 watch(() => privateSessions.state.items, () => {
   applyPendingPrivateConversationRoute()
   maybeRestoreLastPrivateConversation()
@@ -545,14 +556,16 @@ onBeforeUnmount(() => {
           :read-all="markAllMessagesRead"
           :view="currentView"
           :account-state="accountState"
-          :active="isPageActive"
+          :active="isContentActive"
           :controller="privateSessions"
           :messages-controller="privateMessages"
           :emote-controller="privateEmotes"
           :recipient-search="privateRecipientSearch"
           :history-search="privateHistorySearch"
           :transient-recipient="transientPrivateRecipient"
+          :target-state="privateConversationTarget.state"
           :write-controller="privateMessageWrites"
+          @retry-target="privateConversationTarget.retry()"
           @select-view="selectView"
           @close-conversation="closePrivateConversation"
           @select-session="selectPrivateConversation"
@@ -567,7 +580,7 @@ onBeforeUnmount(() => {
             :key="nativeView"
             ref="nativeFeedRef"
             :account-state="accountState"
-            :active="isPageActive"
+            :active="isContentActive"
             :controller="notificationFeeds"
             :section="nativeView"
           />

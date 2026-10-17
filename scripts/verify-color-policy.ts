@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict'
+
+import { NEUTRAL_DARK_BASE_COLOR, resolveDarkModeBaseColor } from '../src/utils/darkModeTint'
+import { getThemeColorTokens, relativeContrast } from '../src/utils/themeColor'
+
+const saved = { darkModeBaseColor: '#2d2a2f', enableDarkModeTint: false }
+assert.equal(resolveDarkModeBaseColor(saved), NEUTRAL_DARK_BASE_COLOR)
+saved.enableDarkModeTint = true
+assert.equal(resolveDarkModeBaseColor(saved), '#2d2a2f')
+saved.enableDarkModeTint = false
+assert.equal(resolveDarkModeBaseColor(saved), NEUTRAL_DARK_BASE_COLOR)
+assert.equal(saved.darkModeBaseColor, '#2d2a2f')
+assert.equal(resolveDarkModeBaseColor({ darkModeBaseColor: '#2d2a2f' }), NEUTRAL_DARK_BASE_COLOR)
+assert.equal(resolveDarkModeBaseColor({ enableDarkModeTint: 'true', darkModeBaseColor: '#2d2a2f' }), NEUTRAL_DARK_BASE_COLOR)
+assert.equal(resolveDarkModeBaseColor({ enableDarkModeTint: true, darkModeBaseColor: 'invalid' }), NEUTRAL_DARK_BASE_COLOR)
+
+const brightColors = ['#eab308', '#fb923c', '#a3e635', '#fda4af', '#ffff00', '#ccffcc', '#ffe0ec']
+const palettes = [
+  { dark: false, surfaces: ['#ffffff', '#f2f2f2', '#c9c9c9'] },
+  { dark: true, surfaces: ['#1b1b1b', '#2e2e2e', '#414141'] },
+  { dark: true, surfaces: ['#000000', '#2e2e2e', '#414141'] },
+]
+for (const { dark, surfaces } of palettes) {
+  for (const color of [...brightColors, '#00a1d6', '#3b82f6', '#6366f1', '#000000', '#ffffff']) {
+    const tokens = getThemeColorTokens(color, dark, surfaces)
+    assert.equal(tokens.theme, color, 'Solid button color must remain the chosen RGB value')
+    assert.ok(relativeContrast(tokens.onTheme, tokens.theme) >= 4.5, `${color}: button contrast`)
+    assert.ok(relativeContrast(tokens.markerOnLight, '#ffffff') >= 3, `${color}: marker on Dock's white indicator`)
+    if (brightColors.includes(color))
+      assert.equal(tokens.onTheme, '#000000', `${color}: bright fills need dark text`)
+    for (const surface of surfaces) {
+      assert.ok(relativeContrast(tokens.foreground, surface) >= 4.5, `${color}: link contrast against ${surface}`)
+      assert.ok(relativeContrast(tokens.focusRing, surface) >= 3, `${color}: marker contrast against ${surface}`)
+    }
+  }
+}
+
+// Sample the full RGB cube, including the black/white foreground crossover.
+let samples = 0
+for (let red = 0; red <= 255; red += 17) {
+  for (let green = 0; green <= 255; green += 17) {
+    for (let blue = 0; blue <= 255; blue += 17) {
+      const color = `#${[red, green, blue].map(value => value.toString(16).padStart(2, '0')).join('')}`
+      const tokens = getThemeColorTokens(color, false)
+      assert.equal(tokens.theme, color)
+      assert.ok(relativeContrast(tokens.onTheme, color) >= 4.5, color)
+      samples++
+    }
+  }
+}
+console.log(`Color policy passed: ${samples} RGB samples, light/dark/OLED palettes, opt-in tint and retained custom value.`)

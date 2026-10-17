@@ -8,7 +8,7 @@ const { t } = useI18n()
   <section class="conversation-empty-state">
     <div class="conversation-empty-state__content">
       <div class="conversation-empty-state__symbol" aria-hidden="true">
-        <i i-mingcute:message-3-line />
+        <i i-tabler:message-circle />
       </div>
       <div class="conversation-empty-state__heading">
         <h2>{{ t('notifications.whisper.select_conversation_empty') }}</h2>

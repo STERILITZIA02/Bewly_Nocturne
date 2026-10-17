@@ -163,14 +163,14 @@ function openPlayerFeedback() {
         >
           <Transition name="fade">
             <div v-show="hoveringDockItem.themeMode" absolute flex>
-              <Icon v-if="isDark" icon="line-md:sunny-outline-to-moon-loop-transition" />
-              <Icon v-else icon="line-md:moon-alt-to-sunny-outline-loop-transition" />
+              <Icon v-if="isDark" icon="tabler:moon" />
+              <Icon v-else icon="tabler:sun" />
             </div>
           </Transition>
           <Transition name="fade">
             <div v-show="!hoveringDockItem.themeMode" absolute flex>
-              <Icon v-if="isDark" icon="line-md:sunny-outline-to-moon-transition" />
-              <Icon v-else icon="line-md:moon-to-sunny-outline-transition" />
+              <Icon v-if="isDark" icon="tabler:moon" />
+              <Icon v-else icon="tabler:sun" />
             </div>
           </Transition>
         </Button>
@@ -185,7 +185,7 @@ function openPlayerFeedback() {
         >
           <div mt--2px>
             <i
-              i-mingcute:settings-3-line w-20px h-20px group-hover:rotate-180
+              i-tabler:settings w-20px h-20px group-hover:rotate-180
               transition="transform duration-400 ease-out"
             />
           </div>
@@ -202,7 +202,7 @@ function openPlayerFeedback() {
           center size="small" round
           @click="openPlayerFeedback"
         >
-          <Icon icon="mingcute:question-line" />
+          <Icon icon="tabler:help-circle" />
         </Button>
       </Tooltip>
     </div>

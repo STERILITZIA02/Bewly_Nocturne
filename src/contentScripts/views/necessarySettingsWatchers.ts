@@ -14,7 +14,7 @@ import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/ef
 import { postMessageToIframe } from '~/utils/iframeMessage'
 import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { cleanBilibiliShareText, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
-import { getThemeColorTokens, readThemeContrastSurfaces } from '~/utils/themeColor'
+import { getThemeColorTokens, readThemeContrastSurfaces, syncNativeNeutralRgb } from '~/utils/themeColor'
 
 function isFestivalPage(): boolean {
   return /https?:\/\/(?:www\.)?bilibili\.com\/festival\/.*/.test(location.href)
@@ -24,7 +24,7 @@ export function setupNecessarySettingsWatchers() {
   const settingsStore = useSettingsStore()
   const currentLocationHref = useCurrentLocationHref()
   const iframePageActive = useIframePageActive()
-  const { isDark } = useDark()
+  const { isDark, isOledDark, darkModeBaseColor } = useDark()
   let effectiveTopBarSource: EffectiveTopBarSource = 'bewly'
 
   let stopNativeKeyboard: (() => void) | undefined
@@ -313,8 +313,9 @@ export function setupNecessarySettingsWatchers() {
   }, { immediate: true })
 
   watch(
-    [() => settings.value.themeColor, isDark, () => settings.value.darkModeBaseColor, () => settings.value.enableOledDarkMode],
+    [() => settings.value.themeColor, isDark, isOledDark, darkModeBaseColor, () => settings.value.adaptToOtherPageStyles],
     () => {
+      syncNativeNeutralRgb(document.documentElement)
       const bewlyElement = document.querySelector('#bewly') as HTMLElement | null
       const surfaces = readThemeContrastSurfaces(bewlyElement ?? document.documentElement)
       const themeTokens = getThemeColorTokens(settings.value.themeColor, isDark.value, surfaces)
@@ -327,6 +328,7 @@ export function setupNecessarySettingsWatchers() {
         element.style.setProperty('--bew-switch-thumb-active', themeTokens.switchThumb)
         element.style.setProperty('--bew-theme-foreground', themeTokens.foreground)
         element.style.setProperty('--bew-theme-focus-ring', themeTokens.focusRing)
+        element.style.setProperty('--bew-accent-marker-on-light', themeTokens.markerOnLight)
       })
     },
     { immediate: true, flush: 'post' },

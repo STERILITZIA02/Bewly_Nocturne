@@ -43,7 +43,7 @@ watch(() => props.item.id, () => {
         decoding="async"
         @error="sourceLogoFailed = true"
       >
-      <i v-else i-mingcute:notification-line />
+      <i v-else i-tabler:bell />
     </div>
 
     <div class="native-system-notification__content">
@@ -184,7 +184,7 @@ watch(() => props.item.id, () => {
   flex: 0 0 auto;
   width: var(--bew-space-2);
   height: var(--bew-space-2);
-  background: var(--bew-theme-color);
+  background: var(--bew-accent-marker);
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
 }

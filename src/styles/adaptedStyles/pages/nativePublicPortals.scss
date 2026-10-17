@@ -69,7 +69,7 @@ html.bewly-design[data-bewly-native-site="marketing-public"] {
   :is(.home-content-btn, .submit-btn, .login-btn) {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -91,7 +91,7 @@ html.bewly-design[data-bewly-native-site="marketing-public"] {
     }
 
     .nav-item.active .nav-item-name {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
 
     .subnav {
@@ -191,7 +191,7 @@ html.bewly-design[data-bewly-native-site="marketing-public"] {
   .el-button--primary:not(:disabled, .is-disabled) {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -469,7 +469,7 @@ html.bewly-design[data-bewly-native-site="brand-public"] {
       &:first-child,
       &:hover {
         color: var(--bew-theme-foreground);
-        border-bottom-color: var(--bew-theme-foreground);
+        border-bottom-color: var(--bew-focus-ring-color);
       }
     }
 
@@ -515,13 +515,13 @@ html.bewly-design[data-bewly-native-site="brand-public"] {
   }
 
   .title-line {
-    background: var(--bew-theme-foreground);
+    background: var(--bew-text-1);
   }
 
   .ivu-btn-info:not(:disabled) {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -587,7 +587,7 @@ html.bewly-design[data-bewly-native-site="mcn-public"] #app {
     color: var(--bew-text-1);
 
     .icon-master {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
 
     :is(.right-container, .message-box, .name, .btn) {
@@ -652,7 +652,7 @@ html.bewly-design[data-bewly-native-site="mcn-public"] #app {
     &.bcc-button--primary:not(:disabled, .is-disabled) {
       background: var(--bew-theme-color);
       color: var(--bew-on-theme-color);
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
 
     &.bcc-button--default:not(:disabled, .is-disabled) {
@@ -708,7 +708,7 @@ html.bewly-design[data-bewly-native-site="jobs-public"] {
     }
 
     .bili-banner-right-routes.active {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
 
     .bili-banner-right-dividing-line {
@@ -731,7 +731,7 @@ html.bewly-design[data-bewly-native-site="jobs-public"] {
   .position-detail .operator-footer .ant-btn:not(:disabled, .ant-btn-disabled) {
     color: var(--bew-on-theme-color);
     background: var(--bew-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-radius-full);
     corner-shape: var(--bew-corner-shape-round);
 
@@ -796,6 +796,10 @@ html.bewly-design[data-bewly-native-site="jobs-public"] {
     corner-shape: var(--bew-corner-shape);
   }
 
+  .bili-cover-container {
+    border: 0;
+  }
+
   .social-home .deliver-card :is(.title, .content),
   .social-home .card__content,
   .campus-pc :is(.news .title, .faq-q-text),
@@ -809,7 +813,7 @@ html.bewly-design[data-bewly-native-site="jobs-public"] {
   }
 
   .campus-pc .faq-item.active {
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .campus-pc .faq-plus::before,
@@ -1000,10 +1004,15 @@ html.bewly-design[data-bewly-native-site="jobs-public"] {
     color: var(--bew-text-1);
   }
 
-  .ant-pagination-item-active,
+  .ant-pagination-item-active {
+    background: var(--bew-selected-bg);
+    border-color: var(--bew-focus-ring-color);
+    color: var(--bew-text-1);
+  }
+
   .ant-checkbox-checked:not(.ant-checkbox-disabled) .ant-checkbox-inner {
     background: var(--bew-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     color: var(--bew-on-theme-color);
   }
 
@@ -1111,8 +1120,8 @@ html.bewly-design[data-bewly-native-site="security-public"] {
     }
 
     .nav-link:is(.active, :hover) {
-      color: var(--bew-theme-foreground);
-      border-bottom-color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
+      border-bottom-color: var(--bew-focus-ring-color);
     }
 
     // This raster lockup combines a coloured shield and black lettering. Keep
@@ -1368,7 +1377,7 @@ html.bewly-design[data-bewly-native-site="investor-public"] {
   }
 
   .hp__business-highlights .box-count :is(.number-count, .unit-count) {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .hp__quarterly-results .quarterly-background {
@@ -1411,12 +1420,12 @@ html.bewly-design[data-bewly-native-site="investor-public"] {
     &.active {
       background: var(--bew-theme-surface);
       color: var(--bew-on-theme-surface);
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
   .inner-content .tab-head .nav-link.active::before {
-    background: var(--bew-theme-foreground);
+    background: var(--bew-text-1);
     border-radius: var(--bew-radius-full);
     corner-shape: var(--bew-corner-shape-round);
   }
@@ -1451,9 +1460,9 @@ html.bewly-design[data-bewly-native-site="investor-public"] {
     corner-shape: var(--bew-corner-shape-round);
 
     &.active {
-      color: var(--bew-on-theme-color);
-      background: var(--bew-theme-color);
-      border-color: var(--bew-theme-color);
+      color: var(--bew-text-1);
+      background: var(--bew-selected-bg);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .title-tab {
@@ -1652,7 +1661,7 @@ html.bewly-design[data-bewly-native-site="investor-public"] {
       &.active {
         color: var(--bew-on-theme-surface);
         background: var(--bew-theme-surface);
-        border-color: var(--bew-theme-foreground);
+        border-color: var(--bew-focus-ring-color);
       }
     }
   }
@@ -1670,8 +1679,8 @@ html.bewly-design[data-bewly-native-site="investor-public"] {
     }
 
     a.active {
-      color: var(--bew-on-theme-color);
-      background: var(--bew-theme-color);
+      color: var(--bew-text-1);
+      background: var(--bew-selected-bg);
     }
   }
 
@@ -1834,7 +1843,7 @@ html.bewly-design[data-bewly-native-site="investor-public"] {
   .site-content .submit-btn {
     color: var(--bew-on-theme-color);
     background: var(--bew-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-radius-full);
     corner-shape: var(--bew-corner-shape-round);
   }

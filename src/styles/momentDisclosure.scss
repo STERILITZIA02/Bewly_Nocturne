@@ -1,0 +1,29 @@
+.moment-card__disclosure {
+  display: block;
+  height: 0;
+  min-width: 0;
+  overflow: clip;
+  pointer-events: auto;
+  transition: height var(--bew-duration-normal) var(--bew-ease-standard);
+}
+
+// An already expanded cached card starts at its natural size before measurement.
+.moment-card__disclosure.is-open {
+  height: auto;
+}
+
+.moment-card__disclosure:not(.is-open) {
+  pointer-events: none;
+}
+
+.moment-card__disclosure-inner {
+  display: flow-root;
+  min-height: 0;
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moment-card__disclosure {
+    transition: none;
+  }
+}

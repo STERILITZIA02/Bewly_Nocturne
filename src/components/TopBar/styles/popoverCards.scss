@@ -109,8 +109,8 @@ button.popover-card__overlay-action {
 }
 
 button.popover-card__overlay-action:hover {
-  background: var(--bew-theme-color);
-  color: var(--bew-on-theme-color);
+  background: var(--bew-selected-bg);
+  color: var(--bew-text-1);
 }
 
 button.popover-card__overlay-action--danger:hover {

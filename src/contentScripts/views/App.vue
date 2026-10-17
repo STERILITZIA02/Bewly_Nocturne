@@ -19,8 +19,10 @@ import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
 import { useHomePageRoute } from '~/composables/useHomePageRoute'
 import { localLoudnessPanelOpen } from '~/composables/useLocalLoudness'
+import { providePageViewState } from '~/composables/usePageViewState'
 import { providePanelOrigin } from '~/composables/usePanelOrigin'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
+import { onRouteChange } from '~/composables/useRouteState'
 import { useSettingsMotion } from '~/composables/useSettingsMotion'
 import { useSettingsPanel } from '~/composables/useSettingsPanel'
 import { provideSidebarHost, registerSidebarWidth } from '~/composables/useSidebarHost'
@@ -49,7 +51,8 @@ import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
 import { setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
-import { resolveDefaultAppPage } from '~/utils/homeRoute'
+import { homeTabStateKey, resolveDefaultAppPage } from '~/utils/homeRoute'
+import { readIframeDrawerHistory } from '~/utils/iframeDrawerHistory'
 import { getIframeMessageData } from '~/utils/iframeMessage'
 import { isSentinelWithinLoadThreshold } from '~/utils/loadMoreSentinel'
 import { getUserID, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, openLinkToNewTab, scrollToTop } from '~/utils/main'
@@ -65,6 +68,10 @@ registerSidebarWidth()
 const settingsStore = useSettingsStore()
 const topBarStore = useTopBarStore()
 const currentLocationHref = useCurrentLocationHref()
+const appAccountScope = ref(String(getUserID() || 'guest'))
+watch([() => topBarStore.userInfo.mid, currentLocationHref], () => {
+  appAccountScope.value = String(getUserID() || 'guest')
+}, { flush: 'sync' })
 const effectiveTopBarSource = computed(() => settingsStore.getEffectiveTopBarSource())
 const useOriginalBilibiliTopBar = computed(() => showNativeBilibiliTopBar(effectiveTopBarSource.value))
 const { t } = useI18n()
@@ -127,8 +134,11 @@ function getDefaultAppPage(): AppPage {
 const { activatedPage, homeActivatedPage, homeActivatedPageTouched, navigateToPage, navigateToHomeTab, resolveAvailableAppPage } = useHomePageRoute(getDefaultAppPage, mainStore.homeTabs.map(tab => ({
   page: tab.page,
   visible: tab.page !== HomeSubPage.Precious,
-})))
+})), () => appAccountScope.value)
 const isHomeTabSwitching = ref(false)
+const displayedPage = ref(activatedPage.value)
+const isPageSwitching = ref(false)
+const pageViewCache = providePageViewState(() => appAccountScope.value)
 provideSidebarHost(() => activatedPage.value)
 
 const shouldUseOriginalSearchResultsPage = computed(() => {
@@ -149,8 +159,8 @@ watch(shouldUseOriginalSearchResultsPage, (useOriginalBiliPage) => {
 // 监听 URL 变化,同步更新 activatedPage
 watch(currentLocationHref, () => {
   exitLayoutEditMode()
-  if (activatedPage.value !== AppPage.SearchResults)
-    topBarStore.searchKeyword = ''
+  if (!isPageSwitching.value)
+    cancelPageScrollRestore()
 })
 
 // URL normalization belongs to useHomePageRoute; the shell only owns the field.
@@ -177,7 +187,7 @@ const pages = {
   [AppPage.Notifications]: definePageComponent(() => import('./Notifications/Notifications.vue')),
 }
 const mainAppRef = ref<HTMLElement>() as Ref<HTMLElement>
-const isLibraryPage = computed(() => [AppPage.Favorites, AppPage.WatchLater, AppPage.History, AppPage.Moments].includes(activatedPage.value))
+const isLibraryPage = computed(() => [AppPage.Favorites, AppPage.WatchLater, AppPage.History, AppPage.Moments].includes(displayedPage.value))
 const scrollViewportRef = ref<HTMLElement | null>(null)
 const loadMoreSentinelRef = ref<HTMLElement>() // ✅ IntersectionObserver 哨兵元素
 const handlePageRefresh = ref<() => void>()
@@ -252,7 +262,7 @@ const handleThrottledPageForwardRefresh = useThrottleFn(() => handleForwardRefre
 function checkLoadMoreSentinelGeometry() {
   const viewport = scrollViewportRef.value
   const sentinel = loadMoreSentinelRef.value
-  if (!viewport || !sentinel || isHomeTabSwitching.value)
+  if (!viewport || !sentinel || isHomeTabSwitching.value || isPageSwitching.value)
     return
 
   if (isSentinelWithinLoadThreshold(
@@ -270,7 +280,7 @@ const handleThrottledLoadMoreGeometryCheck = useThrottleFn(checkLoadMoreSentinel
 const { stop: stopLoadMoreObserver } = useIntersectionObserver(
   loadMoreSentinelRef,
   ([{ isIntersecting }]) => {
-    if (isIntersecting && !isHomeTabSwitching.value)
+    if (isIntersecting && !isHomeTabSwitching.value && !isPageSwitching.value)
       handleThrottledReachBottom()
   },
   {
@@ -311,6 +321,7 @@ watch(isHomeTabSwitching, (switching) => {
 const iframeDrawerURL = ref<string>('')
 const iframeDrawerContext = ref<IframePlaybackContext>()
 const showIframeDrawer = ref<boolean>(false)
+const iframeDrawerRef = ref<{ close: () => Promise<void> }>()
 
 // 添加活跃抽屉状态管理
 const activeDrawer = ref<DrawerType>(DrawerType.None)
@@ -375,7 +386,81 @@ const showBewlyPage = computed((): boolean => {
   return onHomePage
 })
 
-const pageTransition = useReadyPageTransition(() => showBewlyPage.value ? pages[activatedPage.value as keyof typeof pages] : undefined, asyncPages.preload)
+const pageContentRef = ref<HTMLElement>()
+const pageContentMinHeight = ref<number>()
+let scrollRestoreObserver: ResizeObserver | undefined
+let pendingPageScroll: number | undefined
+function pageScrollKey(page: AppPage) {
+  return page === AppPage.Home
+    ? `${page}:${homeTabStateKey(homeActivatedPage.value, settings.value.recommendationMode, settings.value.useFollowingNewLayout)}`
+    : page
+}
+function cancelPageScrollRestore() {
+  pendingPageScroll = undefined
+  scrollRestoreObserver?.disconnect()
+  scrollRestoreObserver = undefined
+}
+function restorePageScroll() {
+  const viewport = scrollViewportRef.value
+  if (!viewport || pendingPageScroll === undefined)
+    return
+  const top = pendingPageScroll
+  viewport.scrollTop = top
+  reachTop.value = viewport.scrollTop === 0
+  // A returning data-only page may still be rebuilding its list. Keep one
+  // bounded observer until its content can accommodate the saved position.
+  if (!isPageSwitching.value && viewport.scrollHeight - viewport.clientHeight >= top - 1)
+    cancelPageScrollRestore()
+}
+const pageTransition = useReadyPageTransition(() => showBewlyPage.value ? pages[activatedPage.value as keyof typeof pages] : undefined, asyncPages.preload, {
+  onStart() {
+    const viewport = scrollViewportRef.value
+    if (!isPageSwitching.value && viewport)
+      pageViewCache.scroll.set(pageScrollKey(displayedPage.value), pendingPageScroll ?? viewport.scrollTop)
+    cancelPageScrollRestore()
+    isPageSwitching.value = showBewlyPage.value
+    if (!showBewlyPage.value) {
+      pageContentMinHeight.value = undefined
+      return
+    }
+    if (viewport)
+      pageContentMinHeight.value = viewport.scrollHeight
+  },
+  onSwap() {
+    displayedPage.value = activatedPage.value
+    pendingPageScroll = pageViewCache.scroll.get(pageScrollKey(activatedPage.value)) ?? 0
+    const viewport = scrollViewportRef.value
+    if (viewport)
+      pageContentMinHeight.value = Math.max(pageContentMinHeight.value ?? 0, pendingPageScroll + viewport.clientHeight)
+  },
+  onEnter(element) {
+    displayedPage.value = activatedPage.value
+    pendingPageScroll ??= pageViewCache.scroll.get(pageScrollKey(activatedPage.value)) ?? 0
+    restorePageScroll()
+    if (typeof ResizeObserver !== 'undefined') {
+      scrollRestoreObserver?.disconnect()
+      scrollRestoreObserver = new ResizeObserver(restorePageScroll)
+      scrollRestoreObserver.observe(element)
+    }
+  },
+  onSettled() {
+    isPageSwitching.value = false
+    pageContentMinHeight.value = undefined
+    void nextTick(() => {
+      restorePageScroll()
+      focusScrollViewport({ force: true })
+      scheduleLoadMoreSentinelCheck()
+    })
+  },
+})
+onScopeDispose(cancelPageScrollRestore)
+useEventListener(scrollViewportRef, 'wheel', cancelPageScrollRestore, { passive: true })
+useEventListener(scrollViewportRef, 'touchstart', cancelPageScrollRestore, { passive: true })
+useEventListener(scrollViewportRef, 'pointerdown', cancelPageScrollRestore, { passive: true })
+useEventListener(scrollViewportRef, 'keydown', (event) => {
+  if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key))
+    cancelPageScrollRestore()
+})
 
 // SearchResults owns a keyword-aware title. Other Bewly shell pages follow the
 // currently selected Dock page (and Home sub-tab) and react to locale changes.
@@ -440,7 +525,7 @@ function focusScrollViewport(options: { force?: boolean } = {}) {
     if (!viewport || !showBewlyPage.value)
       return
 
-    if (!options.force && (showSettings.value || activeDrawer.value !== DrawerType.None || isEditableElement(getActiveElement())))
+    if (showSettings.value || activeDrawer.value !== DrawerType.None || (!options.force && isEditableElement(getActiveElement())))
       return
 
     viewport.focus({ preventScroll: true })
@@ -457,9 +542,6 @@ watch(
       asyncPages.preload(component)
     exitLayoutEditMode()
     cancelPendingRefreshScroll()
-    scrollViewportRef.value?.scrollTo({ top: 0 })
-    focusScrollViewport()
-    scheduleLoadMoreSentinelCheck()
   },
   { immediate: true },
 )
@@ -653,6 +735,7 @@ onBeforeUnmount(() => {
 })
 
 function openIframeDrawer(url: string, options?: { playbackContext?: IframePlaybackContext }) {
+  cancelPageScrollRestore()
   const isSameOrigin = (origin: URL, destination: URL) =>
     origin.protocol === destination.protocol && origin.host === destination.host && origin.port === destination.port
 
@@ -672,6 +755,36 @@ function openIframeDrawer(url: string, options?: { playbackContext?: IframePlayb
   catch {
     // An invalid URL cannot be normalized safely for either the drawer or a new tab.
   }
+}
+
+onScopeDispose(onRouteChange(({ href }) => {
+  const entry = readIframeDrawerHistory(window.history.state, href)
+  if (!entry) {
+    if (showIframeDrawer.value)
+      void iframeDrawerRef.value?.close()
+    return
+  }
+  if (showIframeDrawer.value)
+    return
+  iframeDrawerURL.value = href
+  iframeDrawerContext.value = entry.playbackContext
+  setActiveDrawer(DrawerType.IframeDrawer)
+  showIframeDrawer.value = true
+}))
+
+function handleIframeDrawerClosed() {
+  showIframeDrawer.value = false
+  // A rapid Forward during the old drawer's exit belongs to the new entry.
+  void nextTick(() => {
+    const href = window.location.href
+    const entry = readIframeDrawerHistory(window.history.state, href)
+    if (!entry)
+      return
+    iframeDrawerURL.value = href
+    iframeDrawerContext.value = entry.playbackContext
+    setActiveDrawer(DrawerType.IframeDrawer)
+    showIframeDrawer.value = true
+  })
 }
 
 /**
@@ -700,6 +813,7 @@ provide<BewlyAppProvider>('BEWLY_APP', {
   navigateToPage,
   navigateToHomeTab,
   isHomeTabSwitching,
+  isPageSwitching,
   mainAppRef,
   scrollViewportRef,
   reachTop,
@@ -818,7 +932,7 @@ onBeforeUnmount(stopUrlCleaner)
     :style="{ '--bew-dock-bottom-shift': `${dockBottomShift}px` }"
     :class="{
       'dark': isDark,
-      'bewly-wrapper--wide-sidebar': activatedPage === AppPage.Notifications,
+      'bewly-wrapper--wide-sidebar': displayedPage === AppPage.Notifications,
       'bewly-wrapper--viewport': isHomePage(currentLocationHref),
     }"
     text="$bew-text-1 size-$bew-base-font-size"
@@ -916,19 +1030,23 @@ onBeforeUnmount(stopUrlCleaner)
           >
             <main
               m-auto max-w="$bew-page-max-width"
-              :class="{ 'bewly-page-container--messages': activatedPage === AppPage.Notifications, 'bewly-page-container--library': isLibraryPage }"
+              :class="{ 'bewly-page-container--messages': displayedPage === AppPage.Notifications, 'bewly-page-container--library': isLibraryPage }"
             >
               <div
+                ref="pageContentRef"
                 class="bewly-page-content"
-                :class="{ 'bewly-page-content--messages': activatedPage === AppPage.Notifications, 'bewly-page-content--library': isLibraryPage }"
+                :class="{ 'bewly-page-content--messages': displayedPage === AppPage.Notifications, 'bewly-page-content--library': isLibraryPage }"
                 p="t-[calc(var(--bew-top-bar-height)+10px)]" m-auto
                 w="lg:[calc(100%-200px)] [calc(100%-150px)]"
-                :style="activatedPage !== AppPage.Notifications && !isLibraryPage && useOriginalBilibiliTopBar && !reachTop
-                  ? { paddingTop: 'calc(var(--bew-top-bar-height) + 120px)' }
-                  : undefined"
+                :style="{
+                  minHeight: pageContentMinHeight === undefined ? undefined : `${pageContentMinHeight}px`,
+                  paddingTop: displayedPage !== AppPage.Notifications && !isLibraryPage && useOriginalBilibiliTopBar && !reachTop ? 'calc(var(--bew-top-bar-height) + 120px)' : undefined,
+                }"
               >
-                <Transition mode="out-in" v-bind="pageTransition" @after-enter="scheduleLoadMoreSentinelCheck">
-                  <Component :is="pages[activatedPage]" :key="activatedPage" />
+                <Transition appear mode="out-in" v-bind="pageTransition" @after-enter="scheduleLoadMoreSentinelCheck">
+                  <KeepAlive :include="['BewlyHomePage']" :max="1">
+                    <Component :is="pages[activatedPage]" :key="activatedPage" />
+                  </KeepAlive>
                 </Transition>
 
                 <!-- ✅ IntersectionObserver 哨兵：用于检测滚动到底部，避免在 RAF 中读取 scrollHeight -->
@@ -950,9 +1068,10 @@ onBeforeUnmount(stopUrlCleaner)
 
     <IframeDrawer
       v-if="showIframeDrawer"
+      ref="iframeDrawerRef"
       :url="iframeDrawerURL"
       :playback-context="iframeDrawerContext"
-      @close="showIframeDrawer = false"
+      @close="handleIframeDrawerClosed"
     />
 
     <AppAuthorizationDialog v-if="showAppAuthorizationDialog" />

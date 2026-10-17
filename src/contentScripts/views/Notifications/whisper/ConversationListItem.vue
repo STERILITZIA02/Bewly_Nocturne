@@ -103,10 +103,10 @@ watch(() => props.session.avatar, () => {
         <span class="conversation-list-item__summary">{{ displaySummary }}</span>
         <span class="conversation-list-item__status">
           <Tooltip v-if="session.pinned" :content="t('notifications.whisper.pinned')" placement="top">
-            <i i-mingcute:pin-line aria-hidden="true" />
+            <i i-tabler:pin aria-hidden="true" />
           </Tooltip>
           <Tooltip v-if="session.muted" :content="t('notifications.whisper.muted')" placement="top">
-            <i i-mingcute:notification-off-line aria-hidden="true" />
+            <i i-tabler:bell-off aria-hidden="true" />
           </Tooltip>
           <span
             v-if="session.unreadCount > 0"
@@ -233,8 +233,9 @@ watch(() => props.session.avatar, () => {
 
 .conversation-list-item--selected,
 .conversation-list-item--selected:hover {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
+  box-shadow: var(--bew-selected-ring);
 }
 
 .conversation-list-item--compact {
@@ -362,30 +363,28 @@ watch(() => props.session.avatar, () => {
   min-width: var(--bew-space-4);
   height: var(--bew-space-4);
   padding: 0 var(--bew-space-1);
-  color: var(--bew-on-theme-color);
+  color: var(--bew-text-1);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
-  background: var(--bew-theme-color);
+  background: var(--bew-selected-bg);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
-// Keep state overrides after the base metadata rules: `time` has the same
-// specificity in both rules and must inherit the selected contrast foreground.
-.conversation-list-item--selected {
-  time,
-  .conversation-list-item__summary,
-  .conversation-list-item__status,
-  .conversation-list-item__fallback-avatar,
-  .conversation-list-item__assistant-label {
-    color: inherit;
-  }
+// Keep unread counts readable; the small adjacent dot carries the accent.
+.conversation-list-item__badge::before {
+  content: "";
+  width: var(--bew-space-1);
+  height: var(--bew-space-1);
+  border-radius: 50%;
+  background: var(--bew-accent-marker);
+}
 
-  .conversation-list-item__badge {
-    color: var(--bew-theme-color);
-    background: var(--bew-on-theme-color);
-  }
+.conversation-list-item__badge {
+  display: inline-flex;
+  gap: var(--bew-space-1);
+  align-items: center;
 }
 
 @media (prefers-reduced-motion: reduce) {

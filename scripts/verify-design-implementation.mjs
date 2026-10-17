@@ -71,6 +71,40 @@ export function registerDesignImplementationChecks(check, { Vue, compileComponen
     assert.equal(canvases[1].height, 0)
   })
 
+  check('design: native RGB projection batches reads, avoids unchanged writes and clears stale values after failure', async () => {
+    const projected = new Map()
+    const operations = []
+    let fail = false
+    const root = { style: {
+      getPropertyValue: key => projected.get(key) ?? '',
+      setProperty(key, value) {
+        operations.push('write')
+        projected.set(key, value)
+      },
+      removeProperty(key) { projected.delete(key) },
+    }, ownerDocument: {
+      defaultView: { getComputedStyle: () => ({ getPropertyValue(key) {
+        operations.push('read')
+        return key === '--Ga0' ? '#121212' : ''
+      } }) },
+      createElement: () => ({ width: 0, height: 0, getContext: () => ({ clearRect() {}, fillRect() {}, getImageData() {
+        if (fail)
+          throw new Error('readback blocked')
+        return { data: [18, 18, 18, 255] }
+      } }) }),
+    } }
+    const { syncNativeNeutralRgb } = await loadSourceModule('../src/utils/themeColor.ts', {}, { CSS: { supports: () => true } })
+    syncNativeNeutralRgb(root)
+    assert.equal(projected.get('--bew-native-Ga0-rgb'), '18, 18, 18')
+    assert.ok(operations.lastIndexOf('read') < operations.indexOf('write'), 'style writes cannot invalidate later reads in the same batch')
+    operations.length = 0
+    syncNativeNeutralRgb(root)
+    assert.equal(operations.includes('write'), false)
+    fail = true
+    syncNativeNeutralRgb(root)
+    assert.equal(projected.size, 0, 'current-mode CSS fallbacks replace stale last-mode inline projections')
+  })
+
   check('design: filter summaries clear every applied constraint and each user choice emits once', async () => {
     for (const kind of ['Video', 'User']) {
       const Filters = await compileComponent(`../src/contentScripts/views/SearchResults/components/Search${kind}Filters.vue`, {

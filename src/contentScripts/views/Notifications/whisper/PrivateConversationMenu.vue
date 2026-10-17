@@ -33,19 +33,19 @@ const options = computed<ContextMenuOption[]>(() => {
     return []
   const disabled = value.busy || value.loading || value.unconfirmed || !value.ready
   const result: ContextMenuOption[] = [
-    { value: 'top', label: text(value.pinned ? 'unpin' : 'pin'), icon: 'i-mingcute:pin-line', disabled: disabled || !value.detailReady, kind: 'toggle', checked: value.pinned, pending: value.loading && !value.detailReady, closeOnSelect: false },
-    { value: 'dnd', label: text(value.muted ? 'unmute' : 'mute'), icon: 'i-mingcute:notification-off-line', disabled: disabled || !value.detailReady, kind: 'toggle', checked: value.muted, pending: value.loading && !value.detailReady, closeOnSelect: false },
+    { value: 'top', label: text(value.pinned ? 'unpin' : 'pin'), icon: 'i-tabler:pin', disabled: disabled || !value.detailReady, kind: 'toggle', checked: value.pinned, pending: value.loading && !value.detailReady, closeOnSelect: false },
+    { value: 'dnd', label: text(value.muted ? 'unmute' : 'mute'), icon: 'i-tabler:bell-off', disabled: disabled || !value.detailReady, kind: 'toggle', checked: value.muted, pending: value.loading && !value.detailReady, closeOnSelect: false },
   ]
   if (canManagePrivateUser(value.target)) {
     if (!value.blocked)
-      result.push({ value: 'block', label: text('block'), icon: 'i-mingcute:forbid-circle-line', danger: true, disabled: disabled || !value.relationReady, closeOnSelect: false })
-    result.push({ value: 'report', label: text('report'), icon: 'i-mingcute:flag-1-line', disabled, closeOnSelect: false })
+      result.push({ value: 'block', label: text('block'), icon: 'i-tabler:ban', danger: true, disabled: disabled || !value.relationReady, closeOnSelect: false })
+    result.push({ value: 'report', label: text('report'), icon: 'i-tabler:flag', disabled, closeOnSelect: false })
   }
   if (value.pushAvailable)
-    result.push({ value: 'push', label: text(value.pushEnabled ? 'disable_push' : 'enable_push'), description: value.pushEnabled ? text('notifications_normal') : undefined, icon: 'i-mingcute:notification-line', disabled: disabled || !value.settingsReady, kind: 'toggle', checked: value.pushEnabled, closeOnSelect: false })
+    result.push({ value: 'push', label: text(value.pushEnabled ? 'disable_push' : 'enable_push'), description: value.pushEnabled ? text('notifications_normal') : undefined, icon: 'i-tabler:bell', disabled: disabled || !value.settingsReady, kind: 'toggle', checked: value.pushEnabled, closeOnSelect: false })
   if (value.error || value.unconfirmed) {
-    result.push({ value: 'error', label: errorText.value || text('unconfirmed'), icon: 'i-mingcute:warning-line', disabled: true })
-    result.push({ value: 'refresh', label: text('refresh'), icon: 'i-mingcute:refresh-2-line', closeOnSelect: false, disabled: value.busy || value.loading })
+    result.push({ value: 'error', label: errorText.value || text('unconfirmed'), icon: 'i-tabler:alert-triangle', disabled: true })
+    result.push({ value: 'refresh', label: text('refresh'), icon: 'i-tabler:refresh', closeOnSelect: false, disabled: value.busy || value.loading })
   }
   return result
 })

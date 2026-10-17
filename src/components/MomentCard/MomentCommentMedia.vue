@@ -19,18 +19,6 @@ const MAX_VISIBLE_PICTURES = 9
 const visiblePictures = computed(() => pictures.slice(0, MAX_VISIBLE_PICTURES))
 const hiddenPictureCount = computed(() => Math.max(0, pictures.length - visiblePictures.value.length))
 const failedPictures = ref(new Set<string>())
-const mediaClass = computed(() => {
-  const count = visiblePictures.value.length
-  return count === 1
-    ? 'moment-comment-media--single'
-    : count === 2
-      ? 'moment-comment-media--two'
-      : count === 3
-        ? 'moment-comment-media--three'
-        : count === 4
-          ? 'moment-comment-media--four'
-          : 'moment-comment-media--grid'
-})
 
 function markPictureFailed(url: string) {
   failedPictures.value = new Set(failedPictures.value).add(url)
@@ -48,7 +36,6 @@ function handleOpenImage(index: number, event: MouseEvent) {
   <div
     v-if="visiblePictures.length"
     class="moment-comment-media"
-    :class="mediaClass"
   >
     <button
       v-for="(picture, index) in visiblePictures"
@@ -86,16 +73,9 @@ function handleOpenImage(index: number, event: MouseEvent) {
 .moment-comment-media {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--bew-space-2);
-  width: min(100%, var(--bew-comment-media-max-width));
+  gap: var(--bew-space-1);
+  width: 100%;
   margin-top: var(--bew-space-2);
-}
-.moment-comment-media--single {
-  display: block;
-}
-.moment-comment-media--two,
-.moment-comment-media--four {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .moment-comment-media__item {
   position: relative;
@@ -103,7 +83,7 @@ function handleOpenImage(index: number, event: MouseEvent) {
   width: 100%;
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--bew-surface-border-color);
+  border: 0;
   border-radius: var(--bew-media-radius);
   background: var(--bew-fill-1);
   cursor: pointer;
@@ -123,26 +103,6 @@ function handleOpenImage(index: number, event: MouseEvent) {
   background: var(--bew-fill-2);
   font-size: var(--bew-icon-size-lg);
 }
-.moment-comment-media--single .moment-comment-media__item {
-  width: fit-content;
-  max-width: 100%;
-  background: var(--bew-fill-1);
-}
-.moment-comment-media--single .moment-comment-media__item img {
-  width: auto;
-  max-width: 100%;
-  height: auto;
-  max-height: var(--bew-comment-media-single-max-height);
-  aspect-ratio: auto;
-  object-fit: contain;
-}
-.moment-comment-media--single .moment-comment-media__fallback {
-  width: min(100%, var(--bew-comment-media-fallback-size));
-  aspect-ratio: 1;
-}
-.moment-comment-media__item:hover {
-  border-color: color-mix(in srgb, var(--bew-theme-color) 46%, var(--bew-surface-border-color));
-}
 .moment-comment-media__item:active {
   transform: scale(0.99);
 }
@@ -160,11 +120,5 @@ function handleOpenImage(index: number, event: MouseEvent) {
   font-size: var(--bew-font-size-title);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
-}
-@container (max-width: 420px) {
-  .moment-comment-media--three,
-  .moment-comment-media--grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 </style>

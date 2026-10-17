@@ -9,7 +9,9 @@ import { createCommentReplyPaginationController } from '~/inject/commentReplyPag
 import { createNativeCommentReplyReader } from '~/inject/commentReplyReader'
 import { createCommentReplyReadingController, getCommentReplyGuideCoordinates, isCommentReplyReadingScroll } from '~/inject/commentReplyReading'
 import { updateCommentSendButton } from '~/inject/commentSendButton'
+import { patchNativeUserProfile } from '~/inject/nativeUserProfile'
 import { setupVideoMetadataBridge } from '~/inject/videoMetadata'
+import USER_PROFILE_CSS from '~/styles/adaptedStyles/shadowDom/userProfile.scss?inline'
 import SEND_BUTTON_CSS from '~/styles/sendButton.scss?inline'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
 import { cleanBilibiliShareText } from '~/utils/bilibiliUrl'
@@ -2939,6 +2941,20 @@ else if (shouldInitializePageScript) {
       if (typeof classConstructor !== 'function')
         return
 
+      if (name === 'bili-user-profile') {
+        try {
+          patchNativeUserProfile(classConstructor)
+          patchCommentComponentUpdate(name, classConstructor, (component) => {
+            if (component.shadowRoot)
+              ensureCommentShadowStyle(component.shadowRoot, 'bewly-user-profile-style', USER_PROFILE_CSS)
+          })
+        }
+        catch (error) {
+          console.warn('[Bewly Nocturne] Failed to patch native user profile.', error)
+        }
+        return
+      }
+
       if (name === 'bili-comment-rich-textarea') {
         try {
           patchCommentComponentUpdate(name, classConstructor, (component) => {
@@ -3127,6 +3143,7 @@ else if (shouldInitializePageScript) {
       'bili-comment-pictures-renderer',
       'bili-comment-user-info',
       'bili-comment-rich-textarea',
+      'bili-user-profile',
     ])
     for (const name of commentElementNames)
       patchCommentCustomElement(name, window.customElements.get(name))

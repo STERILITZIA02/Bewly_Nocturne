@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
+import { usePageViewState } from '~/composables/usePageViewState'
 
 import ConversationListItem from './ConversationListItem.vue'
 import ConversationListSkeleton from './ConversationListSkeleton.vue'
@@ -26,6 +27,7 @@ const props = defineProps<{
   paginationStalled: boolean
   loadMoreFailed: boolean
   selectedSessionKey: string
+  selectedRecipient?: TransientPrivateRecipient | null
   showOfficialAssistants: boolean
   recipientSearch: PrivateRecipientSearchController
   searchMode?: 'people' | 'messages'
@@ -42,7 +44,8 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const filter = ref<PrivateSessionFilter>('all')
+const viewState = usePageViewState('conversation-list-ui')
+const filter = viewState.ref<PrivateSessionFilter>('filter', 'all')
 const typeFilter = defineModel<PrivateSessionTypeFilter>('typeFilter', { default: 'all' })
 const query = defineModel<string>('query', { default: '' })
 const filters: PrivateSessionFilter[] = ['all', 'unread', 'pinned']
@@ -91,6 +94,20 @@ const recipientErrors = computed(() => (['following', 'global'] as const).filter
 const noPeopleResults = computed(() => Boolean(normalizedQuery.value) && props.recipientSearch.state.complete
   && !props.recipientSearch.state.loading && !props.recipientSearch.state.searching
   && !recipientErrors.value.length && !hasPeopleResults.value)
+const outsideSelection = computed(() => {
+  const rendered = normalizedQuery.value
+    ? recipientGroups.value.flatMap(group => group.items.map(row => row.session?.key))
+    : filteredItems.value.map(item => item.key)
+  return props.items.find(item => item.key === props.selectedSessionKey && !rendered.includes(item.key))
+})
+watch(() => [props.active, props.selectedSessionKey, props.selectedRecipient?.mid], async () => {
+  if (!props.active)
+    return
+  await nextTick()
+  const selected = Array.from(itemsRef.value?.querySelectorAll<HTMLElement>('[data-session-key], [data-recipient-mid]') ?? [])
+    .find(element => element.dataset.sessionKey === props.selectedSessionKey || (props.selectedRecipient && element.dataset.recipientMid === props.selectedRecipient.mid))
+  selected?.scrollIntoView?.({ block: 'nearest' })
+}, { immediate: true })
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let normalScrollTop = 0
 watch(() => Boolean(normalizedQuery.value), async (searching) => {
@@ -286,9 +303,14 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
       v-else
       ref="itemsRef"
       class="conversation-list__items"
-      :class="{ 'conversation-list__items--empty': (!normalizedQuery && !filteredItems.length) || noPeopleResults }"
+      :class="{ 'conversation-list__items--empty': !selectedRecipient && !outsideSelection && ((!normalizedQuery && !filteredItems.length) || noPeopleResults) }"
       @keydown="handleListKeydown"
     >
+      <PrivateRecipientSearchResultItem v-if="selectedRecipient" :recipient="selectedRecipient" selected @select="emit('selectRecipient', $event)" />
+      <ConversationListItem
+        v-if="outsideSelection" :session="outsideSelection" :compact="compact" selected @select="emit('select', $event)"
+        @menu="(session, trigger) => emit('menu', session, trigger)"
+      />
       <template v-if="!normalizedQuery">
         <ConversationListItem
           v-for="session in filteredItems"
@@ -331,7 +353,7 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
           {{ t('notifications.whisper.search.users_empty') }}
         </p>
       </template>
-      <p v-else-if="!filteredItems.length" class="conversation-list__empty" role="status">
+      <p v-else-if="!filteredItems.length && !selectedRecipient && !outsideSelection" class="conversation-list__empty" role="status">
         {{ visibleItems.length ? t('notifications.whisper.empty_filtered') : t('notifications.whisper.empty') }}
       </p>
       <div

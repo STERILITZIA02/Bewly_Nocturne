@@ -592,7 +592,7 @@ const weekDays = computed(() => [
 
   &:focus {
     background: var(--bew-fill-2);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
   }
 }
 
@@ -618,7 +618,7 @@ const weekDays = computed(() => [
     transform var(--bew-duration-normal) var(--bew-ease-out);
 
   &:hover {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   &:active {
@@ -781,15 +781,17 @@ const weekDays = computed(() => [
   }
 
   &.today {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
+    box-shadow: var(--bew-selected-ring);
   }
 
   &.selected {
-    background: var(--bew-theme-color);
-    color: var(--bew-on-theme-color);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
+    box-shadow: var(--bew-selected-ring);
 
     &:hover {
-      background: var(--bew-theme-color);
+      background: var(--bew-pressed-bg);
     }
   }
 
@@ -837,7 +839,7 @@ const weekDays = computed(() => [
   }
 
   &.today {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
 
     &:hover:not(:disabled) {
       background: var(--bew-theme-surface);

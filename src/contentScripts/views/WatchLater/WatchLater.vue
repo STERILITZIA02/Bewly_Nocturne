@@ -18,6 +18,7 @@ import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindo
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useGridLayout } from '~/composables/useGridLayout'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
+import { usePageViewState } from '~/composables/usePageViewState'
 import { LIBRARY_AUTOFILL_PAGE_LIMIT } from '~/constants/library'
 import { settings } from '~/logic'
 import { isLayoutEditing, useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
@@ -51,15 +52,16 @@ const { openIframeDrawer } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const showOpenTabsDialog = ref(false)
 
+const viewState = usePageViewState('watch-later')
 const isLoading = ref(false)
 const isRefreshing = ref(false)
 const refreshFailed = ref(false)
-const noMoreContent = ref(false)
+const noMoreContent = viewState.ref('noMoreContent', false)
 const requestFailed = ref(false)
-const currentWatchLaterList = ref<VideoItem[]>([])
-const searchQuery = ref('')
-const advancedFilters = ref(createWatchLaterFilters())
-const sortOrder = ref<WatchLaterSortOrder>('newest')
+const currentWatchLaterList = viewState.ref<VideoItem[]>('items', [])
+const searchQuery = viewState.ref('query', '')
+const advancedFilters = viewState.ref('filters', createWatchLaterFilters())
+const sortOrder = viewState.ref<WatchLaterSortOrder>('sort', 'newest')
 const filtersActive = computed(() => Boolean(searchQuery.value.trim() || hasWatchLaterFilters(advancedFilters.value)))
 const filteredItems = computed(() => sortWatchLaterItems(filterWatchLaterItems(currentWatchLaterList.value, searchQuery.value, advancedFilters.value.progress, advancedFilters.value.duration, item => getVideoWatchState({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }), advancedFilters.value), sortOrder.value))
 const layoutOptions = computed(() => [
@@ -69,7 +71,7 @@ const layoutOptions = computed(() => [
 const watchLaterCount = computed(() => topBarStore.watchLaterCount ?? 0)
 const pendingAction = shallowRef<{ accountId: number, aid: number } | null>(null)
 const { handlePageRefresh, handleReachBottom, haveScrollbar, scrollViewportRef } = useBewlyApp()
-const pageNum = ref<number>(1)
+const pageNum = viewState.ref<number>('page', 1)
 const pageSize = ref<number>(20)
 const watchLaterLayoutMode = useLayoutEditSettingValue(
   'page.watchLater.layout',
@@ -329,8 +331,27 @@ function isCurrentRequest(generation: number, accountId: number): boolean {
 onMounted(() => {
   initPageAction()
   loadedAccountId = getCurrentAccountId()
-  void initData()
+  if (viewState.restored && (currentWatchLaterList.value.length || noMoreContent.value)) {
+    if (viewState.read('revision', '') !== queueRevision()) {
+      viewDirty = replaceView = true
+      scheduleViewRefresh()
+    }
+  }
+  else {
+    void initData()
+  }
 })
+
+function queueRevision() {
+  const update = topBarStore.watchLaterUpdate
+  const version = update?.type === 'snapshot' ? update.snapshot : update
+  return version ? `${version.epoch}:${version.revision}` : ''
+}
+viewState.capture('revision', queueRevision)
+batch.managing.value = viewState.read('managing', false)
+batch.selected.value = viewState.read('selected', new Set<number>())
+viewState.capture('managing', () => batch.managing.value)
+viewState.capture('selected', () => batch.selected.value)
 
 watch(
   [() => topBarStore.isLogin, () => topBarStore.userInfo.mid],

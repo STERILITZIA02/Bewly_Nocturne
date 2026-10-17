@@ -224,7 +224,7 @@ function refreshSearchContent() {
       <div
         v-if="!settings.disableFrostedGlass && settings.useLinearGradientThemeColorBackground && reachTop && isDark"
         pos="absolute top-0 left-0" w-full h="$bew-top-bar-height" pointer-events-none
-        :style="{ background: 'linear-gradient(to bottom, var(--bew-theme-color-10), transparent)' }"
+        :style="{ background: 'linear-gradient(to bottom, rgb(255 255 255 / 10%), transparent)' }"
       />
     </Transition>
 

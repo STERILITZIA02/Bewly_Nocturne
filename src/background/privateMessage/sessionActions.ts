@@ -1,4 +1,5 @@
 import { createPrivateMessageErrorResponse } from './errors'
+import { parsePrivateSessionsResponse } from './protocol'
 import { requestPrivateMessage, requestPrivateMessageForm } from './transport'
 import type { PrivateMessageEndpointName, PrivateMessageRequestParams } from './types'
 import { PRIVATE_MESSAGE_ENDPOINTS } from './types'
@@ -24,6 +25,28 @@ export async function getPrivateSessionDetail(target: PrivateSessionTarget) {
   // Menu state does not need history, pagination or a last-message body. Do not
   // couple this read to the stricter session-list parser or forward private text.
   return { code: 0, data: { talker_id: target.talkerId, session_type: target.sessionType, top_ts: data.top_ts, is_dnd: data.is_dnd as 0 | 1 } satisfies PrivateSessionActionState }
+}
+
+/** Targeted deep-link read; unlike menu detail, preserve authoritative capabilities. */
+export async function getPrivateConversationTarget(target: PrivateSessionTarget) {
+  if (!validTarget(target))
+    return invalid('getPrivateSessionDetail')
+  const response = await requestPrivateMessage({ endpointName: 'getPrivateSessionDetail', url: PRIVATE_MESSAGE_ENDPOINTS.getPrivateSessionDetail, params: { talker_id: target.talkerId, session_type: target.sessionType } })
+  // Verified against the current Web IM: a fresh contact returns 1000004.
+  // The native client opens a contact draft; auth/risk/transport failures must
+  // remain errors rather than silently granting a new conversation.
+  if (target.sessionType === 1 && response.code === 1000004)
+    return { code: 0, data: { session: null } }
+  if (response.code !== 0)
+    return response
+  const data = response.data
+  if (data === null || (data && typeof data === 'object' && !Object.keys(data).length))
+    return { code: 0, data: { session: null } }
+  const parsed = parsePrivateSessionsResponse({ ...response, data: { session_list: [data], has_more: 0 } })
+  const session = parsed?.data?.session_list[0]
+  if (!session || session.talker_id !== target.talkerId || session.session_type !== target.sessionType)
+    return invalid('getPrivateSessionDetail')
+  return { code: 0, data: { session } }
 }
 
 export async function getPrivateSessionSettings(target: { talkerId: string }) {

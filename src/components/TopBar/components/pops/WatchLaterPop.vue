@@ -242,7 +242,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
                 :disabled="pendingActions.has(item.aid)"
                 @click.stop.prevent="deleteWatchLaterItem(item.aid, $event)"
               >
-                <i i-mingcute:close-line />
+                <i i-tabler:x />
               </IconButton>
 
               <!-- Video -->

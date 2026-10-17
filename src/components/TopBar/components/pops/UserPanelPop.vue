@@ -46,48 +46,48 @@ const otherLinks = computed((): { name: string, url: string, icon: string, code?
     {
       name: t('topbar.user_dropdown.uploads_manager'),
       url: 'https://member.bilibili.com/platform/upload-manager/article',
-      icon: 'i-solar:video-library-linear',
+      icon: 'i-tabler:video',
     },
     {
       name: t('topbar.user_dropdown.account_settings'),
       url: 'https://account.bilibili.com/account/home',
-      icon: 'i-solar:user-circle-linear',
+      icon: 'i-tabler:user-circle',
     },
     {
       name: t('topbar.user_dropdown.bilibili_premium'),
       url: 'https://account.bilibili.com/big',
-      icon: 'i-solar:accessibility-linear',
+      icon: 'i-tabler:accessible',
     },
     {
       name: t('topbar.user_dropdown.bilibili_premium_rewards'),
       url: 'https://account.bilibili.com/account/big/myPackage',
-      icon: 'i-solar:accessibility-linear',
+      icon: 'i-tabler:accessible',
       code: 'vip_rewards',
     },
     {
       name: t('topbar.user_dropdown.b_coins_wallet'),
       url: 'https://pay.bilibili.com/',
-      icon: 'i-solar:wallet-money-linear',
+      icon: 'i-tabler:wallet',
     },
     {
       name: t('topbar.user_dropdown.orders'),
       url: 'https://show.bilibili.com/orderlist',
-      icon: 'i-solar:clipboard-list-linear',
+      icon: 'i-tabler:clipboard-list',
     },
     {
       name: t('topbar.user_dropdown.workshop'),
       url: 'https://gf.bilibili.com?msource=main_station',
-      icon: 'i-solar:garage-linear',
+      icon: 'i-tabler:building-warehouse',
     },
     {
       name: t('topbar.user_dropdown.my_stream_info'),
       url: 'https://link.bilibili.com/p/center/index',
-      icon: 'i-solar:videocamera-record-linear',
+      icon: 'i-tabler:video',
     },
     {
       name: t('topbar.user_dropdown.my_courses'),
       url: 'https://www.bilibili.com/cheese/mine/list',
-      icon: 'i-solar:notebook-bookmark-linear',
+      icon: 'i-tabler:notebook',
     },
   ]
 })
@@ -401,7 +401,7 @@ function handleClickChannel() {
             <div :class="item.icon" text="$bew-text-2" />
             {{ item.name }}
           </div>
-          <div i-mingcute:arrow-right-line />
+          <div i-tabler:arrow-right />
         </ALink>
       </div>
 
@@ -427,14 +427,14 @@ function handleClickChannel() {
             <div :class="item.icon" text="$bew-text-2" />
             {{ item.name }}
           </div>
-          <div i-mingcute:arrow-right-line />
+          <div i-tabler:arrow-right />
         </ALink>
         <div
           class="user-panel-section__row user-panel-section__row--danger"
           text="$bew-error-color"
           @click="logout()"
         >
-          <div i-solar:logout-2-linear text="$bew-error-60" mr-2 />
+          <div i-tabler:logout text="$bew-error-60" mr-2 />
           {{ $t('topbar.user_dropdown.log_out') }}
         </div>
       </div>

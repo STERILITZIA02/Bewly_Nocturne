@@ -36,6 +36,154 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
     return { listeners, warnings, messaging }
   }
 
+  async function liveRuntimeFixture() {
+    const { messaging } = await runtimeFixture()
+    const requests = []
+    const events = []
+    const provider = { handleReachBottom: Vue.ref(), handlePageRefresh: Vue.ref() }
+    let accountId = 100
+    let view
+    let instance
+    let app
+    const host = document.body.appendChild(document.createElement('div'))
+    const Grid = {
+      props: ['items', 'loading', 'requestFailed', 'noMoreContent', 'needToLoginFirst'],
+      setup(props, { emit }) {
+        view = props
+        return () => Vue.h('div', [
+          Vue.h('button', { 'data-load-more': '', 'onClick': () => emit('loadMore') }, 'More'),
+          Vue.h('button', { 'data-refresh': '', 'onClick': () => emit('refresh') }, 'Refresh'),
+        ])
+      },
+    }
+    const Live = await compileComponent('../src/contentScripts/views/Home/components/Live.vue', {
+      '~/components/VideoCardGrid.vue': { default: Grid },
+      '~/composables/useAppProvider': { useBewlyApp: () => provider },
+      '~/composables/useHomeTabState': await import('../src/composables/useHomeTabState'),
+      '~/logic/loginStatus': { parseDedeUserID: () => accountId },
+      '~/utils/htmlDecode': await import('../src/utils/htmlDecode'),
+      '~/utils/messaging': messaging,
+      '~/utils/api': { default: { live: { getFollowingLiveList(params) {
+        return new Promise((resolve, reject) => requests.push({ params, resolve, reject }))
+      } } } },
+    }, { globals: { console } })
+    function mount() {
+      app = Vue.createApp({ render: () => Vue.h(Live, {
+        gridLayout: 'adaptive',
+        ref: value => instance = value,
+        onBeforeLoading: () => events.push('before'),
+        onAfterLoading: () => events.push('after'),
+      }) })
+      app.mount(host)
+    }
+    mount()
+    return {
+      requests,
+      events,
+      provider,
+      get view() { return view },
+      refresh: () => instance.initData(),
+      more: () => host.querySelector('[data-load-more]').click(),
+      account(value) { accountId = value },
+      remount() {
+        app.unmount()
+        mount()
+      },
+      close() {
+        app.unmount()
+        host.remove()
+      },
+    }
+  }
+
+  check('Live runtime: invalidation stops pagination and remount retries while retaining loaded rooms and ordinary network recovery', async () => {
+    const fixture = await liveRuntimeFixture()
+    const previousError = console.error
+    const errors = []
+    console.error = (...args) => errors.push(args)
+    try {
+      await flush()
+      assert.equal(fixture.requests.length, 1)
+      fixture.requests[0].resolve({ code: 0, data: { list: Array.from({ length: 9 }, (_, index) => ({
+        roomid: index + 1,
+        uid: index + 1,
+        title: 'Room',
+        uname: 'Owner',
+        area_name_v2: 'Area',
+        room_cover: '',
+        face: '',
+        text_small: '',
+        live_status: 1,
+      })) } })
+      await flush()
+      assert.equal(fixture.requests.length, 2)
+      fixture.requests[1].reject(new Error('Network unavailable'))
+      await flush()
+      assert.equal(fixture.view.items.length, 9)
+      assert.equal(fixture.view.requestFailed, true)
+      assert.equal(fixture.view.loading, false)
+      assert.equal(errors.length, 1, 'ordinary failures stay observable')
+      fixture.more()
+      await flush()
+      assert.equal(fixture.requests.length, 3)
+      assert.equal(fixture.requests[2].params.page, 2, 'retry the failed page without advancing its cursor')
+      fixture.requests[2].reject(new Error('Extension context invalidated.'))
+      await flush()
+      assert.equal(fixture.view.loading, false)
+      assert.equal(fixture.view.requestFailed, false, 'invalid runtime is not a retryable live-service error')
+      assert.equal(fixture.view.noMoreContent, false, 'invalidation is not the end of the list')
+      assert.equal(fixture.view.items.length, 9)
+      assert.equal(errors.length, 1, 'terminal context failure must not be logged as an API error')
+      await fixture.refresh()
+      fixture.more()
+      await fixture.provider.handleReachBottom.value()
+      await fixture.provider.handlePageRefresh.value()
+      await flush()
+      assert.equal(fixture.requests.length, 3)
+      assert.equal(fixture.view.items.length, 9, 'refresh cannot clear the retained rooms in a dead world')
+      fixture.remount()
+      await flush()
+      assert.equal(fixture.requests.length, 3, 'component remount cannot revive the invalid extension world')
+      assert.equal(fixture.view.loading, false)
+    }
+    finally {
+      console.error = previousError
+      fixture.close()
+    }
+  })
+
+  check('Live runtime: a stale account failure invalidates the world and an in-flight replacement cannot append rooms or keep loading', async () => {
+    const fixture = await liveRuntimeFixture()
+    const previousError = console.error
+    const errors = []
+    console.error = (...args) => errors.push(args)
+    try {
+      await flush()
+      fixture.account(200)
+      const refresh = fixture.refresh()
+      await flush()
+      assert.equal(fixture.requests.length, 2)
+      fixture.requests[0].reject(new Error('Extension context invalidated.'))
+      await flush()
+      fixture.requests[1].resolve({ code: 0, data: { list: [{ roomid: 99, title: 'stale' }] } })
+      await refresh
+      await flush()
+      assert.equal(fixture.view.items.length, 0)
+      assert.equal(fixture.view.loading, false)
+      assert.equal(fixture.view.requestFailed, false)
+      assert.equal(fixture.events.filter(event => event === 'after').length, 1, 'only the current request settles the loading owner')
+      assert.equal(errors.length, 0)
+      await fixture.refresh()
+      fixture.more()
+      await flush()
+      assert.equal(fixture.requests.length, 2)
+    }
+    finally {
+      console.error = previousError
+      fixture.close()
+    }
+  })
+
   check('runtime transport: native Promise rejections preserve DOMException details and unmatched messages stay silent', async () => {
     const { listeners, messaging } = await runtimeFixture()
     let result

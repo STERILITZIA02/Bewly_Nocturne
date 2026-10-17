@@ -79,24 +79,82 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
     assert.equal(wire.getIframeMessageData({ ...event, origin: 'https://www.bilibili.com.evil.test' }, frame), undefined)
   })
   check('A11 disclosure: cancellation cannot finish the new close or unmount a reopened comment section', async () => {
-    const disclosure = Vue.ref('none')
-    const displayedDisclosure = Vue.ref('comments')
-    const context = await loadSourceFunctions('../src/components/MomentCard/MomentCard.vue', ['handleDisclosureTransitionEnd'], { disclosure, displayedDisclosure })
-    const element = {}
-    const event = { type: 'transitioncancel', propertyName: 'grid-template-rows', target: element, currentTarget: element }
-    context.handleDisclosureTransitionEnd(event)
-    assert.equal(displayedDisclosure.value, 'comments')
-    disclosure.value = 'comments'
-    context.handleDisclosureTransitionEnd({ ...event, type: 'transitionend' })
-    assert.equal(displayedDisclosure.value, 'comments')
-    disclosure.value = 'none'
-    context.handleDisclosureTransitionEnd({ ...event, type: 'transitionend' })
-    assert.equal(displayedDisclosure.value, 'none')
-    displayedDisclosure.value = 'comments'
-    context.handleDisclosureTransitionEnd({ ...event, propertyName: 'height' })
-    assert.equal(displayedDisclosure.value, 'comments', 'intrinsic height reversal retains the live content')
-    context.handleDisclosureTransitionEnd({ ...event, type: 'transitionend', propertyName: 'height' })
-    assert.equal(displayedDisclosure.value, 'none', 'intrinsic height closing releases content only after settling')
+    const open = Vue.ref(false)
+    const frames = new Map()
+    const timers = new Map()
+    const motions = []
+    let sequence = 0
+    let drawn = 0
+    let natural = 180
+    let closed = 0
+    let reduced = false
+    let resized
+    const element = { getBoundingClientRect: () => ({ height: drawn }) }
+    const body = { getBoundingClientRect: () => ({ height: natural }) }
+    const { useMeasuredDisclosure } = await loadSourceModule('../src/composables/useMeasuredDisclosure.ts', {
+      'vue': Vue,
+      '@vueuse/core': { useResizeObserver: (_target, callback) => resized = callback },
+      '~/utils/motionTiming': await import('../src/utils/motionTiming'),
+    }, {
+      requestAnimationFrame: (callback) => {
+        frames.set(++sequence, callback)
+        return sequence
+      },
+      cancelAnimationFrame: id => frames.delete(id),
+      setTimeout: (callback, delay) => {
+        timers.set(++sequence, { callback, delay })
+        return sequence
+      },
+      clearTimeout: id => timers.delete(id),
+      getComputedStyle: () => ({ getPropertyValue: () => '.2s' }),
+      window: { matchMedia: () => ({ matches: reduced }) },
+    })
+    const frame = async () => {
+      await flush()
+      const callbacks = [...frames.values()]
+      frames.clear()
+      callbacks.forEach(callback => callback())
+      await flush()
+    }
+    const scope = Vue.effectScope()
+    const context = scope.run(() => useMeasuredDisclosure(Vue.shallowRef(element), Vue.shallowRef(body), open, () => closed++, moving => motions.push(moving)))
+    await frame()
+    closed = 0
+    open.value = true
+    await frame()
+    assert.equal(context.height.value, 180)
+    assert.equal([...timers.values()][0].delay, 300, 'compressed seconds remain milliseconds for settlement')
+    drawn = 60
+    natural = 480
+    resized()
+    await frame()
+    assert.equal(context.height.value, 480, 'a late comment response redirects the same reveal')
+    assert.deepEqual(motions, [true])
+    open.value = false
+    await frame()
+    const event = { type: 'transitioncancel', propertyName: 'height', target: element }
+    context.onTransitionEnd(event)
+    assert.equal(closed, 0)
+    open.value = true
+    await frame()
+    context.onTransitionEnd({ ...event, type: 'transitionend' })
+    assert.equal(closed, 0, 'a queued earlier end cannot finish the redirected animation')
+    assert.equal(context.moving.value, true)
+    open.value = false
+    await frame()
+    drawn = 0
+    context.onTransitionEnd({ ...event, type: 'transitionend' })
+    assert.equal(closed, 1)
+    assert.deepEqual(motions, [true, false])
+    reduced = true
+    open.value = true
+    await frame()
+    assert.equal(context.height.value, 480)
+    assert.equal(context.moving.value, false)
+    assert.equal(timers.size, 0)
+    resized()
+    scope.stop()
+    assert.equal(frames.size, 0, 'teardown releases scheduled measurements')
   })
   check('A10 custom rate: explicit application survives native ratechange and respects memory and active media', async () => {
     const rates = await import('../src/utils/playbackRate')
@@ -571,6 +629,7 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
     const documentModule = await loadSourceModule('../src/utils/iframeDocument.ts', { './iframeMessage': wire }, { crypto, location, window: childWindow })
     const settings = Vue.ref({ theme: 'dark', videoPageDarkMode: true, enableOledDarkMode: true, darkModeBaseColor: '#181818' })
     const dark = await loadSourceModule('../src/composables/useDark.ts', {
+      '~/utils/darkModeTint': await import('../src/utils/darkModeTint'),
       'vue': Vue,
       '@vueuse/core': { usePreferredDark: () => Vue.ref(true) },
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => route },

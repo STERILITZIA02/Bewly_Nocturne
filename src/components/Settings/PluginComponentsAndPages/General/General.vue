@@ -8,7 +8,6 @@ import { settings } from '~/logic'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
-import SettingsSectionHeading from '../../components/SettingsSectionHeading.vue'
 
 const { t, locale } = useI18n()
 const startQuickLayoutEdit = inject<() => void>('startQuickLayoutEdit')
@@ -46,11 +45,9 @@ watch(() => settings.value.language, (newValue) => {
 
 <template>
   <div>
-    <SettingsSectionHeading
-      :title="$t('settings.menu_general')"
-      :desc="$t('settings.category_general_desc')"
-      icon="i-mingcute:settings-3-line"
-    />
+    <p class="bew-help" mb-4>
+      {{ $t('settings.category_general_desc') }}
+    </p>
 
     <SettingsItemGroup :title="$t('settings.group_language')">
       <SettingsItem :title="$t('settings.select_language')" right-width="auto">
@@ -75,7 +72,7 @@ watch(() => settings.value.language, (newValue) => {
           @click="startQuickLayoutEdit?.()"
         >
           <template #left>
-            <i i-mingcute:edit-3-line />
+            <i i-tabler:edit />
           </template>
           {{ $t('layout_editor.start_quick_edit') }}
         </Button>

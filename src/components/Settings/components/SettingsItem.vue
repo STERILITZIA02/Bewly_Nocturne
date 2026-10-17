@@ -24,7 +24,7 @@ provide(FORM_FIELD_LABEL_ID, titleId)
     >
       <div class="left-content" flex-1 min-w-0>
         <div>
-          <span :id="titleId" class="settings-item-title">
+          <span :id="titleId" class="settings-item-title bew-ui-label">
             <slot name="title">
               {{ title }}
             </slot>
@@ -33,7 +33,7 @@ provide(FORM_FIELD_LABEL_ID, titleId)
         </div>
 
         <div
-          text="sm $bew-text-2"
+          class="bew-help"
           break-words
           :style="{ marginTop: $slots.desc || desc ? '0.25rem' : '0' }"
         >

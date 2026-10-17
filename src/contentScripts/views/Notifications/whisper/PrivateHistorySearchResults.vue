@@ -206,8 +206,8 @@ function formatTime(timestamp: number) {
 
 .private-history-results__snippet mark {
   padding: 0;
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
+  background: transparent;
   border-radius: 0;
 }
 

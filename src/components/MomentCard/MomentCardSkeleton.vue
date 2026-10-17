@@ -77,7 +77,7 @@ withDefaults(defineProps<{ media?: boolean }>(), { media: true })
   min-height: var(--bew-space-10);
   padding: 0 var(--bew-space-2);
   box-sizing: border-box;
-  border-top: 1px solid color-mix(in oklab, var(--bew-border-color), transparent 64%);
+  border-top: 1px solid var(--bew-border-color);
 }
 .moment-card-skeleton--media .moment-card-skeleton__body {
   @include contentCard.under-cover(var(--bew-card-inset-radius));

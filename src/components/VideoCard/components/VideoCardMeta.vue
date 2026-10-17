@@ -29,8 +29,8 @@ const metrics = computed(() => [settings.value.videoCardMetaFontSize, settings.v
     <a v-if="searchable" class="video-card-meta__chip video-card-meta__chip--searchable" :href="getTagSearchUrl(searchable.text)" target="_blank" @click.stop>
       {{ searchable.text }}
     </a>
-    <span v-if="video.type === 'vertical'" i-mingcute:cellphone-2-line />
-    <span v-else-if="video.type === 'bangumi'" i-mingcute:movie-line />
+    <span v-if="video.type === 'vertical'" i-tabler:device-mobile />
+    <span v-else-if="video.type === 'bangumi'" i-tabler:movie />
   </div>
 </template>
 

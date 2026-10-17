@@ -223,7 +223,9 @@ export function registerUpstreamTransactionChecks(check, { Vue, flush, compileCo
       './momentForwardContent': content,
       './momentForwardTransactions': transactions,
     })
+    const host = document.body.appendChild(document.createElement('div'))
     const Component = await compileComponent('../src/components/MomentCard/MomentForwardComposer.vue', {
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ mainAppRef: Vue.ref(host) }) },
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       'vue-toastification': { useToast: () => ({ success() {}, error() {} }) },
       '~/stores/topBarStore': { useTopBarStore: () => ({ isLogin: true, userInfo: { mid: 1 } }) },
@@ -237,7 +239,6 @@ export function registerUpstreamTransactionChecks(check, { Vue, flush, compileCo
     const props = Vue.reactive({ moment: { id: '204', forwardCount: 0 }, active: true, autofocus: false })
     const held = []
     const origin = document.body.appendChild(document.createElement('button'))
-    const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ render: () => Vue.h(Component, { ...props, onInteractionChange: value => held.push(value), onClose: () => props.active = false }) })
     app.provide(transactions.MOMENT_FORWARD_TRANSACTIONS, page)
     origin.focus()

@@ -1,7 +1,10 @@
 import { readonly, shallowReactive } from 'vue'
 
+import { readIframeDrawerHistory, resolveApplicationHref } from '~/utils/iframeDrawerHistory'
+
 export interface RouteState {
   href: string
+  applicationHref: string
   pathname: string
   search: string
   hash: string
@@ -13,6 +16,7 @@ type RouteChangeListener = (state: Readonly<RouteState>) => void
 const initialUrl = typeof window === 'undefined' ? null : new URL(window.location.href)
 const routeState = shallowReactive<RouteState>({
   href: initialUrl?.href ?? '',
+  applicationHref: initialUrl ? resolveApplicationHref(initialUrl.href, window.history.state) : '',
   pathname: initialUrl?.pathname ?? '',
   search: initialUrl?.search ?? '',
   hash: initialUrl?.hash ?? '',
@@ -21,6 +25,7 @@ const routeState = shallowReactive<RouteState>({
 const listeners = new Set<RouteChangeListener>()
 let routeObserverStarted = false
 let fallbackTimer: ReturnType<typeof setTimeout> | undefined
+let lastDrawerEntryId: string | undefined
 
 function scheduleFallback() {
   if (fallbackTimer !== undefined)
@@ -38,11 +43,16 @@ function scheduleFallback() {
 // the site's MAIN-world history wrapper. Their callers commit this same route
 // source immediately instead of waiting for the 4-second external fallback.
 export function syncRouteState() {
-  if (typeof window === 'undefined' || routeState.href === window.location.href)
+  if (typeof window === 'undefined')
     return
 
   const url = new URL(window.location.href)
+  const drawerEntryId = readIframeDrawerHistory(window.history.state, url.href)?.id
+  if (routeState.href === url.href && drawerEntryId === lastDrawerEntryId)
+    return
+  lastDrawerEntryId = drawerEntryId
   routeState.href = url.href
+  routeState.applicationHref = resolveApplicationHref(url.href, window.history.state)
   routeState.pathname = url.pathname
   routeState.search = url.search
   routeState.hash = url.hash

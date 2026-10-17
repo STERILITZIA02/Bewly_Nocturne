@@ -16,7 +16,7 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
         <SkeletonBlock width="64px" height="var(--bew-line-height-caption)" />
       </div>
     </div>
-    <SkeletonBlock class="article-card-skeleton__cover bew-surface-border" width="min(32%, 160px)" height="auto" radius="interactive" />
+    <SkeletonBlock class="article-card-skeleton__cover" width="min(32%, 160px)" height="auto" radius="interactive" />
   </article>
 </template>
 

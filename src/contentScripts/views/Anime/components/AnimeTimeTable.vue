@@ -132,10 +132,10 @@ defineExpose({ refreshAnimeTimeTable })
           {{ t('anime.anime_timetable.today') }}
         </Button>
         <IconButton :label="t('anime.anime_timetable.previous_day')" class="anime-timetable__arrow" :disabled="atStart" @click="scrollDay(-1)">
-          <i i-mingcute:left-line />
+          <i i-tabler:chevron-left />
         </IconButton>
         <IconButton :label="t('anime.anime_timetable.next_day')" class="anime-timetable__arrow" :disabled="atEnd" @click="scrollDay(1)">
-          <i i-mingcute:right-line />
+          <i i-tabler:chevron-right />
         </IconButton>
       </div>
       <HorizontalScrollView ref="scrollViewRef">
@@ -161,7 +161,7 @@ defineExpose({ refreshAnimeTimeTable })
               block
               w-full
               h-4px
-              :bg="item.is_today ? '$bew-theme-color' : '$bew-fill-3'"
+              :bg="item.is_today ? '$bew-text-1' : '$bew-fill-3'"
               rounded-full
             />
             <ul
@@ -190,7 +190,7 @@ defineExpose({ refreshAnimeTimeTable })
                     w-2
                     h-2
                     rounded-full
-                    :bg="item.is_today ? '$bew-theme-color' : '$bew-fill-3'"
+                    :bg="item.is_today ? '$bew-accent-marker' : '$bew-fill-3'"
                     transform="~ translate-x-[calc(-0.25rem-1px)]"
                   />
                   {{ episode.pub_time }}
@@ -217,7 +217,7 @@ defineExpose({ refreshAnimeTimeTable })
                       :href="`//www.bilibili.com/bangumi/play/ss${episode.season_id}`"
                       target="_blank"
                     >{{ episode.title }}</a>
-                    <p mt-auto text="$bew-theme-foreground">
+                    <p mt-auto text="$bew-text-2">
                       {{ episode.pub_index }}
                     </p>
                   </div>

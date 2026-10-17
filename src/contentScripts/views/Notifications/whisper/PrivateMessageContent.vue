@@ -109,7 +109,7 @@ watch(() => props.content, () => {
       class="private-message-content__media-placeholder"
       @click="requestMedia"
     >
-      <i i-mingcute:pic-line aria-hidden="true" />
+      <i i-tabler:photo aria-hidden="true" />
       <span>
         {{ t(mediaFailed
           ? 'notifications.whisper.messages.image_load_failed'
@@ -123,7 +123,7 @@ watch(() => props.content, () => {
   </div>
 
   <div v-else-if="content.type === 'expired'" class="private-message-content__expired">
-    <i i-mingcute:unlink-line aria-hidden="true" />
+    <i i-tabler:link-off aria-hidden="true" />
     {{ t('notifications.whisper.messages.expired') }}
   </div>
 
@@ -298,8 +298,8 @@ watch(() => props.content, () => {
 }
 
 .private-message-content__bubble--self {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
   border-color: var(--bew-message-card-border);
 }
 
@@ -340,7 +340,7 @@ watch(() => props.content, () => {
   appearance: none;
   cursor: zoom-in;
   background: var(--bew-elevated-solid);
-  border: 1px solid var(--bew-message-card-border);
+  border: 0;
   border-radius: var(--bew-radius-xl);
   corner-shape: var(--bew-corner-shape);
 }
@@ -549,7 +549,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
   padding: var(--bew-space-2);
   overflow: hidden;
   background: var(--bew-elevated-solid);
-  border: 1px solid var(--bew-message-card-border);
+  border: 0;
   border-radius: var(--bew-radius-xl);
   corner-shape: var(--bew-corner-shape);
 }

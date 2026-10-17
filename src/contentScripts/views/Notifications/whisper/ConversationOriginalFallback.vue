@@ -44,7 +44,7 @@ defineExpose({ focusHeading })
         :label="t('notifications.whisper.back_to_conversations')"
         @click="emit('back')"
       >
-        <i i-mingcute:arrow-left-line aria-hidden="true" />
+        <i i-tabler:arrow-left aria-hidden="true" />
       </IconButton>
       <div>
         <strong ref="headingRef" tabindex="-1">

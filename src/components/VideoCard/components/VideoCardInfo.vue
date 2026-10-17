@@ -80,7 +80,7 @@ const content = computed(() => {
           :class="{ 'more-active': showVideoOptions }" :aria-label="$t('video_card.operation.more_options')"
           aria-haspopup="menu" :aria-expanded="showVideoOptions" @click.stop.prevent="emit('moreBtnClick', $event)"
         >
-          <div i-mingcute:more-2-line aria-hidden="true" />
+          <div i-tabler:dots-vertical aria-hidden="true" />
         </button>
       </div>
       <div v-if="content.showAvatar || content.showName || content.hasMeta" class="video-card-meta">

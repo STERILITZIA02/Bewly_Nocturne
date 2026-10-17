@@ -60,25 +60,32 @@
     .manage-note--header .tools-btns .edit-btn--ghost,
     .note-single-item .go-video-btn,
     .dialog-note-footer .btn-cancel {
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .editor-innter div:last-child {
-      border-color: var(--bew-theme-color) !important;
+      border-color: var(--bew-focus-ring-color) !important;
     }
 
     #page-series-index .channel-option.no-channel .create-channel,
     .manage-note--header .tools-btns .publish-btn,
     .note-single-item .go-video-btn:hover,
     .note-list-del-popup span.btn-ok,
-    .el-pagination.is-background .el-pager li:not(.disabled).active,
     .dialog-note-footer .btn-confirm,
     .checkbox .box.checked {
       background-color: var(--bew-theme-color);
       color: var(--bew-on-theme-color);
     }
 
-    .note-tabs .van-tabs_active-bar,
+    .el-pagination.is-background .el-pager li:not(.disabled).active {
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
+    }
+
+    .note-tabs .van-tabs_active-bar {
+      background-color: var(--bew-text-1) !important;
+    }
+
     .editor-innter div:last-child div {
       background-color: var(--bew-theme-color) !important;
     }

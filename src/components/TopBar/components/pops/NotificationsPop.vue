@@ -139,8 +139,8 @@ function notificationBadgeWidth(count: number): string {
   max-width: 28px;
   place-items: center;
   overflow: hidden;
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
   border-radius: var(--bew-badge-radius);
   corner-shape: var(--bew-corner-shape-round);
   font-size: var(--bew-font-size-caption);

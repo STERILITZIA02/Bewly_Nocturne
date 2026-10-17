@@ -34,7 +34,7 @@ interface Bangumi {
 const { isDark } = useDark()
 const badgeStyle = computed(() => {
   const color = (isDark.value ? props.bangumi.badge?.bgColorDark : props.bangumi.badge?.bgColor) ?? ''
-  const backgroundColor = /^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(color) ? color : isDark.value ? '#181a1e' : '#ffffff'
+  const backgroundColor = /^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(color) ? color : isDark.value ? '#1b1b1b' : '#ffffff'
   return { backgroundColor, color: getContrastingForeground(backgroundColor) }
 })
 const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
@@ -62,7 +62,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
       <!-- Cover -->
       <div
         tabindex="-1" block
-        class="bangumi-card__cover bew-surface-border"
+        class="bangumi-card__cover"
         rounded="$bew-media-radius" w-full bg="$bew-skeleton" relative shrink-0
         overflow-hidden
       >
@@ -89,7 +89,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
             p-2 fw-bold h-150px flex items-end
             bg="gradient-to-b gradient-from-transparent gradient-to-[rgba(0,0,0,.6)]"
             :style="{
-              '--un-text-shadow': bangumi.rank <= 3 ? '4px 4px 0 var(--bew-theme-color), 6px 6px 0 var(--bew-theme-color-60)' : '',
+              '--un-text-shadow': bangumi.rank <= 3 ? '4px 4px 0 var(--bew-selected-bg), 6px 6px 0 var(--bew-fill-3)' : '',
             }"
           >
             {{ bangumi.rank }}

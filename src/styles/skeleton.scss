@@ -1,9 +1,14 @@
 [data-bew-skeleton] {
-  background-color: var(--bew-skeleton, rgb(131 131 145 / 30%));
+  background-color: var(--bew-skeleton, color-mix(in srgb, var(--bew-neutral-fg, currentColor) 7%, transparent));
   background-image: linear-gradient(
     100deg,
     transparent 20%,
-    color-mix(in oklab, var(--bew-fill-4, rgb(131 131 145 / 60%)), transparent 28%) 50%,
+    color-mix(
+        in oklab,
+        var(--bew-fill-4, color-mix(in srgb, var(--bew-neutral-fg, currentColor) 22%, transparent)),
+        transparent 28%
+      )
+      50%,
     transparent 80%
   );
   background-size: 220% 100%;

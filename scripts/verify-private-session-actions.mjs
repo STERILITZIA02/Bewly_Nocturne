@@ -27,6 +27,7 @@ export function registerPrivateSessionActionChecks(check, { Vue }) {
     let payload = { code: 0, data: { talker_id: 2, session_type: 1, top_ts: 0, is_dnd: 0, last_msg: { content: 'fixture-private-text' } } }
     const api = await loadSourceModule('../src/background/privateMessage/sessionActions.ts', {
       './errors': await import('../src/background/privateMessage/errors'),
+      './protocol': await import('../src/background/privateMessage/protocol'),
       './types': await import('../src/background/privateMessage/types'),
       './transport': { requestPrivateMessage: async () => parsePrivateMessageResponse(new Response(JSON.stringify(payload)), 'getPrivateSessionDetail') },
     })

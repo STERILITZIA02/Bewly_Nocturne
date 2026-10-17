@@ -81,25 +81,19 @@ export function getContrastingForeground(background: string): string {
   return relativeContrast('#000000', background) >= relativeContrast('#ffffff', background) ? '#000000' : '#ffffff'
 }
 
-/**
- * Resolve the existing CSS palette, including custom dark bases, without copying
- * its color-mix recipes into a second JS palette or mounting measurement nodes.
- */
-export function readThemeContrastSurfaces(root: HTMLElement): string[] {
+/** Read all colors before any style writes; one canvas is released per batch. */
+function readOpaqueCssColors(root: HTMLElement, tokens: readonly string[]): Map<string, RgbColor> {
+  const colors = new Map<string, RgbColor>()
   if (typeof CSS === 'undefined' || typeof CSS.supports !== 'function')
-    return []
-  const doc = root.ownerDocument
-  const styles = doc.defaultView?.getComputedStyle(root)
-  if (!styles)
-    return []
-  const canvas = doc.createElement('canvas')
+    return colors
+  const styles = root.ownerDocument.defaultView?.getComputedStyle(root)
+  const canvas = root.ownerDocument.createElement('canvas')
   canvas.width = canvas.height = 1
   try {
     const context = canvas.getContext('2d', { colorSpace: 'srgb', willReadFrequently: true })
-    if (!context)
-      return []
-    const colors = new Set<string>()
-    for (const token of ['--bew-bg', '--bew-content-solid', '--bew-content-alt-solid-hover', '--bew-elevated-solid-hover']) {
+    if (!styles || !context)
+      return colors
+    for (const token of tokens) {
       const value = styles.getPropertyValue(token).trim()
       if (!value || !CSS.supports('color', value))
         continue
@@ -108,26 +102,56 @@ export function readThemeContrastSurfaces(root: HTMLElement): string[] {
       context.fillRect(0, 0, 1, 1)
       const [r, g, b, alpha] = context.getImageData(0, 0, 1, 1).data
       if (alpha === 255)
-        colors.add(toHex({ r, g, b }))
+        colors.set(token, { r, g, b })
     }
-    return [...colors]
   }
   catch {
-    // Retain the existing deterministic fallback if canvas readback is unavailable.
-    return []
+    // A failed batch must not leave a partially updated palette.
+    colors.clear()
   }
   finally {
     canvas.width = canvas.height = 0
   }
+  return colors
+}
+
+const NATIVE_NEUTRAL_COLOR_NAMES = ['Ga0', 'Ga0_s', 'Ga1', 'Ga1_s', 'Ga2', 'Ga3', 'Ga5', 'Ga7', 'Ga10', 'Ga11', 'Ga12', 'Ga12_s', 'Ga13', 'Ga13_s', 'Wh0', 'Wh0_s', 'bg1', 'graph_bg_thin'] as const
+const THEME_CONTRAST_SURFACES = ['--bew-bg', '--bew-content-solid', '--bew-content-alt-solid-hover', '--bew-elevated-solid-hover', '--bew-elevated-alt-solid-hover', '--bew-sidebar-background-solid', '--bew-selected-bg'] as const
+
+/** Legacy native CSS needs RGB tuples. CSS remains the only palette authority. */
+export function syncNativeNeutralRgb(root: HTMLElement) {
+  const colors = readOpaqueCssColors(root, NATIVE_NEUTRAL_COLOR_NAMES.map(name => `--${name}`))
+  for (const name of NATIVE_NEUTRAL_COLOR_NAMES) {
+    const property = `--bew-native-${name}-rgb`
+    const color = colors.get(`--${name}`)
+    if (!color) {
+      // Clear old-mode projections so the current CSS fallback can take over.
+      root.style.removeProperty(property)
+      continue
+    }
+    const value = `${color.r}, ${color.g}, ${color.b}`
+    if (root.style.getPropertyValue(property) !== value)
+      root.style.setProperty(property, value)
+  }
+}
+
+/**
+ * Resolve the existing CSS palette, including custom dark bases, without copying
+ * its color-mix recipes into a second JS palette or mounting measurement nodes.
+ */
+export function readThemeContrastSurfaces(root: HTMLElement): string[] {
+  return [...new Set([...readOpaqueCssColors(root, THEME_CONTRAST_SURFACES).values()].map(toHex))]
 }
 
 export function getThemeColorTokens(themeColor: string, isDark: boolean, surfaces: readonly string[] = []) {
   const backgrounds = surfaces.filter(surface => parseHexColor(surface))
   if (!backgrounds.length)
-    backgrounds.push(isDark ? '#181a1e' : '#ffffff')
+    backgrounds.push(isDark ? '#121212' : '#ffffff')
   const direction = isDark ? '#ffffff' : '#000000'
   const onTheme = getContrastingForeground(themeColor)
   return {
+    // Solid actions always keep the chosen RGB value; only their foreground
+    // changes. Contrast correction below is exclusively for text and markers.
     theme: themeColor,
     onTheme,
     // Keep native checkbox artwork, with the same contrast decision as text.
@@ -135,5 +159,6 @@ export function getThemeColorTokens(themeColor: string, isDark: boolean, surface
     switchThumb: relativeContrast('#ffffff', themeColor) >= 3 ? '#ffffff' : '#000000',
     foreground: ensureContrast(themeColor, backgrounds, direction, 4.5),
     focusRing: ensureContrast(themeColor, backgrounds, direction, 3),
+    markerOnLight: ensureContrast(themeColor, ['#ffffff'], '#000000', 3),
   }
 }

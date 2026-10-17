@@ -141,18 +141,18 @@ function keydown(event: KeyboardEvent) {
     <div class="private-message-image-viewer" @keydown="keydown">
       <div class="private-message-image-viewer__tools">
         <IconButton class="bew-icon-button--control" :label="t('moments.previous_image')" :disabled="currentIndex <= 0" @click="navigate(-1)">
-          <i i-mingcute:left-line />
+          <i i-tabler:chevron-left />
         </IconButton>
         <span aria-live="polite">{{ currentIndex + 1 }} / {{ gallery.length }}</span>
         <IconButton class="bew-icon-button--control" :label="t('moments.next_image')" :disabled="currentIndex >= gallery.length - 1" @click="navigate(1)">
-          <i i-mingcute:right-line />
+          <i i-tabler:chevron-right />
         </IconButton>
         <IconButton class="bew-icon-button--control" :label="t('moments.zoom_out')" :disabled="!natural.width" @click="zoom(scale / 1.25)">
-          <i i-mingcute:zoom-out-line />
+          <i i-tabler:zoom-out />
         </IconButton>
         <span class="private-message-image-viewer__scale">{{ Math.round(scale * 100) }}%</span>
         <IconButton class="bew-icon-button--control" :label="t('moments.zoom_in')" :disabled="!natural.width || scale >= 8" @click="zoom(scale * 1.25)">
-          <i i-mingcute:zoom-in-line />
+          <i i-tabler:zoom-in />
         </IconButton>
         <Button type="tertiary" :aria-pressed="fitMode" @click="fit">
           {{ t('moments.fit_window') }}

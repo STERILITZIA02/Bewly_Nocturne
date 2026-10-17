@@ -10,6 +10,23 @@ import { loadSourceModule } from './sourceModuleHarness'
 export function registerNotificationUIChecks(check, { Vue, compileComponent, flush }) {
   const i18n = { useI18n: () => ({ t: key => key, locale: Vue.ref('cmn-CN') }) }
 
+  check('Mono charts preserve fractional values, bound mark counts and leave unknown or zero empty', async () => {
+    const { chartRungs, chartUnit } = await import('../src/utils/chartScale')
+    assert.deepEqual(chartRungs(null, 1), [])
+    assert.deepEqual(chartRungs(0, 1), [])
+    assert.deepEqual(chartRungs(-1, 1), [])
+    assert.deepEqual(chartRungs(12.5, 5), [1, 1, 0.5])
+    assert.equal(chartRungs(65, 1, 100).length, 65)
+    assert.equal(chartRungs(53.3, 1, 100).length, 54)
+    assert.ok(Math.abs(chartRungs(53.3, 1, 100).at(-1) - 0.3) < 0.001)
+    for (const value of [1, 19, 101, 12345, 1e9]) {
+      const unit = chartUnit(value)
+      const marks = chartRungs(value, unit)
+      assert.ok(marks.length <= 20)
+      assert.ok(Math.abs(marks.reduce((sum, mark) => sum + mark, 0) * unit - value) < 0.001)
+    }
+  })
+
   check('inbox insights distinguish unknown counts, preserve source order and expose navigation/read actions', async () => {
     const { getMessageInsights, getRecentConversationActivity } = await import('../src/contentScripts/views/Notifications/whisper/messageInsights')
     assert.equal(getMessageInsights([], {}, {}).total, null)
@@ -50,6 +67,9 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
     try {
       app.mount(host)
       await flush()
+      assert.equal(host.querySelectorAll('.conversation-insights__ring-primary').length, 67)
+      assert.equal(host.querySelectorAll('.conversation-insights__proportion line').length, 100)
+      assert.equal(host.querySelectorAll('.message-activity-chart__sample').length, 14)
       assert.equal(writes, 0)
       assert.equal(host.querySelector('time').dateTime, new Date(sessions[1].timestamp / 1000).toISOString())
       host.querySelector('.conversation-insights__notification').click()
@@ -68,6 +88,8 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
       await flush()
       assert.equal(host.querySelector('[role="status"]'), null)
       assert.equal(host.querySelector('.conversation-insights__mark-read').disabled, true)
+      assert.equal(host.querySelectorAll('.chart-rungs rect').length, 0)
+      assert.equal(host.querySelectorAll('.conversation-insights__ring-primary').length, 0)
     }
     finally {
       app.unmount()
@@ -418,9 +440,10 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
       './systemNotificationFeed': { createSystemNotificationPageFetcher: () => () => assert.fail('route changes must not fetch feeds in this fixture') },
       './whisper/usePrivateEmotePanel': { usePrivateEmotePanel: () => ({ release() {} }) },
       './whisper/usePrivateMessageWorkspace': { usePrivateMessageWorkspace: () => ({ messages: {}, writes: {}, release() {}, dispose() {} }) },
-      './whisper/usePrivateRecipientSearch': { usePrivateRecipientSearch: () => ({ reset() {} }) },
-      './whisper/usePrivateHistorySearch': { usePrivateHistorySearch: () => ({ reset() {} }) },
+      './whisper/usePrivateRecipientSearch': { usePrivateRecipientSearch: () => ({ reset() {}, pause() {} }) },
+      './whisper/usePrivateHistorySearch': { usePrivateHistorySearch: () => ({ reset() {}, suspend() {} }) },
       './whisper/usePrivateSessions': { usePrivateSessions: () => sessions },
+      './whisper/usePrivateConversationTarget': await import('../src/contentScripts/views/Notifications/whisper/usePrivateConversationTarget'),
       './whisper/WhisperWorkspace.vue': { default: blank },
     }, { renderTemplate: false, globals: { URL } })
     const navigation = await loadSourceModule('../src/utils/searchNavigation.ts', {

@@ -35,7 +35,7 @@
     .sub-like-icon.liked,
     .sub-dislike-icon:hover,
     .sub-dislike-icon.disliked {
-      color: var(--bew-theme-foreground) !important;
+      color: var(--bew-text-1) !important;
     }
 
     .reply-operation .operation-icon:hover,
@@ -131,7 +131,7 @@
 
     .reply-box .box-normal .reply-box-warp.focus-within,
     .reply-box .box-normal .reply-box-warp:hover {
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .reply-box .box-expand .svg-icon svg path {
@@ -146,12 +146,16 @@
   .bb-comment .comment-send .comment-submit,
   .comment-bilibili-fold .comment-send .comment-submit,
   .bb-comment .comment-send-lite .comment-submit,
-  .comment-bilibili-fold .comment-send-lite .comment-submit,
+  .comment-bilibili-fold .comment-send-lite .comment-submit {
+    background-color: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+  }
+
   .bb-comment .stick.assist,
   .comment-bilibili-fold .stick.assist,
   .bb-comment .stick.up,
   .comment-bilibili-fold .stick.up {
-    background-color: var(--bew-theme-color);
+    background-color: var(--bew-selected-bg);
   }
 
   .bb-comment .comment-send .comment-submit:hover,
@@ -183,7 +187,7 @@
   .comment-bilibili-fold .stick.assist,
   .bb-comment .stick.up,
   .comment-bilibili-fold .stick.up {
-    color: var(--bew-on-theme-color) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .bb-comment .comment-list .list-item .info span.liked i,
@@ -231,19 +235,19 @@
   .comment-bilibili-fold .comment-header .tabs-order li.on,
   .bb-comment .stick,
   .comment-bilibili-fold .stick {
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .textarea-container textarea:hover,
   .textarea-container textarea:focus {
-    border-color: var(--bew-theme-color) !important;
+    border-color: var(--bew-focus-ring-color) !important;
   }
 
   .bb-comment .comment-send .comment-submit:hover,
   .comment-bilibili-fold .comment-send .comment-submit:hover,
   .bb-comment .comment-send-lite .comment-submit:hover,
   .comment-bilibili-fold .comment-send-lite .comment-submit:hover {
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
 
   &.dark {

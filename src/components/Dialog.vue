@@ -349,12 +349,12 @@ async function handleConfirm() {
               >
                 <div :id="titleId">
                   <slot name="title">
-                    <p class="dialog__title">
+                    <p class="dialog__title bew-subheading">
                       {{ title }}
                     </p>
                   </slot>
                 </div>
-                <p class="dialog__description" text="$bew-text-2">
+                <p class="dialog__description bew-help">
                   <slot name="desc">
                     {{ desc }}
                   </slot>
@@ -515,16 +515,10 @@ async function handleConfirm() {
 
 .dialog__title {
   margin: 0;
-  font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-title);
 }
 
 .dialog__description {
   margin: var(--bew-space-0-5) 0 0;
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-control);
 }
 
 .dialog__heading,

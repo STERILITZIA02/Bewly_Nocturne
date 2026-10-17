@@ -176,38 +176,38 @@ function isOptionVisible(key: VideoCardContextMenuKey) {
 const commonOptions = computed((): OptionItem[][] => {
   let result: OptionItem[][] = [
     canFavoriteVideo(props.video)
-      ? [{ command: VideoOption.Favorite, key: 'favorite', name: t('video_card.operation.favorite'), icon: 'i-mingcute:star-line' }]
+      ? [{ command: VideoOption.Favorite, key: 'favorite', name: t('video_card.operation.favorite'), icon: 'i-tabler:star' }]
       : [],
     [
       ...(props.video.url
         ? [
-            { command: VideoOption.OpenInNewTab, key: 'openInNewTab' as const, name: t('video_card.operation.open_in_new_tab'), icon: 'i-solar:square-top-down-linear' },
-            { command: VideoOption.OpenInBackground, key: 'openInBackground' as const, name: t('video_card.operation.open_in_background'), icon: 'i-solar:square-top-down-linear' },
-            { command: VideoOption.OpenInNewWindow, key: 'openInNewWindow' as const, name: t('video_card.operation.open_in_new_window'), icon: 'i-solar:maximize-square-3-linear' },
-            { command: VideoOption.OpenInCurrentTab, key: 'openInCurrentTab' as const, name: t('video_card.operation.open_in_current_tab'), icon: 'i-solar:square-top-down-linear' },
-            { command: VideoOption.OpenInDrawer, key: 'openInDrawer' as const, name: t('video_card.operation.open_in_drawer'), icon: 'i-solar:archive-up-minimlistic-linear' },
+            { command: VideoOption.OpenInNewTab, key: 'openInNewTab' as const, name: t('video_card.operation.open_in_new_tab'), icon: 'i-tabler:layout-bottombar' },
+            { command: VideoOption.OpenInBackground, key: 'openInBackground' as const, name: t('video_card.operation.open_in_background'), icon: 'i-tabler:layout-bottombar' },
+            { command: VideoOption.OpenInNewWindow, key: 'openInNewWindow' as const, name: t('video_card.operation.open_in_new_window'), icon: 'i-tabler:maximize' },
+            { command: VideoOption.OpenInCurrentTab, key: 'openInCurrentTab' as const, name: t('video_card.operation.open_in_current_tab'), icon: 'i-tabler:layout-bottombar' },
+            { command: VideoOption.OpenInDrawer, key: 'openInDrawer' as const, name: t('video_card.operation.open_in_drawer'), icon: 'i-tabler:picture-in-picture' },
           ]
         : []),
     ],
 
     [
       ...(props.video.url
-        ? [{ command: VideoOption.CopyVideoLink, key: 'copyVideoLink' as const, name: t('video_card.operation.copy_video_link'), icon: 'i-solar:copy-linear' }]
+        ? [{ command: VideoOption.CopyVideoLink, key: 'copyVideoLink' as const, name: t('video_card.operation.copy_video_link'), icon: 'i-tabler:copy' }]
         : []),
       ...(settings.value.enableCleanShareLink && props.video.url
-        ? [{ command: VideoOption.CopyCleanVideoLink, key: 'copyCleanVideoLink' as const, name: t('video_card.operation.copy_clean_video_link'), icon: 'i-solar:link-minimalistic-2-linear' }]
+        ? [{ command: VideoOption.CopyCleanVideoLink, key: 'copyCleanVideoLink' as const, name: t('video_card.operation.copy_clean_video_link'), icon: 'i-tabler:link' }]
         : []),
       ...(props.video.bvid
-        ? [{ command: VideoOption.CopyBVNumber, key: 'copyBVNumber' as const, name: t('video_card.operation.copy_bv_number'), icon: 'i-solar:copy-linear' }]
+        ? [{ command: VideoOption.CopyBVNumber, key: 'copyBVNumber' as const, name: t('video_card.operation.copy_bv_number'), icon: 'i-tabler:copy' }]
         : []),
       ...(props.video.id
-        ? [{ command: VideoOption.CopyAVNumber, key: 'copyAVNumber' as const, name: t('video_card.operation.copy_av_number'), icon: 'i-solar:copy-linear' }]
+        ? [{ command: VideoOption.CopyAVNumber, key: 'copyAVNumber' as const, name: t('video_card.operation.copy_av_number'), icon: 'i-tabler:copy' }]
         : []),
     ],
 
     [
       ...(props.video.cover
-        ? [{ command: VideoOption.ViewTheOriginalCover, key: 'viewOriginalCover' as const, name: t('video_card.operation.view_the_original_cover'), icon: 'i-solar:gallery-minimalistic-linear' }]
+        ? [{ command: VideoOption.ViewTheOriginalCover, key: 'viewOriginalCover' as const, name: t('video_card.operation.view_the_original_cover'), icon: 'i-tabler:photo' }]
         : []),
     ],
   ]
@@ -227,12 +227,12 @@ const commonOptions = computed((): OptionItem[][] => {
 
     if (isFollowed) {
       result.push([
-        { command: VideoOption.UnfollowUser, key: 'followUser', name: t('video_card.operation.unfollow_user'), icon: 'i-solar:user-minus-linear' },
+        { command: VideoOption.UnfollowUser, key: 'followUser', name: t('video_card.operation.unfollow_user'), icon: 'i-tabler:user-minus' },
       ])
     }
     else {
       result.push([
-        { command: VideoOption.FollowUser, key: 'followUser', name: t('video_card.operation.follow_user'), icon: 'i-solar:user-plus-linear' },
+        { command: VideoOption.FollowUser, key: 'followUser', name: t('video_card.operation.follow_user'), icon: 'i-tabler:user-plus' },
       ])
     }
   }
@@ -240,7 +240,7 @@ const commonOptions = computed((): OptionItem[][] => {
   // 添加拉黑用户选项；缺少作者 mid 时隐藏，避免点击后发出无效请求。
   if (authorMid) {
     result.push([
-      { command: VideoOption.BlockUser, key: 'blockUser', name: t('video_card.operation.block_user'), icon: 'i-solar:user-block-linear', color: 'text-$bew-error-color' },
+      { command: VideoOption.BlockUser, key: 'blockUser', name: t('video_card.operation.block_user'), icon: 'i-tabler:user-cancel', color: 'text-$bew-error-color' },
     ])
   }
 
@@ -256,9 +256,9 @@ const commonOptions = computed((): OptionItem[][] => {
 
 const menuGroups = computed(() => {
   const recommendation = getVideoType() === 'appRcmd'
-    ? (props.video.threePointV2 ?? []).filter(option => option.type === ThreePointV2Type.Dislike && isOptionVisible('notInterested')).filter((option, index, all) => all.findIndex(item => item.type === option.type) === index).map(option => ({ key: `app:${option.type}`, name: t('video_card.operation.not_interested'), icon: 'i-solar:confounded-circle-linear', color: undefined, run: () => openAppDislikeDialog() }))
+    ? (props.video.threePointV2 ?? []).filter(option => option.type === ThreePointV2Type.Dislike && isOptionVisible('notInterested')).filter((option, index, all) => all.findIndex(item => item.type === option.type) === index).map(option => ({ key: `app:${option.type}`, name: t('video_card.operation.not_interested'), icon: 'i-tabler:mood-sad', color: undefined, run: () => openAppDislikeDialog() }))
     : getVideoType() === 'rcmd'
-      ? videoOptions.value.map(option => ({ key: `web:${option.id}`, name: option.name, icon: 'i-solar:confounded-circle-linear', color: undefined, run: () => handleMoreCommand(option.id) }))
+      ? videoOptions.value.map(option => ({ key: `web:${option.id}`, name: option.name, icon: 'i-tabler:mood-sad', color: undefined, run: () => handleMoreCommand(option.id) }))
       : []
   return [recommendation, ...commonOptions.value.map(group => group.map(option => ({ ...option, run: () => handleCommonCommand(option.command) })))].filter(group => group.length)
 })
@@ -518,7 +518,7 @@ const unfollowUser = () => writeRelation(2)
           :aria-label="$t('video_card.operation.scroll_to_top')"
           @click="scrollToTop"
         >
-          <i class="i-mingcute:up-line" aria-hidden="true" />
+          <i class="i-tabler:chevron-up" aria-hidden="true" />
         </button>
 
         <ul
@@ -552,7 +552,7 @@ const unfollowUser = () => writeRelation(2)
           :aria-label="$t('video_card.operation.scroll_to_bottom')"
           @click="scrollToBottom"
         >
-          <i class="i-mingcute:down-line" aria-hidden="true" />
+          <i class="i-tabler:chevron-down" aria-hidden="true" />
         </button>
       </div>
     </div>

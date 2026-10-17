@@ -294,7 +294,7 @@ html.bewly-design[data-bewly-native-site="game-wiki"] {
     > li.tabberactive > a,
     > li > a:hover {
       color: var(--bew-text-1);
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -404,7 +404,7 @@ html.bewly-design[data-bewly-native-site="game-gifts"] {
 
   .g-title h4 {
     color: var(--bew-text-1);
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .g-title > .btn-to-mygift {
@@ -449,7 +449,7 @@ html.bewly-design[data-bewly-native-site="game-gifts"] {
     }
 
     .info .price-box em {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
 
     > .img {
@@ -532,7 +532,7 @@ html.bewly-design[data-bewly-native-site="game-gifts"] {
   .gift-detail .detail-wapper .detail-left .info .code-box .btn {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: 0 var(--bew-interactive-radius) var(--bew-interactive-radius) 0;
     corner-shape: var(--bew-corner-shape);
     box-shadow: none;
@@ -554,7 +554,7 @@ html.bewly-design[data-bewly-native-site="game-gifts"] {
 
     .awards li .img {
       background-color: var(--bew-content-alt-solid);
-      border-color: var(--bew-border-color);
+      border: 0;
       border-radius: var(--bew-media-radius);
       corner-shape: var(--bew-corner-shape);
     }

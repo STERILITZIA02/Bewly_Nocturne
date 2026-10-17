@@ -11,12 +11,12 @@ const { t } = useI18n()
 const { getTopBarItemHref, handleClickTopBarItem, shouldOpenConfiguredTopBarItem } = useTopBarInteraction()
 
 const list = computed((): { name: string, url: string, icon: string, bewlyKey?: TopBarPopupKey }[] => [
-  { name: t('topbar.notifications'), url: '//message.bilibili.com', icon: 'i-mingcute:notification-line' },
+  { name: t('topbar.notifications'), url: '//message.bilibili.com', icon: 'i-tabler:bell' },
   { name: t('topbar.moments'), url: '//t.bilibili.com/', icon: 'i-tabler:windmill', bewlyKey: 'moments' },
-  { name: t('topbar.favorites'), url: `//space.bilibili.com/${getUserID() ?? ''}/favlist`, icon: 'i-mingcute:star-line', bewlyKey: 'favorites' },
-  { name: t('topbar.history'), url: '//www.bilibili.com/history', icon: 'i-mingcute:time-line', bewlyKey: 'history' },
-  { name: t('topbar.watch_later'), url: '//www.bilibili.com/watchlater/#/list', icon: 'i-mingcute:carplay-line', bewlyKey: 'watchLater' },
-  { name: t('topbar.creative_center'), url: '//member.bilibili.com/platform/home', icon: 'i-mingcute:bulb-line' },
+  { name: t('topbar.favorites'), url: `//space.bilibili.com/${getUserID() ?? ''}/favlist`, icon: 'i-tabler:star', bewlyKey: 'favorites' },
+  { name: t('topbar.history'), url: '//www.bilibili.com/history', icon: 'i-tabler:clock', bewlyKey: 'history' },
+  { name: t('topbar.watch_later'), url: '//www.bilibili.com/watchlater/#/list', icon: 'i-tabler:playlist', bewlyKey: 'watchLater' },
+  { name: t('topbar.creative_center'), url: '//member.bilibili.com/platform/home', icon: 'i-tabler:bulb' },
 ])
 </script>
 

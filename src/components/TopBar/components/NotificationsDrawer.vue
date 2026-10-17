@@ -460,10 +460,10 @@ function handleFocusDrawer(e?: Event) {
                 <div
                   v-if="showEscHint"
                   pointer-events-auto
-                  bg="$bew-theme-color" text="$bew-on-theme-color sm" px-3 py-2 rounded="$bew-interactive-radius"
+                  bg="$bew-selected-bg" text="$bew-text-1 sm" px-3 py-2 rounded="$bew-interactive-radius"
                   flex="~ items-center gap-2"
                 >
-                  <i i-mingcute:information-line />
+                  <i i-tabler:info-circle />
                   <span>{{ $t('iframe_drawer.esc_hint', '点击抽屉外部区域，然后按 ESC 关闭') }}</span>
                 </div>
               </Transition>
@@ -478,7 +478,7 @@ function handleFocusDrawer(e?: Event) {
                 @click="handleOpenInNewTab"
               >
                 <template #left>
-                  <i i-mingcute:external-link-line />
+                  <i i-tabler:external-link />
                 </template>
                 {{ $t('iframe_drawer.open_in_new_tab') }}
               </Button>
@@ -493,7 +493,7 @@ function handleFocusDrawer(e?: Event) {
                 @click="handleClose"
               >
                 <template #left>
-                  <i i-mingcute:close-line />
+                  <i i-tabler:x />
                 </template>
                 {{ $t('iframe_drawer.close') }}
                 <kbd
@@ -508,7 +508,7 @@ function handleFocusDrawer(e?: Event) {
                 @click="handleClose"
               >
                 <template #left>
-                  <i i-mingcute:close-line />
+                  <i i-tabler:x />
                 </template>
                 {{ $t('iframe_drawer.press_esc_again_to_close') }}
                 <kbd

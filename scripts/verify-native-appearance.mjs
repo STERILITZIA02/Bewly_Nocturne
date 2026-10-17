@@ -134,7 +134,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
     const owners = []
     const module = await loadSourceModule('../src/contentScripts/features/nativeSiteAppearance.ts', {
       'vue': Vue,
-      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }), stopDarkState() {} },
+      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }), stopDarkState() {} },
       '~/constants/nativeSites': await import('../src/constants/nativeSites'),
       '~/logic/storage': { settings: preferences, settingsInitializationState: Vue.ref('loaded') },
       '~/utils/themeColor': { ...(await import('../src/utils/themeColor')), readThemeContrastSurfaces: () => [] },
@@ -302,7 +302,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
         preferences.displayReady = Vue.ref(true)
         const module = await loadSourceModule('../src/contentScripts/features/nativeSiteAppearance.ts', {
           'vue': Vue,
-          '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }), stopDarkState() {} },
+          '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }), stopDarkState() {} },
           '~/constants/nativeSites': await import('../src/constants/nativeSites'),
           '~/logic/storage': { settings: preferences, settingsInitializationState: Vue.ref('loaded') },
           '~/utils/themeColor': { ...(await import('../src/utils/themeColor')), readThemeContrastSurfaces: () => [] },
@@ -360,7 +360,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       'vue': Vue,
       '~/composables/useDark': { useDark: () => {
         starts++
-        return { isDark: Vue.ref(false) }
+        return { isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }
       }, stopDarkState() { stops++ } },
       '~/constants/nativeSites': await import('../src/constants/nativeSites'),
       '~/logic/storage': { settings: preferences, settingsInitializationState: Vue.ref('loaded') },
@@ -812,7 +812,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       'vue': Vue,
       '~/constants/nativeSites': await import('../src/constants/nativeSites'),
       '~/logic/storage': { settings: preferences, settingsInitializationState: Vue.ref('loaded') },
-      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }), stopDarkState() {} },
+      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }), stopDarkState() {} },
       '~/utils/themeColor': { ...(await import('../src/utils/themeColor')), readThemeContrastSurfaces: () => [] },
       './nativePageKeyboard': keyboard,
     }, { location: { hostname: 'ir.bilibili.com', pathname: '/en/investor-resources/' } })
@@ -1207,9 +1207,9 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       '~/logic/storage': { settings: preferences, settingsInitializationState: Vue.ref('loaded') },
       '~/composables/useDark': { useDark: () => {
         themeStarts++
-        return { isDark: Vue.ref(false) }
+        return { isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }
       }, stopDarkState() { themeStops++ } },
-      '~/utils/themeColor': { getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
+      '~/utils/themeColor': { ...(await import('../src/utils/themeColor')), getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
       './nativePageKeyboard': await import('../src/contentScripts/features/nativePageKeyboard'),
     }, { location: { hostname: 'member.bilibili.com', pathname: '/academy/seriesList' } })
     const dispose = module.setupNativeSiteAppearance()
@@ -1261,8 +1261,8 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       vue: Vue,
       '~/constants/nativeSites': await import('../src/constants/nativeSites'),
       '~/logic/storage': { settings: preferences, settingsInitializationState: Vue.ref('loaded') },
-      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }), stopDarkState() {} },
-      '~/utils/themeColor': { getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
+      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }), stopDarkState() {} },
+      '~/utils/themeColor': { ...(await import('../src/utils/themeColor')), getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
       './nativePageKeyboard': await import('../src/contentScripts/features/nativePageKeyboard'),
     }, { location: { hostname: 'love.bilibili.com', pathname: '/' } })
     const dispose = module.setupNativeSiteAppearance()
@@ -1399,8 +1399,8 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
         vue: Vue,
         '~/constants/nativeSites': await import('../src/constants/nativeSites'),
         '~/logic/storage': { settings: preferences, settingsInitializationState: Vue.ref('loaded') },
-        '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }), stopDarkState() {} },
-        '~/utils/themeColor': { getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
+        '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }), stopDarkState() {} },
+        '~/utils/themeColor': { ...(await import('../src/utils/themeColor')), getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
         './nativePageKeyboard': keyboard,
       }, { location: { hostname: 'pay.bilibili.com', pathname: '/pay-v2-web/bcoin_record' } })
       const dispose = module.setupNativeSiteAppearance()
@@ -1456,8 +1456,8 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       vue: Vue,
       '~/constants/nativeSites': await import('../src/constants/nativeSites'),
       '~/logic/storage': { settings: preferences, settingsInitializationState: Vue.ref('loaded') },
-      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }), stopDarkState() {} },
-      '~/utils/themeColor': { getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
+      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }), stopDarkState() {} },
+      '~/utils/themeColor': { ...(await import('../src/utils/themeColor')), getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
       './nativePageKeyboard': await import('../src/contentScripts/features/nativePageKeyboard'),
     }, { location: { hostname: 'link.bilibili.com', pathname: '/p/eden/download' } })
     const dispose = module.setupNativeSiteAppearance()
@@ -1617,8 +1617,8 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
         vue: Vue,
         '~/constants/nativeSites': await import('../src/constants/nativeSites'),
         '~/logic/storage': { settings: preferences, settingsInitializationState: Vue.ref('loaded') },
-        '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }), stopDarkState() {} },
-        '~/utils/themeColor': { getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
+        '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }), stopDarkState() {} },
+        '~/utils/themeColor': { ...(await import('../src/utils/themeColor')), getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
         './nativePageKeyboard': keyboard,
       }, { location: { hostname: 'game.bilibili.com', pathname: path } })
       const dispose = module.setupNativeSiteAppearance()
@@ -1733,8 +1733,8 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
         vue: Vue,
         '~/constants/nativeSites': await import('../src/constants/nativeSites'),
         '~/logic/storage': { settings: preferences, settingsInitializationState: Vue.ref('loaded') },
-        '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }), stopDarkState() {} },
-        '~/utils/themeColor': { getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
+        '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }), stopDarkState() {} },
+        '~/utils/themeColor': { ...(await import('../src/utils/themeColor')), getThemeColorTokens: () => ({}), readThemeContrastSurfaces: () => [] },
         './nativePageKeyboard': keyboard,
       }, { location: { hostname: 'manga.bilibili.com', pathname: path } })
       const dispose = module.setupNativeSiteAppearance()
@@ -1826,7 +1826,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
     const noop = () => {}
     const module = await loadSourceModule('../src/contentScripts/views/necessarySettingsWatchers.ts', {
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => href },
-      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }) },
+      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }) },
       '~/constants/globalEvents': { IFRAME_TOP_BAR_CHANGE: 'fixture' },
       '~/contentScripts/features/blockUselessFeedCards': { setUselessFeedCardBlockerEnabled: noop, shouldEnableUselessFeedCardBlocker: () => false },
       '~/contentScripts/features/nativePageKeyboard': await import('../src/contentScripts/features/nativePageKeyboard'),
@@ -1840,7 +1840,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       '~/utils/iframeMessage': { postMessageToIframe: noop },
       '~/utils/interfaceLanguage': { ensureInterfaceLanguage: noop },
       '~/utils/main': { isHomePage: () => false, isInIframe: () => false, isVideoPlaybackPage: () => false, injectCSS: () => document.documentElement.appendChild(document.createElement('style')) },
-      '~/utils/themeColor': { readThemeContrastSurfaces: () => ({}), getThemeColorTokens: () => ({}) },
+      '~/utils/themeColor': { ...(await import('../src/utils/themeColor')), readThemeContrastSurfaces: () => ({}), getThemeColorTokens: () => ({}) },
     }, { ...Vue, location: { href: href.value, hostname: 'www.bilibili.com', pathname: '/anime/index/' } })
     const scope = Vue.effectScope()
     try {
@@ -2603,6 +2603,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
     const bodyClass = document.body.className
     const originalStyle = document.documentElement.getAttribute('style')
     const module = await loadSourceModule('../src/composables/useDark.ts', {
+      '~/utils/darkModeTint': await import('../src/utils/darkModeTint'),
       'vue': Vue,
       '@vueuse/core': { usePreferredDark: () => Vue.ref(true) },
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref() {
@@ -2622,6 +2623,15 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       const state = module.useDark({ observeRoute: false, syncNativeTheme: false })
       assert.equal(state.isDark.value, true)
       assert.equal(state.isOledDark.value, true)
+      assert.equal(state.darkModeBaseColor.value, '#2b2b2b', 'missing tint toggle uses the neutral default')
+      settings.value.enableDarkModeTint = true
+      await flush()
+      assert.equal(state.darkModeBaseColor.value, '#2a2f2d')
+      assert.equal(document.documentElement.style.getPropertyValue('--bew-dark-base-color'), '#2a2f2d')
+      settings.value.enableDarkModeTint = false
+      await flush()
+      assert.equal(state.darkModeBaseColor.value, '#2b2b2b')
+      assert.equal(settings.value.darkModeBaseColor, '#2a2f2d', 'disabling retains the custom tint')
       assert.equal(routeSubscriptions, 0)
       assert.equal(intervals, 0)
       assert.equal(cookieWrites, 0, 'CSS adaptation does not overwrite the native site theme preference')
@@ -2674,6 +2684,8 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
     preferences.displayReady = Vue.ref(false)
     const initialization = Vue.ref('loading')
     const dark = Vue.ref(true)
+    const effectiveBase = Vue.ref('#2b2b2b')
+    const effectiveOled = Vue.ref(true)
     let starts = 0
     let stops = 0
     const rootClass = document.documentElement.className
@@ -2688,7 +2700,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
           starts++
           document.documentElement.classList.add('dark', 'oled-dark')
           document.body.classList.add('dark', 'oled-dark')
-          return { isDark: dark }
+          return { isDark: dark, isOledDark: effectiveOled, darkModeBaseColor: effectiveBase }
         },
         stopDarkState() { stops++ },
       },
@@ -2716,9 +2728,13 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       assert.equal(document.documentElement.style.getPropertyValue('--bew-theme-checkmark-image'), colors.getThemeColorTokens('#09090a', true).checkmarkImage)
       assert.ok(colors.relativeContrast(document.documentElement.style.getPropertyValue('--bew-theme-foreground'), '#303533') >= 4.5)
       surfaceColors = ['#000000', '#505550']
-      preferences.value.darkModeBaseColor = '#444944'
+      effectiveBase.value = '#444944'
       await flush()
-      assert.ok(colors.relativeContrast(document.documentElement.style.getPropertyValue('--bew-theme-foreground'), '#505550') >= 4.5, 'changing the dark base refreshes the derived foreground')
+      assert.ok(colors.relativeContrast(document.documentElement.style.getPropertyValue('--bew-theme-foreground'), '#505550') >= 4.5, 'an inherited effective tint refreshes the derived foreground without changing local settings')
+      surfaceColors = ['#000000', '#606660']
+      effectiveOled.value = false
+      await flush()
+      assert.ok(colors.relativeContrast(document.documentElement.style.getPropertyValue('--bew-theme-foreground'), '#606660') >= 4.5, 'an inherited OLED change refreshes contrast even when isDark stays true')
       assert.equal(document.documentElement.style.getPropertyValue('--bew-native-font-family'), 'Fixture Font')
       preferences.value.customizeFont = 'default'
       await flush()
@@ -2778,7 +2794,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       '~/composables/useDark': { useDark: (options) => {
         assert.deepEqual({ ...options }, { observeRoute: false, syncNativeTheme: false })
         themeStarts++
-        return { isDark: Vue.ref(false) }
+        return { isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }
       }, stopDarkState() {} },
       '~/utils/themeColor': { ...(await import('../src/utils/themeColor')), readThemeContrastSurfaces: () => [] },
       './nativePageKeyboard': { setupNativePageKeyboard() { throw new Error('draft controls already own keyboard behavior') } },

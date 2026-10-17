@@ -112,7 +112,7 @@ html.bewly-design[data-bewly-native-site="academy"] {
   }
 
   :is(.toLearnCenter, .bca-c-more-box, .bca-cscrd-count) {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   :is(.h-separator, .v-separator, .bottom-bar) {
@@ -120,7 +120,7 @@ html.bewly-design[data-bewly-native-site="academy"] {
   }
 
   .general-item.active .bottom-bar {
-    background: var(--bew-theme-color);
+    background: var(--bew-text-1);
   }
 
   @media (max-width: 1400px) {
@@ -298,7 +298,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
       }
 
       .material-total {
-        color: var(--bew-theme-foreground);
+        color: var(--bew-text-1);
       }
     }
 
@@ -319,7 +319,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
       .btn {
         box-sizing: border-box;
         min-height: var(--bew-control-height);
-        border-color: var(--bew-theme-color);
+        border-color: var(--bew-focus-ring-color);
       }
 
       .btn-bg {
@@ -413,7 +413,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
   }
 
   :is(.tab.active .tab-text, .u-head-item-active, .category .item.active, .manage-nav-item-sub-item.active) {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   :is(.manage-nav-item-main, .manage-nav-item-sub-item, .bmc-tab-button) {
@@ -435,7 +435,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
   }
 
   .manage-nav .manage-nav-item-main.active {
-    color: var(--bew-theme-foreground) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .manage-nav .manage-nav-item-main.disabled {
@@ -562,8 +562,8 @@ html.bewly-design[data-bewly-native-site="materials"] {
     }
 
     &.active {
-      background: var(--bew-theme-color);
-      color: var(--bew-on-theme-color);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
   }
 
@@ -1039,7 +1039,7 @@ html.bewly-design[data-bewly-native-site="music-rank"] {
   }
 
   [class*="_tabsHeaderAnchor_"] {
-    background: var(--bew-theme-color);
+    background: var(--bew-text-1);
   }
 
   [class*="_card_"] {
@@ -1135,7 +1135,7 @@ html.bewly-design[data-bewly-native-site="creator-data"] {
   }
 
   :is(.header-nav .item.selected, .export) {
-    color: var(--bew-theme-foreground) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .page-link {
@@ -1480,8 +1480,8 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
     corner-shape: var(--bew-corner-shape);
 
     &.nav-item-active {
-      color: var(--bew-theme-foreground);
-      border-color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -1532,7 +1532,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
 
   .combo.is-selected {
     background: var(--bew-theme-surface) !important;
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
 
     :is(.name, .price) {
       color: var(--bew-on-theme-surface) !important;
@@ -1576,7 +1576,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
     &.selected {
       background: var(--bew-theme-surface);
       color: var(--bew-on-theme-surface);
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -1589,9 +1589,9 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   }
 
   .bd-radio-button.is-active:not(.is-disabled) .bd-radio-button__inner {
-    background: var(--bew-theme-color);
-    color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
+    border-color: var(--bew-focus-ring-color);
 
     .radio-item {
       color: inherit;
@@ -1629,11 +1629,11 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   }
 
   .bd-tabs__item.is-active {
-    color: var(--bew-theme-foreground) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .bd-tabs__active-bar {
-    background: var(--bew-theme-color);
+    background: var(--bew-text-1);
   }
 
   :is(.data-content .tabs, .data-content .select-item, .user-profile .empty-wrap, .bd-input__wrapper) {
@@ -1646,7 +1646,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   .data-content .tabs-bg,
   .data-content .select-item.selected {
     background: var(--bew-theme-surface);
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .data-content .tab-item {
@@ -1671,7 +1671,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
     &.bd-button--primary:not(:disabled, .is-disabled) {
       background: var(--bew-theme-color);
       color: var(--bew-on-theme-color);
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
 
     &:is(:disabled, .is-disabled) {
@@ -1696,8 +1696,8 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   }
 
   .bd-date-table :is(td.start-date, td.end-date) span {
-    background: var(--bew-theme-color);
-    color: var(--bew-on-theme-color) !important;
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1) !important;
   }
 
   .bd-date-table td.disabled span {
@@ -1843,7 +1843,7 @@ html.bewly-design[data-bewly-native-site="creator-cooperation"] {
     &.bd-button--primary:not(.is-disabled, :disabled) {
       background: var(--bew-theme-color);
       color: var(--bew-on-theme-color);
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
 
     &:is(.is-disabled, :disabled) {
@@ -1860,7 +1860,7 @@ html.bewly-design[data-bewly-native-site="creator-cooperation"] {
 
   .ivu-checkbox-checked .ivu-checkbox-inner {
     background: var(--bew-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
 
     &::after {
       border-color: var(--bew-on-theme-color);

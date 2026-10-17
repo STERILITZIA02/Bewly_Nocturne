@@ -580,7 +580,7 @@ export function injectLayoutStyle() {
       .bpx-state-active,
       [class*="active"]
     ):not(svg) {
-      color: var(--bew-theme-foreground) !important;
+      color: var(--bew-text-1) !important;
     }
 
     /* 弹幕设置/弹幕样式弹窗文字颜色适配浅色模式（含后代选项与交互态） */
@@ -1307,7 +1307,7 @@ export function injectLayoutStyle() {
       .bui-checkbox-icon-selected
     ),
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-mode-selection-panel .selection-span.active .selection-icon {
-      color: var(--bew-theme-color) !important;
+      color: var(--bew-text-1) !important;
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-box .bui-progress-wrap {
@@ -1436,15 +1436,17 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bili-danmaku-x-guide:not(.bili-danmaku-x-guide-followed) .bili-danmaku-x-guide-follow,
     #${ROOT_ID} .bili-danmaku-x-guide-electric {
       background: var(--bew-theme-color, #00aeec) !important;
+      color: var(--bew-on-theme-color) !important;
     }
 
     #${ROOT_ID} .bili-danmaku-x-guide:not(.bili-danmaku-x-guide-followed) .bili-danmaku-x-guide-follow:hover,
     #${ROOT_ID} .bili-danmaku-x-guide-electric:hover {
-      background: color-mix(in srgb, var(--bew-theme-color, #00aeec) 82%, white) !important;
+      background: var(--bew-theme-color, #00aeec) !important;
+      color: var(--bew-on-theme-color) !important;
     }
 
     #${ROOT_ID} .bili-danmaku-x-guide-three > span.bili-danmaku-x-active svg {
-      fill: var(--bew-theme-color) !important;
+      fill: var(--bew-text-1) !important;
     }
 
     #${ROOT_ID} .bili-danmaku-x-guide-cyc > span {
@@ -1553,7 +1555,7 @@ export function injectLayoutStyle() {
 
     #${ROOT_ID} .bewly-widescreen-sidebar-resizer:hover::before,
     #${ROOT_ID} .bewly-widescreen-sidebar-resizer:focus-visible::before {
-      background: var(--bew-theme-color, #00aeec);
+      background: var(--bew-text-1);
       opacity: 1;
     }
 
@@ -1705,8 +1707,8 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-sidebar-toggle:hover {
-      background: var(--bew-theme-color, #00aeec);
-      border-color: var(--bew-theme-color, #00aeec);
+      background: var(--bew-selected-bg);
+      border-color: var(--bew-text-1);
     }
 
     #${ROOT_ID} .bewly-widescreen-sidebar-top {
@@ -1911,7 +1913,7 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID}[data-page-kind="pgc"] .bewly-widescreen-action-slot :is(.toolbar-left, .toolbar-right) > *:hover {
-      color: var(--bew-theme-foreground) !important;
+      color: var(--bew-text-1) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-metadata-slot .video-info-meta,
@@ -2028,7 +2030,7 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-fallback-owner-link:hover {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
       background: var(--bewly-widescreen-control-hover-bg);
     }
 
@@ -2202,7 +2204,7 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-description-slot a {
-      color: var(--bew-theme-color, #00aeec) !important;
+      color: var(--bew-theme-foreground) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-fallback-description {
@@ -2247,7 +2249,7 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-description-toggle:hover {
-      color: var(--bew-theme-color, #00aeec);
+      color: var(--bew-text-1);
     }
 
     #${ROOT_ID} .bewly-widescreen-description-toggle[hidden] {
@@ -2347,7 +2349,7 @@ export function injectLayoutStyle() {
       top: var(--bewly-action-anchor-y, 50%) !important;
       margin: 0 !important;
       translate: -50% -50% !important;
-      color: var(--bew-theme-color, #00aeec) !important;
+      color: var(--bew-text-1) !important;
       pointer-events: none !important;
       z-index: 2 !important;
     }
@@ -2371,21 +2373,21 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > [class*="Anim"] svg {
       width: 100% !important;
       height: 100% !important;
-      color: var(--bew-theme-color, #00aeec) !important;
+      color: var(--bew-text-1) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon) [stroke],
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="Anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon) [stroke],
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > [class*="anim"] [stroke],
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > [class*="Anim"] [stroke] {
-      stroke: var(--bew-theme-color, #00aeec) !important;
+      stroke: var(--bew-text-1) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon) [fill]:not([fill="none"]),
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="Anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon) [fill]:not([fill="none"]),
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > [class*="anim"] [fill]:not([fill="none"]),
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > [class*="Anim"] [fill]:not([fill="none"]) {
-      fill: var(--bew-theme-color, #00aeec) !important;
+      fill: var(--bew-text-1) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-share,
@@ -2416,7 +2418,7 @@ export function injectLayoutStyle() {
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item:hover,
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-right-item:hover {
-      color: var(--bew-theme-color, #00aeec) !important;
+      color: var(--bew-text-1) !important;
       background: var(--bewly-widescreen-control-hover-bg) !important;
     }
 
@@ -2435,8 +2437,8 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-action-slot .video-fav.on *,
     #${ROOT_ID} .bewly-widescreen-action-slot .video-fav.collected,
     #${ROOT_ID} .bewly-widescreen-action-slot .video-fav.collected * {
-      color: var(--bew-theme-color, #00aeec) !important;
-      fill: var(--bew-theme-color, #00aeec) !important;
+      color: var(--bew-text-1) !important;
+      fill: var(--bew-text-1) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-item-icon,
@@ -2491,7 +2493,7 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-right-item.bewly-watch-later-btn.is-active:hover {
-      color: var(--bew-theme-color, #00aeec) !important;
+      color: var(--bew-text-1) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-sidebar-top .up-panel-container,
@@ -3010,7 +3012,7 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-panel-playlist .subscribe-btn:hover {
       color: var(--bew-on-theme-surface) !important;
       background: var(--bew-theme-surface-hover) !important;
-      border-color: var(--bew-theme-color) !important;
+      border-color: var(--bew-focus-ring-color) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-playlist-toggle:focus-visible {

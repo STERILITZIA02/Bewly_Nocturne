@@ -391,6 +391,25 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       for (let step = 0; step < 30; step++)
         observers[1].callback([{ target: card, contentRect: { width: 540, height: 180 + step } }])
       assert.equal(descriptionReads, 0, 'opening comments do not re-clamp an unchanged video description')
+      time.frame()
+      await flush()
+      gridReads = 0
+      const beforeMotion = layout.virtualColumns.value
+      layout.setDisclosureMotion(item.id, true)
+      for (let step = 1; step <= 30; step++) {
+        heights.set(item.id, 180 + step * 16)
+        observers[1].callback([{ target: card, contentRect: { width: 540, height: heights.get(item.id) } }])
+        time.frame()
+        await flush()
+      }
+      assert.equal(gridReads, 0, '30 local animation frames do not recompute the virtual window')
+      assert.equal(layout.virtualColumns.value, beforeMotion)
+      layout.setDisclosureMotion(item.id, false)
+      time.frame()
+      await flush()
+      assert.equal(gridReads, 1, 'settlement commits the final geometry once')
+      assert.notEqual(layout.virtualColumns.value, beforeMotion)
+      console.log('PERF moments disclosure fixture: 30 intermediate height updates = 0 virtual window reads; settled height = 1 update')
       card.querySelector = originalQuery
       disclosure.remove()
       layout.setInteractionHeld(item.id, true)

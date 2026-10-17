@@ -24,6 +24,7 @@ import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyPlaybackLayoutReady, 
 import { shouldSuppressWidescreenAutoEntry } from '~/utils/bewlyWidescreenPolicy'
 import { cleanupBilibiliScripts } from '~/utils/bilibiliScriptCleanup'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, restoreOriginalBilibiliTopBarParent, restorePreparedOriginalBilibiliTopBars } from '~/utils/bilibiliTopBar'
+import { resolveDarkModeBaseColor } from '~/utils/darkModeTint'
 import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveIframeEscapeAction } from '~/utils/drawerEscape'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
@@ -1645,9 +1646,7 @@ else if (shouldInitializeContentScript) {
     container.classList.toggle('oled-dark', document.documentElement.classList.contains('oled-dark'))
 
     // 立即设置Shadow DOM容器的基准颜色，确保Vue组件能够访问到正确的CSS变量
-    if (settings.value.darkModeBaseColor) {
-      container.style.setProperty('--bew-dark-base-color', settings.value.darkModeBaseColor)
-    }
+    container.style.setProperty('--bew-dark-base-color', resolveDarkModeBaseColor(settings.value))
 
     const root = document.createElement('div')
     const useViewportLayout = !isInIframe() && isHomePage()

@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import MomentPromotionBadge from '~/components/MomentPromotionBadge.vue'
 import VideoWatchedTag from '~/components/VideoWatchedTag.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useMeasuredDisclosure } from '~/composables/useMeasuredDisclosure'
 import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -89,11 +90,14 @@ const emit = defineEmits<{
   openImagePreview: [images: string[], index: number, trigger: HTMLElement]
   interactiveResize: []
   interactionChange: [held: boolean]
+  disclosureMotion: [moving: boolean]
 }>()
 
 const { t } = useI18n()
 const { mainAppRef } = useBewlyApp()
 const topBarStore = useTopBarStore()
+const addedCommentCount = ref(0)
+watch(() => [moment.id, moment.commentCount, topBarStore.userInfo.mid], () => addedCommentCount.value = 0)
 let cardElement: HTMLElement | null = null
 const navigationGuard = createPointerNavigationGuard(() => cardElement)
 
@@ -182,6 +186,18 @@ const getDisclosureCacheKey = () => `${topBarStore.userInfo.mid || 'guest'}:${mo
 const disclosureCache = inject(MOMENT_DISCLOSURES, undefined) ?? createMomentDisclosureCache()
 const disclosure = ref<MomentDisclosure>(disclosureCache.get(getDisclosureCacheKey()))
 const displayedDisclosure = ref<MomentDisclosure>(disclosure.value)
+const disclosureRef = ref<HTMLElement | null>(null)
+const disclosureContentRef = ref<HTMLElement | null>(null)
+const { height: disclosureHeight, moving: disclosureMoving, onTransitionEnd: handleDisclosureTransitionEnd } = useMeasuredDisclosure(
+  disclosureRef,
+  disclosureContentRef,
+  computed(() => disclosure.value !== 'none'),
+  () => {
+    if (disclosure.value === 'none')
+      displayedDisclosure.value = 'none'
+  },
+  moving => emit('disclosureMotion', moving),
+)
 const forwardComposerMounted = ref(disclosure.value === 'forward')
 const forwardFocusRequested = ref(false)
 const forwardInteracting = ref(false)
@@ -199,7 +215,7 @@ watch(() => {
 })
 const commentWriting = ref(false)
 const interactionHeld = computed(() => cardFocused.value || showVideoOptions.value || forwardInteracting.value
-  || previewInteracting.value || commentWriting.value || isForwardLoading || isLikeLoading || isReservationLoading
+  || disclosureMoving.value || previewInteracting.value || commentWriting.value || isForwardLoading || isLikeLoading || isReservationLoading
   || isWatchLaterLoading(moment) || (!!moment.forward?.video && isWatchLaterLoading(moment.forward.video)))
 watch(interactionHeld, held => emit('interactionChange', held), { immediate: true, flush: 'sync' })
 const canExpandComments = computed(() => Boolean(moment.id && !moment.isLive))
@@ -433,15 +449,6 @@ function syncDisplayedDisclosure(value: MomentDisclosure) {
     displayedDisclosure.value = 'none'
 }
 
-function handleDisclosureTransitionEnd(event: TransitionEvent) {
-  // A reversed opening emits transitioncancel before the closing transition.
-  // Retain its contents until the actual close finishes, rather than snapping.
-  if (event.type === 'transitioncancel' || event.target !== event.currentTarget || !['grid-template-rows', 'height'].includes(event.propertyName))
-    return
-  if (disclosure.value === 'none')
-    displayedDisclosure.value = 'none'
-}
-
 watch(disclosure, (value) => {
   disclosureCache.set(getDisclosureCacheKey(), value)
   syncDisplayedDisclosure(value)
@@ -652,7 +659,7 @@ onBeforeUnmount(() => {
           @keydown.enter.stop.prevent="handleMoreBtnClick"
           @keydown.space.stop.prevent="handleMoreBtnClick"
         >
-          <span i-mingcute:more-2-line aria-hidden="true" />
+          <span i-tabler:dots-vertical aria-hidden="true" />
         </button>
       </header>
 
@@ -725,8 +732,8 @@ onBeforeUnmount(() => {
             @click.stop="toggleCardWatchLater(moment)"
           >
             <SkeletonBlock v-if="isWatchLaterLoading(moment)" width="1em" height="1em" radius="interactive" />
-            <span v-else-if="isWatchLaterAdded(moment)" i-line-md:confirm aria-hidden="true" />
-            <span v-else i-mingcute:carplay-line aria-hidden="true" />
+            <span v-else-if="isWatchLaterAdded(moment)" i-tabler:check aria-hidden="true" />
+            <span v-else i-tabler:playlist aria-hidden="true" />
           </button>
         </div>
         <div
@@ -752,8 +759,8 @@ onBeforeUnmount(() => {
             @click.stop="toggleCardWatchLater(moment)"
           >
             <SkeletonBlock v-if="isWatchLaterLoading(moment)" width="1em" height="1em" radius="interactive" />
-            <span v-else-if="isWatchLaterAdded(moment)" i-line-md:confirm aria-hidden="true" />
-            <span v-else i-mingcute:carplay-line aria-hidden="true" />
+            <span v-else-if="isWatchLaterAdded(moment)" i-tabler:check aria-hidden="true" />
+            <span v-else i-tabler:playlist aria-hidden="true" />
           </button>
         </div>
 
@@ -906,8 +913,8 @@ onBeforeUnmount(() => {
                   @click.stop.prevent="toggleCardWatchLater(moment.forward.video)"
                 >
                   <SkeletonBlock v-if="isWatchLaterLoading(moment.forward.video)" width="1em" height="1em" radius="interactive" />
-                  <span v-else-if="isWatchLaterAdded(moment.forward.video)" i-line-md:confirm aria-hidden="true" />
-                  <span v-else i-mingcute:carplay-line aria-hidden="true" />
+                  <span v-else-if="isWatchLaterAdded(moment.forward.video)" i-tabler:check aria-hidden="true" />
+                  <span v-else i-tabler:playlist aria-hidden="true" />
                 </button>
               </span>
               <a
@@ -931,7 +938,7 @@ onBeforeUnmount(() => {
                 </small>
                 <small class="moment-card__forward-video-stats">
                   <span v-if="settings.showVideoCardViewCount && moment.forward.video.play"><span i-tabler-player-play aria-hidden="true" />{{ moment.forward.video.play }}</span>
-                  <span v-if="settings.showVideoCardDanmakuCount && moment.forward.video.danmaku"><span i-mingcute:danmaku-line aria-hidden="true" />{{ moment.forward.video.danmaku }}</span>
+                  <span v-if="settings.showVideoCardDanmakuCount && moment.forward.video.danmaku"><span i-tabler:message aria-hidden="true" />{{ moment.forward.video.danmaku }}</span>
                 </small>
               </a>
             </div>
@@ -1138,7 +1145,7 @@ onBeforeUnmount(() => {
           @click.stop="toggleComments"
         >
           <span i-tabler-message-circle />
-          {{ formatCount(moment.commentCount) }}
+          {{ formatCount(moment.commentCount + addedCommentCount) }}
         </button>
         <span v-else class="moment-card__footer-stat" :aria-label="t('moment_card.live_popularity', { value: moment.livePopularity || t('moment_card.no_data') })">
           <span i-tabler-users />
@@ -1162,14 +1169,16 @@ onBeforeUnmount(() => {
       </footer>
 
       <div
+        ref="disclosureRef"
         class="moment-card__disclosure"
+        :style="{ height: disclosureHeight === undefined ? undefined : `${disclosureHeight}px` }"
         :class="{ 'is-open': disclosure !== 'none' }"
         :aria-hidden="disclosure === 'none'"
         :inert="disclosure === 'none'"
         @transitionend="handleDisclosureTransitionEnd"
         @transitioncancel="handleDisclosureTransitionEnd"
       >
-        <div class="moment-card__disclosure-inner">
+        <div ref="disclosureContentRef" class="moment-card__disclosure-inner">
           <div
             v-if="displayedDisclosure === 'comments' && canExpandComments"
             :id="commentSectionId"
@@ -1179,6 +1188,7 @@ onBeforeUnmount(() => {
               :moment="moment"
               :active="commentExpanded"
               @writing-change="commentWriting = $event"
+              @posted="addedCommentCount += 1"
               @open-image-preview="handleCommentImagePreview"
               @interactive-resize="emit('interactiveResize')"
             />
@@ -1206,6 +1216,7 @@ onBeforeUnmount(() => {
 <style lang="scss" scoped>
 @use "../../styles/contentCard";
 @use "../../styles/breakpoints";
+@use "../../styles/momentDisclosure";
 .moment-card--preparing {
   visibility: hidden;
 }
@@ -1385,8 +1396,8 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__watch-later:hover {
-  background: var(--bew-theme-color);
-  color: var(--bew-on-theme-color);
+  background: var(--bew-selected-bg);
+  color: var(--bew-text-1);
 }
 
 .moment-card__watch-later:focus-visible {
@@ -1430,8 +1441,8 @@ onBeforeUnmount(() => {
   bottom: auto;
   z-index: 2;
   border-radius: var(--bew-badge-radius);
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
   font-weight: var(--bew-font-weight-semibold);
   letter-spacing: 0.02em;
 }
@@ -1552,7 +1563,7 @@ onBeforeUnmount(() => {
 
 .moment-card__forward:hover,
 .moment-card__forward:focus-visible {
-  border-color: var(--bew-theme-foreground);
+  border-color: var(--bew-focus-ring-color);
   background: var(--bew-theme-surface);
   outline: none;
 }
@@ -1719,7 +1730,7 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__likes.is-liked {
-  color: var(--bew-theme-foreground);
+  color: var(--bew-text-1);
 }
 
 .moment-card__likes:disabled {
@@ -2172,7 +2183,7 @@ onBeforeUnmount(() => {
 
 .moment-card__forward-video:hover,
 .moment-card__forward-video:focus-within {
-  border-color: var(--bew-theme-foreground);
+  border-color: var(--bew-focus-ring-color);
   background: var(--bew-content-solid);
 }
 
@@ -2416,7 +2427,7 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   align-items: center;
   gap: var(--bew-space-1);
-  color: var(--bew-theme-foreground);
+  color: var(--bew-text-1);
   font-weight: var(--bew-font-weight-medium);
 }
 
@@ -2437,7 +2448,7 @@ onBeforeUnmount(() => {
   padding: 0 var(--bew-space-2);
   box-sizing: border-box;
   margin: 0;
-  border-top: 1px solid color-mix(in oklab, var(--bew-border-color), transparent 64%);
+  border-top: 1px solid var(--bew-border-color);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
 }
@@ -2495,50 +2506,6 @@ onBeforeUnmount(() => {
   opacity: 0.65;
 }
 
-.moment-card__disclosure {
-  display: grid;
-  pointer-events: auto;
-  grid-template-rows: 0fr;
-  min-width: 0;
-  transition: grid-template-rows var(--bew-duration-moderate) var(--bew-ease-emphasized);
-}
-
-.moment-card__disclosure.is-open {
-  grid-template-rows: 1fr;
-}
-
-.moment-card__disclosure:not(.is-open) {
-  pointer-events: none;
-}
-
-.moment-card__disclosure-inner {
-  min-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  background: transparent;
-  transition: opacity var(--bew-duration-normal) var(--bew-ease-standard);
-}
-
-.moment-card__disclosure.is-open .moment-card__disclosure-inner {
-  opacity: 1;
-}
-
-// Keep the inner comments at their natural size while the outer clip expands.
-// This avoids squeezing their scroll viewport through fractional grid tracks.
-// The grid transition remains the fallback on engines without intrinsic sizing.
-@supports (interpolate-size: allow-keywords) {
-  .moment-card__disclosure {
-    display: block;
-    interpolate-size: allow-keywords;
-    height: 0;
-    overflow: clip;
-    transition-property: height;
-  }
-  .moment-card__disclosure.is-open {
-    height: auto;
-  }
-}
-
 .moment-card__comments,
 .moment-card__forward-disclosure {
   min-width: 0;
@@ -2547,10 +2514,6 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .moment-card__disclosure,
-  .moment-card__disclosure-inner {
-    transition: none;
-  }
   .moment-card__watch-later {
     transform: none;
     transition-property: opacity, color, background-color;

@@ -151,12 +151,12 @@ const deliveryLabel = computed(() => {
               :aria-label="deliveryLabel"
               :title="deliveryLabel"
             >
-              <i v-if="sendState === 'failed'" i-mingcute:warning-line aria-hidden="true" />
+              <i v-if="sendState === 'failed'" i-tabler:alert-triangle aria-hidden="true" />
               <SkeletonBlock
                 v-else-if="sendState && sendState !== 'sent'"
                 width="1em" height="1em" radius="interactive"
               />
-              <i v-else i-mingcute:check-line aria-hidden="true" />
+              <i v-else i-tabler:check aria-hidden="true" />
             </span>
           </div>
 
@@ -261,13 +261,9 @@ const deliveryLabel = computed(() => {
   :deep(.private-message-content__picture-card),
   :deep(.private-message-content__expired),
   :deep(.private-message-content__unknown) {
-    color: var(--bew-on-theme-color);
-    background: var(--bew-theme-color);
+    color: var(--bew-text-1);
+    background: var(--bew-selected-bg);
     border-color: var(--bew-message-card-border);
-    --bew-text-1: var(--bew-on-theme-color);
-    --bew-text-2: var(--bew-on-theme-color);
-    --bew-text-3: var(--bew-on-theme-color);
-    --bew-theme-foreground: var(--bew-on-theme-color);
   }
 }
 
@@ -345,7 +341,7 @@ const deliveryLabel = computed(() => {
 .private-message-item__delivery {
   display: inline-flex;
   align-items: center;
-  color: var(--bew-theme-color);
+  color: var(--bew-text-2);
 }
 
 .private-message-item__delivery--pending {

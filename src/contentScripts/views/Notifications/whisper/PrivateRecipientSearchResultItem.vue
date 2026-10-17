@@ -3,6 +3,7 @@ import type { TransientPrivateRecipient } from './privateRecipientSearch'
 
 defineProps<{
   recipient: TransientPrivateRecipient
+  selected?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -14,6 +15,9 @@ const emit = defineEmits<{
   <button
     type="button"
     class="private-recipient-result"
+    :data-recipient-mid="recipient.mid"
+    :aria-pressed="selected || false"
+    :class="{ 'is-selected': selected }"
     :aria-label="$t('notifications.whisper.select_recipient', { name: recipient.name })"
     @click="emit('select', recipient)"
   >
@@ -29,7 +33,7 @@ const emit = defineEmits<{
     </span>
     <span class="private-recipient-result__copy">
       <strong>{{ recipient.name }}</strong>
-      <span>{{ $t(`notifications.whisper.recipient_search.sources.${recipient.source}`) }}</span>
+      <span v-if="!selected">{{ $t(`notifications.whisper.recipient_search.sources.${recipient.source}`) }}</span>
     </span>
   </button>
 </template>
@@ -56,6 +60,10 @@ const emit = defineEmits<{
 
 .private-recipient-result:hover {
   background: var(--bew-fill-1);
+}
+.private-recipient-result.is-selected {
+  background: var(--bew-selected-bg);
+  color: var(--bew-text-1);
 }
 
 .private-recipient-result:focus-visible {

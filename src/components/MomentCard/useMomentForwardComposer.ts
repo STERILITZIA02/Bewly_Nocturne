@@ -22,8 +22,9 @@ let momentEmotesRequestAccountId = ''
 export async function loadMomentForwardEmotes(
   accountIdValue: number | string,
   fallbackError = 'Failed to load dynamic emotes',
+  business: 'dynamic' | 'reply' = 'dynamic',
 ): Promise<MomentForwardEmotePackage[]> {
-  const accountId = `${String(accountIdValue || 'guest')}:${String(getUserID() ?? 'guest')}`
+  const accountId = `${String(accountIdValue || 'guest')}:${String(getUserID() ?? 'guest')}:${business}`
   if (cachedEmoteAccountId !== accountId) {
     cachedEmoteAccountId = accountId
     cachedMomentEmotes = undefined
@@ -36,7 +37,7 @@ export async function loadMomentForwardEmotes(
     return momentEmotesRequest
 
   momentEmotesRequestAccountId = accountId
-  const request = api.moment.getMomentEmotes({ business: 'dynamic' })
+  const request = api.moment.getMomentEmotes({ business })
     .then((response) => {
       if (getMomentForwardResponseCode(response) !== 0)
         throw new Error(getMomentForwardResponseMessage(response) || fallbackError)

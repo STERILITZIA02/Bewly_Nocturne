@@ -191,8 +191,8 @@ function select(value: string) {
     line-height: var(--bew-line-height-caption);
   }
   em {
-    background: var(--bew-theme-color);
-    color: var(--bew-on-theme-color);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
   }
   i {
     background: var(--bew-fill-1);

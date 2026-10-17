@@ -2,8 +2,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import ChartRungs from '~/components/ChartRungs.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { chartUnit } from '~/utils/chartScale'
 import { normalizeIntlLocale } from '~/utils/locale'
 
 import type { MarkAllMessagesReadController } from '../composables/useMarkAllMessagesRead'
@@ -24,6 +26,9 @@ const formatter = computed(() => new Intl.NumberFormat(normalizeIntlLocale(local
 const timeFormatter = computed(() => new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))
 const formatCount = (value: number | null) => value === null ? '—' : formatter.value.format(value)
 const largestCount = computed(() => Math.max(1, ...insights.value.notifications.map(item => item.count ?? 0)))
+const unit = computed(() => chartUnit(largestCount.value))
+const steps = computed(() => Math.max(10, Math.ceil(largestCount.value / unit.value)))
+const ringTicks = Array.from({ length: 100 }, (_, index) => index)
 const markingRead = computed(() => props.readAll?.state.status === 'running')
 const markReadError = computed(() => props.readAll?.state.status === 'partial' || props.readAll?.state.status === 'error')
 const activity = computed(() => getRecentConversationActivity(props.sessions))
@@ -50,7 +55,7 @@ const privateShare = computed(() => {
             @click="readAll.markAllRead()"
           >
             <SkeletonBlock v-if="markingRead" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" radius="circle" />
-            <i v-else i-mingcute:checks-line aria-hidden="true" />
+            <i v-else i-tabler:checks aria-hidden="true" />
             {{ t(markingRead ? 'notifications.insights.marking_read' : insights.total === 0 ? 'notifications.insights.all_read' : 'notifications.insights.mark_all_read') }}
           </button>
         </header>
@@ -59,19 +64,19 @@ const privateShare = computed(() => {
         </p>
         <div class="conversation-insights__bars" :aria-label="t('notifications.insights.unread_notifications')">
           <button
-            v-for="(item, index) in insights.notifications" :key="item.key"
+            v-for="item in insights.notifications" :key="item.key"
             class="conversation-insights__notification" type="button"
-            :style="{ '--bar-intensity': `${40 + index * 20}%` }"
             :aria-label="`${t(`notifications.sections.${item.key}.label`)} ${formatCount(item.count)}`"
             @click="emit('selectView', item.key)"
           >
             <span class="conversation-insights__bar-track" aria-hidden="true">
-              <span class="conversation-insights__bar" :style="{ height: `${(item.count ?? 0) / largestCount * 100}%` }" />
+              <ChartRungs class="conversation-insights__bar" :value="item.count" :unit="unit" :steps="steps" />
             </span>
             <strong>{{ formatCount(item.count) }}</strong>
             <span class="conversation-insights__bar-label">{{ t(`notifications.sections.${item.key}.label`) }}</span>
           </button>
         </div>
+        <span class="conversation-insights__caption">{{ t('notifications.insights.rung_unit', { count: formatCount(unit) }) }}</span>
       </article>
 
       <article class="conversation-insights__card conversation-insights__activity">
@@ -92,11 +97,11 @@ const privateShare = computed(() => {
         <div class="conversation-insights__private-body">
           <div class="conversation-insights__proportion">
             <svg viewBox="0 0 120 120" aria-hidden="true">
-              <circle class="conversation-insights__ring-track" cx="60" cy="60" r="48" />
-              <circle v-if="privateShare !== null" class="conversation-insights__ring-secondary" cx="60" cy="60" r="48" />
-              <circle
-                v-if="privateShare !== null && privateShare > 0" class="conversation-insights__ring-primary" cx="60" cy="60" r="48"
-                pathLength="100" :stroke-dasharray="privateShare === 100 ? undefined : `${privateShare} 100`"
+              <line
+                v-for="index in ringTicks" :key="index" x1="60" y1="5" x2="60"
+                :y2="index % 10 === 0 ? 19 : 16"
+                :transform="`rotate(${index * 3.6} 60 60)`"
+                :class="privateShare === null ? 'conversation-insights__ring-track' : index < Math.round(privateShare) ? 'conversation-insights__ring-primary' : 'conversation-insights__ring-secondary'"
               />
             </svg>
             <strong class="conversation-insights__number">{{ formatCount(insights.privateCount) }}</strong>
@@ -114,6 +119,7 @@ const privateShare = computed(() => {
             </div>
           </dl>
         </div>
+        <span class="conversation-insights__caption">{{ t('notifications.insights.ring_unit') }}</span>
         <dl class="conversation-insights__session-stats">
           <div>
             <dt>{{ t('notifications.insights.loaded_sessions') }}</dt>
@@ -358,14 +364,12 @@ const privateShare = computed(() => {
   justify-content: center;
   width: 100%;
   height: calc(var(--bew-insights-chart-height) - var(--bew-space-12));
+  border-bottom: 1px solid var(--bew-chart-grid);
 }
 .conversation-insights__bar {
   display: block;
-  width: min(100%, calc(var(--bew-space-8) * 2));
-  min-height: var(--bew-space-0-5);
-  background: color-mix(in oklab, var(--bew-theme-color) var(--bar-intensity), var(--bew-content-solid));
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
+  width: min(100%, var(--bew-space-8));
+  height: 100%;
 }
 .conversation-insights__bar-label {
   min-height: calc(var(--bew-line-height-caption) * 2);
@@ -385,20 +389,20 @@ const privateShare = computed(() => {
 }
 .conversation-insights__proportion svg {
   width: 100%;
-  transform: rotate(-90deg);
 }
-.conversation-insights__proportion circle {
+.conversation-insights__proportion line {
   fill: none;
-  stroke-width: 12;
+  stroke-width: var(--bew-chart-guide-width);
+  vector-effect: non-scaling-stroke;
 }
 .conversation-insights__ring-track {
-  stroke: var(--bew-fill-1);
+  stroke: var(--bew-chart-grid);
 }
 .conversation-insights__ring-secondary {
-  stroke: color-mix(in oklab, var(--bew-theme-color) 35%, var(--bew-content-solid));
+  stroke: var(--bew-chart-secondary);
 }
 .conversation-insights__ring-primary {
-  stroke: var(--bew-theme-color);
+  stroke: var(--bew-chart-primary);
 }
 .conversation-insights__key {
   display: flex;
@@ -410,10 +414,10 @@ const privateShare = computed(() => {
   width: var(--bew-space-2);
   height: var(--bew-space-2);
   border-radius: var(--bew-radius-sm);
-  background: var(--bew-theme-color);
+  background: var(--bew-chart-primary);
 }
 .conversation-insights__key--secondary::before {
-  background: color-mix(in oklab, var(--bew-theme-color) 35%, var(--bew-content-solid));
+  background: var(--bew-chart-secondary);
 }
 
 .conversation-insights__recent-list {
@@ -449,8 +453,8 @@ const privateShare = computed(() => {
 }
 .conversation-insights__badge {
   padding: 0 var(--bew-space-2);
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
   border-radius: var(--bew-badge-radius);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
