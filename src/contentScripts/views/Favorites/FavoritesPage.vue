@@ -7,10 +7,12 @@ import ArticleCardSkeleton from '~/components/ArticleCard/ArticleCardSkeleton.vu
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 import type { FavoriteResource } from '~/components/TopBar/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
+import { usePageViewState } from '~/composables/usePageViewState'
 import { settings } from '~/logic'
 import type { Media as FavoriteItem } from '~/models/video/favorite'
 import type { List as CategoryItem } from '~/models/video/favoriteCategory'
@@ -28,6 +30,9 @@ import {
 import { getCSRF, getUserID, openLinkToNewTab } from '~/utils/main'
 
 import { transformFavoriteArticle, transformFavoriteItem } from './favoriteAdapters'
+import type { FavoriteFilterQuery } from './favoriteFilter'
+import { collectFavoriteUploaders, EMPTY_FAVORITE_FILTER, normalizeFavoriteFilterQuery } from './favoriteFilter'
+import FavoriteFilterPanel from './FavoriteFilterPanel.vue'
 import FavoriteFolderEditor from './FavoriteFolderEditor.vue'
 import FavoriteFolderSocial from './FavoriteFolderSocial.vue'
 import FavoriteResourceActions from './FavoriteResourceActions.vue'
@@ -35,6 +40,7 @@ import FavoriteSidebarItem from './FavoriteSidebarItem.vue'
 import FavoriteSidebarSkeleton from './FavoriteSidebarSkeleton.vue'
 import type { FavoriteVideoOrder, OtherFavoriteKind } from './otherFavorites'
 import { matchesSubscriptionType } from './otherFavorites'
+import { useFavoriteFilterScan } from './useFavoriteFilterScan'
 import { useFavoriteFolderManager } from './useFavoriteFolderManager'
 import type { FavoriteView } from './useFavoritesData'
 import { useFavoritesData } from './useFavoritesData'
@@ -58,6 +64,28 @@ const { videoOrder, subscriptionFilter, otherFavoriteType, otherSearchScope, oth
 const writes = useFavoriteWrites({ api: api.favorite, capture: data.capture, getCSRF, onError: () => toast.error(t('common.operation_failed')) })
 const folders = useFavoriteFolderManager({ api: api.favorite, data, writes, getCSRF, notify: notifyTopBarFavoritesChanged, error: key => toast.error(t(key)), confirm: key => showConfirmDialog(t(key)) })
 const { editor: folderEditor, form: folderForm, info: folderInfo, infoLoading: folderInfoLoading, infoFailed: folderInfoFailed, currentFolderId } = folders
+const viewState = usePageViewState('favorites')
+const restoredFilter = normalizeFavoriteFilterQuery(viewState.read<FavoriteFilterQuery>('filter', EMPTY_FAVORITE_FILTER))
+const filterOpen = ref(false)
+const filterKeyword = ref('')
+const filterScan = useFavoriteFilterScan({
+  api: api.favorite,
+  getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null,
+  getSourceIds: () => searchScope.value === 'all' ? favoriteCategories.map(item => item.id) : selectedCategory.value ? [selectedCategory.value.id] : [],
+  getScope: () => searchScope.value,
+  getOrder: () => videoOrder.value,
+  getNormalQuery: () => filterKeyword.value,
+  isActive: () => favoriteView.value === 'video' && categoryState.loaded,
+})
+viewState.capture('filter', () => filterScan.applied.value)
+const filterActive = computed(() => favoriteView.value === 'video' && filterScan.active.value)
+const filterStatus = filterScan.status
+const managedResources = computed(() => filterActive.value ? filterScan.items.value : favoriteResources)
+const filterUploaders = computed(() => collectFavoriteUploaders([...favoriteResources, ...filterScan.items.value]))
+const filterConditionCount = computed(() => {
+  const query = filterScan.applied.value
+  return query.mids.length + query.tids.length + query.keywords.length
+})
 const ownFolder = computed(() => Boolean(folderInfo.value && String(folderInfo.value.mid || folderInfo.value.upper.mid) === String(accountId.value)))
 
 const isResolvingSeasonPlayAll = ref<boolean>(false)
@@ -127,14 +155,14 @@ const canBatchManage = computed(() => {
 
 const selectedFavoriteResources = computed(() => {
   const selectedKeys = new Set(selectedResourceKeys.value)
-  return favoriteResources.filter(item => selectedKeys.has(getFavoriteResourceKey(item)))
+  return managedResources.value.filter(item => selectedKeys.has(getFavoriteResourceKey(item)))
 })
 
 const selectedCount = computed(() => selectedFavoriteResources.value.length)
 
 const isAllCurrentPageSelected = computed(() => {
-  return favoriteResources.length > 0
-    && favoriteResources.every(item => selectedResourceKeys.value.includes(getFavoriteResourceKey(item)))
+  return managedResources.value.length > 0
+    && managedResources.value.every(item => selectedResourceKeys.value.includes(getFavoriteResourceKey(item)))
 })
 
 const targetCategoryOptions = computed(() => {
@@ -188,6 +216,7 @@ onMounted(() => {
 })
 
 onScopeDispose(() => {
+  filterScan.dispose()
   data.dispose()
   writes.reset()
   if (handleReachBottom.value === handleFavoriteReachBottom)
@@ -383,7 +412,7 @@ function handleFavoriteCardClick(item: FavoriteItem, event: MouseEvent) {
 function toggleSelectAllCurrentPage() {
   selectedResourceKeys.value = isAllCurrentPageSelected.value
     ? []
-    : favoriteResources.map(item => getFavoriteResourceKey(item))
+    : managedResources.value.map(item => getFavoriteResourceKey(item))
 }
 
 function toggleBatchManage() {
@@ -481,7 +510,10 @@ function handleSearch() {
   closeBatchManage()
   exitSidebarManage()
   if (favoriteView.value === 'video') {
+    filterKeyword.value = keyword.value.trim()
     loadSelectedContent()
+    if (filterActive.value)
+      filterScan.refresh()
   }
   else {
     if (failedContentPage.value !== null || stalledContentPage.value !== null)
@@ -578,10 +610,75 @@ function jumpToLoginPage() {
 }
 
 async function handleUnfavorite(resource: FavoriteResource) {
-  if (!selectedCategory.value || searchScope.value !== 'current')
+  const sourceId = filterActive.value
+    ? filterScan.getSourceId(resource as unknown as FavoriteItem) ?? (searchScope.value === 'current' ? selectedCategory.value?.id : undefined)
+    : searchScope.value === 'current' ? selectedCategory.value?.id : undefined
+  if (!sourceId)
     return
-  await runResourceWrite({ kind: 'delete', sourceId: selectedCategory.value.id, resourceKeys: [getFavoriteResourceKey(resource)] }, true)
+  await runResourceWrite({ kind: 'delete', sourceId, resourceKeys: [getFavoriteResourceKey(resource)] }, true)
 }
+
+function applyFavoriteFilter(query: FavoriteFilterQuery) {
+  closeBatchManage()
+  exitSidebarManage()
+  filterKeyword.value = keyword.value.trim()
+  filterScan.apply(normalizeFavoriteFilterQuery(query))
+}
+
+function toggleFilterPanel() {
+  filterOpen.value = !filterOpen.value
+  if (filterOpen.value)
+    void filterScan.loadPartitions()
+}
+
+function handleFavoriteGridLoadMore() {
+  if (filterActive.value)
+    return
+  void loadNextPage()
+}
+
+function handleFavoriteGridRefresh() {
+  if (filterActive.value) {
+    if (filterStatus.value === 'failed' || filterStatus.value === 'stalled')
+      filterScan.continueScan()
+    return
+  }
+  void retryFavoriteContent()
+}
+
+const filterStatusText = computed(() => {
+  const count = filterScan.items.value.length
+  switch (filterStatus.value) {
+    case 'scanning':
+      return t('favorites.filter_status_scanning', { count, scanned: filterScan.scannedItems.value })
+    case 'paused':
+      return t('favorites.filter_status_paused', { count })
+    case 'budget':
+      return t('favorites.filter_status_budget', { count, scanned: filterScan.scannedItems.value })
+    case 'complete':
+      return t('favorites.filter_status_complete', { count })
+    case 'failed':
+      return t('favorites.filter_status_failed', { count })
+    case 'stalled':
+      return t('favorites.filter_status_stalled', { count })
+    default:
+      return ''
+  }
+})
+
+watch(() => [favoriteView.value, searchScope.value, selectedCategory.value?.id, videoOrder.value, categoryState.loaded, searchScope.value === 'all' ? favoriteCategories.map(item => item.id).join(',') : ''] as const, () => {
+  if (filterScan.active.value)
+    filterScan.refresh()
+  if (filterOpen.value && favoriteView.value === 'video')
+    void filterScan.loadPartitions()
+})
+let filterRestorePending = restoredFilter.mids.length + restoredFilter.tids.length + restoredFilter.keywords.length > 0
+watch(() => categoryState.loaded, (loaded) => {
+  if (!loaded || !filterRestorePending)
+    return
+  filterRestorePending = false
+  filterScan.apply(restoredFilter)
+}, { immediate: true })
 
 watch(keyword, () => {
   if (favoriteView.value !== 'video') {
@@ -589,6 +686,11 @@ watch(keyword, () => {
   }
 })
 watch(accountId, () => {
+  filterRestorePending = false
+  filterScan.apply(EMPTY_FAVORITE_FILTER)
+  filterScan.invalidatePartitions()
+  filterKeyword.value = ''
+  filterOpen.value = false
   data.resetAccount()
   writes.reset()
   closeBatchManage()
@@ -614,6 +716,8 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   if (!result)
     return
   data.applyResourceWrite(command, version)
+  filterScan.applyResourceWrite(command)
+  filterScan.invalidatePartitions()
   if (version === contentVersion.value && selection === selectedResourceKeys.value) {
     selectedResourceKeys.value = selection.filter(key => !command.resourceKeys.includes(key))
     if (command.targetId === targetCategory.value?.id) {
@@ -674,37 +778,49 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
       <template v-else>
         <Empty
-          v-if="favoriteView === 'video' && searchScope === 'all' && !keyword.trim() && favoriteResources.length === 0 && !isLoading"
+          v-if="!filterActive && favoriteView === 'video' && searchScope === 'all' && !keyword.trim() && favoriteResources.length === 0 && !isLoading"
           text-only fill
           :description="t('favorites.global_search_hint')"
         />
 
+        <div v-if="filterActive" class="favorite-filter-status" :role="filterStatus === 'failed' || filterStatus === 'stalled' ? 'alert' : 'status'">
+          <span>{{ filterStatusText }}</span>
+          <button v-if="filterStatus === 'scanning'" type="button" class="favorite-filter-status__action" @click="filterScan.pause()">
+            {{ t('favorites.filter_pause') }}
+          </button>
+          <button v-else-if="filterStatus === 'paused' || filterStatus === 'budget'" type="button" class="favorite-filter-status__action" @click="filterScan.continueScan()">
+            {{ t('favorites.filter_continue') }}
+          </button>
+          <button v-else-if="filterStatus === 'failed' || filterStatus === 'stalled'" type="button" class="favorite-filter-status__action" @click="filterScan.continueScan()">
+            {{ t('common.operation.refresh') }}
+          </button>
+        </div>
         <Empty v-else-if="favoriteView === 'season' && keyword.trim() && !visibleResources.length && noMoreContent && !isLoading && failedContentPage === null && stalledContentPage === null" text-only fill :description="t('library_tools.no_matches')" role="status" />
         <VideoCardGrid
           v-else
           :key="favoriteGridStateKey"
           text-only-states
           :state-key="favoriteGridStateKey"
-          :items="visibleResources"
+          :items="filterActive ? filterScan.items.value : visibleResources"
           :transform-item="transformFavoriteItem"
-          :get-item-key="getFavoriteResourceKey"
+          :get-item-key="filterActive ? filterScan.getItemKey : getFavoriteResourceKey"
           grid-layout="adaptive"
           :initial-skeleton-count="favoriteView === 'season' && selectedSeason?.type === 21 ? FAVORITE_SEASON_PAGE_SIZE : FAVORITE_FOLDER_PAGE_SIZE"
           disable-content-visibility
-          :loading="isLoading || isFullPageLoading"
-          :no-more-content="noMoreContent"
-          :request-failed="failedContentPage !== null || stalledContentPage !== null"
-          :empty-description="$t(keyword.trim() ? 'library_tools.no_matches' : 'common.no_data')"
+          :loading="filterActive ? filterStatus === 'scanning' : isLoading || isFullPageLoading"
+          :no-more-content="filterActive ? filterStatus !== 'scanning' : noMoreContent"
+          :request-failed="filterActive ? false : failedContentPage !== null || stalledContentPage !== null"
+          :empty-description="$t(keyword.trim() || filterActive ? 'library_tools.no_matches' : 'common.no_data')"
           :more-btn="favoriteView === 'video' && searchScope === 'current' && !isBatchManaging"
           :hide-author="favoriteView === 'season' && selectedSeason?.type === 21"
           :card-click-handler="isBatchManaging ? handleFavoriteCardClick : undefined"
           :cover-top-left-always-visible="isBatchManaging"
           enable-row-padding
-          @refresh="retryFavoriteContent"
-          @load-more="loadNextPage"
+          @refresh="handleFavoriteGridRefresh"
+          @load-more="handleFavoriteGridLoadMore"
           @author-items-visible="data.loadResourceAvatars"
         >
-          <template v-if="favoriteView === 'video' && searchScope === 'current'" #coverTopLeft="{ item }">
+          <template v-if="favoriteView === 'video' && (searchScope === 'current' || filterActive)" #coverTopLeft="{ item }">
             <button
               v-if="isBatchManaging"
               class="favorite-card-action"
@@ -812,6 +928,15 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
                 {{ option.label }}
               </button>
             </div>
+            <Tooltip :content="t('favorites.filter_title')" placement="top">
+              <IconButton
+                class="favorite-folder-manager favorite-filter-toggle" :label="filterConditionCount ? t('favorites.filter_title_active', { count: filterConditionCount }) : t('favorites.filter_title')"
+                :aria-pressed="filterOpen" :aria-expanded="filterOpen" :data-active="filterConditionCount ? 'true' : undefined"
+                :disabled="isInitialSidebarLoading" @click="toggleFilterPanel"
+              >
+                <span :class="filterConditionCount ? 'i-tabler:filter-filled' : 'i-tabler:filter'" />
+              </IconButton>
+            </Tooltip>
             <Tooltip :content="t(isManagingFolder ? 'favorites.sidebar_manage_exit' : 'favorites.manage_folders')" placement="top">
               <IconButton
                 class="favorite-folder-manager" :label="t(isManagingFolder ? 'favorites.sidebar_manage_exit' : 'favorites.manage_folders')"
@@ -821,6 +946,13 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               </IconButton>
             </Tooltip>
           </div>
+          <FavoriteFilterPanel
+            v-if="favoriteView === 'video' && filterOpen"
+            :applied="filterScan.applied.value" :uploaders="filterUploaders" :partitions="filterScan.partitions.value"
+            :partitions-loading="filterScan.partitionsLoading.value" :partitions-failed="filterScan.partitionsFailed.value"
+            :disabled="isBatchOperating"
+            @apply="applyFavoriteFilter" @retry-partitions="filterScan.invalidatePartitions(); filterScan.loadPartitions()"
+          />
           <div v-if="isManagingFolder" class="sidebar-manage-bar">
             <button class="sidebar-manage-select" :aria-pressed="isAllFoldersSelected" :disabled="isSidebarOperating" @click="toggleSelectAllFolders">
               <span :class="isAllFoldersSelected ? 'i-tabler:checkbox' : 'i-tabler:square'" />
@@ -867,7 +999,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               </button>
               <FavoriteResourceActions
                 v-if="!isManagingFolder && canBatchManage"
-                :managing="isBatchManaging" :pending="isBatchOperating" :total="favoriteResources.length"
+                :managing="isBatchManaging" :pending="isBatchOperating" :total="managedResources.length"
                 :selected-count="selectedCount" :all-selected="isAllCurrentPageSelected" :can-transfer="targetCategoryOptions.length > 0"
                 @toggle="toggleBatchManage" @select-all="toggleSelectAllCurrentPage"
                 @copy="openBatchTransferDialog('copy')" @move="openBatchTransferDialog('move')" @remove="handleBatchDelete"
@@ -903,8 +1035,9 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               @select="handleSeasonItemClick(item)"
             >
               <button v-if="!isManagingSeason" type="button" class="favorite-folder-action" :disabled="isSidebarOperating || isResolvingSeasonPlayAll" @click="handlePlayAll">
-                <SkeletonBlock v-if="isResolvingSeasonPlayAll" width="1em" height="1em" />
-                <span v-else i-tabler:player-play />{{ t('common.play_all') }}
+                <LoadingRing :loading="isResolvingSeasonPlayAll">
+                  <span i-tabler:player-play />
+                </LoadingRing>{{ t('common.play_all') }}
               </button>
               <button v-if="!isManagingSeason" type="button" class="favorite-folder-action danger" :disabled="isSidebarOperating" @click="unfavSeasons([{ id: item.id, type: item.type }])">
                 <span i-tabler:star-off />{{ t('favorites.unfavorite') }}
@@ -951,10 +1084,10 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
           <div v-if="favoriteView === 'season' && (subscriptionState.hasMore || subscriptionState.failed) && (visibleSubscriptions.length || !subscriptionState.failed)" class="favorites-directory-more">
             <span v-if="subscriptionState.failed" role="status">{{ t('common.load_failed') }}</span>
             <Button type="tertiary" class="bew-cover-sidebar__action" :disabled="subscriptionState.loading" @click="loadMoreSubscriptions(subscriptionState.failed)">
-              <SkeletonBlock v-if="subscriptionState.loading" width="4em" height="1em" />
-              <template v-else>
-                {{ t(subscriptionState.failed ? 'common.operation.refresh' : 'common.load_more') }}
+              <template #left>
+                <LoadingRing :loading="subscriptionState.loading" />
               </template>
+              {{ t(subscriptionState.failed ? 'common.operation.refresh' : 'common.load_more') }}
             </Button>
           </div>
         </nav>
@@ -1013,6 +1146,31 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   .favorite-create-button {
     transition: none;
   }
+}
+.favorite-filter-status {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-3);
+  margin-bottom: var(--bew-space-3);
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+}
+.favorite-filter-status__action {
+  min-height: var(--bew-control-item-height);
+  padding: 0 var(--bew-space-3);
+  border: 0;
+  border-radius: var(--bew-radius-full);
+  corner-shape: var(--bew-corner-shape-round);
+  color: var(--bew-text-1);
+  background: var(--bew-hover-bg);
+  font: inherit;
+  font-weight: var(--bew-font-weight-medium);
+  cursor: pointer;
+}
+.favorite-filter-toggle[data-active="true"] {
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 .favorite-rail-toolbar {
   display: flex;

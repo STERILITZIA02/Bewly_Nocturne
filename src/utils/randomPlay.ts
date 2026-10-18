@@ -2,12 +2,14 @@ import { onRouteChange } from '~/composables/useRouteState'
 import { hasPlayerMediaMutation, observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { CustomPlayOrderContext, RandomPlayOrder } from '~/logic/storage'
+import { getBilibiliLogicalPathname, toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { createCustomPlayControls, disposeCustomPlayControlsStyle, findCustomPlayControlsHost, getNativePlaylistRoots, mountCustomPlayControls, PLAYLIST_RECOMMENDATION_SELECTOR, PLAYLIST_ROOT_SELECTOR, updateCustomPlayControls } from '~/utils/customPlayControls'
 import { debugLog } from '~/utils/debug'
 import { i18n } from '~/utils/i18n'
+import { getPlaybackNavigationKey } from '~/utils/playbackTab'
 import { RANDOM_PLAY_UI_RETRY_MAX, shouldRetryRandomPlayVideo } from '~/utils/randomPlayRetry'
 
-import { applyAutoPlayByVideoType, detectVideoType, disableNativeEndPlaybackBehavior, getVideoElement, setCustomEndPlaybackHandlerActive, supportsCustomPlaybackForVideoType, VideoType } from './player'
+import { applyAutoPlayByVideoType, canCustomPlayHandleCurrentEnd, detectCustomPlayListVideoType, detectVideoType, disableNativeEndPlaybackBehavior, getVideoElement, setCustomEndPlaybackHandlerActive, supportsCustomPlaybackForVideoType, VideoType } from './player'
 
 // 随机播放状态管理
 let isRandomPlayEnabled = false
@@ -15,6 +17,8 @@ let isRandomPlayInitialized = false
 const visitedEpisodes = new Set<string>()
 let originalEndedListener: (() => void) | null = null
 let originalPauseListener: (() => void) | null = null
+let originalMediaListener: ((event?: Event) => void) | null = null
+const MEDIA_NAVIGATION_EVENTS = ['emptied', 'loadedmetadata', 'playing'] as const
 let listenerVideo: HTMLVideoElement | null = null
 let stopVideoDomObserver: (() => void) | null = null
 let isPageObserverInitialized = false
@@ -72,7 +76,7 @@ function getVideoTypeCustomPlayOrder(): RandomPlayOrder | null {
     return null
 
   let context: CustomPlayOrderContext | null = null
-  switch (detectVideoType()) {
+  switch (detectCustomPlayListVideoType()) {
     case VideoType.MULTIPART:
       context = 'multipart'
       break
@@ -113,11 +117,12 @@ function getEffectiveCustomPlayOrder(): RandomPlayOrder | null {
 export function getVideoEpisodes(): HTMLElement[] {
   // A multipart manuscript can live inside a collection. Its custom order
   // must contain only its parts, not the collection's other manuscripts.
-  const multipart = detectVideoType() === VideoType.MULTIPART
+  const multipart = detectCustomPlayListVideoType() === VideoType.MULTIPART
   const multipartSelector = '.video-pod__item, .multi-page__item, .page-item'
   const episodes = queryEpisodeItems(multipart
     ? multipartSelector
     : `${multipartSelector}, .video-pod__list .simple-base-item`)
+    .filter(item => !item.parentElement?.closest('.video-pod__item'))
 
   if (episodes.length > 0) {
     return episodes
@@ -178,7 +183,7 @@ function getEpisodeBaseKey(episode: HTMLElement, index: number): string {
     try {
       const url = new URL(link.href, location.href)
       const page = url.searchParams.get('p')
-      return `url:${url.pathname}${page ? `?p=${page}` : ''}`
+      return `url:${getBilibiliLogicalPathname(url)}${page ? `?p=${page}` : ''}`
     }
     catch {
       return `url:${link.getAttribute('href')}`
@@ -270,7 +275,7 @@ export function getCurrentEpisodeIndex(episodes: HTMLElement[]): number {
     return activeIndex
 
   const currentUrl = new URL(location.href)
-  const currentPath = currentUrl.pathname.replace(/\/$/, '')
+  const currentPath = getBilibiliLogicalPathname(currentUrl).replace(/\/$/, '')
   const currentPage = currentUrl.searchParams.get('p') ?? '1'
   const urlIndex = episodes.findIndex((episode) => {
     const link = getEpisodeLink(episode)
@@ -278,7 +283,7 @@ export function getCurrentEpisodeIndex(episodes: HTMLElement[]): number {
       return false
     try {
       const episodeUrl = new URL(link.href, location.href)
-      return episodeUrl.pathname.replace(/\/$/, '') === currentPath
+      return getBilibiliLogicalPathname(episodeUrl).replace(/\/$/, '') === currentPath
         && (episodeUrl.searchParams.get('p') ?? '1') === currentPage
     }
     catch {
@@ -358,8 +363,12 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
     ? targetEpisode as HTMLAnchorElement
     : targetEpisode.querySelector<HTMLAnchorElement>('a[href]')
 
+  const firstPart = targetEpisode.querySelector<HTMLElement>('.multi-p .page-item')
   if (link && link.href) {
     clickableElement = link
+  }
+  else if (firstPart) {
+    clickableElement = firstPart
   }
   else {
     // 2. 查找 .simple-base-item 元素（B站新版播放列表项）
@@ -646,8 +655,13 @@ function detachRandomPlayVideoListeners() {
     listenerVideo.removeEventListener('ended', originalEndedListener, true)
   if (listenerVideo && originalPauseListener)
     listenerVideo.removeEventListener('pause', originalPauseListener)
+  if (listenerVideo && originalMediaListener) {
+    for (const name of MEDIA_NAVIGATION_EVENTS)
+      listenerVideo.removeEventListener(name, originalMediaListener)
+  }
   originalEndedListener = null
   originalPauseListener = null
+  originalMediaListener = null
   listenerVideo?.removeAttribute('data-bewly-random-play-listener')
   listenerVideo = null
   if (videoListenerProcessingTimer !== null)
@@ -698,6 +712,10 @@ export function enableRandomPlay(): void {
 
     // 用于防止重复触发
     let isProcessing = false
+    let mediaNavigationKey = video.readyState >= 1 ? getPlaybackNavigationKey(location.href) : ''
+    const markMediaNavigation = (event?: Event) => {
+      mediaNavigationKey = event?.type === 'emptied' ? '' : getPlaybackNavigationKey(location.href)
+    }
 
     // 创建新的随机播放监听器
     const randomPlayListener = () => {
@@ -713,6 +731,9 @@ export function enableRandomPlay(): void {
       if (!isRandomPlayEnabled) {
         return
       }
+      const navigationKey = getPlaybackNavigationKey(location.href)
+      if (!navigationKey || navigationKey !== mediaNavigationKey || !canCustomPlayHandleCurrentEnd())
+        return
 
       isProcessing = true
 
@@ -729,8 +750,10 @@ export function enableRandomPlay(): void {
       const playOrder = getActivePlayOrder()
       const nextIndex = getNextEpisodeIndex(episodes, currentIndex, playOrder)
 
-      if (nextIndex !== currentIndex)
+      if (nextIndex !== currentIndex) {
+        mediaNavigationKey = ''
         jumpToEpisode(episodes, nextIndex)
+      }
       if (videoListenerProcessingTimer !== null)
         clearTimeout(videoListenerProcessingTimer)
       videoListenerProcessingTimer = window.setTimeout(() => {
@@ -740,6 +763,8 @@ export function enableRandomPlay(): void {
     }
 
     // 监听多个事件以确保兼容性
+    for (const name of MEDIA_NAVIGATION_EVENTS)
+      video.addEventListener(name, markMediaNavigation)
     video.addEventListener('ended', randomPlayListener, true)
     // 有些情况下pause事件可能更可靠
     const randomPlayPauseListener = () => {
@@ -752,6 +777,7 @@ export function enableRandomPlay(): void {
 
     originalEndedListener = randomPlayListener
     originalPauseListener = randomPlayPauseListener
+    originalMediaListener = markMediaNavigation
   }
 
   // 立即尝试设置监听器
@@ -1087,5 +1113,5 @@ export function initRandomPlay(): void {
 
 // 判断是否是视频页面
 export function isCustomPlayPage(): boolean {
-  return /https?:\/\/(?:www\.)?bilibili\.com\/(?:video|list)\/.*/.test(window.location.href)
+  return /https?:\/\/(?:www\.)?bilibili\.com\/(?:video|list)\/.*/.test(toBilibiliLogicalUrl(window.location.href))
 }

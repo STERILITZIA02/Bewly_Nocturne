@@ -31,10 +31,6 @@ async function clearSearchHistory() {
         />
       </SettingsItem>
 
-      <SettingsItem :title="$t('settings.enable_logo_glowing_effect')" right-width="auto">
-        <Radio v-model="settings.searchPageLogoGlow" />
-      </SettingsItem>
-
       <SettingsItem :title="$t('settings.logo_visibility')" right-width="auto">
         <Radio v-model="settings.searchPageShowLogo" />
       </SettingsItem>

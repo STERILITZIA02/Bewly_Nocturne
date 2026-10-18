@@ -1,3 +1,5 @@
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
+
 export const IFRAME_SEARCH_REQUEST = 'BEWLY_IFRAME_SEARCH_REQUEST'
 const categories = ['all', 'video', 'bangumi', 'media_ft', 'live', 'article', 'user'] as const
 export type IframeSearchCategory = typeof categories[number]
@@ -18,7 +20,7 @@ export function parseIframeSearchUrl(destination: string) {
     const url = new URL(destination)
     if (url.protocol !== 'https:' || url.port || url.username || url.password)
       return
-    if (url.hostname === 'www.bilibili.com' && url.pathname === '/' && url.searchParams.get('page') === 'SearchResults')
+    if (url.hostname === 'www.bilibili.com' && getBilibiliLogicalPathname(url) === '/' && url.searchParams.get('page') === 'SearchResults')
       return parseIframeSearch({ keyword: url.searchParams.get('keyword'), category: url.searchParams.get('category') || 'all' })
     if (url.hostname === 'search.bilibili.com') {
       const path = url.pathname.replace(/^\/|\/$/g, '') || 'all'

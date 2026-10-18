@@ -3,8 +3,8 @@ import { computed, ref, watch } from 'vue'
 
 import Button from '~/components/Button.vue'
 import Dialog from '~/components/Dialog.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 import Progress from '~/components/Progress.vue'
-import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useOpenTabsWatchLater } from '~/composables/useOpenTabsWatchLater'
 import { countOpenTabsTask } from '~/constants/openTabsWatchLater'
 
@@ -31,7 +31,9 @@ function toggleAll() {
     :show-footer="false" @close="emit('close')"
   >
     <div class="open-tabs-dialog">
-      <SkeletonBlock v-if="!task && busy" width="100%" height="var(--bew-control-height)" />
+      <div v-if="!task && busy" class="open-tabs-dialog__pending" role="status" :aria-label="$t('common.loading')">
+        <LoadingRing :loading="busy" size="var(--bew-icon-size-lg)" />
+      </div>
       <p v-if="failed" role="alert">
         {{ $t('watch_later.open_tabs.failed_request') }}
       </p>
@@ -105,6 +107,13 @@ function toggleAll() {
 </template>
 
 <style scoped lang="scss">
+.open-tabs-dialog__pending {
+  display: grid;
+  place-items: center;
+  min-height: var(--bew-control-height);
+  color: var(--bew-text-2);
+}
+
 .open-tabs-dialog {
   display: flex;
   flex-direction: column;

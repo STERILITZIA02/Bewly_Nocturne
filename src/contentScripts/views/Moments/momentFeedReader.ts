@@ -206,6 +206,9 @@ export function createMomentFeedReader(
       loadedQuery = queryKey(type, hostMid)
     },
     getLoaded: (type: MomentFilter, hostMid: string) => loadedQuery === queryKey(type, hostMid) ? loadedItems : undefined,
+    remove(id: string) {
+      loadedItems = loadedItems.filter(item => item.id !== id)
+    },
     updateMoment(id: string, patch: Partial<DisplayMoment>) {
       const index = loadedItems.findIndex(item => item.id === id)
       if (index < 0)

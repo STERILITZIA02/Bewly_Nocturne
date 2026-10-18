@@ -26,16 +26,25 @@ export function patchCommentTransferLifecycle(name: string, constructor: unknown
     const original = prototype[name]
     if (typeof original !== 'function')
       continue
-    prototype[name] = function (this: HTMLElement, ...args: unknown[]) {
+    const wrapped = function (this: HTMLElement, ...args: unknown[]) {
       // Bilibili unloads its list, editor and lazy-load task on disconnect.
       // Only our synchronous move of the intact tree skips that lifecycle.
-      if (isCommentTransfer(this)) {
+      let transferring = false
+      try {
+        transferring = isCommentTransfer(this)
+      }
+      catch {}
+      if (transferring) {
         if (name === 'connectedCallback')
           (this as HTMLElement & { requestUpdate?: () => unknown }).requestUpdate?.()
         return
       }
-      return original.apply(this, args)
+      return Reflect.apply(original, this, args)
     }
+    try {
+      prototype[name] = wrapped
+    }
+    catch {}
   }
 }
 

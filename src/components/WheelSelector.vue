@@ -161,7 +161,7 @@ function resetPreview(event: FocusEvent) {
 .wheel-selector__viewport {
   position: relative;
   height: var(--bew-wheel-viewport-height);
-  // Only the three front-facing rows paint; no rectangular clip may cut off glow.
+  // Only the three front-facing rows paint, so the viewport needs no clip.
   overflow: visible;
   perspective: calc(var(--bew-wheel-radius) * 4);
   perspective-origin: left center;
@@ -194,7 +194,7 @@ function resetPreview(event: FocusEvent) {
   corner-shape: var(--bew-corner-shape);
   backface-visibility: hidden;
   transform-origin: left center;
-  transition: filter var(--bew-duration-fast) var(--bew-ease-standard);
+  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
 
   // Keep the visible row at text height while retaining a usable pointer target.
   &::before {
@@ -247,10 +247,6 @@ function resetPreview(event: FocusEvent) {
 @media (hover: hover) {
   .wheel-selector__item:hover {
     color: var(--bew-wheel-text-active);
-    // Filter the finished glyphs after label ellipsis; text-shadow inside the
-    // clipped label would stop at a rectangular boundary.
-    filter: drop-shadow(0 0 var(--bew-space-1) var(--bew-wheel-glow))
-      drop-shadow(0 0 var(--bew-space-2) var(--bew-wheel-glow));
   }
 }
 

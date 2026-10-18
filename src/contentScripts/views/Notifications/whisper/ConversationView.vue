@@ -933,7 +933,7 @@ defineExpose({
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-modal-radius);
   corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-edge-glow-1);
+  box-shadow: none;
   backdrop-filter: var(--bew-filter-glass-1);
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
   background-clip: padding-box;

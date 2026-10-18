@@ -54,6 +54,8 @@ export default defineConfig({
     'i-tabler:home',
     'i-tabler:home-filled',
     'i-tabler:search',
+    'i-tabler:zoom',
+    'i-tabler:zoom-filled',
     'i-tabler:device-tv',
     'i-tabler:device-tv-filled',
     'i-tabler:star',

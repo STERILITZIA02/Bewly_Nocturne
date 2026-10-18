@@ -459,7 +459,7 @@ function handleClickChannel() {
   background: var(--bew-fill-alt);
   border-radius: var(--bew-popover-inner-radius);
   corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
+  box-shadow: var(--bew-shadow-1);
 }
 
 .user-panel-section__row {
@@ -496,7 +496,7 @@ function handleClickChannel() {
   --uno: "w-full p-2 bg-$bew-fill-alt hover:bg-$bew-fill-2";
   border-radius: var(--bew-popover-inner-radius);
   corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
+  box-shadow: var(--bew-shadow-1);
 }
 
 .lv6-entry--compact {
@@ -511,7 +511,7 @@ function handleClickChannel() {
 .channel-info-item {
   --uno: "p-2 m-0 text-sm flex flex-col items-center transition-colors duration-200";
   --uno: "bg-$bew-fill-alt hover:bg-$bew-fill-2";
-  --uno: "shadow-[var(--bew-shadow-edge-glow-1),var(--bew-shadow-1)]";
+  --uno: "shadow-[var(--bew-shadow-1)]";
   border-radius: var(--bew-popover-inner-radius);
   corner-shape: var(--bew-corner-shape);
 

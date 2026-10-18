@@ -7,6 +7,7 @@ import { AppPage } from '~/enums/appEnums'
 import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, originalSettings, settings } from '~/logic'
 import { useIframePageActive } from '~/logic/iframePageState'
 import { useSettingsStore } from '~/stores/settingsStore'
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 import { detachOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanClipboardSelectionHtml, getClipboardSelection } from '~/utils/clipboardSelection'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
@@ -251,7 +252,7 @@ export function setupNecessarySettingsWatchers() {
         searchPage: location.hostname === 'search.bilibili.com',
         nativeFeedPage: location.hostname === 'space.bilibili.com'
           || location.hostname === 't.bilibili.com'
-          || (location.hostname === 'www.bilibili.com' && /^\/(?:c\/|v\/popular(?:\/|$)|video\/)/.test(location.pathname)),
+          || (location.hostname === 'www.bilibili.com' && /^\/(?:c\/|v\/popular(?:\/|$)|video\/)/.test(getBilibiliLogicalPathname())),
         inIframe: isInIframe(),
         nativeHome: isInIframe() || settingsStore.getDockItemIsUseOriginalBiliPage(AppPage.Home),
         active: isInIframe() || !iframePageActive.value,
@@ -328,7 +329,6 @@ export function setupNecessarySettingsWatchers() {
         element.style.setProperty('--bew-switch-thumb-active', themeTokens.switchThumb)
         element.style.setProperty('--bew-theme-foreground', themeTokens.foreground)
         element.style.setProperty('--bew-theme-focus-ring', themeTokens.focusRing)
-        element.style.setProperty('--bew-accent-marker-on-light', themeTokens.markerOnLight)
       })
     },
     { immediate: true, flush: 'post' },

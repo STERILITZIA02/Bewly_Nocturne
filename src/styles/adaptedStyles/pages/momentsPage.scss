@@ -116,7 +116,7 @@
     .dyn-orig-author__following.following-icon:before,
     .bili-dyn-live-users__more:hover:after,
     .bili-dyn-list-loading img {
-      filter: var(--bew-filter-icon-glow);
+      filter: var(--bew-filter-icon-white);
     }
 
     .bili-dyn-topic__card,
@@ -294,7 +294,7 @@
   .bili-album__watch__control__option:hover i,
   .dyn-topic__icon,
   .custom-like-icon.zan-hover {
-    filter: var(--bew-filter-icon-glow);
+    filter: var(--bew-filter-icon-white);
   }
 
   .dyn-reserve__lottery__text:after,

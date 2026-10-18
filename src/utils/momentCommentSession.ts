@@ -34,6 +34,20 @@ interface CommentLikeState {
   previousCount: number
 }
 
+export interface CommentDeletionTarget {
+  id: string
+  rpid: string
+  rootRpid: string
+  parentRpid: string
+  removedCount: number
+}
+
+interface CommentDeletionState {
+  owner: SessionLease
+  pending: boolean
+  target: CommentDeletionTarget
+}
+
 interface SessionEntry {
   momentId: string
   target: MomentCommentTarget
@@ -42,7 +56,35 @@ interface SessionEntry {
   snapshot?: string
   likes: Map<string, CommentLikeState>
   likeVersion: number
+  deletions: Map<string, CommentDeletionState>
+  deletedRpids: Set<string>
+  deletedRoots: Set<string>
+  removedCount: number
   readers: Set<SessionLease>
+}
+
+function isRemovedComment(entry: Pick<SessionEntry, 'deletedRpids' | 'deletedRoots'>, comment: MomentCommentItem) {
+  const rpid = comment.rpid || comment.id
+  return entry.deletedRpids.has(rpid) || (!!comment.rootRpid && comment.rootRpid !== rpid && entry.deletedRoots.has(comment.rootRpid))
+}
+
+function pruneDeletedComments(entry: Pick<SessionEntry, 'deletedRpids' | 'deletedRoots'>, items: MomentCommentItem[]): MomentCommentItem[] {
+  return items.filter(item => !isRemovedComment(entry, item)).map(item => ({
+    ...item,
+    replies: pruneDeletedComments(entry, item.replies),
+  }))
+}
+
+function pruneSnapshot(entry: SessionEntry, snapshot: MomentCommentSessionSnapshot): MomentCommentSessionSnapshot {
+  if (!entry.deletedRpids.size)
+    return snapshot
+  return {
+    ...snapshot,
+    comments: pruneDeletedComments(entry, snapshot.comments),
+    threads: snapshot.threads
+      .filter(thread => !entry.deletedRoots.has(thread.rootRpid))
+      .map(thread => ({ ...thread, items: pruneDeletedComments(entry, thread.items) })),
+  }
 }
 
 const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024
@@ -60,7 +102,8 @@ export function createMomentCommentSessionCache(initialAccountId: string, limit 
   }
   const pruneEntries = () => {
     while (entries.size > limit) {
-      const evict = [...entries].find(([, entry]) => !entry.readers.size && ![...entry.likes.values()].some(like => like.pending))
+      const evict = [...entries].find(([, entry]) => !entry.readers.size && ![...entry.likes.values()].some(like => like.pending)
+        && ![...entry.deletions.values()].some(deletion => deletion.pending))
       if (!evict)
         break
       entries.delete(evict[0])
@@ -85,7 +128,7 @@ export function createMomentCommentSessionCache(initialAccountId: string, limit 
     }
     // JSON is immutable and detached from Vue. Serialize once on save, parse
     // once on restore; no mutable comment array is shared with the cache.
-    const serialized = JSON.stringify({ ...snapshot, likedIds: [...likedIds], likeCounts })
+    const serialized = JSON.stringify({ ...pruneSnapshot(entry, snapshot), likedIds: [...likedIds], likeCounts })
     entry.snapshot = serialized.length * 2 <= MAX_SNAPSHOT_BYTES ? serialized : undefined
     for (const candidate of entries.values()) {
       if (cachedBytes() <= CACHE_BYTE_BUDGET)
@@ -93,6 +136,7 @@ export function createMomentCommentSessionCache(initialAccountId: string, limit 
       candidate.snapshot = undefined
     }
   }
+  const entryOf = (lease: SessionLease | null) => lease && current(lease) ? entries.get(lease.key) : undefined
   return {
     clear,
     get cachedBytes() { return cachedBytes() },
@@ -121,7 +165,7 @@ export function createMomentCommentSessionCache(initialAccountId: string, limit 
         if (entry.momentId === momentId && oldKey !== key)
           entries.delete(oldKey)
       }
-      const entry = entries.get(key) ?? { momentId, target: { ...target }, sort: sort ?? DEFAULT_MOMENT_COMMENT_SORT, revision: 0, likeVersion: 0, likes: shallowReactive(new Map<string, CommentLikeState>()), readers: new Set<SessionLease>() }
+      const entry = entries.get(key) ?? { momentId, target: { ...target }, sort: sort ?? DEFAULT_MOMENT_COMMENT_SORT, revision: 0, likeVersion: 0, likes: shallowReactive(new Map<string, CommentLikeState>()), deletions: shallowReactive(new Map<string, CommentDeletionState>()), deletedRpids: shallowReactive(new Set<string>()), deletedRoots: shallowReactive(new Set<string>()), removedCount: 0, readers: new Set<SessionLease>() }
       if (sort !== undefined && sort !== entry.sort) {
         entry.sort = sort
         entry.revision += 1
@@ -184,6 +228,46 @@ export function createMomentCommentSessionCache(initialAccountId: string, limit 
       const state: CommentLikeState = { owner: lease!, version: ++entry.likeVersion, pending: true, liked: !liked, count: Math.max(0, count + (liked ? -1 : 1)), previousLiked: liked, previousCount: count }
       entry.likes.set(id, state)
       return { lease: lease!, entry, id, state }
+    },
+    pruneComments(lease: SessionLease | null, items: MomentCommentItem[]) {
+      const entry = entryOf(lease)
+      return entry?.deletedRpids.size ? pruneDeletedComments(entry, items) : items
+    },
+    isCommentRemoved(lease: SessionLease | null, comment: MomentCommentItem) {
+      const entry = entryOf(lease)
+      return !!entry && isRemovedComment(entry, comment)
+    },
+    isDeletePending(lease: SessionLease | null, rpid: string) {
+      return !!entryOf(lease)?.deletions.get(rpid)?.pending
+    },
+    getRemovedCount(lease: SessionLease | null) {
+      return entryOf(lease)?.removedCount ?? 0
+    },
+    startDelete(lease: SessionLease | null, target: CommentDeletionTarget) {
+      const entry = entryOf(lease)
+      if (!entry || entry.deletions.get(target.rpid)?.pending || entry.deletedRpids.has(target.rpid))
+        return null
+      const state: CommentDeletionState = { owner: lease!, pending: true, target: { ...target } }
+      entry.deletions.set(target.rpid, state)
+      return { lease: lease!, entry, state }
+    },
+    finishDelete(operation: { lease: SessionLease, entry: SessionEntry, state: CommentDeletionState }, deleted: boolean) {
+      const { lease, entry, state } = operation
+      if (entry.deletions.get(state.target.rpid) !== state)
+        return false
+      entry.deletions.delete(state.target.rpid)
+      if (!deleted || !current(lease) || entries.get(lease.key) !== entry) {
+        pruneEntries()
+        return false
+      }
+      entry.deletedRpids.add(state.target.rpid)
+      if (state.target.rootRpid === state.target.rpid)
+        entry.deletedRoots.add(state.target.rpid)
+      entry.removedCount += state.target.removedCount
+      if (entry.snapshot)
+        storeSnapshot(entry, JSON.parse(entry.snapshot))
+      pruneEntries()
+      return true
     },
     finishLike(operation: { lease: SessionLease, entry: SessionEntry, id: string, state: CommentLikeState }, succeeded: boolean) {
       const { lease, entry, id, state } = operation

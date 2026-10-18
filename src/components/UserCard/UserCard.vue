@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import ALink from '~/components/ALink.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 import UserAvatarLink from '~/components/UserCard/UserAvatarLink.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
@@ -259,8 +260,8 @@ async function handleFollowClick(e: Event) {
               :aria-busy="isFollowLoading"
               @click="handleFollowClick"
             >
+              <LoadingRing :loading="isFollowLoading" />
               {{ followButtonText }}
-              <SkeletonBlock v-if="isFollowLoading" width="100%" height="var(--bew-space-0-5)" pos="absolute bottom-0 left-0" />
             </button>
           </div>
         </div>
@@ -645,6 +646,10 @@ async function handleFollowClick(e: Event) {
 }
 
 .follow-button-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bew-space-1);
   min-height: 28px;
   padding: 0 var(--bew-space-3);
   border-radius: var(--bew-interactive-radius);

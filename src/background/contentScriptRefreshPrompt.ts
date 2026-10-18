@@ -302,7 +302,6 @@ function showRefreshPrompt(...args: unknown[]): void {
     '--bew-ease-emphasized',
     '--bew-ease-standard',
     '--bew-shadow-3',
-    '--bew-shadow-edge-glow-1',
   ]
   themeProperties.forEach((property) => {
     const value = themeStyles.getPropertyValue(property).trim()
@@ -340,7 +339,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       background: color-mix(in oklab, var(--bew-elevated-solid, white) 90%, transparent);
       border: 1px solid var(--bew-surface-border-color, rgb(0 0 0 / 12%));
       border-radius: var(--bew-panel-radius, var(--bew-radius, 12px));
-      box-shadow: var(--bew-shadow-edge-glow-1, 0 0 0 transparent), var(--bew-shadow-3, 0 8px 30px rgb(0 0 0 / 18%));
+      box-shadow: var(--bew-shadow-3, 0 8px 30px rgb(0 0 0 / 18%));
       backdrop-filter: var(--bew-filter-glass-1, blur(12px));
       animation: prompt-in var(--bew-duration-moderate, 300ms) var(--bew-ease-emphasized, ease) both;
       overflow: hidden;
@@ -416,7 +415,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       background: var(--bew-elevated-solid, #2b2d31);
       background: color-mix(in oklab, var(--bew-elevated-solid, #2b2d31) 90%, transparent);
       border-color: var(--bew-border-color, rgb(255 255 255 / 12%));
-      box-shadow: var(--bew-shadow-edge-glow-1, 0 0 0 transparent), var(--bew-shadow-3, 0 8px 30px rgb(0 0 0 / 38%));
+      box-shadow: var(--bew-shadow-3, 0 8px 30px rgb(0 0 0 / 38%));
     }
     :host([data-theme="dark"]) .description {
       color: var(--bew-text-2, #c9ccd0);

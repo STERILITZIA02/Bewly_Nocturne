@@ -230,7 +230,8 @@ async function getSubscribedSeriesVideos(
         displayData: transformSubscribedSeriesVideo({ uniqueId: `${item.id_str}`, item }),
       }))
 
-      videoList.value = [...videoList.value, ...newItems]
+      if (newItems.length > 0)
+        videoList.value = [...videoList.value, ...newItems]
       noMoreContent.value = !response.data.has_more || items.length === 0 || !offset.value
         || offset.value === '0' || offset.value === previousOffset
       return true

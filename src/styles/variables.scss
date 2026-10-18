@@ -162,7 +162,6 @@
   --bew-sidebar-action-hover: var(--bew-hover-bg);
   --bew-wheel-text-active: var(--bew-text-1);
   --bew-wheel-text: rgb(from var(--bew-text-1) r g b / 67%);
-  --bew-wheel-glow: rgb(from var(--bew-text-1) r g b / 35%);
   --bew-notifications-feed-inline-space: var(--bew-space-4);
   --bew-notifications-avatar-size: var(--bew-space-10);
   --bew-notifications-card-background: var(--bew-content-solid);
@@ -239,6 +238,9 @@
   --bew-ease-in-out: ease-in-out;
   // Subtle interactive press/hover (avoid extreme overshoot)
   --bew-ease-emphasized: cubic-bezier(0.34, 1.3, 0.64, 1);
+  // Indeterminate loading ring: one turn per spin, then the arc closes on completion.
+  --bew-loading-ring-spin-duration: 900ms;
+  --bew-loading-ring-close-duration: var(--bew-duration-moderate);
   // #endregion
 
   // #region Compact controls
@@ -273,17 +275,13 @@
   --bew-overlay-background: rgb(0 0 0 / 72%);
   --bew-overlay-background-hover: rgb(0 0 0 / 84%);
   --bew-on-overlay-color: white;
-  --bew-dock-control-size: 35px;
-  --bew-dock-control-size-lg: 45px;
+  --bew-dock-control-size: 32px;
+  --bew-dock-control-size-lg: 40px;
   --bew-floating-control-icon-size: var(--bew-icon-size-md);
   --bew-dock-control-icon-size: 18px;
   --bew-dock-control-icon-size-lg: 22px;
-  --bew-dock-collapsed-mark-glow: drop-shadow(0 0 var(--bew-space-1) color-mix(in srgb, currentColor 30%, transparent));
-  --bew-dock-navigation-active-bg: hsl(0 0% 100%);
+  --bew-dock-navigation-active-bg: var(--bew-fill-3);
   --bew-dock-navigation-active-color: hsl(0 0% 0%);
-  --bew-dock-navigation-active-shadow: 0 4px 30px 4px rgb(255 255 255 / 60%);
-  --bew-dock-navigation-hover-icon-glow: drop-shadow(0 0 2px rgb(255 255 255 / 90%))
-    drop-shadow(0 0 8px rgb(255 255 255 / 70%));
   // #endregion
 
   // Search and logo stay one step larger (still full capsule/circle)
@@ -303,13 +301,9 @@
   --bew-segment-item-active-color: var(--bew-text-1);
   --bew-segment-item-active-shadow: inset 0 0 0 1px var(--bew-surface-border-color);
   --bew-segment-item-hover-bg-white: rgba(255, 255, 255, 0.16);
-  --bew-segment-item-active-bg-white: var(--bew-selected-bg);
-  --bew-segment-item-active-shadow-white: var(--bew-segment-item-active-shadow);
   --bew-liquid-indicator-bg: var(--bew-segment-item-active-bg);
   --bew-liquid-indicator-shadow: var(--bew-segment-item-active-shadow);
   --bew-liquid-indicator-radius: var(--bew-control-item-radius);
-  --bew-liquid-indicator-bg-white: var(--bew-segment-item-active-bg-white);
-  --bew-liquid-indicator-shadow-white: var(--bew-segment-item-active-shadow-white);
   --bew-liquid-indicator-fade-duration: var(--bew-duration-normal);
   --bew-liquid-indicator-paint-duration: var(--bew-duration-normal);
 
@@ -319,7 +313,7 @@
   --bew-popover-max-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
   --bew-popover-surface-background: var(--bew-elevated);
   --bew-popover-surface-background-solid: var(--bew-elevated-solid);
-  --bew-popover-surface-shadow: var(--bew-shadow-3), var(--bew-shadow-edge-glow-1);
+  --bew-popover-surface-shadow: var(--bew-shadow-3);
   --bew-popover-padding: var(--bew-space-3);
   --bew-popover-header-min-height: 52px;
   --bew-popover-header-padding-block: var(--bew-space-3);
@@ -352,8 +346,7 @@
 
   // Apply this to the Bilibili icon if it is an image with the brand's original blue or pink color
   // Icon emphasis stays neutral; accent is reserved for the seven semantic uses.
-  --bew-filter-icon-glow: saturate(0) brightness(2) drop-shadow(0 0 0.2px white)
-    drop-shadow(0 0 2px rgb(255 255 255 / 80%));
+  --bew-filter-icon-white: saturate(0) brightness(2);
   // #endregion
 
   // #region Shadows
@@ -369,11 +362,6 @@
   // Only used in the dialog
   --bew-shadow-4:
     0 34px 50px -20px rgb(0 0 0 / 0.14), 0 32px 45px -12px rgb(0 0 0 / 0.1), 0 30px 40px -8px rgb(0 0 0 / 0.12);
-
-  // Retired decorative inner glows. Keep a valid shadow-list item for existing
-  // consumers that combine these aliases with elevation/focus shadows.
-  --bew-shadow-edge-glow-1: 0 0 0 transparent;
-  --bew-shadow-edge-glow-2: 0 0 0 transparent;
 
   // #endregion
 
@@ -394,8 +382,6 @@
   --bew-accent-solid: var(--bew-theme-color);
   --bew-on-accent-solid: var(--bew-on-theme-color);
   --bew-accent-marker: var(--bew-theme-focus-ring);
-  // Dock's existing active indicator is white in every theme.
-  --bew-accent-marker-on-light: var(--bew-theme-focus-ring);
   --bew-chart-primary: var(--bew-text-1);
   --bew-chart-secondary: color-mix(in srgb, var(--bew-neutral-fg) 60%, var(--bew-content-solid));
   --bew-chart-grid: color-mix(in srgb, var(--bew-neutral-fg) 18%, var(--bew-content-solid));
@@ -586,7 +572,7 @@
   --bew-message-pinned-background: color-mix(in srgb, var(--bew-neutral-bg) 24%, transparent);
   --bew-message-pinned-hover-background: color-mix(in srgb, var(--bew-neutral-bg) 36%, transparent);
   --bew-wheel-text: rgb(255 255 255 / 67%);
-  --bew-wheel-glow: rgb(255 255 255 / 55%);
+  --bew-dock-navigation-active-color: hsl(0 0% 100%);
 
   // #region shadow
   --bew-shadow-1: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);
@@ -653,8 +639,6 @@
   --bew-elevated-alt-hover: var(--bew-elevated-alt-solid-hover);
   --bew-filter-glass-1: none;
   --bew-filter-glass-2: none;
-  --bew-shadow-edge-glow-1: 0 0 0 transparent;
-  --bew-shadow-edge-glow-2: 0 0 0 transparent;
   --bew-fill-alt: var(--bew-content-solid);
   --bew-popover-surface-background: var(--bew-popover-surface-background-solid);
 }

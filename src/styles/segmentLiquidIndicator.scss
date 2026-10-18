@@ -27,11 +27,6 @@
   will-change: transform;
 }
 
-.bew-liquid-indicator--white {
-  background: var(--bew-liquid-indicator-bg-white);
-  box-shadow: var(--bew-liquid-indicator-shadow-white);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .bew-liquid-indicator {
     transition: opacity 120ms ease !important;

@@ -948,23 +948,30 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       configurable: true,
       get(this: any) {
         const items = Reflect.apply(paginationItems, this, [])
-        if (!canHandle(this) || adapter.getMode() !== 'loadMore' || this.showPagination !== true || !Array.isArray(items))
-          return items
+        // Lit 渲染期间读取；增强失败时退回原生分页，不能中断渲染。
+        try {
+          if (!canHandle(this) || adapter.getMode() !== 'loadMore' || this.showPagination !== true || !Array.isArray(items))
+            return items
 
-        const state = getState(this)
-        const currentPage = Number(this.currentPage) || 1
-        const labels = adapter.getLabels()
-        if (state.expandAllLoading || state.allRepliesExpanded)
-          return []
-        if (state.loading)
-          return [{ clickable: false, idx: currentPage, text: labels.loading }]
-        const hasNext = currentPage < (Number(this.totalPage) || 0)
-          && items.some(item => Number(item?.idx) === currentPage && item?.clickable !== false)
-        return [{
-          clickable: hasNext,
-          idx: currentPage,
-          text: hasNext ? labels.loadMore : labels.noMore,
-        }]
+          const state = getState(this)
+          const currentPage = Number(this.currentPage) || 1
+          const labels = adapter.getLabels()
+          if (state.expandAllLoading || state.allRepliesExpanded)
+            return []
+          if (state.loading)
+            return [{ clickable: false, idx: currentPage, text: labels.loading }]
+          const hasNext = currentPage < (Number(this.totalPage) || 0)
+            && items.some(item => Number(item?.idx) === currentPage && item?.clickable !== false)
+          return [{
+            clickable: hasNext,
+            idx: currentPage,
+            text: hasNext ? labels.loadMore : labels.noMore,
+          }]
+        }
+        catch (error) {
+          console.warn('[Bewly Nocturne] Failed to build reply pagination items.', error)
+          return items
+        }
       },
     })
 
@@ -975,8 +982,13 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
         writable: true,
         value(this: any, ...args: any[]) {
           const cleanup = (captureCollapsedList: boolean) => {
-            suspendForNativeCollapse(this, captureCollapsedList)
-            adapter.onNativeCollapse?.(this)
+            try {
+              suspendForNativeCollapse(this, captureCollapsedList)
+              adapter.onNativeCollapse?.(this)
+            }
+            catch (error) {
+              console.warn('[Bewly Nocturne] Failed to reset reply pagination state.', error)
+            }
           }
           cleanup(false)
           let result: unknown

@@ -43,8 +43,8 @@ export function useRecommendationFilters(tabState: HomeTabState, isWebRecommenda
       ['player_args', 'duration'],
       ['cover_left_text_1'],
       ['title'],
-      ['mask', 'avatar', 'text'],
-      ['mask', 'avatar', 'up_id'],
+      ['args', 'up_name'],
+      ['args', 'up_id'],
     ],
   )
 

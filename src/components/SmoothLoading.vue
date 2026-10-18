@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import PageLoadingIndicator from '~/components/PageLoadingIndicator.vue'
+import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 
 const props = defineProps<{
   show: boolean | null | undefined
@@ -7,24 +8,29 @@ const props = defineProps<{
   minHeight?: string
 }>()
 
+const container = ref<HTMLElement>()
+// Stay present until the ring has closed, then collapse or hide.
+const phase = useLoadingRingPhase(() => Boolean(props.show), () => container.value)
+const present = computed(() => phase.value !== 'idle')
 const containerClass = computed(() => ({
-  'loading-visible': Boolean(props.show),
-  'loading-hidden': !props.show && !props.keepSpace,
-  'loading-keep-space': !props.show && props.keepSpace,
+  'loading-visible': present.value,
+  'loading-hidden': !present.value && !props.keepSpace,
+  'loading-keep-space': !present.value && props.keepSpace,
 }))
 </script>
 
 <template>
   <div
+    ref="container"
     class="loading-container"
     :class="containerClass"
-    :aria-hidden="!show"
-    :inert="show ? undefined : true"
+    :aria-hidden="!present"
+    :inert="present ? undefined : true"
   >
     <div class="loading-clip">
       <div class="loading-body" :style="{ minHeight: minHeight || '46px' }">
         <Transition name="loading-fade">
-          <PageLoadingIndicator v-if="show" :label="$t('common.loading')" />
+          <PageLoadingIndicator v-if="present" :loading="Boolean(show)" :label="$t('common.loading')" />
         </Transition>
       </div>
     </div>

@@ -9,7 +9,7 @@ import {
   completeAppAuthorization,
   dismissAppAuthorization,
 } from '~/logic/appAuthorizationCoordinator'
-import { getTVLoginQRCode, hasValidAppAuthTokens, pollTVLoginQRCode, saveAppAuthTokens } from '~/utils/authProvider'
+import { getAppLoginQRCode, hasValidAppAuthTokens, pollAppLoginQRCode, saveAppAuthTokens } from '~/utils/authProvider'
 
 interface DialogExpose {
   close: () => void
@@ -30,6 +30,7 @@ let authorizationDeadline = 0
 let authorizationSucceeded = false
 let authorizationClosing = false
 let authorizationController: AbortController | undefined
+let authorizationAuthGeneration = 0
 
 function clearAuthorizationTimer() {
   if (authorizationTimer != null)
@@ -65,13 +66,17 @@ function scheduleAuthorizationPoll(generation: number, expectedAuthCode: string)
       return
 
     try {
-      const response = await pollTVLoginQRCode(expectedAuthCode, authorizationController?.signal)
+      const response = await pollAppLoginQRCode(expectedAuthCode, authorizationController?.signal)
       if (generation !== authorizationGeneration || expectedAuthCode !== authCode.value)
         return
 
       qrcodeMsg.value = response?.message || ''
       if (response?.code === 0 && response.data) {
-        saveAppAuthTokens(response.data)
+        if (!saveAppAuthTokens(response.data, authorizationAuthGeneration)) {
+          invalidateAuthorization()
+          qrcodeMsg.value = t('common.load_failed')
+          return
+        }
         authorizationSucceeded = true
         invalidateAuthorization()
         toast.success(t('settings.app_authorization_success'))
@@ -100,6 +105,7 @@ async function startAuthorization() {
   authorizationController = new AbortController()
   const generation = authorizationGeneration
   beginAppAuthorization(appAuthTokens.value.accessToken)
+  authorizationAuthGeneration = appAuthTokens.value.generation
   authorizationSucceeded = false
   loginQRCodeUrl.value = ''
   authCode.value = ''
@@ -107,7 +113,7 @@ async function startAuthorization() {
   authorizationDeadline = Date.now() + AUTHORIZATION_DEADLINE
 
   try {
-    const response = await getTVLoginQRCode(authorizationController.signal)
+    const response = await getAppLoginQRCode(authorizationController.signal)
     if (generation !== authorizationGeneration)
       return
     if (response?.code !== 0 || !response.data?.url || !response.data?.auth_code) {

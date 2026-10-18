@@ -43,6 +43,7 @@ import {
 } from '~/stores/topBarSharedRefresh'
 import { waitForDelay, withRequestDeadline } from '~/utils/abort'
 import api from '~/utils/api'
+import { toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { showBewlyTopBar } from '~/utils/effectiveTopBarSource'
 import { i18n } from '~/utils/i18n'
 import { getCSRF, isHomePage } from '~/utils/main'
@@ -178,10 +179,11 @@ export const useTopBarStore = defineStore('topBar', () => {
   })
 
   const isTopBarFixed = computed((): boolean => {
+    const routeUrl = toBilibiliLogicalUrl(currentLocationHref.value)
     if (
       isHomePage(currentLocationHref.value)
-      || VIDEO_LIST_URL.test(currentLocationHref.value)
-      || BANGUMI_PLAY_URL.test(currentLocationHref.value)
+      || VIDEO_LIST_URL.test(routeUrl)
+      || BANGUMI_PLAY_URL.test(routeUrl)
       || MOMENTS_URL.test(currentLocationHref.value)
       || CHANNEL_PAGE_URL.test(currentLocationHref.value)
       || READ_HOME_URL.test(currentLocationHref.value)

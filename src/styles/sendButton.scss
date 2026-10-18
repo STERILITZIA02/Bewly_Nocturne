@@ -62,7 +62,7 @@
     border-radius: 50%;
     opacity: 0;
     scale: 0.8;
-    animation: bew-send-pending 900ms linear infinite paused;
+    animation: bew-send-pending var(--bew-loading-ring-spin-duration, 900ms) linear infinite paused;
   }
 
   &:is(

@@ -1,3 +1,4 @@
+import { getBilibiliLogicalPathname } from './bilibiliLocale'
 import { getPageBridgeChannelId } from './pageBridgeChannel'
 
 export const VIDEO_METADATA_REQUEST = 'bewly:video-metadata:request'
@@ -10,7 +11,7 @@ export const VIDEO_COMPONENT_CHANGED = 'bewly:video-component:changed'
 export function isPgcPlaybackPage(href = window.location.href) {
   try {
     const url = new URL(href)
-    return url.hostname === 'www.bilibili.com' && /^\/bangumi\/play\/(?:ss|ep)\d+\/?$/.test(url.pathname)
+    return url.hostname === 'www.bilibili.com' && /^\/bangumi\/play\/(?:ss|ep)\d+\/?$/.test(getBilibiliLogicalPathname(url))
   }
   catch {
     return false
@@ -29,7 +30,7 @@ export function parseVideoPageIdentity(href: string): { aid?: number, bvid?: str
     const url = new URL(href)
     if (url.hostname !== 'www.bilibili.com')
       return null
-    const match = /^\/video\/(BV[0-9a-z]{10}|av[1-9]\d*)\/?$/i.exec(url.pathname)
+    const match = /^\/video\/(BV[0-9a-z]{10}|av[1-9]\d*)\/?$/i.exec(getBilibiliLogicalPathname(url))
     if (!match)
       return null
     return /^av/i.test(match[1])

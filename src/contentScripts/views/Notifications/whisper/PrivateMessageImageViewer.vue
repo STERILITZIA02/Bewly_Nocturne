@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import Button from '~/components/Button.vue'
 import IconButton from '~/components/IconButton.vue'
-import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 
 const props = withDefaults(defineProps<{
   src: string
@@ -168,7 +168,7 @@ function keydown(event: KeyboardEvent) {
         @wheel="wheel" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="endDrag" @pointercancel="endDrag"
         @lostpointercapture="endDrag"
       >
-        <SkeletonBlock v-if="!natural.width && !failed" class="private-message-image-viewer__loading" width="100%" height="100%" radius="media" />
+        <LoadingRing :loading="!natural.width && !failed" class="private-message-image-viewer__loading" size="var(--bew-icon-size-xl)" />
         <div v-if="failed" class="private-message-image-viewer__error" role="alert">
           <span>{{ t('common.load_failed') }}</span>
           <Button type="secondary" @click="failed = false; imageAttempt++">
@@ -226,6 +226,9 @@ function keydown(event: KeyboardEvent) {
 .private-message-image-viewer__loading {
   position: absolute;
   inset: 0;
+  display: grid;
+  color: var(--bew-text-2);
+  pointer-events: none;
 }
 .private-message-image-viewer__canvas {
   display: grid;

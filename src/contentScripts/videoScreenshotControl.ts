@@ -2,6 +2,7 @@ import { watch } from 'vue'
 
 import { useRouteState } from '~/composables/useRouteState'
 import { settings } from '~/logic'
+import { BILIBILI_LIVE_HOSTNAME } from '~/utils/bilibiliLiveContext'
 import { i18n } from '~/utils/i18n'
 import { isVideoPlaybackPage } from '~/utils/main'
 import { captureVideoScreenshot, handleVideoScreenshotShortcut, videoScreenshotBusy } from '~/utils/videoScreenshot'
@@ -130,7 +131,7 @@ export function stopVideoScreenshotControl() {
 }
 
 export function initVideoScreenshotControl() {
-  if (hasInitialized || location.hostname === 'live.bilibili.com')
+  if (hasInitialized || location.hostname === BILIBILI_LIVE_HOSTNAME)
     return
 
   hasInitialized = true

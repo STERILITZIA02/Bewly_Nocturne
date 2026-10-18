@@ -1,0 +1,88 @@
+// Pending operations and regions whose result has no known layout share one
+// ring. Known layouts keep `[data-bew-skeleton]`. Completion freezes the turn
+// and closes the arc before the owner swaps the content back in.
+.bew-loading-ring {
+  display: block;
+  flex: none;
+  width: var(--bew-loading-ring-size, 1em);
+  height: var(--bew-loading-ring-size, 1em);
+  overflow: visible;
+  animation: bew-loading-ring-spin var(--bew-loading-ring-spin-duration, 900ms) linear infinite;
+}
+
+.bew-loading-ring__arc {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  // pathLength="100": a three-quarter arc while spinning, a closed ring when done.
+  stroke-dasharray: 100;
+  stroke-dashoffset: 25;
+  transition: stroke-dashoffset var(--bew-loading-ring-close-duration, 300ms) var(--bew-ease-standard, ease-out);
+}
+
+.bew-loading-ring[data-state="complete"],
+[data-bew-loading-complete] .bew-loading-ring {
+  animation-play-state: paused;
+
+  .bew-loading-ring__arc {
+    stroke-dashoffset: 0;
+  }
+}
+
+// Ring and idle content share one grid cell so the swap never moves layout.
+.bew-loading-ring-slot {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  vertical-align: middle;
+
+  > * {
+    grid-area: 1 / 1;
+  }
+}
+
+.bew-loading-ring-slot__content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease-out);
+}
+
+.bew-loading-ring-slot:not([data-state="idle"]) > .bew-loading-ring-slot__content {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.bew-loading-ring-fade-enter-active,
+.bew-loading-ring-fade-leave-active {
+  transition: opacity var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease-out);
+}
+
+.bew-loading-ring-fade-enter-from,
+.bew-loading-ring-fade-leave-to {
+  opacity: 0;
+}
+
+@keyframes bew-loading-ring-spin {
+  to {
+    rotate: 1turn;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  // Owners that keep a container alive read the same token, so close at root.
+  :root,
+  :host,
+  .bew-loading-ring {
+    --bew-loading-ring-close-duration: 0ms;
+  }
+
+  .bew-loading-ring {
+    animation: none;
+  }
+
+  .bew-loading-ring__arc {
+    transition: none;
+  }
+}

@@ -57,7 +57,7 @@ const { getTopBarLogoHref, handleClickTopBarLogo } = useTopBarInteraction()
         height="36"
         :style="{
           fill: forceWhiteIcon ? 'white' : 'var(--bew-theme-color)',
-          filter: forceWhiteIcon ? 'drop-shadow(0 0 4px rgba(0, 0, 0, 0.6))' : 'drop-shadow(0 0 4px var(--bew-theme-color-60))',
+          filter: forceWhiteIcon ? 'drop-shadow(0 0 4px rgba(0, 0, 0, 0.6))' : undefined,
         }"
         duration-300 mt--1px
       >
@@ -122,7 +122,6 @@ const { getTopBarLogoHref, handleClickTopBarLogo } = useTopBarInteraction()
     -webkit-mask-position: center;
     -webkit-mask-repeat: no-repeat;
     -webkit-mask-size: contain;
-    filter: drop-shadow(0 0 4px currentColor);
   }
 }
 

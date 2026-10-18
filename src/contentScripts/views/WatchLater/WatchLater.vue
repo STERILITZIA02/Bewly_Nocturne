@@ -9,8 +9,8 @@ import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryVideoCardSkeleton from '~/components/LibraryVideoCardSkeleton.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
-import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import OpenTabsDialog from '~/components/WatchLater/OpenTabsDialog.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -989,8 +989,9 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                 @click="batch.removeSelected"
               >
                 <template #left>
-                  <SkeletonBlock v-if="batch.busy.value" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" />
-                  <i v-else i-tabler:trash aria-hidden="true" />
+                  <LoadingRing :loading="batch.busy.value">
+                    <i i-tabler:trash aria-hidden="true" />
+                  </LoadingRing>
                 </template>
                 {{ t('watch_later.remove_selected', { count: batch.selected.value.size }) }}
               </Button>
@@ -1010,8 +1011,9 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                 :aria-busy="isLoading" @click="handleWatchLaterPageRefresh"
               >
                 <template #left>
-                  <SkeletonBlock v-if="isLoading" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" />
-                  <i v-else i-tabler:refresh aria-hidden="true" />
+                  <LoadingRing :loading="isLoading">
+                    <i i-tabler:refresh aria-hidden="true" />
+                  </LoadingRing>
                 </template>
                 {{ t('watch_later.refresh') }}
               </Button>

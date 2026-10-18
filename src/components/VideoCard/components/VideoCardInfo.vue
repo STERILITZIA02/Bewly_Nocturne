@@ -30,6 +30,9 @@ const props = defineProps<Props>()
 const emit = defineEmits<{ moreBtnClick: [event: MouseEvent] }>()
 const moreBtnRef = ref<HTMLButtonElement | null>(null)
 defineExpose({ moreBtnRef })
+function hasAuthorFace(author: Video['author'] | undefined) {
+  return Array.isArray(author) ? author.some(item => Boolean(item.authorFace)) : Boolean(author?.authorFace)
+}
 const content = computed(() => {
   const current = settings.value
   const tags = selectVisibleVideoCardTags(normalizeVideoCardTags(props.video ?? {}), props.highlightTags, current.showVideoCardVideoTag, current.showVideoCardRecommendTag)
@@ -38,7 +41,7 @@ const content = computed(() => {
   return {
     avatar,
     name,
-    showAvatar: avatar && Boolean(props.video?.author),
+    showAvatar: avatar && hasAuthorFace(props.video?.author),
     showName: name && Boolean(props.video?.author),
     tags,
     publishTime: current.showVideoCardPublishTime,

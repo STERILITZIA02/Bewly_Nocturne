@@ -1,34 +1,40 @@
 import { watch } from 'vue'
 import browser from 'webextension-polyfill'
 
+import type { AppClientEndpoint, AppClientRequest } from '~/constants/appClient'
+import { APP_CLIENT_APP_KEY, APP_CLIENT_ID, APP_CLIENT_QR_PARAMS } from '~/constants/appClient'
 import type { AppAuthTokens } from '~/logic/appAuthStorage'
-import { appAuthTokens, resetAppAuthTokens } from '~/logic/appAuthStorage'
+import { appAuthTokens, isCompatibleAppAuth, nextAppAuthGeneration, resetAppAuthTokens } from '~/logic/appAuthStorage'
 
-import { waitWithSignal, withRequestDeadline } from './abort'
+import { waitWithSignal } from './abort'
 import { createBooleanSingleFlight, resolveAppAccessTokenFreshness } from './appAuthTokenPolicy'
-import { appSign } from './appSign'
+import type { AppClientCallOptions } from './appClient'
+import { AppClientError, requestAppClientData } from './appClient'
 
 export function revokeAccessKey() {
   resetAppAuthTokens()
 }
 
-// https://socialsisteryi.github.io/bilibili-API-collect/docs/misc/sign/APPKey.html#appkey
-export const TVAppKey = {
-  appkey: '4409e2ce8ffd12b8',
-  appsec: '59b43e04ad6965f34319062b478f83dd',
+export interface AppAuthSnapshot {
+  accessToken: string
+  generation: number
+  mid: number | null
 }
 
-// https://github.com/magicdawn/bilibili-app-recommend/blob/e91722cc076fe65b98116fb0248236851ae6e1dc/src/utility/access-key/tv-qrcode/api.ts#L8
-export function tvSignSearchParams(params: Record<string, any>) {
-  const sign = appSign(params, TVAppKey.appkey, TVAppKey.appsec)
-  return new URLSearchParams({
-    ...params,
-    sign,
-  })
+export function captureAppAuth(): AppAuthSnapshot | null {
+  const tokens = appAuthTokens.value
+  if (!tokens.accessToken || !isCompatibleAppAuth(tokens))
+    return null
+  return { accessToken: tokens.accessToken, generation: tokens.generation, mid: tokens.mid }
 }
 
-export function getTvSign(params: Record<string, any>) {
-  return appSign(params, TVAppKey.appkey, TVAppKey.appsec)
+export function isAppAuthCurrent(snapshot: AppAuthSnapshot | null): boolean {
+  const tokens = appAuthTokens.value
+  return !!snapshot && tokens.generation === snapshot.generation && Boolean(tokens.accessToken) && isCompatibleAppAuth(tokens)
+}
+
+export function requestAppClient<T = any>(endpoint: AppClientEndpoint, params: AppClientRequest['params'], options: AppClientCallOptions = {}): Promise<T> {
+  return requestAppClientData<T>(endpoint, params, options)
 }
 
 interface PollLoginTokenPayload {
@@ -47,59 +53,57 @@ interface PollLoginTokenPayload {
   }
 }
 
-const APP_TOKEN_REFRESH_ENDPOINTS = [
-  'https://passport.bilibili.com/api/v3/oauth2/refresh_token',
-  'https://passport.bilibili.com/api/v2/oauth2/refresh_token',
-]
-
-const AUTH_REQUEST_TIMEOUT_MS = 15_000
-
-async function requestAuthJson<T>(url: string, init: RequestInit, signal?: AbortSignal): Promise<T> {
-  const read = async (requestSignal: AbortSignal) => {
-    const response = await waitWithSignal(fetch(url, { ...init, signal: requestSignal }), requestSignal)
-    if (!response.ok)
-      throw new Error(`Authorization HTTP ${response.status}`)
-    return await waitWithSignal(response.json(), requestSignal) as T
-  }
-  return signal ? read(signal) : withRequestDeadline(read, {}, AUTH_REQUEST_TIMEOUT_MS)
-}
-
 interface QRCodeResponse<T> {
   code: number
   message?: string
   data?: T
 }
 
+const APP_TOKEN_REFRESH_ENDPOINTS: AppClientEndpoint[] = ['refreshTokenV3', 'refreshTokenV2']
+
 const runAppAccessTokenRefreshSingleFlight = createBooleanSingleFlight()
 
-export function saveAppAuthTokens(payload: PollLoginTokenPayload) {
+function normalizeMid(value: unknown): number | null {
+  const mid = Number(value)
+  return Number.isSafeInteger(mid) && mid > 0 ? mid : null
+}
+
+export function saveAppAuthTokens(payload: PollLoginTokenPayload, expectedGeneration?: number): boolean {
+  if (expectedGeneration !== undefined && appAuthTokens.value.generation !== expectedGeneration && appAuthTokens.value.accessToken)
+    return false
   const tokenInfo = payload.token_info || {}
   const refreshInfo = payload.refresh_token_info || {}
 
   const accessToken = payload.access_token || tokenInfo.access_token || ''
   const refreshToken = payload.refresh_token || tokenInfo.refresh_token || ''
+  if (!accessToken)
+    return false
   const expiresIn = tokenInfo.expires_in ?? payload.expires_in ?? null
   const refreshExpiresIn = refreshInfo.expires_in ?? null
-  const mid = payload.mid ?? tokenInfo.mid ?? null
 
   appAuthTokens.value = {
+    client: APP_CLIENT_ID,
+    appKey: APP_CLIENT_APP_KEY,
+    generation: nextAppAuthGeneration(),
     accessToken,
     refreshToken,
     accessTokenExpiresAt: expiresIn ? Date.now() + expiresIn * 1000 : null,
     refreshTokenExpiresAt: refreshExpiresIn ? Date.now() + refreshExpiresIn * 1000 : null,
-    mid: mid ?? null,
+    mid: normalizeMid(payload.mid ?? tokenInfo.mid),
     lastUpdatedAt: Date.now(),
   }
+  return true
 }
 
-async function isPersistedRefreshSourceCurrent(refreshToken: string, lastUpdatedAt: number | null) {
+async function isPersistedRefreshSourceCurrent(source: AppAuthTokens) {
   try {
     const stored = await browser.storage.local.get('appAuthTokens')
     const raw = stored.appAuthTokens
-    const persisted: typeof appAuthTokens.value | undefined
+    const persisted: Partial<AppAuthTokens> | undefined
       = typeof raw === 'string' ? JSON.parse(raw) : raw
-    return persisted?.refreshToken === refreshToken
-      && persisted?.lastUpdatedAt === lastUpdatedAt
+    return persisted?.refreshToken === source.refreshToken
+      && persisted?.lastUpdatedAt === source.lastUpdatedAt
+      && persisted?.generation === source.generation
   }
   catch {
     return false
@@ -124,8 +128,8 @@ interface RefreshTokenResponse {
 
 async function refreshAppTokens(source: AppAuthTokens): Promise<boolean> {
   const tokens = { ...source }
-  const { accessToken, refreshToken, lastUpdatedAt } = tokens
-  if (!accessToken || !refreshToken)
+  const { accessToken, refreshToken } = tokens
+  if (!accessToken || !refreshToken || !isCompatibleAppAuth(tokens))
     return false
   const isCurrent = () => appAuthTokens.value === source
     && Object.entries(tokens).every(([key, value]) => appAuthTokens.value[key as keyof AppAuthTokens] === value)
@@ -136,77 +140,49 @@ async function refreshAppTokens(source: AppAuthTokens): Promise<boolean> {
   }, { deep: true, flush: 'sync' })
 
   try {
-    return await withRequestDeadline(async (signal) => {
-      const ts = Math.floor(Date.now() / 1000)
-      const basePayload = {
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        ts: ts.toString(),
+    const payload = {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      ts: Math.floor(Date.now() / 1000).toString(),
+    }
+    for (const endpoint of APP_TOKEN_REFRESH_ENDPOINTS) {
+      if (!isCurrent())
+        return false
+      let data: RefreshTokenResponse
+      try {
+        data = await requestAppClientData<RefreshTokenResponse>(endpoint, payload, { signal: controller.signal })
       }
-
-      for (const endpoint of APP_TOKEN_REFRESH_ENDPOINTS) {
-        try {
-          signal.throwIfAborted()
-          if (!isCurrent())
-            return false
-          const payload = { ...basePayload }
-          const sign = appSign({ ...payload }, TVAppKey.appkey, TVAppKey.appsec)
-          const body = new URLSearchParams({
-            ...payload,
-            appkey: TVAppKey.appkey,
-            sign,
-          })
-
-          const data = await requestAuthJson<RefreshTokenResponse>(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-            },
-            body,
-          }, signal)
-
-          if (data.code !== 0 || !data.data)
-            continue
-
-          const tokenInfo = data.data.token_info || {}
-          const refreshInfo = data.data.refresh_token_info || {}
-
-          if (
-            !isCurrent()
-            || !await waitWithSignal(isPersistedRefreshSourceCurrent(refreshToken, lastUpdatedAt), signal)
-            || !isCurrent()
-          ) {
-            return false
-          }
-
-          signal.throwIfAborted()
-          const nextAccessToken = tokenInfo.access_token || tokens.accessToken
-          const nextRefreshToken = tokenInfo.refresh_token || tokens.refreshToken
-          const expiresIn = tokenInfo.expires_in ?? null
-          const refreshExpiresIn = refreshInfo.expires_in ?? null
-
-          stop()
-          appAuthTokens.value = {
-            accessToken: nextAccessToken,
-            refreshToken: nextRefreshToken,
-            accessTokenExpiresAt: expiresIn ? Date.now() + expiresIn * 1000 : null,
-            refreshTokenExpiresAt: refreshExpiresIn ? Date.now() + refreshExpiresIn * 1000 : tokens.refreshTokenExpiresAt,
-            mid: tokenInfo.mid ?? tokens.mid,
-            lastUpdatedAt: Date.now(),
-          }
-          return true
-        }
-        catch (error) {
-          signal.throwIfAborted()
+      catch (error) {
+        if (!controller.signal.aborted)
           console.error('刷新 APP access_token 失败:', error)
-          // A transport/body failure can follow a committed token rotation.
-          // Only an explicit negative response may try the alternate endpoint.
-          return false
-        }
+        if (error instanceof AppClientError && !error.dispatched && !controller.signal.aborted)
+          continue
+        return false
       }
 
-      return false
-    }, { signal: controller.signal }, AUTH_REQUEST_TIMEOUT_MS)
+      if (data.code !== 0 || !data.data)
+        continue
+
+      const tokenInfo = data.data.token_info || {}
+      const refreshInfo = data.data.refresh_token_info || {}
+      if (!isCurrent() || !await waitWithSignal(isPersistedRefreshSourceCurrent(tokens), controller.signal) || !isCurrent())
+        return false
+
+      const expiresIn = tokenInfo.expires_in ?? null
+      const refreshExpiresIn = refreshInfo.expires_in ?? null
+      stop()
+      appAuthTokens.value = {
+        ...tokens,
+        accessToken: tokenInfo.access_token || tokens.accessToken,
+        refreshToken: tokenInfo.refresh_token || tokens.refreshToken,
+        accessTokenExpiresAt: expiresIn ? Date.now() + expiresIn * 1000 : null,
+        refreshTokenExpiresAt: refreshExpiresIn ? Date.now() + refreshExpiresIn * 1000 : tokens.refreshTokenExpiresAt,
+        mid: normalizeMid(tokenInfo.mid) ?? tokens.mid,
+        lastUpdatedAt: Date.now(),
+      }
+      return true
+    }
+    return false
   }
   catch (error) {
     if (!controller.signal.aborted)
@@ -218,18 +194,18 @@ async function refreshAppTokens(source: AppAuthTokens): Promise<boolean> {
 
 export function refreshAppAccessToken(): Promise<boolean> {
   const source = appAuthTokens.value
-  return runAppAccessTokenRefreshSingleFlight(() => refreshAppTokens(source), source, source.lastUpdatedAt)
+  return runAppAccessTokenRefreshSingleFlight(() => refreshAppTokens(source), source, `${source.generation}:${source.lastUpdatedAt}`)
 }
 
 export async function ensureFreshAppAccessToken(
   bufferMs = 10 * 60 * 1000,
 ): Promise<boolean> {
   const tokens = appAuthTokens.value
-  const freshness = resolveAppAccessTokenFreshness(
-    appAuthTokens.value,
-    Date.now(),
-    bufferMs,
-  )
+  if (tokens.accessToken && !isCompatibleAppAuth(tokens)) {
+    resetAppAuthTokens()
+    return false
+  }
+  const freshness = resolveAppAccessTokenFreshness(tokens, Date.now(), bufferMs)
   if (freshness === 'missing')
     return false
   if (freshness === 'refresh-expired') {
@@ -242,9 +218,6 @@ export async function ensureFreshAppAccessToken(
   const refreshed = await refreshAppAccessToken()
   if (refreshed)
     return true
-  // A proactive refresh can fail because of a transient network/backend error.
-  // Keep using an access token that is still valid instead of forcing the user
-  // into authorization before the actual expiry boundary.
   const accessTokenExpiresAt = tokens.accessTokenExpiresAt
   return appAuthTokens.value === tokens && Boolean(tokens.accessToken)
     && (!accessTokenExpiresAt || accessTokenExpiresAt > Date.now())
@@ -269,45 +242,20 @@ export function isAppAccessTokenInvalidResponse(value: unknown): boolean {
 }
 
 export function hasValidAppAuthTokens(bufferMs = 5 * 60 * 1000) {
-  const { accessToken, refreshToken, refreshTokenExpiresAt } = appAuthTokens.value
-  if (!accessToken || !refreshToken)
+  const tokens = appAuthTokens.value
+  if (!tokens.accessToken || !tokens.refreshToken || !isCompatibleAppAuth(tokens))
     return false
 
-  if (refreshTokenExpiresAt && refreshTokenExpiresAt < Date.now() + bufferMs)
+  if (tokens.refreshTokenExpiresAt && tokens.refreshTokenExpiresAt < Date.now() + bufferMs)
     return false
 
   return true
 }
 
-export function pollTVLoginQRCode(authCode: string, signal?: AbortSignal): Promise<QRCodeResponse<PollLoginTokenPayload>> {
-  const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/poll'
-
-  return withRequestDeadline(requestSignal => requestAuthJson(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-    },
-    body: tvSignSearchParams({
-      appkey: TVAppKey.appkey,
-      auth_code: authCode,
-      local_id: '0',
-      ts: '0',
-    }),
-  }, requestSignal), { signal }, AUTH_REQUEST_TIMEOUT_MS)
+export function pollAppLoginQRCode(authCode: string, signal?: AbortSignal): Promise<QRCodeResponse<PollLoginTokenPayload>> {
+  return requestAppClientData('qrcodePoll', { auth_code: authCode, local_id: APP_CLIENT_QR_PARAMS.local_id }, { signal })
 }
 
-export function getTVLoginQRCode(signal?: AbortSignal): Promise<QRCodeResponse<{ url: string, auth_code: string }>> {
-  const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code'
-
-  return withRequestDeadline(requestSignal => requestAuthJson(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-    },
-    body: tvSignSearchParams({
-      appkey: TVAppKey.appkey,
-      local_id: '0',
-      ts: '0',
-    }),
-  }, requestSignal), { signal }, AUTH_REQUEST_TIMEOUT_MS)
+export function getAppLoginQRCode(signal?: AbortSignal): Promise<QRCodeResponse<{ url: string, auth_code: string }>> {
+  return requestAppClientData('qrcodeAuthCode', { ...APP_CLIENT_QR_PARAMS }, { signal })
 }

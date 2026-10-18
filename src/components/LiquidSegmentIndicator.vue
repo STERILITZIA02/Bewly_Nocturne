@@ -3,12 +3,9 @@ import { onMounted, ref } from 'vue'
 
 import { useLiquidSegmentIndicator } from '~/composables/useLiquidSegmentIndicator'
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   activeKey: unknown
-  white?: boolean
-}>(), {
-  white: false,
-})
+}>()
 
 const indicatorRef = ref<HTMLElement | null>(null)
 const containerRef = ref<HTMLElement | null>(null)
@@ -47,7 +44,6 @@ defineExpose({
     :class="{
       'is-moving': isMoving,
       'is-scrubbing': scrubbing,
-      'bew-liquid-indicator--white': white,
     }"
     :style="indicatorStyle"
     aria-hidden="true"

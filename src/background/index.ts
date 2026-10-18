@@ -2,6 +2,7 @@ import browser from 'webextension-polyfill'
 
 import { BILIBILI_DESKTOP_USER_AGENT, isPreventMobileRedirectEnabled } from '~/utils/bilibiliDesktopNavigation'
 
+import { setupAppClient } from './appClient'
 import { setupContentScriptRefreshPrompt } from './contentScriptRefreshPrompt'
 import { setupLoginStateWatcher } from './loginStateWatcher'
 import { setupApiMsgListeners } from './messageListeners/api'
@@ -75,6 +76,7 @@ setupSettingsStorageCoordinator()
 setupVideoVisitHistoryCoordinator()
 setupSettingsCloudSync()
 setupApiMsgListeners()
+setupAppClient()
 setupTabMsgListeners()
 setupTopBarStateBroker()
 setupOpenTabsWatchLater()

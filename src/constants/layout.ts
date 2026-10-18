@@ -31,8 +31,8 @@ export function resolveHomeSearchStage(shortViewport: boolean) {
 
 /** Keep aligned with --bew-dock-control-size, --bew-dock-control-size-lg and --bew-space-4. */
 export const DOCK_LAYOUT = {
-  controlSize: 35,
-  controlSizeLarge: 45,
+  controlSize: 32,
+  controlSizeLarge: 40,
   shellPadding: 16,
   actionControlSize: 45,
   controlGap: 8,

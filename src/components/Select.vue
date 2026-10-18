@@ -2,6 +2,7 @@
 import { onClickOutside } from '@vueuse/core'
 
 import { FORM_FIELD_LABEL_ID } from '~/components/formFieldLabel'
+import LoadingRing from '~/components/LoadingRing.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 import { DIALOG_FOCUS_OWNER } from '~/utils/dialogFocus'
@@ -235,19 +236,19 @@ watch(unavailable, (disabled) => {
         </template>
       </div>
 
-      <SkeletonBlock v-if="loading && label" class="select-loading-progress" width="calc(100% - var(--bew-space-8))" height="var(--bew-space-0-5)" radius="full" />
-
       <div class="select-arrow-slot" flex="none" grid place-items="center" m="l-2">
-        <!-- arrow -->
-        <div
-          class="select-arrow"
-          border="~ solid t-0 l-0 r-2 b-2"
-          :border-color="showOptions ? '$bew-focus-ring-color' : '$bew-input-border-color'"
-          p="3px"
-          display="inline-block"
-          :transform="`~ ${!showOptions ? 'rotate-45 -translate-y-1/4' : 'rotate-225 translate-y-1/4'} `"
-          transition="background-color duration-200, border-color duration-200, transform duration-200"
-        />
+        <!-- Loading options replaces the arrow in place; an unknown label keeps its line skeleton. -->
+        <LoadingRing :loading="Boolean(loading && label)" size="var(--bew-icon-size-xs)">
+          <div
+            class="select-arrow"
+            border="~ solid t-0 l-0 r-2 b-2"
+            :border-color="showOptions ? '$bew-focus-ring-color' : '$bew-input-border-color'"
+            p="3px"
+            display="inline-block"
+            :transform="`~ ${!showOptions ? 'rotate-45 -translate-y-1/4' : 'rotate-225 translate-y-1/4'} `"
+            transition="background-color duration-200, border-color duration-200, transform duration-200"
+          />
+        </LoadingRing>
       </div>
     </button>
 
@@ -310,12 +311,6 @@ watch(unavailable, (disabled) => {
 </template>
 
 <style lang="scss" scoped>
-.select-loading-progress {
-  position: absolute;
-  left: var(--bew-space-4);
-  bottom: var(--bew-space-1);
-  pointer-events: none;
-}
 .select-trigger {
   appearance: none;
   font: inherit;

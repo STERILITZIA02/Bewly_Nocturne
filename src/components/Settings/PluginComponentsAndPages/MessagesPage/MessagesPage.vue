@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import type { MessageServerSettingField } from '~/background/messageServerSettings/types'
+import LoadingRing from '~/components/LoadingRing.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import { settings } from '~/logic'
@@ -165,11 +166,13 @@ onScopeDispose(serverSettings.dispose)
         right-width="auto"
       >
         <Button
-          type="tertiary" relative :disabled="serverSettings.state.loading" :aria-busy="serverSettings.state.loading" :aria-label="serverSettings.state.loading ? $t('settings.messages_server_loading') : undefined"
+          type="tertiary" :disabled="serverSettings.state.loading" :aria-busy="serverSettings.state.loading" :aria-label="serverSettings.state.loading ? $t('settings.messages_server_loading') : undefined"
           @click="serverSettings.refresh()"
         >
+          <template #left>
+            <LoadingRing :loading="serverSettings.state.loading" />
+          </template>
           {{ $t('settings.messages_server_refresh_action') }}
-          <SkeletonBlock v-if="serverSettings.state.loading" width="100%" height="var(--bew-space-0-5)" pos="absolute bottom-0 left-0" />
         </Button>
       </SettingsItem>
 

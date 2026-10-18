@@ -6,7 +6,7 @@ import type { ErrorData, Events } from 'hls.js'
 
 import Button from '~/components/Button.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
-import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { useVideoPreviewSwipeSeek } from '~/composables/useVideoPreviewSwipeSeek'
 import { settings } from '~/logic'
@@ -462,23 +462,20 @@ onBeforeUnmount(() => {
             />
           </div>
 
-          <!-- Loading indicator -->
-          <Transition name="fade">
-            <div
-              v-if="isPreviewLoading"
-              class="video-card-preview__loading"
-              role="status"
-              :aria-label="$t('common.loading')"
-              pos="absolute top-0 left-0"
-              w-full h-full
-              flex="~ items-center justify-center"
-              bg="black/50"
-              rounded-inherit
-              pointer-events-none
-            >
-              <SkeletonBlock height="100%" radius="media" />
-            </div>
-          </Transition>
+          <!-- The cover stays readable under the scrim; only the buffering preview is pending. -->
+          <LoadingRing
+            :loading="isPreviewLoading"
+            class="video-card-preview__loading"
+            role="status"
+            :aria-label="$t('common.loading')"
+            pos="absolute top-0 left-0"
+            w-full h-full
+            bg="black/50"
+            text-white
+            rounded-inherit
+            pointer-events-none
+            size="var(--bew-icon-size-xl)"
+          />
         </div>
       </Transition>
 

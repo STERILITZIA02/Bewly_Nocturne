@@ -449,16 +449,19 @@ export interface ModuleMore {
 export interface ThreePointItem {
   label: ThreePointItemLabel
   type: ThreePointItemType
+  params?: Record<string, unknown>
 }
 
 export enum ThreePointItemLabel {
   举报 = '举报',
   取消关注 = '取消关注',
+  删除 = '删除',
 }
 
 export enum ThreePointItemType {
   ThreePointFollowing = 'THREE_POINT_FOLLOWING',
   ThreePointReport = 'THREE_POINT_REPORT',
+  ThreePointDelete = 'THREE_POINT_DELETE',
 }
 
 export interface ModuleStat {

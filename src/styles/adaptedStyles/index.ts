@@ -6,6 +6,7 @@ import { watch } from 'vue'
 
 import { onRouteChange } from '~/composables/useRouteState'
 import { settings, settingsInitializationState, settingsReady } from '~/logic/storage'
+import { toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { isHomePage, isInIframe, isTopicPage, isWatchLaterListPage } from '~/utils/main'
 
 const PAGE_STYLE_CLASSES = [
@@ -80,6 +81,7 @@ async function setupStyles(currentUrl: string) {
   }
 
   clearRouteStyles()
+  const routeUrl = toBilibiliLogicalUrl(currentUrl)
 
   // homepage 首页
   if (isHomePage(currentUrl)) {
@@ -88,26 +90,26 @@ async function setupStyles(currentUrl: string) {
   }
 
   // Current category feeds and popular lists share native video cards.
-  else if (/^https?:\/\/www\.bilibili\.com\/(?:c\/|v\/popular(?:[/?#]|$))/.test(currentUrl)) {
+  else if (/^https?:\/\/www\.bilibili\.com\/(?:c\/|v\/popular(?:[/?#]|$))/.test(routeUrl)) {
     activatePage('nativeFeedPage')
   }
 
-  else if (/^https?:\/\/music\.bilibili\.com\/pc\/music-center(?:[/?#]|$)/.test(currentUrl)) {
+  else if (/^https?:\/\/music\.bilibili\.com\/pc\/music-center(?:[/?#]|$)/.test(routeUrl)) {
     activatePage('musicPage')
   }
 
-  else if (/^https?:\/\/www\.bilibili\.com\/v\/game\/match(?:[/?#]|$)/.test(currentUrl)) {
+  else if (/^https?:\/\/www\.bilibili\.com\/v\/game\/match(?:[/?#]|$)/.test(routeUrl)) {
     await import('./pages/esportsPage.scss')
     activatePage('esportsPage')
   }
 
-  else if (/^https?:\/\/www\.bilibili\.com\/cheese(?:[/?#]|$)/.test(currentUrl)) {
+  else if (/^https?:\/\/www\.bilibili\.com\/cheese(?:[/?#]|$)/.test(routeUrl)) {
     await import('./pages/nativeSites.scss')
     activatePage('cheesePage')
   }
 
   // notifications page 消息页
-  else if (/https?:\/\/message\.bilibili\.com\/.*/.test(currentUrl)) {
+  else if (/https?:\/\/message\.bilibili\.com\/.*/.test(routeUrl)) {
     if (!activatePage('notificationsPage'))
       return
 
@@ -130,13 +132,13 @@ async function setupStyles(currentUrl: string) {
   // moments page, new articles page 动态页, 新版专栏页
   else if (
     // moments
-    /https?:\/\/t\.bilibili\.com\/.*/.test(currentUrl)
+    /https?:\/\/t\.bilibili\.com\/.*/.test(routeUrl)
     // moment detail, new articles page
-    || /https?:\/\/www\.bilibili\.com\/opus\/.*/.test(currentUrl)) {
+    || /https?:\/\/www\.bilibili\.com\/opus\/.*/.test(routeUrl)) {
     if (!activatePage('momentsPage'))
       return
 
-    const isOriginalMomentsFeed = /https?:\/\/t\.bilibili\.com\/?(?:[?#].*)?$/.test(currentUrl)
+    const isOriginalMomentsFeed = /https?:\/\/t\.bilibili\.com\/?(?:[?#].*)?$/.test(routeUrl)
     let initialVisibilityGuard: HTMLStyleElement | undefined
     if (isOriginalMomentsFeed) {
       // storage 是异步读取的。先让可选区域不可见，等真实设置和正式样式同时就绪后再显示，
@@ -207,16 +209,16 @@ async function setupStyles(currentUrl: string) {
     }
 
     // 插件动态页通过抽屉 iframe 打开详情时，隐藏原站冗余布局并聚焦正文。
-    const isMomentDetail = /https?:\/\/t\.bilibili\.com\/\d+/.test(currentUrl)
-      || /https?:\/\/(?:www\.)?bilibili\.com\/opus\/\d+/.test(currentUrl)
+    const isMomentDetail = /https?:\/\/t\.bilibili\.com\/\d+/.test(routeUrl)
+      || /https?:\/\/(?:www\.)?bilibili\.com\/opus\/\d+/.test(routeUrl)
     if (isInIframe() && isMomentDetail)
       root.classList.add('drawer', 'remove-top-bar-without-placeholder')
   }
 
   // history page 历史记录页
   else if (
-    /https?:\/\/(?:www\.)?bilibili\.com\/account\/history.*/.test(currentUrl)
-    || /https?:\/\/(?:www\.)?bilibili\.com\/history.*/.test(currentUrl)
+    /https?:\/\/(?:www\.)?bilibili\.com\/account\/history.*/.test(routeUrl)
+    || /https?:\/\/(?:www\.)?bilibili\.com\/history.*/.test(routeUrl)
   ) {
     await import('./pages/historyPage.scss')
     activatePage('historyPage')
@@ -229,54 +231,54 @@ async function setupStyles(currentUrl: string) {
   }
 
   // user note page 笔记页
-  else if (/^https?:\/\/space\.bilibili\.com\/v\/note-list/.test(currentUrl)) {
+  else if (/^https?:\/\/space\.bilibili\.com\/v\/note-list/.test(routeUrl)) {
     await import('./pages/notePage.scss')
     activatePage('notePage')
   }
 
   // user space page 空间页
-  else if (/^https?:\/\/space\.bilibili\.com(?:\/|$).*/.test(currentUrl)) {
+  else if (/^https?:\/\/space\.bilibili\.com(?:\/|$).*/.test(routeUrl)) {
     await import('./pages/userSpacePage.scss')
     activatePage('userSpacePage')
   }
 
   // search page 搜索结果页
-  else if (/^https?:\/\/search\.bilibili\.com(?:\/|$).*/.test(currentUrl)) {
+  else if (/^https?:\/\/search\.bilibili\.com(?:\/|$).*/.test(routeUrl)) {
     await import('./pages/searchPage.scss')
     activatePage('searchPage')
   }
 
   // video page 视频页
   else if (
-    /https?:\/\/(?:www\.)?bilibili\.com\/video\/.*/.test(currentUrl)
-    || /https?:\/\/(?:www\.)?bilibili\.com\/list\/watchlater.*/.test(currentUrl)
-    || /https?:\/\/(?:www\.)?bilibili\.com\/list\/ml.*/.test(currentUrl)
-    || /https?:\/\/(?:www\.)?bilibili\.com\/medialist\/play\/.*/.test(currentUrl)
-    || /https?:\/\/(?:www\.)?bilibili\.com\/list\/.*/.test(currentUrl)
+    /https?:\/\/(?:www\.)?bilibili\.com\/video\/.*/.test(routeUrl)
+    || /https?:\/\/(?:www\.)?bilibili\.com\/list\/watchlater.*/.test(routeUrl)
+    || /https?:\/\/(?:www\.)?bilibili\.com\/list\/ml.*/.test(routeUrl)
+    || /https?:\/\/(?:www\.)?bilibili\.com\/medialist\/play\/.*/.test(routeUrl)
+    || /https?:\/\/(?:www\.)?bilibili\.com\/list\/.*/.test(routeUrl)
   ) {
     await import('./pages/videoPage.scss')
     activatePage('videoPage')
   }
 
-  else if (/https?:\/\/(?:www\.)?bilibili\.com\/bangumi\/play\/.*/.test(currentUrl)) {
+  else if (/https?:\/\/(?:www\.)?bilibili\.com\/bangumi\/play\/.*/.test(routeUrl)) {
     await import('./pages/animePlayback&MoviePage.scss')
     activatePage('animePlaybackAndMoviePage')
   }
 
   // anime page & chinese anime page 番剧页 与 国创动漫
-  else if (/https?:\/\/(?:www\.)?bilibili\.com\/(?:anime|guochuang).*/.test(currentUrl)) {
+  else if (/https?:\/\/(?:www\.)?bilibili\.com\/(?:anime|guochuang).*/.test(routeUrl)) {
     await import('./pages/animePage.scss')
     activatePage('animePage')
   }
 
   // channel page e.g. tv shows, movie, variety shows & mooc pages 分区页
-  else if (/https?:\/\/(?:www\.)?bilibili\.com\/(?:tv|movie|variety|mooc|documentary).*/.test(currentUrl)) {
+  else if (/https?:\/\/(?:www\.)?bilibili\.com\/(?:tv|movie|variety|mooc|documentary).*/.test(routeUrl)) {
     await import('./pages/channelPage.scss')
     activatePage('channelPage')
   }
 
   // articles, articles list & articles ranking pages 专栏页, 专栏列表页, 专栏排行榜页
-  else if (/https?:\/\/(?:www\.)?bilibili\.com\/read.*/.test(currentUrl)) {
+  else if (/https?:\/\/(?:www\.)?bilibili\.com\/read.*/.test(routeUrl)) {
     await import('./pages/articlesPage.scss')
     activatePage('articlesPage')
   }
@@ -288,31 +290,31 @@ async function setupStyles(currentUrl: string) {
   }
 
   // 404 page 404页
-  else if (/^https?:\/\/(?:www\.)?bilibili\.com\/404.*$/.test(currentUrl)) {
+  else if (/^https?:\/\/(?:www\.)?bilibili\.com\/404.*$/.test(routeUrl)) {
     await import('./pages/error404Page.scss')
     activatePage('error404Page')
   }
 
   // creative center page 创作中心页
-  else if (/^https?:\/\/member\.bilibili\.com\/platform.*$/.test(currentUrl)) {
+  else if (/^https?:\/\/member\.bilibili\.com\/platform.*$/.test(routeUrl)) {
     await import('./pages/creativeCenterPage.scss')
     activatePage('creativeCenterPage')
   }
 
   // account settings page 帳戶設定頁，除了大會員頁
-  else if (/^https?:\/\/account\.bilibili\.com\/(?!big).*$/.test(currentUrl)) {
+  else if (/^https?:\/\/account\.bilibili\.com\/(?!big).*$/.test(routeUrl)) {
     await import('./pages/accountSettingsPage.scss')
     activatePage('accountSettingsPage')
   }
 
   // premium page bilibili 大會員頁
-  else if (/^https?:\/\/account\.bilibili\.com\/big.*$/.test(currentUrl)) {
+  else if (/^https?:\/\/account\.bilibili\.com\/big.*$/.test(routeUrl)) {
     await import('./pages/premiumPage.scss')
     activatePage('premiumPage')
   }
 
   // login page 登入頁
-  else if (/^https?:\/\/passport\.bilibili\.com\/login.*$/.test(currentUrl)) {
+  else if (/^https?:\/\/passport\.bilibili\.com\/login.*$/.test(routeUrl)) {
     await import('./pages/loginPage.scss')
     activatePage('loginPage')
   }

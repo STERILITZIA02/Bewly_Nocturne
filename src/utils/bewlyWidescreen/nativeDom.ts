@@ -1,6 +1,7 @@
 import { COMMENT_CONTENT_MARKER_SELECTOR, COMMENT_NESTED_UI_SELECTOR, COMMENT_ROOT_ID_SELECTOR, COMMENT_SHADOW_HOST_SELECTOR, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, ROOT_ID, selectors, SIDEBAR_CONTENT_SELECTOR, SIDEBAR_RELEVANT_SELECTOR } from '~/utils/bewlyWidescreen/constants'
 import type { BewlyWidescreenState, CommentPrewarmState, MovedNode } from '~/utils/bewlyWidescreen/types'
 import type { WidescreenMutationOrigin } from '~/utils/bewlyWidescreenPolicy'
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 import { transferCommentNode } from '~/utils/commentDomTransfer'
 import { getVideoElement } from '~/utils/player'
 import { getPlayerRoot } from '~/utils/playerMedia'
@@ -489,7 +490,7 @@ export function isWidescreenTransferContentReady(): boolean {
     return !!info?.textContent?.trim() && isNativeVideoComponentReady(info) === true
       && !!toolbar?.childElementCount && isNativeVideoComponentReady(toolbar) === true
   }
-  if (!location.pathname.startsWith('/video/'))
+  if (!getBilibiliLogicalPathname().startsWith('/video/'))
     return true
 
   const upPanel = findMovable(selectors.upPanel)

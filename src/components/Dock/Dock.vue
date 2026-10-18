@@ -779,9 +779,8 @@ onUnmounted(() => {
         ref="dockShellRef"
         class="dock-content-inner"
         :class="{
-          'collapsed': isDockCollapsed,
-          'morphing': isDockTransitioning,
-          'disable-glowing-effect': settings.disableDockGlowingEffect,
+          collapsed: isDockCollapsed,
+          morphing: isDockTransitioning,
         }"
         :style="dockShellStyle"
       >
@@ -800,11 +799,8 @@ onUnmounted(() => {
           :aria-hidden="!isDockContentVisible"
           :inert="!isDockContentVisible"
         >
-          <div
-            class="dock-page-navigation bew-segment-control"
-            :class="{ 'disable-glowing-effect': settings.disableDockGlowingEffect }"
-          >
-            <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator bew-shape-circle" :active-key="activeDockItemPage" white />
+          <div class="dock-page-navigation bew-segment-control">
+            <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator bew-shape-circle" :active-key="activeDockItemPage" />
 
             <template v-for="dockItem in currentDockItems" :key="dockItem.page">
               <Tooltip :content="dockBadges[dockItem.page]?.label || $t(dockItem.i18nKey)" :placement="tooltipPlacement">
@@ -839,7 +835,6 @@ onUnmounted(() => {
             :activated-page="activatedPage"
             :placement="tooltipPlacement"
             variant="dock"
-            :disable-glowing-effect="settings.disableDockGlowingEffect"
           />
 
           <Tooltip
@@ -848,17 +843,14 @@ onUnmounted(() => {
             class="group"
             pointer-events-none
           >
-            <!-- moon -->
+            <!-- moon: the signature theme-toggle moonlight is the one kept glow -->
             <div
               v-if="isDark"
               class="bew-shape-circle"
               pos="absolute top-0 left-0 group-hover:top-2px group-hover:left--4px"
               w-full h-full bg-white
               z--2 pointer-events-none
-              :shadow="
-                settings.disableDockGlowingEffect
-                  ? 'none'
-                  : 'group-hover:[-8px_4px_160px_20px_hsla(226deg,85%,77%,1),-8px_4px_100px_12px_hsla(226deg,85%,77%,0.8),-8px_4px_60px_10px_hsla(226deg,85%,77%,0.6),-8px_4px_20px_4px_hsla(226deg,85%,77%,0.4),-4px_2px_8px_0_hsla(226deg,85%,77%,0.8)]'"
+              shadow="group-hover:[-8px_4px_160px_20px_hsla(226deg,85%,77%,1),-8px_4px_100px_12px_hsla(226deg,85%,77%,0.8),-8px_4px_60px_10px_hsla(226deg,85%,77%,0.6),-8px_4px_20px_4px_hsla(226deg,85%,77%,0.4),-4px_2px_8px_0_hsla(226deg,85%,77%,0.8)]"
               opacity-0 group-hover:opacity-100
               duration-300
             />
@@ -1059,6 +1051,9 @@ onUnmounted(() => {
 }
 
 .dock-content {
+  // The shell and its floating action buttons paint one shared surface.
+  --dock-surface-background: var(--bew-content-alt);
+  --dock-surface-background-hover: var(--bew-content-alt-hover);
   --uno: "absolute flex justify-center items-center scale-$scale";
 
   transition-duration: 0ms;
@@ -1107,27 +1102,19 @@ onUnmounted(() => {
 
     &.collapsed:hover .dock-shell-surface {
       background: var(--dock-collapsed-hover-background, var(--bew-fill-2));
-      --dock-surface-shadow: var(--bew-shadow-edge-glow-1), 0 0 0 2px var(--bew-fill-2), var(--bew-shadow-2);
-    }
-
-    &.disable-glowing-effect .dock-shell-surface {
-      --dock-surface-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
-    }
-
-    &.collapsed.disable-glowing-effect:hover .dock-shell-surface {
-      --dock-surface-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
+      --dock-surface-shadow: 0 0 0 2px var(--bew-fill-2), var(--bew-shadow-2);
     }
   }
 
   .dock-shell-surface {
-    --dock-surface-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-2);
+    --dock-surface-shadow: var(--bew-shadow-2);
     position: absolute;
     top: 50%;
     left: 50%;
     width: 100%;
     height: 100%;
     z-index: 0;
-    --uno: "bg-$bew-content-alt dark:bg-$bew-elevated";
+    background: var(--dock-surface-background);
     border: 1px solid var(--bew-surface-border-color);
     border-radius: var(--dock-shell-radius);
     corner-shape: var(--bew-corner-shape-round);
@@ -1237,7 +1224,6 @@ onUnmounted(() => {
   }
 
   .dock-collapsed-mark {
-    filter: var(--bew-dock-collapsed-mark-glow);
     position: relative;
     z-index: 1;
     display: flex;
@@ -1277,9 +1263,10 @@ onUnmounted(() => {
     }
   }
 
+  // Selection is a neutral translucent plate under a filled black/white icon.
   .dock-page-navigation {
-    --bew-liquid-indicator-bg-white: var(--bew-dock-navigation-active-bg);
-    --bew-liquid-indicator-shadow-white: var(--bew-dock-navigation-active-shadow);
+    --bew-liquid-indicator-bg: var(--bew-dock-navigation-active-bg);
+    --bew-liquid-indicator-shadow: none;
 
     flex-direction: column;
     width: auto;
@@ -1287,10 +1274,6 @@ onUnmounted(() => {
     padding: 0;
     gap: var(--bew-space-2);
     overflow: visible;
-
-    &.disable-glowing-effect {
-      --bew-liquid-indicator-shadow-white: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
-    }
   }
 
   &.bottom .dock-page-navigation {
@@ -1349,43 +1332,21 @@ onUnmounted(() => {
     box-shadow: 0 0 0 1px var(--bew-content-solid);
   }
 
-  .dock-page-navigation:not(.disable-glowing-effect) {
-    .dock-page-navigation__item:hover:not([data-active="true"]):not(:disabled),
-    .dock-page-navigation__item:focus-visible:not([data-active="true"]):not(:disabled) {
-      .dock-page-navigation__icon {
-        filter: var(--bew-dock-navigation-hover-icon-glow);
-      }
-    }
-  }
-
   .dock-page-navigation__icon {
     display: block;
     width: var(--bew-icon-size-md);
     height: var(--bew-icon-size-md);
     font-size: var(--bew-icon-size-md);
-    transition: filter var(--bew-duration-normal) var(--bew-ease-standard);
-  }
-
-  .dock-page-navigation__item[data-active="true"]::after {
-    content: "";
-    position: absolute;
-    bottom: var(--bew-space-1);
-    left: calc(50% - var(--bew-space-0-5));
-    width: var(--bew-space-1);
-    height: var(--bew-space-1);
-    border-radius: 50%;
-    background: var(--bew-accent-marker-on-light);
-    pointer-events: none;
   }
 
   .back-to-top-or-refresh-btn {
-    --dock-surface-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-2);
+    --dock-surface-shadow: var(--bew-shadow-2);
     --uno: "transform active:important-scale-90 hover:scale-110";
     --uno: "lg:w-45px w-35px lg:h-45px h-35px";
     --uno: "grid place-items-center";
-    --uno: "bg-$bew-elevated hover:bg-$bew-content-hover";
-    --uno: "rounded-full shadow-$bew-shadow-2 border-1 border-$bew-surface-border-color";
 
+    background: var(--dock-surface-background);
+    border: 1px solid var(--bew-surface-border-color);
     backdrop-filter: var(--bew-filter-glass-1);
     box-sizing: border-box;
     transition:
@@ -1396,10 +1357,8 @@ onUnmounted(() => {
       opacity 300ms ease;
     box-shadow: var(--dock-surface-shadow);
 
-    &.active {
-      --uno: "important-bg-$bew-theme-color-auto text-$bew-text-auto";
-      --uno: "shadow-$shadow-active dark:shadow-$shadow-dark";
-      --uno: "active:shadow-$shadow-active-active dark-active:shadow-$shadow-dark-active";
+    &:hover {
+      background: var(--dock-surface-background-hover);
     }
 
     &.inactive {
@@ -1425,7 +1384,7 @@ onUnmounted(() => {
       box-shadow: none;
 
       // Paint the frame after the optics so refraction cannot sample its own
-      // border and inset glow. Keep the original 1px border's layout footprint.
+      // border. Keep the original 1px border's layout footprint.
       &::after {
         content: "";
         position: absolute;
@@ -1446,12 +1405,13 @@ onUnmounted(() => {
   }
 }
 
-.dock-item {
-  --shadow-dark: 0 4px 30px 4px rgba(255, 255, 255, 0.6);
-  --shadow-active: 0 4px 30px rgb(0 0 0 / 20%);
-  --shadow-dark-active: 0 4px 20px rgba(255, 255, 255, 0.8);
-  --shadow-active-active: 0 4px 20px rgb(0 0 0 / 25%);
+// Only the last compound is scoped, so `.dark` matches the themed ancestor.
+.dark .dock-content {
+  --dock-surface-background: var(--bew-elevated);
+  --dock-surface-background-hover: var(--bew-elevated-hover);
+}
 
+.dock-item {
   --uno: "relative transform active:important-scale-90 hover:scale-110";
   width: var(--bew-dock-control-size);
   height: var(--bew-dock-control-size);
@@ -1464,7 +1424,7 @@ onUnmounted(() => {
   --uno: "dark:bg-$bew-fill-1 dark-hover:bg-$bew-fill-4";
   corner-shape: var(--bew-corner-shape-round);
 
-  box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
+  box-shadow: var(--bew-shadow-1);
   transition:
     transform 300ms var(--bew-ease-emphasized, cubic-bezier(0.34, 1.3, 0.64, 1)),
     background 300ms ease,
@@ -1474,13 +1434,8 @@ onUnmounted(() => {
 
   &:hover {
     box-shadow:
-      var(--bew-shadow-edge-glow-1),
       0 0 0 2px var(--bew-fill-2),
       var(--bew-shadow-2);
-  }
-
-  &.disable-glowing-effect {
-    box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1) !important;
   }
 
   &.dock-item--icon-only {
@@ -1493,16 +1448,6 @@ onUnmounted(() => {
       background: transparent;
       box-shadow: none;
     }
-
-    &.disable-glowing-effect {
-      box-shadow: none !important;
-    }
-  }
-
-  &.active {
-    --uno: "important-bg-$bew-selected-bg text-$bew-text-1 !dark:bg-white !dark:text-black";
-    --uno: "shadow-$shadow-active dark:shadow-$shadow-dark";
-    --uno: "active:shadow-$shadow-active-active dark-active:shadow-$shadow-dark-active";
   }
 
   &.inactive {

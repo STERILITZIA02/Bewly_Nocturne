@@ -15,10 +15,8 @@ const props = withDefaults(defineProps<{
   activatedPage: AppPage
   placement: TooltipPlacement
   variant: 'dock' | 'sidebar'
-  disableGlowingEffect?: boolean
   liquidGlass?: boolean
 }>(), {
-  disableGlowingEffect: false,
   liquidGlass: false,
 })
 
@@ -44,10 +42,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
       type="button"
       class="page-mode-switcher"
       :data-layout-editable-id="layoutEditableId"
-      :class="[
-        `page-mode-switcher--${variant}`,
-        { 'page-mode-switcher--no-glow': disableGlowingEffect },
-      ]"
+      :class="`page-mode-switcher--${variant}`"
       :disabled="disabled"
       :aria-label="tooltip"
       @click="cyclePageMode"
@@ -170,10 +165,6 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
     }
   }
 
-  &--no-glow:hover:not(:disabled) {
-    box-shadow: none;
-  }
-
   &:disabled,
   &:disabled:hover {
     box-shadow: var(--bew-shadow-1);
@@ -182,10 +173,6 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
 
 :global(.dark) .page-mode-switcher--dock:hover:not(:disabled) {
   background: transparent;
-  box-shadow: none;
-}
-
-:global(.dark) .page-mode-switcher--dock.page-mode-switcher--no-glow:hover:not(:disabled) {
   box-shadow: none;
 }
 

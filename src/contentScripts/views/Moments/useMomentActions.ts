@@ -8,11 +8,13 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import type { AccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
-import { getCSRF } from '~/utils/main'
+import { getCSRF, getUserID } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
 import { getDirectWatchLaterAid, resolveWatchLaterAid, updateOwnedWatchLater } from '~/utils/watchLater'
 
-export function useMomentActions(getAccountId: () => AccountId, commit: (id: string, patch: Partial<DisplayMoment>) => void) {
+export type MomentOperationOutcome = 'succeeded' | 'failed' | 'uncertain' | 'skipped'
+
+export function useMomentActions(getAccountId: () => AccountId, commit: (id: string, patch: Partial<DisplayMoment>) => void, remove: (id: string) => void) {
   const lifetime = createAccountLifetime(getAccountId)
   const topBarStore = useTopBarStore()
   const toast = useToast()
@@ -22,6 +24,89 @@ export function useMomentActions(getAccountId: () => AccountId, commit: (id: str
   const watchLaterRequests = reactive(new Map<string, symbol>())
   const watchLaterAidByTarget = reactive(new Map<string, number>())
   const watchLaterAidRequests = new Map<string, Promise<number | undefined>>()
+  const deleteRequests = reactive(new Map<string, symbol>())
+  const reportRequests = reactive(new Map<string, symbol>())
+  const sameAccount = (accountId: AccountId) => accountId !== null && accountId === getAccountId() && getUserID() === String(accountId)
+
+  async function deleteMoment(moment: DisplayMoment): Promise<MomentOperationOutcome> {
+    const params = moment.moreCapability?.canDelete ? moment.moreCapability.deleteParams : undefined
+    if (!params || deleteRequests.has(moment.id))
+      return 'skipped'
+    const csrf = getCSRF()
+    const accountId = getAccountId()
+    if (!csrf || !sameAccount(accountId)) {
+      toast.warning(t('common.please_log_in_first'))
+      return 'skipped'
+    }
+    if (moment.author.mid !== String(accountId))
+      return 'skipped'
+    const requestId = Symbol(moment.id)
+    deleteRequests.set(moment.id, requestId)
+    try {
+      const response = await api.moment.removeMoment({ accountId: String(accountId), csrf, momentId: moment.id, params })
+      if (!sameAccount(accountId))
+        return 'skipped'
+      if (response?.code === 0) {
+        remove(moment.id)
+        toast.success(t('moment_card.delete_success'))
+        return 'succeeded'
+      }
+      if (response?.bewlyOperationUncertain) {
+        toast.warning(t('moment_card.operation_uncertain'))
+        return 'uncertain'
+      }
+      toast.error(response?.message || t('moment_card.delete_failed'))
+      return 'failed'
+    }
+    catch {
+      if (sameAccount(accountId))
+        toast.warning(t('moment_card.operation_uncertain'))
+      return 'uncertain'
+    }
+    finally {
+      if (deleteRequests.get(moment.id) === requestId)
+        deleteRequests.delete(moment.id)
+    }
+  }
+
+  async function reportMoment(moment: DisplayMoment, reasonType: number, reasonDesc: string): Promise<MomentOperationOutcome> {
+    if (!moment.moreCapability?.canReport || reportRequests.has(moment.id))
+      return 'skipped'
+    const csrf = getCSRF()
+    const accountId = getAccountId()
+    if (!csrf || !sameAccount(accountId)) {
+      toast.warning(t('common.please_log_in_first'))
+      return 'skipped'
+    }
+    if (moment.author.mid === String(accountId))
+      return 'skipped'
+    const requestId = Symbol(moment.id)
+    reportRequests.set(moment.id, requestId)
+    try {
+      const response = await api.moment.reportMoment({ accountId: String(accountId), csrf, momentId: moment.id, accusedMid: moment.author.mid, reasonType, reasonDesc })
+      if (!sameAccount(accountId))
+        return 'skipped'
+      if (response?.code === 0) {
+        toast.success(t('moment_card.report_success'))
+        return 'succeeded'
+      }
+      if (response?.bewlyOperationUncertain) {
+        toast.warning(t('moment_card.operation_uncertain'))
+        return 'uncertain'
+      }
+      toast.error(response?.message || t('moment_card.report_failed'))
+      return 'failed'
+    }
+    catch {
+      if (sameAccount(accountId))
+        toast.warning(t('moment_card.operation_uncertain'))
+      return 'uncertain'
+    }
+    finally {
+      if (reportRequests.get(moment.id) === requestId)
+        reportRequests.delete(moment.id)
+    }
+  }
   async function toggleMomentLike(moment: DisplayMoment) {
     if (likingMomentRequests.has(moment.id) || moment.isLikeDisabled)
       return
@@ -218,6 +303,10 @@ export function useMomentActions(getAccountId: () => AccountId, commit: (id: str
     likingMomentIds: readonly(likingMomentRequests),
     reservationLoadingMomentIds: readonly(reservationRequests),
     watchLaterLoadingMomentIds: readonly(watchLaterRequests),
+    deletingMomentIds: readonly(deleteRequests),
+    reportingMomentIds: readonly(reportRequests),
+    deleteMoment,
+    reportMoment,
     toggleMomentLike,
     toggleMomentReservation,
     isWatchLaterAdded,

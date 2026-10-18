@@ -23,12 +23,22 @@ import FavoriteVideoDialog from './components/FavoriteVideoDialog.vue'
 import FollowUserConfirmDialog from './components/FollowUserConfirmDialog.vue'
 import UnfollowUserConfirmDialog from './components/UnfollowUserConfirmDialog.vue'
 
+export interface VideoCardContextMenuExtraOption {
+  key: string
+  name: string
+  icon: string
+  color?: string
+  run: () => void
+}
+
 const props = withDefaults(defineProps<{
   video: Video
   contextMenuStyles: CSSProperties
   isFollowingPage?: boolean
+  extraGroups?: VideoCardContextMenuExtraOption[][]
 }>(), {
   isFollowingPage: false,
+  extraGroups: () => [],
 })
 const emit = defineEmits<{
   (event: 'removed', selectedOpt?: { reasonId?: number, feedbackId?: number }): void
@@ -260,7 +270,14 @@ const menuGroups = computed(() => {
     : getVideoType() === 'rcmd'
       ? videoOptions.value.map(option => ({ key: `web:${option.id}`, name: option.name, icon: 'i-tabler:mood-sad', color: undefined, run: () => handleMoreCommand(option.id) }))
       : []
-  return [recommendation, ...commonOptions.value.map(group => group.map(option => ({ ...option, run: () => handleCommonCommand(option.command) })))].filter(group => group.length)
+  const extra = props.extraGroups.map(group => group.map(option => ({
+    ...option,
+    run: () => {
+      handleClose()
+      option.run()
+    },
+  })))
+  return [recommendation, ...commonOptions.value.map(group => group.map(option => ({ ...option, run: () => handleCommonCommand(option.command) }))), ...extra].filter(group => group.length)
 })
 
 // 在菜单显示后检查是否需要显示滚动指示器

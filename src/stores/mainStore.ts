@@ -36,8 +36,8 @@ export const useMainStore = defineStore('main', () => {
       },
       {
         i18nKey: 'dock.search',
-        icon: 'i-tabler:search',
-        iconActivated: 'i-tabler:search',
+        icon: 'i-tabler:zoom',
+        iconActivated: 'i-tabler:zoom-filled',
         page: AppPage.Search,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Search),

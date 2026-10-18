@@ -19,7 +19,6 @@ const searchFocusEffect = useSearchFocusEffect()
   >
     <Logo
       v-if="settings.searchPageShowLogo" :size="180" :color="settings.searchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
-      :glow="settings.searchPageLogoGlow"
       mb-12 z-1
     />
     <SearchBar

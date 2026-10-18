@@ -296,7 +296,6 @@ export interface Settings {
   dockLiquidGlassSaturation: number
   dockItemsConfig: { page: AppPage, visible: boolean, openInNewTab: boolean, useOriginalBiliPage: boolean }[]
   pageMode: PageMode
-  disableDockGlowingEffect: boolean
   disableLightDarkModeSwitcherOnDock: boolean
   backToTopAndRefreshButtonsAreSeparated: boolean
   enableUndoRefreshButton: boolean // 添加撤销刷新按钮配置项
@@ -316,7 +315,6 @@ export interface Settings {
 
   disableSearchFocusEffect: boolean
   searchPageLogoColor: 'white' | 'themeColor'
-  searchPageLogoGlow: boolean
   searchPageShowLogo: boolean
   searchPageSearchBarFocusCharacter: string
 
@@ -602,7 +600,6 @@ export const originalSettings: Settings = {
   dockLiquidGlassSaturation: LIQUID_GLASS_PARAMETERS.saturation.default,
   dockItemsConfig: [],
   pageMode: 'custom',
-  disableDockGlowingEffect: false,
   disableLightDarkModeSwitcherOnDock: false,
   backToTopAndRefreshButtonsAreSeparated: true,
   enableUndoRefreshButton: true, // 默认开启撤销刷新按钮
@@ -622,7 +619,6 @@ export const originalSettings: Settings = {
 
   disableSearchFocusEffect: false,
   searchPageLogoColor: 'themeColor',
-  searchPageLogoGlow: true,
   searchPageShowLogo: true,
   searchPageSearchBarFocusCharacter: DEFAULT_SEARCH_BAR_CHARACTER,
 

@@ -4,8 +4,10 @@ import { useId } from 'vue'
 
 import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { GLASS_SURFACE_CONTEXT } from '~/composables/useLiquidGlass'
+import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { usePanelTrigger } from '~/composables/usePanelOrigin'
 import { useSourcePanelMotion } from '~/composables/useSourcePanelMotion'
 import { settings } from '~/logic'
@@ -60,6 +62,8 @@ const dialogRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const dialogId = useId()
 const titleId = `${dialogId}-title`
+// The mask outlives `loading` until its ring has closed.
+const loadingPhase = useLoadingRingPhase(() => Boolean(props.loading), () => panelRef.value)
 const dialogMotion = useSourcePanelMotion('.dialog__panel', [
   ':scope > .dialog__backdrop',
   ':scope > .dialog__panel > .dialog__edge',
@@ -318,16 +322,14 @@ async function handleConfirm() {
             <!-- loading masking -->
             <Transition name="fade">
               <div
-                v-if="loading && showLoadingOverlay"
+                v-if="loadingPhase !== 'idle' && showLoadingOverlay"
                 pos="absolute top-0 left-0" w-full h-full bg="white dark:black opacity-60 dark:opacity-60" flex="~ justify-center items-center"
                 rounded-inherit
                 class="dialog__loading-mask"
                 z-2
               >
-                <div class="dialog__loading-skeleton" role="status" :aria-label="$t('common.loading')">
-                  <SkeletonBlock height="var(--bew-control-height)" radius="interactive" />
-                  <SkeletonBlock width="84%" height="var(--bew-line-height-body)" />
-                  <SkeletonBlock width="64%" height="var(--bew-line-height-body)" />
+                <div class="dialog__loading-status" role="status" :aria-label="loading ? $t('common.loading') : undefined">
+                  <LoadingRing :loading="Boolean(loading)" size="var(--bew-icon-size-xl)" />
                 </div>
               </div>
             </Transition>
@@ -405,6 +407,9 @@ async function handleConfirm() {
                 </div>
               </Button>
               <Button type="primary" @click="handleConfirm">
+                <template v-if="!showLoadingOverlay" #left>
+                  <LoadingRing :loading="Boolean(loading)" />
+                </template>
                 <div>
                   {{ $t('common.operation.confirm') }}
                   <span
@@ -426,12 +431,10 @@ async function handleConfirm() {
 </template>
 
 <style lang="scss" scoped>
-.dialog__loading-skeleton {
+.dialog__loading-status {
   display: grid;
-  gap: var(--bew-space-4);
-  width: min(100%, calc(var(--bew-space-12) * 8));
-  padding: var(--bew-space-8);
-  box-sizing: border-box;
+  place-items: center;
+  color: var(--bew-text-2);
 }
 
 .dialog {
@@ -478,7 +481,7 @@ async function handleConfirm() {
   border: 1px solid var(--bew-surface-border-color);
   border-radius: inherit;
   corner-shape: inherit;
-  box-shadow: var(--bew-shadow-4), var(--bew-shadow-edge-glow-2);
+  box-shadow: var(--bew-shadow-4);
   pointer-events: none;
 }
 

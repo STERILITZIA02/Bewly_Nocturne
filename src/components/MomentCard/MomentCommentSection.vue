@@ -4,6 +4,8 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, 
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import LoadingRing from '~/components/LoadingRing.vue'
+import { confirmDialogKey } from '~/composables/useConfirmDialog'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { buildMomentCommentPermalink } from '~/utils/commentPermalink'
@@ -18,9 +20,10 @@ import { readMomentCommentTarget, resolveMomentCommentTarget } from '~/utils/mom
 import type { MomentCommentViewNode } from './commentThreadLayout'
 import { buildMomentCommentThread } from './commentThreadLayout'
 import type { MomentCommentItem } from './commentUtils'
-import { flattenMomentCommentReplies, mergeMomentComments, normalizeMomentComment, normalizeMomentCommentPage } from './commentUtils'
+import { flattenMomentCommentReplies, mergeMomentComments, normalizeMomentComment, normalizeMomentCommentPage, normalizeMomentCommentRepliesPage } from './commentUtils'
 import MomentCommentMedia from './MomentCommentMedia.vue'
 import MomentCommentRichText from './MomentCommentRichText.vue'
+import MomentCommentSkeleton from './MomentCommentSkeleton.vue'
 import MomentCommentTreeGuides from './MomentCommentTreeGuides.vue'
 import MomentReplyComposer from './MomentReplyComposer.vue'
 import type { DisplayMoment } from './types'
@@ -37,6 +40,7 @@ const emit = defineEmits<{
   interactiveResize: []
   writingChange: [pending: boolean]
   posted: []
+  removed: [count: number]
 }>()
 
 interface MomentCommentThreadView {
@@ -94,7 +98,13 @@ watch(composerHeight, () => {
 })
 const replyPending = ref(false)
 const postedCount = ref(0)
-watch(() => props.moment.commentCount, () => postedCount.value = 0)
+const removedCount = ref(0)
+const confirmService = inject(confirmDialogKey, null)
+let mutationOwner = new AbortController()
+watch(() => props.moment.commentCount, () => {
+  postedCount.value = 0
+  removedCount.value = 0
+})
 watch(() => replyInteracting.value || replyPending.value || sessions.hasPendingLikes(sessionLease.value), pending => emit('writingChange', pending), { flush: 'sync' })
 let requestGeneration = 0
 let disposed = false
@@ -238,7 +248,8 @@ function commentLikeState(comment: MomentCommentItem) {
   }
 }
 
-const commentCountLabel = computed(() => props.moment.commentCount + postedCount.value > 0 ? ` ${props.moment.commentCount + postedCount.value}` : '')
+const displayedCommentCount = computed(() => Math.max(0, props.moment.commentCount + postedCount.value - removedCount.value))
+const commentCountLabel = computed(() => displayedCommentCount.value > 0 ? ` ${displayedCommentCount.value}` : '')
 const threadViews = computed<MomentCommentThreadView[]>(() => comments.value.map((root) => {
   const state = getThreadState(root)
   const replies = flattenMomentCommentReplies(state?.items ?? root.replies)
@@ -351,6 +362,7 @@ async function loadComments(reset = false) {
       || requestIdentity !== getCommentIdentity()) {
       return
     }
+    page.items = sessions.pruneComments(sessionLease.value, page.items)
     const mergedItems = reset ? page.items : mergeMomentComments(comments.value, page.items)
     const pageAdvanced = page.nextPage > pageNumber
     comments.value = mergedItems
@@ -462,6 +474,131 @@ function replyPosted(raw: unknown) {
   toast.success(t('moment_card.reply_success'))
 }
 
+const COMMENT_ID_PATTERN = /^[1-9]\d*$/
+const DELETED_THREAD_CODES = new Set([12022, 12009])
+const DELETE_VERIFY_PAGES = 3
+
+function isRootComment(comment: MomentCommentItem) {
+  return !comment.rootRpid || comment.rootRpid === comment.rpid
+}
+
+function canDeleteComment(comment: MomentCommentItem) {
+  return Boolean(confirmService && target.value && props.active !== false && topBarStore.isLogin && accountId.value
+    && accountId.value === String(getUserID() ?? '') && comment.author.id === accountId.value && COMMENT_ID_PATTERN.test(comment.rpid))
+}
+
+async function verifyCommentDeletion(oid: string, type: number, comment: MomentCommentItem): Promise<'deleted' | 'present' | 'uncertain'> {
+  const root = isRootComment(comment) ? comment.rpid : comment.rootRpid
+  try {
+    for (let pageNumber = 1; pageNumber <= DELETE_VERIFY_PAGES; pageNumber++) {
+      const response = await api.moment.getMomentCommentReplies({ oid, type, root, pn: pageNumber, ps: isRootComment(comment) ? 1 : 20 })
+      const code = getApiCode(response)
+      if (DELETED_THREAD_CODES.has(code))
+        return 'deleted'
+      if (code !== 0)
+        return 'uncertain'
+      if (isRootComment(comment))
+        return 'present'
+      const page = normalizeMomentCommentRepliesPage(response, pageNumber, 20)
+      if (page.items.some(item => item.rpid === comment.rpid))
+        return 'present'
+      if (!page.hasMore || page.nextPage <= pageNumber)
+        return 'deleted'
+    }
+  }
+  catch {}
+  return 'uncertain'
+}
+
+function applyCommentDeletion(comment: MomentCommentItem) {
+  const anchor = listRef.value ? captureCommentReadingAnchor(listRef.value, listRef.value, readOwner.signal) : undefined
+  const generation = requestGeneration
+  const identity = getCommentIdentity()
+  if (isRootComment(comment)) {
+    comments.value = comments.value.filter(item => item.rpid !== comment.rpid)
+  }
+  else {
+    const root = comments.value.find(item => item.rpid === comment.rootRpid)
+    if (root) {
+      root.replyCount = Math.max(0, root.replyCount - 1)
+      root.replies = sessions.pruneComments(sessionLease.value, root.replies)
+      const state = getThreadState(root)
+      if (state)
+        state.items = sessions.pruneComments(sessionLease.value, state.items)
+    }
+    comments.value = [...comments.value]
+  }
+  collapsedIds.delete(comment.id)
+  if (replyTarget.value && sessions.isCommentRemoved(sessionLease.value, replyTarget.value))
+    replyTarget.value = null
+  saveSession()
+  void nextTick(() => anchor?.restore(() => generation === requestGeneration && identity === getCommentIdentity()))
+}
+
+async function deleteComment(comment: MomentCommentItem) {
+  if (disposed || !canDeleteComment(comment))
+    return
+  const lease = sessionLease.value
+  const userId = accountId.value
+  const source = getSourceIdentity()
+  if (!lease || lease.accountId !== getAccountIdentity() || sessions.isDeletePending(lease, comment.rpid))
+    return
+  const owner = mutationOwner
+  const isCurrent = () => !disposed && !owner.signal.aborted && source === getSourceIdentity() && sessionLease.value === lease
+    && String(getUserID() ?? '') === userId && accountId.value === userId
+  const confirmed = await confirmService!.confirm(t('moment_card.comment_delete_confirm'), owner.signal)
+  const csrf = getCSRF() || ''
+  if (!confirmed || !isCurrent() || !csrf)
+    return
+  const oid = commentId.value
+  const type = commentType.value
+  const operation = sessions.startDelete(lease, {
+    id: comment.id,
+    rpid: comment.rpid,
+    rootRpid: isRootComment(comment) ? comment.rpid : comment.rootRpid,
+    parentRpid: comment.parentRpid,
+    removedCount: isRootComment(comment) ? 1 + comment.replyCount : 1,
+  })
+  if (!operation)
+    return
+  let outcome: 'deleted' | 'failed' | 'uncertain' = 'failed'
+  let message = ''
+  try {
+    const response = await api.moment.deleteMomentReply({ accountId: userId, csrf, oid, type, rpid: comment.rpid })
+    if (getApiCode(response) === 0) {
+      outcome = 'deleted'
+    }
+    else if ((response as { bewlyReplyUncertain?: boolean } | undefined)?.bewlyReplyUncertain) {
+      outcome = 'uncertain'
+    }
+    else {
+      message = getApiMessage(response)
+    }
+  }
+  catch {
+    outcome = 'uncertain'
+  }
+  if (outcome === 'uncertain') {
+    const verified = await verifyCommentDeletion(oid, type, comment)
+    outcome = verified === 'deleted' ? 'deleted' : verified === 'present' ? 'failed' : 'uncertain'
+  }
+  const applied = sessions.finishDelete(operation, outcome === 'deleted')
+  if (!isCurrent())
+    return
+  if (applied) {
+    applyCommentDeletion(comment)
+    removedCount.value += operation.state.target.removedCount
+    emit('removed', operation.state.target.removedCount)
+    toast.success(t('moment_card.comment_delete_success'))
+  }
+  else if (outcome === 'uncertain') {
+    toast.warning(t('moment_card.comment_delete_uncertain'))
+  }
+  else {
+    toast.error(message || t('moment_card.comment_delete_failed'))
+  }
+}
+
 function openCommentImage(images: string[], index: number, trigger: HTMLElement) {
   emit('openImagePreview', images, index, trigger)
 }
@@ -483,8 +620,10 @@ async function loadThreadReplies(root: MomentCommentItem) {
     return
   }
   const state = getThreadState(root)
-  if (state)
+  if (state) {
+    state.items = sessions.pruneComments(sessionLease.value, state.items)
     seedCommentLikeState(state.items.filter(item => !previousItems.has(item)), likeReadVersion)
+  }
   await nextTick()
   void anchor?.restore(() => generation === requestGeneration && identity === getCommentIdentity())
 }
@@ -510,6 +649,9 @@ watch(() => props.active, (active) => {
 })
 watch(getSourceIdentity, () => {
   postedCount.value = 0
+  removedCount.value = 0
+  mutationOwner.abort()
+  mutationOwner = new AbortController()
   void initializeComments()
 }, { immediate: true, flush: 'sync' })
 watch(() => [comments.value, loading.value, loadingMore.value, resolvingTarget.value, loadError.value, threadRevision.value, composerHeight.value], () => emit('interactiveResize'), { flush: 'post' })
@@ -525,6 +667,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  mutationOwner.abort()
   saveSession()
   cancelReads()
   document.removeEventListener('visibilitychange', onVisibilityChange)
@@ -557,22 +700,16 @@ onBeforeUnmount(() => {
         :disabled="loading || resolvingTarget"
         @click="refreshComments"
       >
-        <SkeletonBlock v-if="loading" width="1em" height="1em" radius="interactive" />
-        <span v-else i-tabler-refresh aria-hidden="true" />
+        <LoadingRing :loading="loading">
+          <span i-tabler-refresh aria-hidden="true" />
+        </LoadingRing>
         {{ t('moment_card.comments_refresh') }}
       </button>
     </header>
 
     <div class="moment-comments__viewport" :style="{ '--moment-composer-height': `${composerHeight}px` }" :class="{ 'has-composer': target && active }">
       <div v-if="resolvingTarget || (loading && !comments.length)" class="moment-comments__skeleton" role="status" :aria-label="t('moment_card.comments_loading')">
-        <div v-for="row in 3" :key="row" class="moment-comments__skeleton-row" aria-hidden="true">
-          <SkeletonBlock width="var(--bew-comment-avatar-size)" height="var(--bew-comment-avatar-size)" radius="circle" />
-          <div class="moment-comments__skeleton-copy">
-            <SkeletonBlock width="40%" height="var(--bew-line-height-control)" />
-            <SkeletonBlock height="var(--bew-line-height-body)" />
-            <SkeletonBlock width="72%" height="var(--bew-line-height-caption)" />
-          </div>
-        </div>
+        <MomentCommentSkeleton />
       </div>
 
       <div v-else-if="loadError && !comments.length" class="moment-comments__state moment-comments__state--error" role="alert">
@@ -667,6 +804,16 @@ onBeforeUnmount(() => {
                     <span i-tabler-message-circle aria-hidden="true" />
                     {{ t('moment_card.reply_action') }}
                   </button>
+                  <button
+                    v-if="canDeleteComment(node.comment)"
+                    type="button"
+                    class="moment-comments__action"
+                    :disabled="sessions.isDeletePending(sessionLease, node.comment.rpid)"
+                    @click="deleteComment(node.comment)"
+                  >
+                    <span i-tabler-trash aria-hidden="true" />
+                    {{ t('moment_card.comment_delete') }}
+                  </button>
                 </div>
               </div>
             </template>
@@ -684,14 +831,13 @@ onBeforeUnmount(() => {
               :disabled="thread.repliesLoading"
               @click="loadThreadReplies(thread.root)"
             >
-              <SkeletonBlock v-if="thread.repliesLoading" width="1em" height="1em" radius="interactive" />
+              <LoadingRing :loading="thread.repliesLoading" />
               {{ thread.repliesLoaded ? t('moment_card.comments_load_more_replies') : t('moment_card.comments_expand_replies') }}
             </button>
           </div>
         </section>
         <div v-if="loadingMore" class="moment-comments__loading-more" role="status" :aria-label="t('moment_card.comments_loading')">
-          <SkeletonBlock width="40%" height="var(--bew-line-height-control)" />
-          <SkeletonBlock width="72%" height="var(--bew-line-height-caption)" />
+          <MomentCommentSkeleton :count="1" />
         </div>
         <div v-if="loadError && comments.length" class="moment-comments__pagination-error" role="alert">
           <span>{{ loadError }}</span>
@@ -722,25 +868,12 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .moment-comments__skeleton {
   display: grid;
-  gap: var(--bew-space-4);
-  padding-block: var(--bew-space-3);
 }
 .moment-comments__missing-avatar {
   display: grid;
   place-items: center;
   background: var(--bew-content-solid);
   color: var(--bew-text-2);
-}
-.moment-comments__skeleton-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--bew-space-3);
-}
-.moment-comments__skeleton-copy {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-  gap: var(--bew-space-2);
 }
 .moment-comments {
   padding: 0 var(--bew-space-4) var(--bew-space-4);
@@ -961,10 +1094,10 @@ onBeforeUnmount(() => {
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
 }
+// Appended rows continue the thread separators of the loaded list.
 .moment-comments__loading-more {
-  display: grid;
   flex: none;
-  gap: var(--bew-space-2);
-  padding: var(--bew-space-3) 0;
+  padding-top: var(--bew-space-3);
+  border-top: 1px solid var(--bew-border-color);
 }
 </style>

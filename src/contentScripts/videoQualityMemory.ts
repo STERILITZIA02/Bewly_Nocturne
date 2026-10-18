@@ -1,7 +1,10 @@
+import { getActivePinia } from 'pinia'
 import { watch } from 'vue'
 
 import { useRouteState } from '~/composables/useRouteState'
 import { settings } from '~/logic'
+import { useTopBarStore } from '~/stores/topBarStore'
+import { getUserID } from '~/utils/main'
 import { getPlaybackNavigationKey, parsePlaybackTabUrl } from '~/utils/playbackTab'
 import { getPlayerRoot, getVideoElement } from '~/utils/playerMedia'
 import { isNativeVideoComponentReady, readNativePlaybackEpisodeId, readNativeQualityState } from '~/utils/videoMetadataBridge'
@@ -18,6 +21,17 @@ function qualityOf(item: HTMLElement | undefined): number | undefined {
     return
   const quality = Number(value)
   return Number.isSafeInteger(quality) ? quality : undefined
+}
+
+type QualityRestriction = 'none' | 'login' | 'vip'
+
+function restrictionOf(item: HTMLElement): QualityRestriction {
+  const badges = Array.from(item.querySelectorAll<HTMLElement>('[class*="quality-badge"]'), badge => badge.className)
+  if (badges.some(name => /vip/i.test(name)))
+    return 'vip'
+  if (badges.some(name => /login/i.test(name)))
+    return 'login'
+  return 'none'
 }
 
 function unavailable(item: HTMLElement) {
@@ -44,6 +58,34 @@ export function setupVideoQualityMemory() {
   let active = false
   let settledContext = ''
   let awaitingMedia = false
+  let requestedAccount = ''
+  let stopAccountWatch: (() => void) | undefined
+
+  function accountStore() {
+    if (!getActivePinia())
+      return
+    const store = useTopBarStore()
+    stopAccountWatch ??= watch(() => [store.isLogin, store.userInfo.mid, store.userInfo.vip?.status], schedule)
+    return store
+  }
+  function eligibility(restriction: QualityRestriction): boolean | undefined {
+    if (restriction === 'none')
+      return true
+    const mid = getUserID()
+    if (!mid)
+      return false
+    if (restriction === 'login')
+      return true
+    const store = accountStore()
+    if (!store)
+      return
+    if (store.isLogin && String(store.userInfo.mid ?? '') === mid && store.userInfo.vip)
+      return store.userInfo.vip.status === 1
+    if (requestedAccount !== mid) {
+      requestedAccount = mid
+      void store.getUserInfo().catch(() => undefined)
+    }
+  }
 
   function clearPending() {
     clearTimeout(confirmationTimer)
@@ -57,7 +99,7 @@ export function setupVideoQualityMemory() {
       return ''
     const video = getVideoElement()
     const episode = 'seasonId' in target && video instanceof HTMLVideoElement ? readNativePlaybackEpisodeId(video) : undefined
-    return `${getPlaybackNavigationKey(route.href)}:${episode ?? ''}`
+    return `${getUserID() || 'guest'}:${getPlaybackNavigationKey(route.href)}:${episode ?? ''}`
   }
   function isTrial(root: HTMLElement) {
     if (root.matches('.bpx-state-trial, [data-trial="true"], [data-is-preview="true"]'))
@@ -124,7 +166,7 @@ export function setupVideoQualityMemory() {
     if (saved === current || attempted.has(saved))
       return
     const target = items.find(item => qualityOf(item) === saved)
-    if (!target || unavailable(target))
+    if (!target || unavailable(target) || eligibility(restrictionOf(target)) !== true)
       return
     attempted.add(saved)
     target.click()
@@ -193,6 +235,9 @@ export function setupVideoQualityMemory() {
   function stop() {
     active = false
     clearPending()
+    stopAccountWatch?.()
+    stopAccountWatch = undefined
+    requestedAccount = ''
     stopStructure?.()
     stopStructure = undefined
     stateObserver?.disconnect()

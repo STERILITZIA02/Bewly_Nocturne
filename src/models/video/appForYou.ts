@@ -42,7 +42,7 @@ export interface Item {
   card_type: CardType
   card_goto: CardGoto
   args: Args
-  idx: number
+  idx?: number
   track_id: TrackID
   hash?: string
   banner_item?: BannerItem[]
@@ -62,7 +62,8 @@ export interface Item {
   cover_left_text_1?: string
   cover_left_text_2?: string
   desc?: string
-  rcmd_reason?: RcmdReason
+  rcmd_reason?: RcmdReason | string
+  desc_button?: DescButton
   can_play?: number
   cover_right_text?: string
   cover_left_icon_1?: number
@@ -292,7 +293,16 @@ export interface Args {
   up_name?: string
   rid?: number
   rname?: string
+  tid?: number
+  tname?: string
   aid?: number
+}
+
+export interface DescButton {
+  text?: string
+  uri?: string
+  event?: string
+  type?: number
 }
 
 export interface Avatar {
@@ -341,6 +351,7 @@ export interface RcmdReasonStyle {
 
 export enum CardGoto {
   AV = 'av',
+  AdAV = 'ad_av',
   AdWebS = 'ad_web_s',
   Banner = 'banner',
   Bangumi = 'bangumi',

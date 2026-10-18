@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 
 withDefaults(defineProps<{
   label?: string
   announce?: boolean
+  loading?: boolean
 }>(), {
   label: '',
   announce: true,
+  loading: true,
 })
 </script>
 
@@ -14,12 +16,9 @@ withDefaults(defineProps<{
   <div
     class="bew-page-loading-indicator"
     :role="announce ? 'status' : undefined"
-    :aria-label="announce && label ? label : undefined"
+    :aria-label="announce && label && loading ? label : undefined"
   >
-    <span class="bew-page-loading-indicator__skeleton" aria-hidden="true">
-      <SkeletonBlock width="100%" height="var(--bew-space-2)" />
-      <SkeletonBlock width="72%" height="var(--bew-space-2)" />
-    </span>
+    <LoadingRing :loading="loading" size="var(--bew-icon-size-sm)" />
     <span v-if="label" class="bew-page-loading-indicator__label">{{ label }}</span>
   </div>
 </template>
@@ -34,12 +33,6 @@ withDefaults(defineProps<{
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-}
-
-.bew-page-loading-indicator__skeleton {
-  display: grid;
-  gap: var(--bew-space-2);
-  width: calc(var(--bew-space-12) * 2);
 }
 
 .bew-page-loading-indicator__label {

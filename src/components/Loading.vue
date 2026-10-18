@@ -1,17 +1,26 @@
 <script setup lang="ts">
+import LoadingRing from '~/components/LoadingRing.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 
-withDefaults(defineProps<{ kind?: 'page' | 'video' | 'article' }>(), { kind: 'page' })
+// An arbitrary page has no predictable layout, so it gets the ring; video and
+// article pages keep skeletons shaped like their known layout.
+withDefaults(defineProps<{ kind?: 'page' | 'video' | 'article', loading?: boolean }>(), { kind: 'page', loading: true })
 </script>
 
 <template>
-  <div class="loading-container" :class="`loading-container--${kind}`" role="status" :aria-label="$t('common.loading')" aria-busy="true">
+  <div v-if="kind === 'page'" class="loading-container loading-container--page" role="status" :aria-label="loading ? $t('common.loading') : undefined" :aria-busy="loading">
+    <LoadingRing :loading="loading" size="var(--bew-icon-size-xl)" />
+  </div>
+  <div
+    v-else class="loading-container" :class="`loading-container--${kind}`" role="status" :aria-label="$t('common.loading')"
+    aria-busy="true"
+  >
     <div class="loading-container__heading" aria-hidden="true">
       <SkeletonBlock v-if="kind === 'article'" width="var(--bew-space-12)" height="var(--bew-space-12)" radius="circle" />
       <SkeletonBlock width="min(70%, 400px)" height="var(--bew-line-height-heading)" />
     </div>
     <div class="loading-container__body" aria-hidden="true">
-      <SkeletonBlock v-if="kind !== 'page'" class="loading-container__media" height="auto" radius="media" />
+      <SkeletonBlock class="loading-container__media" height="auto" radius="media" />
       <div class="loading-container__copy">
         <SkeletonBlock v-for="index in 6" :key="index" :width="index % 3 === 0 ? '64%' : '100%'" height="var(--bew-line-height-body)" />
       </div>
@@ -28,6 +37,11 @@ withDefaults(defineProps<{ kind?: 'page' | 'video' | 'article' }>(), { kind: 'pa
   gap: var(--bew-space-6);
   padding: var(--bew-space-6);
   box-sizing: border-box;
+}
+.loading-container--page {
+  place-items: center;
+  align-content: center;
+  color: var(--bew-text-2);
 }
 .loading-container__heading {
   display: flex;

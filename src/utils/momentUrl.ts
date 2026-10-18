@@ -1,3 +1,5 @@
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
+
 export function normalizeMomentRemoteUrl(value: unknown, baseUrl = 'https://www.bilibili.com'): string {
   if (typeof value !== 'string')
     return ''
@@ -18,7 +20,7 @@ export function normalizeMomentRemoteUrl(value: unknown, baseUrl = 'https://www.
 export function isMomentVideoUrl(value: string) {
   try {
     const url = new URL(normalizeMomentRemoteUrl(value))
-    return url.hostname === 'www.bilibili.com' && /^\/(?:video\/(?:BV[\da-z]+|av\d+)|(?:bangumi|cheese)\/play\/(?:ep|ss)\d+)(?:[/?#]|$)/i.test(url.pathname)
+    return url.hostname === 'www.bilibili.com' && /^\/(?:video\/(?:BV[\da-z]+|av\d+)|(?:bangumi|cheese)\/play\/(?:ep|ss)\d+)(?:[/?#]|$)/i.test(getBilibiliLogicalPathname(url))
   }
   catch {
     return false

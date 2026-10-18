@@ -572,7 +572,7 @@ settings:
   remember_video_aspect_ratio: 记住视频比例
   remember_video_quality: 记住清晰度
   player_extra_controls_hint: 空间不足时，收起的操作仍可在播放器右键菜单中使用。
-  remember_video_quality_desc: 首次启用沿用当前档位，之后只记住已生效的手动选择。自动降档和试看不会覆盖偏好。
+  remember_video_quality_desc: 首次启用沿用当前档位，之后只记住已生效的手动选择。自动降档和试看不会覆盖偏好；大会员或登录档位仅在当前账号确认具备资格后恢复。
   show_widescreen_idle_progress: 控件隐藏时显示细进度条
   show_widescreen_idle_progress_desc: 仅显示主视频播放进度，不改变控制栏显隐或提供拖动操作。
   original_moments_use_bewly_filters: 原生动态使用现有过滤规则
@@ -761,7 +761,6 @@ settings:
   topbar_mode_bilibili: Bilibili 顶栏
   dock_item_open_in_new_tab: 在新标签页打开
   dock_item_use_original_bili_web_page: 使用原版 Bilibili 网页
-  disable_dock_glowing_effect: 关闭 Dock 栏发光效果
   disable_light_dark_mode_switcher: 禁用亮/暗色模式切换按钮
   back_to_top_and_refresh_buttons_are_separated: 分离回到顶部和刷新按钮
   sidebar_position: 侧边栏位置
@@ -792,7 +791,6 @@ settings:
     scroll: 滚动加载
     pagination: 翻页
   logo_visibility: Logo 可见性
-  enable_logo_glowing_effect: 启用 Logo 发光效果
   disable_search_focus_effect: 去除搜索栏聚焦效果
   disable_search_focus_effect_desc: 开启后，搜索栏聚焦时不再模糊或暗化页面背景。
   choose_search_bar_focused_character: 选择搜索栏聚焦时出现的人物
@@ -1420,6 +1418,30 @@ moments:
   fit_window: 适应窗口
   rotate_clockwise: 顺时针旋转
 moment_card:
+  copy_link: 复制动态链接
+  link_copied: 链接已复制
+  delete: 删除动态
+  delete_confirm: 删除这条动态？删除后无法恢复。
+  delete_success: 动态已删除
+  delete_failed: 删除动态失败，请稍后重试
+  operation_uncertain: 请求结果未确认，为避免重复提交，请刷新后查看。
+  report: 举报
+  report_title: 举报动态
+  report_select_reason: 选择举报理由
+  report_remark_placeholder: 请填写举报说明
+  report_success: 举报已提交
+  report_failed: 举报失败，请稍后重试
+  report_reasons:
+    spam: 垃圾广告
+    inciting_conflict: 引战
+    pornography: 色情
+    personal_attack: 人身攻击
+    illegal_content: 违法信息
+    political_rumors: 涉政谣言
+    social_event_rumor: 涉社会事件谣言
+    false_information: 虚假不实信息
+    illegal_link: 违法信息外链
+    other: 其他
   comments_expand_thread: 展开此评论的回复
   comments_collapse_thread: 收起此评论的回复
   forward_search_mention: 搜索要提及的用户
@@ -1499,6 +1521,11 @@ moment_card:
   comment_unlike: 取消评论点赞
   comment_login_required: 登录后才能进行评论互动
   comment_like_failed: 评论点赞失败，请稍后重试
+  comment_delete: 删除
+  comment_delete_confirm: 删除这条评论？删除后无法恢复。
+  comment_delete_success: 评论已删除
+  comment_delete_failed: 删除评论失败，请稍后重试
+  comment_delete_uncertain: 删除结果未确认，评论已保留。请刷新后查看。
   live_popularity: '{count} 人气'
   no_data: 暂无数据
   live_now: 正在直播
@@ -1567,6 +1594,9 @@ video_card:
   watch_later_unavailable: 无法获取该视频的稍后再看信息
   watch_later_update_failed: 更新稍后再看失败
   feedback_unavailable: 无法获取反馈选项
+  feedback_failed: 反馈提交失败，请稍后重试
+  feedback_uncertain: 反馈结果未确认，为避免重复提交，请稍后刷新查看。
+  feedback_auth_expired: 授权已过期，请重试一次
 home:
   channels: 分区
   series:
@@ -1680,6 +1710,26 @@ history:
     要开启观看历史吗？
     你确定要开启观看历史吗？
 favorites:
+  filter_title: 筛选
+  filter_title_active: '筛选（{count} 项条件）'
+  filter_uploader: UP 主
+  filter_uploader_empty: 加载收藏后可按 UP 主筛选
+  filter_partition: 分区
+  filter_partition_empty: 当前范围暂无分区信息
+  filter_partition_retry: 重新读取分区
+  filter_keywords: 标题关键词
+  filter_keywords_placeholder: 输入后按 Enter 添加
+  filter_keyword_remove: '移除关键词 {keyword}'
+  filter_reset: 重置
+  filter_apply: 应用
+  filter_pause: 暂停
+  filter_continue: 继续扫描
+  filter_status_scanning: '正在扫描，已扫描 {scanned} 个，匹配 {count} 个'
+  filter_status_paused: '扫描已暂停，已匹配 {count} 个'
+  filter_status_budget: '已扫描 {scanned} 个，匹配 {count} 个；尚未扫描完毕'
+  filter_status_complete: '扫描完成，共匹配 {count} 个'
+  filter_status_failed: '扫描失败，已匹配 {count} 个'
+  filter_status_stalled: '分页没有进展，已匹配 {count} 个'
   saved_refresh_failed: 已保存，但列表刷新失败，请刷新查看
   create_folder: 新建收藏夹
   folder_name: 名称
