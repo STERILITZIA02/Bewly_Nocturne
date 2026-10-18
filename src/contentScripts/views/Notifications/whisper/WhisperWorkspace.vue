@@ -571,7 +571,7 @@ defineExpose({ refresh })
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-panel-radius);
   corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
+  box-shadow: var(--bew-shadow-2);
   backdrop-filter: var(--bew-filter-glass-1);
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }

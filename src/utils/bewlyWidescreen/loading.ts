@@ -156,8 +156,11 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
 
     loadingFadeFrame = requestAnimationFrame(() => {
       loadingFadeFrame = undefined
-      if (loadingOverlay === overlay && overlay.isConnected)
+      if (loadingOverlay === overlay && overlay.isConnected) {
+        // The player ring closes while the overlay fades out.
+        overlay.setAttribute('data-bew-loading-complete', '')
         overlay.classList.add('is-leaving')
+      }
     })
     loadingFadeTimer = setTimeout(remove, LOADING_FADE_DURATION)
   }

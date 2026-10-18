@@ -646,7 +646,6 @@ settings:
   topbar_mode_bilibili: Bilibili 頂部列
   dock_item_open_in_new_tab: 在新索引標籤開啟
   dock_item_use_original_bili_web_page: 使用原版 Bilibili 網頁
-  disable_dock_glowing_effect: 關閉 Dock 發光效果
   disable_light_dark_mode_switcher: 關閉淺/深色模式切換按鈕
   back_to_top_and_refresh_buttons_are_separated: 分離回到頂部列和重新整理按鈕
   sidebar_position: 側邊欄位置
@@ -676,7 +675,6 @@ settings:
   search_results_pagination_mode_opt:
     scroll: 滾動載入
     pagination: 翻頁
-  enable_logo_glowing_effect: 啟用 Logo 發光效果
   logo_visibility: Logo 可視性
   disable_search_focus_effect: 移除搜尋列聚焦效果
   disable_search_focus_effect_desc: 開啟後，搜尋列聚焦時不再模糊或暗化頁面背景。
@@ -803,7 +801,7 @@ settings:
   remember_video_aspect_ratio: 記住影片比例
   remember_video_quality: 記住畫質
   player_extra_controls_hint: 空間不足時，收起的操作仍可在播放器右鍵選單中使用。
-  remember_video_quality_desc: 首次啟用沿用目前畫質，之後只記住已生效的手動選擇。自動降級和試看不會覆寫偏好。
+  remember_video_quality_desc: 首次啟用沿用目前畫質，之後只記住已生效的手動選擇。自動降級和試看不會覆寫偏好；大會員或登入畫質僅在目前帳號確認具備資格後恢復。
   show_widescreen_idle_progress: 控制項隱藏時顯示細進度條
   show_widescreen_idle_progress_desc: 僅顯示主影片播放進度，不改變控制列顯隱或提供拖曳操作。
   original_moments_use_bewly_filters: 原生動態使用現有過濾規則
@@ -1421,6 +1419,30 @@ moments:
   fit_window: 適應視窗
   rotate_clockwise: 順時針旋轉
 moment_card:
+  copy_link: 複製動態連結
+  link_copied: 連結已複製
+  delete: 刪除動態
+  delete_confirm: 刪除這則動態？刪除後無法復原。
+  delete_success: 動態已刪除
+  delete_failed: 刪除動態失敗，請稍後再試
+  operation_uncertain: 請求結果未確認，為避免重複送出，請重新整理後查看。
+  report: 檢舉
+  report_title: 檢舉動態
+  report_select_reason: 選擇檢舉理由
+  report_remark_placeholder: 請填寫檢舉說明
+  report_success: 檢舉已送出
+  report_failed: 檢舉失敗，請稍後再試
+  report_reasons:
+    spam: 垃圾廣告
+    inciting_conflict: 引戰
+    pornography: 色情
+    personal_attack: 人身攻擊
+    illegal_content: 違法資訊
+    political_rumors: 涉政謠言
+    social_event_rumor: 涉社會事件謠言
+    false_information: 虛假不實資訊
+    illegal_link: 違法資訊外部連結
+    other: 其他
   comments_expand_thread: 展開此留言的回覆
   comments_collapse_thread: 收起此留言的回覆
   forward_search_mention: 搜尋要提及的使用者
@@ -1500,6 +1522,11 @@ moment_card:
   comment_unlike: 取消留言讚好
   comment_login_required: 登入後才能進行留言互動
   comment_like_failed: 留言讚好失敗，請稍後再試
+  comment_delete: 刪除
+  comment_delete_confirm: 刪除這則留言？刪除後無法復原。
+  comment_delete_success: 留言已刪除
+  comment_delete_failed: 刪除留言失敗，請稍後再試
+  comment_delete_uncertain: 刪除結果未確認，留言已保留。請重新整理後查看。
   live_popularity: '{count} 人氣'
   no_data: 暫無資料
   live_now: 正在直播
@@ -1568,6 +1595,9 @@ video_card:
   watch_later_unavailable: 無法取得此影片的稍後觀看資訊
   watch_later_update_failed: 更新稍後觀看失敗
   feedback_unavailable: 無法取得意見回饋選項
+  feedback_failed: 意見回饋送出失敗，請稍後再試
+  feedback_uncertain: 意見回饋結果未確認，為避免重複送出，請稍後重新整理查看。
+  feedback_auth_expired: 授權已過期，請再試一次
 home:
   channels: 分區
   series:
@@ -1681,6 +1711,26 @@ history:
     要啟用觀看記錄嗎？
     你確定要啟用觀看記錄嗎？
 favorites:
+  filter_title: 篩選
+  filter_title_active: '篩選（{count} 項條件）'
+  filter_uploader: UP 主
+  filter_uploader_empty: 載入收藏後可依 UP 主篩選
+  filter_partition: 分區
+  filter_partition_empty: 目前範圍暫無分區資訊
+  filter_partition_retry: 重新讀取分區
+  filter_keywords: 標題關鍵字
+  filter_keywords_placeholder: 輸入後按 Enter 新增
+  filter_keyword_remove: '移除關鍵字 {keyword}'
+  filter_reset: 重設
+  filter_apply: 套用
+  filter_pause: 暫停
+  filter_continue: 繼續掃描
+  filter_status_scanning: '正在掃描，已掃描 {scanned} 個，符合 {count} 個'
+  filter_status_paused: '掃描已暫停，已符合 {count} 個'
+  filter_status_budget: '已掃描 {scanned} 個，符合 {count} 個；尚未掃描完畢'
+  filter_status_complete: '掃描完成，共符合 {count} 個'
+  filter_status_failed: '掃描失敗，已符合 {count} 個'
+  filter_status_stalled: '分頁沒有進展，已符合 {count} 個'
   saved_refresh_failed: 已儲存，但列表重新整理失敗，請重新整理查看
   create_folder: 新增收藏夾
   folder_name: 名稱

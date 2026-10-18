@@ -1,6 +1,8 @@
+import { BILIBILI_LIVE_HOSTNAME } from '../utils/bilibiliLiveContext'
+
 // Separate entry: these sites keep their own navigation, player and account UI.
 export const NATIVE_SITE_HOSTS = {
-  'live.bilibili.com': 'live',
+  [BILIBILI_LIVE_HOSTNAME]: 'live',
   'manga.bilibili.com': 'manga',
   'show.bilibili.com': 'show',
   'mall.bilibili.com': 'merchandise-detail',

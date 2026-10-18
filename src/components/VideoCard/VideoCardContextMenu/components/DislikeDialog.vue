@@ -5,11 +5,10 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import type { Video } from '~/components/VideoCard/types'
-import { appAuthTokens } from '~/logic'
 import type { DislikeReason } from '~/models/video/appForYou'
 import { Type as ThreePointV2Type } from '~/models/video/appForYou'
-import api from '~/utils/api'
-import { ensureFreshAppAccessToken, getTvSign, isAppAccessTokenInvalidResponse, refreshInvalidAppAccessToken, TVAppKey } from '~/utils/authProvider'
+import { getAppFeedFeedbackTarget, isSameAppFeedFeedbackTarget, submitAppFeedFeedback } from '~/utils/appFeedFeedback'
+import { captureAppAuth, ensureFreshAppAccessToken } from '~/utils/authProvider'
 
 const props = defineProps<{
   modelValue: boolean
@@ -76,45 +75,34 @@ function closeDislikeDialog() {
 }
 
 async function handleAppDislike() {
-  if (!await ensureFreshAppAccessToken()) {
-    toast.warning(t('auth.auth_access_key_first'))
+  if (loadingDislikeDialog.value)
     return
-  }
-
   const selectedPayload = getSelectedPayload()
-  if (!selectedPayload) {
+  const target = getAppFeedFeedbackTarget(props.video)
+  if (!selectedPayload || !target) {
     toast.warning(t('video_card.feedback_unavailable'))
     return
   }
-
-  const sendFeedback = () => {
-    const params = {
-      access_key: appAuthTokens.value.accessToken,
-      goto: props.video?.goto,
-      id: props.video?.param || props.video?.id,
-      ...(selectedPayload.reasonId !== undefined ? { reason_id: selectedPayload.reasonId } : {}),
-      ...(selectedPayload.feedbackId !== undefined ? { feedback_id: selectedPayload.feedbackId } : {}),
-      build: 1,
-      mobi_app: 'android',
-      appkey: TVAppKey.appkey,
-      ts: Math.floor(Date.now() / 1000).toString(),
-    }
-    return api.video.dislikeVideo({
-      ...params,
-      sign: getTvSign(params),
-    })
-  }
-
   loadingDislikeDialog.value = true
   try {
-    let response = await sendFeedback()
-    if (isAppAccessTokenInvalidResponse(response) && await refreshInvalidAppAccessToken())
-      response = await sendFeedback()
-
-    if (response.code === 0)
+    const auth = await ensureFreshAppAccessToken() ? captureAppAuth() : null
+    if (!auth) {
+      toast.warning(t('auth.auth_access_key_first'))
+      return
+    }
+    if (!isSameAppFeedFeedbackTarget(target, getAppFeedFeedbackTarget(props.video)))
+      return
+    const { outcome, message } = await submitAppFeedFeedback('feedDislike', auth, target, selectedPayload)
+    if (outcome === 'stale' || !isSameAppFeedFeedbackTarget(target, getAppFeedFeedbackTarget(props.video)))
+      return
+    if (outcome === 'succeeded')
       emit('removed', selectedPayload)
+    else if (outcome === 'uncertain')
+      toast.warning(t('video_card.feedback_uncertain'))
+    else if (outcome === 'expired')
+      toast.error(t('video_card.feedback_auth_expired'))
     else
-      toast.error(response.message)
+      toast.error(message || t('video_card.feedback_failed'))
   }
   finally {
     loadingDislikeDialog.value = false

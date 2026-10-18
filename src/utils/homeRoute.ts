@@ -1,5 +1,6 @@
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 
 import type { HomeTabConfigItem } from './homeTabConfig'
 import { PRIVATE_CONVERSATION_ROUTE_PARAMS } from './privateConversationRoute'
@@ -16,7 +17,7 @@ export function resolveDefaultAppPage(config: readonly { page: AppPage, visible:
 
 export function readHomeRoute(href: string) {
   const url = new URL(href)
-  if (!['bilibili.com', 'www.bilibili.com'].includes(url.hostname) || !['/', '/index.html'].includes(url.pathname))
+  if (!['bilibili.com', 'www.bilibili.com'].includes(url.hostname) || !['/', '/index.html'].includes(getBilibiliLogicalPathname(url)))
     return null
   const page = url.searchParams.get('page') as AppPage | null
   const tab = url.searchParams.get('tab') as HomeSubPage | null
@@ -32,11 +33,27 @@ export function resolveHomeTab(tab: HomeSubPage | null, config: readonly HomeTab
     : config.find(item => item.visible)?.page ?? HomeSubPage.ForYou
 }
 
-export function writeHomeRoute(href: string, page: AppPage, tab: HomeSubPage): string {
+export interface HomeRouteDefaults {
+  page: AppPage
+  tab: HomeSubPage
+}
+
+export function shouldOmitHomeRouteTab(page: AppPage, tab: HomeSubPage, defaults: HomeRouteDefaults): boolean {
+  return page === AppPage.Home && tab === defaults.tab
+}
+
+export function shouldOmitHomeRoutePage(page: AppPage, tab: HomeSubPage, defaults: HomeRouteDefaults): boolean {
+  return defaults.page === AppPage.Home && shouldOmitHomeRouteTab(page, tab, defaults)
+}
+
+export function writeHomeRoute(href: string, page: AppPage, tab: HomeSubPage, defaults?: HomeRouteDefaults): string {
   if (!readHomeRoute(href))
     return href
   const url = new URL(href)
-  url.searchParams.set('page', page)
+  if (defaults && shouldOmitHomeRoutePage(page, tab, defaults))
+    url.searchParams.delete('page')
+  else
+    url.searchParams.set('page', page)
   if (page !== AppPage.SearchResults) {
     for (const key of ['keyword', 'category', 'user_order', 'user_type', 'search_type', 'live_room_order', 'live_user_order', 'pn'])
       url.searchParams.delete(key)
@@ -45,7 +62,7 @@ export function writeHomeRoute(href: string, page: AppPage, tab: HomeSubPage): s
     for (const key of ['notificationView', ...Object.values(PRIVATE_CONVERSATION_ROUTE_PARAMS)])
       url.searchParams.delete(key)
   }
-  if (page === AppPage.Home)
+  if (page === AppPage.Home && !(defaults && shouldOmitHomeRouteTab(page, tab, defaults)))
     url.searchParams.set('tab', tab)
   else
     url.searchParams.delete('tab')

@@ -6,6 +6,7 @@ import { findFirst, findMovable, getTitleText, moveOrReplaceNode } from '~/utils
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 import { reportRuntimeFailure } from '~/utils/messaging'
 import { isPgcPlaybackPage } from '~/utils/videoMetadataBridge'
@@ -48,11 +49,12 @@ export function syncVideoMetadata(currentState: BewlyWidescreenState) {
 }
 
 function getCurrentVideoInfoRequest() {
-  const bvidMatch = location.pathname.match(/^\/video\/(BV[0-9A-Za-z]+)(?:\/|$)/)
+  const pathname = getBilibiliLogicalPathname()
+  const bvidMatch = pathname.match(/^\/video\/(BV[0-9A-Za-z]+)(?:\/|$)/)
   if (bvidMatch)
     return { identity: `bvid:${bvidMatch[1]}`, params: { bvid: bvidMatch[1] } }
 
-  const aidMatch = location.pathname.match(/^\/video\/av(\d+)(?:\/|$)/i)
+  const aidMatch = pathname.match(/^\/video\/av(\d+)(?:\/|$)/i)
   if (aidMatch)
     return { identity: `aid:${aidMatch[1]}`, params: { aid: aidMatch[1] } }
 

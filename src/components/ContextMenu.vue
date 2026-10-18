@@ -2,6 +2,7 @@
 import { useEventListener } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 
+import LoadingRing from '~/components/LoadingRing.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { DIALOG_FOCUS_OWNER, getDeepActiveElement, restoreOverlayFocus } from '~/utils/dialogFocus'
@@ -210,8 +211,9 @@ onBeforeUnmount(() => {
             <i class="item-icon" :class="option.icon" aria-hidden="true" />
             <span class="item-label">{{ option.label }}<small v-if="option.description" class="item-description">{{ option.description }}</small></span>
             <span v-if="option.kind === 'toggle' || option.kind === 'radio'" class="item-check" aria-hidden="true">
-              <SkeletonBlock v-if="option.pending" width="var(--bew-control-icon-size)" height="var(--bew-control-icon-size)" />
-              <i v-else-if="option.checked" class="i-tabler:check" />
+              <LoadingRing :loading="Boolean(option.pending)" size="var(--bew-control-icon-size)">
+                <i v-if="option.checked" class="i-tabler:check" />
+              </LoadingRing>
             </span>
           </button>
         </li>

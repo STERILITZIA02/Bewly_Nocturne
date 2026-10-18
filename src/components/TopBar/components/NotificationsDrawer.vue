@@ -2,6 +2,7 @@
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
 import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
+import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED } from '~/constants/globalEvents'
 import { DRAWER_TRANSITION_MS, ESC_CONFIRM_WINDOW_MS } from '~/constants/timing'
 import { settings } from '~/logic'
@@ -30,6 +31,8 @@ const currentUrl = ref<string>(props.url || 'https://message.bilibili.com/')
 const showIframe = ref(false)
 const isIframeLoaded = ref(false)
 const isIframeDisplayReady = ref(false)
+// The layer stays until the ring has closed over the ready iframe.
+const loadingPhase = useLoadingRingPhase(() => showIframe.value && !isIframeDisplayReady.value, () => drawerRef.value)
 const delayCloseTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const revealIframeTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const openIframeTimer = ref<ReturnType<typeof setTimeout> | null>(null)
@@ -521,14 +524,14 @@ function handleFocusDrawer(e?: Event) {
 
           <Transition name="fade">
             <div
-              v-if="showIframe && !isIframeDisplayReady"
+              v-if="loadingPhase !== 'idle'"
               class="notifications-drawer__loading-layer"
               pos="absolute top-0 right-0"
               z-20
               w-full h-full
               bg="$bew-bg"
             >
-              <Loading />
+              <Loading :loading="showIframe && !isIframeDisplayReady" />
             </div>
           </Transition>
 

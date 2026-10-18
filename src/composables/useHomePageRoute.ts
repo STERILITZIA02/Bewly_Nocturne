@@ -5,6 +5,7 @@ import { syncRouteState } from '~/composables/useRouteState'
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import type { HomeRouteDefaults } from '~/utils/homeRoute'
 import { readHomeRoute, resolveHomeTab, writeHomeRoute } from '~/utils/homeRoute'
 import type { HomeTabConfigItem } from '~/utils/homeTabConfig'
 import { isSameHomeTabConfig, normalizeHomeTabConfig } from '~/utils/homeTabConfig'
@@ -25,10 +26,16 @@ export function useHomePageRoute(defaultPage: () => AppPage, defaultTabs: HomeTa
   let routeAccount = account()
   watch(account, () => rememberedUrls.clear(), { flush: 'sync' })
 
+  const routeDefaults = (): HomeRouteDefaults => ({
+    page: availablePage(defaultPage()),
+    tab: resolveHomeTab(null, tabConfig()),
+  })
+  const routePage = (page: AppPage | null) => availablePage(page ?? defaultPage())
+
   function syncUrl(mode: 'push' | 'replace' = 'replace', base = window.location.href) {
     if (applyingRoute)
       return
-    const next = writeHomeRoute(base, activatedPage.value, homeActivatedPage.value)
+    const next = writeHomeRoute(base, activatedPage.value, homeActivatedPage.value, routeDefaults())
     routeAccount = account()
     if (readHomeRoute(next))
       rememberedUrls.set(activatedPage.value, next)
@@ -41,8 +48,8 @@ export function useHomePageRoute(defaultPage: () => AppPage, defaultTabs: HomeTa
 
   function navigateToPage(page: AppPage) {
     const current = readHomeRoute(window.location.href)
-    if (current?.page && routeAccount === account())
-      rememberedUrls.set(current.page, window.location.href)
+    if (current && routeAccount === account())
+      rememberedUrls.set(routePage(current.page), window.location.href)
     const target = availablePage(page)
     const remembered = rememberedUrls.get(target)
     applyingRoute = true
@@ -66,11 +73,10 @@ export function useHomePageRoute(defaultPage: () => AppPage, defaultTabs: HomeTa
     const route = readHomeRoute(value)
     if (!route)
       return
-    if (route.page)
-      rememberedUrls.set(route.page, value)
+    rememberedUrls.set(routePage(route.page), value)
     routeAccount = account()
     applyingRoute = true
-    activatedPage.value = availablePage(route.page ?? defaultPage())
+    activatedPage.value = routePage(route.page)
     if (activatedPage.value === AppPage.Home) {
       homeActivatedPage.value = resolveHomeTab(route.tab, tabConfig())
       homeActivatedPageTouched.value = Boolean(route.tab)
@@ -88,7 +94,9 @@ export function useHomePageRoute(defaultPage: () => AppPage, defaultTabs: HomeTa
       return
     }
     homeActivatedPage.value = resolveHomeTab(homeActivatedPageTouched.value ? homeActivatedPage.value : null, config)
+    syncUrl()
   }, { deep: true, immediate: true })
+  watch(() => routeDefaults().page, () => syncUrl(), { flush: 'sync' })
   watch([activatedPage, homeActivatedPage], () => syncUrl(), { flush: 'sync' })
   syncUrl()
   return { activatedPage, homeActivatedPage, homeActivatedPageTouched, navigateToPage, navigateToHomeTab, resolveAvailableAppPage: availablePage }

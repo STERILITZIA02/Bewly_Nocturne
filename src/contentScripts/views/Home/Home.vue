@@ -383,7 +383,6 @@ watch(tabContentLoading, (loading) => {
               class="home-search-stage__logo"
               :size="shortViewport ? 144 : 180"
               :color="settings.searchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
-              :glow="settings.searchPageLogoGlow"
             />
           </div>
           <div

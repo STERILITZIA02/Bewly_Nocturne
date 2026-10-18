@@ -1,3 +1,4 @@
+import { getBilibiliLogicalPathname, toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { scrollToPosition } from '~/utils/scrollIntent'
 
 /**
@@ -94,7 +95,8 @@ export function isHomePage(url: string = location.href): boolean {
     const urlObj = new URL(url)
     const isHttp = urlObj.protocol === 'http:' || urlObj.protocol === 'https:'
     const isBilibiliHomeHost = urlObj.hostname === 'www.bilibili.com' || urlObj.hostname === 'bilibili.com'
-    return isHttp && isBilibiliHomeHost && (urlObj.pathname === '/' || urlObj.pathname === '/index.html')
+    const pathname = getBilibiliLogicalPathname(urlObj)
+    return isHttp && isBilibiliHomeHost && (pathname === '/' || pathname === '/index.html')
   }
   catch {
     return false
@@ -133,10 +135,11 @@ export function isWatchLaterListPage(url: string): boolean {
     if (!isHttp || !isBilibiliHost)
       return false
 
-    if (urlObj.pathname === '/watchlater/list' || urlObj.pathname === '/watchlater/list/')
+    const pathname = getBilibiliLogicalPathname(urlObj)
+    if (pathname === '/watchlater/list' || pathname === '/watchlater/list/')
       return true
 
-    const isLegacyWatchLaterPath = urlObj.pathname === '/watchlater' || urlObj.pathname === '/watchlater/'
+    const isLegacyWatchLaterPath = pathname === '/watchlater' || pathname === '/watchlater/'
     return isLegacyWatchLaterPath && /^#\/list(?:[/?]|$)/.test(urlObj.hash)
   }
   catch {
@@ -150,6 +153,7 @@ export function isWatchLaterListPage(url: string): boolean {
  * @returns true if the current page is a video or bangumi page
  */
 export function isVideoOrBangumiPage(url: string = location.href): boolean {
+  url = toBilibiliLogicalUrl(url)
   if (
     // video page
     /https?:\/\/(?:www\.)?bilibili\.com\/(?:video|list)\/.*/.test(url)
@@ -174,6 +178,7 @@ export function isVideoOrBangumiPage(url: string = location.href): boolean {
  * @returns true if the current page is a video playback page
  */
 export function isVideoPlaybackPage(url: string = location.href): boolean {
+  url = toBilibiliLogicalUrl(url)
   return (
     // normal video page and playlist video page
     /https?:\/\/(?:www\.)?bilibili\.com\/(?:video|list)\/.*/.test(url)

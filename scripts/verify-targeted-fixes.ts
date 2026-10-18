@@ -2466,7 +2466,7 @@ async function verifyP2WidescreenControl() {
   assert.match(sidebarSurfaceStyles, /border-radius: var\(--bewly-widescreen-shell-radius\)/)
   assert.match(widescreen, /--bewly-widescreen-shell-radius: var\(--bew-modal-radius, 24px\)/)
   assert.match(sidebarSurfaceStyles, /corner-shape: var\(--bew-corner-shape\)/)
-  assert.match(sidebarSurfaceStyles, /box-shadow: var\(--bew-shadow-3\), var\(--bew-shadow-edge-glow-1\)/)
+  assert.match(sidebarSurfaceStyles, /box-shadow: var\(--bew-shadow-3\);/)
   assert.match(sidebarSurfaceStyles, /backdrop-filter: var\(--bew-filter-glass-1\)/)
   assert.match(sidebarSurfaceStyles, /transform: translate3d\(var\(--bewly-widescreen-sidebar-offset\), 0, 0\)/)
   assert.match(sidebarSurfaceStyles, /transform var\(--bew-duration-moderate, 300ms\)/)

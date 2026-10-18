@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import LoadingRing from '~/components/LoadingRing.vue'
+
 const props = defineProps<{
   currentPage: number
   totalPages: number
@@ -112,8 +114,9 @@ function goToNextPage() {
         :aria-current="page === currentPage ? 'page' : undefined"
         @click="handlePageChange(page)"
       >
-        <span>{{ page }}</span>
-        <span v-if="loading && page === currentPage" class="pagination-loading-mark" data-bew-skeleton aria-hidden="true" />
+        <LoadingRing :loading="Boolean(loading && page === currentPage)">
+          <span>{{ page }}</span>
+        </LoadingRing>
       </button>
     </template>
 
@@ -182,15 +185,6 @@ function goToNextPage() {
   &.loading {
     pointer-events: none;
   }
-}
-
-.pagination-loading-mark {
-  position: absolute;
-  left: var(--bew-space-2);
-  right: var(--bew-space-2);
-  bottom: var(--bew-space-1);
-  height: var(--bew-space-0-5);
-  border-radius: var(--bew-radius-full);
 }
 
 .pagination-ellipsis {

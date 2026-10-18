@@ -1,3 +1,5 @@
+import { createLoadingRingElement } from '~/utils/loadingRing'
+
 function createLoadingSkeletonElement(className: string) {
   const element = document.createElement('div')
   element.className = className
@@ -16,7 +18,9 @@ export function createWidescreenLoadingSkeleton() {
   stage.setAttribute('aria-hidden', 'true')
 
   const player = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-player')
-  player.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-player-mark'))
+  const playerMark = createLoadingRingElement()
+  playerMark.classList.add('bewly-widescreen-loading-skeleton-player-mark')
+  player.appendChild(playerMark)
 
   const controls = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-controls')
   controls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-progress'))

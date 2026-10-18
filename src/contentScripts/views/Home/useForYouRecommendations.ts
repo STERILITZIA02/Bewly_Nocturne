@@ -4,6 +4,8 @@ import { useToast } from 'vue-toastification'
 
 import { UndoForwardState, useBewlyApp } from '~/composables/useAppProvider'
 import { useHomeTabState } from '~/composables/useHomeTabState'
+import { APP_CLIENT_FEED_PARAMS } from '~/constants/appClient'
+import { getAppVideoKeys, isRepresentableAppVideo, normalizeAppVideoItem } from '~/contentScripts/views/Home/adapters/appRecommendationItem'
 import { transformAppVideo, transformWebVideo } from '~/contentScripts/views/Home/adapters/recommendationVideo'
 import { LanguageType } from '~/enums/appEnums'
 import { appAuthTokens, settings } from '~/logic'
@@ -12,6 +14,7 @@ import {
   reportAppAuthorizationInvalid,
   requestAppAuthorization,
 } from '~/logic/appAuthorizationCoordinator'
+import { getAppAuthIdentity } from '~/logic/appAuthStorage'
 import { parseDedeUserID } from '~/logic/loginStatus'
 import type { AppForYouResult, Item as AppVideoItem } from '~/models/video/appForYou'
 import type { forYouResult, Item as VideoItem } from '~/models/video/forYou'
@@ -20,7 +23,8 @@ import type { AccountId } from '~/utils/accountScope'
 import { isSameAccount } from '~/utils/accountScope'
 import { isBilibiliAdvertisement, toAdvertisementCard } from '~/utils/advertising'
 import api from '~/utils/api'
-import { ensureFreshAppAccessToken, getTvSign, isAppAccessTokenInvalidResponse, refreshInvalidAppAccessToken, TVAppKey } from '~/utils/authProvider'
+import type { AppAuthSnapshot } from '~/utils/authProvider'
+import { captureAppAuth, ensureFreshAppAccessToken, isAppAccessTokenInvalidResponse, isAppAuthCurrent, refreshInvalidAppAccessToken, requestAppClient } from '~/utils/authProvider'
 import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
 import { debugLog } from '~/utils/debug'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
@@ -48,6 +52,9 @@ export function useForYouRecommendations(emit: {
   // 先声明数据变量
   const videoList = tabState.ref<VideoElement[]>('videoList', [])
   const appVideoList = tabState.ref<AppVideoElement[]>('appVideoList', [])
+  const appFeedIdx = tabState.ref<number>('appFeedIdx', 0)
+  const appRecentShownKeys = tabState.ref<string[]>('appRecentShownKeys', [])
+  const APP_RECENT_SHOWN_MAX_KEYS = 600
 
   const isWebRecommendationMode = computed(() => settings.value.recommendationMode !== 'app')
   const { refreshIdx, webFetchRow, webShowlistGroups, buildLastShowlistGroup, getLastShowlistFromGroups, getNoCookieStoredLastShowlist, getNoCookieNextFreshIdx, saveNoCookieRecommendationState, resetWebRecommendState } = useWebRecommendationCursor(tabState)
@@ -232,13 +239,13 @@ export function useForYouRecommendations(emit: {
         hasInitializedData.value = true
       if (recommendationDataState.value === 'loading')
         recommendationDataState.value = currentVideoList.value.length ? 'success' : 'idle'
-      if (settings.value.recommendationMode === 'app' && tabState.read('appAuthorized', false) !== Boolean(appAuthTokens.value.accessToken))
+      if (settings.value.recommendationMode === 'app' && tabState.read('appAuthIdentity', '') !== getAppAuthIdentity())
         hasInitializedData.value = false
     }
     initPageAction()
     void initialDataCoordinator.ensure()
   })
-  tabState.capture('appAuthorized', () => Boolean(appAuthTokens.value.accessToken))
+  tabState.capture('appAuthIdentity', () => getAppAuthIdentity())
 
   watch(appAuthorizationSuccessVersion, () => {
     appAuthorizationRequired.value = false
@@ -274,16 +281,14 @@ export function useForYouRecommendations(emit: {
     return `${item.id}`
   }
 
-  function getAppVideoKeys(item: AppVideoItem): string[] {
-    const keys: string[] = []
-    const bvid = item.bvid?.trim()
-    if (bvid)
-      keys.push(`bvid:${bvid}`)
-
-    const aid = item.args?.aid
-    if (aid && aid > 0)
-      keys.push(`aid:${aid}`)
-    return keys
+  function rememberAppRecentShown(list: AppVideoElement[]) {
+    const keys = new Set(list.flatMap(video => video.item && !isBilibiliAdvertisement(video.item) ? getAppVideoKeys(video.item) : []))
+    if (!keys.size)
+      return
+    appRecentShownKeys.value = [
+      ...appRecentShownKeys.value.filter(key => !keys.has(key)),
+      ...keys,
+    ].slice(-APP_RECENT_SHOWN_MAX_KEYS)
   }
 
   function isWebRiskCooldownActive(): boolean {
@@ -347,6 +352,7 @@ export function useForYouRecommendations(emit: {
 
     videoList.value = []
     appVideoList.value = []
+    appFeedIdx.value = 0
 
     // 重置前进后退状态
     undoForwardState.value = UndoForwardState.Hidden
@@ -372,6 +378,10 @@ export function useForYouRecommendations(emit: {
     if (isWebRecommendationMode.value)
       webFetchRow.value = 1
 
+    if (recommendationMode === 'app') {
+      rememberAppRecentShown(appVideoList.value)
+      appFeedIdx.value = 0
+    }
     // 直接清空列表，骨架屏由 VideoCardGrid 自动处理
     videoList.value = []
     appVideoList.value = []
@@ -497,6 +507,8 @@ export function useForYouRecommendations(emit: {
     return {
       videoList: videoList.value,
       appVideoList: appVideoList.value,
+      appFeedIdx: appFeedIdx.value,
+      appAuthIdentity: getAppAuthIdentity(),
       refreshIdx: refreshIdx.value,
       webFetchRow: webFetchRow.value,
       webShowlistGroups: webShowlistGroups.value,
@@ -512,11 +524,14 @@ export function useForYouRecommendations(emit: {
   function restoreRecommendationSnapshot(snapshot: RecommendationSnapshot | null) {
     if (!snapshot || !tabState.isCurrent())
       return false
+    if (settings.value.recommendationMode === 'app' && snapshot.appAuthIdentity !== getAppAuthIdentity())
+      return false
     requestVersion++
     isLoading.value = false
     isRecursiveLoading.value = false
     videoList.value = snapshot.videoList
     appVideoList.value = snapshot.appVideoList
+    appFeedIdx.value = snapshot.appFeedIdx
     refreshIdx.value = snapshot.refreshIdx
     webFetchRow.value = snapshot.webFetchRow
     webShowlistGroups.value = snapshot.webShowlistGroups
@@ -835,11 +850,11 @@ export function useForYouRecommendations(emit: {
       return
     }
 
-    // 仅在 APP 推荐真正发起请求前按需刷新 access token。
     const tokenReady = await ensureFreshAppAccessToken()
     if (!isCurrentWebRequest(version, recommendationMode, accountId) || recommendationMode !== 'app')
       return
-    if (!tokenReady) {
+    let auth: AppAuthSnapshot | null = tokenReady ? captureAppAuth() : null
+    if (!auth) {
       debugLog(`${HOME_LOAD_LOG_PREFIX} 推荐接口请求失败`, {
         time: new Date().toLocaleString(),
         mode: recommendationMode,
@@ -849,63 +864,55 @@ export function useForYouRecommendations(emit: {
       requireAppAuthorization()
       return
     }
+    const isCurrentAppRequest = () => isCurrentWebRequest(version, recommendationMode, accountId) && isAppAuthCurrent(auth)
 
     const batchesToLoad = APP_LOAD_BATCHES.value
     const beforeLoadCount = currentVideoList.value.length
-    const seenCandidateIds = new Set(
-      appVideoList.value
-        .flatMap(video => video.item && !isBilibiliAdvertisement(video.item) ? getAppVideoKeys(video.item) : []),
-    )
+    const seenCandidateIds = new Set([
+      ...appRecentShownKeys.value,
+      ...appVideoList.value.flatMap(video => video.item && !isBilibiliAdvertisement(video.item) ? getAppVideoKeys(video.item) : []),
+    ])
+    const locale = settings.value.language === LanguageType.Mandarin_TW || settings.value.language === LanguageType.Cantonese ? 'zh-Hant_TW' : 'zh-Hans_CN'
 
-    // 加载多个批次
     for (let batch = 0; batch < batchesToLoad; batch++) {
       try {
-      // 获取最后一个视频的idx用于请求下一批
-        const lastIdx = appVideoList.value.length > 0 && appVideoList.value[appVideoList.value.length - 1].item
-          ? appVideoList.value[appVideoList.value.length - 1].item!.idx
-          : 1
+        const idx = appFeedIdx.value
         const requestLog = startRecommendRequestLog(recommendationMode, requestType)
 
         let response: AppForYouResult
         try {
-          const requestAppRecommendations = () => {
-            const params = {
-              access_key: appAuthTokens.value.accessToken,
-              s_locale: settings.value.language === LanguageType.Mandarin_TW || settings.value.language === LanguageType.Cantonese ? 'zh-Hant_TW' : 'zh-Hans_CN',
-              c_locate: settings.value.language === LanguageType.Mandarin_TW || settings.value.language === LanguageType.Cantonese ? 'zh-Hant_TW' : 'zh-Hans_CN',
-              appkey: TVAppKey.appkey,
-              idx: lastIdx,
-              ts: Math.floor(Date.now() / 1000).toString(),
-            }
-            return api.video.getAppRecommendVideos({
-              ...params,
-              sign: getTvSign(params),
-            })
-          }
+          const requestAppRecommendations = () => requestAppClient<AppForYouResult>('feedIndex', {
+            ...APP_CLIENT_FEED_PARAMS,
+            access_key: appAuthTokens.value.accessToken,
+            c_locale: locale,
+            s_locale: locale,
+            idx,
+            pull: idx === 0,
+          }, { mid: auth?.mid })
           response = await requestAppRecommendations()
           if (
             isAppAccessTokenInvalidResponse(response)
-            && isCurrentWebRequest(version, recommendationMode, accountId)
+            && isCurrentAppRequest()
             && await refreshInvalidAppAccessToken()
             && isCurrentWebRequest(version, recommendationMode, accountId)
           ) {
+            auth = captureAppAuth()
+            if (!auth) {
+              requireAppAuthorization()
+              return
+            }
             response = await requestAppRecommendations()
           }
         }
         catch (error) {
-          if (!isCurrentWebRequest(version, recommendationMode, accountId))
+          if (!isCurrentAppRequest())
             return
-          if (isAppAccessTokenInvalidResponse(error)) {
-            logRecommendRequestFailure(requestLog, { error })
-            requireAppAuthorization()
-            return
-          }
           if (!isExtensionContextInvalidatedError(error))
             logRecommendRequestFailure(requestLog, { error })
           throw error
         }
 
-        if (!isCurrentWebRequest(version, recommendationMode, accountId))
+        if (!isCurrentAppRequest())
           return
 
         if (!response) {
@@ -917,54 +924,37 @@ export function useForYouRecommendations(emit: {
         }
 
         if (response.code === 0 && Array.isArray(response.data?.items)) {
+          appFeedIdx.value = idx + 1
           const activeAppFilter = hasActiveAppRecommendationFilter.value ? appFilterFunc.value : null
           let filteredCandidateCount = 0
           let filteredKeptCount = 0
 
-          response.data.items.forEach((item: AppVideoItem) => {
-            const advertisement = isBilibiliAdvertisement(item)
-            if (advertisement) {
-              const displayData = toAdvertisementCard(item)
+          response.data.items.forEach((rawItem: AppVideoItem) => {
+            if (isBilibiliAdvertisement(rawItem)) {
+              const displayData = toAdvertisementCard(rawItem)
               const uniqueId = displayData.advertisementKey!
               if (!appVideoList.value.some(video => video.uniqueId === uniqueId))
-                appVideoList.value.push({ uniqueId, item, displayData })
+                appVideoList.value.push({ uniqueId, item: rawItem, displayData })
               return
             }
-            // Non-video banner layouts cannot be represented by a VideoCard.
-            if (item.card_type.includes('banner'))
+            const item = normalizeAppVideoItem(rawItem)
+            if (!isRepresentableAppVideo(item))
               return
 
-            // 过滤掉没有有效 ID 的视频（既没有 aid 也没有 bvid）
-            const hasValidId = (item.args?.aid && item.args.aid > 0) || (item.bvid && item.bvid.trim() !== '')
-            if (!hasValidId)
+            const videoKeys = getAppVideoKeys(item)
+            if (videoKeys.some(key => seenCandidateIds.has(key)))
               return
+            videoKeys.forEach(key => seenCandidateIds.add(key))
 
             if (activeAppFilter) {
-              const videoKeys = getAppVideoKeys(item)
-              if (!videoKeys.length || videoKeys.some(key => seenCandidateIds.has(key)))
-                return
-
-              videoKeys.forEach(key => seenCandidateIds.add(key))
               filteredCandidateCount++
-
               if (!activeAppFilter(item))
                 return
-
               filteredKeptCount++
             }
-            else {
-            // Keep the unfiltered recommendation path's existing duplicate semantics.
-              const isDuplicate = appVideoList.value.some(video =>
-                video.item && !isBilibiliAdvertisement(video.item)
-                && (video.item.args?.aid === item.args?.aid || video.item.bvid === item.bvid),
-              )
-              if (isDuplicate)
-                return
-            }
 
-            const videoId = item.args?.aid || item.bvid
             appVideoList.value.push({
-              uniqueId: `${videoId || item.idx}`,
+              uniqueId: videoKeys[0],
               item,
               displayData: transformAppVideo(item),
             })
@@ -996,7 +986,7 @@ export function useForYouRecommendations(emit: {
         }
       }
       catch (error) {
-        if (!isCurrentWebRequest(version, recommendationMode, accountId))
+        if (!isCurrentAppRequest())
           return
 
         setRecommendationFailure(error)
@@ -1005,7 +995,7 @@ export function useForYouRecommendations(emit: {
     }
 
     // 检查是否成功添加了新内容
-    if (!isCurrentWebRequest(version, recommendationMode, accountId))
+    if (!isCurrentAppRequest())
       return
 
     const afterLoadCount = currentVideoList.value.length

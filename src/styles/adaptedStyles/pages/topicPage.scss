@@ -40,7 +40,7 @@ html.topicPage.remove-top-bar:not(.remove-top-bar-without-placeholder) {
     }
 
     .topic-nav span:before {
-      filter: var(--bew-filter-icon-glow);
+      filter: var(--bew-filter-icon-white);
     }
 
     .share-popover .share-popover__qrcode canvas {

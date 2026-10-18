@@ -129,9 +129,10 @@ async function getData(generation = requestGeneration, accountId = loadedAccount
   isLoading.value = true
 
   try {
-    // 初次加载时多加载几批确保有足够内容
+    // 初次加载时多加载几批确保有足够内容；失败、过期或整页重复都结束本轮。
     for (let i = 0; i < 3 && !noMoreContent.value; i++) {
-      if (!await getLiveVideos(generation, accountId))
+      const added = await getLiveVideos(generation, accountId)
+      if (added === null || added === 0)
         break
     }
   }
@@ -146,11 +147,12 @@ async function getData(generation = requestGeneration, accountId = loadedAccount
   }
 }
 
-async function getLiveVideos(generation = requestGeneration, accountId = loadedAccountId) {
+/** Returns the number of newly listed rooms, or null when this round cannot continue. */
+async function getLiveVideos(generation = requestGeneration, accountId = loadedAccountId): Promise<number | null> {
   if (liveExtensionContextInvalidated || !isCurrentRequest(generation, accountId))
-    return false
+    return null
   if (noMoreContent.value)
-    return true
+    return 0
 
   try {
     const response: FollowingLiveResult = await api.live.getFollowingLiveList({
@@ -159,13 +161,13 @@ async function getLiveVideos(generation = requestGeneration, accountId = loadedA
     })
 
     if (liveExtensionContextInvalidated || !isCurrentRequest(generation, accountId))
-      return false
+      return null
 
     if (response.code === -101) {
       noMoreContent.value = false
       needToLoginFirst.value = true
       requestFailed.value = false
-      return false
+      return null
     }
 
     if (response.code === 0) {
@@ -176,19 +178,11 @@ async function getLiveVideos(generation = requestGeneration, accountId = loadedA
         noMoreContent.value = true
 
       page.value++
-
-      const newItems = list.map((item: FollowingLiveItem) => ({
-        uniqueId: `${item.roomid}`,
-        item,
-        displayData: transformLiveVideo({ uniqueId: `${item.roomid}`, item }),
-      }))
-
-      videoList.value = [...videoList.value, ...newItems]
-      return true
+      return mergeLiveRooms(list)
     }
     requestFailed.value = true
     noMoreContent.value = false
-    return false
+    return null
   }
   catch (error) {
     // A superseded request can still prove that the whole extension world is
@@ -197,17 +191,56 @@ async function getLiveVideos(generation = requestGeneration, accountId = loadedA
       liveExtensionContextInvalidated = true
       if (isCurrentRequest(generation, accountId))
         requestFailed.value = false
-      return false
+      return null
     }
     if (liveExtensionContextInvalidated)
-      return false
+      return null
     if (isCurrentRequest(generation, accountId)) {
       requestFailed.value = true
       noMoreContent.value = false
       console.error('[Live] Failed to load followed live rooms:', error)
     }
-    return false
+    return null
   }
+}
+
+function getLiveRoomId(item: FollowingLiveItem): string | null {
+  const roomId = Number(item?.roomid)
+  return Number.isSafeInteger(roomId) && roomId > 0 ? `${roomId}` : null
+}
+
+function getLiveRoomSignature(item: FollowingLiveItem) {
+  return JSON.stringify([item.title, item.room_cover, item.uname, item.face, item.uid, item.text_small, item.area_name_v2, item.live_status])
+}
+
+// 直播间按开播状态重新排序，同一房间可能跨页或同页重复出现；以 roomid 为稳定身份，
+// 已有房间只在展示字段变化时替换条目，没有新增也没有变化时不提交列表。
+function mergeLiveRooms(list: FollowingLiveItem[]) {
+  const indexById = new Map(videoList.value.map((video, index) => [video.uniqueId, index]))
+  const nextList = videoList.value.slice()
+  let changed = false
+  let added = 0
+  for (const item of list) {
+    const uniqueId = getLiveRoomId(item)
+    if (!uniqueId)
+      continue
+    const index = indexById.get(uniqueId)
+    if (index !== undefined) {
+      const current = nextList[index]
+      if (current.item && getLiveRoomSignature(current.item) === getLiveRoomSignature(item))
+        continue
+      nextList[index] = { uniqueId, item, displayData: transformLiveVideo({ uniqueId, item }) }
+      changed = true
+      continue
+    }
+    indexById.set(uniqueId, nextList.length)
+    nextList.push({ uniqueId, item, displayData: transformLiveVideo({ uniqueId, item }) })
+    added++
+    changed = true
+  }
+  if (changed)
+    videoList.value = nextList
+  return added
 }
 
 // 供 VideoCardGrid 预加载调用的函数

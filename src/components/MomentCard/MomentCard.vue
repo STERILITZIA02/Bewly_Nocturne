@@ -3,6 +3,7 @@ import type { ComponentPublicInstance, CSSProperties } from 'vue'
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import LoadingRing from '~/components/LoadingRing.vue'
 import MomentPromotionBadge from '~/components/MomentPromotionBadge.vue'
 import VideoWatchedTag from '~/components/VideoWatchedTag.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -19,7 +20,6 @@ import { isMomentDescriptionOverflowing } from '~/utils/momentDescription'
 import { isMomentVideoUrl } from '~/utils/momentUrl'
 
 import type { Author, Video } from '../VideoCard/types'
-import VideoCardContextMenu from '../VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue'
 import MomentCommentSection from './MomentCommentSection.vue'
 import MomentForwardComposer from './MomentForwardComposer.vue'
 import type { MomentDisclosure } from './momentForwardContent'
@@ -29,6 +29,7 @@ import {
   normalizeForwardCount,
   toggleMomentDisclosure,
 } from './momentForwardContent'
+import MomentMoreMenu from './MomentMoreMenu.vue'
 import MomentVideoPreview from './MomentVideoPreview.vue'
 import MomentVote from './MomentVote.vue'
 import type { DisplayForwardVideo, DisplayMoment, WatchLaterTarget } from './types'
@@ -91,6 +92,8 @@ const emit = defineEmits<{
   interactiveResize: []
   interactionChange: [held: boolean]
   disclosureMotion: [moving: boolean]
+  requestDelete: [moment: DisplayMoment]
+  requestReport: [moment: DisplayMoment]
 }>()
 
 const { t } = useI18n()
@@ -174,9 +177,8 @@ const menuVideo = computed<Video | null>(() => {
   })
 })
 
-const menuButtonLabel = computed(() => menuVideo.value
-  ? t('video_card.operation.more_options')
-  : '')
+const menuButtonLabel = computed(() => t('video_card.operation.more_options'))
+const menuAnchor = ref({ x: 0, y: 0 })
 
 const showVideoOptions = ref(false)
 const videoOptionsFloatingStyles = ref<CSSProperties>({})
@@ -262,10 +264,11 @@ function handleMoreBtnClick(event: Event) {
   event.stopPropagation()
   event.preventDefault()
 
-  if (!menuVideo.value || !moreBtnRef.value)
+  if (!moreBtnRef.value)
     return
 
   const anchor = moreBtnRef.value.getBoundingClientRect()
+  menuAnchor.value = { x: anchor.right, y: anchor.bottom }
   const position = computeFloatingMenuPosition(anchor, window.innerWidth, window.innerHeight)
   showVideoOptions.value = false
   videoOptionsFloatingStyles.value = {
@@ -285,6 +288,16 @@ function closeVideoOptions() {
     return
   showVideoOptions.value = false
   void nextTick(() => moreBtnRef.value?.focus({ preventScroll: true }))
+}
+
+function requestMomentOperation(kind: 'delete' | 'report') {
+  closeVideoOptions()
+  void nextTick(() => {
+    if (kind === 'delete')
+      emit('requestDelete', moment)
+    else
+      emit('requestReport', moment)
+  })
 }
 
 function openPrimaryDetail(event?: MouseEvent) {
@@ -646,7 +659,6 @@ onBeforeUnmount(() => {
         </span>
         <MomentPromotionBadge v-if="moment.momentPromotion" :promotion="moment.momentPromotion" />
         <button
-          v-if="menuVideo"
           ref="moreBtnRef"
           type="button"
           class="moment-card__more-btn"
@@ -731,9 +743,10 @@ onBeforeUnmount(() => {
             :title="isWatchLaterAdded(moment) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
             @click.stop="toggleCardWatchLater(moment)"
           >
-            <SkeletonBlock v-if="isWatchLaterLoading(moment)" width="1em" height="1em" radius="interactive" />
-            <span v-else-if="isWatchLaterAdded(moment)" i-tabler:check aria-hidden="true" />
-            <span v-else i-tabler:playlist aria-hidden="true" />
+            <LoadingRing :loading="isWatchLaterLoading(moment)">
+              <span v-if="isWatchLaterAdded(moment)" i-tabler:check aria-hidden="true" />
+              <span v-else i-tabler:playlist aria-hidden="true" />
+            </LoadingRing>
           </button>
         </div>
         <div
@@ -758,9 +771,10 @@ onBeforeUnmount(() => {
             :title="isWatchLaterAdded(moment) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
             @click.stop="toggleCardWatchLater(moment)"
           >
-            <SkeletonBlock v-if="isWatchLaterLoading(moment)" width="1em" height="1em" radius="interactive" />
-            <span v-else-if="isWatchLaterAdded(moment)" i-tabler:check aria-hidden="true" />
-            <span v-else i-tabler:playlist aria-hidden="true" />
+            <LoadingRing :loading="isWatchLaterLoading(moment)">
+              <span v-if="isWatchLaterAdded(moment)" i-tabler:check aria-hidden="true" />
+              <span v-else i-tabler:playlist aria-hidden="true" />
+            </LoadingRing>
           </button>
         </div>
 
@@ -912,9 +926,10 @@ onBeforeUnmount(() => {
                   :title="isWatchLaterAdded(moment.forward.video) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment.forward.video) ? t('moment_card.added') : t('moment_card.watch_later')"
                   @click.stop.prevent="toggleCardWatchLater(moment.forward.video)"
                 >
-                  <SkeletonBlock v-if="isWatchLaterLoading(moment.forward.video)" width="1em" height="1em" radius="interactive" />
-                  <span v-else-if="isWatchLaterAdded(moment.forward.video)" i-tabler:check aria-hidden="true" />
-                  <span v-else i-tabler:playlist aria-hidden="true" />
+                  <LoadingRing :loading="isWatchLaterLoading(moment.forward.video)">
+                    <span v-if="isWatchLaterAdded(moment.forward.video)" i-tabler:check aria-hidden="true" />
+                    <span v-else i-tabler:playlist aria-hidden="true" />
+                  </LoadingRing>
                 </button>
               </span>
               <a
@@ -1016,14 +1031,19 @@ onBeforeUnmount(() => {
       </div>
 
       <Teleport
-        v-if="showVideoOptions && menuVideo"
+        v-if="showVideoOptions"
         :to="mainAppRef"
       >
-        <VideoCardContextMenu
+        <MomentMoreMenu
+          :moment="moment"
           :video="menuVideo"
-          :context-menu-styles="videoOptionsFloatingStyles"
+          :href="primaryHref"
+          :menu-styles="videoOptionsFloatingStyles"
+          :anchor="menuAnchor"
+          :trigger="moreBtnRef"
           @close="closeVideoOptions"
-          @removed="closeVideoOptions"
+          @request-delete="requestMomentOperation('delete')"
+          @request-report="requestMomentOperation('report')"
         />
       </Teleport>
 
@@ -1065,7 +1085,6 @@ onBeforeUnmount(() => {
           v-if="isReservationAdditional"
           type="button"
           class="moment-card__additional-action"
-          relative
           :class="{ 'is-reserved': moment.additional.isReserved }"
           :disabled="isReservationLoading"
           :aria-busy="isReservationLoading"
@@ -1073,8 +1092,8 @@ onBeforeUnmount(() => {
           :aria-pressed="Boolean(moment.additional.isReserved)"
           @click.stop="emit('toggleReservation', moment)"
         >
+          <LoadingRing :loading="isReservationLoading" />
           <span>{{ reservationActionLabel }}</span>
-          <SkeletonBlock v-if="isReservationLoading" width="100%" height="var(--bew-space-0-5)" pos="absolute bottom-0 left-0" />
         </button>
         <a
           v-else
@@ -1189,6 +1208,7 @@ onBeforeUnmount(() => {
               :active="commentExpanded"
               @writing-change="commentWriting = $event"
               @posted="addedCommentCount += 1"
+              @removed="addedCommentCount -= $event"
               @open-image-preview="handleCommentImagePreview"
               @interactive-resize="emit('interactiveResize')"
             />
@@ -1656,6 +1676,7 @@ onBeforeUnmount(() => {
   min-height: 28px;
   align-items: center;
   justify-content: center;
+  gap: var(--bew-space-1);
   padding: var(--bew-space-1) var(--bew-space-3);
   border: 0;
   border-radius: var(--bew-interactive-radius);

@@ -55,7 +55,7 @@ function isPluginSearchResultsDestination(destination: string): boolean {
 export function openSearchResultsInCurrentTab(destination: string): void {
   if (isPluginSearchResultsDestination(destination) && isHomePage() && !isInIframe()) {
     const target = new URL(destination)
-    window.history.pushState(window.history.state, '', `${target.pathname}${target.search}${target.hash}`)
+    window.history.pushState(window.history.state, '', `${location.pathname}${target.search}${target.hash}`)
     syncRouteState()
     return
   }

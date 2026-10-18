@@ -114,10 +114,22 @@ function initPageAction() {
   }
 }
 
-async function getTrendingVideos(generation: number) {
-  if (noMoreContent.value)
-    return
+// 每轮（首次加载或一次触底）最多请求的页数；只有实际新增视频才算分页进展。
+const TRENDING_FILL_TARGET = 30
+const TRENDING_MAX_PAGES_PER_ROUND = 3
 
+async function getTrendingVideos(generation: number) {
+  for (let requested = 0; requested < TRENDING_MAX_PAGES_PER_ROUND && !noMoreContent.value; requested++) {
+    const added = await fetchTrendingPage(generation)
+    // 失败、过期或整页重复都结束本轮；服务端结束只由 no_more 表示。
+    if (added === null || added === 0)
+      return
+    if (videoList.value.length >= TRENDING_FILL_TARGET)
+      return
+  }
+}
+
+async function fetchTrendingPage(generation: number): Promise<number | null> {
   try {
     const page = pn.value
     const response: TrendingResult = await api.video.getPopularVideos({
@@ -126,38 +138,34 @@ async function getTrendingVideos(generation: number) {
     })
 
     if (!tabState.isCurrent() || generation !== requestGeneration)
-      return
+      return null
 
     if (response.code !== 0 || !Array.isArray(response.data?.list))
       throw new Error(response.message || 'Popular videos request failed')
 
-    const newItems = response.data.list.map((item: VideoItem) => ({
-      uniqueId: `${item.aid}`,
-      item,
-      displayData: transformTrendingVideo({ uniqueId: `${item.aid}`, item }),
-    }))
-
     const existingIds = new Set(videoList.value.map(item => item.uniqueId))
-    videoList.value.push(...newItems.filter((item) => {
-      if (existingIds.has(item.uniqueId))
-        return false
-      existingIds.add(item.uniqueId)
-      return true
-    }))
-    pn.value = page + 1
-    noMoreContent.value = response.data.no_more
-    requestFailed.value = false
-
-    // 初次加载且数据不足时继续加载
-    if (newItems.length > 0 && videoList.value.length < 30 && !noMoreContent.value) {
-      await getTrendingVideos(generation)
+    const newItems: VideoElement[] = []
+    for (const item of response.data.list as VideoItem[]) {
+      const uniqueId = `${item.aid}`
+      if (existingIds.has(uniqueId))
+        continue
+      existingIds.add(uniqueId)
+      newItems.push({ uniqueId, item, displayData: transformTrendingVideo({ uniqueId, item }) })
     }
+
+    if (newItems.length > 0)
+      videoList.value.push(...newItems)
+    pn.value = page + 1
+    noMoreContent.value = response.data.no_more === true
+    requestFailed.value = false
+    return newItems.length
   }
   catch (error) {
     if (tabState.isCurrent() && generation === requestGeneration) {
       requestFailed.value = true
       reportRuntimeFailure('Failed to load popular videos', error)
     }
+    return null
   }
 }
 

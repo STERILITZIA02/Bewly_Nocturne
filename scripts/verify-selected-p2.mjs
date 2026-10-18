@@ -466,6 +466,14 @@ let sharedChevronIcon
 let sharedMasonryGrid
 let sharedAdvertisementCard
 let sharedLibraryVideoSkeleton
+let sharedLoadingRing
+async function compileSharedLoadingRing() {
+  sharedLoadingRing ??= await compileComponent('../src/components/LoadingRing.vue', {
+    '~/composables/useLoadingRingPhase': await import('../src/composables/useLoadingRingPhase'),
+    '~/utils/loadingRing': await import('../src/utils/loadingRing'),
+  })
+  return sharedLoadingRing
+}
 const glassSurfaceContext = Symbol('fixture-glass-surface')
 async function compileComponent(file, mocks = {}, { renderTemplate = true, globals = {} } = {}) {
   if (!file.endsWith('/SkeletonBlock.vue'))
@@ -680,6 +688,10 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     modules['~/utils/responsiveImage'] = await import('../src/utils/responsiveImage')
   if (text.includes('\'~/utils/motionTiming\'') && !modules['~/utils/motionTiming'])
     modules['~/utils/motionTiming'] = await import('../src/utils/motionTiming')
+  if (text.includes('\'~/composables/useLoadingRingPhase\'') && !modules['~/composables/useLoadingRingPhase'])
+    modules['~/composables/useLoadingRingPhase'] = await import('../src/composables/useLoadingRingPhase')
+  if (text.includes('\'~/components/LoadingRing.vue\'') && !modules['~/components/LoadingRing.vue'])
+    modules['~/components/LoadingRing.vue'] = { default: await compileSharedLoadingRing() }
   if (text.includes('\'~/components/LazyPicture.vue\'') && !modules['~/components/LazyPicture.vue'])
     modules['~/components/LazyPicture.vue'] = { default: await compileComponent('../src/components/LazyPicture.vue') }
   vm.runInNewContext(code, {
@@ -716,9 +728,10 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   })
   if (!renderTemplate)
     exports.default.render = () => null
-  if (!file.endsWith('/SkeletonBlock.vue')) {
+  if (!file.endsWith('/SkeletonBlock.vue') && !file.endsWith('/LoadingRing.vue')) {
     sharedSkeletonComponent ??= await compileComponent('../src/components/SkeletonBlock.vue')
-    exports.default.components = { SkeletonBlock: sharedSkeletonComponent, ...exports.default.components }
+    // Both are registered globally by the app plugin.
+    exports.default.components = { SkeletonBlock: sharedSkeletonComponent, LoadingRing: await compileSharedLoadingRing(), ...exports.default.components }
   }
   return exports.default
 }

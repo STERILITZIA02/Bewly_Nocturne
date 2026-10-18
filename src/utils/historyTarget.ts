@@ -1,5 +1,6 @@
 import type { List as HistoryItem } from '~/models/history/history'
 import { Business } from '~/models/history/history'
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 import type { VideoIdentity } from '~/utils/videoVisitRecord'
 
 function positiveInteger(value: unknown): number | undefined {
@@ -26,7 +27,7 @@ function resolveHistoryTarget(item: HistoryItem): { url: URL, resumable: boolean
   if (history.business === Business.ARCHIVE) {
     const bvid = /^BV[a-z0-9]{10}$/i.test(history.bvid) ? history.bvid : undefined
     const aid = positiveInteger(history.oid)
-    const pathId = ownHost ? uri?.pathname.match(/^\/video\/(BV[a-z0-9]{10}|av\d+)\/?$/i)?.[1] : undefined
+    const pathId = ownHost ? (uri ? getBilibiliLogicalPathname(uri) : undefined)?.match(/^\/video\/(BV[a-z0-9]{10}|av\d+)\/?$/i)?.[1] : undefined
     matches = Boolean(pathId && (pathId === bvid || (aid && pathId.toLowerCase() === `av${aid}`)))
     fallback = bvid ? `https://www.bilibili.com/video/${bvid}` : aid ? `https://www.bilibili.com/video/av${aid}` : ''
     const url = uri ?? parseUri(fallback)
@@ -41,7 +42,7 @@ function resolveHistoryTarget(item: HistoryItem): { url: URL, resumable: boolean
   }
   if (history.business === Business.PGC) {
     const epid = positiveInteger(history.epid)
-    matches = Boolean(epid && ownHost && uri?.pathname.match(/^\/bangumi\/play\/ep(\d+)\/?$/)?.[1] === String(epid))
+    matches = Boolean(epid && ownHost && (uri ? getBilibiliLogicalPathname(uri) : undefined)?.match(/^\/bangumi\/play\/ep(\d+)\/?$/)?.[1] === String(epid))
     fallback = epid ? `https://www.bilibili.com/bangumi/play/ep${epid}` : ''
     const url = uri ?? parseUri(fallback)
     return url ? { url, resumable: matches || (!uri && Boolean(epid)) } : undefined

@@ -1,5 +1,6 @@
 import { createMovedPgcReactBridge, getMountedPgcEventRoot } from '~/inject/movedPgcReact'
 import { selectors } from '~/utils/bewlyWidescreen/constants'
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 import {
   isPgcPlaybackPage,
   parseVideoMetadataEvent,
@@ -148,7 +149,7 @@ export function setupVideoMetadataBridge(channelId: string) {
       try {
         const manifest = getNativePlayer()?.getManifest?.()
         const route = parseVideoPageIdentity(location.href)
-        const episode = /^\/bangumi\/play\/(ep|ss)(\d+)/.exec(location.pathname)
+        const episode = /^\/bangumi\/play\/(ep|ss)(\d+)/.exec(getBilibiliLogicalPathname())
         const currentAid = route ? readMetadata()?.aid : episode && Number(manifest?.[episode[1] === 'ep' ? 'episodeId' : 'seasonId']) === Number(episode[2]) ? manifest?.aid : undefined
         if (owner?.$el === node && owner._isMounted && !owner._isDestroyed && !owner._isBeingDestroyed
           && Number.isSafeInteger(currentAid) && currentAid === Number(owner.aid) && Array.isArray(owner.list)) {
@@ -174,7 +175,7 @@ export function setupVideoMetadataBridge(channelId: string) {
     }
     if (nativeMedia) {
       const player = getNativePlayer()
-      const episode = /^\/bangumi\/play\/ep(\d+)/.exec(location.pathname)?.[1]
+      const episode = /^\/bangumi\/play\/ep(\d+)/.exec(getBilibiliLogicalPathname())?.[1]
       let ready: boolean | undefined
       let episodeId: number | undefined
       let qualityState

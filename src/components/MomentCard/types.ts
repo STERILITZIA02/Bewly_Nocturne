@@ -45,8 +45,21 @@ export interface DisplayAdditional {
   isReserved?: boolean
 }
 
+export interface MomentDeleteParams {
+  dyn_id_str: string
+  dyn_type: number
+  rid_str: string
+}
+
+export interface MomentMoreCapability {
+  canDelete: boolean
+  canReport: boolean
+  deleteParams?: MomentDeleteParams
+}
+
 export interface DisplayMoment {
   id: string
+  moreCapability?: MomentMoreCapability
   author: { mid: string, name: string, face: string }
   publishedAt: number
   title: string

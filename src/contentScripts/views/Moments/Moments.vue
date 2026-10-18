@@ -10,8 +10,10 @@ import MomentCard from '~/components/MomentCard/MomentCard.vue'
 import MomentCardSkeleton from '~/components/MomentCard/MomentCardSkeleton.vue'
 import { createMomentDisclosureCache, MOMENT_DISCLOSURES, normalizeForwardCount } from '~/components/MomentCard/momentForwardContent'
 import { createMomentForwardTransactions, MOMENT_FORWARD_TRANSACTIONS } from '~/components/MomentCard/momentForwardTransactions'
+import MomentReportDialog from '~/components/MomentCard/MomentReportDialog.vue'
 import type { DisplayMoment } from '~/components/MomentCard/types'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { useSourcePanelMotion } from '~/composables/useSourcePanelMotion'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
@@ -83,7 +85,7 @@ const topBarStore = useTopBarStore()
 
 const viewState = usePageViewState('moments')
 const moments = viewState.ref<DisplayMoment[]>('items', [])
-const momentActions = useMomentActions(getMomentActionAccount, applyMomentPatch)
+const momentActions = useMomentActions(getMomentActionAccount, applyMomentPatch, removeMomentFromViews)
 const { likingMomentIds, reservationLoadingMomentIds, toggleMomentLike, toggleMomentReservation, isWatchLaterAdded, isWatchLaterLoading, toggleMomentWatchLater } = momentActions
 const previews = useMomentPreviews(getCurrentAccountId)
 const { hoveredMediaId, previewUrls, previewState, previewGeneration, handleMediaEnter, handleMediaLeave, bindPreviewVideo } = previews
@@ -389,7 +391,7 @@ async function reapplyMomentFiltersFromCache() {
   const requestType = activeMomentFilter.value
   const requestHostMid = selectedHostMid.value
   const filteredItems = sourceItems
-    .filter(passesMomentSettings)
+    .filter(item => !isMomentDeleted(item.id) && passesMomentSettings(item))
     .sort((a, b) => b.publishedAt - a.publishedAt)
 
   moments.value = []
@@ -421,6 +423,66 @@ async function reapplyMomentFiltersFromCache() {
 /** 按最短列排布，尽量让各列底部相对平齐 */
 
 /** 按设置的期望列数排布；空间不足时降列，避免卡片窄于最小可读宽度。 */
+
+const { confirm: confirmMomentAction } = useConfirmDialog()
+const deletedMomentIds = new Set<string>()
+let deletedMomentAccount: AccountId = null
+const reportTarget = shallowRef<{ moment: DisplayMoment, account: AccountId } | null>(null)
+const reportDialogRef = ref<InstanceType<typeof MomentReportDialog> | null>(null)
+const reportSubmitting = computed(() => Boolean(reportTarget.value && momentActions.reportingMomentIds.has(reportTarget.value.moment.id)))
+
+function isMomentDeleted(id: string) {
+  return deletedMomentAccount !== null && deletedMomentAccount === getMomentActionAccount() && deletedMomentIds.has(id)
+}
+
+function removeMomentFromViews(id: string) {
+  const account = getMomentActionAccount()
+  if (account === null)
+    return
+  if (deletedMomentAccount !== account) {
+    deletedMomentIds.clear()
+    deletedMomentAccount = account
+  }
+  deletedMomentIds.add(id)
+  feedReader.remove(id)
+  const removed = moments.value.find(moment => moment.id === id)
+  if (removed && hoveredMediaId.value === id)
+    handleMediaLeave(removed)
+  moments.value = moments.value.filter(moment => moment.id !== id)
+  momentLayout.remove(id)
+  if (selectedMoment.value?.id === id)
+    closeMomentDetail()
+}
+
+async function requestMomentDelete(moment: DisplayMoment) {
+  const account = getMomentActionAccount()
+  if (account === null || momentActions.deletingMomentIds.has(moment.id) || isMomentDeleted(moment.id))
+    return
+  if (!await confirmMomentAction(t('moment_card.delete_confirm')) || account !== getMomentActionAccount())
+    return
+  const current = moments.value.find(item => item.id === moment.id)
+  if (current)
+    void momentActions.deleteMoment(current)
+}
+
+function requestMomentReport(moment: DisplayMoment) {
+  const account = getMomentActionAccount()
+  if (account !== null && !reportTarget.value)
+    reportTarget.value = { moment, account }
+}
+
+async function submitMomentReport(reasonType: number, reasonDesc: string) {
+  const target = reportTarget.value
+  if (!target)
+    return
+  if (target.account !== getMomentActionAccount()) {
+    reportDialogRef.value?.close()
+    return
+  }
+  const outcome = await momentActions.reportMoment(target.moment, reasonType, reasonDesc)
+  if (reportTarget.value === target && outcome !== 'failed')
+    reportDialogRef.value?.close()
+}
 
 function applyMomentPatch(id: string, patch: Partial<DisplayMoment>) {
   const updated = feedReader.updateMoment(id, patch)
@@ -852,7 +914,7 @@ function appendMoments(items: DisplayMoment[]) {
   const wasEmpty = moments.value.length === 0
   const ids = new Set(moments.value.map(item => item.id))
   const incoming = items.filter((item) => {
-    if (ids.has(item.id))
+    if (ids.has(item.id) || isMomentDeleted(item.id))
       return false
     ids.add(item.id)
     return true
@@ -1063,6 +1125,8 @@ function appendMoments(items: DisplayMoment[]) {
                   @interactive-resize="handleMomentCardInteractiveResize"
                   @disclosure-motion="moving => momentLayout.setDisclosureMotion(moment.id, moving)"
                   @interaction-change="held => momentLayout.setInteractionHeld(moment.id, held)"
+                  @request-delete="requestMomentDelete"
+                  @request-report="requestMomentReport"
                 />
               </template>
               <div v-if="column.bottomPad" class="moments-grid__spacer" :style="{ height: `${column.bottomPad}px` }" />
@@ -1246,6 +1310,13 @@ function appendMoments(items: DisplayMoment[]) {
         </div>
       </Transition>
     </Teleport>
+    <MomentReportDialog
+      v-if="reportTarget"
+      ref="reportDialogRef"
+      :submitting="reportSubmitting"
+      @submit="submitMomentReport"
+      @close="reportTarget = null"
+    />
   </section>
 </template>
 

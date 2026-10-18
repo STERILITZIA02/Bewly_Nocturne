@@ -5,6 +5,8 @@ import { isBilibiliAdvertisement, toAdvertisementCard } from '~/utils/advertisin
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { isVerticalVideo } from '~/utils/uriParse'
 
+import { APP_FOLLOWED_REASONS, getAppBangumiUrl, getAppRcmdReasonText } from './appRecommendationItem'
+
 export function transformWebVideo(item: VideoItem): VideoCardDisplayData {
   if (isBilibiliAdvertisement(item))
     return toAdvertisementCard(item)
@@ -37,7 +39,9 @@ export function transformAppVideo(item: AppVideoItem): VideoCardDisplayData {
     return toAdvertisementCard(item)
   // 预先计算 followed 状态，避免多次 trim 和比较
   const bottomReason = item?.bottom_rcmd_reason?.trim()
-  const followed = bottomReason === '已关注' || bottomReason === '已關注'
+  const followed = !!bottomReason && APP_FOLLOWED_REASONS.has(bottomReason)
+  const rcmdReason = getAppRcmdReasonText(item)
+  const tag = rcmdReason && rcmdReason !== '竖屏' && rcmdReason !== '豎屏' && !APP_FOLLOWED_REASONS.has(rcmdReason) ? rcmdReason : undefined
 
   // 预先计算 capsuleText，提取复杂逻辑
   const descPart = item?.desc?.split('·')?.[1]?.trim()
@@ -61,20 +65,21 @@ export function transformAppVideo(item: AppVideoItem): VideoCardDisplayData {
     title: decodeHtmlEntities(item.title),
     cover: item.cover || '',
     author: {
-      name: decodeHtmlEntities(item?.mask?.avatar?.text || ''),
+      name: decodeHtmlEntities(item.args?.up_name || ''),
       authorFace: item?.mask?.avatar?.cover || item?.avatar?.cover || '',
       followed,
-      mid: item?.mask?.avatar?.up_id || 0,
+      mid: item.args?.up_id || 0,
     },
+    displayTags: tag ? [decodeHtmlEntities(tag)] : [],
     capsuleText: decodeHtmlEntities(capsuleText),
     bvid: item.bvid || '',
     viewStr: item.cover_left_text_1,
     danmakuStr: item.cover_left_text_2,
     cid: item?.player_args?.cid,
-    goto: item?.goto,
+    goto: item.card_goto,
     param: item?.param,
     trackId: item?.track_id,
-    url: item?.goto === 'bangumi' ? item.uri : '',
+    url: item.card_goto === 'bangumi' ? getAppBangumiUrl(item.uri) : '',
     type,
     threePointV2: item?.three_point_v2 || [],
   }

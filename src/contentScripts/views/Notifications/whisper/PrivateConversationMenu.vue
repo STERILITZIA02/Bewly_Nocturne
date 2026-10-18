@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import type { ContextMenuOption } from '~/components/ContextMenu.vue'
 import ContextMenu from '~/components/ContextMenu.vue'
 import Dialog from '~/components/Dialog.vue'
-import SkeletonBlock from '~/components/SkeletonBlock.vue'
 
 import { canManagePrivateUser, privateSessionActionsKey } from './usePrivateSessionActions'
 
@@ -104,9 +103,6 @@ watch(() => state.value?.target, (target) => {
     @confirm="confirm" @close="emit('close')"
   >
     <div class="private-conversation-menu__dialog" :aria-busy="state.busy || state.loading">
-      <div class="private-conversation-menu__progress" role="status" :aria-label="state.busy || state.loading ? $t('common.loading') : undefined">
-        <SkeletonBlock v-if="state.busy || state.loading" height="var(--bew-space-1)" />
-      </div>
       <p v-if="completed" role="status">
         {{ text(dialog === 'report' ? 'report_success' : 'success') }}
       </p>
@@ -164,9 +160,5 @@ watch(() => state.value?.target, (target) => {
     border-radius: var(--bew-interactive-radius);
     font: inherit;
   }
-}
-
-.private-conversation-menu__progress {
-  height: var(--bew-space-1);
 }
 </style>

@@ -231,9 +231,6 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
           </draggable>
         </template>
       </SettingsItem>
-      <SettingsItem :title="$t('settings.disable_dock_glowing_effect')" right-width="auto">
-        <Radio v-model="settings.disableDockGlowingEffect" />
-      </SettingsItem>
       <SettingsItem
         :title="$t('settings.show_bewly_or_bili_page_switcher')"
         :desc="$t('settings.show_bewly_or_bili_page_switcher_desc')"

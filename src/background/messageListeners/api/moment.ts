@@ -1,4 +1,5 @@
-import { submitMomentReply, uploadMomentReplyImage } from '../../momentReply'
+import { removeMoment, reportMoment } from '../../momentOperations'
+import { deleteMomentReply, submitMomentReply, uploadMomentReplyImage } from '../../momentReply'
 import { serializeMomentVoteBody } from '../../momentVoteSerializer'
 import type { APIMAP } from '../../utils'
 import { AHS } from '../../utils'
@@ -6,6 +7,9 @@ import { AHS } from '../../utils'
 const API_MOMENT = {
   submitMomentReply,
   uploadMomentReplyImage,
+  deleteMomentReply,
+  removeMoment,
+  reportMoment,
   searchMomentReplyMentions: {
     url: 'https://api.bilibili.com/x/v2/reply/at',
     _fetch: { method: 'get', strictParams: true },

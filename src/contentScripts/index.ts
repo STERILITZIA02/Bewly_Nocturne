@@ -22,6 +22,8 @@ import { stopAdaptedStyles } from '~/styles/adaptedStyles'
 import RESET_BEWLY_CSS from '~/styles/reset.css?raw'
 import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyPlaybackLayoutReady, isBewlyPlaybackNavigationPending, isBewlyWidescreenActive, isBewlyWidescreenEngaged, prepareBewlyPlaybackPageNavigation, prepareBewlyWidescreenLoading, refreshBewlyPlaybackPageNavigation } from '~/utils/bewlyWidescreen'
 import { shouldSuppressWidescreenAutoEntry } from '~/utils/bewlyWidescreenPolicy'
+import { isConfirmedLiveEmbeddedFrame } from '~/utils/bilibiliLiveContext'
+import { getBilibiliLogicalPathname, toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { cleanupBilibiliScripts } from '~/utils/bilibiliScriptCleanup'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, restoreOriginalBilibiliTopBarParent, restorePreparedOriginalBilibiliTopBars } from '~/utils/bilibiliTopBar'
 import { resolveDarkModeBaseColor } from '~/utils/darkModeTint'
@@ -81,6 +83,7 @@ const contentScriptGlobal = globalThis as typeof globalThis & {
 }
 const bundledShadowStyleText = contentScriptGlobal.__BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__
 const shouldInitializeContentScript = !contentScriptGlobal.__BEWLY_NOCTURNE_CONTENT_SCRIPT_INITIALIZED__
+  && !isConfirmedLiveEmbeddedFrame()
 const contentScriptDisposers: Array<() => void> = []
 let contentScriptAbortController: AbortController | null = null
 let mountedVueApp: VueApp<Element> | null = null
@@ -213,7 +216,7 @@ if (shouldInitializeContentScript) {
 
 const isElectronEnv = isElectron()
 
-const currentUrl = document.URL
+const currentUrl = toBilibiliLogicalUrl(document.URL)
 
 if (shouldInitializeContentScript && isHomePage()) {
   console.log('[Bewly Nocturne][首页加载] 插件开始加载', {
@@ -1203,7 +1206,7 @@ else if (shouldInitializeContentScript) {
         const navigationVideoInfoRequest = shouldReloadWidescreenNavigation
           ? videoCommentNavigation.start(currentVideoNavigationKey)
           : undefined
-        if (shouldReloadWidescreenNavigation && !navigationVideoInfoRequest && !location.pathname.startsWith('/bangumi/play/')) {
+        if (shouldReloadWidescreenNavigation && !navigationVideoInfoRequest && !getBilibiliLogicalPathname().startsWith('/bangumi/play/')) {
           exitBewlyWidescreen()
           window.location.reload()
           return

@@ -82,6 +82,17 @@ const API_FAVORITE = {
     params: {},
     afterHandle: AHS.J_D,
   },
+  getFavoritePartitions: {
+    url: 'https://api.bilibili.com/x/v3/fav/resource/partition',
+    _fetch: {
+      method: 'get',
+    },
+    params: {
+      up_mid: '',
+      media_id: 0,
+    },
+    afterHandle: AHS.J_D,
+  },
   // 原站公开收藏夹读取契约：tests/fixtures/favorites/native-space-contract.json。
   getFavoriteResources: {
     url: 'https://api.bilibili.com/x/v3/fav/resource/list',

@@ -4,6 +4,7 @@ import { useToast } from 'vue-toastification'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
+import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { IFRAME_NAVIGATION_ACK, IFRAME_NAVIGATION_REQUEST, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
@@ -25,6 +26,9 @@ const currentUrl = ref<string>(props.url)
 const iframeKey = ref(0)
 
 const showLoading = ref<boolean>(false)
+const loadingKind = computed(() => isVideoOrBangumiPage(currentUrl.value) ? 'video' : 'page')
+// A page ring closes over the ready iframe before the overlay fades.
+const loadingPhase = useLoadingRingPhase(() => showLoading.value, () => iframeRef.value)
 const iframeScrollCleanupFns = ref<Array<() => void>>([])
 const iframeScrollSyncFailed = ref(false)
 let iframeGeneration = 0
@@ -298,7 +302,8 @@ defineExpose({
   >
     <Transition name="fade">
       <Loading
-        v-if="showLoading" :kind="isVideoOrBangumiPage(currentUrl) ? 'video' : 'page'" class="iframe-page-loading" w-full h-full
+        v-if="showLoading || (loadingKind === 'page' && loadingPhase !== 'idle')" :kind="loadingKind" :loading="showLoading" class="iframe-page-loading" w-full
+        h-full
         pos="absolute top-0 left-0"
       />
     </Transition>

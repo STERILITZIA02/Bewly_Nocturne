@@ -1,4 +1,5 @@
 import { AppPage } from '~/enums/appEnums'
+import { isBilibiliHomepagePathname, splitBilibiliLocalePath } from '~/utils/bilibiliLocale'
 import { getPluginSearchResultsUrl } from '~/utils/searchUrl'
 
 export type PageMode = 'original' | 'bewly' | 'custom'
@@ -34,7 +35,7 @@ function isBilibiliHomeHost(hostname: string): boolean {
 }
 
 function isBilibiliHomepagePath(pathname: string): boolean {
-  return pathname === '/' || pathname === '' || pathname === '/index.html'
+  return isBilibiliHomepagePathname(pathname)
 }
 
 export function getNextPageMode(mode: PageMode): PageMode {
@@ -98,7 +99,8 @@ export function resolvePageModeTarget(rawUrl: string, activatedPage: AppPage): P
     if (sourceUrl.protocol !== 'http:' && sourceUrl.protocol !== 'https:')
       return null
 
-    const { hostname, pathname } = sourceUrl
+    const { hostname } = sourceUrl
+    const { pathname } = splitBilibiliLocalePath(hostname, sourceUrl.pathname)
 
     if (hostname === 'search.bilibili.com') {
       const searchResultsUrl = getPluginSearchResultsUrl(rawUrl)
@@ -209,7 +211,7 @@ export function resolvePageModeNavigationUrl(
   try {
     const sourceUrl = new URL(rawUrl)
     const isBewlyShell = isBilibiliHomeHost(sourceUrl.hostname)
-      && isBilibiliHomepagePath(sourceUrl.pathname)
+      && isBilibiliHomepagePath(splitBilibiliLocalePath(sourceUrl.hostname, sourceUrl.pathname).pathname)
 
     if (isBewlyShell) {
       if (target.page === AppPage.SearchResults && useOriginalBiliPage)

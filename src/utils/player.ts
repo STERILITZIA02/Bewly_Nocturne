@@ -6,6 +6,7 @@ import { settings } from '~/logic'
 import { useIframePlaybackContext } from '~/logic/iframePageState'
 import type { AutoPlayMode, DefaultVideoPlayerMode, VideoPlayerModeContext, VideoPlayerModeOverride } from '~/logic/storage'
 import { selectors as playbackSelectors } from '~/utils/bewlyWidescreen/constants'
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 import {
   applyConfiguredPlaybackRate,
   isValidPlaybackRate,
@@ -185,12 +186,13 @@ export function isPlayerDisplayModeReady(mode: DefaultVideoPlayerMode): boolean 
 
 // 判断是否为视频页面
 export function isVideoPage() {
-  return location.pathname.startsWith('/video/')
+  return getBilibiliLogicalPathname().startsWith('/video/')
 }
 
 // 判断是否为稍后再看播放页
 export function isWatchLaterVideo(): boolean {
-  return location.pathname === '/list/watchlater' || location.pathname === '/list/watchlater/'
+  const pathname = getBilibiliLogicalPathname()
+  return pathname === '/list/watchlater' || pathname === '/list/watchlater/'
 }
 
 // 显示状态
@@ -493,16 +495,19 @@ export enum VideoType {
   PLAYLIST = 'playlist', // 收藏列表
 }
 
+const MULTIPART_ITEM_IN_COLLECTION_SELECTOR = '.video-pod__list.section .video-pod__item .multi-p .active'
+
 // 检测当前视频类型
 export function detectVideoType(): VideoType {
   if (isWatchLaterVideo())
     return VideoType.WATCH_LATER
 
   // 检测是否为收藏列表
+  const pathname = getBilibiliLogicalPathname()
   if (
-    location.pathname.startsWith('/list/')
-    || location.pathname === '/medialist/play'
-    || location.pathname.startsWith('/medialist/play/')
+    pathname.startsWith('/list/')
+    || pathname === '/medialist/play'
+    || pathname.startsWith('/medialist/play/')
   ) {
     return VideoType.PLAYLIST
   }
@@ -526,6 +531,7 @@ export function detectVideoType(): VideoType {
     '.video-pod .view-mode',
     '.multi-page .view-mode',
     '.multi-page-v1 .view-mode',
+    MULTIPART_ITEM_IN_COLLECTION_SELECTOR,
   ].join(', '))) {
     return VideoType.MULTIPART
   }
@@ -539,11 +545,49 @@ export function detectVideoType(): VideoType {
   return VideoType.RECOMMEND
 }
 
+function readCurrentPartNumber(): number {
+  const page = Number(new URL(location.href).searchParams.get('p') || 1)
+  return Number.isSafeInteger(page) && page > 0 ? page : 1
+}
+
+function isMultipartVideoInCollection(): boolean {
+  const metadata = readVideoPageMetadata()
+  if (metadata)
+    return metadata.isCollection && metadata.pageCount > 1
+  return document.querySelector(MULTIPART_ITEM_IN_COLLECTION_SELECTOR) !== null
+}
+
+function isLastPartOfCurrentVideo(): boolean {
+  const metadata = readVideoPageMetadata()
+  if (metadata)
+    return readCurrentPartNumber() >= metadata.pageCount
+  const activePart = document.querySelector<HTMLElement>('.video-pod__list.section .video-pod__item .page-item.active')
+  const parts = activePart?.parentElement?.querySelectorAll(':scope > .page-item')
+  return !!activePart && !!parts && activePart === parts[parts.length - 1]
+}
+
+export function detectEndBehaviorVideoType(videoType = detectVideoType()): VideoType {
+  if (videoType !== VideoType.MULTIPART || !isMultipartVideoInCollection())
+    return videoType
+  return isLastPartOfCurrentVideo() ? VideoType.COLLECTION : VideoType.MULTIPART
+}
+
+export function detectCustomPlayListVideoType(videoType = detectVideoType()): VideoType {
+  return videoType === VideoType.MULTIPART && isMultipartVideoInCollection()
+    ? VideoType.COLLECTION
+    : videoType
+}
+
+export function canCustomPlayHandleCurrentEnd(): boolean {
+  const videoType = detectVideoType()
+  return detectEndBehaviorVideoType(videoType) === detectCustomPlayListVideoType(videoType)
+}
+
 export function detectVideoPlayerModeContext(): VideoPlayerModeContext | null {
   if (isWatchLaterVideo())
     return 'watchLater'
 
-  if (location.pathname.startsWith('/bangumi/play/'))
+  if (getBilibiliLogicalPathname().startsWith('/bangumi/play/'))
     return 'bangumi'
 
   switch (detectVideoType()) {
@@ -858,7 +902,7 @@ export function getAutoPlayModeForVideoType(videoType = detectVideoType()): Auto
 }
 
 /** 关闭 B 站原生的续播行为，让自定义播放独占视频结束后的切集。 */
-export function disableNativeEndPlaybackBehavior(videoType = detectVideoType()): void {
+export function disableNativeEndPlaybackBehavior(videoType = detectEndBehaviorVideoType()): void {
   captureNativeEndPlaybackBehavior(videoType)
   setLoopState(false)
   if (usesPlaylistHandoff(videoType))
@@ -869,9 +913,9 @@ export function disableNativeEndPlaybackBehavior(videoType = detectVideoType()):
 // 根据视频类型和设置应用自动连播状态
 export function applyAutoPlayByVideoType() {
   invalidatePendingEndPlaybackStateChanges()
-  const videoType = detectVideoType()
+  const videoType = detectEndBehaviorVideoType()
 
-  if (customEndPlaybackHandlerActive) {
+  if (customEndPlaybackHandlerActive && canCustomPlayHandleCurrentEnd()) {
     disableNativeEndPlaybackBehavior(videoType)
     return
   }
@@ -1232,21 +1276,12 @@ function checkAndCancelAutoPlayForRecommendation() {
   }
 
   // 检测当前视频类型,只在分P和合集视频中生效
-  const videoType = detectVideoType()
+  const videoType = detectEndBehaviorVideoType()
   if (videoType !== VideoType.MULTIPART && videoType !== VideoType.COLLECTION) {
     return
   }
 
-  // 获取当前视频类型对应的自动播放模式
-  let mode: AutoPlayMode = 'default'
-  switch (videoType) {
-    case VideoType.MULTIPART:
-      mode = settings.value.autoPlayMultipart
-      break
-    case VideoType.COLLECTION:
-      mode = settings.value.autoPlayCollection
-      break
-  }
+  const mode = getAutoPlayModeForVideoType(videoType)
 
   // 如果是"自动播放(含推荐)"模式，不取消推荐视频的自动播放
   if (mode === 'autoPlayWithRecommend') {

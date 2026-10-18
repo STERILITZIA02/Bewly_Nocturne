@@ -17,7 +17,7 @@
     // border-radius: var(--bew-radius);
     // margin: 10px 20px;
     // width: calc(100% - 40px);
-    box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
+    box-shadow: var(--bew-shadow-2);
   }
 
   .header-channel-fixed-right-item {
@@ -31,7 +31,7 @@
 
   .bili-live-card .bili-live-card__info--living img,
   .single-card.floor-card .living > img {
-    filter: var(--bew-filter-icon-glow);
+    filter: var(--bew-filter-icon-white);
   }
 
   &.dark {

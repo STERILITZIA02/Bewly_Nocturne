@@ -31,7 +31,6 @@ defineEmits<{ (event: 'toggle', trigger: MouseEvent): void }>()
   line-height: var(--bew-line-height-title);
   text-align: start;
   cursor: pointer;
-  transition: text-shadow var(--bew-duration-normal) var(--bew-ease-standard);
   // The click target includes the node and its gutter, not just the date text.
   &::before {
     position: absolute;
@@ -39,12 +38,6 @@ defineEmits<{ (event: 'toggle', trigger: MouseEvent): void }>()
     inset-inline-start: calc(-1 * var(--bew-history-timeline-gutter));
     width: var(--bew-history-timeline-gutter);
     content: "";
-  }
-  &:is(:hover, :focus-visible):not(:disabled) {
-    text-shadow: 0 0 var(--bew-space-3) color-mix(in srgb, currentColor 45%, transparent);
-    .history-day-toggle__node {
-      box-shadow: 0 0 var(--bew-space-3) color-mix(in srgb, currentColor 60%, transparent);
-    }
   }
   &:focus-visible {
     outline: var(--bew-focus-ring);
@@ -64,9 +57,7 @@ defineEmits<{ (event: 'toggle', trigger: MouseEvent): void }>()
   border: 1px solid currentColor;
   border-radius: var(--bew-radius-full);
   background: currentColor;
-  transition:
-    box-shadow var(--bew-duration-normal) var(--bew-ease-standard),
-    background-color var(--bew-duration-normal) var(--bew-ease-standard);
+  transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
 }
 .history-day-toggle__node--collapsed {
   background: var(--bew-homepage-bg);

@@ -3,8 +3,8 @@ import { useIntersectionObserver } from '@vueuse/core'
 import { computed, onBeforeUnmount, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import LoadingRing from '~/components/LoadingRing.vue'
 import MomentVideoPreview from '~/components/MomentCard/MomentVideoPreview.vue'
-import SkeletonBlock from '~/components/SkeletonBlock.vue'
 
 import type { MomentsPortalLiveUser } from './momentPortal'
 import { getSidebarAvatarUrl } from './momentPortal'
@@ -76,7 +76,7 @@ onBeforeUnmount(leave)
               v-if="active && url" :url="url" :loading="previews?.previewState.value !== 'ready'" :generation="previews?.previewGeneration.value"
               live hover-surface=".moments-live-row" @video="element => previews?.bindPreviewVideo(element, media)" @leave="leave"
             />
-            <SkeletonBlock v-else-if="active" width="100%" height="100%" radius="media" />
+            <LoadingRing v-else :loading="active" class="moments-live-row__pending" size="var(--bew-icon-size-xl)" />
           </a>
         </div>
       </div>
@@ -177,6 +177,12 @@ onBeforeUnmount(leave)
   inset: 0;
   display: block;
   border-radius: inherit;
+}
+.moments-live-row__pending {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  color: var(--bew-text-2);
 }
 .moments-live-row__error {
   position: absolute;

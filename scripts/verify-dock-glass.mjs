@@ -19,7 +19,7 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       emits: ['update:modelValue'],
       setup: (props, { emit }) => () => Vue.h('select', { value: String(props.modelValue), onChange: event => emit('update:modelValue', event.target.value) }, props.options.map(option => Vue.h('option', { value: String(option.value) }, option.label))),
     }
-    const settings = Vue.ref({ alwaysUseDock: false, dockCollapseMode: 'button', dockPosition: 'bottom', dockItemsConfig: [], pageMode: 'bewly', disableDockGlowingEffect: false, showBewlyOrBiliPageSwitcher: true, disableLightDarkModeSwitcherOnDock: false, backToTopAndRefreshButtonsAreSeparated: false, enableUndoRefreshButton: false, sidebarPosition: 'right', autoHideSidebar: false, enableDockLiquidGlass: false, disableFrostedGlass: false, dockLiquidGlassMode: 'standard', dockLiquidGlassRefraction: 35, dockLiquidGlassBlur: 6, dockLiquidGlassTintSource: 'theme', dockLiquidGlassTintColor: '#ffffff', dockLiquidGlassTintOpacity: 30, dockLiquidGlassDispersion: 1.5, dockLiquidGlassSaturation: 140 })
+    const settings = Vue.ref({ alwaysUseDock: false, dockCollapseMode: 'button', dockPosition: 'bottom', dockItemsConfig: [], pageMode: 'bewly', showBewlyOrBiliPageSwitcher: true, disableLightDarkModeSwitcherOnDock: false, backToTopAndRefreshButtonsAreSeparated: false, enableUndoRefreshButton: false, sidebarPosition: 'right', autoHideSidebar: false, enableDockLiquidGlass: false, disableFrostedGlass: false, dockLiquidGlassMode: 'standard', dockLiquidGlassRefraction: 35, dockLiquidGlassBlur: 6, dockLiquidGlassTintSource: 'theme', dockLiquidGlassTintColor: '#ffffff', dockLiquidGlassTintOpacity: 30, dockLiquidGlassDispersion: 1.5, dockLiquidGlassSaturation: 140 })
     const page = await compileComponent('../src/components/Settings/Appearance/LiquidGlassSettings.vue', {
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       'vuedraggable': { default: { render: () => null } },
@@ -276,7 +276,7 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     assert.equal(host.querySelectorAll('button').length, buttons)
     for (const owner of host.querySelectorAll('.dock-shell-surface, .back-to-top-or-refresh-btn')) {
       assert.equal(getComputedStyle(owner).borderColor, 'transparent', 'the backdrop must not sample its own border')
-      assert.equal(getComputedStyle(owner).boxShadow, 'none', 'edge glow is painted by the foreground frame')
+      assert.equal(getComputedStyle(owner).boxShadow, 'none', 'the frame shadow is painted by the foreground frame')
       // JSDOM does not compute backdrop-filter; check the matching compiled CSS
       // declaration here and verify the rendered effect in the browser.
       const backdropRule = [...style.sheet.cssRules].findLast(rule => rule.selectorText && rule.style.getPropertyValue('backdrop-filter') && owner.matches(rule.selectorText))

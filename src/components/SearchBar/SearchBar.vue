@@ -906,7 +906,7 @@ function handleClearKeyword() {
   }
 
   .search-bar::before {
-    box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
+    box-shadow: var(--bew-shadow-2);
     opacity: 1;
   }
 
@@ -1113,7 +1113,7 @@ function handleClearKeyword() {
           }
 
           &.active {
-            --uno: "bg-$bew-fill-2 text-$bew-theme-foreground shadow-[var(--bew-shadow-1),var(--bew-shadow-edge-glow-1)]";
+            --uno: "bg-$bew-fill-2 text-$bew-theme-foreground shadow-[var(--bew-shadow-1)]";
           }
         }
       }
@@ -1129,7 +1129,7 @@ function handleClearKeyword() {
       @include search-content-item;
 
       &.active {
-        --uno: "bg-$bew-fill-2 shadow-[var(--bew-shadow-1),var(--bew-shadow-edge-glow-1)]";
+        --uno: "bg-$bew-fill-2 shadow-[var(--bew-shadow-1)]";
       }
     }
   }

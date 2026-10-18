@@ -791,7 +791,7 @@ onBeforeUnmount(() => {
   background: var(--bew-elevated-alt-solid);
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-popover-radius);
-  box-shadow: var(--bew-shadow-4), var(--bew-shadow-edge-glow-1);
+  box-shadow: var(--bew-shadow-4);
   pointer-events: auto;
 }
 

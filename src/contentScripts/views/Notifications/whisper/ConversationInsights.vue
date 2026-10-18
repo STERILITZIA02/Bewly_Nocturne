@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartRungs from '~/components/ChartRungs.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { chartUnit } from '~/utils/chartScale'
@@ -54,8 +55,9 @@ const privateShare = computed(() => {
             :disabled="markingRead || insights.total === 0" :aria-busy="markingRead"
             @click="readAll.markAllRead()"
           >
-            <SkeletonBlock v-if="markingRead" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" radius="circle" />
-            <i v-else i-tabler:checks aria-hidden="true" />
+            <LoadingRing :loading="markingRead">
+              <i i-tabler:checks aria-hidden="true" />
+            </LoadingRing>
             {{ t(markingRead ? 'notifications.insights.marking_read' : insights.total === 0 ? 'notifications.insights.all_read' : 'notifications.insights.mark_all_read') }}
           </button>
         </header>

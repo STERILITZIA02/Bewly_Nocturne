@@ -14,6 +14,7 @@ import { setupVideoMetadataBridge } from '~/inject/videoMetadata'
 import USER_PROFILE_CSS from '~/styles/adaptedStyles/shadowDom/userProfile.scss?inline'
 import SEND_BUTTON_CSS from '~/styles/sendButton.scss?inline'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
+import { isConfirmedLiveEmbeddedFrame } from '~/utils/bilibiliLiveContext'
 import { cleanBilibiliShareText } from '~/utils/bilibiliUrl'
 import { patchCommentTransferLifecycle } from '~/utils/commentDomTransfer'
 import type { CommentReplyCachedMeta as CommentReplyTreeCachedMeta } from '~/utils/commentMissingParents'
@@ -42,10 +43,13 @@ const settingsReadyPromise = new Promise<void>((resolve) => {
   timeoutId = window.setTimeout(finish, 1500)
 })
 
+const CLEAN_SHARE_WRITE_TEXT = Symbol.for('bewly-nocturne.clean-share-write-text')
+
 const pageScriptGlobal = globalThis as typeof globalThis & {
   __BEWLYCAT_PAGE_SCRIPT_INITIALIZED__?: boolean
 }
 const shouldInitializePageScript = !pageScriptGlobal.__BEWLYCAT_PAGE_SCRIPT_INITIALIZED__
+  && !isConfirmedLiveEmbeddedFrame()
 
 if (shouldInitializePageScript)
   pageScriptGlobal.__BEWLYCAT_PAGE_SCRIPT_INITIALIZED__ = true
@@ -816,8 +820,11 @@ else if (shouldInitializePageScript) {
             catch (error) {
               console.warn(`[Bewly Nocturne] Failed to enhance ${name}.`, error)
             }
-            finally {
+            try {
               options?.afterUpdate?.(instance)
+            }
+            catch (error) {
+              console.warn(`[Bewly Nocturne] Failed to finish ${name} enhancement.`, error)
             }
           })
         })
@@ -851,10 +858,21 @@ else if (shouldInitializePageScript) {
 
     const boundOriginal = originalMethod
     const patched = function (this: any, ...updateArgs: any[]) {
-      if (settingsReady)
-        options?.beforeUpdate?.(this)
+      if (settingsReady && options?.beforeUpdate) {
+        try {
+          options.beforeUpdate(this)
+        }
+        catch (error) {
+          console.warn(`[Bewly Nocturne] Failed to prepare ${name} enhancement.`, error)
+        }
+      }
       const result = Reflect.apply(boundOriginal, this, updateArgs)
-      scheduleEnhance(this)
+      try {
+        scheduleEnhance(this)
+      }
+      catch (error) {
+        console.warn(`[Bewly Nocturne] Failed to schedule ${name} enhancement.`, error)
+      }
       return result
     }
 
@@ -2969,15 +2987,26 @@ else if (shouldInitializePageScript) {
         return
       }
 
-      if (name === 'bili-comment-replies-renderer')
-        commentReplyPagination.patchPrototype(classConstructor)
+      if (name === 'bili-comment-replies-renderer') {
+        try {
+          commentReplyPagination.patchPrototype(classConstructor)
+        }
+        catch (error) {
+          console.warn(`[Bewly Nocturne] Failed to patch ${name} pagination.`, error)
+        }
+      }
       if (name === 'bili-comment-action-buttons-renderer') {
-        patchCommentReplyInteraction(classConstructor, (actionRenderer) => {
-          const replyRenderer = findCommentReplyRendererHost(actionRenderer)
-          const repliesRenderer = findCommentRepliesRendererHost(replyRenderer)
-          const rpid = getReplyRpid(getCommentReplyData(replyRenderer))
-          return repliesRenderer && rpid ? commentReplyPagination.captureInteraction(repliesRenderer, rpid) : undefined
-        })
+        try {
+          patchCommentReplyInteraction(classConstructor, (actionRenderer) => {
+            const replyRenderer = findCommentReplyRendererHost(actionRenderer)
+            const repliesRenderer = findCommentRepliesRendererHost(replyRenderer)
+            const rpid = getReplyRpid(getCommentReplyData(replyRenderer))
+            return repliesRenderer && rpid ? commentReplyPagination.captureInteraction(repliesRenderer, rpid) : undefined
+          })
+        }
+        catch (error) {
+          console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
+        }
       }
 
       const shadowStylePatch = COMMENT_SHADOW_STYLE_PATCHES[name]
@@ -3123,17 +3152,34 @@ else if (shouldInitializePageScript) {
       }
     }
 
-    const { define: originalDefine } = window.customElements
-    window.customElements.define = new Proxy(originalDefine, {
-      apply: (target, thisArg, args) => {
-        const [name, classConstructor] = args
-        if (typeof name === 'string') {
-          patchCommentCustomElement(name, classConstructor)
-          patchCommentTransferLifecycle(name, classConstructor)
-        }
-        return Reflect.apply(target, thisArg, args)
-      },
-    })
+    // 每项增强独立隔离；任何增强失败都只记录日志，原生 define 始终且仅执行一次。
+    const runElementEnhancement = (label: string, name: string, enhance: () => void) => {
+      try {
+        enhance()
+      }
+      catch (error) {
+        console.warn(`[Bewly Nocturne] Failed to ${label} ${name}.`, error)
+      }
+    }
+    const enhanceCustomElement = (name: string, classConstructor: unknown) => {
+      runElementEnhancement('patch', name, () => patchCommentCustomElement(name, classConstructor))
+      runElementEnhancement('patch transfer lifecycle of', name, () => patchCommentTransferLifecycle(name, classConstructor))
+    }
+
+    try {
+      const originalDefine = window.customElements.define
+      window.customElements.define = new Proxy(originalDefine, {
+        apply: (target, thisArg, args) => {
+          const [name, classConstructor] = args
+          if (typeof name === 'string')
+            enhanceCustomElement(name, classConstructor)
+          return Reflect.apply(target, thisArg, args)
+        },
+      })
+    }
+    catch (error) {
+      console.warn('[Bewly Nocturne] Failed to hook customElements.define.', error)
+    }
 
     // document_start 仍可能晚于页面内联脚本；回补已经注册的评论组件。
     const commentElementNames = new Set([
@@ -3146,7 +3192,7 @@ else if (shouldInitializePageScript) {
       'bili-user-profile',
     ])
     for (const name of commentElementNames)
-      patchCommentCustomElement(name, window.customElements.get(name))
+      runElementEnhancement('patch', name, () => patchCommentCustomElement(name, window.customElements.get(name)))
   }
 
   const settingsRequestTimers: number[] = []
@@ -3217,25 +3263,41 @@ else if (shouldInitializePageScript) {
   for (const delay of [100, 300, 700])
     settingsRequestTimers.push(window.setTimeout(requestSettings, delay))
 
-  // 拦截 navigator.clipboard.writeText，启用净化分享链接功能
-  const originalWriteText = navigator.clipboard.writeText.bind(navigator.clipboard)
-  navigator.clipboard.writeText = function (text: string) {
-    if (!currentSettings?.enableCleanShareLink)
-      return originalWriteText(text)
-
-    const isBilibiliShare = /【.+?】\s*https?:\/\//.test(text)
-    const hasBilibiliUrl = /https?:\/\/(?:www\.)?bilibili\.com\//.test(text) || /https?:\/\/b23\.tv\//.test(text)
-
-    if (isBilibiliShare || hasBilibiliUrl) {
-      const includeTitle = currentSettings?.cleanShareLinkIncludeTitle ?? false
-      const removeTracking = currentSettings?.cleanShareLinkRemoveTrackingParams !== false
-      const cleanedText = cleanBilibiliShareText(text, {
-        includeTitle,
-        removeTrackingParams: removeTracking,
+  // 拦截 navigator.clipboard.writeText，启用净化分享链接功能；净化失败时原样复制。
+  const clipboard = navigator.clipboard as (Clipboard & { [CLEAN_SHARE_WRITE_TEXT]?: true }) | undefined
+  if (clipboard && typeof clipboard.writeText === 'function' && !clipboard[CLEAN_SHARE_WRITE_TEXT]) {
+    const originalWriteText = clipboard.writeText
+    const getCleanShareText = (text: string) => {
+      if (!currentSettings?.enableCleanShareLink || typeof text !== 'string')
+        return text
+      const isBilibiliShare = /【.+?】\s*https?:\/\//.test(text)
+      const hasBilibiliUrl = /https?:\/\/(?:www\.)?bilibili\.com\//.test(text) || /https?:\/\/b23\.tv\//.test(text)
+      if (!isBilibiliShare && !hasBilibiliUrl)
+        return text
+      return cleanBilibiliShareText(text, {
+        includeTitle: currentSettings.cleanShareLinkIncludeTitle ?? false,
+        removeTrackingParams: currentSettings.cleanShareLinkRemoveTrackingParams !== false,
       })
-      return originalWriteText(cleanedText)
     }
-
-    return originalWriteText(text)
+    try {
+      Object.defineProperty(clipboard, 'writeText', {
+        configurable: true,
+        writable: true,
+        value(text: string) {
+          let finalText = text
+          try {
+            finalText = getCleanShareText(text)
+          }
+          catch (error) {
+            console.warn('[Bewly Nocturne] Failed to clean shared link.', error)
+          }
+          return Reflect.apply(originalWriteText, clipboard, [finalText])
+        },
+      })
+      Object.defineProperty(clipboard, CLEAN_SHARE_WRITE_TEXT, { configurable: true, value: true })
+    }
+    catch {
+      // writeText 不可改写时保留原生复制
+    }
   }
 }

@@ -1,5 +1,6 @@
 import type { MomentCommentItem } from '~/components/MomentCard/commentUtils'
 import type { DisplayMoment } from '~/components/MomentCard/types'
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 
 function toAbsoluteHttpUrl(value: string): URL | null {
   try {
@@ -17,7 +18,7 @@ function getVideoCommentUrl(moment: DisplayMoment): URL | null {
   const existingVideoUrl = toAbsoluteHttpUrl(moment.videoUrl || '')
   if (existingVideoUrl
     && /(?:^|\.)bilibili\.com$/i.test(existingVideoUrl.hostname)
-    && /^\/video\//.test(existingVideoUrl.pathname)) {
+    && /^\/video\//.test(getBilibiliLogicalPathname(existingVideoUrl))) {
     return existingVideoUrl
   }
 

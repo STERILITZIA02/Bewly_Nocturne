@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import LoadingRing from '~/components/LoadingRing.vue'
+
 import type {
   DisplayPrivateMessage as OptimisticPrivateMessage,
   PrivateMessageSendState,
@@ -151,12 +153,10 @@ const deliveryLabel = computed(() => {
               :aria-label="deliveryLabel"
               :title="deliveryLabel"
             >
-              <i v-if="sendState === 'failed'" i-tabler:alert-triangle aria-hidden="true" />
-              <SkeletonBlock
-                v-else-if="sendState && sendState !== 'sent'"
-                width="1em" height="1em" radius="interactive"
-              />
-              <i v-else i-tabler:check aria-hidden="true" />
+              <LoadingRing :loading="Boolean(sendState && !['failed', 'sent'].includes(sendState))">
+                <i v-if="sendState === 'failed'" i-tabler:alert-triangle aria-hidden="true" />
+                <i v-else i-tabler:check aria-hidden="true" />
+              </LoadingRing>
             </span>
           </div>
 

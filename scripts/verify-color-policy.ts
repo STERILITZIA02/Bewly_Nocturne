@@ -25,7 +25,6 @@ for (const { dark, surfaces } of palettes) {
     const tokens = getThemeColorTokens(color, dark, surfaces)
     assert.equal(tokens.theme, color, 'Solid button color must remain the chosen RGB value')
     assert.ok(relativeContrast(tokens.onTheme, tokens.theme) >= 4.5, `${color}: button contrast`)
-    assert.ok(relativeContrast(tokens.markerOnLight, '#ffffff') >= 3, `${color}: marker on Dock's white indicator`)
     if (brightColors.includes(color))
       assert.equal(tokens.onTheme, '#000000', `${color}: bright fills need dark text`)
     for (const surface of surfaces) {

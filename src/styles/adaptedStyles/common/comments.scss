@@ -73,7 +73,7 @@
     .comment-bilibili-fold .comment-list .list-item .text .jump-img,
     .bb-comment .comment-list .list-item .text-con .jump-img,
     .comment-bilibili-fold .comment-list .list-item .text-con .jump-img {
-      filter: var(--bew-filter-icon-glow);
+      filter: var(--bew-filter-icon-white);
     }
   }
   // #endregion
@@ -198,7 +198,7 @@
   .comment-bilibili-fold .comment-list .list-item .info span:hover i,
   .bb-comment .operation .spot:hover,
   .comment-bilibili-fold .operation .spot:hover {
-    filter: var(--bew-filter-icon-glow);
+    filter: var(--bew-filter-icon-white);
   }
 
   .bb-comment .comment-header .tabs-order li.on:after,

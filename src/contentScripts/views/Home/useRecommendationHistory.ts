@@ -8,6 +8,8 @@ import type { RecommendationDataState } from './recommendationState'
 export interface RecommendationSnapshot {
   videoList: VideoElement[]
   appVideoList: AppVideoElement[]
+  appFeedIdx: number
+  appAuthIdentity: string
   refreshIdx: number
   webFetchRow: number
   webShowlistGroups: string[]

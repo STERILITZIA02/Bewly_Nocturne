@@ -3,6 +3,7 @@ import { watch } from 'vue'
 import { useRouteState } from '~/composables/useRouteState'
 import { settings, settingsReady } from '~/logic'
 import type { VideoAspectRatio } from '~/logic/storage'
+import { BILIBILI_LIVE_HOSTNAME } from '~/utils/bilibiliLiveContext'
 import { isVideoPlaybackPage } from '~/utils/main'
 
 import { observePlayerDom } from './playerDomLifecycle'
@@ -97,7 +98,7 @@ export function stopVideoAspectRatioMemory() {
 }
 
 export function initVideoAspectRatioMemory() {
-  if (hasInitialized || location.hostname === 'live.bilibili.com')
+  if (hasInitialized || location.hostname === BILIBILI_LIVE_HOSTNAME)
     return
 
   hasInitialized = true

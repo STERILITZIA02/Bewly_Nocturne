@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 import { useVideoPreviewSwipeSeek } from '~/composables/useVideoPreviewSwipeSeek'
 import { settings } from '~/logic'
 
@@ -130,9 +130,7 @@ onBeforeUnmount(() => {
       autoplay muted playsinline
       @loadeddata="revealFirstFrame" @playing="revealFirstFrame" @error="failFrame"
     />
-    <Transition name="fade">
-      <SkeletonBlock v-if="loading || (url && !frameReady && !frameFailed)" height="100%" radius="media" class="moment-video-preview__loading" />
-    </Transition>
+    <LoadingRing :loading="Boolean(loading || (url && !frameReady && !frameFailed))" class="moment-video-preview__loading" size="var(--bew-icon-size-xl)" />
     <span v-if="gesture.isScrubbing.value && !controls" class="moment-video-preview__progress" aria-hidden="true">
       <span :style="{ transform: `scaleX(${gesture.scrubProgress.value / 100})` }" />
     </span>
@@ -181,6 +179,9 @@ onBeforeUnmount(() => {
 .moment-video-preview__loading {
   position: absolute;
   inset: 0;
+  display: grid;
+  color: #fff;
+  background: var(--bew-cover-scrim);
   border-radius: inherit;
   corner-shape: inherit;
   pointer-events: none;

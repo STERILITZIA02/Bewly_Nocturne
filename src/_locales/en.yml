@@ -677,7 +677,6 @@ settings:
   topbar_mode_bilibili: Bilibili top bar
   dock_item_open_in_new_tab: Open in new tab
   dock_item_use_original_bili_web_page: Use the original Bilibili web page
-  disable_dock_glowing_effect: Disable the dock glowing effect
   disable_light_dark_mode_switcher: Disable light/dark mode switcher
   back_to_top_and_refresh_buttons_are_separated: Separate Back to Top and Refresh Buttons
   sidebar_position: Sidebar position
@@ -707,7 +706,6 @@ settings:
   search_results_pagination_mode_opt:
     scroll: Infinite Scroll
     pagination: Pagination
-  enable_logo_glowing_effect: Enable glowing effect for the logo
   logo_visibility: Logo visibility
   disable_search_focus_effect: Remove search focus effect
   disable_search_focus_effect_desc: When enabled, focusing the search bar no longer blurs or darkens the page background.
@@ -857,7 +855,7 @@ settings:
   remember_video_aspect_ratio: Remember video aspect ratio
   remember_video_quality: Remember video quality
   player_extra_controls_hint: When space is limited, collapsed actions remain available in the player context menu.
-  remember_video_quality_desc: Start with the current quality, then remember confirmed manual choices. Automatic downgrades and trials never replace this preference.
+  remember_video_quality_desc: Start with the current quality, then remember confirmed manual choices. Automatic downgrades and trials never replace this preference. Premium or sign-in tiers are restored only after the current account is confirmed eligible.
   show_widescreen_idle_progress: Show a thin progress bar when controls are hidden
   show_widescreen_idle_progress_desc: Display main-video progress without revealing the controls or adding a seek action.
   original_moments_use_bewly_filters: Apply existing filters to the native Moments feed
@@ -1463,6 +1461,30 @@ moments:
   fit_window: Fit to window
   rotate_clockwise: Rotate clockwise
 moment_card:
+  copy_link: Copy moment link
+  link_copied: Link copied
+  delete: Delete moment
+  delete_confirm: 'Delete this moment? This can''t be undone.'
+  delete_success: Moment deleted
+  delete_failed: 'Couldn''t delete the moment. Try again later.'
+  operation_uncertain: 'The result couldn''t be confirmed. Refresh to check before trying again.'
+  report: Report
+  report_title: Report moment
+  report_select_reason: Choose a reason
+  report_remark_placeholder: Describe the issue
+  report_success: Report submitted
+  report_failed: 'Couldn''t submit the report. Try again later.'
+  report_reasons:
+    spam: Spam or ads
+    inciting_conflict: Inciting conflict
+    pornography: Sexual content
+    personal_attack: Personal attack
+    illegal_content: Illegal content
+    political_rumors: Political rumors
+    social_event_rumor: Rumors about public events
+    false_information: False information
+    illegal_link: Links to illegal content
+    other: Other
   comments_expand_thread: Expand replies to this comment
   comments_collapse_thread: Collapse replies to this comment
   forward_search_mention: Search users to mention
@@ -1542,6 +1564,11 @@ moment_card:
   comment_unlike: Remove comment like
   comment_login_required: Sign in to interact with comments
   comment_like_failed: Failed to update comment like. Try again later.
+  comment_delete: Delete
+  comment_delete_confirm: Delete this comment? This can't be undone.
+  comment_delete_success: Comment deleted
+  comment_delete_failed: Couldn't delete the comment. Try again later.
+  comment_delete_uncertain: The deletion couldn't be confirmed, so the comment is still shown. Refresh to check.
   live_popularity: '{count} popularity'
   no_data: No data
   live_now: Live now
@@ -1610,6 +1637,9 @@ video_card:
   watch_later_unavailable: Watch Later information is unavailable for this video
   watch_later_update_failed: Failed to update Watch Later
   feedback_unavailable: Feedback options are unavailable
+  feedback_failed: 'Couldn''t send feedback. Try again later.'
+  feedback_uncertain: 'The feedback result couldn''t be confirmed. Refresh later to check before trying again.'
+  feedback_auth_expired: Authorization expired. Please try again.
 home:
   channels: Channels
   series:
@@ -1724,6 +1754,26 @@ history:
   turn_on_watch_history: Turn on watch history
   turn_on_watch_history_confirm: Turn on watch history? Are you sure you want to turn on watch history?
 favorites:
+  filter_title: Filter
+  filter_title_active: 'Filter ({count} conditions)'
+  filter_uploader: Uploaders
+  filter_uploader_empty: Uploaders appear after favorites load
+  filter_partition: Categories
+  filter_partition_empty: No category data in this scope
+  filter_partition_retry: Reload categories
+  filter_keywords: Title keywords
+  filter_keywords_placeholder: Type and press Enter to add
+  filter_keyword_remove: 'Remove keyword {keyword}'
+  filter_reset: Reset
+  filter_apply: Apply
+  filter_pause: Pause
+  filter_continue: Continue scanning
+  filter_status_scanning: 'Scanning: {scanned} checked, {count} matched'
+  filter_status_paused: 'Scan paused, {count} matched'
+  filter_status_budget: '{scanned} checked, {count} matched; more remain'
+  filter_status_complete: 'Scan complete, {count} matched'
+  filter_status_failed: 'Scan failed, {count} matched so far'
+  filter_status_stalled: 'Pagination stopped advancing, {count} matched so far'
   saved_refresh_failed: 'Saved, but the list could not refresh. Please refresh to verify.'
   create_folder: Create folder
   folder_name: Name

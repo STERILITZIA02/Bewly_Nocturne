@@ -142,7 +142,6 @@ export function injectLayoutStyle() {
       --bewly-widescreen-progress-track: color-mix(in srgb, var(--bew-text-1) 32%, transparent);
       --bewly-widescreen-progress-buffer: color-mix(in srgb, var(--bew-text-1) 44%, transparent);
       --bewly-widescreen-progress-played: var(--bew-theme-color);
-      --bewly-widescreen-progress-glow: none;
     }
 
     html:not(.dark) #${ROOT_ID},
@@ -152,7 +151,6 @@ export function injectLayoutStyle() {
 
     html.dark body.${BODY_CLASS} {
       --bewly-widescreen-progress-played: #fff;
-      --bewly-widescreen-progress-glow: 0 0 4px rgb(255 255 255 / 85%), 0 0 8px rgb(255 255 255 / 45%);
     }
 
     /* Only our shell owns this box model. Native controls, guides and ending
@@ -518,7 +516,7 @@ export function injectLayoutStyle() {
       .bpx-player-progress-schedule-current {
       background: var(--bewly-widescreen-progress-played) !important;
       border-color: var(--bewly-widescreen-progress-played) !important;
-      box-shadow: var(--bewly-widescreen-progress-glow) !important;
+      box-shadow: none !important;
     }
 
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} ${HIGH_ENERGY_PROGRESS_PIN_SELECTOR} {
@@ -650,7 +648,7 @@ export function injectLayoutStyle() {
       border: 1px solid var(--bew-surface-border-color) !important;
       border-radius: var(--bewly-widescreen-shell-radius) !important;
       corner-shape: var(--bew-corner-shape);
-      box-shadow: var(--bew-shadow-edge-glow-1) !important;
+      box-shadow: none !important;
       backdrop-filter: var(--bew-filter-glass-1) !important;
       -webkit-backdrop-filter: var(--bew-filter-glass-1) !important;
       background-clip: padding-box !important;
@@ -1142,8 +1140,7 @@ export function injectLayoutStyle() {
       border-color: var(--bew-focus-ring-color) !important;
       box-shadow:
         var(--bew-focus-shadow, 0 0 0 1px CanvasText),
-        var(--bew-shadow-2),
-        var(--bew-shadow-edge-glow-1) !important;
+        var(--bew-shadow-2) !important;
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar-wrap {
@@ -1495,7 +1492,7 @@ export function injectLayoutStyle() {
       border: 1px solid var(--bew-surface-border-color);
       border-radius: var(--bewly-widescreen-shell-radius);
       corner-shape: var(--bew-corner-shape);
-      box-shadow: var(--bew-shadow-3), var(--bew-shadow-edge-glow-1);
+      box-shadow: var(--bew-shadow-3);
       backdrop-filter: var(--bew-filter-glass-1);
       -webkit-backdrop-filter: var(--bew-filter-glass-1);
       overflow: hidden;
@@ -1563,8 +1560,7 @@ export function injectLayoutStyle() {
       /* Outer paint only: the content box and native controls keep their size. */
       box-shadow:
         var(--bew-focus-shadow, 0 0 0 1px CanvasText),
-        var(--bew-shadow-3),
-        var(--bew-shadow-edge-glow-1);
+        var(--bew-shadow-3);
     }
 
     #${ROOT_ID}[data-sidebar-resizing="true"] .bewly-widescreen-sidebar-resizer::before {
@@ -1654,7 +1650,7 @@ export function injectLayoutStyle() {
       corner-shape: var(--bew-corner-shape);
       color: var(--bew-text-1);
       background: var(--bew-elevated-alt-solid);
-      box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
+      box-shadow: var(--bew-shadow-2);
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
       cursor: pointer;
@@ -3075,12 +3071,18 @@ export function injectLayoutStyle() {
       opacity: 1;
       overflow-x: hidden !important;
       overflow-y: auto !important;
-      overscroll-behavior: contain;
       scrollbar-gutter: stable;
       transition:
         max-height var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
         opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
         margin var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease);
+    }
+
+    /* 选集滚到顶部或底部后把剩余滚动交给外侧侧栏面板；面板自身保持 contain，
+       不会继续带动底层页面。只放开选集真正的滚动区，覆盖 B 站原生的 contain。 */
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .${EPISODE_SECTION_CLASS},
+    #${ROOT_ID} .bewly-widescreen-panel-playlist [class*="EpisodeVirtualList_scroll"] {
+      overscroll-behavior: auto !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-playlist.is-episode-section-collapsed .${EPISODE_SECTION_CLASS} {
@@ -3101,9 +3103,6 @@ export function injectLayoutStyle() {
     }
     #${ROOT_ID} .bewly-widescreen-panel-playlist.is-episode-section-collapsed [class*="PaginatedEpList_root"].${EPISODE_SECTION_CLASS} {
       display: none !important;
-    }
-    #${ROOT_ID} .bewly-widescreen-panel-playlist [class*="EpisodeVirtualList_scroll"] {
-      overscroll-behavior: contain;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-playlist [class*="EpisodeVirtualList_gridRow"] {

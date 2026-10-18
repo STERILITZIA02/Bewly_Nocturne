@@ -436,7 +436,7 @@ function handleContributorImageError() {
   background: var(--bew-fill-alt);
   border-radius: var(--bew-panel-radius);
   corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-1), var(--bew-shadow-edge-glow-1);
+  box-shadow: var(--bew-shadow-1);
 }
 
 .contributors-image-link {

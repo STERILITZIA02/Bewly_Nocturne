@@ -1,3 +1,4 @@
+import LOADING_RING_CSS from '~/styles/loadingRing.scss?inline'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
 import { LOADING_FADE_DURATION, LOADING_ROOT_ID, MOBILE_BREAKPOINT, SIDEBAR_MAX_VIEWPORT_PERCENT } from '~/utils/bewlyWidescreen/constants'
 import { WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO, WIDESCREEN_SIDEBAR_MIN_WIDTH } from '~/utils/bewlyWidescreenPolicy'
@@ -6,6 +7,7 @@ import { injectCSS } from '~/utils/main'
 export function injectLoadingStyle() {
   return injectCSS(`
     ${SKELETON_CSS}
+    ${LOADING_RING_CSS}
     #${LOADING_ROOT_ID} {
       position: fixed;
       inset: 0;
@@ -69,15 +71,12 @@ export function injectLoadingStyle() {
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-player-mark {
+      --bew-loading-ring-size: var(--bew-space-12, 48px);
       position: absolute;
       top: 46%;
       left: 50%;
-      width: var(--bew-space-12, 48px);
-      height: var(--bew-space-12, 48px);
-      border-radius: 50%;
-      corner-shape: var(--bew-corner-shape-round, round);
-      opacity: 0.46;
-      transform: translate(-50%, -50%);
+      color: rgb(255 255 255 / 72%);
+      translate: -50% -50%;
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-controls {
@@ -93,7 +92,7 @@ export function injectLoadingStyle() {
       border: 1px solid var(--bew-surface-border-color);
       border-radius: var(--bew-modal-radius, 24px);
       corner-shape: var(--bew-corner-shape);
-      box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
+      box-shadow: var(--bew-shadow-2);
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-progress {
@@ -184,7 +183,7 @@ export function injectLoadingStyle() {
       border: 1px solid var(--bew-surface-border-color);
       border-radius: var(--bew-modal-radius, 24px);
       corner-shape: var(--bew-corner-shape);
-      box-shadow: var(--bew-shadow-3), var(--bew-shadow-edge-glow-1);
+      box-shadow: var(--bew-shadow-3);
     }
 
     #${LOADING_ROOT_ID}[data-sidebar-layout="compact"] .bewly-widescreen-loading-skeleton-sidebar {

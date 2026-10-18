@@ -159,6 +159,5 @@ export function getThemeColorTokens(themeColor: string, isDark: boolean, surface
     switchThumb: relativeContrast('#ffffff', themeColor) >= 3 ? '#ffffff' : '#000000',
     foreground: ensureContrast(themeColor, backgrounds, direction, 4.5),
     focusRing: ensureContrast(themeColor, backgrounds, direction, 3),
-    markerOnLight: ensureContrast(themeColor, ['#ffffff'], '#000000', 3),
   }
 }

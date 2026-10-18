@@ -1,3 +1,5 @@
+import { splitBilibiliLocalePath } from '../utils/bilibiliLocale'
+
 const PAGE_LOADING_TIMEOUT_MS = 10_000
 
 export interface PageLoadingGuard {
@@ -11,8 +13,9 @@ export interface PageLoadingGuard {
 /** Kept independent of Vue, settings and styles so the document-start entry stays small. */
 export function createPageLoadingGuard(doc: Document, inIframe: boolean): PageLoadingGuard {
   const url = new URL(doc.URL)
-  const homepage = !inIframe && ['www.bilibili.com', 'bilibili.com'].includes(url.hostname) && ['/', '/index.html'].includes(url.pathname)
-  const playback = !inIframe && url.hostname === 'www.bilibili.com' && /^\/(?:video\/|bangumi\/play\/|list\/|medialist\/play)/.test(url.pathname)
+  const { pathname } = splitBilibiliLocalePath(url.hostname, url.pathname)
+  const homepage = !inIframe && ['www.bilibili.com', 'bilibili.com'].includes(url.hostname) && ['/', '/index.html'].includes(pathname)
+  const playback = !inIframe && url.hostname === 'www.bilibili.com' && /^\/(?:video\/|bangumi\/play\/|list\/|medialist\/play)/.test(pathname)
   const pageStyle = doc.createElement('style')
   const headerStyle = doc.createElement('style')
   const playbackCover = playback ? doc.createElement('div') : undefined

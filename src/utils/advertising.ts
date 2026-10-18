@@ -9,7 +9,7 @@ export function isBilibiliAdvertisement(value: unknown): boolean {
     return true
   if (item.goto === 'ad' || item.card_type === 'cm_v1')
     return true
-  if ([item.type, item.card_type].some(type => typeof type === 'string' && /(?:^|_)ad(?:_|$)/i.test(type)))
+  if ([item.type, item.card_type, item.card_goto].some(type => typeof type === 'string' && /(?:^|_)ad(?:_|$)/i.test(type)))
     return true
   return ['ad_info', 'ad_extra', 'cm_info'].some((key) => {
     const marker = item[key]

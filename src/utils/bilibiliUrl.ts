@@ -1,3 +1,5 @@
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
+
 const COMMON_TRACKING_PARAMS = new Set([
   '-Arouter',
   'bbid',
@@ -81,7 +83,8 @@ export function cleanBilibiliUrl(url: string): string {
     for (const param of COMMON_TRACKING_PARAMS)
       parsed.searchParams.delete(param)
 
-    if (parsed.pathname.startsWith('/video/') || parsed.pathname.startsWith('/bangumi/play/')) {
+    const pathname = getBilibiliLogicalPathname(parsed)
+    if (pathname.startsWith('/video/') || pathname.startsWith('/bangumi/play/')) {
       for (const param of VIDEO_TRACKING_PARAMS)
         parsed.searchParams.delete(param)
     }

@@ -1,5 +1,6 @@
 import type { Video } from '~/components/VideoCard/types'
 
+import { getBilibiliLogicalPathname } from './bilibiliLocale'
 import { parsePlaybackTabUrl } from './playbackTab'
 
 function playbackTarget(video: Video): { url: URL, kind: 'video' | 'ep', id: string, page: number } | undefined {
@@ -13,9 +14,9 @@ function playbackTarget(video: Video): { url: URL, kind: 'video' | 'ep', id: str
     if (url.protocol !== 'https:' || url.hostname !== 'www.bilibili.com' || url.port || url.username || url.password)
       return
     const queueTarget = parsePlaybackTabUrl(url.href)
-    const videoId = /^\/video\/(BV[\da-z]+|av\d+)\/?$/i.exec(url.pathname)?.[1]
+    const videoId = /^\/video\/(BV[\da-z]+|av\d+)\/?$/i.exec(getBilibiliLogicalPathname(url))?.[1]
       || (queueTarget && ('bvid' in queueTarget ? queueTarget.bvid : 'aid' in queueTarget ? `av${queueTarget.aid}` : undefined))
-    const ep = /^\/bangumi\/play\/ep(\d+)\/?$/.exec(url.pathname)?.[1]
+    const ep = /^\/bangumi\/play\/ep(\d+)\/?$/.exec(getBilibiliLogicalPathname(url))?.[1]
     if (ep && video.epid && ep === String(video.epid))
       return { url, kind: 'ep', id: ep, page: 1 }
     if (!videoId || (videoId !== video.bvid && videoId !== `av${video.aid}`))

@@ -865,7 +865,7 @@ function changeMenuItem(menuItem: MenuType) {
   }
 
   .settings-primary-navigation__surface {
-    box-shadow: var(--bew-shadow-edge-glow-2);
+    box-shadow: none;
   }
 }
 
@@ -879,7 +879,7 @@ function changeMenuItem(menuItem: MenuType) {
   inset: 0;
   box-sizing: border-box;
   border: 1px solid var(--bew-surface-border-color);
-  box-shadow: var(--bew-shadow-4), var(--bew-shadow-edge-glow-2);
+  box-shadow: var(--bew-shadow-4);
   border-radius: inherit;
   corner-shape: inherit;
   pointer-events: none;
@@ -956,7 +956,7 @@ function changeMenuItem(menuItem: MenuType) {
   border: 1px solid var(--bew-surface-border-color);
   border-radius: calc(var(--bew-control-height) / 2);
   corner-shape: var(--bew-corner-shape-round);
-  box-shadow: var(--bew-shadow-edge-glow-1);
+  box-shadow: none;
   transition:
     width var(--bew-duration-moderate) var(--bew-ease-standard),
     border-radius var(--bew-duration-moderate) var(--bew-ease-standard),
@@ -972,7 +972,7 @@ function changeMenuItem(menuItem: MenuType) {
     border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-panel-radius);
     corner-shape: var(--bew-corner-shape);
-    box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-focus-shadow, 0 0 0 1px CanvasText);
+    box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
   }
 
   > i {

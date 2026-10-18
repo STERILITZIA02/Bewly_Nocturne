@@ -9,6 +9,7 @@ import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryVideoCardSkeleton from '~/components/LibraryVideoCardSkeleton.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
@@ -619,8 +620,9 @@ function jumpToLoginPage() {
             </Button>
             <Button class="library-sidebar-action" type="primary" :disabled="!batch.selected.value.size" @click="batch.removeSelected">
               <template #left>
-                <SkeletonBlock v-if="batch.busy.value" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" />
-                <i v-else i-tabler:trash />
+                <LoadingRing :loading="batch.busy.value">
+                  <i i-tabler:trash />
+                </LoadingRing>
               </template>
               {{ t('watch_later.remove_selected', { count: batch.selected.value.size }) }}
             </Button>
@@ -634,8 +636,9 @@ function jumpToLoginPage() {
               :aria-busy="isLoading" @click="!isLoading && handleHistoryPageRefresh()"
             >
               <template #left>
-                <SkeletonBlock v-if="isLoading" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" />
-                <i v-else i-tabler:refresh aria-hidden="true" />
+                <LoadingRing :loading="isLoading">
+                  <i i-tabler:refresh aria-hidden="true" />
+                </LoadingRing>
               </template>
               {{ t('history.refresh') }}
             </Button>
@@ -645,8 +648,9 @@ function jumpToLoginPage() {
               @click="timeline.getHistoryPauseStatus"
             >
               <template #left>
-                <SkeletonBlock v-if="timeline.isReadingStatus.value" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" />
-                <i v-else i-tabler:refresh />
+                <LoadingRing :loading="timeline.isReadingStatus.value">
+                  <i i-tabler:refresh />
+                </LoadingRing>
               </template>
               {{ t('history.retry_recording_status') }}
             </Button>

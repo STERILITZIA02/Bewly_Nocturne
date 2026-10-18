@@ -4,14 +4,16 @@ import { useToast } from 'vue-toastification'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { DELAYED_MEDIA_PREVIEW_MS } from '~/constants/mediaPreview'
-import { appAuthTokens, settings } from '~/logic'
+import { settings } from '~/logic'
 import type { VideoInfo } from '~/models/video/videoInfo'
 import type { VideoPreviewResult } from '~/models/video/videoPreview'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
-import { ensureFreshAppAccessToken, getTvSign, isAppAccessTokenInvalidResponse, refreshInvalidAppAccessToken, TVAppKey } from '~/utils/authProvider'
+import type { AppFeedFeedbackSelection } from '~/utils/appFeedFeedback'
+import { getAppFeedFeedbackTarget, isSameAppFeedFeedbackTarget, submitAppFeedFeedback } from '~/utils/appFeedFeedback'
+import { captureAppAuth, ensureFreshAppAccessToken } from '~/utils/authProvider'
 import { calcCurrentTime, numFormatter, parseStatNumber } from '~/utils/dataFormatter'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
 import { getUserID, removeHttpFromUrl } from '~/utils/main'
@@ -34,25 +36,6 @@ interface VideoCardProps {
   horizontal?: boolean
   showPreview?: boolean
   moreBtn?: boolean
-}
-
-interface AppFeedFeedbackSelection {
-  reasonId?: number
-  feedbackId?: number
-}
-
-function createAppFeedFeedbackParams(video: Video, selection?: AppFeedFeedbackSelection) {
-  return {
-    access_key: appAuthTokens.value.accessToken,
-    goto: video.goto,
-    id: video.param || video.id,
-    ...(selection?.reasonId !== undefined ? { reason_id: selection.reasonId } : {}),
-    ...(selection?.feedbackId !== undefined ? { feedback_id: selection.feedbackId } : {}),
-    build: 1,
-    mobi_app: 'android',
-    appkey: TVAppKey.appkey,
-    ts: Math.floor(Date.now() / 1000).toString(),
-  }
 }
 
 export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps>, savedState?: VideoCardState) {
@@ -80,7 +63,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   const removed = toRef(interactionState, 'removed')
   const moreBtnRef = ref<HTMLButtonElement | null>(null)
   const contextMenuRef = ref<HTMLDivElement | null>(null)
-  const selectedDislikeOpt = toRef(interactionState, 'selectedDislikeOpt')
   const videoCurrentTime = toRef(interactionState, 'videoCurrentTime')
   const previewMediaIdentity = computed(() => getVideoPreviewIdentity(props.value.video))
   watch(previewMediaIdentity, (identity) => {
@@ -509,27 +491,30 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       const video = props.value.video
 
       if (props.value.type === 'appRcmd' && video) {
-        if (!await ensureFreshAppAccessToken()) {
+        const target = getAppFeedFeedbackTarget(video)
+        const state = interactionState
+        if (!target) {
+          toast.warning(t('video_card.feedback_unavailable'))
+          return
+        }
+        const auth = await ensureFreshAppAccessToken() ? captureAppAuth() : null
+        if (!auth) {
           toast.warning(t('auth.auth_access_key_first'))
           return
         }
-
-        const sendUndo = () => {
-          const params = createAppFeedFeedbackParams(video, selectedDislikeOpt.value)
-          return api.video.undoDislikeVideo({
-            ...params,
-            sign: getTvSign(params),
-          })
-        }
-
-        let response = await sendUndo()
-        if (isAppAccessTokenInvalidResponse(response) && await refreshInvalidAppAccessToken())
-          response = await sendUndo()
-
-        if (response.code === 0)
-          removed.value = false
-        else
-          toast.error(response.message)
+        if (state !== interactionState || !isSameAppFeedFeedbackTarget(target, getAppFeedFeedbackTarget(props.value.video)))
+          return
+        const { outcome, message } = await submitAppFeedFeedback('feedDislikeCancel', auth, target)
+        if (outcome === 'stale')
+          return
+        if (outcome === 'succeeded')
+          state.removed = false
+        else if (state === interactionState && outcome === 'uncertain')
+          toast.warning(t('video_card.feedback_uncertain'))
+        else if (state === interactionState && outcome === 'expired')
+          toast.error(t('video_card.feedback_auth_expired'))
+        else if (state === interactionState)
+          toast.error(message || t('video_card.feedback_failed'))
       }
       else {
         removed.value = false
@@ -540,8 +525,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     }
   }
 
-  function handleRemoved(selectedOpt?: AppFeedFeedbackSelection) {
-    selectedDislikeOpt.value = selectedOpt
+  function handleRemoved(_selectedOpt?: AppFeedFeedbackSelection) {
     removed.value = true
   }
 

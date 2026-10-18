@@ -1,3 +1,4 @@
+import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 import type { LocalLoudnessConfig } from '~/utils/localLoudnessProtocol'
 import { LOCAL_LOUDNESS_BIND, LOCAL_LOUDNESS_BIND_REQUEST, LOCAL_LOUDNESS_DEFAULTS, LOCAL_LOUDNESS_PANEL, LOCAL_LOUDNESS_STATE } from '~/utils/localLoudnessProtocol'
 import type { PageSettingsPayload } from '~/utils/pageSettingsProtocol'
@@ -39,7 +40,7 @@ export function setupLocalLoudnessBridge(channelId: string) {
       const manifest = player.getManifest?.()
       const route = parseVideoPageIdentity(location.href)
       const url = new URL(location.href)
-      const episode = /^\/bangumi\/play\/(ep|ss)(\d+)/.exec(url.pathname)
+      const episode = /^\/bangumi\/play\/(ep|ss)(\d+)/.exec(getBilibiliLogicalPathname(url))
       if (!manifest || (route
         ? (route.aid ? route.aid !== manifest.aid : route.bvid !== manifest.bvid)
         || (Number.isSafeInteger(manifest.p) && manifest.p !== Number(url.searchParams.get('p') || 1))

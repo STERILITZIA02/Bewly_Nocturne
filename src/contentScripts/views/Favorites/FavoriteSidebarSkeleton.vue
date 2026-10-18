@@ -1,8 +1,8 @@
 <template>
   <ul class="favorite-sidebar-skeleton" aria-hidden="true">
     <li v-for="index in 5" :key="index">
-      <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-space-12)" radius="var(--bew-radius-md)" />
-      <SkeletonBlock width="100%" height="var(--bew-line-height-control)" />
+      <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-space-12)" radius="interactive" />
+      <SkeletonBlock :width="index % 2 ? '72%' : '56%'" height="var(--bew-line-height-control)" />
       <SkeletonBlock width="var(--bew-space-6)" height="var(--bew-line-height-caption)" />
     </li>
   </ul>

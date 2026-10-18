@@ -775,6 +775,21 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     reset()
   })
 
+  function remove(id: string) {
+    momentColumns.value = momentColumns.value.map(column => column.filter(item => item.id !== id))
+    interactiveCardIds.delete(id)
+    movingDisclosureIds.delete(id)
+    readyCardIds.delete(id)
+    enteringCardIds.delete(id)
+    visibleMomentIds.delete(id)
+    revealedCardIds.delete(id)
+    settledHeights.delete(id)
+    cardElements.delete(id)
+    delete cardHeights[id]
+    clearTimeout(cardEnterTimers.get(id))
+    cardEnterTimers.delete(id)
+    updateVirtualColumns()
+  }
   function updateMoment(moment: DisplayMoment) {
     momentColumns.value = momentColumns.value.map(column => column.map(item => item.id === moment.id ? moment : item))
     updateVirtualColumns()
@@ -803,7 +818,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     if (card && commitCardHeight(id, Math.round(card.getBoundingClientRect().height), { force: true }))
       scheduleVirtualUpdate()
   }
-  return { layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad, append, reset, clearColumns, updateMoment, setInteractionHeld, setDisclosureMotion, suspendRebalance(duration: number) {
+  return { layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad, append, remove, reset, clearColumns, updateMoment, setInteractionHeld, setDisclosureMotion, suspendRebalance(duration: number) {
     suppressBottomRebalanceUntil = Date.now() + duration
   } }
 }

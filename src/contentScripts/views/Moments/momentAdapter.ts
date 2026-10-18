@@ -3,6 +3,7 @@ import { formatCount } from '~/components/MomentCard/utils'
 import type { DataItem } from '~/models/moment/moment'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '~/utils/momentAdditionalPolicy'
 import { resolveMomentTextSources } from '~/utils/momentDescription'
+import { resolveMomentMoreCapability } from '~/utils/momentMoreCapability'
 import { detectMomentPromotion } from '~/utils/momentPromotion'
 import { normalizeMomentRemoteUrl as httpsUrl } from '~/utils/momentUrl'
 
@@ -467,6 +468,7 @@ export function createMomentAdapter(
         || raw.modules?.module_stat?.like?.disabled,
       ),
       commentCount: Number(raw.modules?.module_stat?.comment?.count || 0),
+      moreCapability: resolveMomentMoreCapability(id, raw.modules?.module_more?.three_point_items),
       forwardCount: resolveMomentForwardCount(id, raw.modules?.module_stat?.forward?.count),
       commentId: raw.basic?.comment_id_str ? String(raw.basic.comment_id_str) : undefined,
       commentType: Number(raw.basic?.comment_type) || undefined,
