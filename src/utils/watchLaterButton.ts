@@ -17,7 +17,13 @@ const TOOLBAR_LIFECYCLE_SELECTOR = '.video-tool-more, .video-toolbar-container, 
 const buttonMembershipWatchers = new WeakMap<HTMLButtonElement, () => void>()
 const buttonInitializationContexts = new WeakMap<HTMLButtonElement, { ids: VideoIds, state: WatchLaterButtonState }>()
 const mountedButtons = new Set<HTMLButtonElement>()
-let toolbarLifecycleObserver: MutationObserver | undefined
+/** Discovery: body insertions plus attributes of toolbar elements and hidden candidates. */
+let toolbarDiscoveryObserver: MutationObserver | undefined
+/** Stable: only the mounted toolbar host and its shallow ancestry. */
+let toolbarStableObserver: MutationObserver | undefined
+let toolbarStableHost: HTMLElement | undefined
+let toolbarStableAncestors: HTMLElement[] = []
+let toolbarDiscoveryCandidates: HTMLElement[] = []
 let toolbarLifecycleFrame: number | undefined
 let toolbarLifecycleActive = false
 let firstMountPromise: Promise<boolean> | undefined
@@ -399,6 +405,89 @@ function settleFirstMount(mounted: boolean) {
   resolveFirstMount = undefined
 }
 
+function disconnectToolbarStableObserver() {
+  toolbarStableObserver?.disconnect()
+  toolbarStableObserver = undefined
+  toolbarStableHost = undefined
+  toolbarStableAncestors = []
+}
+
+function disconnectToolbarDiscoveryObserver() {
+  toolbarDiscoveryObserver?.disconnect()
+  toolbarDiscoveryObserver = undefined
+  toolbarDiscoveryCandidates = []
+}
+
+function enterToolbarDiscovery() {
+  disconnectToolbarStableObserver()
+  // A present but hidden toolbar becomes usable through its own or an ancestor's
+  // class/style; remember it so attribute records need no subtree queries.
+  toolbarDiscoveryCandidates = Array.from(document.querySelectorAll<HTMLElement>('.video-tool-more'))
+  if (toolbarDiscoveryObserver || !document.body)
+    return
+  toolbarDiscoveryObserver = new MutationObserver((records) => {
+    const relevant = records.some((record) => {
+      if (record.type === 'attributes') {
+        const target = record.target
+        return target instanceof Element && (target.matches(TOOLBAR_LIFECYCLE_SELECTOR)
+          || toolbarDiscoveryCandidates.some(candidate => target.contains(candidate)))
+      }
+      return Array.from(record.addedNodes)
+        .concat(Array.from(record.removedNodes))
+        .some(nodeTouchesToolbarLifecycle)
+    })
+    if (relevant)
+      scheduleLifecycleButtonCheck()
+  })
+  toolbarDiscoveryObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'hidden'],
+  })
+}
+
+/**
+ * After mounting, unrelated body class/style/hidden churn cannot reach the
+ * toolbar search. The host's own children/attributes report a native re-render;
+ * its shallow ancestry reports replacement, transfer (widescreen) or removal.
+ */
+function enterToolbarStablePhase(button: HTMLButtonElement) {
+  const host = button.parentElement
+  if (!host) {
+    enterToolbarDiscovery()
+    return
+  }
+  disconnectToolbarDiscoveryObserver()
+  const ancestors: HTMLElement[] = []
+  for (let parent = host.parentElement; parent; parent = parent.parentElement)
+    ancestors.push(parent)
+  if (toolbarStableHost === host && toolbarStableObserver
+    && ancestors.length === toolbarStableAncestors.length && ancestors.every((parent, index) => parent === toolbarStableAncestors[index])) {
+    return
+  }
+  disconnectToolbarStableObserver()
+  toolbarStableHost = host
+  toolbarStableAncestors = ancestors
+  const isOwnButton = (node: Node) => node instanceof Element && node.classList.contains(BUTTON_CLASS)
+  toolbarStableObserver = new MutationObserver((records) => {
+    const relevant = records.some((record) => {
+      if (record.type === 'attributes')
+        return true
+      // Ancestors matter only when they detach or move the toolbar host.
+      if (record.target !== host)
+        return !host.isConnected || Array.from(record.removedNodes).some(node => node.contains(host))
+      // Our own insertion is not a native change; its removal is.
+      return Array.from(record.removedNodes).some(node => isOwnButton(node) || nodeTouchesToolbarLifecycle(node))
+        || Array.from(record.addedNodes).some(node => !isOwnButton(node) && nodeTouchesToolbarLifecycle(node))
+    })
+    if (relevant)
+      scheduleLifecycleButtonCheck()
+  })
+  toolbarStableObserver.observe(host, { childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] })
+  ancestors.forEach(parent => toolbarStableObserver!.observe(parent, { childList: true }))
+}
+
 function ensureLifecycleButton() {
   toolbarLifecycleFrame = undefined
   for (const button of [...mountedButtons]) {
@@ -412,13 +501,20 @@ function ensureLifecycleButton() {
     return
   }
   try {
-    if (addWatchLaterButton())
+    if (addWatchLaterButton()) {
       settleFirstMount(true)
+      const button = document.querySelector<HTMLButtonElement>(`.${BUTTON_CLASS}`)
+      if (button) {
+        enterToolbarStablePhase(button)
+        return
+      }
+    }
   }
   catch (error) {
     if (!isExtensionContextInvalidatedError(error))
       console.error('挂载稍后再看按钮失败:', error)
   }
+  enterToolbarDiscovery()
 }
 
 function scheduleLifecycleButtonCheck() {
@@ -456,25 +552,8 @@ export function mountWatchLaterButtonWhenToolbarReady(): Promise<boolean> {
     }
   }
 
-  if (!toolbarLifecycleObserver && document.body) {
-    toolbarLifecycleObserver = new MutationObserver((records) => {
-      const relevant = records.some((record) => {
-        if (record.type === 'attributes')
-          return nodeTouchesToolbarLifecycle(record.target)
-        return Array.from(record.addedNodes)
-          .concat(Array.from(record.removedNodes))
-          .some(nodeTouchesToolbarLifecycle)
-      })
-      if (relevant)
-        scheduleLifecycleButtonCheck()
-    })
-    toolbarLifecycleObserver.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class', 'style', 'hidden'],
-    })
-  }
+  if (!toolbarStableObserver)
+    enterToolbarDiscovery()
 
   scheduleLifecycleButtonCheck()
   return firstMountPromise
@@ -482,8 +561,8 @@ export function mountWatchLaterButtonWhenToolbarReady(): Promise<boolean> {
 
 export function removeWatchLaterButton() {
   toolbarLifecycleActive = false
-  toolbarLifecycleObserver?.disconnect()
-  toolbarLifecycleObserver = undefined
+  disconnectToolbarDiscoveryObserver()
+  disconnectToolbarStableObserver()
   toolbarLifecycleEventCleanup?.()
   toolbarLifecycleEventCleanup = undefined
   if (toolbarLifecycleFrame !== undefined)

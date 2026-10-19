@@ -1,7 +1,6 @@
 import type Browser from 'webextension-polyfill'
 import browser from 'webextension-polyfill'
 
-import { CONTENT_SCRIPT_MATCHES } from '~/constants/contentScript'
 import type {
   TopBarFavoritesChanged,
   TopBarRefreshClaim,
@@ -18,6 +17,9 @@ import {
 } from '~/constants/topBarState'
 import { onMessage } from '~/utils/messaging'
 
+import type { StateConsumerBrowser } from './stateConsumers'
+import { createStateConsumerRegistry, getStateConsumerRegistry } from './stateConsumers'
+
 interface TopBarStateEntry {
   snapshot?: Partial<TopBarSharedState>
   updatedAt: number
@@ -28,12 +30,11 @@ interface TopBarStateEntry {
   snapshotVersion?: number
 }
 
-export interface TopBarStateBrokerBrowser {
+export interface TopBarStateBrokerBrowser extends StateConsumerBrowser {
   extension?: Pick<Browser.Extension.Static, 'inIncognitoContext'>
   storage?: {
     session?: Pick<Browser.Storage.StorageAreaWithUsage, 'get' | 'set'>
   }
-  tabs: Pick<Browser.Tabs.Static, 'query' | 'sendMessage'>
 }
 
 export interface TopBarStateBroker {
@@ -60,13 +61,8 @@ export interface TopBarStateBroker {
 }
 
 const REFRESH_LEASE_TIMEOUT = 30_000
-const TOP_BAR_STATE_STORAGE_KEY = 'topBarStateBroker:v3'
-const TOP_BAR_STATE_STORAGE_VERSION = 3
-
-interface PersistedTopBarState {
-  version: typeof TOP_BAR_STATE_STORAGE_VERSION
-  entries: Record<string, TopBarStateEntry>
-}
+/** One session-storage record per context/account/resource: no write rewrites unrelated resources. */
+const TOP_BAR_STATE_STORAGE_KEY = 'topBarStateBroker:v4'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -98,13 +94,6 @@ function isTopBarStateEntry(value: unknown): value is TopBarStateEntry {
     && (value.snapshot === undefined || isTopBarSharedState(value.snapshot))
 }
 
-function isPersistedTopBarState(value: unknown): value is PersistedTopBarState {
-  return isRecord(value)
-    && value.version === TOP_BAR_STATE_STORAGE_VERSION
-    && isRecord(value.entries)
-    && Object.values(value.entries).every(isTopBarStateEntry)
-}
-
 function getBrowserContextKey(tab?: Browser.Tabs.Tab) {
   const privacyContext = tab?.incognito ? 'private' : 'normal'
   return `${privacyContext}:default`
@@ -116,16 +105,24 @@ function getStateKey(tab: Browser.Tabs.Tab | undefined, accountId: number, resou
 
 export function createTopBarStateBroker(
   extensionApi: TopBarStateBrokerBrowser = browser,
+  consumers = createStateConsumerRegistry(extensionApi),
 ): TopBarStateBroker {
   const stateByContext = new Map<string, TopBarStateEntry>()
   const sessionStorage = extensionApi.storage?.session
-  const storageKey = extensionApi.extension?.inIncognitoContext ? `${TOP_BAR_STATE_STORAGE_KEY}:private` : TOP_BAR_STATE_STORAGE_KEY
+  const storagePrefix = `${extensionApi.extension?.inIncognitoContext ? `${TOP_BAR_STATE_STORAGE_KEY}:private` : TOP_BAR_STATE_STORAGE_KEY}:`
   let stateLoadPromise: Promise<void> | undefined
-  let operationQueue: Promise<void> = Promise.resolve()
+  /** Leases and versions of one resource stay ordered; other resources never wait for it. */
+  const operationQueues = new Map<string, Promise<void>>()
 
-  function runExclusive<T>(operation: () => T | Promise<T>): Promise<T> {
-    const result = operationQueue.then(operation, operation)
-    operationQueue = result.then(() => undefined, () => undefined)
+  function runExclusive<T>(key: string, operation: () => T | Promise<T>): Promise<T> {
+    const previous = operationQueues.get(key) ?? Promise.resolve()
+    const result = previous.then(operation, operation)
+    const settled = result.then(() => undefined, () => undefined)
+    operationQueues.set(key, settled)
+    void settled.then(() => {
+      if (operationQueues.get(key) === settled)
+        operationQueues.delete(key)
+    })
     return result
   }
 
@@ -134,15 +131,11 @@ export function createTopBarStateBroker(
       return
 
     try {
-      const stored = await sessionStorage.get(storageKey)
-      const persistedState = stored[storageKey]
-
-      if (!isPersistedTopBarState(persistedState))
-        return
-
-      Object.entries(persistedState.entries).forEach(([key, entry]) => {
-        stateByContext.set(key, entry)
-      })
+      const stored = await sessionStorage.get(null)
+      for (const [storageKey, entry] of Object.entries(stored)) {
+        if (storageKey.startsWith(storagePrefix) && isTopBarStateEntry(entry))
+          stateByContext.set(storageKey.slice(storagePrefix.length), entry)
+      }
     }
     catch {
       // 不支持会话存储时继续使用当前后台进程内的状态
@@ -154,29 +147,27 @@ export function createTopBarStateBroker(
     await stateLoadPromise
   }
 
-  async function persistState(): Promise<void> {
-    if (!sessionStorage)
+  /** A lease grant or version commit is persisted before its reply, for this record only. */
+  async function persistEntry(key: string): Promise<void> {
+    const entry = stateByContext.get(key)
+    if (!sessionStorage || !entry)
       return
 
-    const persistedState: PersistedTopBarState = {
-      version: TOP_BAR_STATE_STORAGE_VERSION,
-      entries: Object.fromEntries(stateByContext),
-    }
-
     try {
-      await sessionStorage.set({
-        [storageKey]: persistedState,
-      })
+      await sessionStorage.set({ [`${storagePrefix}${key}`]: entry })
     }
     catch {
       // 写入失败不影响当前后台进程继续协调刷新
     }
   }
 
-  function getEntry(accountId: number, resource: TopBarSharedResource, sender?: Browser.Runtime.MessageSender) {
+  function resolveKey(accountId: number, resource: TopBarSharedResource, sender?: Browser.Runtime.MessageSender) {
     if (!Number.isSafeInteger(accountId) || accountId <= 0 || !Object.hasOwn(TOP_BAR_RESOURCE_FIELDS, resource))
       throw new TypeError('Invalid TopBar resource')
-    const key = getStateKey(sender?.tab, accountId, resource)
+    return getStateKey(sender?.tab, accountId, resource)
+  }
+
+  function getEntry(key: string) {
     let entry = stateByContext.get(key)
 
     if (!entry) {
@@ -193,86 +184,28 @@ export function createTopBarStateBroker(
     return entry
   }
 
-  async function broadcastSnapshot(
-    data: TopBarStatePublish,
-    sender?: Browser.Runtime.MessageSender,
-  ): Promise<void> {
-    const browserContextKey = getBrowserContextKey(sender?.tab)
-    let tabs: Browser.Tabs.Tab[]
-
-    try {
-      tabs = await extensionApi.tabs.query({
-        url: [...CONTENT_SCRIPT_MATCHES],
-      })
-    }
-    catch {
-      return
-    }
-
-    await Promise.allSettled(
-      tabs
-        .filter(tab => tab.id !== undefined && getBrowserContextKey(tab) === browserContextKey)
-        .map(tab => extensionApi.tabs.sendMessage(tab.id!, {
-          type: TOP_BAR_STATE_MESSAGE.UPDATED,
-          data,
-        })),
-    )
+  // Only documents that claimed this topic and still show it receive changes;
+  // a consumer already holding this resource revision is skipped.
+  function deliverSnapshot(data: TopBarStatePublish, sender?: Browser.Runtime.MessageSender) {
+    return consumers.deliver('topBar', { type: TOP_BAR_STATE_MESSAGE.UPDATED, data }, consumers.privacyOf(sender?.tab), {
+      resource: `${data.accountId}:${data.resource}`,
+      revision: `${data.version}:${data.refreshId}`,
+    })
   }
 
-  async function broadcastInvalidation(
-    data: TopBarStateInvalidate,
-    sender?: Browser.Runtime.MessageSender,
-    messageType: string = TOP_BAR_STATE_MESSAGE.INVALIDATED,
-    excludeSender = false,
-  ): Promise<void> {
-    const browserContextKey = getBrowserContextKey(sender?.tab)
-
-    try {
-      const tabs = await extensionApi.tabs.query({ url: [...CONTENT_SCRIPT_MATCHES] })
-      await Promise.allSettled(
-        tabs
-          .filter(tab => tab.id !== undefined
-            && (!excludeSender || tab.id !== sender?.tab?.id)
-            && getBrowserContextKey(tab) === browserContextKey)
-          .map(tab => extensionApi.tabs.sendMessage(tab.id!, {
-            type: messageType,
-            data,
-          })),
-      )
-    }
-    catch {
-      // 页面可能已关闭；后续初始化仍会从已失效的缓存重新请求
-    }
-  }
-
-  async function broadcastFavoritesChanged(
-    data: TopBarFavoritesChanged,
-    sender?: Browser.Runtime.MessageSender,
-  ): Promise<void> {
-    const browserContextKey = getBrowserContextKey(sender?.tab)
-
-    try {
-      const tabs = await extensionApi.tabs.query({ url: [...CONTENT_SCRIPT_MATCHES] })
-      await Promise.allSettled(
-        tabs
-          .filter(tab => tab.id !== undefined && getBrowserContextKey(tab) === browserContextKey)
-          .map(tab => extensionApi.tabs.sendMessage(tab.id!, {
-            type: TOP_BAR_STATE_MESSAGE.FAVORITES_CHANGED,
-            data,
-          })),
-      )
-    }
-    catch {
-      // 页面可能已关闭；下次打开收藏 Pop 时仍会重新拉取
-    }
+  function deliverInvalidation(data: TopBarStateInvalidate, sender?: Browser.Runtime.MessageSender) {
+    return consumers.deliver('topBar', { type: TOP_BAR_STATE_MESSAGE.INVALIDATED, data }, consumers.privacyOf(sender?.tab))
   }
 
   return {
-    claimRefresh({ accountId, maxAge, force = false, resource }, sender) {
-      return runExclusive(async () => {
+    async claimRefresh({ accountId, maxAge, force = false, resource }, sender) {
+      const key = resolveKey(accountId, resource, sender)
+      // A claim is the document's current display demand for this topic.
+      void consumers.touch('topBar', sender)
+      return runExclusive(key, async () => {
         await ensureStateLoaded()
 
-        const entry = getEntry(accountId, resource, sender)
+        const entry = getEntry(key)
         const now = Date.now()
         const snapshotFresh = entry.snapshot !== undefined && entry.snapshotVersion === entry.version && now - entry.updatedAt < maxAge
         const refreshInProgress = entry.refreshStartedAt > 0
@@ -284,7 +217,7 @@ export function createTopBarStateBroker(
           entry.refreshStartedAt = now
           entry.refreshId += 1
           entry.refreshVersion = entry.version
-          await persistState()
+          await persistEntry(key)
         }
 
         return {
@@ -298,74 +231,77 @@ export function createTopBarStateBroker(
 
     async publish(data, sender) {
       const { accountId, snapshot, refreshId, resource, version } = data
-      const published = await runExclusive(async () => {
+      const key = resolveKey(accountId, resource, sender)
+      const published = await runExclusive(key, async () => {
         await ensureStateLoaded()
 
-        const entry = getEntry(accountId, resource, sender)
+        const entry = getEntry(key)
         if (entry.refreshId !== refreshId || !entry.refreshStartedAt || entry.refreshVersion !== version)
           return undefined
 
         entry.refreshStartedAt = 0
         if (entry.version !== version) {
-          await persistState()
+          await persistEntry(key)
           return { invalidated: true, version: entry.version }
         }
         const fields = TOP_BAR_RESOURCE_FIELDS[resource]
         const selected = Object.fromEntries(fields.filter(field => field in snapshot).map(field => [field, snapshot[field]]))
         if (!isTopBarSharedState(selected) || fields.some(field => !field.endsWith('At') && !(field in selected))) {
-          await persistState()
+          await persistEntry(key)
           return undefined
         }
         entry.snapshot = selected
         entry.snapshotVersion = version
         entry.updatedAt = Date.now()
-        await persistState()
+        await persistEntry(key)
         return { invalidated: false, version, snapshot: selected }
       })
 
       if (published?.invalidated)
-        await broadcastInvalidation({ accountId, resource, version: published.version }, sender)
+        await deliverInvalidation({ accountId, resource, version: published.version }, sender)
       else if (published?.snapshot)
-        await broadcastSnapshot({ ...data, snapshot: published.snapshot }, sender)
+        await deliverSnapshot({ ...data, snapshot: published.snapshot }, sender)
     },
 
     async releaseRefresh({ accountId, refreshId, resource }, sender) {
-      const dirty = await runExclusive(async () => {
+      const key = resolveKey(accountId, resource, sender)
+      const dirty = await runExclusive(key, async () => {
         await ensureStateLoaded()
-        const entry = getEntry(accountId, resource, sender)
+        const entry = getEntry(key)
         if (entry.refreshId !== refreshId)
           return
 
         entry.refreshStartedAt = 0
-        await persistState()
+        await persistEntry(key)
         return entry.version !== entry.refreshVersion ? entry.version : undefined
       })
       if (dirty !== undefined)
-        await broadcastInvalidation({ accountId, resource, version: dirty }, sender)
+        await deliverInvalidation({ accountId, resource, version: dirty }, sender)
     },
 
     async invalidate(data, sender) {
-      const version = await runExclusive(async () => {
+      const key = resolveKey(data.accountId, data.resource, sender)
+      const version = await runExclusive(key, async () => {
         await ensureStateLoaded()
-        const entry = getEntry(data.accountId, data.resource, sender)
+        const entry = getEntry(key)
         entry.updatedAt = 0
         entry.version++
-        await persistState()
+        await persistEntry(key)
         return entry.version
       })
 
-      await broadcastInvalidation({ ...data, version }, sender)
+      await deliverInvalidation({ ...data, version }, sender)
     },
 
     notifyFavoritesChanged(data, sender) {
-      return broadcastFavoritesChanged(data, sender)
+      return consumers.deliver('topBar', { type: TOP_BAR_STATE_MESSAGE.FAVORITES_CHANGED, data }, consumers.privacyOf(sender?.tab))
     },
 
   }
 }
 
 export function setupTopBarStateBroker() {
-  const broker = createTopBarStateBroker()
+  const broker = createTopBarStateBroker(browser, getStateConsumerRegistry())
 
   onMessage<TopBarStateClaim>(
     TOP_BAR_STATE_MESSAGE.CLAIM_REFRESH,

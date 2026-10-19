@@ -203,8 +203,19 @@ export function useMomentPreviews(getAccountId: () => AccountId, options?: {
             })
           })
           player.on(Hls.Events.ERROR, (_event, data) => {
-            if (data.fatal && streamSession.hls === player)
-              failLivePreview(generation, momentId, url, videoEl)
+            if (!data.fatal || streamSession.hls !== player)
+              return
+            // Media errors get the bounded per-instance recovery first; only
+            // its exhaustion (or any other fatal error) advances to the next
+            // live source, so one failure has one owner at a time.
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              streamSession.recoverHlsMediaError(player, videoEl, () => {
+                if (streamSession.hls === player)
+                  failLivePreview(generation, momentId, url, videoEl)
+              })
+              return
+            }
+            failLivePreview(generation, momentId, url, videoEl)
           })
           return
         }

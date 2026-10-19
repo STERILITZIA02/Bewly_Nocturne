@@ -21,7 +21,8 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     const originalHidden = Object.getOwnPropertyDescriptor(document, 'hidden')
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
     const noop = () => {}
-    const viewport = { scrollHeight: 4000, clientHeight: 800, scrollTop: 0 }
+    const viewport = document.body.appendChild(document.createElement('div'))
+    Object.defineProperties(viewport, { scrollHeight: { value: 4000 }, clientHeight: { value: 800 }, scrollTop: { value: 0, writable: true } })
     const appState = { scrollViewportRef: Vue.ref(viewport), handlePageRefresh: Vue.ref(), handleReachBottom: Vue.ref() }
     const data = id => ({ id, publishedAt: 1, isVideo: false, author: { mid: '1' } })
     const filterPolicy = Vue.ref({ active: false, keywords: [], passes: () => true })
@@ -52,7 +53,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       '~/utils/momentHostFollowState': {},
     })
-    const componentStubs = Object.fromEntries(['Button.vue', 'CloseButton.vue', 'Dialog.vue', 'LiquidSegmentIndicator.vue', 'MomentCard/MomentCard.vue', 'MomentCard/MomentCardSkeleton.vue'].map(name => [`~/components/${name}`, { default: { render: () => null } }]))
+    const componentStubs = Object.fromEntries(['Button.vue', 'CloseButton.vue', 'Dialog.vue', 'LiquidSegmentIndicator.vue', 'MomentCard/MomentCard.vue', 'MomentCard/MomentCardSkeleton.vue', 'MomentCard/MomentReportDialog.vue', 'IconButton.vue', 'LibraryWorkspace.vue'].map(name => [`~/components/${name}`, { default: { render: () => null } }]))
     const component = await compileComponent('../src/contentScripts/views/Moments/Moments.vue', {
       ...componentStubs,
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
@@ -74,6 +75,14 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       '~/utils/momentCommentSession': { createMomentCommentSessionCache: () => ({ clear: noop, setAccount: noop }), MOMENT_COMMENT_SESSIONS: Symbol('comments') },
       '~/utils/momentsLayout': {},
       '~/utils/momentUrl': {},
+      '~/utils/scrollIntent': await import('../src/utils/scrollIntent'),
+      '~/composables/useConfirmDialog': { useConfirmDialog: () => ({ confirm: async () => false }) },
+      '~/composables/useSourcePanelMotion': { useSourcePanelMotion: () => ({}) },
+      './momentPortal': { getSidebarAvatarUrl: () => '' },
+      './MomentsContentLayout.vue': { default: { render: () => null } },
+      './MomentsHotSearch.vue': { default: { render: () => null } },
+      './MomentsSidebar.vue': { default: { render: () => null } },
+      '~/utils/viewportGeometry': await import('../src/utils/viewportGeometry'),
       './momentAdapter': { createMomentAdapter: () => ({ mapMoment: item => item, collectVideoPublicationTimes: () => [] }) },
       './momentFeedReader': readerModule,
       './useMomentActions': { useMomentActions: () => ({ reset: noop }) },
@@ -158,6 +167,135 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     }
   })
 
+  check('pagination ownership: an unmoved cursor stalls automation without ending the feed; clamps restore, user scrolls and explicit jumps win', async () => {
+    const responses = [
+      { code: 0, data: { items: [{ id: 'a' }], offset: 'same', has_more: true } },
+      { code: 0, data: { items: [{ id: 'b' }], offset: 'same', has_more: true } },
+      { code: 0, data: { items: [], offset: 'end', has_more: false } },
+    ]
+    const api = { moment: { getMoments: async () => responses.shift() } }
+    const { createMomentFeedReader } = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {
+      '~/utils/api': { default: api },
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      '~/utils/momentHostFollowState': {},
+    })
+    const reader = createMomentFeedReader(item => item)
+    const request = { reset: true, type: 'all', hostMid: '', offset: '', updateBaseline: '', page: 1, filtered: false }
+    const first = await reader.read(request, () => true)
+    assert.deepEqual([first.hasMore, first.stalled], [true, false])
+    const repeated = await reader.read({ ...request, reset: false, offset: 'same' }, () => true)
+    assert.deepEqual([repeated.hasMore, repeated.stalled], [true, true], 'no progress is not the server end')
+    const ended = await reader.read({ ...request, reset: false, offset: 'same' }, () => true)
+    assert.deepEqual([ended.hasMore, ended.stalled], [false, false])
+
+    const scroll = await import('../src/utils/scrollIntent')
+    const viewport = document.body.appendChild(document.createElement('div'))
+    let scrollHeight = 5000
+    Object.defineProperties(viewport, {
+      clientHeight: { value: 800 },
+      scrollHeight: { get: () => scrollHeight },
+      scrollTop: { value: 1200, writable: true },
+    })
+    viewport.scrollTo = ({ top }) => {
+      viewport.scrollTop = top
+    }
+    try {
+      let claim = scroll.claimScrollPosition(viewport)
+      assert.equal(scroll.canRestoreScrollPosition(viewport, claim), false, 'an unchanged position needs no write')
+      // A temporarily shorter range clamps without a gesture; the committed layout holds it again.
+      scrollHeight = 1600
+      viewport.scrollTop = 800
+      scrollHeight = 5200
+      assert.equal(scroll.canRestoreScrollPosition(viewport, claim), true)
+      viewport.dispatchEvent(new window.Event('wheel'))
+      assert.equal(scroll.canRestoreScrollPosition(viewport, claim), false, 'continued user scrolling wins')
+      claim = scroll.claimScrollPosition(viewport)
+      viewport.scrollTop = 400
+      scroll.scrollToPosition(viewport, 0)
+      assert.equal(scroll.canRestoreScrollPosition(viewport, claim), false, 'an explicit jump or another restore wins')
+      claim = scroll.claimScrollPosition(viewport)
+      viewport.scrollTop = 0
+      scrollHeight = 600
+      assert.equal(scroll.canRestoreScrollPosition(viewport, { ...claim, top: 1200 }), false, 'an unreachable position is not forced')
+    }
+    finally {
+      viewport.remove()
+    }
+  })
+
+  check('viewport geometry: one read per owner and round is shared by every subscriber; hidden pages defer and release stops work', async () => {
+    const frames = new Map()
+    let frameId = 0
+    let hidden = false
+    const originalHidden = Object.getOwnPropertyDescriptor(document, 'hidden')
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
+    const geometry = await loadSourceModule('../src/utils/viewportGeometry.ts', {}, {
+      window: { innerHeight: 700, addEventListener() {}, removeEventListener() {} },
+      requestAnimationFrame: (callback) => {
+        frames.set(++frameId, callback)
+        return frameId
+      },
+      cancelAnimationFrame: id => frames.delete(id),
+      ResizeObserver: class { observe() {} disconnect() {} },
+    })
+    const runFrame = () => {
+      const pending = [...frames.values()]
+      frames.clear()
+      pending.forEach(callback => callback())
+    }
+    const createViewport = () => {
+      const element = document.body.appendChild(document.createElement('div'))
+      let reads = 0
+      Object.defineProperties(element, {
+        clientHeight: { get: () => {
+          reads++
+          return 700
+        } },
+        scrollHeight: { value: 9000 },
+        scrollTop: { value: 0, writable: true },
+      })
+      return { element, reads: () => reads }
+    }
+    const main = createViewport()
+    const panel = createViewport()
+    const seen = []
+    const stops = [0, 1, 2].map(index => geometry.subscribeViewportFrame(main.element, (snapshot, reason) => seen.push([index, snapshot.scrollTop, reason])))
+    const stopPanel = geometry.subscribeViewportFrame(panel.element, snapshot => seen.push(['panel', snapshot.scrollTop]))
+    try {
+      main.element.scrollTop = 300
+      for (let event = 0; event < 5; event++)
+        main.element.dispatchEvent(new window.Event('scroll'))
+      runFrame()
+      assert.deepEqual(seen, [[0, 300, 'scroll'], [1, 300, 'scroll'], [2, 300, 'scroll']])
+      assert.equal(main.reads(), 1, 'five scroll events and three consumers share one measurement')
+      assert.equal(panel.reads(), 0, 'another scroll owner is not measured for this one')
+      seen.length = 0
+      geometry.invalidateViewportGeometry(main.element)
+      main.element.dispatchEvent(new window.Event('scroll'))
+      runFrame()
+      assert.ok(seen.every(([, , reason]) => reason === 'layout'), 'a commit in the same frame outranks the scroll')
+      hidden = true
+      seen.length = 0
+      geometry.invalidateViewportGeometry(main.element)
+      assert.equal(frames.size, 1)
+      hidden = false
+      runFrame()
+      assert.equal(seen.length, 3)
+      stops.forEach(stop => stop())
+      stopPanel()
+      main.element.dispatchEvent(new window.Event('scroll'))
+      assert.equal(frames.size, 0, 'the last subscriber releases listeners and frames')
+    }
+    finally {
+      main.element.remove()
+      panel.element.remove()
+      if (originalHidden)
+        Object.defineProperty(document, 'hidden', originalHidden)
+      else
+        delete document.hidden
+    }
+  })
+
   check('moment reader: replacing or disposing a read aborts only its own GET transport and never commits the cancelled batch', async () => {
     const requests = []
     const module = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {
@@ -217,7 +355,9 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       '~/utils/watchLater': {},
     })
     const selected = Vue.ref(post)
-    const handler = await loadSourceFunctions(MOMENTS_SOURCE_FILES, ['handleMomentForwardCountChange', 'applyMomentPatch'], {
+    const handler = await loadSourceFunctions(MOMENTS_SOURCE_FILES, ['handleMomentForwardCountChange', 'applyMomentPatch', 'getMomentPositions', 'findMoment'], {
+      indexedMoments: undefined,
+      momentPositions: new Map(),
       normalizeForwardCount: (await import('../src/components/MomentCard/momentForwardContent')).normalizeForwardCount,
       forwardCountOverrides: new Map(),
       getCurrentAccountId: () => 1,
@@ -272,6 +412,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       '~/utils/gridLayout': gridPolicy,
       '~/utils/mitt': { default: { on: () => {}, off: () => {} } },
       '~/utils/videoCardLayout': coverPolicy,
+      '~/utils/viewportGeometry': await import('../src/utils/viewportGeometry'),
       './SmoothLoading.vue': { default: { render: () => null } },
     })
     const root = document.body.appendChild(document.createElement('section'))

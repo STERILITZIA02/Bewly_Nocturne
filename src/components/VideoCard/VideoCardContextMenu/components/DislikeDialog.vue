@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { Icon } from '@iconify/vue'
 import { onKeyStroke } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
@@ -164,9 +163,9 @@ onKeyStroke((e: KeyboardEvent) => {
           </div>
           {{ reason.name }}
         </div>
-        <Icon
-          v-if="isSelected(ThreePointV2Type.Dislike, reason)" icon="tabler:check"
-          w-18px h-18px
+        <span
+          v-if="isSelected(ThreePointV2Type.Dislike, reason)" class="i-tabler:check"
+          w-18px h-18px aria-hidden="true"
         />
       </li>
     </ul>
@@ -191,9 +190,9 @@ onKeyStroke((e: KeyboardEvent) => {
             </div>
             {{ reason.name }}
           </div>
-          <Icon
-            v-if="isSelected(ThreePointV2Type.Feedback, reason)" icon="tabler:check"
-            w-18px h-18px
+          <span
+            v-if="isSelected(ThreePointV2Type.Feedback, reason)" class="i-tabler:check"
+            w-18px h-18px aria-hidden="true"
           />
         </li>
       </ul>

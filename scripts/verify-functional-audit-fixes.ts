@@ -34,7 +34,7 @@ async function verifyRankingLoadingEvents() {
     requestFailed: { value: false },
     requestGeneration: 1,
     isLoading: { value: false },
-    PgcList: [],
+    PgcList: { value: [] },
     emit: (event: string) => events.push(event),
     api: { ranking: { getRankingPgc: () => new Promise(resolve => completions.push(resolve)) } },
   })
@@ -48,7 +48,7 @@ async function verifyRankingLoadingEvents() {
   await second
   assert.equal(context.isLoading.value, false)
   assert.deepEqual(events, ['beforeLoading', 'beforeLoading', 'afterLoading'])
-  assert.equal(context.PgcList[0], 'current')
+  assert.deepEqual(context.PgcList.value, ['current'])
 }
 
 async function verifyScrollOwnerCleanup() {
@@ -195,6 +195,7 @@ async function verifyVideoIdentityReuse() {
           '~/utils/advertising': await import('../src/utils/advertising'),
           '~/utils/htmlDecode': await import('../src/utils/htmlDecode'),
           '~/utils/uriParse': await import('../src/utils/uriParse'),
+          './appRecommendationItem': await import('../src/contentScripts/views/Home/adapters/appRecommendationItem'),
         })
       : await loadSourceFunctions(`../src/contentScripts/views/Home/components/${file}.vue`, [name], { decodeHtmlEntities })
     const video = context[name](file === 'Trending' ? { item: fixture } : fixture, 1)

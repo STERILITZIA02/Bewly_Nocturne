@@ -32,12 +32,15 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
   const entries = new Map<number, Entry>()
   let loaded: Promise<void> | undefined
 
+  const accountKey = (accountId: number) => `${dependencies.storageKey}:${accountId}`
+  const indexedAccounts = new Set<number>()
   async function load() {
     loaded ??= (async () => {
-      const stored = (await dependencies.storage.get(dependencies.storageKey))[dependencies.storageKey]
-      if (!stored || typeof stored !== 'object')
-        return
-      for (const value of Object.values(stored)) {
+      // The index lists accounts; each account's record is stored separately.
+      const index = (await dependencies.storage.get(dependencies.storageKey))[dependencies.storageKey] as { accounts?: unknown } | undefined
+      const accounts = Array.isArray(index?.accounts) ? index.accounts.filter(Number.isSafeInteger) as number[] : []
+      const records = await Promise.all(accounts.map(async id => (await dependencies.storage.get(accountKey(id)))[accountKey(id)]))
+      for (const value of records) {
         const entry = value as PersistedEntry
         const snapshot = entry?.snapshot
         if (!snapshot || !snapshot.epoch || !Number.isSafeInteger(snapshot.revision) || !Array.isArray(snapshot.entries)
@@ -53,6 +56,7 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
         snapshot.updatedAt = 0
         snapshot.countUpdatedAt = 0
         entries.set(snapshot.accountId, { ...entry, confirmed: entry.confirmed.map(item => ({ ...item, revision: 0, disagreements: 0 })), sending: undefined, writeQueue: Promise.resolve() })
+        indexedAccounts.add(snapshot.accountId)
       }
     })()
     await loaded
@@ -72,16 +76,21 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
     return entry
   }
 
-  // Serial storage writes retain revision order, including during a batch.
-  let persistQueue = Promise.resolve()
-  function persist() {
-    const value = Object.fromEntries([...entries].map(([id, entry]) => [id, {
-      snapshot: entry.snapshot,
-      confirmed: entry.confirmed,
-      sending: entry.sending,
-    }]))
-    const task = persistQueue.then(() => dependencies.storage.set({ [dependencies.storageKey]: value }))
-    persistQueue = task.catch(() => {})
+  // Serial writes per account retain revision order, including during a batch;
+  // one account's slow write never queues another account's record.
+  const persistQueues = new Map<number, Promise<void>>()
+  function persist(accountId: number) {
+    const entry = entries.get(accountId)
+    if (!entry)
+      return Promise.resolve()
+    const value = { snapshot: entry.snapshot, confirmed: entry.confirmed, sending: entry.sending }
+    const values: Record<string, unknown> = { [accountKey(accountId)]: value }
+    if (!indexedAccounts.has(accountId)) {
+      indexedAccounts.add(accountId)
+      values[dependencies.storageKey] = { accounts: [...entries.keys()] }
+    }
+    const task = (persistQueues.get(accountId) ?? Promise.resolve()).then(() => dependencies.storage.set(values))
+    persistQueues.set(accountId, task.catch(() => {}))
     return task
   }
 
@@ -103,7 +112,7 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
         || !('entry' in item.change) || !('entry' in change) || item.change.entry.aid !== change.entry.aid)
       entry.confirmed.push({ change, revision: snapshot.revision, disagreements: 0 })
     }
-    await persist()
+    await persist(previous.accountId)
     const update: WatchLaterUpdate = {
       type: 'change',
       accountId: previous.accountId,
@@ -161,7 +170,25 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
               }
             }
             const complete = entry.snapshot.complete && count === entry.snapshot.entries.length
-            entry.snapshot = { ...entry.snapshot, count, countUpdatedAt: Date.now(), revision: version + 1, complete, entries: complete || count === entry.snapshot.count ? entry.snapshot.entries : [], updatedAt: complete ? entry.snapshot.updatedAt : 0 }
+            const previous = entry.snapshot
+            const entries = complete || count === previous.count ? previous.entries : []
+            entry.snapshot = { ...previous, count, countUpdatedAt: Date.now(), revision: version + 1, complete, entries, updatedAt: complete ? previous.updatedAt : 0 }
+            await persist(account.accountId)
+            signal.throwIfAborted()
+            // A count needs no member list on the wire: consumers keep theirs.
+            await dependencies.broadcast({
+              type: 'count',
+              accountId: previous.accountId,
+              epoch: previous.epoch,
+              baseRevision: version,
+              revision: entry.snapshot.revision,
+              count,
+              countUpdatedAt: entry.snapshot.countUpdatedAt,
+              complete,
+              updatedAt: entry.snapshot.updatedAt,
+              entriesDropped: entries !== previous.entries,
+            })
+            return entry.snapshot
           }
           else {
             const members = new Map<number, WatchLaterEntry>()
@@ -199,7 +226,7 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
               throw new Error('Watch Later membership is awaiting server reconciliation')
           }
           const snapshot = entry.snapshot
-          await persist()
+          await persist(account.accountId)
           signal.throwIfAborted()
           if (full)
             entry.membershipRetryAt = 0
@@ -270,9 +297,16 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
             || items.some((item, index) => item.aid !== previous.entries[index]?.aid || item.bvid !== previous.entries[index]?.bvid || item.epid !== previous.entries[index]?.epid)
           const snapshot = { ...previous, entries: items, count: count!, complete, countUpdatedAt: Date.now(), updatedAt: wholePage ? Date.now() : complete ? previous.updatedAt : 0, revision: previous.revision + Number(changed) }
           entry.snapshot = snapshot
-          await persist()
-          if (changed)
+          await persist(account.accountId)
+          const sameMembers = items.length === previous.entries.length
+            && items.every((item, index) => item.aid === previous.entries[index]?.aid && item.bvid === previous.entries[index]?.bvid && item.epid === previous.entries[index]?.epid)
+          // Unchanged members travel as a count update; consumers keep their list.
+          if (changed && sameMembers) {
+            await dependencies.broadcast({ type: 'count', accountId: previous.accountId, epoch: previous.epoch, baseRevision: previous.revision, revision: snapshot.revision, count: snapshot.count!, countUpdatedAt: snapshot.countUpdatedAt, complete, updatedAt: snapshot.updatedAt, entriesDropped: false })
+          }
+          else if (changed) {
             await dependencies.broadcast({ type: 'snapshot', snapshot })
+          }
           return result
         }
         throw new Error('Watch Later page changed during read')
@@ -289,7 +323,7 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
       const task = entry.writeQueue.catch(() => {}).then(async () => {
         await requireAccount(account.accountId, account.csrf)
         entry.sending = operationId
-        await persist()
+        await persist(account.accountId)
         let response: WatchLaterWriteResponse
         try {
           response = await send()
@@ -302,7 +336,7 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
         entry.sending = undefined
         if (response.code === 0)
           return { ...response, watchLaterUpdate: await publishChange(entry, change, operationId) }
-        await persist()
+        await persist(account.accountId)
         return response
       })
       entry.writeQueue = task

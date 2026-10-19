@@ -390,7 +390,8 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       props.modelValue = 1
       await flush()
       assert.match(trigger.textContent, /Enabled/)
-      assert.equal(host.querySelectorAll('[data-bew-skeleton]').length, 1)
+      assert.equal(host.querySelectorAll('[data-bew-skeleton]').length, 0, 'a known label replaces the text placeholder')
+      assert.ok(host.querySelector('.bew-loading-ring'), 'the chevron slot shows the loading ring while the label is known')
       props.loading = false
       await flush()
       assert.equal(trigger.disabled, false)

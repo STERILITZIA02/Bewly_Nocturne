@@ -1,7 +1,10 @@
-import type { TransitionProps } from 'vue'
+import type { InjectionKey, Ref, TransitionProps } from 'vue'
 import { onScopeDispose } from 'vue'
 
 import { getMotionDuration } from '../utils/motionTiming'
+
+/** True inside a surface that already samples the backdrop, so descendants stay solid. */
+export const GLASS_SURFACE_CONTEXT: InjectionKey<Readonly<Ref<boolean>>> = Symbol('bew-glass-surface')
 
 /** Keep glass and its ancestors opaque: opacity changes the backdrop sampling root. */
 export function useGlassPanelMotion(selector: string, collapsedTransform?: (panel: HTMLElement) => string, fadeSelector?: string): TransitionProps {

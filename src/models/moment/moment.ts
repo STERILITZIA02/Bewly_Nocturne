@@ -374,7 +374,8 @@ export interface Stat {
 export interface Pgc {
   badge: Badge
   cover: string
-  epid: number
+  // The dynamic feed currently serializes this ID as a string.
+  epid: number | string
   jump_url: string
   season_id: number
   stat: Stat

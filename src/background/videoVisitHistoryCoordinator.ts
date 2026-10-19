@@ -1,10 +1,10 @@
 import browser from 'webextension-polyfill'
 
-import { CONTENT_SCRIPT_MATCHES } from '~/constants/contentScript'
 import { onMessage } from '~/utils/messaging'
 import type { VideoHistoryCommand, VideoHistorySnapshot, VideoHistoryUpdate, VideoHistoryWriteDelta } from '~/utils/videoVisitRecord'
 import { applyVideoHistoryEdits, limitVideoVisitHistory, mergeVideoVisitRecord, pruneVideoVisitHistory, VIDEO_VISIT_HISTORY_MAX_ENTRIES, VIDEO_VISIT_HISTORY_MESSAGE, VIDEO_VISIT_HISTORY_UPDATED, videoHistoryBaseKeys } from '~/utils/videoVisitRecord'
 
+import { getStateConsumerRegistry } from './stateConsumers'
 import { createVideoVisitHistoryDatabase } from './videoVisitHistoryDatabase'
 
 interface Dependencies {
@@ -135,15 +135,13 @@ export function setupVideoVisitHistoryCoordinator() {
   coordinator = createVideoVisitHistoryCoordinator({
     get: storage.get,
     set: storage.set,
-    async broadcast(update) {
-      const tabs = await browser.tabs.query({ url: [...CONTENT_SCRIPT_MATCHES] }).catch(() => [])
-      await Promise.allSettled(tabs.filter(tab => tab.id !== undefined && Boolean(tab.incognito) === privateContext)
-        .map(tab => browser.tabs.sendMessage(tab.id!, { type: VIDEO_VISIT_HISTORY_UPDATED, data: update })))
-    },
+    broadcast: update => getStateConsumerRegistry().deliver('videoHistory', { type: VIDEO_VISIT_HISTORY_UPDATED, data: update }, privateContext ? 'private' : 'normal'),
   })
   onMessage<VideoHistoryCommand>(VIDEO_VISIT_HISTORY_MESSAGE, (command, sender) => {
     if (sender?.tab && Boolean(sender.tab.incognito) !== privateContext)
       throw new Error('History privacy context changed')
+    if (command.type === 'read')
+      void getStateConsumerRegistry().touch('videoHistory', sender)
     return coordinator.handle(command)
   })
 }

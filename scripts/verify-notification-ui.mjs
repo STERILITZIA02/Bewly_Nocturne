@@ -639,12 +639,12 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
       '~/logic': { settings, appAuthTokens: tokens },
       '~/logic/appAuthorizationCoordinator': { beginAppAuthorization() {}, completeAppAuthorization() {}, dismissAppAuthorization() {} },
       '~/utils/authProvider': {
-        getTVLoginQRCode: async () => {
+        getAppLoginQRCode: async () => {
           requests++
           return { code: 0, data: { url: 'https://www.bilibili.com/fixture-qr', auth_code: 'fixture' } }
         },
         hasValidAppAuthTokens: () => false,
-        pollTVLoginQRCode: async () => ({ code: 86039 }),
+        pollAppLoginQRCode: async () => ({ code: 86039 }),
         saveAppAuthTokens() {},
       },
     }, { globals: {

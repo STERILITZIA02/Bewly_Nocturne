@@ -370,13 +370,26 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     panel.append(comments)
     root.append(panel)
     document.body.append(root)
-    const currentState = { root, panels: { comment: panel }, activeTab: 'comment', sidebarHydrationTimedOut: true }
+    const currentState = { root, panels: { comment: panel }, activeTab: 'comment', sidebarHydrationTimedOut: true, movedNodes: [], playerEl: document.createElement('div') }
     const frames = []
     let refreshes = 0
-    const context = await loadSourceFunctions(widescreenFile, ['setupDomRefreshObserver', 'scheduleSidebarRefresh'], {
+    const observers = []
+    let playerSubscriptions = 0
+    const context = await loadSourceFunctions(widescreenFile, ['setupDomRefreshObserver', 'scheduleSidebarRefresh', 'isSidebarFullyReady'], {
       document,
       HTMLElement,
       Node,
+      Element,
+      setTimeout,
+      clearTimeout,
+      DOM_DISCOVERY_WINDOW_MS: 15_000,
+      observePlayerDom: () => {
+        playerSubscriptions++
+        return () => playerSubscriptions--
+      },
+      classifyWidescreenMutation: () => ({ insideRoot: true, relevant: false }),
+      shouldScheduleWidescreenRefresh: () => false,
+      exitBewlyWidescreen: () => {},
       VIDEO_COMPONENT_CHANGED: 'bewly:video-component:changed',
       parseVideoMetadataEvent: (await import('../src/utils/videoMetadataBridge')).parseVideoMetadataEvent,
       getPageBridgeChannelId: () => 'fixture',
@@ -385,7 +398,16 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
       sidebarRefreshFrame: undefined,
       selectors: { danmakuInput: [] },
       NATIVE_LIGHT_OFF_CONTROL_SELECTORS: [],
-      MutationObserver: class { observe() {} disconnect() {} },
+      MutationObserver: class {
+        constructor(callback) {
+          this.callback = callback
+          this.targets = []
+          observers.push(this)
+        }
+
+        observe(target, options) { this.targets.push({ target, options }) }
+        disconnect() { this.targets = [] }
+      },
       disableNativeLightOffMode: () => {},
       requestAnimationFrame: callback => frames.push(callback),
       findCommentRoot: () => null,
@@ -396,6 +418,13 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
       clearSidebarHydration: () => {},
     })
     context.setupDomRefreshObserver(currentState)
+    const [observer] = observers
+    assert.ok(observer.targets.some(({ target, options }) => target === document.body && options.subtree), 'bounded discovery watches the body')
+    Object.assign(root.dataset, { sidebarTopReady: 'true', sidebarCommentReady: 'true', sidebarDanmakuReady: 'true', sidebarPlaylistReady: 'true' })
+    observer.callback([])
+    assert.ok(!observer.targets.some(({ target, options }) => target === document.body && options.subtree), 'a ready sidebar stops body-wide observation')
+    assert.ok(observer.targets.some(({ target, options }) => target === root && options.subtree))
+    assert.equal(playerSubscriptions, 1, 'the shared player observer reports player changes')
     comments.dispatchEvent(new CustomEvent('inited'))
     assert.equal(frames.length, 1, 'capture the native non-bubbling event after the polling deadline')
     frames.shift()()

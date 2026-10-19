@@ -36,7 +36,7 @@ const emit = defineEmits<{
 
 const tabState = useHomeTabState()
 const hasSettled = tabState.ref('hasSettled', false)
-const videoList = tabState.ref<VideoElement[]>('videoList', [])
+const videoList = tabState.shallowRef<VideoElement[]>('videoList', [])
 // Server order defines the latest update; only an authoritative season ID joins
 // entries. Trailers and extras remain available with their original titles.
 const seriesGroups = computed(() => groupSeriesUpdates(videoList.value))
@@ -134,7 +134,7 @@ function transformSubscribedSeriesVideo(item: VideoElement): Video | undefined {
     danmakuStr: momentItem.modules.module_dynamic.major.pgc?.stat.danmaku,
     likeStr: momentItem.modules.module_dynamic.major.pgc?.stat.like,
     capsuleText: decodeHtmlEntities(momentItem.modules.module_author.pub_time),
-    epid: momentItem.modules.module_dynamic.major.pgc?.epid,
+    epid: Number(momentItem.modules.module_dynamic.major.pgc?.epid) || undefined,
     threePointV2: [],
   }
 }

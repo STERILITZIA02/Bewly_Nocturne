@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
-
 import IconButton from '~/components/IconButton.vue'
 
 withDefaults(defineProps<{
@@ -22,7 +20,7 @@ withDefaults(defineProps<{
     ]"
     :label="label"
   >
-    <Icon icon="tabler:x" aria-hidden="true" />
+    <span class="bew-close-button__icon i-tabler:x" aria-hidden="true" />
   </IconButton>
 </template>
 
@@ -39,9 +37,8 @@ withDefaults(defineProps<{
     background: var(--bew-elevated-solid-hover);
   }
 
-  svg {
+  .bew-close-button__icon {
     display: block;
-    color: currentColor;
   }
 }
 
@@ -49,7 +46,7 @@ withDefaults(defineProps<{
   width: var(--bew-icon-button-size-sm);
   height: var(--bew-icon-button-size-sm);
 
-  svg {
+  .bew-close-button__icon {
     width: var(--bew-icon-size-xs);
     height: var(--bew-icon-size-xs);
   }
@@ -59,7 +56,7 @@ withDefaults(defineProps<{
   width: var(--bew-icon-button-size-md);
   height: var(--bew-icon-button-size-md);
 
-  svg {
+  .bew-close-button__icon {
     width: var(--bew-icon-size-sm);
     height: var(--bew-icon-size-sm);
   }
@@ -69,7 +66,7 @@ withDefaults(defineProps<{
   width: var(--bew-icon-button-size-lg);
   height: var(--bew-icon-button-size-lg);
 
-  svg {
+  .bew-close-button__icon {
     width: var(--bew-icon-size-md);
     height: var(--bew-icon-size-md);
   }

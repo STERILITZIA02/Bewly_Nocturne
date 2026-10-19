@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
@@ -278,7 +277,7 @@ defineExpose({
                     <div i-tabler:playlist />
                   </Tooltip>
                   <Tooltip v-else :content="$t('common.added')" placement="bottom" type="dark">
-                    <Icon icon="tabler:check" />
+                    <div i-tabler:check />
                   </Tooltip>
                 </IconButton>
               </div>

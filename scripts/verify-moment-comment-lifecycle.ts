@@ -147,7 +147,12 @@ export async function verifyMomentCommentLifecycle() {
     './commentUtils': commentUtils,
     './commentThreadLayout': await import('../src/components/MomentCard/commentThreadLayout'),
     './utils': { getAvatarThumbnailUrl: (url: string) => url },
+    // The ring wraps icon slots; the lifecycle fixture only needs the slotted content.
+    // Deleting is outside this fixture; the section injects the confirm service optionally.
+    '~/composables/useConfirmDialog': { confirmDialogKey: Symbol('CONFIRM_DIALOG') },
+    '~/components/LoadingRing.vue': { default: vue.defineComponent({ props: ['loading', 'size'], setup: (_props, { slots }) => () => vue.h('span', slots.default?.()) }) },
     './MomentCommentMedia.vue': { default: { render: () => vue.h('span') } },
+    './MomentCommentSkeleton.vue': { default: { render: () => vue.h('span') } },
     './MomentCommentRichText.vue': { default: { render: () => vue.h('span') } },
     './MomentCommentTreeGuides.vue': { default: { render: () => vue.h('svg') } },
     './MomentReplyComposer.vue': { default: vue.defineComponent({

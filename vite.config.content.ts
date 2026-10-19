@@ -3,11 +3,17 @@ import type { Plugin } from 'vite'
 import { defineConfig } from 'vite'
 
 import packageJson from './package.json'
+import { splitContentStyles } from './scripts/contentStyleSplit'
 import { isDev, isSafari, r } from './scripts/utils'
 import { sharedConfig } from './vite.config'
 
 const BUNDLED_STYLE_GLOBAL = '__BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__'
 
+/**
+ * One compiled stylesheet, two consumers: `style.css` (manifest, host page)
+ * keeps only rules the host can match; the Shadow root receives the copy
+ * without host-only selectors, embedded once in the entry script.
+ */
 function embedShadowStyles(): Plugin {
   return {
     name: 'bewly-nocturne-embed-shadow-styles',
@@ -23,7 +29,9 @@ function embedShadowStyles(): Plugin {
       const styleText = typeof styleAsset.source === 'string'
         ? styleAsset.source
         : new TextDecoder().decode(styleAsset.source)
-      entryChunk.code = `globalThis.${BUNDLED_STYLE_GLOBAL}=${JSON.stringify(styleText)};\n${entryChunk.code}`
+      const { host, shadow } = splitContentStyles(styleText)
+      styleAsset.source = host
+      entryChunk.code = `globalThis.${BUNDLED_STYLE_GLOBAL}=${JSON.stringify(shadow)};\n${entryChunk.code}`
     },
   }
 }

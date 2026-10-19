@@ -2,6 +2,8 @@ import { useResizeObserver } from '@vueuse/core'
 import type { MaybeRefOrGetter, Ref } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toValue, watch } from 'vue'
 
+import { getTravelDuration } from '~/utils/motionTiming'
+
 export interface LiquidSegmentRect {
   x: number
   y: number
@@ -52,7 +54,7 @@ function calculateLiquidSegmentRect({
   }
 }
 
-/** Keep in sync with CSS move duration for wheel threshold / cooldown */
+/** Duration of a one-item move; longer travel scales up via `getTravelDuration`. */
 export const LIQUID_MOVE_DURATION_MS = 300
 
 function lerp(from: number, to: number, progress: number) {
@@ -73,6 +75,15 @@ interface LiquidGeometry {
   y: number
   width: number
   height: number
+}
+
+/** Travel measured in items along the move axis, so wide tabs count as one step. */
+function getLiquidTravelSteps(from: LiquidSegmentRect, to: LiquidSegmentRect) {
+  const dx = Math.abs((to.x + to.width / 2) - (from.x + from.width / 2))
+  const dy = Math.abs((to.y + to.height / 2) - (from.y + from.height / 2))
+  const horizontal = dx >= dy
+  const itemSize = horizontal ? (from.width + to.width) / 2 : (from.height + to.height) / 2
+  return itemSize > 0 ? (horizontal ? dx : dy) / itemSize : 1
 }
 
 /**
@@ -217,13 +228,14 @@ export function useLiquidSegmentIndicator(options: {
     cancelRaf()
     const token = ++animToken
     const start = performance.now()
+    const duration = getTravelDuration(LIQUID_MOVE_DURATION_MS, getLiquidTravelSteps(from, to))
     markMoving()
     fromRect = { ...from }
 
     const tick = (now: number) => {
       if (token !== animToken)
         return
-      const t = clamp((now - start) / LIQUID_MOVE_DURATION_MS, 0, 1)
+      const t = clamp((now - start) / duration, 0, 1)
       applyGeometry(computeLiquidGeometry(from, to, t))
       if (t < 1) {
         rafId = requestAnimationFrame(tick)

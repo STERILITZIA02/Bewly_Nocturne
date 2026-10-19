@@ -1,6 +1,9 @@
 // One material for persistent page rails, their placeholders and the hot-search
 // companion card. Layout, clipping and borders remain each host's responsibility.
 @mixin surface {
+  // Selected segments sit on this material rather than on solid content.
+  --bew-segment-item-active-bg: var(--bew-sidebar-selected-bg);
+  --bew-segment-secondary-active-bg: var(--bew-sidebar-selected-bg);
   background: var(--bew-sidebar-background);
   backdrop-filter: var(--bew-filter-glass-1);
   -webkit-backdrop-filter: var(--bew-filter-glass-1);

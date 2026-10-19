@@ -594,19 +594,6 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
   }),
 
   ...createEntries(appearanceRoute, [
-    'settings.liquid_glass',
-  ], { keywords: ['Liquid Glass', 'WXperia', 'liquid-glass-vue'] }),
-  ...createEntries(appearanceRoute, [
-    'settings.liquid_glass_mode',
-    'settings.liquid_glass_refraction',
-    'settings.liquid_glass_blur',
-    'settings.liquid_glass_tint',
-    'settings.liquid_glass_tint_color',
-    'settings.liquid_glass_tint_opacity',
-    'settings.liquid_glass_dispersion',
-    'settings.liquid_glass_saturation',
-  ], { targetTitleKey: 'settings.liquid_glass', keywords: ['Liquid Glass', 'WXperia', 'OLED'] }),
-  ...createEntries(appearanceRoute, [
     'settings.menu_appearance',
     'settings.group_visual_effects',
     'settings.disable_frosted_glass_and_top_bar_gradient',

@@ -95,12 +95,12 @@ export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent
       settings.value.homePageTabVisibilityList[1].visible = false
       await flush()
       assert.equal(state.homeActivatedPage.value, HomeSubPage.ForYou)
-      assert.equal(new URL(href.value).searchParams.get('tab'), 'ForYou')
+      assert.equal(new URL(href.value).searchParams.has('tab'), false, 'the default tab is omitted from the URL')
       assert.deepEqual(window.history.state, { from: 'back' })
       window.history.pushState({ from: 'forward' }, '', '/?page=Search&tab=Weekly')
       href.value = window.location.href
       assert.equal(state.activatedPage.value, enums.AppPage.Home)
-      assert.equal(new URL(href.value).searchParams.get('tab'), 'ForYou')
+      assert.equal(new URL(href.value).searchParams.has('tab'), false, 'integrated search falls back to the default tab')
       state.activatedPage.value = enums.AppPage.Moments
       assert.equal(new URL(href.value).searchParams.has('tab'), false)
       window.history.pushState({ native: true }, '', '/bangumi/play/ep123')

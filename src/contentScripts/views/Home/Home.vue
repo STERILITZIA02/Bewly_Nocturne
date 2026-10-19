@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
 import { useMediaQuery } from '@vueuse/core'
 import type { AsyncComponentLoader } from 'vue'
 
@@ -46,15 +45,21 @@ const {
   scrollViewportRef,
 } = useBewlyApp()
 
-// ✅ 性能优化：缓存 scrollTop 值，避免重复 DOM 读取
-const cachedScrollTop = ref(0)
+// Updated every scroll frame without reactivity; only crossing the sticky
+// threshold below reaches render state.
+let cachedScrollTop = 0
 const shortViewport = useMediaQuery('(max-height: 800px)')
 const searchStage = computed(() => resolveHomeSearchStage(shortViewport.value))
 const searchStageStyle = computed(() => ({
   '--bew-layout-home-search-stage-lead-height': `${searchStage.value.lead}px`,
   '--bew-layout-home-search-stage-tail-height': `${searchStage.value.tail}px`,
 }))
-const showHomeSearchCharacter = computed(() => cachedScrollTop.value < searchStage.value.stickyScrollTop)
+const showHomeSearchCharacter = ref(true)
+function setCachedScrollTop(scrollTop: number) {
+  cachedScrollTop = scrollTop
+  showHomeSearchCharacter.value = scrollTop < searchStage.value.stickyScrollTop
+}
+watch(() => searchStage.value.stickyScrollTop, () => setCachedScrollTop(cachedScrollTop))
 const tabScrollPositions = usePageScrollPositions('Home:')
 const homeActive = ref(true)
 let pendingTabScrollTop: number | null = null
@@ -162,9 +167,9 @@ const reserveRecommendationModeSwitcher = computed(() => recommendationSwitcherE
 const shouldShowRecommendationModeSwitcher = computed(() => activatedPage.value === HomeSubPage.ForYou && reserveRecommendationModeSwitcher.value)
 const gridLayoutIcons = computed((): GridLayoutIcon[] => {
   return [
-    { icon: 'tabler:table', iconActivated: 'tabler:table-filled', value: 'adaptive', labelKey: 'layout_editor.layout_adaptive' },
-    { icon: 'tabler:layout-grid', iconActivated: 'tabler:layout-grid-filled', value: 'twoColumns', labelKey: 'layout_editor.layout_two_columns' },
-    { icon: 'tabler:layout-list', iconActivated: 'tabler:layout-list-filled', value: 'oneColumn', labelKey: 'layout_editor.layout_one_column' },
+    { icon: 'i-tabler:table', iconActivated: 'i-tabler:table-filled', value: 'adaptive', labelKey: 'layout_editor.layout_adaptive' },
+    { icon: 'i-tabler:layout-grid', iconActivated: 'i-tabler:layout-grid-filled', value: 'twoColumns', labelKey: 'layout_editor.layout_two_columns' },
+    { icon: 'i-tabler:layout-list', iconActivated: 'i-tabler:layout-list-filled', value: 'oneColumn', labelKey: 'layout_editor.layout_one_column' },
   ]
 })
 
@@ -199,12 +204,22 @@ function getInitialTabScrollTop(): number {
   )
 }
 
+// A tab switch swaps only the grid and never moves the shared header: above
+// the content top the page stays exactly where it is; once the header is
+// pinned, the incoming tab may resume its own position below that point.
+function resolveTabSwitchScrollTop(current: number, saved: number | undefined): number {
+  const contentTop = getContentScrollTop()
+  if (current < contentTop)
+    return current
+  return Math.max(saved ?? contentTop, contentTop)
+}
+
 function restoreTabScrollPosition() {
   if (pendingTabScrollTop !== null) {
     const viewport = scrollViewportRef.value
     if (viewport) {
       scrollToPosition(viewport, pendingTabScrollTop)
-      cachedScrollTop.value = pendingTabScrollTop
+      setCachedScrollTop(pendingTabScrollTop)
       pendingTabScrollTop = null
     }
   }
@@ -235,7 +250,7 @@ watch(activatedPageCacheKey, (_newPage, oldPage) => {
 
   if (pendingTabScrollTop === null)
     tabScrollPositions.set(oldPage, viewport.scrollTop)
-  pendingTabScrollTop = tabScrollPositions.get(activatedPageCacheKey.value) ?? getContentScrollTop()
+  pendingTabScrollTop = resolveTabSwitchScrollTop(viewport.scrollTop, tabScrollPositions.get(activatedPageCacheKey.value))
   // Keep the outgoing space through the out-in/async-loading gap so the
   // browser itself cannot clamp the shared viewport back to the top.
   tabContentMinHeight.value = Math.max(tabContentRef.value?.getBoundingClientRect().height ?? 0, pendingTabScrollTop + viewport.clientHeight - getContentScrollTop())
@@ -260,7 +275,7 @@ watch(() => settings.value.homePageTabVisibilityList, () => {
 }, { deep: true })
 
 function handleOverlayScroll(scrollTop: number) {
-  cachedScrollTop.value = scrollTop
+  setCachedScrollTop(scrollTop)
 }
 
 function handleTopBarVisibilityChange(visible: boolean) {
@@ -312,7 +327,7 @@ onMounted(() => {
 onActivated(() => {
   homeActive.value = true
   subscribeHomeEvents()
-  cachedScrollTop.value = scrollViewportRef.value?.scrollTop ?? cachedScrollTop.value
+  setCachedScrollTop(scrollViewportRef.value?.scrollTop ?? cachedScrollTop)
 })
 
 onDeactivated(() => {
@@ -335,7 +350,7 @@ onUnmounted(() => {
     forYouStore.saveCompleteState({
       accountId: homeAccountId.value,
       recommendationMode: mode,
-      scrollTop: activatedPage.value === HomeSubPage.ForYou ? cachedScrollTop.value : tabScrollPositions.get(key) ?? getInitialTabScrollTop(),
+      scrollTop: activatedPage.value === HomeSubPage.ForYou ? cachedScrollTop : tabScrollPositions.get(key) ?? getInitialTabScrollTop(),
       snapshot,
     })
   }
@@ -414,7 +429,7 @@ watch(tabContentLoading, (loading) => {
           <section
             v-if="shouldShowHomeTabs"
             v-layout-editable="'home-tabs'"
-            class="home-control-surface home-tabs-panel bew-segment-control bew-segment-control--surface"
+            class="home-control-surface home-tabs-panel bew-segment-control bew-segment-control--surface bew-segment-control--flush"
             data-layout-editable-id="home-tabs"
           >
             <div class="home-tabs-scroll" h-full of-x-auto of-y-hidden>
@@ -454,7 +469,7 @@ watch(tabContentLoading, (loading) => {
           <div
             v-if="settings.enableGridLayoutSwitcher"
             v-layout-editable="'home-grid-switcher'"
-            class="home-control-surface home-grid-layout-switcher bew-segment-control bew-segment-control--surface"
+            class="home-control-surface home-grid-layout-switcher bew-segment-control bew-segment-control--surface bew-segment-control--flush"
             data-layout-editable-id="home-grid-switcher"
             flex="~ shrink-0 items-center"
             box-border
@@ -473,9 +488,9 @@ watch(tabContentLoading, (loading) => {
               :title="$t(icon.labelKey)"
               @click="gridLayout.home = icon.value"
             >
-              <Icon
+              <span
                 class="home-grid-layout-item__icon bew-segment-control__icon"
-                :icon="homeGridLayout === icon.value ? icon.iconActivated : icon.icon"
+                :class="homeGridLayout === icon.value ? icon.iconActivated : icon.icon"
                 aria-hidden="true"
               />
             </button>

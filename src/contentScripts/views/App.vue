@@ -59,7 +59,9 @@ import { getUserID, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumi
 import emitter from '~/utils/mitt'
 import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pageMode'
-import { cancelScrollIntent } from '~/utils/scrollIntent'
+import { cancelScrollIntent, scrollToPosition } from '~/utils/scrollIntent'
+import type { ViewportFrameReason, ViewportGeometry } from '~/utils/viewportGeometry'
+import { invalidateViewportGeometry, readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
 
 import { setupNecessarySettingsWatchers } from './necessarySettingsWatchers'
 
@@ -265,8 +267,9 @@ function checkLoadMoreSentinelGeometry() {
   if (!viewport || !sentinel || isHomeTabSwitching.value || isPageSwitching.value)
     return
 
+  const geometry = readViewportGeometry(viewport)
   if (isSentinelWithinLoadThreshold(
-    viewport.getBoundingClientRect(),
+    { top: geometry.top, bottom: geometry.top + geometry.clientHeight },
     sentinel.getBoundingClientRect(),
     LOAD_MORE_THRESHOLD,
   )) {
@@ -274,12 +277,14 @@ function checkLoadMoreSentinelGeometry() {
   }
 }
 
-// Scroll events may fire every frame. Coalesce geometry reads separately so the
-// IntersectionObserver fallback cannot create repeated synchronous layout work.
-const handleThrottledLoadMoreGeometryCheck = useThrottleFn(checkLoadMoreSentinelGeometry, 200)
+// The observer owns the preload-zone state. Scroll frames only reuse it; one
+// geometry check runs after commits, restores and resizes, where the observer
+// may not report a change for a sentinel that stays inside the zone.
+let loadMoreSentinelIntersecting = false
 const { stop: stopLoadMoreObserver } = useIntersectionObserver(
   loadMoreSentinelRef,
   ([{ isIntersecting }]) => {
+    loadMoreSentinelIntersecting = isIntersecting
     if (isIntersecting && !isHomeTabSwitching.value && !isPageSwitching.value)
       handleThrottledReachBottom()
   },
@@ -291,26 +296,9 @@ const { stop: stopLoadMoreObserver } = useIntersectionObserver(
 )
 const topBarRef = ref()
 const reachTop = ref<boolean>(true)
-let loadMoreCheckRafId: number | null = null
-let loadMoreCheckGeneration = 0
-
+/** Coalesced into the viewport's next layout frame, after the pending DOM commit. */
 function scheduleLoadMoreSentinelCheck() {
-  const generation = ++loadMoreCheckGeneration
-  if (loadMoreCheckRafId !== null) {
-    cancelAnimationFrame(loadMoreCheckRafId)
-    loadMoreCheckRafId = null
-  }
-
-  void nextTick(() => {
-    if (generation !== loadMoreCheckGeneration)
-      return
-
-    loadMoreCheckRafId = requestAnimationFrame(() => {
-      loadMoreCheckRafId = null
-      if (generation === loadMoreCheckGeneration)
-        checkLoadMoreSentinelGeometry()
-    })
-  })
+  invalidateViewportGeometry(scrollViewportRef.value)
 }
 
 watch(isHomeTabSwitching, (switching) => {
@@ -405,7 +393,8 @@ function restorePageScroll() {
   if (!viewport || pendingPageScroll === undefined)
     return
   const top = pendingPageScroll
-  viewport.scrollTop = top
+  // Through the shared intent so an older pagination claim yields to this restore.
+  scrollToPosition(viewport, top)
   reachTop.value = viewport.scrollTop === 0
   // A returning data-only page may still be rebuilding its list. Keep one
   // bounded observer until its content can accommodate the saved position.
@@ -652,78 +641,54 @@ function handleBackToTop(targetScrollTop = 0 as number) {
 }
 
 let scrollStateTimer: ReturnType<typeof setTimeout> | null = null
-let lastScrollTop = 0
-let rafId: number | null = null
-let latestScrollTop = 0
+let emittedScrollTop: number | undefined
 
-function handleOsScroll(_instance: any, event: Event) {
-  // 从事件的 target 读取 scrollTop，避免调用 osInstance().elements() 触发强制布局
-  latestScrollTop = (event.target as HTMLElement | null)?.scrollTop ?? 0
-
-  // 如果已经有 RAF 在等待，跳过本次滚动事件
-  if (rafId !== null)
-    return
-
-  // 只在滚动开始时发出一次信号（避免额外的响应式开销）
+// The raw event only marks the start; reads happen once in the shared frame.
+function handleNativeScroll() {
   if (!scrollingEmitted) {
     emitter.emit(OVERLAY_SCROLL_STATE_CHANGE, true)
     scrollingEmitted = true
   }
+}
 
-  // 使用 RAF 将所有 DOM 读取合并到下一帧
-  rafId = requestAnimationFrame(() => {
-    const scrollTop = latestScrollTop
-
+function handleViewportFrame(geometry: ViewportGeometry, reason: ViewportFrameReason) {
+  const { scrollTop } = geometry
+  if (scrollTop !== emittedScrollTop) {
+    emittedScrollTop = scrollTop
     emitter.emit(OVERLAY_SCROLL_BAR_SCROLL, scrollTop)
     if (useOriginalBilibiliTopBar.value)
       setOriginalBilibiliTopBarScrolled(document, scrollTop > 0)
-
-    // 只在滚动距离超过阈值时更新状态
-    const scrollDelta = Math.abs(scrollTop - lastScrollTop)
-    if (scrollDelta > 50) {
-      lastScrollTop = scrollTop
-    }
-
     reachTop.value = scrollTop === 0
+  }
 
-    // IntersectionObserver only reports intersection state changes. A page can
-    // return with the sentinel still intersecting, so run the throttled geometry
-    // fallback while scrolling without replacing the observer.
-    handleThrottledLoadMoreGeometryCheck()
+  if (reason === 'layout')
+    checkLoadMoreSentinelGeometry()
+  // A sentinel that stays inside the preload zone reports no new intersection.
+  else if (loadMoreSentinelIntersecting && !isHomeTabSwitching.value && !isPageSwitching.value)
+    handleThrottledReachBottom()
 
-    // 清除之前的滚动状态定时器
-    if (scrollStateTimer) {
-      clearTimeout(scrollStateTimer)
-    }
-
-    // 设置滚动状态结束检测，150ms后发出滚动结束信号
-    scrollStateTimer = setTimeout(() => {
-      emitter.emit(OVERLAY_SCROLL_STATE_CHANGE, false)
-      scrollingEmitted = false
-    }, 150)
-
-    rafId = null
-  })
+  if (!scrollingEmitted)
+    return
+  if (scrollStateTimer)
+    clearTimeout(scrollStateTimer)
+  // 150ms 内没有新的滚动帧时发出一次滚动结束信号
+  scrollStateTimer = setTimeout(() => {
+    scrollStateTimer = null
+    emitter.emit(OVERLAY_SCROLL_STATE_CHANGE, false)
+    scrollingEmitted = false
+  }, 150)
 }
 
-function handleNativeScroll(event: Event) {
-  handleOsScroll(null, event)
-}
+watch(scrollViewportRef, (viewport, _previous, onCleanup) => {
+  if (viewport)
+    onCleanup(subscribeViewportFrame(viewport, handleViewportFrame))
+}, { immediate: true, flush: 'post' })
 
 onBeforeUnmount(() => {
   stopLoadMoreObserver()
   if (scrollViewportRef.value)
     cancelScrollIntent(scrollViewportRef.value)
   document.removeEventListener('scroll', handleDocumentScroll)
-  loadMoreCheckGeneration++
-  if (loadMoreCheckRafId !== null) {
-    cancelAnimationFrame(loadMoreCheckRafId)
-    loadMoreCheckRafId = null
-  }
-  if (rafId !== null) {
-    cancelAnimationFrame(rafId)
-    rafId = null
-  }
   if (scrollStateTimer) {
     clearTimeout(scrollStateTimer)
     scrollStateTimer = null

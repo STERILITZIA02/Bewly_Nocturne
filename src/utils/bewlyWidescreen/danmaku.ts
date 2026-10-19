@@ -6,7 +6,6 @@ import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 import { setupWidescreenDanmakuSemantics } from '~/utils/bewlyWidescreenNative'
 import { computeAnchoredPopoverPosition } from '~/utils/floatingMenu'
-import { attachLiquidGlass } from '~/utils/liquidGlass'
 
 export function positionDanmakuSettingsPanel(setting: HTMLElement, panel: HTMLElement) {
   const anchor = setting.getBoundingClientRect()
@@ -249,8 +248,6 @@ export function syncDanmakuInputSource(currentState: BewlyWidescreenState, force
   if (source !== currentState.danmakuSemanticsSource || host !== currentState.danmakuSourceHost)
     resetControlsLayout(currentState)
   currentState.danmakuSettingsCleanup?.()
-  currentState.danmakuGlassCleanup?.()
-  currentState.danmakuGlassCleanup = undefined
   currentState.danmakuGlass?.remove()
   currentState.danmakuGlass = undefined
   currentState.danmakuSemanticsSource?.classList.remove(DANMAKU_SOURCE_CLASS)
@@ -264,7 +261,6 @@ export function syncDanmakuInputSource(currentState: BewlyWidescreenState, force
   glass.className = DANMAKU_GLASS_CLASS
   glass.setAttribute('aria-hidden', 'true')
   host.parentElement?.insertBefore(glass, host)
-  currentState.danmakuGlassCleanup = attachLiquidGlass(glass).dispose
   currentState.danmakuGlass = glass
   currentState.danmakuSemanticsSource = source
   currentState.danmakuSourceHost = host

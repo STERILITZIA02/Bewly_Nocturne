@@ -10,7 +10,8 @@ export function useWebRecommendationCursor(tabState: HomeTabState) {
 
   const webFetchRow = tabState.ref<number>('webFetchRow', 1)
 
-  const webShowlistGroups = tabState.ref<string[]>('webShowlistGroups', [])
+  // Replaced, never mutated in place: undo/redo snapshots share the array.
+  const webShowlistGroups = tabState.shallowRef<string[]>('webShowlistGroups', [])
 
   function getWebShowlistEntry(item: VideoItem): string | undefined {
     const goto = `${item.goto || ''}`.trim()

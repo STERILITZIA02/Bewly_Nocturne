@@ -132,6 +132,13 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
       '~/components/ArticleCard/ArticleCardSkeleton.vue': { default: {} },
       '~/components/Settings/components/SettingsSegmentedControl.vue': { default: {} },
       '~/components/VideoCardGrid.vue': { default: {} },
+      './FavoriteFilterPanel.vue': { default: {} },
+      // No filter is applied here, so the real scan stays inactive.
+      './useFavoriteFilterScan': await loadSourceModule('../src/contentScripts/views/Favorites/useFavoriteFilterScan.ts', {
+        vue: Vue,
+        '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
+        './favoriteFilter': await import('../src/contentScripts/views/Favorites/favoriteFilter'),
+      }),
       '~/composables/useAppProvider': { useBewlyApp: () => ({ handlePageRefresh: Vue.ref(), handleReachBottom: Vue.ref(), haveScrollbar: async () => true }) },
       '~/composables/useConfirmDialog': { useConfirmDialog: () => ({ confirm: async () => true }) },
       '~/logic': { settings: Vue.ref({}) },

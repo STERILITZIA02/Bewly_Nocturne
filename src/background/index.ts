@@ -11,6 +11,7 @@ import { setupOpenTabsWatchLater } from './openTabsWatchLater'
 import { setupRefreshTabs } from './refreshTabs'
 import { setupSettingsCloudSync } from './settingsCloudSync'
 import { setupSettingsStorageCoordinator } from './settingsStorageCoordinator'
+import { setupStateConsumers } from './stateConsumers'
 import { setupTopBarStateBroker } from './topBarStateBroker'
 import { setupVideoVisitHistoryCoordinator } from './videoVisitHistoryCoordinator'
 
@@ -72,6 +73,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
 // Signed transports restore/fetch their WBI keys on demand. Waking this worker
 // for storage or a hidden tab does not itself start a profile/network request.
 // Setup all message listeners
+setupStateConsumers()
 setupSettingsStorageCoordinator()
 setupVideoVisitHistoryCoordinator()
 setupSettingsCloudSync()

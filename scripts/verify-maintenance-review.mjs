@@ -549,7 +549,6 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       }) } } },
       '~/utils/debug': { debugLog() {} },
       '~/utils/linkNavigation': { hasNavigationModifier: () => false },
-      '~/utils/liquidGlass': { vLiquidGlass: {} },
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       '~/utils/searchHighlight': { sanitizeSearchHighlight: value => value },
       '~/utils/searchNavigation': { openSearchResults() {}, resolveSearchNavigationTarget: value => `https://www.bilibili.com/?keyword=${value}`, shouldUsePluginSearchResultsPage: () => true },

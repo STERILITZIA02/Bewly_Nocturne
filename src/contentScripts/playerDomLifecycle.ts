@@ -8,9 +8,19 @@ let bootstrapObserver: MutationObserver | null = null
 let observedParents: HTMLElement[] = []
 let bindPlayerRoot: () => void
 
+// Every subscriber receives the same batch; query its media nodes once.
+const mediaMutationBatches = new WeakMap<MutationRecord[], boolean>()
+
 export function hasPlayerMediaMutation(mutations?: MutationRecord[]) {
-  return !mutations || mutations.some(record => [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]
-    .some(node => node instanceof Element && (node.matches('video, bwp-video') || !!node.querySelector('video, bwp-video'))))
+  if (!mutations)
+    return true
+  let changed = mediaMutationBatches.get(mutations)
+  if (changed === undefined) {
+    changed = mutations.some(record => [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]
+      .some(node => node instanceof Element && (node.matches('video, bwp-video') || !!node.querySelector('video, bwp-video'))))
+    mediaMutationBatches.set(mutations, changed)
+  }
+  return changed
 }
 
 function containsPlayerRoot(node: Node) {

@@ -3,6 +3,7 @@ import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMoun
 
 import { CardRowMetrics } from '~/utils/cardRowMetrics'
 import { getScrollIntent } from '~/utils/scrollIntent'
+import { invalidateViewportGeometry, readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
 
 type CardKey = string | number
 export const CARD_WINDOW_THRESHOLD = 40
@@ -66,11 +67,11 @@ export function useCardWindow(options: {
   const restoredAnchor = options.snapshot?.anchor
   options.snapshot = undefined
   let generation = 0
-  let frame: number | undefined
   let sweepTimer: ReturnType<typeof setTimeout> | undefined
   let resizeObserver: ResizeObserver | undefined
-  let viewportObserver: ResizeObserver | undefined
-  let scrollTarget: HTMLElement | Window | undefined
+  let containerObserver: ResizeObserver | undefined
+  let releaseViewportFrame: (() => void) | undefined
+  let frameRoot: HTMLElement | undefined
   let anchorPending = false
   let pendingAnchor: CardWindowSnapshot['anchor']
   let pendingScrollTop = 0
@@ -79,8 +80,11 @@ export function useCardWindow(options: {
 
   function viewport() {
     const root = options.root.value
-    const top = root && root !== document.scrollingElement ? root.getBoundingClientRect().top + root.clientTop : 0
-    return { top, height: Math.max(1, root?.clientHeight || window.innerHeight) }
+    if (!root)
+      return { top: 0, height: Math.max(1, window.innerHeight) }
+    // Shared with every other consumer of this scroll owner in the same round.
+    const geometry = readViewportGeometry(root)
+    return { top: geometry.top, height: geometry.clientHeight }
   }
 
   function visibleAnchor() {
@@ -252,13 +256,19 @@ export function useCardWindow(options: {
     })
   }
 
+  /** Joins the viewport's next shared frame instead of scheduling a private one. */
   function scheduleUpdate() {
-    if (!active || document.hidden || restoring || frame !== undefined)
+    if (!active || document.hidden || restoring)
       return
-    frame = requestAnimationFrame(() => {
-      frame = undefined
+    if (frameRoot)
+      invalidateViewportGeometry(frameRoot)
+    else
+      requestAnimationFrame(handleViewportFrame)
+  }
+
+  function handleViewportFrame() {
+    if (active && !document.hidden && !restoring)
       updateRanges()
-    })
   }
 
   function measuredHeight(key: CardKey) {
@@ -269,9 +279,56 @@ export function useCardWindow(options: {
       : estimatedHeight
   }
 
-  function rebuildRows() {
+  /**
+   * Rows before the first changed key keep their heights: their keys, columns
+   * and every height input are unchanged. The suffix from the first affected
+   * row (including a previously partial row) is truncated and rebuilt, which
+   * covers appended pages and loading placeholders replaced by real cards.
+   */
+  function rebuildSuffix(keys: CardKey[], previousKeys: CardKey[]) {
+    const columns = options.columns.value
+    const gap = options.gap.value
+    let prefix = 0
+    while (prefix < keys.length && prefix < previousKeys.length && keys[prefix] === previousKeys[prefix])
+      prefix++
+    const firstRow = Math.floor(prefix / columns)
+    // A change near the top is a replacement, not an extension.
+    if (firstRow === 0 && prefix < keys.length && previousKeys.length > columns)
+      return false
     keepScrollAnchor()
+    for (let index = prefix; index < previousKeys.length; index++) {
+      if (indices.get(previousKeys[index]) === index)
+        indices.delete(previousKeys[index])
+    }
+    for (let index = firstRow * columns; index < keys.length; index++)
+      indices.set(keys[index], index)
+    rowCount = Math.ceil(keys.length / columns)
+    metrics.truncate(firstRow)
+    const appended: number[] = []
+    for (let row = firstRow; row < rowCount; row++) {
+      let height = 0
+      for (let index = row * columns; index < Math.min(keys.length, (row + 1) * columns); index++)
+        height = Math.max(height, measuredHeight(keys[index]))
+      appended.push(height + gap)
+    }
+    metrics.append(appended)
+    for (let index = prefix; index < previousKeys.length; index++) {
+      if (!indices.has(previousKeys[index]))
+        measurements.delete(previousKeys[index])
+    }
+    updateRanges()
+    return true
+  }
+
+  function rebuildRows(next?: unknown[], previous?: unknown[]) {
     const keys = options.keys.value
+    // Only the key list changed; every row-height input stayed the same.
+    if (next && previous && next.slice(1).every((value, index) => value === previous[index + 1])
+      && Array.isArray(previous[0]) && measuredColumns === options.columns.value
+      && rebuildSuffix(keys, previous[0] as CardKey[])) {
+      return
+    }
+    keepScrollAnchor()
     const columns = options.columns.value
     measuredColumns = columns
     indices.clear()
@@ -282,8 +339,9 @@ export function useCardWindow(options: {
       const row = Math.floor(index / columns)
       heights[row] = Math.max(heights[row], measuredHeight(key))
     })
-    for (const key of measurements.keys()) {
-      if (!indices.has(key))
+    // Measurements outside the list or from another layout version cannot be reused.
+    for (const [key, measurement] of measurements) {
+      if (!indices.has(key) || measurement.layout !== options.layout.value)
         measurements.delete(key)
     }
     metrics.reset(heights.map(height => height + options.gap.value))
@@ -342,18 +400,14 @@ export function useCardWindow(options: {
   function disconnect() {
     generation++
     loadingRange.value = { start: 0, end: 0 }
-    if (frame !== undefined)
-      cancelAnimationFrame(frame)
-    frame = undefined
     clearTimeout(sweepTimer)
     sweepTimer = undefined
     resizeObserver?.disconnect()
-    viewportObserver?.disconnect()
-    resizeObserver = viewportObserver = undefined
-    scrollTarget?.removeEventListener('scroll', scheduleUpdate)
-    window.removeEventListener('resize', scheduleUpdate)
+    containerObserver?.disconnect()
+    resizeObserver = containerObserver = undefined
+    releaseViewportFrame?.()
+    releaseViewportFrame = frameRoot = undefined
     document.removeEventListener('visibilitychange', handleVisibilityChange)
-    scrollTarget = undefined
   }
 
   function handleVisibilityChange() {
@@ -370,10 +424,12 @@ export function useCardWindow(options: {
     disconnect()
     if (!active)
       return
-    const root = options.root.value
-    scrollTarget = !root || root === document.scrollingElement ? window : root
-    scrollTarget.addEventListener('scroll', scheduleUpdate, { passive: true })
-    window.addEventListener('resize', scheduleUpdate, { passive: true })
+    const root = options.root.value ?? document.scrollingElement as HTMLElement | null
+    // Scroll, root resize and window resize arrive through the shared frame.
+    if (root) {
+      frameRoot = root
+      releaseViewportFrame = subscribeViewportFrame(root, handleViewportFrame)
+    }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver((entries) => {
@@ -388,10 +444,10 @@ export function useCardWindow(options: {
           measureMounted(dirtyRows)
       })
       slots.forEach(element => resizeObserver?.observe(element))
-      viewportObserver = new ResizeObserver(scheduleUpdate)
-      viewportObserver.observe(root || document.documentElement)
-      if (options.container.value)
-        viewportObserver.observe(options.container.value)
+      if (options.container.value) {
+        containerObserver = new ResizeObserver(scheduleUpdate)
+        containerObserver.observe(options.container.value)
+      }
     }
     scheduleUpdate()
   }
@@ -418,7 +474,7 @@ export function useCardWindow(options: {
     disconnect()
   }
 
-  watch([stableKeys, options.columns, options.gap, options.estimatedHeight, options.layout, options.enabled], rebuildRows, { immediate: true })
+  watch([stableKeys, options.columns, options.gap, options.estimatedHeight, options.layout, options.enabled], (next, previous) => rebuildRows(next, previous), { immediate: true })
   watch([options.root, options.container], observe, { flush: 'post' })
   onMounted(activate)
   onActivated(activate)

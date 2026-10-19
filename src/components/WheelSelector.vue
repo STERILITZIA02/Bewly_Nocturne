@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, useId, watch } from 'vue'
 
 import { useSpringValue } from '~/composables/useSpringValue'
-import { getMotionDuration } from '~/utils/motionTiming'
+import { getMotionDuration, getTravelDuration } from '~/utils/motionTiming'
 
 const props = defineProps<{
   modelValue: string
@@ -22,7 +22,9 @@ const selectedIndex = computed(() => Math.max(0, props.items.findIndex(item => i
 const cursor = ref(selectedIndex.value)
 const position = useSpringValue(() => cursor.value, () => {
   const duration = root.value ? getMotionDuration(getComputedStyle(root.value), '--bew-duration-normal') : 200
-  return duration / 1000
+  // Read when the target changes: multi-step jumps (Home/End, external
+  // selection) settle more slowly than a single step.
+  return getTravelDuration(duration, Math.abs(cursor.value - position.value)) / 1000
 })
 let wheelDistance = 0
 let lastWheelTime = 0

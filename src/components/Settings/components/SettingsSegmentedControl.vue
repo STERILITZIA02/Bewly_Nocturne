@@ -31,7 +31,7 @@ function handleKeydown(event: KeyboardEvent, index: number) {
 
 <template>
   <div
-    class="settings-segmented-control bew-segment-control bew-segment-control--surface"
+    class="settings-segmented-control bew-segment-control bew-segment-control--surface bew-segment-control--flush"
     role="radiogroup"
     :aria-label="label"
     :style="{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }"

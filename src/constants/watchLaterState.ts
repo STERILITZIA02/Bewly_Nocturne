@@ -17,6 +17,15 @@ export interface WatchLaterSnapshot {
   countUpdatedAt: number
 }
 
+/**
+ * A count read from a client that already holds the member list of this epoch
+ * at or after the revision the list last changed: the list is not resent.
+ */
+export interface WatchLaterCountReply extends Omit<WatchLaterSnapshot, 'entries'> {
+  entries?: WatchLaterEntry[]
+  entriesOmitted?: true
+}
+
 export type WatchLaterChange
   = | { type: 'add' | 'remove', entry: WatchLaterEntry }
     | { type: 'clear' }
@@ -24,6 +33,20 @@ export type WatchLaterChange
 
 export type WatchLaterUpdate
   = | { type: 'snapshot', snapshot: WatchLaterSnapshot }
+  /** A count read: list fields stay with the consumer's base revision unless dropped. */
+    | {
+      type: 'count'
+      accountId: number
+      epoch: string
+      baseRevision: number
+      revision: number
+      count: number
+      countUpdatedAt: number
+      complete: boolean
+      updatedAt: number
+      /** The count no longer matches the known members; the list must be read again. */
+      entriesDropped: boolean
+    }
     | {
       type: 'change'
       accountId: number

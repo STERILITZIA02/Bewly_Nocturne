@@ -187,7 +187,8 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       let video = host.querySelector('video')
       assert.ok(video)
       assert.equal(previews.previewState.value, 'loading')
-      assert.ok(host.querySelector('[data-bew-skeleton]'))
+      // Buffering uses the shared loading ring until the first decoded frame.
+      assert.ok(host.querySelector('.moment-video-preview__loading .bew-loading-ring[data-state="spinning"]'))
       video.dispatchEvent(new Event('canplay'))
       assert.equal(previews.previewState.value, 'loading')
       ready.set(video, 2)
@@ -197,7 +198,7 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       assert.ok(host.querySelector('.moment-video-preview--ready'), 'the first decoded frame hands off from the cover')
       await new Promise(resolve => setTimeout(resolve, 60))
       await flush()
-      assert.equal(host.querySelector('[data-bew-skeleton]'), null)
+      assert.equal(host.querySelector('.moment-video-preview__loading .bew-loading-ring[data-state="spinning"]'), null)
       const controlClick = new MouseEvent('click', { bubbles: true, cancelable: true })
       video.dispatchEvent(controlClick)
       assert.equal(activations, 0)
@@ -315,6 +316,9 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       '~/utils/momentCardLayout': await import('../src/utils/momentCardLayout'),
       '~/utils/momentColumnIndex': await import('../src/utils/momentColumnIndex'),
       '~/utils/momentsLayout': await import('../src/utils/momentsLayout'),
+      // The shared viewport frame runs on the same fixture clock; its own size
+      // observer is not one of the layout observers indexed below.
+      '~/utils/viewportGeometry': await loadSourceModule('../src/utils/viewportGeometry.ts', {}, { ...time, window: { innerHeight: 700, requestAnimationFrame: time.requestAnimationFrame, addEventListener() {}, removeEventListener() {} }, ResizeObserver: class { observe() {} disconnect() {} } }),
     }, { ...time, window: { innerWidth: 1100, innerHeight: 700, requestAnimationFrame: time.requestAnimationFrame }, ResizeObserver: Observer, IntersectionObserver: Observer })
     const items = Vue.ref(Array.from({ length: 3000 }, (_, index) => ({ id: String(index), text: 'post', images: [], title: '', isVideo: false, isForward: false })))
     const heights = new Map()
@@ -348,7 +352,9 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
     } })
     app.mount(viewport)
     await flush()
-    layout.append(items.value, true)
+    // Mounting already placed the 3000 posts; appending them again would
+    // duplicate every id (Moments dedupes ids before they reach the layout).
+    assert.equal(layout.virtualColumns.value.length, 2)
     await flush()
     for (let frame = 0; frame < 4; frame++) {
       layout.updateVirtualColumns()

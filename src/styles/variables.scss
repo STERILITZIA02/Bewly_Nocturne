@@ -160,6 +160,7 @@
   --bew-sidebar-action-padding: var(--bew-space-2);
   --bew-sidebar-action-inset: calc(var(--bew-sidebar-label-inset) - var(--bew-sidebar-action-padding));
   --bew-sidebar-action-hover: var(--bew-hover-bg);
+  --bew-sidebar-selected-bg: var(--bew-control-selected-background);
   --bew-wheel-text-active: var(--bew-text-1);
   --bew-wheel-text: rgb(from var(--bew-text-1) r g b / 67%);
   --bew-notifications-feed-inline-space: var(--bew-space-4);
@@ -275,8 +276,8 @@
   --bew-overlay-background: rgb(0 0 0 / 72%);
   --bew-overlay-background-hover: rgb(0 0 0 / 84%);
   --bew-on-overlay-color: white;
-  --bew-dock-control-size: 32px;
-  --bew-dock-control-size-lg: 40px;
+  --bew-dock-control-size: 36px;
+  --bew-dock-control-size-lg: 44px;
   --bew-floating-control-icon-size: var(--bew-icon-size-md);
   --bew-dock-control-icon-size: 18px;
   --bew-dock-control-icon-size-lg: 22px;
@@ -342,7 +343,6 @@
 
   // Use this in dialogs if you want to add a frosted glass effect
   --bew-filter-glass-2: blur(30px) saturate(180%);
-  --bew-liquid-glass-color: var(--bew-neutral-bg);
 
   // Apply this to the Bilibili icon if it is an image with the brand's original blue or pink color
   // Icon emphasis stays neutral; accent is reserved for the seven semantic uses.
@@ -567,6 +567,9 @@
   // keep the existing alpha and blur so background detail still shows through.
   --bew-sidebar-background-solid: color-mix(in srgb, var(--bew-neutral-fg) 16%, var(--bew-neutral-canvas));
   --bew-sidebar-action-hover: color-mix(in srgb, var(--bew-neutral-bg) 18%, transparent);
+  // The rail is lighter than solid content here, so a solid selected plate would
+  // sink below it; lift the rail instead.
+  --bew-sidebar-selected-bg: var(--bew-fill-3);
   --bew-wheel-text-active: #fff;
   --bew-message-icon-hover: #fff;
   --bew-message-pinned-background: color-mix(in srgb, var(--bew-neutral-bg) 24%, transparent);
@@ -605,7 +608,6 @@
   --bew-notifications-card-border: var(--bew-surface-border-color);
   --bew-notifications-reference-background: var(--bew-fill-1);
 
-  --bew-liquid-glass-color: var(--bew-neutral-canvas);
   --bew-fill-alt: var(--bew-fill-1);
   --bew-surface-inset-bg: color-mix(in srgb, var(--bew-neutral-bg) 20%, transparent);
 }

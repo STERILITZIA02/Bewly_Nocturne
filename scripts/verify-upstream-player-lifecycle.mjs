@@ -165,7 +165,7 @@ export function registerPlayerLifecycleChecks(check) {
       '~/utils/customPlayControls': await import('../src/utils/customPlayControls'),
       '~/utils/i18n': { i18n: { global: { t: key => key } } },
       '~/utils/randomPlayRetry': await import('../src/utils/randomPlayRetry'),
-      './player': { VideoType: { MULTIPART: 'multipart', COLLECTION: 'collection', RECOMMEND: 'recommend' }, detectVideoType: () => 'collection', supportsCustomPlaybackForVideoType: () => true, getVideoElement: () => null, setCustomEndPlaybackHandlerActive() {}, applyAutoPlayByVideoType() {}, disableNativeEndPlaybackBehavior() {} },
+      './player': { VideoType: { MULTIPART: 'multipart', COLLECTION: 'collection', RECOMMEND: 'recommend' }, detectVideoType: () => 'collection', detectCustomPlayListVideoType: () => 'collection', canCustomPlayHandleCurrentEnd: () => true, supportsCustomPlaybackForVideoType: () => true, getVideoElement: () => null, setCustomEndPlaybackHandlerActive() {}, applyAutoPlayByVideoType() {}, disableNativeEndPlaybackBehavior() {} },
     }, { ...time, location: { href: 'https://www.bilibili.com/video/BV1xx411c7mD/', pathname: '/video/BV1xx411c7mD/' }, window: { setTimeout: time.setTimeout, clearTimeout: time.clearTimeout } })
     try {
       const header = host.querySelector('.video-pod__header')

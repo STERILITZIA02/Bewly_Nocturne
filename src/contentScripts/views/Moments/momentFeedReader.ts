@@ -39,7 +39,9 @@ export function createMomentFeedReader(
     let nextPageNumber = request.page
     let filteredRequestPages = 0
     let rawItems: DataItem[] = []
+    /** Server-reported continuation; `stalled` marks a page that did not advance it. */
     let hasMore = false
+    let stalled = false
     let nextOffset = ''
     let nextUpdateBaseline = ''
     const hostFollowStatePromise = request.reset && requestHostMid
@@ -95,15 +97,14 @@ export function createMomentFeedReader(
             scanned.push(...pageItems)
             const responseOffset = response.data?.offset || ''
             scanUpdateBaseline = response.data?.update_baseline || ''
-            canContinue = Boolean(response.data?.has_more)
-              && pageItems.length > 0
-              && responseOffset !== scanOffset
+            hasMore = Boolean(response.data?.has_more)
+            stalled = hasMore && (pageItems.length === 0 || responseOffset === scanOffset)
+            canContinue = hasMore && !stalled
             scanOffset = responseOffset
             nextPage += 1
           }
 
           rawItems = scanned
-          hasMore = canContinue
           nextOffset = scanOffset
           nextUpdateBaseline = scanUpdateBaseline
         }
@@ -124,7 +125,8 @@ export function createMomentFeedReader(
             return
           rawItems = response.data?.items || []
           nextOffset = response.data?.offset || ''
-          hasMore = Boolean(response.data?.has_more) && rawItems.length > 0 && nextOffset !== request.offset
+          hasMore = Boolean(response.data?.has_more)
+          stalled = hasMore && (rawItems.length === 0 || nextOffset === request.offset)
           nextUpdateBaseline = response.data?.update_baseline || ''
           nextPage += 1
         }
@@ -152,15 +154,15 @@ export function createMomentFeedReader(
           scanned.push(...pageItems)
           const responseOffset = response.data?.offset || ''
           scanUpdateBaseline = response.data?.update_baseline || ''
-          canContinue = Boolean(response.data?.has_more)
-            && pageItems.length > 0
-            && responseOffset !== scanOffset
+          hasMore = Boolean(response.data?.has_more)
+          stalled = hasMore && (pageItems.length === 0 || responseOffset === scanOffset)
+          canContinue = hasMore && !stalled
           scanOffset = responseOffset
         }
 
         // 以整页推进 offset，同一次刷新/手动加载不会在缓存或补屏阶段重置预算。
+        // An exhausted two-page budget keeps `hasMore`; it is not a server end.
         rawItems = scanned
-        hasMore = canContinue
         nextOffset = scanOffset
         nextUpdateBaseline = scanUpdateBaseline
       }
@@ -175,7 +177,8 @@ export function createMomentFeedReader(
           return
         rawItems = response.data?.items || []
         nextOffset = response.data?.offset || ''
-        hasMore = Boolean(response.data?.has_more) && rawItems.length > 0 && nextOffset !== request.offset
+        hasMore = Boolean(response.data?.has_more)
+        stalled = hasMore && (rawItems.length === 0 || nextOffset === request.offset)
         nextUpdateBaseline = response.data?.update_baseline || ''
       }
 
@@ -192,7 +195,7 @@ export function createMomentFeedReader(
         return true
       })]
       loadedQuery = key
-      return { rawItems, normalizedItems, hasMore, nextOffset, nextUpdateBaseline, nextPage: nextPageNumber }
+      return { rawItems, normalizedItems, hasMore, stalled, nextOffset, nextUpdateBaseline, nextPage: nextPageNumber }
     }
     finally {
       if (pendingRead === controller)

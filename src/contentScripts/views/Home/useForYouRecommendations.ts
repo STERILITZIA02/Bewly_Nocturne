@@ -30,6 +30,7 @@ import { debugLog } from '~/utils/debug'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 
 import { createForYouInitialDataCoordinator } from './forYouInitialData'
+import { createRecommendationFeed } from './recommendationFeed'
 import type { RecommendationDataState } from './recommendationState'
 import { resolveRecommendationSuccessState } from './recommendationState'
 import { useRecommendationFilters } from './useRecommendationFilters'
@@ -49,11 +50,12 @@ export function useForYouRecommendations(emit: {
 
   const { handleReachBottom, handlePageRefresh, haveScrollbar, undoForwardState, handleUndoRefresh, handleForwardRefresh, handleBackToTop } = useBewlyApp()
 
-  // 先声明数据变量
-  const videoList = tabState.ref<VideoElement[]>('videoList', [])
-  const appVideoList = tabState.ref<AppVideoElement[]>('appVideoList', [])
+  // Accepted lists are large and immutable once published: every change
+  // replaces the root, so history snapshots and parked tabs share them safely.
+  const videoList = tabState.shallowRef<VideoElement[]>('videoList', [])
+  const appVideoList = tabState.shallowRef<AppVideoElement[]>('appVideoList', [])
   const appFeedIdx = tabState.ref<number>('appFeedIdx', 0)
-  const appRecentShownKeys = tabState.ref<string[]>('appRecentShownKeys', [])
+  const appRecentShownKeys = tabState.shallowRef<string[]>('appRecentShownKeys', [])
   const APP_RECENT_SHOWN_MAX_KEYS = 600
 
   const isWebRecommendationMode = computed(() => settings.value.recommendationMode !== 'app')
@@ -119,11 +121,16 @@ export function useForYouRecommendations(emit: {
     debugLog(`${HOME_LOAD_LOG_PREFIX} 推荐接口请求失败`, diagnostic)
   }
 
-  // 当前使用的视频列表（根据推荐模式）
-  const currentVideoList = computed(() => {
-    const items = isWebRecommendationMode.value ? videoList.value : appVideoList.value
-    return settings.value.blockAds ? items.filter(video => !isBilibiliAdvertisement(video.item)) : items
+  const blockAds = () => settings.value.blockAds
+  const webFeed = createRecommendationFeed(videoList, { blockAds, keysOf: entry => [entry.uniqueId] })
+  // Cross-page dedupe uses every manuscript identity of a normal card; an
+  // advertisement is keyed by its own creative identity only.
+  const appFeed = createRecommendationFeed(appVideoList, {
+    blockAds,
+    keysOf: entry => entry.isAdvertisement || !entry.item ? [entry.uniqueId] : getAppVideoKeys(entry.item),
   })
+  // 当前使用的视频列表（根据推荐模式），由各自的增量投影维护
+  const currentVideoList = computed(() => isWebRecommendationMode.value ? webFeed.visible.value : appFeed.visible.value)
 
   const isLoading = ref<boolean>(true)
   const recommendationDataState = tabState.ref<RecommendationDataState>('recommendationDataState', 'idle')
@@ -282,7 +289,7 @@ export function useForYouRecommendations(emit: {
   }
 
   function rememberAppRecentShown(list: AppVideoElement[]) {
-    const keys = new Set(list.flatMap(video => video.item && !isBilibiliAdvertisement(video.item) ? getAppVideoKeys(video.item) : []))
+    const keys = new Set(list.flatMap(video => video.item && !video.isAdvertisement ? getAppVideoKeys(video.item) : []))
     if (!keys.size)
       return
     appRecentShownKeys.value = [
@@ -715,17 +722,14 @@ export function useForYouRecommendations(emit: {
         refreshIdx.value = currentRefreshIdx + 1
         webFetchRow.value = fetchRow
 
-        const resData = [] as VideoItem[]
-        const existingIds = new Set<string>()
+        const accepted: VideoElement[] = []
+        const batchKeys = new Set<string>()
         const activeWebFilter = hasActiveWebRecommendationFilter.value ? filterFunc.value : null
         let filteredCandidateCount = 0
         let filteredKeptCount = 0
 
-        videoList.value.forEach((video) => {
-          if (video.item)
-            existingIds.add(getWebVideoKey(video.item))
-        })
-
+        // Only this page is classified, deduped (against the maintained key
+        // index), filtered and transformed; the accumulated list is not rescanned.
         response.data.item.forEach((item: VideoItem) => {
           const advertisement = isBilibiliAdvertisement(item)
           // 过滤掉缺少必要字段的数据（owner 或 stat 为 null）
@@ -733,10 +737,10 @@ export function useForYouRecommendations(emit: {
             return
 
           const itemKey = getWebVideoKey(item)
-          if (existingIds.has(itemKey))
+          if (webFeed.has(itemKey) || batchKeys.has(itemKey))
             return
 
-          existingIds.add(itemKey)
+          batchKeys.add(itemKey)
           if (activeWebFilter && !advertisement)
             filteredCandidateCount++
 
@@ -745,22 +749,22 @@ export function useForYouRecommendations(emit: {
 
           if (activeWebFilter && !advertisement)
             filteredKeptCount++
-          resData.push(item)
+          accepted.push({
+            uniqueId: itemKey,
+            item,
+            displayData: transformWebVideo(item),
+            isAdvertisement: advertisement,
+          })
         })
 
         recordFilteredFeedBatch(filteredCandidateCount, filteredKeptCount)
 
-        const showlistGroup = buildLastShowlistGroup(settings.value.blockAds
-          ? resData.filter(item => !isBilibiliAdvertisement(item))
-          : resData)
+        const showlistGroup = buildLastShowlistGroup(accepted.flatMap(entry =>
+          entry.item && !(settings.value.blockAds && entry.isAdvertisement) ? [entry.item] : []))
         if (showlistGroup)
-          webShowlistGroups.value.push(showlistGroup)
+          webShowlistGroups.value = [...webShowlistGroups.value, showlistGroup]
 
-        videoList.value.push(...resData.map(item => ({
-          uniqueId: getWebVideoKey(item),
-          item,
-          displayData: transformWebVideo(item),
-        })))
+        webFeed.append(accepted)
 
         saveNoCookieRecommendationState(
           showlistGroup,
@@ -868,10 +872,8 @@ export function useForYouRecommendations(emit: {
 
     const batchesToLoad = APP_LOAD_BATCHES.value
     const beforeLoadCount = currentVideoList.value.length
-    const seenCandidateIds = new Set([
-      ...appRecentShownKeys.value,
-      ...appVideoList.value.flatMap(video => video.item && !isBilibiliAdvertisement(video.item) ? getAppVideoKeys(video.item) : []),
-    ])
+    // Accepted cards are covered by the feed's maintained key index.
+    const recentShownKeys = new Set(appRecentShownKeys.value)
     const locale = settings.value.language === LanguageType.Mandarin_TW || settings.value.language === LanguageType.Cantonese ? 'zh-Hant_TW' : 'zh-Hans_CN'
 
     for (let batch = 0; batch < batchesToLoad; batch++) {
@@ -929,12 +931,17 @@ export function useForYouRecommendations(emit: {
           let filteredCandidateCount = 0
           let filteredKeptCount = 0
 
+          const accepted: AppVideoElement[] = []
+          const batchKeys = new Set<string>()
+          const isSeen = (key: string) => appFeed.has(key) || batchKeys.has(key)
           response.data.items.forEach((rawItem: AppVideoItem) => {
             if (isBilibiliAdvertisement(rawItem)) {
               const displayData = toAdvertisementCard(rawItem)
               const uniqueId = displayData.advertisementKey!
-              if (!appVideoList.value.some(video => video.uniqueId === uniqueId))
-                appVideoList.value.push({ uniqueId, item: rawItem, displayData })
+              if (!isSeen(uniqueId)) {
+                batchKeys.add(uniqueId)
+                accepted.push({ uniqueId, item: rawItem, displayData, isAdvertisement: true })
+              }
               return
             }
             const item = normalizeAppVideoItem(rawItem)
@@ -942,9 +949,9 @@ export function useForYouRecommendations(emit: {
               return
 
             const videoKeys = getAppVideoKeys(item)
-            if (videoKeys.some(key => seenCandidateIds.has(key)))
+            if (videoKeys.some(key => isSeen(key) || recentShownKeys.has(key)))
               return
-            videoKeys.forEach(key => seenCandidateIds.add(key))
+            videoKeys.forEach(key => batchKeys.add(key))
 
             if (activeAppFilter) {
               filteredCandidateCount++
@@ -953,12 +960,14 @@ export function useForYouRecommendations(emit: {
               filteredKeptCount++
             }
 
-            appVideoList.value.push({
+            accepted.push({
               uniqueId: videoKeys[0],
               item,
               displayData: transformAppVideo(item),
+              isAdvertisement: false,
             })
           })
+          appFeed.append(accepted)
           recordFilteredFeedBatch(filteredCandidateCount, filteredKeptCount)
           applyRecommendationSuccessState({
             apiItemCount: response.data.items.length,

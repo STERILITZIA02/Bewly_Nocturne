@@ -456,9 +456,14 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     assert.equal(filterWatchLaterItems([{ ...items[0], progress: 1 }], '', 'unstarted', 'all', () => undefined).length, 0, 'partially watched is not unwatched')
     assert.equal(filterWatchLaterItems([{ ...items[0], progress: undefined }], '', 'unstarted', 'all', () => undefined).length, 0, 'unknown progress is not evidence of unwatched')
   })
-  check('Watch Later filter sections collapse independently, preserve values and release hidden focus', async () => {
+  check('Watch Later filter sections start collapsed, remember their state per tab, preserve values and release hidden focus', async () => {
+    const store = new Map()
+    const sessionStorage = { getItem: key => store.get(key) ?? null, setItem: (key, value) => store.set(key, String(value)) }
     const state = Vue.ref(createWatchLaterFilters())
-    const Filter = await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterAdvancedFilters.vue', { 'vue-i18n': { useI18n: () => ({ t: key => key }) } })
+    const Filter = await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterAdvancedFilters.vue', {
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      './WatchLaterFilterSection.vue': { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterFilterSection.vue', {}, { globals: { sessionStorage } }) },
+    })
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ render: () => Vue.h(Filter, { modelValue: state.value, 'onUpdate:modelValue': value => state.value = value }) })
     app.config.globalProperties.$t = key => key
@@ -471,6 +476,11 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
       input.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
     }
     try {
+      const initialHeaders = [...host.querySelectorAll('.watch-later-filter-section > h2 > button')]
+      assert.deepEqual(initialHeaders.map(header => header.getAttribute('aria-expanded')), ['false', 'false', 'false'], 'every section starts collapsed')
+      for (const key of ['by_progress', 'by_date', 'by_duration'])
+        click(key)
+      await flush()
       click('progress_unstarted')
       await flush()
       click('duration_long')
@@ -516,6 +526,15 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
       click('by_progress')
       await flush()
       assert.equal(headers[0].getAttribute('aria-expanded'), 'true')
+      click('by_duration')
+      await flush()
+      app.unmount()
+      const remounted = Vue.createApp({ render: () => Vue.h(Filter, { modelValue: state.value, 'onUpdate:modelValue': value => state.value = value }) })
+      remounted.config.globalProperties.$t = key => key
+      remounted.mount(host)
+      await flush()
+      assert.deepEqual([...host.querySelectorAll('.watch-later-filter-section > h2 > button')].map(header => header.getAttribute('aria-expanded')), ['true', 'true', 'false'], 'open state survives a remount in the same tab')
+      remounted.unmount()
     }
     finally {
       app.unmount()

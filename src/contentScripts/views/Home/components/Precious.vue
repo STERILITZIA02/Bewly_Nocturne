@@ -25,7 +25,7 @@ const emit = defineEmits<{
 
 const tabState = useHomeTabState()
 const hasSettled = tabState.ref('hasSettled', false)
-const videoList = tabState.ref<VideoElement[]>('videoList', [])
+const videoList = tabState.shallowRef<VideoElement[]>('videoList', [])
 const isLoading = ref<boolean>(false)
 const noMoreContent = tabState.ref<boolean>('noMoreContent', true) // 入站必刷没有分页
 const requestFailed = tabState.ref<boolean>('requestFailed', false)

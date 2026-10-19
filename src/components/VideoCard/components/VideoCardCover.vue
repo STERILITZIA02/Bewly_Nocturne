@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
 import type flvjs from 'flv.js'
 import type Hls from 'hls.js'
 import type { ErrorData, Events } from 'hls.js'
@@ -11,6 +10,7 @@ import Tooltip from '~/components/Tooltip.vue'
 import { useVideoPreviewSwipeSeek } from '~/composables/useVideoPreviewSwipeSeek'
 import { settings } from '~/logic'
 import { loadFlvModule } from '~/utils/flv'
+import { getFullscreenElement, subscribeFullscreenChange } from '~/utils/fullscreenChange'
 import { loadHlsModule } from '~/utils/hls'
 import { releaseMediaElement } from '~/utils/mediaResources'
 import { createPreviewMediaSession } from '~/utils/previewMediaSession'
@@ -118,14 +118,6 @@ function stopPreview(videoEl: HTMLVideoElement) {
   cleanupPlayers()
   resetPreviewScrub()
   resetVideoElement(videoEl)
-}
-
-function getFullscreenElement() {
-  const doc = document as Document & {
-    webkitFullscreenElement?: Element | null
-  }
-
-  return doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null
 }
 
 function syncPreviewFullscreenState() {
@@ -298,7 +290,13 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
             return
           switch (data.type) {
             case Hls.ErrorTypes.MEDIA_ERROR:
-              player.recoverMediaError()
+              // Bounded per instance; exhaustion releases it into the failure state.
+              streamSession.recoverHlsMediaError(player, videoEl, () => {
+                if (!isHlsPlayerCurrent(player, generation, url, videoEl))
+                  return
+                streamSession.releaseHls(player)
+                failPreviewSetup(generation, url, videoEl)
+              })
               break
             default:
               streamSession.releaseHls(player)
@@ -360,18 +358,25 @@ watch([() => props.previewVideoUrl, () => props.isHover, videoRef, () => props.p
   })
 }, { flush: 'post' })
 
-// Cleanup on unmount
-onMounted(() => {
-  document.addEventListener('fullscreenchange', syncPreviewFullscreenState)
-  document.addEventListener('webkitfullscreenchange', syncPreviewFullscreenState as EventListener)
-})
+// Only a card that holds a preview element (or is still fullscreen) listens,
+// through the shared owner. A fullscreen mouseleave keeps the element and the
+// subscription; exit, replacement or unmount releases them.
+let stopFullscreenSubscription: (() => void) | undefined
+watch(() => Boolean(videoRef.value) || isPreviewFullscreen.value, (holdsMedia) => {
+  if (holdsMedia) {
+    stopFullscreenSubscription ??= subscribeFullscreenChange(syncPreviewFullscreenState)
+    return
+  }
+  stopFullscreenSubscription?.()
+  stopFullscreenSubscription = undefined
+}, { immediate: true, flush: 'post' })
 
 onBeforeUnmount(() => {
   recordPreviewPosition()
   previewSetupGeneration++
   progressOwner = undefined
-  document.removeEventListener('fullscreenchange', syncPreviewFullscreenState)
-  document.removeEventListener('webkitfullscreenchange', syncPreviewFullscreenState as EventListener)
+  stopFullscreenSubscription?.()
+  stopFullscreenSubscription = undefined
   disposeSwipeSeek()
   cleanupPlayers()
   if (videoRef.value)
@@ -559,7 +564,7 @@ onBeforeUnmount(() => {
             <div i-tabler:playlist />
           </Tooltip>
           <Tooltip v-else :content="$t('common.added')" placement="bottom-right" type="dark">
-            <Icon icon="tabler:check" />
+            <div i-tabler:check />
           </Tooltip>
         </button>
 
@@ -576,7 +581,7 @@ onBeforeUnmount(() => {
               v-if="coverStatsVisibility?.view"
               class="video-card-cover-stats__item cover-stat-view"
             >
-              <Icon icon="tabler:player-play" class="video-card-cover-stats__icon" aria-hidden="true" />
+              <span class="video-card-cover-stats__icon i-tabler:player-play" aria-hidden="true" />
               <span class="video-card-cover-stats__value">{{ coverStatValues?.view }}</span>
             </span>
 
@@ -584,7 +589,7 @@ onBeforeUnmount(() => {
               v-if="coverStatsVisibility?.danmaku"
               class="video-card-cover-stats__item cover-stat-danmaku"
             >
-              <Icon icon="tabler:message" class="video-card-cover-stats__icon" aria-hidden="true" />
+              <span class="video-card-cover-stats__icon i-tabler:message" aria-hidden="true" />
               <span class="video-card-cover-stats__value">{{ coverStatValues?.danmaku }}</span>
             </span>
 
@@ -592,7 +597,7 @@ onBeforeUnmount(() => {
               v-if="coverStatsVisibility?.like"
               class="video-card-cover-stats__item cover-stat-like"
             >
-              <Icon icon="tabler:thumb-up" class="video-card-cover-stats__icon" aria-hidden="true" />
+              <span class="video-card-cover-stats__icon i-tabler:thumb-up" aria-hidden="true" />
               <span class="video-card-cover-stats__value">{{ coverStatValues?.like }}</span>
             </span>
           </div>
@@ -785,8 +790,10 @@ onBeforeUnmount(() => {
 }
 
 .video-card-cover-stats__icon {
+  flex: none;
+  width: 1em;
+  height: 1em;
   font-size: var(--video-card-stats-icon-size, calc(var(--video-card-stats-font-size, 0.75rem) * 1.1));
-  color: currentColor;
 }
 
 .video-card-cover-stats__value {

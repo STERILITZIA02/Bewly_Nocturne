@@ -343,7 +343,7 @@ export function createMomentAdapter(
       aid: archive.aid || undefined,
       bvid: archive.bvid || undefined,
       cid: Number(archive.cid) || undefined,
-      epid: major.pgc?.epid || undefined,
+      epid: Number(major.pgc?.epid) || undefined,
       videoUrl: archive.jump_url ? httpsUrl(archive.jump_url.startsWith('//') ? `https:${archive.jump_url}` : archive.jump_url) : undefined,
       videoPlay: pickText(archive.stat?.play),
       videoDanmaku: pickText(archive.stat?.danmaku),

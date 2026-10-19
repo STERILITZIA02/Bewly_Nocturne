@@ -497,6 +497,10 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer__nav > svg {
   height: 18px !important;
   flex: 0 0 auto !important;
 }
+/* The iframe has no UnoCSS icons; match the project's 1.75px Tabler stroke. */
+html.momentsPage.drawer.bewly-opus-layout :is(.bewly-opus-gallery__nav, .bewly-opus-viewer__nav, .bewly-opus-viewer__close) > svg [stroke-width] {
+  stroke-width: 1.75 !important;
+}
 html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-gallery__nav:disabled {
   opacity: 0.28 !important;
   cursor: default !important;

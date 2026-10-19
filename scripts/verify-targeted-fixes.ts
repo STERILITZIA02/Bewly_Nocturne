@@ -2146,17 +2146,23 @@ async function verifyP1Contracts() {
 
   assert.match(authProvider, /const runAppAccessTokenRefreshSingleFlight = createBooleanSingleFlight\(\)/)
   assert.match(authProvider, /function refreshAppAccessToken\(/)
-  assert.match(authProvider, /runAppAccessTokenRefreshSingleFlight\(\(\) => refreshAppTokens\(source\), source, source\.lastUpdatedAt\)/)
-  assert.match(authProvider, /isPersistedRefreshSourceCurrent\(refreshToken, lastUpdatedAt\)/)
+  // The single-flight key and persisted check include the auth generation.
+  assert.match(authProvider, /runAppAccessTokenRefreshSingleFlight\(\(\) => refreshAppTokens\(source\), source, `\$\{source\.generation\}:\$\{source\.lastUpdatedAt\}`\)/)
+  assert.match(authProvider, /isPersistedRefreshSourceCurrent\(tokens\)/)
   assert.doesNotMatch(background, /setupAppAuthScheduler/)
   // Cloud-quota recovery now needs a one-shot MV3 wakeup; App auth remains on demand.
   assert.match(manifest, /['"]alarms['"]/)
   assert.doesNotMatch(authProvider, /browser\.alarms|setInterval\(/)
   for (const source of [forYou, dislikeDialog, videoCardLogic]) {
     assert.match(source, /ensureFreshAppAccessToken/)
-    assert.match(source, /refreshInvalidAppAccessToken/)
-    assert.match(source, /getTvSign\(params\)/)
+    // App requests are signed by the background App client, never locally.
+    assert.match(source, /requestAppClient|submitAppFeedFeedback/)
+    assert.doesNotMatch(source, /getTvSign/)
   }
+  // Feed reads retry an invalid token themselves; dislike feedback shares the
+  // retry in its App feedback helper.
+  assert.match(forYou, /refreshInvalidAppAccessToken/)
+  assert.match(await readFile(`${process.cwd()}/src/utils/appFeedFeedback.ts`, 'utf8'), /refreshInvalidAppAccessToken/)
 
   assert.doesNotMatch(shadowCurve, /document\.addEventListener\('keydown'/)
   assert.match(shadowCurve, /@keydown="handleKeyDown"/)
@@ -2878,7 +2884,8 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /body\.\$\{BODY_CLASS\} \{\s*--bewly-widescreen-progress-track:[\s\S]{0,360}--bewly-widescreen-progress-played: var\(--bew-theme-color\)/)
   assert.match(widescreen, /--bewly-widescreen-progress-played: var\(--bew-theme-color\)/)
   assert.match(widescreen, /html\.dark body\.\$\{BODY_CLASS\}[\s\S]{0,240}--bewly-widescreen-progress-played: #fff/)
-  assert.match(widescreen, /html\.dark body\.\$\{BODY_CLASS\}[\s\S]{0,240}--bewly-widescreen-progress-glow/)
+  // The project no longer draws glow effects, including the progress bar.
+  assert.doesNotMatch(widescreen, /--bewly-widescreen-progress-glow/)
   assert.match(widescreen, /--bpx-primary-color: var\(--bew-text-1\)/)
   assert.match(widescreen, /--bpx-tooltip-color: var\(--bew-text-1\)/)
   assert.match(widescreen, /--bpx-aux-content-bg: var\(--bew-elevated-alt-solid\)/)
@@ -3177,7 +3184,11 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /syncEpisodeSectionMarker\(currentState\)/)
   assert.match(widescreen, /NATIVE_LIGHT_OFF_CONTROL_SELECTORS/)
   assert.match(widescreen, /function disableNativeLightOffMode\([\s\S]{0,360}input\?\.checked[\s\S]{0,80}input\.click\(\)/)
-  assert.match(widescreen, /mutationObserver\.observe\(document\.body[\s\S]{0,180}disableNativeLightOffMode\(currentState\.playerEl\)/)
+  // Discovery observes the body for a bounded window; both phases share one
+  // record handler that turns off late native light-off controls.
+  assert.match(widescreen, /observer\.observe\(document\.body, \{ childList: true, subtree: true \}\)/)
+  assert.match(widescreen, /if \(addedLightOffControl\)\s*disableNativeLightOffMode\(currentState\.playerEl\)/)
+  assert.match(widescreen, /enterDiscovery\(\)\s*disableNativeLightOffMode\(currentState\.playerEl\)/)
   const hiddenNativePlaybackControls = widescreen.slice(
     widescreen.indexOf(`body.\${BODY_CLASS} .\${NATIVE_PLAYER_CLASS} .bpx-player-top-issue`),
     widescreen.indexOf(`#\${ROOT_ID} {`),
@@ -3522,7 +3533,9 @@ async function verifyUpstreamReliabilityContracts() {
   ])
 
   assert.match(app, /onSettled\(\)\s*\{[\s\S]{0,400}scheduleLoadMoreSentinelCheck\(\)/)
-  assert.match(app, /handleThrottledLoadMoreGeometryCheck\(\)/)
+  // The shared viewport frame re-checks sentinel geometry after layout and keeps
+  // loading while a sentinel stays inside the preload zone during scrolling.
+  assert.match(app, /reason === 'layout'\)\s*checkLoadMoreSentinelGeometry\(\)[\s\S]{0,200}loadMoreSentinelIntersecting[\s\S]{0,120}handleThrottledReachBottom\(\)/)
   assert.match(app, /const requestStarted = await handler\(\)[\s\S]{0,100}requestStarted === true[\s\S]{0,80}scheduleLoadMoreSentinelCheck\(\)/)
   assert.match(app, /useHomePageRoute\(getDefaultAppPage,/)
   assert.match(app, /activatedPage\.value !== AppPage\.SearchResults[\s\S]{0,140}topBarStore\.searchKeyword = ''/)
@@ -3981,7 +3994,10 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.match(moments, /clearMomentPresentationForRefresh\(items\)/)
   assert.match(moments, /reapplyMomentFiltersFromCache\([\s\S]*maybeLoadMoreNearBottom\(\)/)
   assert.match(moments, /let attachedScrollViewport: HTMLElement \| null = null/)
-  assert.match(moments, /attachedScrollViewport\?\.removeEventListener\('scroll', handleViewportScroll\)/)
+  // Moments shares the viewport owner's frame instead of its own scroll listener.
+  assert.match(moments, /releaseViewportFrame = subscribeViewportFrame\(viewport, handleViewportFrame\)/)
+  assert.match(moments, /function detachViewportScroll\(\) \{\s*releaseViewportFrame\?\.\(\)/)
+  assert.doesNotMatch(moments, /addEventListener\('scroll', handleViewportScroll/)
   assert.doesNotMatch(moments, /MOMENTS_MEMORY_MAX_ITEMS/)
   assert.doesNotMatch(moments, /MOMENTS_CACHE_MAX_ITEMS|useMomentsFeedCache/)
   assert.match(moments, /function releaseMediaElement\(media: HTMLMediaElement\)/)
@@ -4275,7 +4291,9 @@ async function verifySemanticPortContracts() {
   }
 
   await assert.rejects(stat(`${root}/src/components/MomentCard/MomentVideoStrip.vue`))
-  assert.match(moments, /gap: GRID_GAP/)
+  // Layout math uses the grid's measured column gap; the token is only the start value.
+  assert.match(moments, /getComputedStyle\(grid\)\.columnGap/)
+  assert.match(moments, /gap: gridGap/)
   assert.equal((await import('../src/utils/momentsLayout')).MOMENT_GRID_DIMENSIONS.gap, 16)
   assert.match(momentCard, /@container \(min-width: #\{breakpoints\.\$moment-card-wide\}\)/)
   assert.match(momentCard, /grid-template-columns: minmax\(0, 3fr\) minmax\(320px, 2fr\)/)

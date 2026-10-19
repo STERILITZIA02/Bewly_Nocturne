@@ -1,26 +1,42 @@
-import type { InjectionKey, Ref } from 'vue'
-import { inject, onBeforeUnmount, onScopeDispose, provide, ref, toRaw, watch } from 'vue'
+import type { InjectionKey, Ref, ShallowRef } from 'vue'
+import { inject, onBeforeUnmount, onScopeDispose, provide, ref, shallowRef, toRaw, watch } from 'vue'
+
+import { estimateSnapshotEntries } from '~/utils/viewSnapshotBudget'
 
 type Snapshot = Record<string, unknown>
 interface PageViewCache {
   generation: number
   snapshots: Map<string, Snapshot>
+  /** Estimated entries per parked view, maintained on park/take/evict. */
+  sizes: Map<string, number>
+  parkedEntries: number
   scroll: Map<string, number>
 }
+const MAX_PAGE_VIEW_SNAPSHOTS = 24
+/** Parked list items and states across inactive pages; whole views evict oldest first. */
+const PAGE_VIEW_ENTRY_BUDGET = 8000
 const cacheKey: InjectionKey<PageViewCache> = Symbol('page-view-state')
 
 /** App-owned memory only. No DOM, request owners, credentials or message bodies. */
 export function providePageViewState(account: () => string) {
-  const cache: PageViewCache = { generation: 0, snapshots: new Map(), scroll: new Map() }
+  const cache: PageViewCache = { generation: 0, snapshots: new Map(), sizes: new Map(), parkedEntries: 0, scroll: new Map() }
   const clear = () => {
     cache.generation++
     cache.snapshots.clear()
+    cache.sizes.clear()
+    cache.parkedEntries = 0
     cache.scroll.clear()
   }
   watch(account, clear, { flush: 'sync' })
   onScopeDispose(clear)
   provide(cacheKey, cache)
   return cache
+}
+
+function dropSnapshot(cache: PageViewCache, key: string) {
+  cache.parkedEntries -= cache.sizes.get(key) ?? 0
+  cache.sizes.delete(key)
+  cache.snapshots.delete(key)
 }
 
 function retain(value: unknown): unknown {
@@ -42,14 +58,21 @@ export function usePageViewState(key: string) {
   const cache = inject(cacheKey, null)
   const generation = cache?.generation
   const snapshot = cache?.snapshots.get(key)
-  cache?.snapshots.delete(key)
+  if (cache)
+    dropSnapshot(cache, key)
   const fields = new Map<string, () => unknown>()
   onBeforeUnmount(() => {
     if (!cache || generation !== cache.generation)
       return
-    cache.snapshots.set(key, Object.fromEntries([...fields].map(([name, read]) => [name, retain(read())])))
-    while (cache.snapshots.size > 24)
-      cache.snapshots.delete(cache.snapshots.keys().next().value!)
+    dropSnapshot(cache, key)
+    const parked = Object.fromEntries([...fields].map(([name, read]) => [name, retain(read())]))
+    const entries = estimateSnapshotEntries(parked)
+    cache.snapshots.set(key, parked)
+    cache.sizes.set(key, entries)
+    cache.parkedEntries += entries
+    // Only complete views are evicted: a list, its cursor and anchors stay paired.
+    while (cache.snapshots.size > MAX_PAGE_VIEW_SNAPSHOTS || (cache.parkedEntries > PAGE_VIEW_ENTRY_BUDGET && cache.snapshots.size > 1))
+      dropSnapshot(cache, cache.snapshots.keys().next().value!)
     fields.clear()
   })
   return {
@@ -60,6 +83,12 @@ export function usePageViewState(key: string) {
     capture(name: string, read: () => unknown) { fields.set(name, read) },
     ref<T>(name: string, fallback: T): Ref<T> {
       const value = ref(snapshot && Object.hasOwn(snapshot, name) ? snapshot[name] : fallback) as Ref<T>
+      fields.set(name, () => value.value)
+      return value
+    },
+    /** Large display lists and raw data with an immutable or owner-local update contract. */
+    shallowRef<T>(name: string, fallback: T): ShallowRef<T> {
+      const value = shallowRef(snapshot && Object.hasOwn(snapshot, name) ? snapshot[name] : fallback) as ShallowRef<T>
       fields.set(name, () => value.value)
       return value
     },

@@ -9,16 +9,19 @@ import type { Item as AppVideoItem } from '~/models/video/appForYou'
 import type { Item as VideoItem } from '~/models/video/forYou'
 import type { AccountId } from '~/utils/accountScope'
 
+/** Accepted once: raw item, its display mapping and its advertisement class never change afterwards. */
 export interface VideoElement {
   uniqueId: string
   item?: VideoItem
   displayData?: VideoCardDisplayData
+  isAdvertisement: boolean
 }
 
 export interface AppVideoElement {
   uniqueId: string
   item?: AppVideoItem
   displayData?: VideoCardDisplayData
+  isAdvertisement: boolean
 }
 
 export interface ForYouState {

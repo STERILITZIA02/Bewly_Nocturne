@@ -17,28 +17,26 @@ export interface RecommendationSnapshot {
   dataState: RecommendationDataState
 }
 
-/** One previous and one next state. Restoring transfers arrays, then releases the consumed snapshot. */
+/**
+ * One previous and one next state. The lists follow an immutable update
+ * contract (every change replaces the array root), so a snapshot shares the
+ * accepted arrays and entities instead of copying them.
+ */
 export function useRecommendationHistory(tab: HomeTabState) {
-  const back = tab.ref<RecommendationSnapshot | null>('recommendationBack', null)
-  const forward = tab.ref<RecommendationSnapshot | null>('recommendationForward', null)
-  const copy = (state: RecommendationSnapshot): RecommendationSnapshot => ({
-    ...state,
-    videoList: state.videoList.slice(),
-    appVideoList: state.appVideoList.slice(),
-    webShowlistGroups: state.webShowlistGroups.slice(),
-  })
+  const back = tab.shallowRef<RecommendationSnapshot | null>('recommendationBack', null)
+  const forward = tab.shallowRef<RecommendationSnapshot | null>('recommendationForward', null)
   return {
     canUndo: computed(() => back.value !== null),
     canRedo: computed(() => forward.value !== null),
     remember(current: RecommendationSnapshot) {
-      back.value = copy(current)
+      back.value = current
       forward.value = null
     },
     undo(current: RecommendationSnapshot) {
       const target = back.value
       if (!target)
         return null
-      forward.value = copy(current)
+      forward.value = current
       back.value = null
       return target
     },
@@ -46,7 +44,7 @@ export function useRecommendationHistory(tab: HomeTabState) {
       const target = forward.value
       if (!target)
         return null
-      back.value = copy(current)
+      back.value = current
       forward.value = null
       return target
     },

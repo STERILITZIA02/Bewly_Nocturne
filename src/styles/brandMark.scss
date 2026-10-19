@@ -1,0 +1,10 @@
+// Bewly's broken-X mark, painted like the UnoCSS Tabler mask icons so they take
+// colour and size from their slot. Vite inlines the source SVGs as data URIs.
+.bew-mark-icon {
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  vertical-align: middle;
+  background-color: currentColor;
+  mask: url("../assets/branding/bewly-mark.svg") center / 100% 100% no-repeat;
+}

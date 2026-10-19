@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
-
 import IconButton from '~/components/IconButton.vue'
 
 defineProps<{
@@ -10,7 +8,7 @@ defineProps<{
 
 <template>
   <IconButton class="bew-tag-remove-button" :label="label">
-    <Icon icon="tabler:x" aria-hidden="true" />
+    <span class="bew-tag-remove-button__icon i-tabler:x" aria-hidden="true" />
   </IconButton>
 </template>
 
@@ -29,7 +27,7 @@ defineProps<{
     opacity: 1;
   }
 
-  svg {
+  .bew-tag-remove-button__icon {
     width: 12px;
     height: 12px;
   }

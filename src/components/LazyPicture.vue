@@ -2,8 +2,9 @@
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 import type { ImageLoadQueueHandle } from '~/utils/imageLoadQueue'
-import { enqueueImageLoad, getImageLoadPriority, subscribeImageLoadRoot } from '~/utils/imageLoadQueue'
+import { enqueueImageLoad, subscribeImageLoadRoot } from '~/utils/imageLoadQueue'
 import { getResponsiveCoverSrcset, observeCoverWidth } from '~/utils/responsiveImage'
+import { observeSkeletonGroup } from '~/utils/skeletonVisibility'
 
 // 仅记录“曾经加载过”的 URL，避免重复淡入；不持有 ImageBitmap。
 const MAX_REMEMBERED_PICTURES = 240
@@ -197,6 +198,7 @@ const imageElRef = ref<HTMLImageElement | null>(null)
 const isVisible = ref(props.loading === 'eager')
 const isLoaded = ref(false)
 const imageFailed = ref(!props.src)
+const skeletonActive = computed(() => props.showSkeleton && isVisible.value && !isLoaded.value && !imageFailed.value)
 const usePreferredSources = ref(true)
 const actualSrc = ref(props.loading === 'eager' && !props.responsiveCover ? sourceUrl.value : '')
 const imageKey = computed(() => `${actualSrc.value}:${usePreferredSources.value}`)
@@ -220,7 +222,7 @@ function measureCover() {
     stopMeasuring = observeCoverWidth(imgRef.value, (width) => {
       if (width > 0)
         coverWidth.value = Math.ceil(width)
-    })
+    }, props.loading === 'eager')
   }
 }
 
@@ -285,7 +287,7 @@ function startLoad() {
     return
   }
   queueHandle = enqueueImageLoad({
-    priority: () => imgRef.value ? getImageLoadPriority(imgRef.value, getObserverRoot()) : Infinity,
+    geometry: () => imgRef.value ? { element: imgRef.value, root: getObserverRoot() } : null,
     start: ({ isCurrent }) => {
       if (!isCurrent() || version !== loadVersion || !active)
         return
@@ -519,6 +521,18 @@ watch(
     }
   },
 )
+
+// The shimmer joins the shared visibility owner only while it runs, so a
+// pending cover off screen or in a hidden tab stops repainting.
+let releaseSkeleton: (() => void) | undefined
+watch([skeletonActive, imgRef], ([running, element]) => {
+  releaseSkeleton?.()
+  releaseSkeleton = running && element ? observeSkeletonGroup(element) : undefined
+}, { flush: 'post' })
+onBeforeUnmount(() => {
+  releaseSkeleton?.()
+  releaseSkeleton = undefined
+})
 </script>
 
 <template>
@@ -528,7 +542,8 @@ watch(
     rounded-inherit
     style="display: block; position: relative; contain: layout style;"
     :style="{ aspectRatio, backgroundColor: showSkeleton ? 'var(--bew-skeleton)' : undefined }"
-    :data-bew-skeleton="showSkeleton && isVisible && !isLoaded && !imageFailed ? '' : undefined"
+    data-bew-skeleton-group
+    :data-bew-skeleton="skeletonActive ? '' : undefined"
   >
 
     <div v-if="imageFailed" class="lazy-picture-error" role="img" :aria-label="$t('common.image_load_failed')">

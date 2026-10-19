@@ -7,7 +7,7 @@ import { getCommentReplyBranchPath, getCommentReplyBranchToggleY } from '~/injec
 import { patchCommentReplyInteraction } from '~/inject/commentReplyInteraction'
 import { createCommentReplyPaginationController } from '~/inject/commentReplyPagination'
 import { createNativeCommentReplyReader } from '~/inject/commentReplyReader'
-import { createCommentReplyReadingController, getCommentReplyGuideCoordinates, isCommentReplyReadingScroll } from '~/inject/commentReplyReading'
+import { createCommentReplyReadingController, getCommentReplyGuideCoordinates } from '~/inject/commentReplyReading'
 import { updateCommentSendButton } from '~/inject/commentSendButton'
 import { patchNativeUserProfile } from '~/inject/nativeUserProfile'
 import { setupVideoMetadataBridge } from '~/inject/videoMetadata'
@@ -203,7 +203,23 @@ else if (shouldInitializePageScript) {
     layoutUpdateRaf?: number
     /** 锚点未就绪时的重试次数，防止无限 rAF */
     layoutRetryCount?: number
+    /** Last observed border-box size per target; equal deliveries are our own writes. */
+    observedSizes?: WeakMap<Element, string>
+    /** Relations, mode and collapse keys of the last full build. */
+    topologyKey?: string
+    /** The last full build, reused while only text or geometry changes. */
+    renderedTree?: {
+      collapseParentBody: boolean
+      depthLimit: number
+      indentStep: number
+      orderedNodes: Array<{ depth: number, node: CommentReplyTreeNode }>
+      rootNodes: CommentReplyTreeNode[]
+      showGuides: boolean
+    }
   }
+
+  /** topology: relations changed; content: one reply's own data; geometry: sizes only. */
+  type CommentReplyTreeUpdateKind = 'geometry' | 'content' | 'topology'
 
   interface CommentReplyMotionState {
     animation?: Animation
@@ -217,7 +233,8 @@ else if (shouldInitializePageScript) {
   const COMMENT_REPLY_MOTION_FALLBACK_DURATION = 300
   const COMMENT_REPLY_MOTION_CLEANUP_BUFFER = 80
   const commentReplyMotionStates = new WeakMap<HTMLElement, CommentReplyMotionState>()
-  const pendingCommentReplyTreeLayoutUpdates = new WeakSet<object>()
+  const pendingCommentReplyTreeLayoutUpdates = new Map<object, CommentReplyTreeUpdateKind>()
+  const pendingCommentReplyContentRenderers = new WeakMap<object, HTMLElement>()
 
   interface CommentReplyTreeNode {
     authorName: string | null
@@ -1246,6 +1263,9 @@ else if (shouldInitializePageScript) {
     state.resizeObserver?.disconnect()
     state.resizeObserver = undefined
     state.observedTargets = undefined
+    state.observedSizes = undefined
+    state.topologyKey = undefined
+    state.renderedTree = undefined
     state.replyContainerMutationObserver?.disconnect()
     state.replyContainerMutationObserver = undefined
     state.observedReplyContainer = undefined
@@ -1263,20 +1283,31 @@ else if (shouldInitializePageScript) {
    * ResizeObserver 不会因「上方变高导致位移」触发，线条会错位。
    * 同时监听楼层 host、主评论与回复容器，并在图片 load 后重算。
    */
-  function scheduleCommentReplyTreeLayoutUpdate(component: any) {
-    if (!component || pendingCommentReplyTreeLayoutUpdates.has(component))
+  /** One frame per thread; requests in the same frame merge to the widest kind. */
+  function scheduleCommentReplyTreeLayoutUpdate(component: any, kind: CommentReplyTreeUpdateKind = 'geometry') {
+    if (!component)
       return
+    const rank = (value: CommentReplyTreeUpdateKind) => value === 'topology' ? 2 : value === 'content' ? 1 : 0
+    const pending = pendingCommentReplyTreeLayoutUpdates.get(component)
+    if (pending !== undefined) {
+      if (rank(kind) > rank(pending))
+        pendingCommentReplyTreeLayoutUpdates.set(component, kind)
+      return
+    }
 
     const treeEpoch = commentReplyTreeEpochs.get(component) ?? 0
     const identity = getCommentReplyTreeIdentity(component)
-    pendingCommentReplyTreeLayoutUpdates.add(component)
+    pendingCommentReplyTreeLayoutUpdates.set(component, kind)
     requestAnimationFrame(() => {
+      const queued = pendingCommentReplyTreeLayoutUpdates.get(component)
       pendingCommentReplyTreeLayoutUpdates.delete(component)
-      if (!component?.isConnected || (commentReplyTreeEpochs.get(component) ?? 0) !== treeEpoch
+      if (!queued || !component?.isConnected || (commentReplyTreeEpochs.get(component) ?? 0) !== treeEpoch
         || identity !== getCommentReplyTreeIdentity(component)) {
         return
       }
-      updateCommentReplyTree(component)
+      const changedRenderer = pendingCommentReplyContentRenderers.get(component)
+      pendingCommentReplyContentRenderers.delete(component)
+      updateCommentReplyTree(component, queued, changedRenderer)
     })
   }
 
@@ -1301,9 +1332,14 @@ else if (shouldInitializePageScript) {
 
     // 主评论图片和正文可能分别位于多层 shadow root；只观察外层 renderer
     // 在某些布局下无法捕获内部图片高度变化，导致回复坐标仍停留在旧位置。
+    // Each ShadowRoot boundary keeps its own targets, but inside one tree scope
+    // a box already covered by an observed ancestor adds nothing.
     const layoutTargetSelector = '#body, #main, #header, #content, #pictures, #footer, #user-avatar, bili-comment-pictures-renderer, bili-rich-text, img'
     const collectNestedLayoutTargets = (root: ParentNode) => {
-      root.querySelectorAll<HTMLElement>(layoutTargetSelector).forEach(addTarget)
+      const candidates = Array.from(root.querySelectorAll<HTMLElement>(layoutTargetSelector))
+      candidates
+        .filter(candidate => !candidates.some(other => other !== candidate && other.contains(candidate)))
+        .forEach(addTarget)
       root.querySelectorAll<HTMLElement>('*').forEach((element) => {
         if (element.shadowRoot)
           collectNestedLayoutTargets(element.shadowRoot)
@@ -1314,20 +1350,35 @@ else if (shouldInitializePageScript) {
     else if (component instanceof HTMLElement && component.shadowRoot)
       collectNestedLayoutTargets(component.shadowRoot)
 
-    const targetList = [...targets]
-    if (!state.resizeObserver || state.observedTargets?.size !== targets.size
-      || targetList.some(target => !state.observedTargets?.has(target))) {
-      disconnectCommentReplyTreeResizeObserver(state)
-      state.observedTargets = targets
-      state.resizeObserver = new ResizeObserver(() => {
-        if (!component?.isConnected) {
-          disconnectCommentReplyTreeResizeObserver(state)
-          return
-        }
+    // Keep the observer and every unchanged target; only diff the set.
+    const observedSizes = state.observedSizes ??= new WeakMap()
+    state.resizeObserver ??= new ResizeObserver((entries) => {
+      if (!component?.isConnected) {
+        disconnectCommentReplyTreeResizeObserver(state)
+        return
+      }
+      let changed = false
+      for (const entry of entries) {
+        const box = entry.borderBoxSize?.[0]
+        const size = box ? `${box.inlineSize}x${box.blockSize}` : `${entry.contentRect.width}x${entry.contentRect.height}`
+        const previous = observedSizes.get(entry.target)
+        observedSizes.set(entry.target, size)
+        // The first delivery reports a size the last build already used.
+        changed ||= previous !== undefined && previous !== size
+      }
+      if (changed)
         scheduleCommentReplyTreeLayoutUpdate(component)
-      })
-      targetList.forEach(target => state.resizeObserver?.observe(target))
-    }
+    })
+    const previousTargets = state.observedTargets ?? new Set<HTMLElement>()
+    previousTargets.forEach((target) => {
+      if (!targets.has(target))
+        state.resizeObserver?.unobserve(target)
+    })
+    targets.forEach((target) => {
+      if (!previousTargets.has(target))
+        state.resizeObserver?.observe(target)
+    })
+    state.observedTargets = targets
 
     // 删除/屏蔽回复时，B 站有时直接从列表移除 renderer，不触发回复组件自身的
     // update；仅依赖 ResizeObserver 可能错过这一帧，导致楼层 shadow root 内的线条
@@ -1357,7 +1408,7 @@ else if (shouldInitializePageScript) {
             .some(node => !isTreeGuideNode(node))
         })
         if (hasExternalChildListMutation)
-          scheduleCommentReplyTreeLayoutUpdate(component)
+          scheduleCommentReplyTreeLayoutUpdate(component, 'topology')
       })
       observer.observe(replyContainer, { childList: true })
       state.observedReplyContainer = replyContainer
@@ -1510,17 +1561,10 @@ else if (shouldInitializePageScript) {
     shouldShowExpandAll: renderer => !isInsideBewlyWidescreen(renderer),
     onNativeCollapse: clearCommentReplyTreeState,
     scheduleTreeUpdate: (renderer) => {
-      const treeEpoch = commentReplyTreeEpochs.get(renderer) ?? 0
       renderer.requestUpdate?.()
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        if (
-          renderer.isConnected
-          && getCommentReplyTreeMode() !== null
-          && (commentReplyTreeEpochs.get(renderer) ?? 0) === treeEpoch
-        ) {
-          updateCommentReplyTree(renderer)
-        }
-      }))
+      // Lit applies the update in a microtask; the tree joins the next frame.
+      if (getCommentReplyTreeMode() !== null)
+        scheduleCommentReplyTreeLayoutUpdate(renderer, 'topology')
     },
   })
 
@@ -2399,18 +2443,49 @@ else if (shouldInitializePageScript) {
     return contentsList
   }
 
-  const commentReplyAtPrefixObservers = new WeakMap<HTMLElement, MutationObserver>()
+  const commentReplyAtPrefixObservers = new WeakMap<HTMLElement, { observer: MutationObserver, targets: Set<Node> }>()
 
   function disconnectCommentReplyAtPrefixObserver(renderer: HTMLElement) {
-    const observer = commentReplyAtPrefixObservers.get(renderer)
-    if (!observer)
+    const entry = commentReplyAtPrefixObservers.get(renderer)
+    if (!entry)
       return
-    observer.disconnect()
+    entry.observer.disconnect()
     commentReplyAtPrefixObservers.delete(renderer)
   }
 
+  /**
+   * Observe each ShadowRoot boundary that holds the reply text once. A subtree
+   * observation of a root already covers rich-text contents in the same scope;
+   * replaced inner roots are discovered from the outer root's mutations.
+   */
+  function getCommentReplyAtPrefixTargets(renderer: HTMLElement) {
+    const targets = new Set<Node>()
+    if (renderer.shadowRoot)
+      targets.add(renderer.shadowRoot)
+    findCommentRichTextContents(renderer).forEach((contents) => {
+      const root = contents.getRootNode()
+      targets.add(root instanceof ShadowRoot ? root : contents)
+    })
+    renderer.shadowRoot?.querySelectorAll('bili-rich-text').forEach((richText) => {
+      if (richText.shadowRoot)
+        targets.add(richText.shadowRoot)
+    })
+    return targets
+  }
+
   function ensureCommentReplyAtPrefixObserver(renderer: HTMLElement) {
-    // 每次重建，确保新挂载的 bili-rich-text shadow 也被监听到
+    const targets = getCommentReplyAtPrefixTargets(renderer)
+    const current = commentReplyAtPrefixObservers.get(renderer)
+    // Reuse the observer while every observed boundary is still current.
+    if (current && [...current.targets].every(target => targets.has(target))) {
+      targets.forEach((target) => {
+        if (current.targets.has(target))
+          return
+        current.targets.add(target)
+        current.observer.observe(target, { childList: true, subtree: true, characterData: true })
+      })
+      return
+    }
     disconnectCommentReplyAtPrefixObserver(renderer)
 
     const observer = new MutationObserver(() => {
@@ -2420,26 +2495,12 @@ else if (shouldInitializePageScript) {
       }
       // 富文本重绘后重新隐藏前缀（自身改 DOM 时若已处理会直接 return）
       applyCommentReplyAtPrefixHidden(renderer, true)
+      ensureCommentReplyAtPrefixObserver(renderer)
     })
-
-    const observeTargets = new Set<Node>()
-    if (renderer.shadowRoot)
-      observeTargets.add(renderer.shadowRoot)
-    findCommentRichTextContents(renderer).forEach((contents) => {
-      observeTargets.add(contents)
-      const root = contents.getRootNode()
-      if (root instanceof ShadowRoot)
-        observeTargets.add(root)
-    })
-    renderer.shadowRoot?.querySelectorAll('bili-rich-text').forEach((richText) => {
-      if (richText.shadowRoot)
-        observeTargets.add(richText.shadowRoot)
-    })
-
-    observeTargets.forEach((target) => {
+    targets.forEach((target) => {
       observer.observe(target, { childList: true, subtree: true, characterData: true })
     })
-    commentReplyAtPrefixObservers.set(renderer, observer)
+    commentReplyAtPrefixObservers.set(renderer, { observer, targets })
   }
 
   function applyCommentReplyAtPrefixHidden(renderer: HTMLElement, hidden: boolean) {
@@ -2453,6 +2514,9 @@ else if (shouldInitializePageScript) {
   }
 
   function setCommentReplyAtPrefixHidden(renderer: HTMLElement, hidden: boolean) {
+    // Unchanged state: the prefix observer already re-applies after native renders.
+    if (renderer.hasAttribute('data-bewly-hide-reply-at') === hidden && (!hidden || commentReplyAtPrefixObservers.has(renderer)))
+      return
     renderer.toggleAttribute('data-bewly-hide-reply-at', hidden)
     applyCommentReplyAtPrefixHidden(renderer, hidden)
 
@@ -2495,12 +2559,55 @@ else if (shouldInitializePageScript) {
     })
   }
 
-  function updateCommentReplyTree(component: any) {
+  /** Cheap: Lit data only, no DOM reads. Equal keys mean the last build still applies. */
+  function getCommentReplyTreeTopologyKey(
+    state: CommentReplyTreeState,
+    replyRenderers: HTMLElement[],
+    treeMode: string | null,
+  ) {
+    const relations = replyRenderers.map((renderer) => {
+      const data = getCommentReplyData(renderer)
+      return `${getCommentReplyOriginalOrder(state, renderer)}:${getReplyRpid(data) ?? ''}:${getReplyParentRpid(data) ?? ''}:${getReplyRootRpid(data) ?? ''}`
+    })
+    return [
+      treeMode,
+      state.cachedPageRevision ?? 0,
+      [...state.collapsedNodeKeys].join(','),
+      [...state.collapsedTailKeys].join(','),
+      relations.join('|'),
+    ].join('\u0000')
+  }
+
+  /** Sizes changed: refresh indentation limits and guides from the last build. */
+  function updateCommentReplyTreeGeometry(component: HTMLElement, state: CommentReplyTreeState, replyContainer: HTMLElement) {
+    const tree = state.renderedTree
+    if (!tree)
+      return
+    const indentStep = getCommentReplyTreeIndentStep(replyContainer)
+    const depthLimit = getCommentReplyTreeDepthLimit(replyContainer, indentStep)
+    if (indentStep !== tree.indentStep || depthLimit !== tree.depthLimit) {
+      tree.indentStep = indentStep
+      tree.depthLimit = depthLimit
+      component.style.setProperty('--bew-comment-reply-indent-step', `${indentStep}px`)
+      tree.orderedNodes.forEach(({ depth, node }) => {
+        const visualDepth = String(Math.min(depth, depthLimit))
+        if (node.renderer.dataset.bewlyCommentReplyDepth === visualDepth)
+          return
+        node.renderer.dataset.bewlyCommentReplyDepth = visualDepth
+        node.renderer.style.setProperty('--bew-comment-reply-indent', getCommentReplyIndent(Number(visualDepth)))
+      })
+    }
+    if (tree.showGuides)
+      renderCommentReplyTreeGuides(component, state, replyContainer, tree.orderedNodes, tree.rootNodes, tree.collapseParentBody)
+  }
+
+  function updateCommentReplyTree(component: any, kind: CommentReplyTreeUpdateKind = 'topology', changedRenderer?: HTMLElement) {
     const root = component?.shadowRoot as ShadowRoot | null | undefined
     if (!root)
       return
 
-    pruneDisconnectedCommentReplyRenderers()
+    if (kind === 'topology')
+      pruneDisconnectedCommentReplyRenderers()
     commentReplyPagination.sync(component)
     const treeMode = getCommentReplyTreeMode()
     const state = getCommentReplyTreeState(component)
@@ -2528,6 +2635,17 @@ else if (shouldInitializePageScript) {
     replyRenderers.forEach(renderer => getCommentReplyOriginalOrder(state, renderer))
 
     const enabled = treeMode !== null
+    // A like or local text change keeps relations; sizes alone never re-parse
+    // the thread. Only a changed topology key rebuilds order, depth and guides.
+    if (kind !== 'topology' && enabled && state.enabled && state.renderedTree
+      && getCommentReplyTreeTopologyKey(state, replyRenderers, treeMode) === state.topologyKey) {
+      if (changedRenderer && replyRenderers.includes(changedRenderer)) {
+        cacheCommentReplyTreeMeta(state, getCommentReplyData(changedRenderer), { messageText: getCommentRendererMessageText(changedRenderer) })
+      }
+      if (component instanceof HTMLElement)
+        updateCommentReplyTreeGeometry(component, state, replyContainer)
+      return
+    }
     const showGuides = treeMode === 'lineCollapseMain' || treeMode === 'lineKeepMain'
     // true：收起时折叠所有父节点本体；false：收起时父节点保持显示，仅隐藏子回复
     const collapseParentBody = treeMode === 'lineCollapseMain'
@@ -2535,6 +2653,8 @@ else if (shouldInitializePageScript) {
 
     if (!enabled) {
       disconnectCommentReplyTreeResizeObserver(state)
+      state.topologyKey = undefined
+      state.renderedTree = undefined
       component.style.removeProperty('--bew-comment-reply-indent-step')
       removeCommentReplyTreeGuides(component, replyContainer)
       clearMissingCommentParents(replyContainer)
@@ -2610,11 +2730,14 @@ else if (shouldInitializePageScript) {
       setCommentReplyAtPrefixHidden(node.renderer, showGuides && node.directParentVisible && (!parent || !!parent.authorName))
     })
     // 未进入树序的节点恢复显示
+    const orderedRenderers = new Set(orderedNodes.map(({ node }) => node.renderer))
     replyRenderers.forEach((replyRenderer) => {
-      if (!orderedNodes.some(({ node }) => node.renderer === replyRenderer)) {
+      if (!orderedRenderers.has(replyRenderer))
         setCommentReplyAtPrefixHidden(replyRenderer, false)
-      }
     })
+    // After the build: indent-only mode may have cleared collapse keys above.
+    state.topologyKey = getCommentReplyTreeTopologyKey(state, replyRenderers, treeMode)
+    state.renderedTree = { collapseParentBody, depthLimit, indentStep, orderedNodes, rootNodes, showGuides }
     if (showGuides) {
       renderCommentReplyTreeGuides(
         component,
@@ -2645,12 +2768,12 @@ else if (shouldInitializePageScript) {
 
   /**
    * 带 #reply{rpid} 的深链会触发 B 站：滚动定位、展开楼中楼、高亮目标评论。
-   * 这些步骤常在我们首次画线之后才完成，导致线条错位。在结算窗口内多次重算。
+   * 这些步骤常在我们首次画线之后才完成。只协调包含目标的线程：目标出现、
+   * 展开或尺寸变化时更新该线程；等待窗口内保留有界的退避补查，失效即停止。
    */
   const COMMENT_REPLY_DEEP_LINK_RE = /#reply(\d+)/i
-  const commentReplyDeepLinkSettleTimers: number[] = []
-  let commentReplyDeepLinkScrollUntil = 0
-  let commentReplyDeepLinkScrollScheduled = false
+  const COMMENT_REPLY_DEEP_LINK_WINDOW_MS = 5500
+  let commentReplyDeepLinkSettlement: { rpid: string, until: number, attempt: number, timer?: number } | undefined
 
   function getCommentReplyDeepLinkId(): string | null {
     const match = location.hash.match(COMMENT_REPLY_DEEP_LINK_RE)
@@ -2658,62 +2781,78 @@ else if (shouldInitializePageScript) {
   }
 
   function clearCommentReplyDeepLinkSettlement() {
-    while (commentReplyDeepLinkSettleTimers.length > 0) {
-      const timer = commentReplyDeepLinkSettleTimers.pop()
-      if (timer !== undefined)
-        window.clearTimeout(timer)
+    if (commentReplyDeepLinkSettlement?.timer !== undefined)
+      window.clearTimeout(commentReplyDeepLinkSettlement.timer)
+    commentReplyDeepLinkSettlement = undefined
+  }
+
+  /** The thread holding the target reply, or the thread of a target root comment. */
+  function findCommentReplyDeepLinkThreads(rpid: string) {
+    const threads: HTMLElement[] = []
+    commentRepliesRenderers.forEach((component) => {
+      if (!(component instanceof HTMLElement) || !component.isConnected)
+        return
+      const data = getCommentReplyData(component)
+      const host = component as HTMLElement & { root?: unknown, rootRpid?: unknown }
+      const ownsTarget = String(host.root ?? host.rootRpid ?? getReplyRootRpid(data) ?? '') === rpid
+        || Array.from(component.shadowRoot?.querySelector('#expander-contents')?.children ?? [])
+          .some(renderer => isCommentReplyRenderer(renderer) && String(getReplyRpid(getCommentReplyData(renderer)) ?? '') === rpid)
+      if (ownsTarget)
+        threads.push(component)
+    })
+    return threads
+  }
+
+  function settleCommentReplyDeepLink() {
+    const settlement = commentReplyDeepLinkSettlement
+    if (!settlement)
+      return
+    if (Date.now() > settlement.until || getCommentReplyDeepLinkId() !== settlement.rpid || getCommentReplyTreeMode() === null) {
+      clearCommentReplyDeepLinkSettlement()
+      return
     }
-    commentReplyDeepLinkScrollUntil = 0
+    findCommentReplyDeepLinkThreads(settlement.rpid).forEach((component) => {
+      // 深链结算时允许更多锚点重试
+      const state = commentReplyTreeStates.get(component)
+      if (state)
+        state.layoutRetryCount = 0
+      scheduleCommentReplyTreeLayoutUpdate(component)
+    })
+  }
+
+  function scheduleCommentReplyDeepLinkFallback() {
+    const settlement = commentReplyDeepLinkSettlement
+    if (!settlement)
+      return
+    // Bounded backoff for native steps that report no event we can observe.
+    const delay = Math.min(1600, 100 * 2 ** settlement.attempt)
+    settlement.attempt += 1
+    settlement.timer = window.setTimeout(() => {
+      if (commentReplyDeepLinkSettlement !== settlement)
+        return
+      settlement.timer = undefined
+      settleCommentReplyDeepLink()
+      if (commentReplyDeepLinkSettlement === settlement && Date.now() + delay <= settlement.until)
+        scheduleCommentReplyDeepLinkFallback()
+    }, delay)
   }
 
   function scheduleCommentReplyDeepLinkSettlement(reason: 'immediate' | 'hash' = 'hash') {
-    if (!getCommentReplyDeepLinkId() || getCommentReplyTreeMode() === null)
-      return
-
-    // 已在结算窗口：只做轻量刷新，避免每条回复 update 重置长定时器
-    if (commentReplyDeepLinkSettleTimers.length > 0 && reason !== 'immediate') {
-      onCommentReplyDeepLinkScrollOrResize()
+    const rpid = getCommentReplyDeepLinkId()
+    if (!rpid || getCommentReplyTreeMode() === null) {
+      clearCommentReplyDeepLinkSettlement()
       return
     }
-
+    // Already settling this target: the event itself (appearance, expansion)
+    // only coordinates its thread in the next frame.
+    if (commentReplyDeepLinkSettlement?.rpid === rpid && reason !== 'immediate') {
+      settleCommentReplyDeepLink()
+      return
+    }
     clearCommentReplyDeepLinkSettlement()
-    // 覆盖：首屏渲染、展开楼中楼、滚动动画、高亮样式、图片解码
-    const delays = reason === 'immediate'
-      ? [0, 50, 120, 280, 500, 900, 1500, 2500, 4000]
-      : [0, 100, 300, 600, 1000, 1800, 3000, 5000]
-    commentReplyDeepLinkScrollUntil = Date.now() + Math.max(...delays) + 500
-
-    delays.forEach((delay) => {
-      const timer = window.setTimeout(() => {
-        // 深链结算时允许更多锚点重试
-        commentRepliesRenderers.forEach((component) => {
-          const state = commentReplyTreeStates.get(component)
-          if (state)
-            state.layoutRetryCount = 0
-        })
-        refreshCommentReplyTrees()
-      }, delay)
-      commentReplyDeepLinkSettleTimers.push(timer)
-    })
-  }
-
-  function onCommentReplyDeepLinkScrollOrResize(event?: Event) {
-    if (isCommentReplyReadingScroll(event))
-      return
-    if (
-      Date.now() > commentReplyDeepLinkScrollUntil
-      || !getCommentReplyDeepLinkId()
-      || getCommentReplyTreeMode() === null
-    ) {
-      return
-    }
-    if (commentReplyDeepLinkScrollScheduled)
-      return
-    commentReplyDeepLinkScrollScheduled = true
-    requestAnimationFrame(() => {
-      commentReplyDeepLinkScrollScheduled = false
-      refreshCommentReplyTrees()
-    })
+    commentReplyDeepLinkSettlement = { rpid, until: Date.now() + COMMENT_REPLY_DEEP_LINK_WINDOW_MS, attempt: 0 }
+    settleCommentReplyDeepLink()
+    scheduleCommentReplyDeepLinkFallback()
   }
 
   window.addEventListener('hashchange', () => {
@@ -2722,10 +2861,6 @@ else if (shouldInitializePageScript) {
     else
       clearCommentReplyDeepLinkSettlement()
   })
-  window.addEventListener('scroll', onCommentReplyDeepLinkScrollOrResize, { passive: true, capture: true })
-  window.addEventListener('resize', onCommentReplyDeepLinkScrollOrResize, { passive: true })
-  // 部分浏览器滚动结束事件
-  window.addEventListener('scrollend', onCommentReplyDeepLinkScrollOrResize, { passive: true, capture: true } as AddEventListenerOptions)
 
   if (getCommentReplyDeepLinkId())
     scheduleCommentReplyDeepLinkSettlement('immediate')
@@ -3023,7 +3158,8 @@ else if (shouldInitializePageScript) {
               // 内的 SVG 线条会随渲染结果一并被移除；重绘完成后从当前回复容器恢复。
               const repliesRenderer = root.querySelector('bili-comment-replies-renderer') as HTMLElement | null
               if (repliesRenderer) {
-                updateCommentReplyTree(repliesRenderer)
+                // Relations live in the replies renderer; here only guides may be gone.
+                updateCommentReplyTree(repliesRenderer, 'geometry')
                 if (getCommentReplyDeepLinkId())
                   scheduleCommentReplyDeepLinkSettlement('hash')
               }
@@ -3057,7 +3193,10 @@ else if (shouldInitializePageScript) {
             const rootNode = component.getRootNode?.()
             const repliesRenderer = rootNode instanceof ShadowRoot ? rootNode.host : null
             if (repliesRenderer?.localName === 'bili-comment-replies-renderer') {
-              updateCommentReplyTree(repliesRenderer)
+              // Likes and local text keep relations: merge into the thread's next
+              // frame and rebuild only if its topology key changed.
+              pendingCommentReplyContentRenderers.set(repliesRenderer, component)
+              scheduleCommentReplyTreeLayoutUpdate(repliesRenderer, 'content')
               if (getCommentReplyDeepLinkId())
                 scheduleCommentReplyDeepLinkSettlement('hash')
             }

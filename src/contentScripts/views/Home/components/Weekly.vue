@@ -32,9 +32,9 @@ const tabState = useHomeTabState()
 const hasSettled = tabState.ref('hasSettled', false)
 const isLoading = ref<boolean>(true)
 
-const seriesList = tabState.ref<PopularSeriesItem[]>('seriesList', [])
+const seriesList = tabState.shallowRef<PopularSeriesItem[]>('seriesList', [])
 const activatedSeries = tabState.ref<PopularSeriesItem | null>('activatedSeries', null)
-const videoList = tabState.ref<VideoElement[]>('videoList', [])
+const videoList = tabState.shallowRef<VideoElement[]>('videoList', [])
 const noMoreContent = tabState.ref<boolean>('noMoreContent', true) // 每周必看没有分页
 const requestFailed = tabState.ref('requestFailed', false)
 let requestGeneration = 0
@@ -159,8 +159,8 @@ async function initData() {
   emit('beforeLoading')
   isLoading.value = true
   requestFailed.value = false
-  videoList.value.length = 0
-  seriesList.value.length = 0
+  videoList.value = []
+  seriesList.value = []
   activatedSeries.value = null
 
   try {
@@ -216,7 +216,7 @@ async function getSeriesOne() {
   emit('beforeLoading')
   isLoading.value = true
   requestFailed.value = false
-  videoList.value.length = 0
+  videoList.value = []
   try {
     await fetchSeriesOne(generation, series)
   }
