@@ -1,5 +1,5 @@
-import type { Ref } from 'vue'
-import { computed, onScopeDispose, ref } from 'vue'
+import type { ShallowRef } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { SearchRequest } from '~/constants/searchApi'
@@ -22,8 +22,9 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
   const topBarStore = useTopBarStore()
   const isLoading = ref(false)
   const error = ref('')
-  // Search responses contain plain data; keep deep reactivity and the caller's data type.
-  const results = ref<T | null>(null) as Ref<T | null>
+  // Search responses are plain data that every page replaces at the root
+  // (merge/dedupe build new arrays), so nested rows need no proxies.
+  const results = shallowRef<T | null>(null) as ShallowRef<T | null>
 
   // 请求令牌，用于取消过期的请求
   let activeRequestToken: symbol | null = null

@@ -74,7 +74,7 @@ onScopeDispose(keepOpen)
 </script>
 
 <template>
-  <div class="home-channels-menu bew-segment-control bew-segment-control--surface bew-segment-control--static">
+  <div class="home-channels-menu bew-segment-control bew-segment-control--surface bew-segment-control--static bew-segment-control--flush">
     <button
       ref="trigger" type="button" class="bew-segment-control__item"
       :aria-expanded="open" :aria-controls="panelId" :data-active="open ? 'true' : undefined"

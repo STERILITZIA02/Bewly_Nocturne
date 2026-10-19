@@ -390,8 +390,10 @@ async function verifyPlayerAndTiming() {
   let selectors = new Set<string>()
   let metadata: { pageCount: number, isCollection: boolean } | null = null
   const settings = { value: { autoPlayMultipart: 'loop', autoPlayCollection: 'list' } }
-  const player = await loadSourceFunctions('../src/utils/player.ts', ['VideoType', 'isWatchLaterVideo', 'isCollectionVideo', 'detectVideoType', 'getAutoPlayModeForVideoType', 'detectVideoPlayerModeContext'], {
+  const player = await loadSourceFunctions('../src/utils/player.ts', ['VideoType', 'MULTIPART_ITEM_IN_COLLECTION_SELECTOR', 'isWatchLaterVideo', 'isCollectionVideo', 'detectVideoType', 'getAutoPlayModeForVideoType', 'detectVideoPlayerModeContext'], {
     location: { get pathname() { return pathname } },
+    // Locale-prefixed routes resolve to the same logical path as the fixture.
+    getBilibiliLogicalPathname: () => pathname,
     settings,
     readVideoPageMetadata: () => metadata,
     document: { querySelector: (selector: string) => selector.split(',').some(part => selectors.has(part.trim())) ? {} : null },

@@ -95,7 +95,8 @@ const { t } = useI18n()
 const { scrollViewportRef, handlePageRefresh, handleReachBottom, canRefreshHomeSubPage } = useBewlyApp()
 const tabState = useHomeTabState()
 const hasSettled = tabState.ref('hasSettled', false)
-const videoList = tabState.ref<VideoElement[]>('videoList', [])
+// Replaced per page, never mutated in place: cards read items without deep proxies.
+const videoList = tabState.shallowRef<VideoElement[]>('videoList', [])
 const selectedUploader = tabState.ref<number | null>('selectedUploader', null) // null means "All"
 const previousSelectedUploader = tabState.ref<number | null>('previousSelectedUploader', null)
 const selectionToken = ref<number>(0) // 用于防止竞态条件的令牌
@@ -409,6 +410,7 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
           allViewOffset.value = newOffset
         }
 
+        const pageItems: VideoElement[] = []
         response.data.items.forEach((item: MomentItem) => {
           // 如果应该过滤该视频（充电专属视频），则跳过
           if (shouldFilterVideo(item)) {
@@ -449,7 +451,7 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
           }
 
           const major = item.modules?.module_dynamic?.major
-          videoList.value.push({
+          pageItems.push({
             uniqueId: `following-all-${item.id_str}`,
             bvid: major?.archive?.bvid || major?.ugc_season?.bvid,
             item,
@@ -457,6 +459,8 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
             displayData: mapMomentItemToVideo(item, authors),
           })
         })
+        if (pageItems.length)
+          videoList.value = [...videoList.value, ...pageItems]
       }
       else {
         reportRuntimeFailure('Following: API returned an error code', response.code)
@@ -585,6 +589,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
 
         // 收集所有视频动态用于显示
         const allVideoItems: { item: MomentItem, time: number }[] = []
+        const pageItems: VideoElement[] = []
 
         response.data.items.forEach((item: MomentItem) => {
           // 只处理包含视频的动态（投稿 archive / 合集订阅 ugc_season）
@@ -621,7 +626,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
           if (displayData) {
             const time = item.modules.module_author.pub_ts * 1000
 
-            videoList.value.push({
+            pageItems.push({
               uniqueId: `user-moment-${item.id_str}`,
               bvid: major.archive?.bvid || major.ugc_season?.bvid,
               item,
@@ -633,6 +638,8 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
             allVideoTimes.push(time) // 收集所有视频时间
           }
         })
+        if (pageItems.length)
+          videoList.value = [...videoList.value, ...pageItems]
       }
       else {
         reportRuntimeFailure('Following: API returned an error code', response.code)

@@ -340,9 +340,11 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
 
   check('data auth: revoke/re-authorize during persisted verification cannot publish or clear a newer refresh', async () => {
     const abort = await deadlineModule()
-    const tokens = Vue.ref({ accessToken: 'one', refreshToken: 'r1', lastUpdatedAt: 1, mid: 100, accessTokenExpiresAt: 0, refreshTokenExpiresAt: null })
+    const tokens = Vue.ref({ accessToken: 'one', refreshToken: 'r1', lastUpdatedAt: 1, generation: 1, mid: 100, accessTokenExpiresAt: 0, refreshTokenExpiresAt: null })
     const requests = []
     const persisted = []
+    // Refresh goes through the App client port; each request carries the
+    // refresh's own abort signal.
     const auth = await loadSourceModule('../src/utils/authProvider.ts', {
       'vue': Vue,
       'webextension-polyfill': { default: { storage: { local: { get() {
@@ -350,17 +352,20 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
         persisted.push(task)
         return task.promise
       } } } } },
-      '~/logic/appAuthStorage': { appAuthTokens: tokens, defaultAppAuthTokens: {}, resetAppAuthTokens: () => { tokens.value = {} } },
+      '~/logic/appAuthStorage': { appAuthTokens: tokens, defaultAppAuthTokens: {}, isCompatibleAppAuth: () => true, nextAppAuthGeneration: () => 0, resetAppAuthTokens: () => { tokens.value = {} } },
       './abort': abort.module,
       './appAuthTokenPolicy': await import('../src/utils/appAuthTokenPolicy'),
-      './appSign': { appSign: () => 'fixture' },
-    }, { URLSearchParams, fetch: (_url, init) => {
-      const task = deferred()
-      requests.push({ ...task, init })
-      return task.promise
-    } })
+      './appClient': {
+        AppClientError: class extends Error {},
+        requestAppClientData: (_endpoint, _params, init) => {
+          const task = deferred()
+          requests.push({ ...task, init })
+          return task.promise
+        },
+      },
+    })
     const first = auth.refreshAppAccessToken()
-    requests[0].resolve({ ok: true, json: async () => ({ code: 0, data: { token_info: { access_token: 'late-one' } } }) })
+    requests[0].resolve({ code: 0, data: { token_info: { access_token: 'late-one' } } })
     await flush()
     const old = { ...tokens.value }
     tokens.value = { ...old, accessToken: 'two', refreshToken: 'r2', lastUpdatedAt: 2 }
@@ -370,7 +375,7 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
     assert.equal(requests[0].init.signal.aborted, true)
     const same = auth.refreshAppAccessToken()
     assert.equal(requests.length, 2, 'old finally cannot clear the new single-flight')
-    requests[1].resolve({ ok: true, json: async () => ({ code: 0, data: { token_info: { access_token: 'fresh-two' } } }) })
+    requests[1].resolve({ code: 0, data: { token_info: { access_token: 'fresh-two' } } })
     await flush()
     persisted[1].resolve({ appAuthTokens: { ...tokens.value } })
     assert.equal(await second, true)
@@ -801,7 +806,7 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
       return new Promise(() => {})
     })
     await sent.promise
-    assert.ok(fixture.stored.fixture['100'].sending)
+    assert.ok(fixture.stored['fixture:100'].sending, 'each account persists its own record')
     fixture.setTruth([{ aid: 3 }])
     const restarted = fixture.module.createWatchLaterStateBroker(fixture.dependencies)
     const state = await restarted.readMembership(100)

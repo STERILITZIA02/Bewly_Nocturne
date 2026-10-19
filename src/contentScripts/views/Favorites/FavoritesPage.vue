@@ -1202,7 +1202,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   &:is(:hover, :focus-visible):not(:disabled),
   &[aria-pressed="true"] {
     color: var(--bew-sidebar-text);
-    background: var(--bew-control-selected-background);
+    background: var(--bew-sidebar-selected-bg);
   }
 }
 

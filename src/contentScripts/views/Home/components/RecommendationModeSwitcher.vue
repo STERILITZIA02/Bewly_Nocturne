@@ -14,7 +14,7 @@ const options = computed(() => getRecommendationModeOptions(t))
 <template>
   <div
     v-layout-editable="'home-recommendation-switcher'"
-    class="home-recommendation-mode-switcher bew-segment-control bew-segment-control--surface"
+    class="home-recommendation-mode-switcher bew-segment-control bew-segment-control--surface bew-segment-control--flush"
     role="group" :aria-label="$t('settings.recommendation_mode')"
   >
     <LiquidSegmentIndicator :active-key="settings.recommendationMode" />

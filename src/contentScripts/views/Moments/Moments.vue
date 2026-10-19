@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEventListener } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
@@ -29,6 +30,9 @@ import api from '~/utils/api'
 import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/utils/messaging'
 import { createMomentCommentSessionCache, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
 import { resolveHorizontalScrollState } from '~/utils/momentsLayout'
+import type { ScrollPositionClaim } from '~/utils/scrollIntent'
+import { canRestoreScrollPosition, claimScrollPosition, scrollToPosition } from '~/utils/scrollIntent'
+import { getRemainingScroll, invalidateViewportGeometry, readViewportGeometry } from '~/utils/viewportGeometry'
 
 import { createMomentAdapter } from './momentAdapter'
 import { createMomentFeedReader } from './momentFeedReader'
@@ -84,7 +88,25 @@ const { mapMoment, collectVideoPublicationTimes } = createMomentAdapter(t, resol
 const topBarStore = useTopBarStore()
 
 const viewState = usePageViewState('moments')
-const moments = viewState.ref<DisplayMoment[]>('items', [])
+// Accepted feed. Appends and removals replace the root; a confirmed entity
+// patch replaces one element in place (cards render from the layout window,
+// parked view state holds its own slice), so no full list copy is made.
+const moments = viewState.shallowRef<DisplayMoment[]>('items', [])
+let indexedMoments: DisplayMoment[] | undefined
+const momentPositions = new Map<string, number>()
+/** Id → position of the current root, rebuilt only after a replacement other than an append. */
+function getMomentPositions() {
+  if (indexedMoments !== moments.value) {
+    indexedMoments = moments.value
+    momentPositions.clear()
+    indexedMoments.forEach((moment, index) => momentPositions.set(moment.id, index))
+  }
+  return momentPositions
+}
+function findMoment(id: string) {
+  const index = getMomentPositions().get(id)
+  return index === undefined ? undefined : moments.value[index]
+}
 const momentActions = useMomentActions(getMomentActionAccount, applyMomentPatch, removeMomentFromViews)
 const { likingMomentIds, reservationLoadingMomentIds, toggleMomentLike, toggleMomentReservation, isWatchLaterAdded, isWatchLaterLoading, toggleMomentWatchLater } = momentActions
 const previews = useMomentPreviews(getCurrentAccountId)
@@ -130,6 +152,8 @@ const forwardCountOverrides = new Map<string, number>()
 const isLoading = ref(false)
 const isInitialLoading = ref(!viewState.restored)
 const feedRequestFailed = ref(false)
+/** The server reports more but a page made no progress: pause automation, not "no more". */
+const paginationStalled = ref(false)
 const noMoreContent = viewState.ref('noMoreContent', false)
 const offset = viewState.ref('offset', '')
 const updateBaseline = viewState.ref('updateBaseline', '')
@@ -149,6 +173,10 @@ const LOAD_MORE_AHEAD_PX = 640
 
 /** 最近滚动时间，用于避免滚动中重排导致抖动 */
 
+/** Accepted batches; a newer commit, refresh, account or view change retires older layout work. */
+let layoutCommit = 0
+let settlingLayoutCommit = 0
+const visibilityWaiters = new Set<() => void>()
 let feedRequestToken = 0
 let portalRequestToken = 0
 let portalRequestController: AbortController | undefined
@@ -240,7 +268,7 @@ function handleMomentFilterChange(filter: MomentFilter) {
   previews.clear()
   activeMomentFilter.value = filter
   if (scrollViewportRef.value)
-    scrollViewportRef.value.scrollTop = 0
+    scrollToPosition(scrollViewportRef.value, 0)
   void loadMoments(true)
 }
 
@@ -255,7 +283,7 @@ function clearUpUpdateDot(mid: string) {
 function prepareMomentListTransition() {
   previews.clear()
   if (scrollViewportRef.value)
-    scrollViewportRef.value.scrollTop = 0
+    scrollToPosition(scrollViewportRef.value, 0)
 }
 
 /** 选择“全部动态”或某个经常访问的 UP 主；切换时 reset 列表与分页 */
@@ -371,7 +399,7 @@ function hasActiveMomentFilters() {
 }
 
 function requiresManualMomentPaging() {
-  return feedRequestFailed.value
+  return feedRequestFailed.value || paginationStalled.value
 }
 
 function passesMomentSettings(moment: DisplayMoment) {
@@ -396,8 +424,9 @@ async function reapplyMomentFiltersFromCache() {
 
   moments.value = []
   momentLayout.clearColumns()
+  layoutCommit++
   if (scrollViewportRef.value)
-    scrollViewportRef.value.scrollTop = 0
+    scrollToPosition(scrollViewportRef.value, 0)
 
   appendMoments(filteredItems)
   isInitialLoading.value = false
@@ -445,7 +474,7 @@ function removeMomentFromViews(id: string) {
   }
   deletedMomentIds.add(id)
   feedReader.remove(id)
-  const removed = moments.value.find(moment => moment.id === id)
+  const removed = findMoment(id)
   if (removed && hoveredMediaId.value === id)
     handleMediaLeave(removed)
   moments.value = moments.value.filter(moment => moment.id !== id)
@@ -460,7 +489,7 @@ async function requestMomentDelete(moment: DisplayMoment) {
     return
   if (!await confirmMomentAction(t('moment_card.delete_confirm')) || account !== getMomentActionAccount())
     return
-  const current = moments.value.find(item => item.id === moment.id)
+  const current = findMoment(moment.id)
   if (current)
     void momentActions.deleteMoment(current)
 }
@@ -488,17 +517,20 @@ function applyMomentPatch(id: string, patch: Partial<DisplayMoment>) {
   const updated = feedReader.updateMoment(id, patch)
   if (!updated)
     return
-  moments.value = moments.value.map(moment => moment.id === id ? updated : moment)
+  const index = getMomentPositions().get(id)
+  if (index !== undefined)
+    moments.value[index] = updated
   momentLayout.updateMoment(updated)
   if (selectedMoment.value?.id === id)
     details.updateMoment(updated)
 }
 function handleMomentForwardCountChange(momentId: string, forwardCount: number) {
-  const count = Math.max(normalizeForwardCount(moments.value.find(moment => moment.id === momentId)?.forwardCount), forwardCount)
+  const count = Math.max(normalizeForwardCount(findMoment(momentId)?.forwardCount), forwardCount)
   forwardCountOverrides.set(`${getCurrentAccountId()}:${momentId}`, count)
   applyMomentPatch(momentId, { forwardCount: count })
 }
 
+/** Views only report "near the bottom"; loadMoments owns eligibility and budgets. */
 function maybeLoadMoreNearBottom() {
   const viewport = scrollViewportRef.value
   if (
@@ -506,16 +538,47 @@ function maybeLoadMoreNearBottom() {
     || document.hidden
     || isInitialLoading.value
     || isLoading.value
+    || settlingLayoutCommit
     || noMoreContent.value
     || requiresManualMomentPaging()
   ) {
     return
   }
 
-  const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
-  const threshold = Math.max(LOAD_MORE_AHEAD_PX, viewport.clientHeight * 0.6)
-  if (distanceFromBottom <= threshold)
+  const geometry = readViewportGeometry(viewport)
+  const threshold = Math.max(LOAD_MORE_AHEAD_PX, geometry.clientHeight * 0.6)
+  if (getRemainingScroll(geometry) <= threshold)
     void loadMoments()
+}
+
+function releaseVisibilityWaiters() {
+  const waiters = [...visibilityWaiters]
+  visibilityWaiters.clear()
+  waiters.forEach(resolve => resolve())
+}
+
+useEventListener(document, 'visibilitychange', () => {
+  if (!document.hidden)
+    releaseVisibilityWaiters()
+})
+
+/**
+ * DOM commit → stable virtual window. Card refs measure in the patch's own
+ * microtask, so no frame wait is needed while visible; a hidden page finishes
+ * when it becomes visible again instead of relying on paused frames.
+ */
+async function settleMomentLayout(commit: number, isCurrent: () => boolean) {
+  for (let pass = 0; pass < 3; pass++) {
+    await nextTick()
+    if (document.hidden)
+      await new Promise<void>(resolve => visibilityWaiters.add(resolve))
+    if (commit !== layoutCommit || !isCurrent())
+      return false
+    if (!updateVirtualColumns())
+      break
+  }
+  invalidateViewportGeometry(scrollViewportRef.value)
+  return commit === layoutCommit && isCurrent()
 }
 
 /** 卡片仅在第一次完成测量时播放入场动画，虚拟列表重新挂载不重复播放 */
@@ -548,6 +611,9 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     return
   if ((!reset && isLoading.value) || (!reset && noMoreContent.value))
     return
+  // The settling batch runs its own follow-up check once its layout is known.
+  if (!reset && !manualPaging && settlingLayoutCommit)
+    return
 
   if (reset) {
     clearTimeout(autoFillTimer)
@@ -562,13 +628,15 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   const requestOffset = offset.value
   const requestUpdateBaseline = updateBaseline.value
   let pageApplied = false
-  let preservedPaginationScrollTop: number | null = null
+  let pageCommit = 0
+  let paginationClaim: ScrollPositionClaim | undefined
   const previousPagination = reset
     ? {
         offset: offset.value,
         updateBaseline: updateBaseline.value,
         page: momentsFeedPage.value,
         noMoreContent: noMoreContent.value,
+        stalled: paginationStalled.value,
       }
     : null
   isLoading.value = true
@@ -578,6 +646,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     updateBaseline.value = ''
     momentsFeedPage.value = 1
     noMoreContent.value = false
+    paginationStalled.value = false
   }
 
   try {
@@ -596,16 +665,15 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
       handleUpFilterChange('')
       return
     }
-    const { rawItems, normalizedItems, nextOffset, nextUpdateBaseline } = response
-    let { hasMore } = response
+    const { rawItems, normalizedItems, nextOffset, nextUpdateBaseline, hasMore } = response
     momentsFeedPage.value = response.nextPage
 
-    const existingMomentIds = new Set(moments.value.map(moment => moment.id))
+    const existingMomentIds = getMomentPositions()
     const hasUniqueResponseItem = normalizedItems.some(moment => !existingMomentIds.has(moment.id))
     const cursorAdvanced = nextOffset !== requestOffset
       || nextUpdateBaseline !== requestUpdateBaseline
-    if (!reset && hasMore && !hasUniqueResponseItem && !cursorAdvanced)
-      hasMore = false
+    // A repeated page or an unmoved cursor only stops automation; the server end is separate.
+    const stalled = hasMore && (response.stalled || (!reset && !hasUniqueResponseItem && !cursorAdvanced))
 
     void recordUploaderLatestVideoTimes(
       [
@@ -622,23 +690,19 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     const items = normalizedItems
       .filter(passesMomentSettings)
       .sort((a, b) => b.publishedAt - a.publishedAt)
-    if (!reset)
-      preservedPaginationScrollTop = scrollViewportRef.value?.scrollTop ?? null
+    if (!reset && scrollViewportRef.value)
+      paginationClaim = claimScrollPosition(scrollViewportRef.value)
     if (!reset)
       momentLayout.suspendRebalance(1500)
     else
       clearMomentPresentationForRefresh(items)
+    pageCommit = ++layoutCommit
     appendMoments(items)
-    if (reset) {
-      await nextTick()
-      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-      if (!isFeedRequestCurrent(requestToken, requestType, requestHostMid))
-        return
-    }
 
     offset.value = nextOffset
     updateBaseline.value = nextUpdateBaseline
     noMoreContent.value = !hasMore
+    paginationStalled.value = stalled
     feedRequestFailed.value = false
     pageApplied = true
   }
@@ -660,66 +724,56 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
         updateBaseline.value = previousPagination.updateBaseline
         momentsFeedPage.value = previousPagination.page
         noMoreContent.value = previousPagination.noMoreContent
+        paginationStalled.value = previousPagination.stalled
       }
       reportRuntimeFailure('Failed to load Moments feed', error)
       toast.error(t('common.load_failed'))
     }
   }
   finally {
+    // The network request ends here; layout settling below is separate work.
     if (isFeedRequestCurrent(requestToken, requestType, requestHostMid)) {
       isLoading.value = false
       isInitialLoading.value = false
     }
   }
 
-  if (
-    preservedPaginationScrollTop !== null
-    && isFeedRequestCurrent(requestToken, requestType, requestHostMid)
-  ) {
-    // 等卡片、虚拟 spacer 和底部加载提示完成更新后，恢复分页前的滚动位置
-    await nextTick()
-    updateVirtualColumns()
-    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-    if (!isFeedRequestCurrent(requestToken, requestType, requestHostMid))
-      return
-    const viewport = scrollViewportRef.value
-    if (viewport)
-      viewport.scrollTop = preservedPaginationScrollTop
-  }
-
-  if (
-    !pageApplied
-    || document.hidden
-    || noMoreContent.value
-    || requiresManualMomentPaging()
-    || !isFeedRequestCurrent(requestToken, requestType, requestHostMid)
-  ) {
+  if (!pageApplied || !isFeedRequestCurrent(requestToken, requestType, requestHostMid))
     return
+  const isCurrent = () => isFeedRequestCurrent(requestToken, requestType, requestHostMid)
+  settlingLayoutCommit = pageCommit
+  let settled = false
+  try {
+    settled = await settleMomentLayout(pageCommit, isCurrent)
   }
+  finally {
+    if (settlingLayoutCommit === pageCommit)
+      settlingLayoutCommit = 0
+  }
+  if (!settled)
+    return
+
+  const viewport = scrollViewportRef.value
+  // Explicit jumps, other restores and user scrolling since the claim win.
+  if (viewport && paginationClaim && canRestoreScrollPosition(viewport, paginationClaim))
+    viewport.scrollTop = paginationClaim.top
+
+  if (!viewport || document.hidden || noMoreContent.value || requiresManualMomentPaging())
+    return
 
   // 哨兵分页后可能始终停留在视口内，不会再次触发进入事件；布局稳定后主动补载
-  await nextTick()
-  updateVirtualColumns()
-  await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-  if (!isFeedRequestCurrent(requestToken, requestType, requestHostMid))
+  if (getRemainingScroll(readViewportGeometry(viewport)) > 240)
     return
-  const viewport = scrollViewportRef.value
-  if (!viewport)
+  if (autoFillDepth < MAX_POST_LOAD_AUTOFILL_PAGES) {
+    void loadMoments(false, autoFillDepth + 1)
     return
-  const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
-  if (distanceFromBottom <= 240) {
-    if (autoFillDepth < MAX_POST_LOAD_AUTOFILL_PAGES) {
-      void loadMoments(false, autoFillDepth + 1)
-    }
-    else {
-      clearTimeout(autoFillTimer)
-      autoFillTimer = setTimeout(() => {
-        autoFillTimer = undefined
-        if (isFeedRequestCurrent(requestToken, requestType, requestHostMid))
-          maybeLoadMoreNearBottom()
-      }, FILTERED_FEED_YIELD_MS)
-    }
   }
+  clearTimeout(autoFillTimer)
+  autoFillTimer = setTimeout(() => {
+    autoFillTimer = undefined
+    if (isCurrent())
+      maybeLoadMoreNearBottom()
+  }, FILTERED_FEED_YIELD_MS)
 }
 
 function clearMomentsPortalState() {
@@ -793,9 +847,11 @@ function resetMomentsAccountState() {
   updateBaseline.value = ''
   momentsFeedPage.value = 1
   noMoreContent.value = false
+  paginationStalled.value = false
   feedRequestFailed.value = false
   isLoading.value = false
   isInitialLoading.value = true
+  layoutCommit++
   clearMomentsPortalState()
   previews.clear()
 }
@@ -812,7 +868,7 @@ async function ensureMomentsAccount(): Promise<boolean> {
 }
 
 function handleMomentsReachBottom() {
-  if (document.hidden || requiresManualMomentPaging() || isLoading.value || noMoreContent.value)
+  if (document.hidden || requiresManualMomentPaging() || isLoading.value || settlingLayoutCommit || noMoreContent.value)
     return false
   void loadMoments()
   return true
@@ -854,6 +910,8 @@ watch([
 
 onBeforeUnmount(() => {
   momentsMounted = false
+  layoutCommit++
+  releaseVisibilityWaiters()
   clearTimeout(autoFillTimer)
   feedReader.reset()
   moments.value = []
@@ -912,14 +970,18 @@ watch(
 
 function appendMoments(items: DisplayMoment[]) {
   const wasEmpty = moments.value.length === 0
-  const ids = new Set(moments.value.map(item => item.id))
+  const positions = getMomentPositions()
   const incoming = items.filter((item) => {
-    if (ids.has(item.id) || isMomentDeleted(item.id))
+    if (positions.has(item.id) || isMomentDeleted(item.id))
       return false
-    ids.add(item.id)
+    positions.set(item.id, positions.size)
     return true
   })
-  moments.value.push(...incoming)
+  if (!incoming.length)
+    return
+  const next = moments.value.concat(incoming)
+  indexedMoments = next
+  moments.value = next
   momentLayout.append(incoming, wasEmpty)
 }
 </script>

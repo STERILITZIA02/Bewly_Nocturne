@@ -29,11 +29,11 @@ export function resolveHomeSearchStage(shortViewport: boolean) {
   }
 }
 
-/** Keep aligned with --bew-dock-control-size, --bew-dock-control-size-lg and --bew-space-4. */
+/** Keep aligned with --bew-dock-control-size, --bew-dock-control-size-lg and the shell's 6px rim on each side. */
 export const DOCK_LAYOUT = {
-  controlSize: 32,
-  controlSizeLarge: 40,
-  shellPadding: 16,
+  controlSize: 36,
+  controlSizeLarge: 44,
+  shellPadding: 12,
   actionControlSize: 45,
   controlGap: 8,
 } as const

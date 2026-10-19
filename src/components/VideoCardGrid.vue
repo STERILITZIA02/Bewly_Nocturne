@@ -1,6 +1,4 @@
 <script setup lang="ts" generic="T = any">
-import { useDebounceFn } from '@vueuse/core'
-
 import AdvertisementCard from '~/components/VideoCard/AdvertisementCard.vue'
 import type { Video, VideoCardState } from '~/components/VideoCard/types'
 import { createVideoCardState } from '~/components/VideoCard/types'
@@ -18,6 +16,7 @@ import { isLayoutEditing } from '~/logic/layoutEdit'
 import { getAdaptiveGridColumnCount, getListGridColumnCount } from '~/utils/gridLayout'
 import emitter from '~/utils/mitt'
 import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
+import { getRemainingScroll, readViewportGeometry } from '~/utils/viewportGeometry'
 
 import SmoothLoading from './SmoothLoading.vue'
 
@@ -216,6 +215,7 @@ const loadMoreSentinelRef = ref<HTMLElement | null>(null)
 const isLoadMoreSentinelIntersecting = ref(false)
 const reachedLoadMoreDuringLoading = ref(false)
 const gridContainerWidth = ref(0)
+const cardGap = ref(0)
 const bewlyApp = inject<BewlyAppProvider | undefined>('BEWLY_APP', undefined)
 const tabState = props.persistState ? useHomeTabViewState() : undefined
 interface GridSnapshot {
@@ -403,11 +403,9 @@ function setupIntersectionObserver() {
   intersectionObserver.observe(sentinel)
 }
 
-// RAF 标志，用于批量处理 DOM 读取
-let checkPreloadRAF: number | null = null
-
-// 检查是否需要预加载
-function checkShouldPreload() {
+// 检查是否需要预加载。滚动帧只读取 IntersectionObserver 维护的预载区状态；
+// 数据提交、恢复和尺寸变化后再用视口快照补查一次几何位置。
+function checkShouldPreload(fromScroll = false) {
   if (!isGridActive)
     return
 
@@ -426,33 +424,22 @@ function checkShouldPreload() {
     return
   }
 
-  // observer 回调可能滞后；用滚动几何位置兜底，保证至少提前一页加载。
-  if (checkPreloadRAF !== null)
+  if (fromScroll && supportsIntersectionObserver)
     return
 
-  checkPreloadRAF = requestAnimationFrame(() => {
-    checkPreloadRAF = null
-
-    if (isWithinPreloadDistance())
-      triggerLoadMore()
-  })
+  // observer 不会为停留在区内的哨兵再次回调；用同一轮的视口快照兜底。
+  if (isWithinPreloadDistance())
+    triggerLoadMore()
 }
 
-// 防抖的滚动检查
-const debouncedCheck = useDebounceFn(checkShouldPreload, 100)
-
-// 监听滚动
-// emitter 路径已在 App.vue 的 RAF 内，直接同步更新避免双 RAF 延迟
-// native 路径浏览器已限制为每帧一次，也可直接更新
+// emitter 路径已在 App.vue 共享的视口帧内，直接复用该帧的快照
 function handleScroll() {
-  debouncedCheck()
+  checkShouldPreload(true)
 }
 
 function handleResize() {
-  const width = gridContainerRef.value?.clientWidth
-  if (width && Math.abs(width - gridContainerWidth.value) > 0.5)
-    gridContainerWidth.value = width
-  debouncedCheck()
+  measureGridGeometry()
+  checkShouldPreload()
 }
 
 function setupScrollListeners() {
@@ -473,7 +460,6 @@ function cleanupScrollListeners() {
 
   scrollListenersActive = false
   emitter.off(OVERLAY_SCROLL_BAR_SCROLL, handleScroll)
-  window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('resize', handleResize)
 }
 
@@ -622,11 +608,6 @@ function deactivateGrid() {
   cleanupScrollListeners()
   cleanupIntersectionObserver()
   cleanupGridResizeObserver()
-
-  if (checkPreloadRAF !== null) {
-    cancelAnimationFrame(checkPreloadRAF)
-    checkPreloadRAF = null
-  }
 }
 
 onMounted(() => {
@@ -641,10 +622,6 @@ onUnmounted(() => {
   if (loadMoreRequestTimeout !== null) {
     window.clearTimeout(loadMoreRequestTimeout)
     loadMoreRequestTimeout = null
-  }
-  if (checkPreloadRAF !== null) {
-    cancelAnimationFrame(checkPreloadRAF)
-    checkPreloadRAF = null
   }
   cleanupGridResizeObserver()
   mountedCards.clear()
@@ -696,14 +673,6 @@ const horizontalCoverLayout = computed(() => {
 // Skeleton and real cards share these variables, so their cover geometry stays
 // identical while loading. Default values retain the former equal split and
 // 400px cap; choosing a custom ratio explicitly releases that cap.
-const gridContainerStyle = computed(() => ({
-  ...shadowStyleVars.value,
-  ...gridCssVars.value,
-  '--video-card-cover-flex': horizontalCoverLayout.value.ratio,
-  '--video-card-info-flex': 100 - horizontalCoverLayout.value.ratio,
-  '--video-card-cover-max-width': horizontalCoverLayout.value.preserveOriginalMaxWidth ? '400px' : 'none',
-}))
-
 const renderedGridClass = computed(() => [
   ...gridClass.value,
   ...(isAutoSwitchSingleColumn.value ? ['bew-grid-list-auto-switch-single'] : []),
@@ -759,11 +728,7 @@ function findScrollElement(): HTMLElement | null {
 }
 
 function getPreloadDistance(scrollElement: HTMLElement | null = findScrollElement()): number {
-  return Math.max(1, scrollElement?.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 0))
-}
-
-function getRemainingScroll(scrollElement: HTMLElement): number {
-  return scrollElement.scrollHeight - scrollElement.clientHeight - scrollElement.scrollTop
+  return scrollElement ? readViewportGeometry(scrollElement).clientHeight : Math.max(1, typeof window !== 'undefined' ? window.innerHeight : 0)
 }
 
 function isWithinPreloadDistance(): boolean {
@@ -771,7 +736,8 @@ function isWithinPreloadDistance(): boolean {
   if (!scrollElement)
     return false
 
-  return getRemainingScroll(scrollElement) <= getPreloadDistance(scrollElement)
+  const geometry = readViewportGeometry(scrollElement)
+  return getRemainingScroll(geometry) <= geometry.clientHeight
 }
 
 function isScrollAtBottom(): boolean {
@@ -779,7 +745,7 @@ function isScrollAtBottom(): boolean {
   if (!scrollElement)
     return false
 
-  return getRemainingScroll(scrollElement) <= 2
+  return getRemainingScroll(readViewportGeometry(scrollElement)) <= 2
 }
 
 let gridResizeObserver: ResizeObserver | null = null
@@ -798,7 +764,7 @@ function setupGridResizeObserver() {
   if (!container)
     return
 
-  gridContainerWidth.value = Math.max(1, container.clientWidth || window.innerWidth)
+  measureGridGeometry()
   if (typeof ResizeObserver === 'undefined')
     return
 
@@ -806,9 +772,25 @@ function setupGridResizeObserver() {
     const width = entries[0]?.contentRect.width
     if (!width || Math.abs(width - gridContainerWidth.value) <= 0.5)
       return
-    gridContainerWidth.value = width
+    measureGridGeometry(width)
   })
   gridResizeObserver.observe(container)
+}
+
+/**
+ * Real track width and row gap form one layout snapshot. It is refreshed on
+ * container resize and layout-class changes, never inside a computed.
+ */
+function measureGridGeometry(width?: number) {
+  const container = gridContainerRef.value
+  if (!container)
+    return
+  const nextWidth = Math.max(1, width ?? (container.clientWidth || window.innerWidth))
+  if (Math.abs(nextWidth - gridContainerWidth.value) > 0.5)
+    gridContainerWidth.value = nextWidth
+  const gap = Number.parseFloat(getComputedStyle(container).rowGap) || 0
+  if (gap !== cardGap.value)
+    cardGap.value = gap
 }
 
 watch(gridContainerRef, () => {
@@ -896,19 +878,31 @@ const cardWindowRoot = computed(() => {
 })
 const recycleCards = computed(() => Boolean(tabState?.enabled) || props.items.length > CARD_WINDOW_THRESHOLD)
 const cardColumns = computed(() => getCurrentColumnCount(props.gridLayout, gridContainerWidth.value || window.innerWidth))
-const cardGap = computed(() => {
-  void gridContainerWidth.value
-  void isHorizontal.value
-  return gridContainerRef.value ? Number.parseFloat(getComputedStyle(gridContainerRef.value).rowGap) || 0 : 0
-})
+watch([isHorizontal, () => props.gridLayout], () => nextTick(() => measureGridGeometry()), { flush: 'post' })
 const cardKeys = computed(() => displayItems.value.map(getUniqueKey))
 const estimatedCardHeight = computed(() => {
   const columns = cardColumns.value
-  const width = (gridContainerWidth.value || window.innerWidth) / columns
+  const width = Math.max(1, (gridContainerWidth.value || window.innerWidth) - cardGap.value * (columns - 1)) / columns
   const cover = isHorizontal.value ? width * horizontalCoverLayout.value.ratio / 100 : width
   // Estimates only seed unmeasured rows; one shared measurement index owns actual geometry.
   return isHorizontal.value ? Math.max(cover * 9 / 16, 130) + 16 : cover * 9 / 16 + 110
 })
+const gridContainerStyle = computed(() => ({
+  ...shadowStyleVars.value,
+  ...gridCssVars.value,
+  // Only the content-visibility fallback uses an intrinsic estimate; windowed
+  // grids own heights through spacers and the measured row index.
+  ...(props.disableContentVisibility || recycleCards.value
+    ? {}
+    : {
+        '--video-card-intrinsic-width': `${Math.round(Math.max(1, (gridContainerWidth.value || window.innerWidth) - cardGap.value * (cardColumns.value - 1)) / cardColumns.value)}px`,
+        '--video-card-intrinsic-height': `${Math.round(estimatedCardHeight.value)}px`,
+      }),
+  '--video-card-cover-flex': horizontalCoverLayout.value.ratio,
+  '--video-card-info-flex': 100 - horizontalCoverLayout.value.ratio,
+  '--video-card-cover-max-width': horizontalCoverLayout.value.preserveOriginalMaxWidth ? '400px' : 'none',
+}))
+
 const cardLayoutKey = computed(() => [
   props.gridLayout,
   settings.value.videoCardTitleFontSize,
@@ -959,10 +953,18 @@ watch(() => {
   }
   return [...mids]
 }, (mids) => { void gridRelations.batchQueryUserRelations(mids) }, { immediate: true, flush: 'post' })
+// Only states with restore value park; default ones are recreated on demand.
 detachGridSnapshot = tabState?.capture(gridStateKey, (): GridSnapshot => ({
   window: cardWindow.captureSnapshot(),
-  cardStates: [...cardStates],
-}))
+  cardStates: [...cardStates].filter(([, state]) => !isDefaultCardState(state)),
+}), {
+  // Under the cache budget, measured heights go first: they are rebuilt by
+  // measuring, while the anchor and card states keep the return position.
+  shrink: (value) => {
+    const snapshot = value as GridSnapshot
+    return { ...snapshot, window: { ...snapshot.window, measurements: [] } }
+  },
+})
 const renderItems = computed(() => {
   const result: { key: string, height?: number, card?: VideoCardRenderItem }[] = []
   for (const range of cardWindow.ranges.value) {
@@ -987,11 +989,21 @@ function getCardState(key: string | number) {
   return state
 }
 
+/** Removal, preview progress and a resolved Watch Later aid are worth restoring. */
+function isDefaultCardState(state: VideoCardState) {
+  return !state.removed && state.videoCurrentTime == null && state.resolvedWatchLaterAid === undefined
+}
+
 function setMountedCard(key: string | number, component: unknown) {
-  if (component)
+  if (component) {
     mountedCards.set(key, component as { canRecycle?: boolean })
-  else
-    mountedCards.delete(key)
+    return
+  }
+  mountedCards.delete(key)
+  // A recycled card without interaction state needs no retained object.
+  const state = cardStates.get(key)
+  if (state && isDefaultCardState(state))
+    cardStates.delete(key)
 }
 
 watch(cardKeys, (keys) => {
@@ -1224,7 +1236,7 @@ function getUniqueKey(item: T, index: number): string | number {
   contain: layout style;
   content-visibility: auto;
   overflow-anchor: none;
-  contain-intrinsic-size: auto 376px 276px;
+  contain-intrinsic-size: auto var(--video-card-intrinsic-width, 376px) auto var(--video-card-intrinsic-height, 276px);
   min-width: 0;
 }
 

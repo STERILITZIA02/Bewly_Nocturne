@@ -43,17 +43,26 @@ function hasOwn(record: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(record, key)
 }
 
-function valuesEqual(left: unknown, right: unknown) {
+/** Structural equality of JSON settings values, without serializing either side. */
+export function settingsValuesEqual(left: unknown, right: unknown): boolean {
   if (Object.is(left, right))
     return true
-
-  try {
-    return JSON.stringify(left) === JSON.stringify(right)
-  }
-  catch {
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object' || Array.isArray(left) !== Array.isArray(right))
     return false
+  if (Array.isArray(left)) {
+    const other = right as unknown[]
+    return left.length === other.length && left.every((value, index) => settingsValuesEqual(value, other[index]))
   }
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  // As in JSON, a field holding `undefined` is the same as a missing field.
+  const keys = Object.keys(leftRecord).filter(key => leftRecord[key] !== undefined)
+  if (keys.length !== Object.keys(rightRecord).filter(key => rightRecord[key] !== undefined).length)
+    return false
+  return keys.every(key => settingsValuesEqual(leftRecord[key], rightRecord[key]))
 }
+
+const valuesEqual = settingsValuesEqual
 
 export function createEmptySettingsStoragePatch(): SettingsStoragePatch {
   return { set: {}, remove: [] }

@@ -4,183 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 import { compileStyleAsync, parse } from 'vue/compiler-sfc'
 
-import { loadSourceModule } from './sourceModuleHarness'
-
 export function registerDockGlassChecks(check, { Vue, compileComponent, flush }) {
-  check('Appearance glass settings: real form preserves blur, custom color and strength after moving from Dock', async () => {
-    const parameters = await import('../src/constants/liquidGlass')
-    const range = await import('../src/utils/range')
-    const Radio = await compileComponent('../src/components/Radio.vue')
-    const Slider = await compileComponent('../src/components/Slider.vue', { '~/utils/range': range })
-    const Item = await compileComponent('../src/components/Settings/components/SettingsItem.vue')
-    const Group = await compileComponent('../src/components/Settings/components/SettingsItemGroup.vue')
-    const Select = {
-      props: ['modelValue', 'options'],
-      emits: ['update:modelValue'],
-      setup: (props, { emit }) => () => Vue.h('select', { value: String(props.modelValue), onChange: event => emit('update:modelValue', event.target.value) }, props.options.map(option => Vue.h('option', { value: String(option.value) }, option.label))),
-    }
-    const settings = Vue.ref({ alwaysUseDock: false, dockCollapseMode: 'button', dockPosition: 'bottom', dockItemsConfig: [], pageMode: 'bewly', showBewlyOrBiliPageSwitcher: true, disableLightDarkModeSwitcherOnDock: false, backToTopAndRefreshButtonsAreSeparated: false, enableUndoRefreshButton: false, sidebarPosition: 'right', autoHideSidebar: false, enableDockLiquidGlass: false, disableFrostedGlass: false, dockLiquidGlassMode: 'standard', dockLiquidGlassRefraction: 35, dockLiquidGlassBlur: 6, dockLiquidGlassTintSource: 'theme', dockLiquidGlassTintColor: '#ffffff', dockLiquidGlassTintOpacity: 30, dockLiquidGlassDispersion: 1.5, dockLiquidGlassSaturation: 140 })
-    const page = await compileComponent('../src/components/Settings/Appearance/LiquidGlassSettings.vue', {
-      'vue-i18n': { useI18n: () => ({ t: key => key }) },
-      'vuedraggable': { default: { render: () => null } },
-      '~/components/Button.vue': { default: { render: () => null } },
-      '~/components/Radio.vue': { default: Radio },
-      '~/components/Select.vue': { default: Select },
-      '~/components/Slider.vue': { default: Slider },
-      '~/constants/liquidGlass': parameters,
-      '~/logic': { settings },
-      '~/stores/mainStore': { useMainStore: () => ({ dockItems: [] }) },
-      '~/stores/settingsStore': { useSettingsStore: () => ({ getUseOriginalBilibiliTopBar: () => false }) },
-      '../components/SettingsItem.vue': { default: Item },
-      '../components/SettingsItemGroup.vue': { default: Group },
-    })
-    const host = document.body.appendChild(document.createElement('div'))
-    const app = Vue.createApp(page)
-    app.config.globalProperties.$t = key => key
-    app.mount(host)
-    host.querySelector('[data-setting-id="appearance.liquidGlass"] input').click()
-    await flush()
-    assert.equal(settings.value.enableDockLiquidGlass, true)
-    const blur = host.querySelector('[data-settings-title="settings.liquid_glass_blur"] input')
-    blur.value = '20'
-    blur.dispatchEvent(new Event('input', { bubbles: true }))
-    await flush()
-    assert.equal(settings.value.dockLiquidGlassBlur, 20)
-    const source = host.querySelector('[data-setting-id="appearance.liquidGlass.tint"] select')
-    source.value = 'custom'
-    source.dispatchEvent(new Event('change', { bubbles: true }))
-    await flush()
-    const color = host.querySelector('input[type="color"]')
-    color.value = '#7a3f91'
-    color.dispatchEvent(new Event('input', { bubbles: true }))
-    const opacity = host.querySelector('[data-settings-title="settings.liquid_glass_tint_opacity"] input')
-    opacity.value = '65'
-    opacity.dispatchEvent(new Event('input', { bubbles: true }))
-    await flush()
-    assert.equal(settings.value.dockLiquidGlassTintColor, '#7a3f91')
-    assert.equal(settings.value.dockLiquidGlassTintOpacity, 65)
-    source.value = 'theme'
-    source.dispatchEvent(new Event('change', { bubbles: true }))
-    await flush()
-    assert.equal(host.querySelector('input[type="color"]'), null)
-    assert.equal(settings.value.dockLiquidGlassTintColor, '#7a3f91')
-    settings.value.disableFrostedGlass = true
-    await flush()
-    assert.ok(host.textContent.includes('settings.liquid_glass_paused'))
-    const { settingsSearchEntries } = await import('../src/components/Settings/searchCatalog')
-    const { MenuType } = await import('../src/components/Settings/types')
-    const entries = settingsSearchEntries.filter(entry => entry.titleKey?.startsWith('settings.liquid_glass'))
-    assert.equal(entries.length, 9)
-    assert.ok(entries.every(entry => entry.menu === MenuType.Appearance && !entry.storageValues?.length))
-    app.unmount()
-    host.remove()
-  })
-
-  async function withResizeObserver(run) {
-    const previous = window.ResizeObserver
-    const previousGlobal = globalThis.ResizeObserver
-    const observers = []
-    window.ResizeObserver = class {
-      elements = new Set()
-      constructor(callback) {
-        this.callback = callback
-        observers.push(this)
-      }
-
-      observe(element) { this.elements.add(element) }
-      unobserve(element) { this.elements.delete(element) }
-      disconnect() { this.elements.clear() }
-    }
-    globalThis.ResizeObserver = window.ResizeObserver
-    const resize = async (width, height) => {
-      for (const observer of observers) {
-        const entries = [...observer.elements].map(target => ({ target, contentBoxSize: [{ inlineSize: width, blockSize: height }], borderBoxSize: [{ inlineSize: width, blockSize: height }], contentRect: { width, height } }))
-        if (entries.length)
-          observer.callback(entries)
-      }
-      await flush()
-    }
-    try {
-      await run({ observers, resize })
-    }
-    finally {
-      window.ResizeObserver = previous
-      globalThis.ResizeObserver = previousGlobal
-    }
-  }
-
-  check('Dock glass: real library filter follows CSS geometry without resize observers and releases opaque optics', async () => {
-    await withResizeObserver(async ({ observers, resize }) => {
-      const library = await import('@wxperia/liquid-glass-vue')
-      const Surface = await compileComponent('../src/components/LiquidGlassSurface.vue', { '@wxperia/liquid-glass-vue': library })
-      const enabled = Vue.ref(true)
-      const mode = Vue.ref('standard')
-      const options = Vue.reactive({ blur: 6, tintColor: '#446688', tintOpacity: 30 })
-      const file = new URL('../src/components/LiquidGlassSurface.vue', import.meta.url)
-      const descriptor = parse(await readFile(file, 'utf8')).descriptor
-      const compiled = await compileStyleAsync({ source: descriptor.styles[0].content, filename: fileURLToPath(file), id: 'glass-test', preprocessLang: 'scss' })
-      assert.equal(compiled.errors.length, 0)
-      const style = document.head.appendChild(document.createElement('style'))
-      style.textContent = compiled.code
-      const host = document.body.appendChild(document.createElement('div'))
-      const app = Vue.createApp({ setup: () => () => enabled.value ? Vue.h('div', [0, 1].map(key => Vue.h(Surface, { key, mode: mode.value, refraction: 35, ...options, dispersion: 1.5, saturation: 140 }))) : null })
-      app.mount(host)
-      await flush()
-      await resize(600, 60)
-      const filters = [...host.querySelectorAll('filter')]
-      assert.equal(filters.length, 2)
-      assert.notEqual(filters[0].id, filters[1].id)
-      for (const surface of host.querySelectorAll('.bew-liquid-glass-surface')) {
-        const warp = surface.querySelector('.bew-liquid-glass-surface__warp')
-        assert.equal([...surface.querySelectorAll('*')].filter(element => element.style?.backdropFilter && element.style.backdropFilter !== 'none').length, 1)
-        assert.equal(warp.style.backdropFilter, 'blur(6px) saturate(140%)')
-        assert.equal(warp.style.filter, `url(#${surface.querySelector('filter').id})`)
-        const tint = surface.querySelector('.bew-liquid-glass-surface__tint')
-        assert.equal(tint.parentElement, surface, 'tint must not be distorted inside the optical layer')
-        assert.equal(getComputedStyle(warp).backgroundColor, 'rgba(0, 0, 0, 0)')
-        assert.equal(tint.style.backgroundColor, 'rgb(68, 102, 136)')
-        assert.equal(tint.style.opacity, '0.3')
-        assert.equal(getComputedStyle(tint).position, 'absolute')
-        assert.equal(getComputedStyle(tint).inset, '0')
-      }
-      options.blur = 18
-      options.tintColor = '#22aa66'
-      options.tintOpacity = 65
-      await flush()
-      assert.equal(host.querySelector('.bew-liquid-glass-surface__warp').style.backdropFilter, 'blur(18px) saturate(140%)')
-      assert.equal(host.querySelector('.bew-liquid-glass-surface__tint').style.backgroundColor, 'rgb(34, 170, 102)')
-      assert.equal(host.querySelector('.bew-liquid-glass-surface__tint').style.opacity, '0.65')
-      options.tintOpacity = 0
-      await flush()
-      assert.equal(host.querySelector('.bew-liquid-glass-surface__tint').style.opacity, '0')
-      const map = host.querySelector('feImage').getAttribute('href')
-      mode.value = 'polar'
-      await flush()
-      assert.notEqual(host.querySelector('feImage').getAttribute('href'), map)
-      const polarMap = host.querySelector('feImage').getAttribute('href')
-      mode.value = 'prominent'
-      await flush()
-      assert.notEqual(host.querySelector('feImage').getAttribute('href'), polarMap)
-      assert.equal(host.querySelectorAll('filter').length, 2)
-      await resize(64, 64)
-      assert.equal(host.querySelector('svg').style.width, '100%')
-      assert.equal(host.querySelector('svg').style.height, '100%')
-      assert.equal(observers.length, 0, 'shell morphs must not allocate a reactive size observer for optics')
-      options.tintOpacity = 100
-      await flush()
-      assert.equal(host.querySelectorAll('filter').length, 0, 'opaque tint releases invisible refraction work')
-      assert.equal(host.querySelectorAll('.bew-liquid-glass-surface__warp').length, 0)
-      enabled.value = false
-      await flush()
-      assert.equal(host.querySelectorAll('filter').length, 0)
-      assert.ok(observers.every(observer => observer.elements.size === 0))
-      app.unmount()
-      host.remove()
-      style.remove()
-    })
-  })
-
-  check('Dock glass: actual Dock replaces each surface, honors global disable and keeps its shell and controls', async () => {
+  check('Dock glass: actual Dock keeps one frosted owner per surface, its shell and controls', async () => {
     const { AppPage } = await import('../src/enums/appEnums')
     const { HomeSubPage } = await import('../src/contentScripts/views/Home/types')
     const dockPolicy = await import('../src/constants/dock')
@@ -190,24 +15,17 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     const item = { page: AppPage.Home, visible: true, icon: '', iconActivated: '', i18nKey: 'Home' }
     const items = [item, ...[AppPage.Notifications, AppPage.Moments, AppPage.WatchLater].map(page => ({ ...item, page, i18nKey: page }))]
     const topBarStore = Vue.reactive({ isLogin: true, unReadMessageCount: 120, newMomentsCount: 3, watchLaterCount: 12 })
-    const settings = Vue.ref({ dockPosition: 'bottom', dockCollapseMode: 'button', dockItemsConfig: [item], pageMode: 'bewly', useSearchPageModeOnHomePage: true, showBewlyOrBiliPageSwitcher: true, enableDockLiquidGlass: false, disableFrostedGlass: false, dockLiquidGlassMode: 'standard', dockLiquidGlassRefraction: 35, dockLiquidGlassBlur: 6, dockLiquidGlassTintSource: 'theme', dockLiquidGlassTintColor: '#ffffff', dockLiquidGlassTintOpacity: 30, dockLiquidGlassDispersion: 1.5, dockLiquidGlassSaturation: 140, frostedGlassBlurIntensity: 20 })
+    const settings = Vue.ref({ dockPosition: 'bottom', dockCollapseMode: 'button', dockItemsConfig: [item], pageMode: 'bewly', useSearchPageModeOnHomePage: true, showBewlyOrBiliPageSwitcher: true, disableFrostedGlass: false, frostedGlassBlurIntensity: 20 })
     const passthrough = { setup: (_props, { slots }) => () => Vue.h('div', slots.default?.()) }
     settings.value.dockItemsConfig = items
     const Badge = await compileComponent('../src/components/CountBadge.vue')
-    const Surface = { props: ['blur', 'tintColor', 'tintOpacity'], setup: props => () => Vue.h('span', { 'class': 'optical-test-surface', 'data-blur': props.blur, 'data-tint': props.tintColor, 'data-opacity': props.tintOpacity }) }
-    const material = await loadSourceModule('../src/composables/useLiquidGlass.ts', {
-      'vue': Vue,
-      '~/logic': { settings },
-      '~/constants/liquidGlass': await import('../src/constants/liquidGlass'),
-      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false) }) },
-    })
     const Dock = await compileComponent('../src/components/Dock/Dock.vue', {
       'vue-i18n': { useI18n: () => ({ t: (key, params) => `${key}:${params.count}` }) },
       '@iconify/vue': { Icon: { render: () => Vue.h('svg') } },
-      '@vueuse/core': { useElementSize: () => ({ width: Vue.ref(600), height: Vue.ref(60) }), useWindowSize: () => ({ width: Vue.ref(1280), height: Vue.ref(900) }), usePreferredReducedMotion: () => Vue.ref('reduce') },
+      // 56px = the large Dock control (44px) plus its 6px rim on each side.
+      '@vueuse/core': { useElementSize: () => ({ width: Vue.ref(600), height: Vue.ref(56) }), useWindowSize: () => ({ width: Vue.ref(1280), height: Vue.ref(900) }), usePreferredReducedMotion: () => Vue.ref('reduce') },
       '~/composables/useAppProvider': { UndoForwardState: { ShowUndo: 1, ShowForward: 2 }, useBewlyApp: () => ({ reachTop: Vue.ref(true), homeActivatedPage: Vue.ref(HomeSubPage.ForYou), undoForwardState: undoState, canRefreshHomeSubPage: Vue.ref(true), getDockPageHref: () => '/' }) },
       '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), toggleDark: () => {} }) },
-      '~/composables/useLiquidGlass': material,
       '~/composables/useDelayedHover': { useDelayedHover: () => Vue.ref(null) },
       '~/constants/dock': dockPolicy,
       '~/constants/layout': layout,
@@ -221,7 +39,6 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       '~/utils/main': { isHomePage: () => true, openLinkToNewTab: () => {} },
       '../IconButton.vue': { default: { setup: (_props, { slots, attrs }) => () => Vue.h('button', attrs, slots.default?.()) } },
       '../CountBadge.vue': { default: Badge },
-      '../LiquidGlassSurface.vue': { default: Surface },
       '../LiquidSegmentIndicator.vue': { default: { setup: (_props, { expose }) => {
         expose({ updateIndicator: () => {} })
         return () => Vue.h('span')
@@ -267,68 +84,36 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     const frostedShadow = getComputedStyle(shell).boxShadow
     assert.notEqual(frostedShadow, 'none')
     const buttons = host.querySelectorAll('button').length
-    assert.equal(host.querySelectorAll('.optical-test-surface').length, 0)
-    settings.value.enableDockLiquidGlass = true
-    await flush()
-    assert.equal(host.querySelector('.dock-shell-surface'), shell, 'material changes preserve the morph owner')
-    assert.equal(shell.querySelectorAll('.optical-test-surface').length, 1)
-    assert.equal(host.querySelectorAll('.back-to-top-or-refresh-btn .optical-test-surface').length, 1)
-    assert.equal(host.querySelectorAll('button').length, buttons)
-    for (const owner of host.querySelectorAll('.dock-shell-surface, .back-to-top-or-refresh-btn')) {
-      assert.equal(getComputedStyle(owner).borderColor, 'transparent', 'the backdrop must not sample its own border')
-      assert.equal(getComputedStyle(owner).boxShadow, 'none', 'the frame shadow is painted by the foreground frame')
-      // JSDOM does not compute backdrop-filter; check the matching compiled CSS
-      // declaration here and verify the rendered effect in the browser.
-      const backdropRule = [...style.sheet.cssRules].findLast(rule => rule.selectorText && rule.style.getPropertyValue('backdrop-filter') && owner.matches(rule.selectorText))
-      assert.equal(backdropRule?.style.getPropertyValue('backdrop-filter'), 'none')
-    }
-    shell.parentElement.classList.add('collapsed')
-    await flush()
-    assert.equal(getComputedStyle(shell).boxShadow, 'none', 'collapsed styling must keep decorations out of the sampled backdrop')
-    shell.parentElement.classList.remove('collapsed')
+    assert.equal(host.querySelector('.dock-shell-surface').children.length, 0, 'the shell paints its own backdrop without optical children')
+    const backdropOf = owner => [...style.sheet.cssRules].findLast(rule => rule.selectorText && rule.style.getPropertyValue('backdrop-filter') && owner.matches(rule.selectorText))?.style.getPropertyValue('backdrop-filter')
     settings.value.enableUndoRefreshButton = true
     undoState.value = 1
     await flush()
-    assert.equal(host.querySelectorAll('.optical-test-surface').length, 3)
-    undoState.value = 2
-    await flush()
-    assert.equal(host.querySelectorAll('.optical-test-surface').length, 3, 'undo/redo shares the same single optical surface')
-    settings.value.frostedGlassBlurIntensity = 10
-    await flush()
-    assert.equal(shell.querySelector('[data-blur]').getAttribute('data-blur'), '6', 'liquid glass blur is independently adjustable')
-    assert.equal(shell.querySelector('[data-tint]').getAttribute('data-tint'), 'var(--bew-liquid-glass-color)')
-    settings.value.dockLiquidGlassBlur = 14.5
-    settings.value.dockLiquidGlassTintSource = 'custom'
-    settings.value.dockLiquidGlassTintColor = '#2a8f70'
-    settings.value.dockLiquidGlassTintOpacity = 65
-    await flush()
-    for (const surface of host.querySelectorAll('.optical-test-surface')) {
-      assert.equal(surface.getAttribute('data-blur'), '14.5')
-      assert.equal(surface.getAttribute('data-tint'), '#2a8f70')
-      assert.equal(surface.getAttribute('data-opacity'), '65')
+    assert.ok(host.querySelectorAll('button').length > buttons)
+    for (const owner of host.querySelectorAll('.dock-shell-surface, .back-to-top-or-refresh-btn')) {
+      // JSDOM does not compute backdrop-filter; read the compiled declaration. The
+      // token resolves to none under disable-frosted-glass, so no sample remains.
+      assert.equal(backdropOf(owner), 'var(--bew-filter-glass-1)')
+      assert.notEqual(getComputedStyle(owner).borderStyle, 'none', 'surfaces keep their own frame')
+      assert.equal(owner.querySelector('svg filter, [data-bew-liquid-glass]'), null)
     }
-    settings.value.dockLiquidGlassTintSource = 'theme'
-    await flush()
-    assert.equal(shell.querySelector('[data-tint]').getAttribute('data-tint'), 'var(--bew-liquid-glass-color)')
-    assert.equal(settings.value.dockLiquidGlassTintColor, '#2a8f70', 'switching tint source keeps the custom color')
+    assert.equal(host.querySelector('[data-bew-liquid-glass]'), null)
     settings.value.disableFrostedGlass = true
     await flush()
-    assert.equal(host.querySelectorAll('.optical-test-surface').length, 0)
-    assert.equal(host.querySelector('.dock-content.liquid-glass'), null)
-    assert.equal(getComputedStyle(shell).boxShadow, frostedShadow, 'global disable restores the original surface owner')
+    assert.equal(host.querySelector('.dock-shell-surface'), shell, 'material changes preserve the morph owner')
+    assert.equal(getComputedStyle(shell).boxShadow, frostedShadow, 'global disable keeps the original surface owner')
     settings.value.disableFrostedGlass = false
-    settings.value.enableDockLiquidGlass = false
+    undoState.value = 0
     await flush()
-    assert.equal(host.querySelector('.dock-shell-surface'), shell)
     const collapsedTrigger = host.querySelector('.dock-collapsed-trigger')
     assert.equal(collapsedTrigger.querySelectorAll('.dock-collapsed-mark__dot').length, 3)
     assert.ok(collapsedTrigger.querySelector('.dock-collapsed-mark__line'))
     host.querySelector('[aria-label="dock.collapse_dock"]').click()
     await flush()
     const geometry = host.querySelector('.dock-content-inner').style
-    assert.equal(geometry.getPropertyValue('--dock-collapsed-width'), '120px')
-    assert.equal(Number.parseFloat(geometry.getPropertyValue('--dock-collapsed-height')), 20)
-    assert.equal(bottomShifts.at(-1), 40, 'composer uses the actual scaled height released by Dock')
+    assert.equal(geometry.getPropertyValue('--dock-collapsed-width'), '112px')
+    assert.ok(Math.abs(Number.parseFloat(geometry.getPropertyValue('--dock-collapsed-height')) - 56 / 3) < 0.01)
+    assert.ok(Math.abs(bottomShifts.at(-1) - (56 - 56 / 3)) < 0.01, 'composer uses the actual scaled height released by Dock')
     const ended = new window.Event('transitionend', { bubbles: true })
     Object.defineProperty(ended, 'propertyName', { value: 'transform' })
     shell.dispatchEvent(ended)

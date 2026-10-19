@@ -17,11 +17,11 @@ import { registerDesignImplementationChecks } from './verify-design-implementati
 import { registerDockGlassChecks } from './verify-dock-glass.mjs'
 import { registerFavoriteSourceChecks } from './verify-favorite-sources.mjs'
 import { registerFourFeatureChecks } from './verify-four-features.mjs'
+import { registerFrostedGlassSurfaceChecks } from './verify-frosted-glass-surfaces.mjs'
 import { registerGlobalResourceChecks } from './verify-global-resources.mjs'
 import { registerHomeLoadingRegressionChecks } from './verify-home-loading-regressions.mjs'
 import { registerLibraryMemoryChecks } from './verify-library-memory.mjs'
 import { registerLibraryToolChecks } from './verify-library-tools.mjs'
-import { registerLiquidGlassSurfaceChecks } from './verify-liquid-glass-surfaces.mjs'
 import { registerLoadingSkeletonChecks } from './verify-loading-skeletons.mjs'
 import { registerLocalLoudnessChecks } from './verify-local-loudness.mjs'
 import { registerLongListResourceChecks } from './verify-long-list-resources.mjs'
@@ -44,6 +44,8 @@ import { registerRuntimeErrorChecks } from './verify-runtime-errors.mjs'
 import { registerSeptemberAdaptationChecks } from './verify-september-adaptation.mjs'
 import { registerSidebarContinuityChecks } from './verify-sidebar-continuity.mjs'
 import { registerSixAuditFixChecks } from './verify-six-audit-fixes.mjs'
+import { registerStage2DataPathChecks } from './verify-stage2-data-paths.mjs'
+import { registerStage3RuntimeChecks } from './verify-stage3-runtime-boundaries.mjs'
 import { registerSurfaceMaterialChecks } from './verify-surface-materials.mjs'
 import { registerTopBarSyncChecks } from './verify-top-bar-sync.mjs'
 import { registerTypographyChecks } from './verify-typography.mjs'
@@ -132,8 +134,10 @@ registerDesignImplementationChecks(check, { Vue, compileComponent, flush })
 registerDockGlassChecks(check, { Vue, compileComponent, flush })
 registerTopBarSyncChecks(check, { Vue, flush, compileComponent })
 registerSurfaceMaterialChecks(check, { Vue, compileComponent, flush })
+registerStage2DataPathChecks(check, { Vue, flush })
+registerStage3RuntimeChecks(check)
 registerLoadingSkeletonChecks(check, { Vue, compileComponent, flush })
-registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent, flush })
+registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent, flush })
 registerPlaybackContentChecks(check)
 registerAdvertisingRuleChecks(check, { Vue, compileComponent, flush })
 registerHomeLoadingRegressionChecks(check, { Vue, compileComponent, flush })
@@ -474,7 +478,6 @@ async function compileSharedLoadingRing() {
   })
   return sharedLoadingRing
 }
-const glassSurfaceContext = Symbol('fixture-glass-surface')
 async function compileComponent(file, mocks = {}, { renderTemplate = true, globals = {} } = {}) {
   if (!file.endsWith('/SkeletonBlock.vue'))
     sharedSkeletonComponent ??= await compileComponent('../src/components/SkeletonBlock.vue')
@@ -513,6 +516,9 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     // fixtures do not create a real embedded document or settings owner.
     '~/composables/useIframeDocumentHost': { useIframeDocumentHost: () => ({ currentHref: Vue.ref('') }) },
     '~/utils/motionPresence': await import('../src/utils/motionPresence'),
+    '~/utils/fullscreenChange': await import('../src/utils/fullscreenChange'),
+    '~/constants/appClient': await import('../src/constants/appClient'),
+    './favoriteFilter': await import('../src/contentScripts/views/Favorites/favoriteFilter'),
     '~/utils/asyncPage': globals.defineAsyncComponent
       ? { createAsyncPageRegistry: () => ({ define: (loader, options) => globals.defineAsyncComponent({ loader, ...options }), preload: () => Promise.resolve() }) }
       : await import('../src/utils/asyncPage'),
@@ -551,10 +557,6 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '../components/mediaResults.scss': {},
     './mediaResults.scss': {},
     './searchFilters.scss': {},
-    // Non-material checks keep their existing leaf boundary. Material checks
-    // replace these dependencies with the real production modules.
-    '~/utils/liquidGlass': { vLiquidGlass: {} },
-    '~/composables/useLiquidGlass': { GLASS_SURFACE_CONTEXT: glassSurfaceContext, liquidGlassEnabled: Vue.ref(false) },
     '~/composables/useGlassPanelMotion': await import('../src/composables/useGlassPanelMotion'),
     ...mocks,
   }
@@ -922,7 +924,10 @@ check('P2-10/12 dialog and context-menu geometry stay inside narrow/zoomed viewp
 check('P2-13 popular videos retain a failed page and retry without discarding loaded cards', async () => {
   const requests = []
   let fail = false
-  const context = await loadSourceFunctions('../src/contentScripts/views/Home/components/Trending.vue', ['getTrendingVideos', 'getData', 'retryTrendingRequest'], {
+  const context = await loadSourceFunctions('../src/contentScripts/views/Home/components/Trending.vue', ['getTrendingVideos', 'fetchTrendingPage', 'getData', 'retryTrendingRequest'], {
+    // Mirrors Trending.vue's per-round fill target and page budget.
+    TRENDING_FILL_TARGET: 30,
+    TRENDING_MAX_PAGES_PER_ROUND: 3,
     tabState: { isCurrent: () => true },
     hasSettled: r(false),
     requestGeneration: 1,
@@ -1038,6 +1043,7 @@ check('P2-14 custom multipart order excludes collection manuscripts and preserve
     ...await import('../src/utils/customPlayControls'),
     document,
     detectVideoType: () => type,
+    detectCustomPlayListVideoType: () => type,
     VideoType: { MULTIPART: 'multipart' },
   })
   assert.deepEqual(Array.from(context.getVideoEpisodes(), item => item.id), ['part-1', 'part-2'])

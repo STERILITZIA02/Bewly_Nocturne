@@ -74,8 +74,9 @@ const activatedRankingType = computed<RankingType>({
   get: () => rankingTypes.value.find(type => type.id === activatedRankingTypeId.value) || rankingTypes.value[0],
   set: type => activatedRankingTypeId.value = type.id,
 })
-const videoList = tabState.reactive<RankingVideoElement[]>('videoList', [])
-const PgcList = tabState.reactive<RankingPgcItem[]>('pgcList', [])
+// Each response replaces the whole list; rows are read-only display data.
+const videoList = tabState.shallowRef<RankingVideoElement[]>('videoList', [])
+const PgcList = tabState.shallowRef<RankingPgcItem[]>('pgcList', [])
 const shouldMoveAsideUp = ref<boolean>(false)
 const noMoreContent = tabState.ref<boolean>('noMoreContent', true) // 排行榜没有分页
 const rankingGridRef = ref<HTMLElement | null>(null)
@@ -217,8 +218,8 @@ function initData() {
   hasSettled.value = false
   const generation = ++requestGeneration
   const rankingType = { ...activatedRankingType.value }
-  videoList.length = 0
-  PgcList.length = 0
+  videoList.value = []
+  PgcList.value = []
   requestFailed.value = false
   return getData(generation, rankingType)
 }
@@ -245,7 +246,7 @@ async function getRankingVideos(generation: number, rankingType: RankingType) {
       ...item,
       displayData: transformRankingVideo(item, index + 1),
     }))
-    Object.assign(videoList, processedList)
+    videoList.value = processedList
   }
   catch (error) {
     if (tabState.isCurrent() && generation === requestGeneration) {
@@ -271,7 +272,7 @@ async function getRankingPgc(generation: number, seasonType: number) {
       return
     if (response.code !== 0 || !Array.isArray(response.data?.list))
       throw new Error(response.message || 'PGC ranking request failed')
-    Object.assign(PgcList, response.data.list)
+    PgcList.value = response.data.list
   }
   catch (error) {
     if (tabState.isCurrent() && generation === requestGeneration) {

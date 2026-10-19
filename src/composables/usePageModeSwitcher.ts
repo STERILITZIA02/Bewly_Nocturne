@@ -19,17 +19,13 @@ import {
 } from '~/utils/pageMode'
 
 export interface PageModeSwitcherState {
-  currentIcon: ComputedRef<string>
+  /** Mode shown at rest; the component owns how each mode is drawn. */
+  currentMode: ComputedRef<PageMode>
   disabled: ComputedRef<boolean>
-  nextIcon: ComputedRef<string>
+  /** Mode previewed on hover or focus. */
+  previewMode: ComputedRef<PageMode>
   tooltip: ComputedRef<string>
   cyclePageMode: () => Promise<void>
-}
-
-const PAGE_MODE_ICONS: Readonly<Record<PageMode, string>> = {
-  original: 'tabler:brand-bilibili',
-  bewly: 'tabler:cat',
-  custom: 'tabler:tools',
 }
 
 const PAGE_MODE_LABEL_KEYS: Readonly<Record<PageMode, string>> = {
@@ -66,12 +62,12 @@ export function usePageModeSwitcher(
   const unavailable = computed(() => target.value === null)
   const disabled = computed(() => switchingPageMode.value || (!videoPlaybackPage.value && unavailable.value))
   const nextMode = computed(() => getNextPageMode(settings.value.pageMode))
-  const currentIcon = computed(() => videoPlaybackPage.value
-    ? PAGE_MODE_ICONS[widescreenEngaged.value ? 'bewly' : 'original']
-    : PAGE_MODE_ICONS[settings.value.pageMode])
-  const nextIcon = computed(() => videoPlaybackPage.value
-    ? PAGE_MODE_ICONS[widescreenEngaged.value ? 'original' : 'bewly']
-    : PAGE_MODE_ICONS[nextMode.value])
+  const currentMode = computed<PageMode>(() => videoPlaybackPage.value
+    ? (widescreenEngaged.value ? 'bewly' : 'original')
+    : settings.value.pageMode)
+  const previewMode = computed<PageMode>(() => videoPlaybackPage.value
+    ? (widescreenEngaged.value ? 'original' : 'bewly')
+    : nextMode.value)
   const tooltip = computed(() => {
     if (videoPlaybackPage.value)
       return t(widescreenEngaged.value ? 'widescreen.exit' : 'widescreen.enter')
@@ -147,9 +143,9 @@ export function usePageModeSwitcher(
   }
 
   return {
-    currentIcon,
+    currentMode,
     disabled,
-    nextIcon,
+    previewMode,
     tooltip,
     cyclePageMode,
   }

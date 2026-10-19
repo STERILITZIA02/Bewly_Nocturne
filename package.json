@@ -54,7 +54,6 @@
   },
   "dependencies": {
     "@types/md5": "^2.3.5",
-    "@wxperia/liquid-glass-vue": "1.0.9",
     "dompurify": "^3.2.6",
     "flv.js": "^1.6.2",
     "hls.js": "^1.6.14",

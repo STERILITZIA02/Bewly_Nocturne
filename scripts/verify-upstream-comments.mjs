@@ -97,7 +97,8 @@ export function registerUpstreamCommentChecks(check) {
       commentReplyTreeStates: states,
       commentReplyTreeEpochs: epochs,
       commentRepliesRenderers: new Set(),
-      pendingCommentReplyTreeLayoutUpdates: new WeakSet(),
+      pendingCommentReplyTreeLayoutUpdates: new Map(),
+      pendingCommentReplyContentRenderers: new WeakMap(),
       disconnectCommentReplyTreeResizeObserver() {},
       removeCommentReplyTreeGuides() {},
       commentReplyReading: { clear() {} },
@@ -128,6 +129,51 @@ export function registerUpstreamCommentChecks(check) {
     }
     finally {
       component.remove()
+    }
+  })
+
+  check('native comment tree: likes, sizes and relations merge per thread into one frame; only a changed topology key rebuilds', async () => {
+    const frames = []
+    const updates = []
+    const component = document.body.appendChild(document.createElement('div'))
+    const other = document.body.appendChild(document.createElement('div'))
+    const changed = document.createElement('div')
+    const pendingContent = new WeakMap([[component, changed]])
+    const functions = await loadSourceFunctions('../src/inject/index.ts', ['scheduleCommentReplyTreeLayoutUpdate', 'getCommentReplyTreeTopologyKey'], {
+      commentReplyTreeEpochs: new WeakMap(),
+      getCommentReplyTreeIdentity: () => 'same',
+      pendingCommentReplyTreeLayoutUpdates: new Map(),
+      pendingCommentReplyContentRenderers: pendingContent,
+      requestAnimationFrame: fn => frames.push(fn),
+      updateCommentReplyTree: (target, kind, renderer) => updates.push([target, kind, renderer]),
+      getCommentReplyData: renderer => renderer.data,
+      getCommentReplyOriginalOrder: (_state, renderer) => renderer.order,
+      getReplyRpid: data => data.rpid,
+      getReplyParentRpid: data => data.parent,
+      getReplyRootRpid: data => data.root,
+    })
+    try {
+      functions.scheduleCommentReplyTreeLayoutUpdate(component)
+      functions.scheduleCommentReplyTreeLayoutUpdate(component, 'content')
+      functions.scheduleCommentReplyTreeLayoutUpdate(component, 'geometry')
+      functions.scheduleCommentReplyTreeLayoutUpdate(other, 'topology')
+      assert.equal(frames.length, 2, 'one frame per thread, however many requests')
+      frames.splice(0).forEach(run => run())
+      assert.deepEqual(updates, [[component, 'content', changed], [other, 'topology', undefined]], 'the widest request wins and carries the changed reply')
+
+      const state = { cachedPageRevision: 1, collapsedNodeKeys: new Set(), collapsedTailKeys: new Set() }
+      const renderers = [{ order: 0, data: { rpid: '1', parent: '0', root: '1' } }, { order: 1, data: { rpid: '2', parent: '1', root: '1', like: 3 } }]
+      const key = functions.getCommentReplyTreeTopologyKey(state, renderers, 'lineKeepMain')
+      renderers[1].data = { ...renderers[1].data, like: 4, message: 'edited' }
+      assert.equal(functions.getCommentReplyTreeTopologyKey(state, renderers, 'lineKeepMain'), key, 'likes and text keep the build')
+      renderers[1].data = { ...renderers[1].data, parent: '9' }
+      assert.notEqual(functions.getCommentReplyTreeTopologyKey(state, renderers, 'lineKeepMain'), key, 'a reused renderer with new relations rebuilds')
+      state.collapsedNodeKeys.add('reply:1')
+      assert.notEqual(functions.getCommentReplyTreeTopologyKey(state, renderers, 'lineKeepMain'), key)
+    }
+    finally {
+      component.remove()
+      other.remove()
     }
   })
 

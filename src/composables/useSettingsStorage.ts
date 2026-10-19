@@ -19,6 +19,7 @@ import {
   SETTINGS_STORAGE_META_KEY,
   SETTINGS_STORAGE_PATCH_MESSAGE,
   SETTINGS_STORAGE_READ_MESSAGE,
+  settingsValuesEqual,
 } from '~/utils/settingsStorageProtocol'
 import { migrateSidebarCoverSetting } from '~/utils/sidebarCoverSettings'
 
@@ -92,6 +93,47 @@ function reconcileSettingsValue(current: unknown, next: unknown): unknown {
   return current
 }
 
+/**
+ * Runs `normalize` on a private working copy and records which top-level
+ * fields it read, wrote or removed. Enumerating every field marks the run as
+ * depending on everything.
+ */
+function runRecordedNormalize<T>(working: Record<string, unknown>, normalize: (value: T) => void) {
+  const touched = new Set<string>()
+  let enumerated = false
+  const record = (key: string | symbol) => {
+    if (typeof key === 'string')
+      touched.add(key)
+  }
+  normalize(new Proxy(working, {
+    get(target, key, receiver) {
+      record(key)
+      return Reflect.get(target, key, receiver)
+    },
+    set(target, key, value, receiver) {
+      record(key)
+      return Reflect.set(target, key, value, receiver)
+    },
+    has(target, key) {
+      record(key)
+      return Reflect.has(target, key)
+    },
+    deleteProperty(target, key) {
+      record(key)
+      return Reflect.deleteProperty(target, key)
+    },
+    getOwnPropertyDescriptor(target, key) {
+      record(key)
+      return Reflect.getOwnPropertyDescriptor(target, key)
+    },
+    ownKeys: (target) => {
+      enumerated = true
+      return Reflect.ownKeys(target)
+    },
+  }) as T)
+  return enumerated ? undefined : touched
+}
+
 function storedValueFingerprint(value: unknown) {
   if (value == null)
     return null
@@ -137,7 +179,13 @@ export function useSettingsStorage<T extends object>(
   const retiredEpochs = new Set<string>()
   let canonicalRevision = 0
   let canonicalFingerprint: string | null = null
+  // Immutable per-field snapshots: unchanged fields keep their identity, and
+  // no snapshot shares a mutable reference with the edited `data`.
   let observedValue = asRecord(cloneValue(data.value))
+  /** Last full-normalize input/output and the fields it depended on. */
+  let lastNormalizeInput: Record<string, unknown> | undefined
+  let lastNormalized: Record<string, unknown> | undefined
+  let normalizeDependencies: Set<string> | undefined
   let queuedPatch = createEmptySettingsStoragePatch()
   let inFlightPatch: SettingsStoragePatch | null = null
   let failedPatchRequest: SettingsStoragePatchRequest | null = null
@@ -156,14 +204,66 @@ export function useSettingsStorage<T extends object>(
   let recoveryReadTimer: ReturnType<typeof setTimeout> | null = null
   const flushWaiters = new Set<SettingsStorageFlushWaiter>()
 
+  /** Compares field by field; only changed fields are cloned into the next snapshot. */
   function captureLocalChanges() {
     if (disposed || contextInvalidated || applyingCanonicalValue)
       return
-    const next = asRecord(cloneValue(data.value))
-    const patch = createTopLevelSettingsStoragePatch(observedValue, next)
+    const current = asRecord(toRaw(data.value))
+    const patch = createEmptySettingsStoragePatch()
+    let next: Record<string, unknown> | undefined
+    for (const key of Object.keys(current)) {
+      if (Object.hasOwn(observedValue, key) && settingsValuesEqual(current[key], observedValue[key]))
+        continue
+      next ??= { ...observedValue }
+      next[key] = cloneValue(current[key])
+      patch.set[key] = next[key]
+    }
+    for (const key of Object.keys(observedValue)) {
+      if (Object.hasOwn(current, key))
+        continue
+      next ??= { ...observedValue }
+      Reflect.deleteProperty(next, key)
+      patch.remove.push(key)
+    }
+    if (!next)
+      return
     observedValue = next
-    if (!isSettingsStoragePatchEmpty(patch))
-      queuedPatch = mergeSettingsStoragePatches(queuedPatch, patch)
+    queuedPatch = mergeSettingsStoragePatches(queuedPatch, patch)
+  }
+
+  /**
+   * Normalize the rendered value. When every field that changed since the last
+   * full run lies outside the fields that run depended on, its result still
+   * holds: reuse it and take the changed fields unchanged. Canonical applies,
+   * imports, resets and any change to a dependency run the full normalizer.
+   */
+  function normalizeRendered(input: Record<string, unknown>, full: boolean): { value: Record<string, unknown>, reused: boolean } {
+    if (!options.normalize)
+      return { value: input, reused: false }
+    if (!full && lastNormalizeInput && lastNormalized && normalizeDependencies) {
+      const changed = new Set<string>()
+      for (const key of new Set([...Object.keys(input), ...Object.keys(lastNormalizeInput)])) {
+        if (!Object.is(input[key], lastNormalizeInput[key]) || Object.hasOwn(input, key) !== Object.hasOwn(lastNormalizeInput, key))
+          changed.add(key)
+      }
+      if ([...changed].every(key => !normalizeDependencies!.has(key))) {
+        const normalized = { ...lastNormalized }
+        for (const key of changed) {
+          if (Object.hasOwn(input, key))
+            normalized[key] = input[key]
+          else
+            Reflect.deleteProperty(normalized, key)
+        }
+        lastNormalizeInput = input
+        lastNormalized = normalized
+        return { value: normalized, reused: true }
+      }
+    }
+    const working = asRecord(cloneValue(input))
+    normalizeDependencies = runRecordedNormalize(working, options.normalize)
+    lastNormalizeInput = input
+    lastNormalized = working
+    return { value: working, reused: false }
   }
 
   const storageIsIdle = () => ready
@@ -184,15 +284,18 @@ export function useSettingsStorage<T extends object>(
     flushWaiters.clear()
   }
 
-  const renderCanonicalValue = () => {
+  /**
+   * canonical → inFlight → queued, then normalize, then reconcile in place.
+   * The overlay is built from immutable field snapshots (shallow copies), so
+   * one working copy is the only deep clone; reconcile clones replaced branches.
+   */
+  const renderCanonicalValue = (fullNormalize = false) => {
     captureLocalChanges()
     let nextValue = canonicalValue
     if (inFlightPatch)
       nextValue = applySettingsStoragePatch(nextValue, inFlightPatch)
     nextValue = applySettingsStoragePatch(nextValue, queuedPatch)
-    const renderedValue = asRecord(cloneValue(nextValue))
-    const normalized = cloneValue(renderedValue) as T
-    options.normalize?.(normalized)
+    const { value: normalized, reused } = normalizeRendered(nextValue, fullNormalize)
 
     applyingCanonicalValue = true
     try {
@@ -202,9 +305,12 @@ export function useSettingsStorage<T extends object>(
       applyingCanonicalValue = false
     }
 
-    const actualValue = asRecord(cloneValue(data.value))
-    const derivedPatch = createTopLevelSettingsStoragePatch(renderedValue, actualValue)
-    observedValue = actualValue
+    // `data` now equals `normalized`; its fields are the next observed snapshot.
+    observedValue = normalized
+    // A reused result derives nothing new: its derived fields were queued when computed.
+    if (reused)
+      return
+    const derivedPatch = createTopLevelSettingsStoragePatch(nextValue, normalized)
     if (persistenceReady && !isSettingsStoragePatchEmpty(derivedPatch))
       queuedPatch = mergeSettingsStoragePatches(queuedPatch, derivedPatch)
   }
@@ -223,11 +329,12 @@ export function useSettingsStorage<T extends object>(
     const migrated = migrateSidebarCoverSetting(raw)
     if (persistenceReady)
       queuedPatch = mergeSettingsStoragePatches(createTopLevelSettingsStoragePatch(raw, migrated), queuedPatch)
+    // Defaults and parsed values are shared immutable field snapshots.
     canonicalValue = {
-      ...asRecord(cloneValue(defaults)),
+      ...asRecord(defaults),
       ...migrated,
     }
-    renderCanonicalValue()
+    renderCanonicalValue(true)
     return true
   }
 
@@ -239,7 +346,7 @@ export function useSettingsStorage<T extends object>(
     currentEpoch = epoch
     canonicalRevision = 0
     canonicalFingerprint = null
-    canonicalValue = asRecord(cloneValue(defaults))
+    canonicalValue = { ...asRecord(defaults) }
     queuedPatch = createEmptySettingsStoragePatch()
     inFlightPatch = null
     failedPatchRequest = null
@@ -248,7 +355,7 @@ export function useSettingsStorage<T extends object>(
     persistenceReady = false
     initializationState.value = 'loading'
     if (renderDefaults)
-      renderCanonicalValue()
+      renderCanonicalValue(true)
   }
 
   const sendWithRetry = async <R>(type: string, payload: unknown, generation: number): Promise<R> => {
@@ -583,7 +690,8 @@ export function useSettingsStorage<T extends object>(
     persistenceReady = false
     const importPatch: SettingsStoragePatch = { set: cloneValue(values) as Record<string, unknown>, remove: [] }
     inFlightPatch = importPatch
-    renderCanonicalValue()
+    // Imported values may carry retired fields or cross-field state: full normalize.
+    renderCanonicalValue(true)
     const generation = storageGeneration
     try {
       const response = await sendWithRetry<SettingsStoragePatchResponse>(SETTINGS_STORAGE_IMPORT_MESSAGE, {

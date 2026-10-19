@@ -10,7 +10,6 @@ import { acquireSearchExperience, loadSharedHotSearch, useSearchExperience } fro
 import api from '~/utils/api'
 import { debugLog } from '~/utils/debug'
 import { hasNavigationModifier } from '~/utils/linkNavigation'
-import { vLiquidGlass } from '~/utils/liquidGlass'
 import { isInIframe } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
@@ -576,7 +575,6 @@ function handleClearKeyword() {
     />
 
     <div
-      v-liquid-glass
       class="search-bar group"
       :class="isFocus ? 'focus' : ''"
       flex="~ items-center" pos="relative"
@@ -650,7 +648,6 @@ function handleClearKeyword() {
       <div
         v-if="shouldShowSearchDropdown"
         :id="searchDropdownId"
-        v-liquid-glass
         class="search-dropdown bew-popover-surface bew-popover-surface--clip"
         role="region"
         :aria-label="$t('search_bar.search_options_label')"
@@ -776,7 +773,6 @@ function handleClearKeyword() {
     <Transition name="slide-in">
       <div
         v-if="isFocus && keyboardSelectionMode !== 'history' && (suggestions.length !== 0 || suggestionsLoading) && keyword.length > 0"
-        v-liquid-glass
         class="search-suggestion bew-popover-surface bew-popover-surface--clip"
         :style="narrowTopBarPopupStyle"
       >
@@ -925,8 +921,6 @@ function handleClearKeyword() {
 
   .search-bar {
     --b-search-bar-current-corner: var(--bew-corner-shape-round);
-    --bew-liquid-frame-width: 0px;
-    --bew-liquid-frame-inset: 0px;
     background: var(--b-search-bar-normal-color);
     backdrop-filter: var(--bew-filter-glass-1);
     -webkit-backdrop-filter: var(--bew-filter-glass-1);

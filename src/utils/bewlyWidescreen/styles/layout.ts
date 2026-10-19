@@ -1,5 +1,4 @@
 import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } from '~/constants/globalEvents'
-import LIQUID_GLASS_CSS from '~/styles/liquidGlass.scss?inline'
 import SEGMENT_CONTROL_CSS from '~/styles/segmentControl.scss?inline'
 import SEND_BUTTON_CSS from '~/styles/sendButton.scss?inline'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
@@ -11,7 +10,6 @@ import { PHOTO_VIEWER_SELECTOR } from '~/utils/photoViewer'
 export function injectLayoutStyle() {
   return injectCSS(`
     ${SKELETON_CSS}
-    ${LIQUID_GLASS_CSS}
     ${SEGMENT_CONTROL_CSS}
     ${SEND_BUTTON_CSS}
     body.${BODY_CLASS} {
@@ -635,7 +633,6 @@ export function injectLayoutStyle() {
     /* 统一悬浮玻璃卡：包住原生控制栏（含进度行）与底部弹幕控制区。
        高度由 JS 测量原生控制栏后写入 --bewly-widescreen-controls-glass-height。 */
     body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS} {
-      --bew-liquid-frame-inset: 0px;
       box-sizing: border-box !important;
       position: absolute !important;
       right: var(--bewly-widescreen-controls-glass-inset) !important;
@@ -666,30 +663,6 @@ export function injectLayoutStyle() {
       opacity: var(--bewly-widescreen-controls-opacity, 0) !important;
       transform: none !important;
       pointer-events: none !important;
-    }
-
-    /* An opacity/will-change ancestor cuts off backdrop sampling. Fade only the
-       painted leaves so the optics can still see the video throughout the fade. */
-    body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] {
-      background: transparent !important;
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
-      border-color: transparent !important;
-      box-shadow: none !important;
-      opacity: 1 !important;
-      will-change: auto;
-      transition: none;
-    }
-
-    body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-layer::after,
-    body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__warp,
-    body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__tint {
-      opacity: var(--bewly-widescreen-controls-opacity, 0);
-      transition: opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease);
-    }
-
-    body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__tint {
-      opacity: calc(var(--bew-liquid-tint-opacity) * var(--bewly-widescreen-controls-opacity, 0)) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-danmaku-dock {
@@ -3205,9 +3178,6 @@ export function injectLayoutStyle() {
       ),
       body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS},
       #${ROOT_ID} .bewly-widescreen-sidebar,
-      body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-layer::after,
-      body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__warp,
-      body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__tint,
       #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag, .bgm-tag) > .tag-link,
       ${DANMAKU_SURFACE_SELECTOR},
       #${ROOT_ID} .bewly-widescreen-sidebar-toggle,

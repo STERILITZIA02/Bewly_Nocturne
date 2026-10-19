@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
 import type { CSSProperties } from 'vue'
 import { nextTick, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -664,13 +663,13 @@ onBeforeUnmount(() => {
           @click="beginSelectedPreview"
         >
           <template #left>
-            <Icon icon="tabler:edit" />
+            <span class="layout-editor-icon i-tabler:edit" aria-hidden="true" />
           </template>
           {{ t('layout_editor.adjust_target') }}
         </Button>
         <Button type="secondary" size="small" data-layout-editor-control @click="openSelectedSetting">
           <template #left>
-            <Icon icon="tabler:settings" />
+            <span class="layout-editor-icon i-tabler:settings" aria-hidden="true" />
           </template>
           {{ t('layout_editor.open_setting') }}
         </Button>
@@ -718,11 +717,11 @@ onBeforeUnmount(() => {
       role="menu"
     >
       <button type="button" data-layout-editor-control role="menuitem" @click="editContextTarget">
-        <Icon icon="tabler:edit" />
+        <span class="layout-editor-icon i-tabler:edit" aria-hidden="true" />
         <span>{{ t('layout_editor.edit_layout') }}</span>
       </button>
       <button type="button" data-layout-editor-control role="menuitem" @click="openContextSetting">
-        <Icon icon="tabler:settings" />
+        <span class="layout-editor-icon i-tabler:settings" aria-hidden="true" />
         <span>{{ t('layout_editor.open_setting') }}</span>
       </button>
     </section>
@@ -893,11 +892,13 @@ onBeforeUnmount(() => {
       outline-offset: -2px;
     }
   }
+}
 
-  svg {
-    width: var(--bew-icon-size-md);
-    height: var(--bew-icon-size-md);
-  }
+// Buttons provide their icon size; the context menu keeps the medium glyph.
+.layout-editor-icon {
+  flex: none;
+  width: var(--b-button-icon-size, var(--bew-icon-size-md));
+  height: var(--b-button-icon-size, var(--bew-icon-size-md));
 }
 
 :global(body.bewly-layout-editing),

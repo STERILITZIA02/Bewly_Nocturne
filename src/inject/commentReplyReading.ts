@@ -30,10 +30,6 @@ export function getCommentReplyGuideCoordinates(component: HTMLElement, containe
   return { parent: threadRoot ?? container, rect: threadRoot ? threadRoot.host.getBoundingClientRect() : container.getBoundingClientRect(), includeRoot: true }
 }
 
-export function isCommentReplyReadingScroll(event?: Event) {
-  return event?.type.startsWith('scroll') && event.composedPath().some(node => node instanceof Element && node.hasAttribute(SCROLL_ATTRIBUTE))
-}
-
 /** Only styles the existing Lit-owned container. Reply nodes never move. */
 export function createCommentReplyReadingController(getOptions: () => ReadingOptions, rootKey: string) {
   const states = new WeakMap<HTMLElement, { container: HTMLElement, abort: AbortController, collapsed: Set<string>, tails?: Set<string>, rootTails: string[], rootWasCollapsed: boolean, tabIndex: string | null, label: string | null }>()

@@ -1,8 +1,8 @@
 import browser from 'webextension-polyfill'
 
-import { CONTENT_SCRIPT_MATCHES } from '~/constants/contentScript'
 import { TOP_BAR_STATE_MESSAGE } from '~/constants/topBarState'
 
+import { getStateConsumerRegistry } from './stateConsumers'
 import { invalidateWbiMemoryCache } from './wbiSign'
 
 // 登录态相关的会话 Cookie（见 bilibili-API-collect docs/login/exit.md：
@@ -53,16 +53,8 @@ function scheduleBroadcastLoginStateChanged() {
   }, BROADCAST_COALESCE_MS)
 }
 
+// Account-scoped consumers (TopBar, Watch Later) get one message per document;
+// hidden ones only turn stale and reconcile Cookie facts on resume.
 async function broadcastLoginStateChanged() {
-  try {
-    const tabs = await browser.tabs.query({ url: [...CONTENT_SCRIPT_MATCHES] })
-    await Promise.allSettled(
-      tabs
-        .filter(tab => tab.id !== undefined)
-        .map(tab => browser.tabs.sendMessage(tab.id!, { type: TOP_BAR_STATE_MESSAGE.LOGIN_STATE_CHANGED })),
-    )
-  }
-  catch {
-    // 没有匹配的标签页或查询失败时静默：下次变化会再次广播
-  }
+  await getStateConsumerRegistry().deliverOnce(['topBar', 'watchLater'], { type: TOP_BAR_STATE_MESSAGE.LOGIN_STATE_CHANGED })
 }

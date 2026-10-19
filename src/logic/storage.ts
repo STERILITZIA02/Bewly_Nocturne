@@ -7,8 +7,6 @@ import { COMMENT_REPLY_BATCH_DEFAULT, COMMENT_REPLY_CONTAINER_HEIGHT, normalizeC
 import type { DockCollapseMode, DockPosition } from '~/constants/dock'
 import { normalizeDockPosition } from '~/constants/dock'
 import { DEFAULT_SEARCH_BAR_CHARACTER } from '~/constants/imgs'
-import type { LiquidGlassMode, LiquidGlassTintSource } from '~/constants/liquidGlass'
-import { LIQUID_GLASS_MODES, LIQUID_GLASS_PARAMETERS, LIQUID_GLASS_TINT_SOURCES } from '~/constants/liquidGlass'
 import { removeRetiredSettings, RETIRED_LOCAL_STORAGE_KEYS } from '~/constants/retiredSettings'
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import type { AppPage } from '~/enums/appEnums'
@@ -20,7 +18,6 @@ import {
 } from '~/utils/gridLayout'
 import { LOCAL_LOUDNESS_DEFAULTS, normalizeLocalLoudnessValue } from '~/utils/localLoudnessProtocol'
 import type { PageMode } from '~/utils/pageMode'
-import { clampRangeValue } from '~/utils/range'
 import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
 import { DEFAULT_SCREENSHOT_SHORTCUT, isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
@@ -285,15 +282,6 @@ export interface Settings {
   alwaysUseDock: boolean
   dockCollapseMode: DockCollapseMode
   dockPosition: DockPosition
-  enableDockLiquidGlass: boolean
-  dockLiquidGlassMode: LiquidGlassMode
-  dockLiquidGlassRefraction: number
-  dockLiquidGlassBlur: number
-  dockLiquidGlassTintSource: LiquidGlassTintSource
-  dockLiquidGlassTintColor: string
-  dockLiquidGlassTintOpacity: number
-  dockLiquidGlassDispersion: number
-  dockLiquidGlassSaturation: number
   dockItemsConfig: { page: AppPage, visible: boolean, openInNewTab: boolean, useOriginalBiliPage: boolean }[]
   pageMode: PageMode
   disableLightDarkModeSwitcherOnDock: boolean
@@ -589,15 +577,6 @@ export const originalSettings: Settings = {
   alwaysUseDock: false,
   dockCollapseMode: 'button',
   dockPosition: 'bottom',
-  enableDockLiquidGlass: false,
-  dockLiquidGlassMode: 'standard',
-  dockLiquidGlassRefraction: LIQUID_GLASS_PARAMETERS.refraction.default,
-  dockLiquidGlassBlur: LIQUID_GLASS_PARAMETERS.blur.default,
-  dockLiquidGlassTintSource: 'theme',
-  dockLiquidGlassTintColor: '#ffffff',
-  dockLiquidGlassTintOpacity: LIQUID_GLASS_PARAMETERS.tintOpacity.default,
-  dockLiquidGlassDispersion: LIQUID_GLASS_PARAMETERS.dispersion.default,
-  dockLiquidGlassSaturation: LIQUID_GLASS_PARAMETERS.saturation.default,
   dockItemsConfig: [],
   pageMode: 'custom',
   disableLightDarkModeSwitcherOnDock: false,
@@ -882,23 +861,6 @@ function normalizeSettings(value: Settings) {
 
   if (record.frostedGlassBlurIntensity > FROSTED_GLASS_BLUR_MAX_PX)
     record.frostedGlassBlurIntensity = FROSTED_GLASS_BLUR_MAX_PX
-
-  if (!LIQUID_GLASS_MODES.includes(record.dockLiquidGlassMode))
-    record.dockLiquidGlassMode = originalSettings.dockLiquidGlassMode
-  Reflect.deleteProperty(record, 'dockLiquidGlassFrost')
-  if (!LIQUID_GLASS_TINT_SOURCES.includes(record.dockLiquidGlassTintSource))
-    record.dockLiquidGlassTintSource = originalSettings.dockLiquidGlassTintSource
-  if (!/^#[\da-f]{6}$/i.test(record.dockLiquidGlassTintColor))
-    record.dockLiquidGlassTintColor = originalSettings.dockLiquidGlassTintColor
-  for (const [key, parameter] of [
-    ['dockLiquidGlassRefraction', LIQUID_GLASS_PARAMETERS.refraction],
-    ['dockLiquidGlassBlur', LIQUID_GLASS_PARAMETERS.blur],
-    ['dockLiquidGlassTintOpacity', LIQUID_GLASS_PARAMETERS.tintOpacity],
-    ['dockLiquidGlassDispersion', LIQUID_GLASS_PARAMETERS.dispersion],
-    ['dockLiquidGlassSaturation', LIQUID_GLASS_PARAMETERS.saturation],
-  ] as const) {
-    record[key] = clampRangeValue(Number.isFinite(record[key]) ? record[key] : parameter.default, parameter.min, parameter.max)
-  }
 
   // Normalize the user-configurable two-column list breakpoint. Older
   // versions used a fixed 640px threshold and do not have this field.

@@ -22,6 +22,14 @@
   box-shadow: none;
 }
 
+// Sliding selectors: items take the track's full height, so the selected plate
+// is exactly as tall as the container. Item height is re-derived here because
+// the root token resolved the default padding already.
+.bew-segment-control--flush {
+  --bew-control-padding: 0px;
+  --bew-control-item-height: calc(var(--bew-control-height) - var(--bew-control-border-width) * 2);
+}
+
 // Embedded panel controls use the same outline as nearby inputs and list rows.
 .bew-segment-control--rect {
   --bew-control-radius: var(--bew-interactive-radius);
@@ -37,7 +45,7 @@
 // Subordinate choices keep their selection clear without competing with the
 // page navigation or a primary action for the same accent color.
 .bew-segment-control--secondary {
-  --bew-segment-item-active-bg: var(--bew-control-selected-background);
+  --bew-segment-item-active-bg: var(--bew-segment-secondary-active-bg, var(--bew-control-selected-background));
   --bew-segment-item-active-color: var(--bew-text-1);
   --bew-segment-item-active-shadow: none;
 }

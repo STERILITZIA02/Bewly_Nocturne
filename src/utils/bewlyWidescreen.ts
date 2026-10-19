@@ -2,6 +2,7 @@ import { watch } from 'vue'
 
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
 import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS, BEWLY_WIDESCREEN_MANUAL_TOGGLE } from '~/constants/globalEvents'
+import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { VideoInfo } from '~/models/video/videoInfo'
 import { clearActionGeometry, setupActionGeometryObservers, syncActionAnimationTheme } from '~/utils/bewlyWidescreen/actionEffects'
@@ -178,9 +179,23 @@ function setupWidescreenSettingsWatchers(currentState: BewlyWidescreenState) {
   ]
 }
 
+/** Body-wide discovery is bounded; a mounted sidebar then watches only its own structures. */
+const DOM_DISCOVERY_WINDOW_MS = 15_000
+
+function isSidebarFullyReady(currentState: BewlyWidescreenState) {
+  const { dataset } = currentState.root
+  return dataset.sidebarTopReady === 'true' && dataset.sidebarCommentReady === 'true'
+    && dataset.sidebarDanmakuReady === 'true' && dataset.sidebarPlaylistReady === 'true'
+}
+
 function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
   const danmakuInputSelector = selectors.danmakuInput.join(',')
   const lightOffControlSelector = NATIVE_LIGHT_OFF_CONTROL_SELECTORS.join(',')
+  let discovering = false
+  let discoveryTimer: ReturnType<typeof setTimeout> | undefined
+  let stopPlayerObservation: (() => void) | undefined
+  /** Stable-phase subtree targets; their removal reopens discovery. */
+  let stableTargets: Node[] = []
   const onCommentsReady = (event: Event) => {
     const target = event.target
     if (target instanceof HTMLElement && target.matches('bili-comments')
@@ -196,6 +211,8 @@ function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
     const message = parseVideoMetadataEvent(event)
     if (message && session.current === currentState && event.target instanceof Node && currentState.root.contains(event.target)
       && message.channelId === getPageBridgeChannelId() && message.href === location.href) {
+      // A native rebuild at the same URL may place replacements anywhere.
+      enterDiscovery()
       scheduleSidebarRefresh(currentState)
     }
   }
@@ -204,13 +221,24 @@ function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
     document.removeEventListener('inited', onCommentsReady, true)
     document.removeEventListener('bili-comments-inited', onCommentsReady, true)
     document.removeEventListener(VIDEO_COMPONENT_CHANGED, onNativeComponentChanged, true)
+    clearTimeout(discoveryTimer)
+    discoveryTimer = undefined
+    stopPlayerObservation?.()
+    stopPlayerObservation = undefined
+    currentState.restartDomDiscovery = undefined
   }
-  currentState.mutationObserver = new MutationObserver((records) => {
+
+  const handleRecords = (records: MutationRecord[]) => {
     if (!session.current || session.current !== currentState)
       return
     if (!currentState.root.isConnected) {
       exitBewlyWidescreen()
       return
+    }
+    // A shallow ancestor or observed origin lost its subtree: rediscover hosts.
+    if (!discovering && records.some(record => Array.from(record.removedNodes).some(node =>
+      stableTargets.some(target => node === target || node.contains(target))))) {
+      enterDiscovery()
     }
 
     const addedLightOffControl = records.some(record => Array.from(record.addedNodes).some((node) => {
@@ -238,15 +266,75 @@ function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
     })
     if (addedDanmakuInput || nativeDanmakuChanged) {
       scheduleSidebarRefresh(currentState)
-      return
     }
+    else {
+      const origins = records.map(record => classifyWidescreenMutation(record, currentState))
+      if (shouldScheduleWidescreenRefresh(origins))
+        scheduleSidebarRefresh(currentState)
+    }
+    if (discovering && isSidebarFullyReady(currentState))
+      enterStable()
+  }
+  const observer = new MutationObserver(handleRecords)
+  currentState.mutationObserver = observer
 
-    const origins = records.map(record => classifyWidescreenMutation(record, currentState))
-    if (shouldScheduleWidescreenRefresh(origins))
-      scheduleSidebarRefresh(currentState)
-  })
+  function enterDiscovery() {
+    if (session.current !== currentState)
+      return
+    clearTimeout(discoveryTimer)
+    discoveryTimer = setTimeout(enterStable, DOM_DISCOVERY_WINDOW_MS)
+    if (discovering)
+      return
+    discovering = true
+    stopPlayerObservation?.()
+    stopPlayerObservation = undefined
+    stableTargets = []
+    observer.disconnect()
+    observer.observe(document.body, { childList: true, subtree: true })
+  }
 
-  currentState.mutationObserver.observe(document.body, { childList: true, subtree: true })
+  /**
+   * The root holds every transferred native node; origin parents receive
+   * native re-renders; the shared player observer reports control and media
+   * changes; shallow ancestry reports replacement of any of these hosts.
+   */
+  function enterStable() {
+    clearTimeout(discoveryTimer)
+    discoveryTimer = undefined
+    if (session.current !== currentState || !currentState.root.isConnected)
+      return
+    discovering = false
+    observer.disconnect()
+    const origins = currentState.movedNodes
+      .map(({ placeholder }) => placeholder.parentNode)
+      .filter((parent): parent is Element => parent instanceof Element && parent.isConnected && !currentState.root.contains(parent))
+    const subtrees = [currentState.root, ...new Set(origins)]
+      .filter((target, index, all) => !all.some((other, otherIndex) => otherIndex !== index && other !== target && other.contains(target)))
+    const ancestors = new Set<Element>()
+    for (const target of subtrees) {
+      for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+        if (!subtrees.some(subtree => subtree !== parent && subtree.contains(parent)))
+          ancestors.add(parent)
+      }
+    }
+    subtrees.forEach(target => observer.observe(target, { childList: true, subtree: true }))
+    ancestors.forEach(parent => observer.observe(parent, { childList: true }))
+    stableTargets = subtrees
+    // An origin subtree that already holds the player reports its changes once.
+    if (subtrees.some(target => target.contains(currentState.playerEl)))
+      return
+    stopPlayerObservation ??= observePlayerDom((mutations) => {
+      if (!mutations) {
+        // The player root itself was rebound; its new host may be elsewhere.
+        enterDiscovery()
+        return
+      }
+      handleRecords(mutations)
+    })
+  }
+
+  currentState.restartDomDiscovery = enterDiscovery
+  enterDiscovery()
   disableNativeLightOffMode(currentState.playerEl)
 }
 
@@ -273,8 +361,6 @@ function cleanupState(currentState: BewlyWidescreenState) {
   currentState.highEnergyProgressElement = undefined
   currentState.settingsWatchCleanup?.forEach(stop => stop())
   currentState.settingsWatchCleanup = undefined
-  currentState.danmakuGlassCleanup?.()
-  currentState.danmakuGlassCleanup = undefined
   currentState.descriptionCleanup?.()
   currentState.descriptionCleanup = undefined
   currentState.playlistToggleCleanup?.()
@@ -621,6 +707,8 @@ export function refreshBewlyPlaybackPageNavigation(videoInfoRequest?: Promise<Vi
   ensureAnchoredPlayer(currentState)
   syncSidebarTitle(currentState)
   void loadFallbackVideoInfo(currentState, videoInfoRequest)
+  // A new episode/manuscript may render its native hosts anywhere again.
+  currentState.restartDomDiscovery?.()
   scheduleSidebarRefresh(currentState)
   updateAspectRatio(currentState)
   return true

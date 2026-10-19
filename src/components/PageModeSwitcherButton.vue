@@ -1,36 +1,39 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
 import { computed, ref, toRef } from 'vue'
 
 import { usePageModeSwitcher } from '~/composables/usePageModeSwitcher'
 import type { AppPage } from '~/enums/appEnums'
 import { vLayoutEditable } from '~/logic/layoutEdit'
-import { vLiquidGlass } from '~/utils/liquidGlass'
+import type { PageMode } from '~/utils/pageMode'
 
 import Tooltip from './Tooltip.vue'
 
 type TooltipPlacement = 'left' | 'right' | 'top' | 'bottom' | 'bottom-left' | 'bottom-right'
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   activatedPage: AppPage
   placement: TooltipPlacement
   variant: 'dock' | 'sidebar'
-  liquidGlass?: boolean
-}>(), {
-  liquidGlass: false,
-})
+}>()
+
+// Kept in this template-scanned file so UnoCSS emits every icon class.
+const PAGE_MODE_ICONS: Readonly<Record<PageMode, string>> = {
+  original: 'i-tabler:brand-bilibili',
+  bewly: 'bew-mark-icon',
+  custom: 'i-tabler:adjustments-horizontal',
+}
 
 const hovered = ref(false)
 const focused = ref(false)
 const {
-  currentIcon,
+  currentMode,
   disabled,
-  nextIcon,
+  previewMode,
   tooltip,
   cyclePageMode,
 } = usePageModeSwitcher(toRef(props, 'activatedPage'))
 const previewNextMode = computed(() => (hovered.value || focused.value) && !disabled.value)
-const displayedIcon = computed(() => previewNextMode.value ? nextIcon.value : currentIcon.value)
+const displayedIcon = computed(() => PAGE_MODE_ICONS[previewNextMode.value ? previewMode.value : currentMode.value])
 const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
 </script>
 
@@ -38,7 +41,6 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
   <Tooltip :content="tooltip" :placement="placement">
     <button
       v-layout-editable="layoutEditableId"
-      v-liquid-glass="liquidGlass && variant === 'sidebar'"
       type="button"
       class="page-mode-switcher"
       :data-layout-editable-id="layoutEditableId"
@@ -53,7 +55,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
     >
       <span class="page-mode-switcher__glyph">
         <Transition name="mode-glyph">
-          <Icon :key="displayedIcon" :icon="displayedIcon" aria-hidden="true" />
+          <span :key="displayedIcon" :class="displayedIcon" aria-hidden="true" />
         </Transition>
       </span>
     </button>
@@ -69,7 +71,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
   place-items: center;
   width: var(--page-mode-icon-size);
   height: var(--page-mode-icon-size);
-  > svg {
+  > span {
     grid-area: 1 / 1;
     display: block;
     width: 100%;
@@ -95,8 +97,6 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
 }
 
 .page-mode-switcher {
-  --bew-liquid-frame-inset: 0px;
-  --bew-liquid-outer-shadow: var(--bew-shadow-1);
   position: relative;
   box-sizing: border-box;
   display: grid;
@@ -137,7 +137,8 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
   }
 
   &--dock {
-    --page-mode-icon-size: var(--bew-dock-control-icon-size);
+    // Matches the Dock navigation glyphs at every breakpoint.
+    --page-mode-icon-size: var(--bew-icon-size-md);
     width: var(--bew-dock-control-size);
     height: var(--bew-dock-control-size);
     border: 0;
@@ -183,7 +184,6 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
 
 @media (min-width: breakpoints.$grid-lg) {
   .page-mode-switcher--dock {
-    --page-mode-icon-size: var(--bew-dock-control-icon-size-lg);
     width: var(--bew-dock-control-size-lg);
     height: var(--bew-dock-control-size-lg);
   }

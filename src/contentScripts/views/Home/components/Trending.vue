@@ -26,7 +26,7 @@ const emit = defineEmits<{
 
 const tabState = useHomeTabState()
 const hasSettled = tabState.ref('hasSettled', false)
-const videoList = tabState.ref<VideoElement[]>('videoList', [])
+const videoList = tabState.shallowRef<VideoElement[]>('videoList', [])
 const isLoading = ref<boolean>(false)
 const pn = tabState.ref<number>('pn', 1)
 const noMoreContent = tabState.ref<boolean>('noMoreContent', false)
@@ -154,7 +154,7 @@ async function fetchTrendingPage(generation: number): Promise<number | null> {
     }
 
     if (newItems.length > 0)
-      videoList.value.push(...newItems)
+      videoList.value = [...videoList.value, ...newItems]
     pn.value = page + 1
     noMoreContent.value = response.data.no_more === true
     requestFailed.value = false

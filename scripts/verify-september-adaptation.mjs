@@ -117,69 +117,49 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     finally { scope.stop() }
   })
 
-  check('September auth: fetch/body timeout and cancellation release single-flight', async () => {
+  check('September auth: cancellation releases App client reads and refresh stays single-flight across endpoints', async () => {
+    // Request deadlines and body timeouts now live in the App client port; the
+    // provider must forward its caller's signal and release its single-flight.
     const requests = []
-    const timers = new Map()
-    let timerId = 0
-    const tokens = Vue.ref({ accessToken: 'old', refreshToken: 'refresh', lastUpdatedAt: 1, accessTokenExpiresAt: 0 })
-    const abort = await loadSourceModule('../src/utils/abort.ts', {}, {
-      DOMException: window.DOMException,
-      setTimeout: (callback) => {
-        timers.set(++timerId, callback)
-        return timerId
-      },
-      clearTimeout: id => timers.delete(id),
-    })
+    const tokens = Vue.ref({ accessToken: 'old', refreshToken: 'refresh', lastUpdatedAt: 1, generation: 1, accessTokenExpiresAt: 0 })
+    const abort = await loadSourceModule('../src/utils/abort.ts', {}, { DOMException: window.DOMException })
     const module = await loadSourceModule('../src/utils/authProvider.ts', {
       'vue': Vue,
       './abort': abort,
       'webextension-polyfill': { default: { storage: { local: { get: async () => ({ appAuthTokens: { ...tokens.value } }) } } } },
-      '~/logic/appAuthStorage': { appAuthTokens: tokens, defaultAppAuthTokens: {}, resetAppAuthTokens() {} },
+      '~/logic/appAuthStorage': { appAuthTokens: tokens, defaultAppAuthTokens: {}, isCompatibleAppAuth: () => true, nextAppAuthGeneration: () => 0, resetAppAuthTokens() {} },
       './appAuthTokenPolicy': await import('../src/utils/appAuthTokenPolicy'),
-      './appSign': { appSign: () => 'signed' },
-    }, {
-      AbortController,
-      DOMException: window.DOMException,
-      URLSearchParams,
-      setTimeout: (callback) => {
-        timers.set(++timerId, callback)
-        return timerId
+      './appClient': {
+        AppClientError: class extends Error {},
+        requestAppClientData: (endpoint, _params, init = {}) => {
+          const response = deferred()
+          init.signal?.addEventListener('abort', () => response.reject(init.signal.reason), { once: true })
+          requests.push({ ...response, endpoint, init })
+          return response.promise
+        },
       },
-      clearTimeout: id => timers.delete(id),
-      fetch: (_url, init) => {
-        const response = deferred()
-        init.signal.addEventListener('abort', () => response.reject(init.signal.reason), { once: true })
-        requests.push({ ...response, init })
-        return response.promise
-      },
-    })
+    }, { AbortController, DOMException: window.DOMException })
     const controller = new AbortController()
-    const qr = module.getTVLoginQRCode(controller.signal)
+    const qr = module.getAppLoginQRCode(controller.signal)
+    assert.equal(requests.at(-1).init.signal, controller.signal, 'the caller signal reaches the App client')
     controller.abort()
     await assert.rejects(qr)
-    assert.equal(timers.size, 0)
-    const pendingBody = module.getTVLoginQRCode()
-    const current = requests.at(-1)
-    current.resolve({ ok: true, json: () => new Promise((_resolve, reject) => current.init.signal.addEventListener('abort', () => reject(current.init.signal.reason), { once: true })) })
-    await flush()
-    for (const callback of [...timers.values()]) callback()
-    await assert.rejects(pendingBody)
-    assert.equal(timers.size, 0)
     const a = module.refreshInvalidAppAccessToken()
     const b = module.refreshInvalidAppAccessToken()
     await flush()
-    assert.equal(requests.length, 3)
-    requests.at(-1).resolve({ ok: true, json: async () => ({ code: -1 }) })
+    assert.equal(requests.length, 2, 'concurrent refreshes share one request')
+    assert.equal(requests.at(-1).endpoint, 'refreshTokenV3')
+    requests.at(-1).resolve({ code: -1 })
     await flush()
-    requests.at(-1).resolve({ ok: true, json: async () => ({ code: -1 }) })
-    await Promise.all([a, b])
+    assert.equal(requests.at(-1).endpoint, 'refreshTokenV2', 'a rejected endpoint falls back to the next one')
+    requests.at(-1).resolve({ code: -1 })
+    assert.deepEqual(await Promise.all([a, b]), [false, false])
     const next = module.refreshInvalidAppAccessToken()
     await flush()
-    assert.equal(requests.length, 5)
-    requests.at(-1).resolve({ ok: true, json: async () => ({ code: 0, data: { token_info: { access_token: 'new', expires_in: 3600 } } }) })
+    assert.equal(requests.length, 4, 'a finished refresh releases the single-flight')
+    requests.at(-1).resolve({ code: 0, data: { token_info: { access_token: 'new', expires_in: 3600 } } })
     assert.equal(await next, true)
     assert.equal(tokens.value.accessToken, 'new')
-    assert.equal(timers.size, 0)
   })
 
   check('September comment graph: shared missing parent, known chain, late real parent and reset', async () => {

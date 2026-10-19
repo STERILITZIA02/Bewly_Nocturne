@@ -6,7 +6,6 @@ import { useSurfaceMorph } from '~/composables/useSurfaceMorph'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
-import { vLiquidGlass } from '~/utils/liquidGlass'
 
 import ConversationFind from './ConversationFind.vue'
 import MessageComposer from './experimental/MessageComposer.vue'
@@ -585,7 +584,6 @@ defineExpose({
       <div
         v-if="showLatestButton || (searchMode && entryPhase !== 'opening')"
         ref="navigationRef"
-        v-liquid-glass="active"
         class="conversation-view__new-messages"
         :class="{ 'conversation-view__search-navigation': searchMode }"
         :role="searchMode ? 'group' : undefined"
@@ -922,7 +920,6 @@ defineExpose({
 .conversation-view__floating-composer,
 .conversation-view__new-messages {
   translate: 0 var(--notifications-composer-dock-shift, 0px);
-  --bew-liquid-frame-inset: 0px;
   position: absolute;
   right: var(--conversation-composer-end-inset);
   bottom: 0;

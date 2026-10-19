@@ -70,6 +70,7 @@ export function registerMomentsMaintenanceChecks(check, { Vue, compileComponent,
     class Hls {
       static isSupported() { return true }
       static Events = { MANIFEST_PARSED: 'manifest', ERROR: 'error' }
+      static ErrorTypes = { MEDIA_ERROR: 'mediaError', NETWORK_ERROR: 'networkError' }
       handlers = new Map()
       constructor() { players.push(this) }
       on(name, fn) { this.handlers.set(name, fn) }

@@ -1,13 +1,14 @@
 import type { Runtime } from 'webextension-polyfill'
 import browser from 'webextension-polyfill'
 
-import { CONTENT_SCRIPT_MATCHES } from '~/constants/contentScript'
+import type { WatchLaterCountReply, WatchLaterSnapshot } from '~/constants/watchLaterState'
 import { WATCH_LATER_STATE_UPDATED } from '~/constants/watchLaterState'
 import type { WatchLaterResult } from '~/models/video/watchLater'
 import type { ReadRequestOptions } from '~/utils/abort'
 import { toWatchLaterEntry } from '~/utils/watchLaterSnapshot'
 import type { WatchLaterWriteResponse } from '~/utils/watchLaterWrite'
 
+import { getStateConsumerRegistry } from '../../stateConsumers'
 import type { APIMAP } from '../../utils'
 import { AHS, doRequest } from '../../utils'
 import { createWatchLaterStateBroker } from '../../watchLaterStateBroker'
@@ -96,19 +97,32 @@ const state = createWatchLaterStateBroker({
     full ? endpoints.getAllWatchLaterList : endpoints.getWatchLaterListByPage,
     { signal },
   ) as Promise<{ code: number, data?: { count: number, list?: { aid: number, bvid?: string }[] } }>,
-  async broadcast(update) {
-    const tabs = await browser.tabs.query({ url: [...CONTENT_SCRIPT_MATCHES] }).catch(() => [])
-    await Promise.allSettled(tabs.filter(tab => tab.id !== undefined && Boolean(tab.incognito) === privateContext)
-      .map(tab => browser.tabs.sendMessage(tab.id!, { type: WATCH_LATER_STATE_UPDATED, data: update })))
-  },
+  // Only documents that read Watch Later and still show it; hidden ones turn stale.
+  broadcast: update => getStateConsumerRegistry().deliver('watchLater', { type: WATCH_LATER_STATE_UPDATED, data: update }, privateContext ? 'private' : 'normal'),
 })
 
 function checkContext(sender?: Runtime.MessageSender) {
   if (sender?.tab && Boolean(sender.tab.incognito) !== privateContext)
     throw new Error('Watch Later privacy context changed')
+  // A read is this document's display demand for the topic.
+  void getStateConsumerRegistry().touch('watchLater', sender)
 }
 
-interface ReadOptions { contentScriptQuery?: string, accountId?: number, force?: boolean }
+interface ReadOptions { contentScriptQuery?: string, accountId?: number, force?: boolean, knownEpoch?: string, knownRevision?: number }
+
+// Member lists are replaced, never mutated: identity marks the revision where a list first appeared.
+const entriesFirstRevision = new WeakMap<object, number>()
+function withoutKnownEntries(snapshot: WatchLaterSnapshot, options: ReadOptions): WatchLaterCountReply {
+  let since = entriesFirstRevision.get(snapshot.entries)
+  if (since === undefined) {
+    since = snapshot.revision
+    entriesFirstRevision.set(snapshot.entries, since)
+  }
+  if (options.knownEpoch !== snapshot.epoch || !Number.isSafeInteger(options.knownRevision) || options.knownRevision! < since)
+    return snapshot
+  const { entries: _entries, ...rest } = snapshot
+  return { ...rest, entriesOmitted: true }
+}
 interface WriteOptions extends ReadOptions { aid?: number, bvid?: string, epid?: number, viewed?: boolean, csrf?: string }
 
 const API_WATCHLATER = {
@@ -118,7 +132,7 @@ const API_WATCHLATER = {
   },
   async getWatchLaterCount(options: ReadOptions = {}, sender?: Runtime.MessageSender) {
     checkContext(sender)
-    return { code: 0, data: await state.readCount(options.accountId, options.force) }
+    return { code: 0, data: withoutKnownEntries(await state.readCount(options.accountId, options.force), options) }
   },
   async invalidateWatchLaterState(options: ReadOptions = {}, sender?: Runtime.MessageSender) {
     checkContext(sender)

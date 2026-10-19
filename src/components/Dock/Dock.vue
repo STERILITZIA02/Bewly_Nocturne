@@ -8,7 +8,6 @@ import { useI18n } from 'vue-i18n'
 import { UndoForwardState, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'
-import { liquidGlassEnabled as useLiquidGlass, useLiquidGlassOptions } from '~/composables/useLiquidGlass'
 import {
   getDockCollapsedStateForMode,
   getPreservedDockStageSize,
@@ -36,7 +35,6 @@ import { isHomePage, openLinkToNewTab } from '~/utils/main'
 
 import CountBadge from '../CountBadge.vue'
 import IconButton from '../IconButton.vue'
-import LiquidGlassSurface from '../LiquidGlassSurface.vue'
 import LiquidSegmentIndicator from '../LiquidSegmentIndicator.vue'
 import PageModeSwitcherButton from '../PageModeSwitcherButton.vue'
 import Tooltip from '../Tooltip.vue'
@@ -84,7 +82,6 @@ const { isDark, toggleDark } = useDark()
 const { reachTop, homeActivatedPage, undoForwardState, canRefreshHomeSubPage, getDockPageHref } = useBewlyApp()
 const dockPositionSetting = useLayoutEditSettingValue('navigation.dock.position', () => settings.value.dockPosition)
 const dockPosition = computed(() => normalizeDockPosition(dockPositionSetting.value))
-const liquidGlassProps = useLiquidGlassOptions()
 
 // 计算属性：是否显示撤销按钮
 const showUndo = computed(() => undoForwardState.value === UndoForwardState.ShowUndo)
@@ -159,8 +156,8 @@ const dockIndicatorRef = ref<InstanceType<typeof LiquidSegmentIndicator> | null>
 const tooltipPlacement = computed(() => dockPosition.value === 'right' ? 'left' : 'top')
 
 const dockCollapseIcon = computed(() => dockPosition.value === 'bottom'
-  ? 'tabler:chevrons-left'
-  : 'tabler:chevrons-up')
+  ? 'i-tabler:chevrons-left'
+  : 'i-tabler:chevrons-up')
 
 /**
  * Whether to show the back to top or refresh button
@@ -761,12 +758,11 @@ onUnmounted(() => {
       class="dock-content"
       data-layout-editable-id="dock"
       :class="{
-        'right': dockPosition === 'right',
-        'bottom': dockPosition === 'bottom',
-        'hover': dockContentHover,
-        'ready': dockReady,
-        'collapsed': isDockCollapsed,
-        'liquid-glass': useLiquidGlass,
+        right: dockPosition === 'right',
+        bottom: dockPosition === 'bottom',
+        hover: dockContentHover,
+        ready: dockReady,
+        collapsed: isDockCollapsed,
       }"
       :style="dockTransformStyle"
       @pointerdown="handleDockPointerDown"
@@ -789,9 +785,7 @@ onUnmounted(() => {
           class="dock-shell-surface"
           aria-hidden="true"
           @transitionend="handleDockShellTransitionEnd"
-        >
-          <LiquidGlassSurface v-if="useLiquidGlass" v-bind="liquidGlassProps" />
-        </div>
+        />
 
         <div
           class="dock-expanded-content"
@@ -890,7 +884,7 @@ onUnmounted(() => {
               :aria-label="$t('dock.settings')"
               @click="openSettings"
             >
-              <div i-tabler:settings text-xl group-hover:rotate-180 transition="transform duration-400 ease-out" />
+              <span class="dock-item__icon i-tabler:settings" group-hover:rotate-180 transition="transform duration-400 ease-out" aria-hidden="true" />
             </button>
           </Tooltip>
 
@@ -906,7 +900,7 @@ onUnmounted(() => {
               :aria-label="$t('dock.collapse_dock')"
               @click="collapseDock"
             >
-              <Icon :icon="dockCollapseIcon" />
+              <span class="dock-item__icon" :class="dockCollapseIcon" aria-hidden="true" />
             </button>
           </Tooltip>
         </div>
@@ -951,18 +945,17 @@ onUnmounted(() => {
                 }"
                 @click="handleBackToTopOrRefresh(key === 1 ? 'refresh' : 'backToTop')"
               >
-                <LiquidGlassSurface v-if="useLiquidGlass" v-bind="liquidGlassProps" />
-                <Icon
+                <span
                   v-if="key === 1"
-                  icon="tabler:refresh"
-                  class="dock-action-icon"
-                  shrink-0 rotate-90 absolute
-                />
-                <Icon
-                  v-else
-                  icon="tabler:arrow-up"
-                  class="dock-action-icon"
+                  class="dock-action-icon i-tabler:rotate-clockwise"
                   shrink-0 absolute
+                  aria-hidden="true"
+                />
+                <span
+                  v-else
+                  class="dock-action-icon i-tabler:arrow-bar-to-up"
+                  shrink-0 absolute
+                  aria-hidden="true"
                 />
               </IconButton>
             </Transition>
@@ -978,19 +971,18 @@ onUnmounted(() => {
             }"
             @click="handleBackToTopOrRefresh('auto')"
           >
-            <LiquidGlassSurface v-if="useLiquidGlass" v-bind="liquidGlassProps" />
             <Transition name="fade">
-              <Icon
+              <span
                 v-if="reachTop && canRefreshCurrentPage"
-                icon="tabler:refresh"
-                class="dock-action-icon"
-                shrink-0 rotate-90 absolute
-              />
-              <Icon
-                v-else
-                icon="tabler:arrow-up"
-                class="dock-action-icon"
+                class="dock-action-icon i-tabler:rotate-clockwise"
                 shrink-0 absolute
+                aria-hidden="true"
+              />
+              <span
+                v-else
+                class="dock-action-icon i-tabler:arrow-bar-to-up"
+                shrink-0 absolute
+                aria-hidden="true"
               />
             </Transition>
           </IconButton>
@@ -1007,18 +999,17 @@ onUnmounted(() => {
             }"
             @click="handleHistoryNavigation"
           >
-            <LiquidGlassSurface v-if="useLiquidGlass" v-bind="liquidGlassProps" />
-            <Icon
+            <span
               v-if="showUndo"
-              icon="tabler:arrow-back-up"
-              class="dock-action-icon"
+              class="dock-action-icon i-tabler:arrow-back-up"
               shrink-0 absolute
+              aria-hidden="true"
             />
-            <Icon
+            <span
               v-else-if="showForward"
-              icon="tabler:arrow-forward-up"
-              class="dock-action-icon"
+              class="dock-action-icon i-tabler:arrow-forward-up"
               shrink-0 absolute
+              aria-hidden="true"
             />
           </IconButton>
         </Transition>
@@ -1095,13 +1086,16 @@ onUnmounted(() => {
 
   .dock-content-inner {
     --dock-shell-control-size: var(--bew-dock-control-size);
-    --dock-shell-size: calc(var(--dock-shell-control-size) + var(--bew-space-4));
-    --dock-shell-radius: calc(var(--dock-shell-control-size) / 2 + var(--bew-space-2));
-    --uno: "p-2 m-2 relative flex shrink-0";
+    // User-chosen optical rim between 4px and 8px; deliberately off the 4px grid.
+    --dock-shell-rim: 6px;
+    --dock-shell-size: calc(var(--dock-shell-control-size) + var(--dock-shell-rim) * 2);
+    --dock-shell-radius: calc(var(--dock-shell-control-size) / 2 + var(--dock-shell-rim));
+    --uno: "m-2 relative flex shrink-0";
+    padding: var(--dock-shell-rim);
     box-sizing: border-box;
 
     &.collapsed:hover .dock-shell-surface {
-      background: var(--dock-collapsed-hover-background, var(--bew-fill-2));
+      background: var(--bew-fill-2);
       --dock-surface-shadow: 0 0 0 2px var(--bew-fill-2), var(--bew-shadow-2);
     }
   }
@@ -1332,7 +1326,9 @@ onUnmounted(() => {
     box-shadow: 0 0 0 1px var(--bew-content-solid);
   }
 
-  .dock-page-navigation__icon {
+  // Every Dock glyph except the protected theme toggle shares the idle nav icon.
+  .dock-page-navigation__icon,
+  .dock-item__icon {
     display: block;
     width: var(--bew-icon-size-md);
     height: var(--bew-icon-size-md);
@@ -1369,39 +1365,6 @@ onUnmounted(() => {
 
   &.bottom .back-to-top-or-refresh-btn {
     --uno: "bottom-unset lg:right--45px right--35px";
-  }
-
-  // Each surface owns one backdrop. The optical child replaces the old blur
-  // without changing the shell's border, shadow, layout or morph animation.
-  &.liquid-glass {
-    --dock-collapsed-hover-background: transparent;
-
-    .dock-content-inner .dock-shell-surface,
-    .back-to-top-or-refresh-btn {
-      background: transparent;
-      backdrop-filter: none;
-      border-color: transparent;
-      box-shadow: none;
-
-      // Paint the frame after the optics so refraction cannot sample its own
-      // border. Keep the original 1px border's layout footprint.
-      &::after {
-        content: "";
-        position: absolute;
-        inset: -1px;
-        border: inherit;
-        border-color: var(--bew-surface-border-color);
-        border-radius: inherit;
-        corner-shape: inherit;
-        box-shadow: var(--dock-surface-shadow);
-        pointer-events: none;
-        transition: inherit;
-      }
-    }
-
-    .back-to-top-or-refresh-btn :deep(.dock-action-icon) {
-      z-index: 1;
-    }
   }
 }
 
@@ -1467,9 +1430,10 @@ onUnmounted(() => {
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
 
+  // Same glyph size as the Dock controls beside them.
   :deep(.dock-action-icon) {
-    width: var(--bew-icon-size-lg);
-    height: var(--bew-icon-size-lg);
+    width: var(--bew-icon-size-md);
+    height: var(--bew-icon-size-md);
   }
 }
 

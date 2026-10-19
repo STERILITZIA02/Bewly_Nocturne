@@ -26,7 +26,7 @@ function updateDate(key: 'startDate' | 'endDate', value: string) {
 
 <template>
   <section class="watch-later-advanced-filters" :aria-label="t('watch_later.filters.title')">
-    <WatchLaterFilterSection :title="t('watch_later.filters.by_progress')">
+    <WatchLaterFilterSection memory-key="watch-later:progress" :title="t('watch_later.filters.by_progress')">
       <div class="bew-segment-control bew-segment-control--static bew-segment-control--secondary watch-later-advanced-filters__options" role="group" :aria-label="t('library_tools.playback_state')">
         <button
           v-for="value in progressOptions" :key="value" type="button" class="bew-segment-control__item"
@@ -36,7 +36,7 @@ function updateDate(key: 'startDate' | 'endDate', value: string) {
         </button>
       </div>
     </WatchLaterFilterSection>
-    <WatchLaterFilterSection v-slot="{ expanded }" :title="t('watch_later.filters.by_date')">
+    <WatchLaterFilterSection v-slot="{ expanded }" memory-key="watch-later:date" :title="t('watch_later.filters.by_date')">
       <div class="watch-later-advanced-filters__dates">
         <div class="watch-later-advanced-filters__range">
           <div v-for="key in (['startDate', 'endDate'] as const)" :key="key" class="watch-later-advanced-filters__date-field">
@@ -55,7 +55,7 @@ function updateDate(key: 'startDate' | 'endDate', value: string) {
         </p>
       </div>
     </WatchLaterFilterSection>
-    <WatchLaterFilterSection :title="t('watch_later.filters.by_duration')">
+    <WatchLaterFilterSection memory-key="watch-later:duration" :title="t('watch_later.filters.by_duration')">
       <div class="bew-segment-control bew-segment-control--static bew-segment-control--secondary watch-later-advanced-filters__options watch-later-advanced-filters__options--duration" role="group" :aria-label="t('library_tools.duration')">
         <button
           v-for="value in durationOptions" :key="value" type="button" class="bew-segment-control__item"

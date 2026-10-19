@@ -34,7 +34,7 @@ function updateDate(key: 'startDate' | 'endDate', value: string) {
 
 <template>
   <section class="history-advanced-filters" :aria-label="t('history.filters.title')">
-    <FilterSection :title="t('watch_later.filters.by_duration')">
+    <FilterSection memory-key="history:duration" :title="t('watch_later.filters.by_duration')">
       <div class="bew-segment-control bew-segment-control--static bew-segment-control--secondary history-advanced-filters__options history-advanced-filters__options--wide-first" role="group" :aria-label="t('library_tools.duration')">
         <button
           v-for="value in durations" :key="value" type="button" class="bew-segment-control__item" :disabled="disabled"
@@ -44,7 +44,7 @@ function updateDate(key: 'startDate' | 'endDate', value: string) {
         </button>
       </div>
     </FilterSection>
-    <FilterSection v-slot="{ expanded }" :title="t('watch_later.filters.by_date')">
+    <FilterSection v-slot="{ expanded }" memory-key="history:date" :title="t('watch_later.filters.by_date')">
       <div class="history-advanced-filters__dates">
         <div class="bew-segment-control bew-segment-control--static bew-segment-control--secondary history-advanced-filters__options" role="group" :aria-label="t('history.filters.period')">
           <button
@@ -71,7 +71,7 @@ function updateDate(key: 'startDate' | 'endDate', value: string) {
         </p>
       </div>
     </FilterSection>
-    <FilterSection :title="t('history.filters.by_device')">
+    <FilterSection memory-key="history:device" :title="t('history.filters.by_device')">
       <div class="bew-segment-control bew-segment-control--static bew-segment-control--secondary history-advanced-filters__options history-advanced-filters__options--wide-first" role="group" :aria-label="t('history.filters.by_device')">
         <button
           v-for="value in devices" :key="value" type="button" class="bew-segment-control__item" :disabled="disabled"

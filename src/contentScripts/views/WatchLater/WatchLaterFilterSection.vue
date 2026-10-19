@@ -1,8 +1,28 @@
 <script setup lang="ts">
-import { ref, useId } from 'vue'
+import { ref, useId, watch } from 'vue'
 
-defineProps<{ title: string }>()
-const expanded = ref(true)
+// `memoryKey` names the section within its page; the open state is remembered
+// for this browser tab only and every section starts collapsed.
+const props = defineProps<{ title: string, memoryKey: string }>()
+const storageKey = `bewly-library-filter-section:${props.memoryKey}`
+const expanded = ref(readExpanded())
+watch(expanded, (value) => {
+  try {
+    sessionStorage.setItem(storageKey, value ? '1' : '0')
+  }
+  catch {
+    // Storage may be unavailable; the section still works for this view.
+  }
+})
+
+function readExpanded() {
+  try {
+    return sessionStorage.getItem(storageKey) === '1'
+  }
+  catch {
+    return false
+  }
+}
 const trigger = ref<HTMLButtonElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
 const id = useId()

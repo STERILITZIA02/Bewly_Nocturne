@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import LoadingRing from '~/components/LoadingRing.vue'
 import { useVideoPreviewSwipeSeek } from '~/composables/useVideoPreviewSwipeSeek'
 import { settings } from '~/logic'
+import { subscribeFullscreenChange } from '~/utils/fullscreenChange'
 
 const props = withDefaults(defineProps<{ url: string, loading: boolean, generation?: number, live?: boolean, controls?: boolean, hoverSurface?: string }>(), { controls: undefined })
 const emit = defineEmits<{
@@ -101,12 +102,13 @@ function handleClick(event: MouseEvent) {
   }
 }
 
-onMounted(() => document.addEventListener('fullscreenchange', syncFullscreen))
+// Mounted only with its media element; listens through the shared owner.
+const stopFullscreenSubscription = subscribeFullscreenChange(syncFullscreen)
 onBeforeUnmount(() => {
   cancelFirstFrame?.()
   if (leaveFrame !== undefined)
     cancelAnimationFrame(leaveFrame)
-  document.removeEventListener('fullscreenchange', syncFullscreen)
+  stopFullscreenSubscription()
   emit('interactionChange', false)
   emit('video', null)
 })

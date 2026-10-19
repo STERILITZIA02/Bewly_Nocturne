@@ -9,3 +9,12 @@ export function getMotionDuration(style: CSSStyleDeclaration, property: string, 
   const duration = Number(match[1]) * (match[2] === 's' ? 1000 : 1)
   return Number.isFinite(duration) ? duration : fallback
 }
+
+/**
+ * Duration for a move across `steps` discrete positions. One step keeps the
+ * base duration; longer travel always takes longer, growing sublinearly so a
+ * distant jump stays responsive instead of crawling.
+ */
+export function getTravelDuration(base: number, steps: number): number {
+  return base * Math.max(1, steps) ** 0.4
+}

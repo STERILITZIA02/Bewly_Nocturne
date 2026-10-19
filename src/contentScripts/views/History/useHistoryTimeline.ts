@@ -1,4 +1,4 @@
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, shallowReactive } from 'vue'
 
 import { LIBRARY_AUTOFILL_PAGE_LIMIT } from '~/constants/library'
 import type { HistoryResult, List as HistoryItem } from '~/models/history/history'
@@ -26,7 +26,8 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
   const isLoading = ref(false)
   const requestFailed = ref(false)
   const noMoreContent = ref(false)
-  const historyList = reactive<HistoryItem[]>([])
+  // Rows are server records replaced or removed whole; only the array is tracked.
+  const historyList = shallowReactive<HistoryItem[]>([])
   const keyword = ref('')
   const submittedKeyword = ref('')
   const filters = ref(createHistoryFilters())

@@ -67,6 +67,8 @@ export interface BewlyWidescreenState {
   sidebarHydrationWarningShown?: boolean
   sidebarHydrationTimedOut?: boolean
   sidebarReadyCleanup?: () => void
+  /** Reopens bounded body-wide host discovery after a rebuild or navigation. */
+  restartDomDiscovery?: () => void
   sidebarEdgeRevealSuppressionTimer?: ReturnType<typeof setTimeout>
   sidebarInteractionCleanup?: () => void
   sidebarInteractionFocusSync?: () => void
@@ -87,7 +89,6 @@ export interface BewlyWidescreenState {
   danmakuSemanticsSource?: HTMLElement
   danmakuSourceHost?: HTMLElement
   danmakuGlass?: HTMLElement
-  danmakuGlassCleanup?: () => void
   controlsGlassAppliedHeight?: number
   auxiliaryControlsElement?: HTMLElement
   controlsLayoutReady: boolean

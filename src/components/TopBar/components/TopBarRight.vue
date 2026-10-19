@@ -8,7 +8,6 @@ import OpenTabsDialog from '~/components/WatchLater/OpenTabsDialog.vue'
 import { settings } from '~/logic'
 import { getTopBarItemLayoutEditableId, vLayoutEditable } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
-import { vLiquidGlass } from '~/utils/liquidGlass'
 import { getUserID, isInIframe, removeHttpFromUrl } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
 import { isComponentVisible, shouldShowBadge, shouldShowDotBadge, shouldShowNumberBadge } from '~/utils/topBarBadge'
@@ -257,7 +256,6 @@ const shouldShowDivider = computed(() => {
               <MomentsPop
                 v-if="popupVisible?.moments"
                 ref="momentsPopRef"
-                v-liquid-glass
                 class="bew-popover"
                 @click.stop="() => {}"
               />
@@ -290,7 +288,6 @@ const shouldShowDivider = computed(() => {
               <FavoritesPop
                 v-if="popupVisible?.favorites"
                 ref="favoritesPopRef"
-                v-liquid-glass
                 class="bew-popover"
                 @click.stop="() => {}"
               />
@@ -323,7 +320,6 @@ const shouldShowDivider = computed(() => {
               <HistoryPop
                 v-if="popupVisible?.history"
                 ref="historyPopRef"
-                v-liquid-glass
                 class="bew-popover"
                 @click.stop="() => {}"
               />
@@ -367,7 +363,6 @@ const shouldShowDivider = computed(() => {
               <WatchLaterPop
                 v-if="popupVisible?.watchLater"
                 ref="watchLaterPopRef"
-                v-liquid-glass
                 class="bew-popover"
                 @add-open-tabs="openTabsDialog"
                 @click.stop="() => {}"
@@ -419,7 +414,6 @@ const shouldShowDivider = computed(() => {
             <MorePop
               v-show="popupVisible?.more"
               ref="morePopRef"
-              v-liquid-glass="!!popupVisible?.more"
               class="bew-popover"
               @click.stop="() => {}"
             />
@@ -460,7 +454,6 @@ const shouldShowDivider = computed(() => {
               <UploadPop
                 v-show="popupVisible?.upload"
                 ref="uploadPopRef"
-                v-liquid-glass="!!popupVisible?.upload"
                 class="bew-popover"
                 @click.stop="() => {}"
               />
@@ -505,7 +498,6 @@ const shouldShowDivider = computed(() => {
               <NotificationsPop
                 v-show="popupVisible?.notifications"
                 ref="notificationsPopRef"
-                v-liquid-glass="!!popupVisible?.notifications"
                 class="bew-popover"
                 :un-read-message="unReadMessage"
                 :un-read-dm="unReadDm"
@@ -565,7 +557,6 @@ const shouldShowDivider = computed(() => {
           <UserPanelPop
             v-if="popupVisible?.userPanel"
             ref="avatarPopRef"
-            v-liquid-glass="popupVisible?.userPanel"
             :user-info="userInfo"
             after:h="!0"
             class="bew-popover"

@@ -22,11 +22,6 @@
   overflow: hidden;
 }
 
-.bew-popover-surface[data-bew-liquid-glass] {
-  --bew-liquid-frame-inset: 0px;
-  --bew-liquid-outer-shadow: var(--bew-shadow-3);
-}
-
 .bew-popover {
   position: fixed;
   display: flex;

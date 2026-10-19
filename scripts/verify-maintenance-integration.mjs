@@ -55,7 +55,6 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       '~/constants/dock': await import('../src/constants/dock'),
       '~/constants/retiredSettings': await import('../src/constants/retiredSettings'),
       '~/utils/localLoudnessProtocol': await import('../src/utils/localLoudnessProtocol'),
-      '~/constants/liquidGlass': await import('../src/constants/liquidGlass'),
       '~/enums/appEnums': await import('../src/enums/appEnums'),
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
       '~/utils/gridLayout': await import('../src/utils/gridLayout'),
@@ -65,7 +64,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       './appAuthStorage': {},
     })
     const defaults = JSON.parse(JSON.stringify(storage.originalSettings))
-    const retired = { customizeCSS: true, customizeCSSContent: 'body { color: red; }', videoCardLayout: 'old' }
+    const retired = { customizeCSS: true, customizeCSSContent: 'body { color: red; }', videoCardLayout: 'old', enableDockLiquidGlass: true, dockLiquidGlassRefraction: 70, dockLiquidGlassTintColor: '#7a3f91' }
     const { removeRetiredSettings } = await import('../src/constants/retiredSettings')
     for (const malformed of [null, undefined, false, 0, 'invalid'])
       assert.doesNotThrow(() => removeRetiredSettings(malformed))

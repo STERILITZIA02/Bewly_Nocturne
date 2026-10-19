@@ -14,7 +14,6 @@ const virtual = {
 export const settings=ref({theme:'dark',themeColor:'#eab308',darkModeBaseColor:'#2d2a2f',enableDarkModeTint:false,enableOledDarkMode:false,themeScheduleStart:'06:00',themeScheduleEnd:'18:00',disableFrostedGlass:false,frostedGlassBlurIntensity:20,disableShadow:false,enableSidebarCoverBlur:false,adaptToOtherPageStyles:true,videoPageDarkMode:false,useLinearGradientThemeColorBackground:false,customizeFont:'default',fontFamily:''});
 export const FROSTED_GLASS_BLUR_MAX_PX=20, FROSTED_GLASS_BLUR_MIN_PX=1;`,
   '/__color-app.js': `import {ref} from 'vue'; export const useBewlyApp=()=>({mainAppRef:ref(document.body)});`,
-  '/__color-unused.vue': '<template><div /></template>',
   '/__color-preview.vue': `<script setup>
 import {ref,watchEffect,nextTick,onMounted} from 'vue';
 import Appearance from '/src/components/Settings/Appearance/Appearance.vue';
@@ -42,7 +41,6 @@ onMounted(inspect);
 const aliases = {
   '~/logic': '/__color-settings.js',
   '~/composables/useAppProvider': '/__color-app.js',
-  './LiquidGlassSettings.vue': '/__color-unused.vue',
 }
 const server = await createServer({
   configFile: false,

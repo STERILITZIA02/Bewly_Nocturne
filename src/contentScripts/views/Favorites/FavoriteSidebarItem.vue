@@ -104,10 +104,12 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
   &:is(:hover, :focus-within) {
     background: var(--bew-sidebar-control);
   }
+  // Same plate as the History / Watch Later advanced filters, which reads
+  // clearly on the rail material in every theme.
   &.is-active,
   &.is-selected {
     color: var(--bew-text-1);
-    background: var(--bew-selected-bg);
+    background: var(--bew-message-pinned-background);
   }
 }
 .favorite-sidebar-item__trigger {

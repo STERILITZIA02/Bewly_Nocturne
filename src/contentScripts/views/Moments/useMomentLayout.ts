@@ -6,9 +6,11 @@ import { getCardPreviewText, isCompactPlainTextMoment } from '~/components/Momen
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
 import { useLayoutEditSettingValue } from '~/logic/layoutEdit'
-import { shouldUseWideMomentCardLayout } from '~/utils/momentCardLayout'
+import { shouldUseWideMomentCardLayout, supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { createMomentColumnIndex } from '~/utils/momentColumnIndex'
 import { MOMENT_GRID_DIMENSIONS, resolveMomentCardWidth, resolveMomentGridColumnCount } from '~/utils/momentsLayout'
+import type { ViewportFrameReason, ViewportGeometry } from '~/utils/viewportGeometry'
+import { getRemainingScroll, invalidateViewportGeometry, readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
 
 interface LayoutHooks {
   onNearBottom: () => void
@@ -29,22 +31,36 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     'page.moments.gridColumns',
     () => settings.value.momentsGridColumns,
   )
-  const momentColumns = ref<DisplayMoment[][]>([])
+  // Column arrays only grow by push or are replaced; the height index follows
+  // that contract (see momentColumnIndex). Nothing renders them reactively.
+  const momentColumns = shallowRef<DisplayMoment[][]>([])
+  /** Feed order of each placed card, for sorting a column after a tail move. */
+  const feedOrder = new Map<string, number>()
+  let nextFeedOrder = 0
   const layoutRef = ref<HTMLElement | null>(null)
   const momentsContentRef = ref<HTMLElement | null>(null)
   const gridRef = ref<HTMLElement | null>(null)
-  const { minCardWidth: CARD_MIN_WIDTH, gap: GRID_GAP } = MOMENT_GRID_DIMENSIONS
+  const { minCardWidth: CARD_MIN_WIDTH } = MOMENT_GRID_DIMENSIONS
+  /** Measured from the rendered grid (or its skeleton) on layout changes, never in render paths. */
+  let gridGap: number = MOMENT_GRID_DIMENSIONS.gap
   const gridColumnCount = ref(1)
   const gridCardWidth = ref(520)
   let rebalanceTimer: ReturnType<typeof setTimeout> | null = null
-  const cardHeights = reactive<Record<string, number>>({})
+  // Read only by imperative layout passes, never by render or computed state.
+  const cardHeights: Record<string, number> = {}
   const visibleMomentIds = reactive(new Set<string>())
   const readyCardIds = reactive(new Set<string>())
   const enteringCardIds = reactive(new Set<string>())
   const revealedCardIds = new Set<string>()
   const cardEnterTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  const cardReadyFrames = new Map<string, number>()
   const cardElements = new Map<string, HTMLElement>()
+  const cardMoments = new Map<string, DisplayMoment>()
+  /** Cards awaiting one batched reset → read → write → measure pass. */
+  const pendingCardLayouts = new Map<string, { force: boolean }>()
+  const descriptionFitKeys = new WeakMap<HTMLElement, string>()
+  let cardLayoutFlushQueued = false
+  const pendingReadyIds = new Set<string>()
+  let cardReadyFrame = 0
   const virtualColumns = shallowRef<VirtualColumn[]>([])
   const interactiveCardIds = new Set<string>()
   const movingDisclosureIds = new Set<string>()
@@ -52,17 +68,20 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   const MIN_SINGLE_IMAGE_RATIO = 1 / 2
   let gridObserver: ResizeObserver | undefined
   const OVERSCAN_PX = 1200
+  let releaseViewportFrame: (() => void) | undefined
   let attachedScrollViewport: HTMLElement | null = null
+  /** Grid top within the scroll content; scrolling cannot change it. */
+  let gridOffsetTop: number | undefined
   let cardMeasureObserver: ResizeObserver | undefined
   const measuredCardWidths = new WeakMap<HTMLElement, number>()
+  const DESCRIPTION_LINES_PROPERTY = '--moment-card-description-lines'
   let visibilityObserver: IntersectionObserver | undefined
   let lastScrollAt = 0
-  let virtualRaf = 0
   let cardGeometryFrame = 0
   let suppressBottomRebalanceUntil = 0
   const settledHeights = new Set<string>()
   let measurementRevision = 0
-  const columnHeightIndex = createMomentColumnIndex<DisplayMoment>(item => item.id, getCardHeight, GRID_GAP)
+  const columnHeightIndex = createMomentColumnIndex<DisplayMoment>(item => item.id, getCardHeight, () => gridGap)
   const momentsGridStyle = computed(() => ({
     '--moments-columns': String(Math.max(1, gridColumnCount.value)),
   }))
@@ -77,10 +96,10 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     const interactionHeight = moment.hotComment ? 52 : 0
     const additionalHeight = moment.additional ? 68 : 0
     if (shouldUseWideMomentCardLayout(moment, columnWidth)) {
-      const mediaWidth = Math.max(1, (columnWidth - GRID_GAP * 3) * 0.6)
+      const mediaWidth = Math.max(1, (columnWidth - gridGap * 3) * 0.6)
       const mediaRatio = moment.isVideo || moment.isLive ? 16 / 9 : getMomentImageRatio(moment)
       const mediaHeight = mediaWidth / mediaRatio
-      const bodyWidth = Math.max(160, (columnWidth - GRID_GAP * 3) * 0.4 - GRID_GAP * 2)
+      const bodyWidth = Math.max(160, (columnWidth - gridGap * 3) * 0.4 - gridGap * 2)
       const charsPerLine = Math.max(12, Math.floor(bodyWidth / 14))
       const textLineCount = Math.min(7, Math.max(1, Math.ceil((moment.text || '').length / charsPerLine)))
       const bodyHeight = 96 + textLineCount * 24 + (moment.title ? 44 : 0)
@@ -186,11 +205,19 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     return cardHeights[moment.id] || estimateCardHeight(moment)
   }
 
+  function columnIndexKey() {
+    return `${gridCardWidth.value}:${gridGap}:${measurementRevision}`
+  }
+
+  /** Maintained totals while the index is current; a full reduce otherwise. */
   function getColumnStackHeight(column: DisplayMoment[]) {
     if (!column.length)
       return 0
+    const indexed = columnHeightIndex.stackHeight(column)
+    if (indexed !== undefined)
+      return indexed
     return column.reduce((sum, moment, index) => {
-      return sum + getCardHeight(moment) + (index > 0 ? GRID_GAP : 0)
+      return sum + getCardHeight(moment) + (index > 0 ? gridGap : 0)
     }, 0)
   }
 
@@ -207,17 +234,24 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     return minIdx
   }
 
+  /**
+   * Tail balancing over maintained column totals: heights are read once and
+   * then adjusted per move. Only columns that actually move a card are copied,
+   * so untouched columns keep their array (and their index rows).
+   */
   function balanceColumnBottoms(columns: DisplayMoment[][]) {
-    const next = columns.map(column => [...column])
+    const next = columns.slice()
     if (next.length < 2)
       return { columns: next, changed: false }
 
-    const sourceOrder = new Map(moments.value.map((moment, index) => [moment.id, index]))
+    if (columns === momentColumns.value)
+      columnHeightIndex.sync(columns, columnIndexKey())
+    const heights = next.map(column => getColumnStackHeight(column))
+    const copied = new Set<number>()
     let changed = false
     const maxMoves = Math.min(moments.value.length, 24)
 
     for (let moveCount = 0; moveCount < maxMoves; moveCount++) {
-      const heights = next.map(column => getColumnStackHeight(column))
       const currentSpread = Math.max(...heights) - Math.min(...heights)
       let bestMove: { sourceIndex: number, targetIndex: number, itemIndex: number, spread: number } | null = null
 
@@ -234,8 +268,8 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
               return
 
             const candidateHeights = [...heights]
-            candidateHeights[sourceIndex] -= itemHeight + GRID_GAP
-            candidateHeights[targetIndex] += itemHeight + (target.length ? GRID_GAP : 0)
+            candidateHeights[sourceIndex] -= itemHeight + gridGap
+            candidateHeights[targetIndex] += itemHeight + (target.length ? gridGap : 0)
             const spread = Math.max(...candidateHeights) - Math.min(...candidateHeights)
             if (spread >= currentSpread - 4 || (bestMove && spread >= bestMove.spread))
               return
@@ -249,9 +283,18 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
         break
 
       const { sourceIndex, targetIndex, itemIndex } = bestMove
+      for (const index of [sourceIndex, targetIndex]) {
+        if (!copied.has(index)) {
+          copied.add(index)
+          next[index] = next[index].slice()
+        }
+      }
       const [moved] = next[sourceIndex].splice(itemIndex, 1)
+      const movedHeight = getCardHeight(moved)
+      heights[sourceIndex] -= movedHeight + (next[sourceIndex].length ? gridGap : 0)
+      heights[targetIndex] += movedHeight + (next[targetIndex].length ? gridGap : 0)
       next[targetIndex].push(moved)
-      next[targetIndex].sort((a, b) => (sourceOrder.get(a.id) ?? 0) - (sourceOrder.get(b.id) ?? 0))
+      next[targetIndex].sort((a, b) => (feedOrder.get(a.id) ?? 0) - (feedOrder.get(b.id) ?? 0))
       changed = true
     }
 
@@ -263,10 +306,13 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     const next = Array.from({ length: count }, () => [] as DisplayMoment[])
     const heights = Array.from({ length: count }, () => 0)
 
+    feedOrder.clear()
+    nextFeedOrder = 0
     moments.value.forEach((item) => {
+      feedOrder.set(item.id, nextFeedOrder++)
       const columnIndex = findShortestColumnIndex(next, heights)
       next[columnIndex].push(item)
-      heights[columnIndex] += (heights[columnIndex] > 0 ? GRID_GAP : 0) + getCardHeight(item)
+      heights[columnIndex] += (heights[columnIndex] > 0 ? gridGap : 0) + getCardHeight(item)
     })
 
     momentColumns.value = balanceColumnBottoms(next).columns
@@ -279,20 +325,31 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     settledHeights.clear()
     if (cardGeometryFrame)
       cancelAnimationFrame(cardGeometryFrame)
+    // Wait for the new width to reach the DOM, then fit and measure every
+    // mounted card in one batch instead of alternating writes and reads per card.
     cardGeometryFrame = requestAnimationFrame(() => {
       cardGeometryFrame = 0
-      cardElements.forEach((element, id) => {
-        fitVideoCardDescription(element)
-        const height = element.getBoundingClientRect().height
-        if (height > 0)
-          commitCardHeight(id, height, { force: true })
-      })
+      cardElements.forEach((_element, id) => pendingCardLayouts.set(id, { force: true }))
+      flushCardLayouts()
       updateVirtualColumns()
       hooks.onNearBottom()
     })
   }
 
+  function measureGridGap(): boolean {
+    const grid = gridRef.value ?? momentsContentRef.value?.querySelector<HTMLElement>('.moments-skeleton-grid')
+    if (!grid)
+      return false
+    const gap = Number.parseFloat(getComputedStyle(grid).columnGap)
+    if (Number.isFinite(gap) && gap >= 0 && gap !== gridGap) {
+      gridGap = gap
+      return true
+    }
+    return false
+  }
+
   function updateGridColumnCount() {
+    const gapChanged = measureGridGap()
     const layoutWidth = layoutRef.value?.clientWidth || window.innerWidth
     const mainRailWidth = momentsContentRef.value?.clientWidth || layoutWidth
     const preferredColumns = Math.min(3, Math.max(1, Number(momentsGridColumns.value) || 3))
@@ -300,7 +357,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
       containerWidth: mainRailWidth,
       preferredColumns,
       minCardWidth: CARD_MIN_WIDTH,
-      gap: GRID_GAP,
+      gap: gridGap,
     })
     // Keep an active editor/focus/fullscreen in its Vue column. Apply the new
     // column count as soon as the interaction ends; width still follows resize.
@@ -309,10 +366,10 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     const nextCardWidth = resolveMomentCardWidth({
       gridClientWidth,
       columns: nextCols,
-      gap: GRID_GAP,
+      gap: gridGap,
     })
 
-    const colsChanged = nextCols !== gridColumnCount.value
+    const colsChanged = nextCols !== gridColumnCount.value || gapChanged
     const widthChanged = Math.abs(nextCardWidth - gridCardWidth.value) > 0.01
     const needInitColumns = momentColumns.value.length !== nextCols
 
@@ -331,12 +388,14 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     if (!momentColumns.value.length)
       momentColumns.value = Array.from({ length: Math.max(1, gridColumnCount.value) }, () => [])
 
+    columnHeightIndex.sync(momentColumns.value, columnIndexKey())
     const columnHeights = momentColumns.value.map(column => getColumnStackHeight(column))
 
     items.forEach((item) => {
+      feedOrder.set(item.id, nextFeedOrder++)
       const columnIndex = findShortestColumnIndex(momentColumns.value, columnHeights)
       momentColumns.value[columnIndex].push(item)
-      columnHeights[columnIndex] += (columnHeights[columnIndex] > 0 ? GRID_GAP : 0) + getCardHeight(item)
+      columnHeights[columnIndex] += (columnHeights[columnIndex] > 0 ? gridGap : 0) + getCardHeight(item)
     })
     // 初始布局可整体平衡；分页只追加，不能搬动用户正在查看的旧卡片
     if (wasEmpty)
@@ -363,11 +422,12 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
         return
       const viewport = scrollViewportRef.value
       if (viewport) {
-        const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
+        const geometry = readViewportGeometry(viewport)
         // 分页加载区不再缩短最高列，避免最大 scrollTop 变化把滚动位置向上夹回
-        if (distanceFromBottom < viewport.clientHeight * 1.25)
+        if (getRemainingScroll(geometry) < geometry.clientHeight * 1.25)
           return
       }
+      columnHeightIndex.sync(momentColumns.value, columnIndexKey())
       const heights = momentColumns.value.map(column => getColumnStackHeight(column))
       const maxH = Math.max(...heights)
       const minH = Math.min(...heights)
@@ -409,53 +469,67 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     return true
   }
 
+  /** Height commits join the viewport's next layout frame with every other consumer. */
   function scheduleVirtualUpdate() {
-    if (!active || virtualRaf)
+    if (!active)
       return
-    virtualRaf = window.requestAnimationFrame(() => {
-      virtualRaf = 0
-      updateVirtualColumns()
-      hooks.onNearBottom()
-    })
-  }
-
-  function getGridOffsetTop() {
-    const grid = gridRef.value
     const viewport = scrollViewportRef.value
-    if (!grid || !viewport)
-      return 0
-
-    const gridRect = grid.getBoundingClientRect()
-    const viewportRect = viewport.getBoundingClientRect()
-    return gridRect.top - viewportRect.top + viewport.scrollTop
+    if (viewport)
+      invalidateViewportGeometry(viewport)
+    else
+      updateVirtualColumns()
   }
 
-  function updateVirtualColumns() {
+  function handleViewportFrame(geometry: ViewportGeometry, reason: ViewportFrameReason) {
+    if (reason === 'scroll')
+      lastScrollAt = Date.now()
+    else
+      gridOffsetTop = undefined
+    updateVirtualColumns(geometry)
+    hooks.onNearBottom()
+  }
+
+  function getGridOffsetTop(geometry: ViewportGeometry | undefined) {
+    const grid = gridRef.value
+    if (!grid || !geometry)
+      return 0
+    gridOffsetTop ??= grid.getBoundingClientRect().top - geometry.top + geometry.scrollTop
+    return gridOffsetTop
+  }
+
+  /** Returns whether the rendered window changed and needs another DOM commit. */
+  function updateVirtualColumns(geometry?: ViewportGeometry) {
     if (!momentColumns.value.length) {
-      if (virtualColumns.value.length)
-        virtualColumns.value = []
-      return
+      if (!virtualColumns.value.length)
+        return false
+      virtualColumns.value = []
+      return true
     }
 
     const viewport = scrollViewportRef.value
-    const scrollTop = viewport?.scrollTop ?? 0
-    const viewportHeight = viewport?.clientHeight ?? window.innerHeight
-    const gridOffsetTop = getGridOffsetTop()
+    // Explicit calls follow a commit: the grid may have moved inside the content.
+    if (!geometry)
+      gridOffsetTop = undefined
+    const snapshot = geometry ?? (viewport ? readViewportGeometry(viewport) : undefined)
+    const scrollTop = snapshot?.scrollTop ?? 0
+    const viewportHeight = snapshot?.clientHeight ?? window.innerHeight
+    const offsetTop = getGridOffsetTop(snapshot)
     const viewStart = scrollTop - OVERSCAN_PX
     const viewEnd = scrollTop + viewportHeight + OVERSCAN_PX
-    columnHeightIndex.sync(momentColumns.value, `${gridCardWidth.value}:${measurementRevision}`)
-    const next = columnHeightIndex.window(viewStart - gridOffsetTop, viewEnd - gridOffsetTop, interactiveCardIds)
+    columnHeightIndex.sync(momentColumns.value, columnIndexKey())
+    const next = columnHeightIndex.window(viewStart - offsetTop, viewEnd - offsetTop, interactiveCardIds)
     const previous = virtualColumns.value
-    if (next.length !== previous.length || next.some((column, index) => {
+    const changed = next.length !== previous.length || next.some((column, index) => {
       const old = previous[index]
       return column.topPad !== old.topPad || column.bottomPad !== old.bottomPad
         || column.items.length !== old.items.length
         || column.items.some((item, row) => item !== old.items[row] || (column.gaps?.[row] ?? 0) !== (old.gaps?.[row] ?? 0))
-    })) {
+    })
+    if (changed)
       virtualColumns.value = next
-    }
 
     hooks.onViewportChange(visibleMomentIds, [])
+    return changed
   }
 
   function markCardReady(id: string) {
@@ -474,53 +548,143 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     }, 240))
   }
 
-  function fitVideoCardDescription(card: HTMLElement) {
-    if (card.dataset.descriptionExpanded === 'true')
-      return
-
+  /**
+   * Vertical cards keep the CSS clamp (`--moment-card-description-lines`
+   * defaults); only a wide split card stretches its body to the media row and
+   * needs the remaining height measured. The key covers every input that
+   * changes that height: width, gap, font revision, text and expansion.
+   */
+  function getDescriptionFitTarget(card: HTMLElement, moment: DisplayMoment | undefined) {
+    if (!moment || !supportsWideMomentCardLayout(moment))
+      return undefined
     const body = card.querySelector<HTMLElement>('.moment-card__main--video:not(.moment-card__main--live) .moment-card__body')
     const description = body?.querySelector<HTMLElement>('.moment-card__desc')
     if (!body || !description)
+      return undefined
+    const key = [
+      measurementRevision,
+      Math.round(measuredCardWidths.get(card) ?? gridCardWidth.value),
+      gridGap,
+      settings.value.fontFamily,
+      moment.title,
+      getCardPreviewText(moment),
+      moment.descInherited ? 1 : 0,
+    ].join('\u0000')
+    return { body, description, title: body.querySelector<HTMLElement>('.moment-card__title'), key }
+  }
+
+  function flushCardLayouts() {
+    cardLayoutFlushQueued = false
+    if (!active) {
+      pendingCardLayouts.clear()
+      return
+    }
+    const batch = [...pendingCardLayouts].flatMap(([id, options]) => {
+      const card = cardElements.get(id)
+      return card?.isConnected ? [{ id, card, ...options }] : []
+    })
+    pendingCardLayouts.clear()
+    if (!batch.length)
       return
 
-    // 先解除上一次测量得到的限制，让纵向卡片也能按当前宽高重新展开。
-    body.style.removeProperty('--moment-card-description-lines')
+    // 1. Resets only: release the previous fit of cards whose inputs changed.
+    const fits = batch.flatMap(({ card, id }) => {
+      // An expanded description keeps its natural height until it collapses.
+      if (card.dataset.descriptionExpanded === 'true')
+        return []
+      const target = getDescriptionFitTarget(card, cardMoments.get(id))
+      if (!target)
+        return []
+      if (descriptionFitKeys.get(card) === target.key)
+        return []
+      descriptionFitKeys.set(card, target.key)
+      target.body.style.removeProperty(DESCRIPTION_LINES_PROPERTY)
+      return [target]
+    })
+    // 2. Reads only.
+    const lines = fits.map(({ body, description, title }) => {
+      const bodyStyle = getComputedStyle(body)
+      // Not in the split composition: the CSS default clamp already applies.
+      if (bodyStyle.gridColumnStart !== '2')
+        return undefined
+      const titleStyle = title ? getComputedStyle(title) : undefined
+      const occupiedHeight = title
+        ? title.getBoundingClientRect().height
+        + Number.parseFloat(titleStyle?.marginTop || '0')
+        + Number.parseFloat(titleStyle?.marginBottom || '0')
+        : 0
+      const availableHeight = body.clientHeight
+        - Number.parseFloat(bodyStyle.paddingTop)
+        - Number.parseFloat(bodyStyle.paddingBottom)
+        - occupiedHeight
+      const lineHeight = Number.parseFloat(getComputedStyle(description).lineHeight)
+      return Number.isFinite(lineHeight) && lineHeight > 0
+        ? String(Math.max(1, Math.floor((availableHeight + 0.5) / lineHeight)))
+        : undefined
+    })
+    // 3. Writes only, skipping unchanged values.
+    fits.forEach(({ body }, index) => {
+      const value = lines[index]
+      if (value !== undefined && body.style.getPropertyValue(DESCRIPTION_LINES_PROPERTY) !== value)
+        body.style.setProperty(DESCRIPTION_LINES_PROPERTY, value)
+    })
+    // 4. One layout for the whole batch, then merge the final heights.
+    let changed = false
+    for (const { id, card, force } of batch) {
+      const measured = Math.round(card.getBoundingClientRect().height)
+      if (measured > 0) {
+        changed = commitCardHeight(id, measured, force ? { force: true } : undefined) || changed
+        if (!readyCardIds.has(id))
+          pendingReadyIds.add(id)
+      }
+      else if (!cardHeights[id]) {
+        const moment = cardMoments.get(id)
+        if (moment)
+          changed = commitCardHeight(id, estimateCardHeight(moment), { force: true }) || changed
+      }
+    }
+    if (pendingReadyIds.size && !cardReadyFrame) {
+      // Reveal after the first paint of the batch, once for all its cards.
+      cardReadyFrame = requestAnimationFrame(() => {
+        cardReadyFrame = 0
+        for (const id of pendingReadyIds) {
+          if (active && cardElements.has(id))
+            markCardReady(id)
+        }
+        pendingReadyIds.clear()
+      })
+    }
+    if (changed) {
+      scheduleVirtualUpdate()
+      scheduleBottomRebalance()
+    }
+  }
 
-    const bodyStyle = getComputedStyle(body)
-    const title = body.querySelector<HTMLElement>('.moment-card__title')
-    const titleStyle = title ? getComputedStyle(title) : undefined
-    const occupiedHeight = title
-      ? title.getBoundingClientRect().height
-      + Number.parseFloat(titleStyle?.marginTop || '0')
-      + Number.parseFloat(titleStyle?.marginBottom || '0')
-      : 0
-    const availableHeight = body.clientHeight
-      - Number.parseFloat(bodyStyle.paddingTop)
-      - Number.parseFloat(bodyStyle.paddingBottom)
-      - occupiedHeight
-    const lineHeight = Number.parseFloat(getComputedStyle(description).lineHeight)
-
-    if (!Number.isFinite(lineHeight) || lineHeight <= 0)
+  /** Bindings, frames and ResizeObserver deliveries for the same version merge here. */
+  function requestCardLayout(id: string, force = false) {
+    const pending = pendingCardLayouts.get(id)
+    pendingCardLayouts.set(id, { force: force || Boolean(pending?.force) })
+    if (cardLayoutFlushQueued)
       return
-
-    const visibleLines = Math.max(1, Math.floor((availableHeight + 0.5) / lineHeight))
-    body.style.setProperty('--moment-card-description-lines', String(visibleLines))
+    cardLayoutFlushQueued = true
+    // After the current Vue patch has bound every card, before `nextTick` callers.
+    queueMicrotask(flushCardLayouts)
   }
 
   function bindCardEl(el: Element | null, moment: DisplayMoment) {
     const previous = cardElements.get(moment.id)
+    cardMoments.set(moment.id, moment)
     if (previous === el)
       return
-    const pendingFrame = cardReadyFrames.get(moment.id)
-    if (pendingFrame !== undefined)
-      cancelAnimationFrame(pendingFrame)
-    cardReadyFrames.delete(moment.id)
+    pendingReadyIds.delete(moment.id)
     if (!(el instanceof HTMLElement)) {
       if (previous) {
         cardMeasureObserver?.unobserve(previous)
         visibilityObserver?.unobserve(previous)
         cardElements.delete(moment.id)
       }
+      cardMoments.delete(moment.id)
+      pendingCardLayouts.delete(moment.id)
       movingDisclosureIds.delete(moment.id)
       visibleMomentIds.delete(moment.id)
       readyCardIds.delete(moment.id)
@@ -542,24 +706,8 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     cardMeasureObserver?.observe(el)
     visibilityObserver?.observe(el)
     el.dataset.momentId = moment.id
-    fitVideoCardDescription(el)
-
-    // 初次挂载写入实测高度（带阈值，避免反复抖）
-    const measured = Math.round(el.getBoundingClientRect().height)
-    if (measured > 0) {
-      commitCardHeight(moment.id, measured)
-      const frame = requestAnimationFrame(() => {
-        cardReadyFrames.delete(moment.id)
-        if (active && cardElements.get(moment.id) === el) {
-          fitVideoCardDescription(el)
-          markCardReady(moment.id)
-        }
-      })
-      cardReadyFrames.set(moment.id, frame)
-    }
-    else if (!cardHeights[moment.id]) {
-      commitCardHeight(moment.id, estimateCardHeight(moment), { force: true })
-    }
+    // 初次挂载写入实测高度（带阈值，避免反复抖）；同一次挂载的卡片合并测量
+    requestCardLayout(moment.id)
   }
 
   function setupVirtualObservers() {
@@ -580,13 +728,14 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
         // and checking pagination for every intermediate animation frame.
         if (movingDisclosureIds.has(id))
           return
-        const width = entry.contentRect.width
-        const widthChanged = measuredCardWidths.get(card) !== width
-        measuredCardWidths.set(card, width)
-        // Comment expansion changes only the footer. Re-clamping the unchanged
-        // video body here removes a style then forces layout on every frame.
-        if (widthChanged || !card.querySelector('.moment-card__disclosure-inner')?.childElementCount)
-          fitVideoCardDescription(card)
+        measuredCardWidths.set(card, entry.contentRect.width)
+        // Changed fit inputs (width, collapse) refit in the shared batch. Comment
+        // expansion changes only the footer, so its key stays and nothing refits.
+        const target = card.dataset.descriptionExpanded === 'true' ? undefined : getDescriptionFitTarget(card, cardMoments.get(id))
+        if (target && descriptionFitKeys.get(card) !== target.key) {
+          requestCardLayout(id)
+          return
+        }
         const next = Math.round(entry.contentRect.height)
         if (commitCardHeight(id, next))
           changed = true
@@ -629,22 +778,19 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     })
   }
 
-  function handleViewportScroll() {
-    lastScrollAt = Date.now()
-    scheduleVirtualUpdate()
-  }
-
   function attachViewportScroll() {
     const viewport = scrollViewportRef.value
     if (!viewport || attachedScrollViewport === viewport)
       return
     detachViewportScroll()
-    viewport.addEventListener('scroll', handleViewportScroll, { passive: true })
+    releaseViewportFrame = subscribeViewportFrame(viewport, handleViewportFrame)
     attachedScrollViewport = viewport
+    gridOffsetTop = undefined
   }
 
   function detachViewportScroll() {
-    attachedScrollViewport?.removeEventListener('scroll', handleViewportScroll)
+    releaseViewportFrame?.()
+    releaseViewportFrame = undefined
     attachedScrollViewport = null
   }
 
@@ -759,24 +905,32 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   })
   onBeforeUnmount(() => {
     active = false
-    cardReadyFrames.forEach(frame => cancelAnimationFrame(frame))
-    cardReadyFrames.clear()
+    if (cardReadyFrame)
+      cancelAnimationFrame(cardReadyFrame)
+    cardReadyFrame = 0
+    pendingReadyIds.clear()
+    pendingCardLayouts.clear()
     gridObserver?.disconnect()
     cardMeasureObserver?.disconnect()
     visibilityObserver?.disconnect()
     detachViewportScroll()
     if (rebalanceTimer)
       clearTimeout(rebalanceTimer)
-    if (virtualRaf)
-      cancelAnimationFrame(virtualRaf)
     if (cardGeometryFrame)
       cancelAnimationFrame(cardGeometryFrame)
     cardElements.clear()
+    cardMoments.clear()
     reset()
   })
 
   function remove(id: string) {
-    momentColumns.value = momentColumns.value.map(column => column.filter(item => item.id !== id))
+    // Only the owning column is replaced; the index rebuilds that column alone.
+    const location = columnHeightIndex.locate(id)
+    const column = location && momentColumns.value[location.column]?.[location.row]?.id === id ? location.column : -1
+    momentColumns.value = momentColumns.value.map((items, index) => (column < 0 || index === column) && items.some(item => item.id === id)
+      ? items.filter(item => item.id !== id)
+      : items)
+    feedOrder.delete(id)
     interactiveCardIds.delete(id)
     movingDisclosureIds.delete(id)
     readyCardIds.delete(id)
@@ -785,13 +939,24 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     revealedCardIds.delete(id)
     settledHeights.delete(id)
     cardElements.delete(id)
+    cardMoments.delete(id)
+    pendingCardLayouts.delete(id)
     delete cardHeights[id]
     clearTimeout(cardEnterTimers.get(id))
     cardEnterTimers.delete(id)
     updateVirtualColumns()
   }
   function updateMoment(moment: DisplayMoment) {
-    momentColumns.value = momentColumns.value.map(column => column.map(item => item.id === moment.id ? moment : item))
+    if (cardMoments.has(moment.id))
+      cardMoments.set(moment.id, moment)
+    // Same key, order and height: replace the entity in place. The column array
+    // and its index rows stay; only the window containing the card re-renders.
+    const location = columnHeightIndex.locate(moment.id)
+    const column = location ? momentColumns.value[location.column] : undefined
+    if (column && location && column[location.row]?.id === moment.id)
+      column[location.row] = moment
+    else
+      momentColumns.value = momentColumns.value.map(items => items.map(item => item.id === moment.id ? moment : item))
     updateVirtualColumns()
   }
   function setInteractionHeld(id: string, held: boolean) {

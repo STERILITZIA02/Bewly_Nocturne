@@ -6,6 +6,7 @@ import { waitWithSignal, withRequestDeadline } from '~/utils/abort'
 import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure, sendMessage } from '~/utils/messaging'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { parsePlaybackTabUrl } from '~/utils/playbackTab'
+import { followStateTopic } from '~/utils/stateConsumer'
 import type { VideoHistoryCommand, VideoHistoryEdit, VideoHistorySnapshot, VideoHistoryUpdate, VideoIdentity, VideoVisitHistory } from '~/utils/videoVisitRecord'
 import { applyVideoHistoryEdits, createVideoHistoryIndex, mergeVideoVisitRecord, pruneVideoVisitHistory, VIDEO_VISIT_HISTORY_MESSAGE, VIDEO_VISIT_HISTORY_UPDATED, videoHistoryBaseKeys, videoHistoryPartKey } from '~/utils/videoVisitRecord'
 
@@ -88,6 +89,8 @@ function writeSiteMarker(value: string) {
 }
 
 function initialize(): Promise<void> {
+  // Watched badges are shown here; while hidden this document is only marked stale.
+  followStateTopic('videoHistory', () => void initialize())
   if (pendingRead)
     return pendingRead
   if (disposed || invalidated)

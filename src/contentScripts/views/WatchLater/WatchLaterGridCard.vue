@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
-
 import ALink from '~/components/ALink.vue'
 import Button from '~/components/Button.vue'
 import IconButton from '~/components/IconButton.vue'
@@ -68,7 +66,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
           :disabled="disabled || !videoUrl"
           @click="emit('playAndRemove', item)"
         >
-          <Icon icon="tabler:player-play" aria-hidden="true" />
+          <span class="watch-later-grid-card__icon i-tabler:player-play" aria-hidden="true" />
           {{ $t('watch_later.play_and_remove') }}
         </Button>
         <Tooltip :content="$t('watch_later.play_in_watch_later')" placement="top" teleport>
@@ -78,7 +76,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
             :disabled="disabled || !videoUrl"
             @click="emit('playInWatchLater', item)"
           >
-            <Icon icon="tabler:list-check" aria-hidden="true" />
+            <span class="watch-later-grid-card__icon i-tabler:list-check" aria-hidden="true" />
           </IconButton>
         </Tooltip>
         <Tooltip :content="$t('watch_later.remove_from_watch_later')" placement="top" teleport>
@@ -88,7 +86,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
             :disabled="disabled"
             @click="emit('remove', item)"
           >
-            <Icon icon="tabler:trash" aria-hidden="true" />
+            <span class="watch-later-grid-card__icon i-tabler:trash" aria-hidden="true" />
           </IconButton>
         </Tooltip>
       </div>
@@ -218,7 +216,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
     background: var(--bew-overlay-background-hover);
   }
 
-  svg {
+  .watch-later-grid-card__icon {
     width: var(--bew-icon-size-md);
     height: var(--bew-icon-size-md);
   }

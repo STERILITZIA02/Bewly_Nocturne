@@ -453,6 +453,7 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       '~/utils/flv': { loadFlvModule: () => assert.fail('MP4 does not load FLV') },
       '~/utils/mediaResources': await import('../src/utils/mediaResources'),
       '~/utils/previewMediaSession': await import('../src/utils/previewMediaSession'),
+      '~/utils/fullscreenChange': await import('../src/utils/fullscreenChange'),
       '~/utils/videoPreviewProgress': policy,
     })
     const media = window.HTMLMediaElement.prototype

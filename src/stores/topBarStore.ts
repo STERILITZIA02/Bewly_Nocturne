@@ -51,6 +51,7 @@ import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure, se
 import { countVisibleNewMomentItems } from '~/utils/momentFeedOrder'
 import { resolveStableMomentKey } from '~/utils/momentKey'
 import { getNotificationBadgeCounts } from '~/utils/notificationBadge'
+import { reportStateTopicActive } from '~/utils/stateConsumer'
 import { updateOwnedWatchLater } from '~/utils/watchLater'
 import { normalizeWatchLaterItem } from '~/utils/watchLaterList'
 
@@ -1553,6 +1554,10 @@ export const useTopBarStore = defineStore('topBar', () => {
     if (!canRefreshUi()) {
       stopUpdateTimer()
       cancelLoginRead()
+      // No display need: the broker keeps only a stale mark for this document;
+      // the next claim (on resume) reactivates it and reconciles once.
+      if (!sharedStateMessagingUnavailable)
+        void reportStateTopicActive('topBar', false)
       return
     }
     // Cookie reconciliation precedes any reuse of account-scoped snapshots.

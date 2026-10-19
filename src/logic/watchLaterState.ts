@@ -1,11 +1,12 @@
 import { computed, shallowRef } from 'vue'
 
 import { TOP_BAR_STATE_MESSAGE } from '~/constants/topBarState'
-import type { WatchLaterEntry, WatchLaterSnapshot, WatchLaterUpdate } from '~/constants/watchLaterState'
+import type { WatchLaterCountReply, WatchLaterEntry, WatchLaterSnapshot, WatchLaterUpdate } from '~/constants/watchLaterState'
 import { WATCH_LATER_STATE_UPDATED } from '~/constants/watchLaterState'
 import { parseDedeUserID } from '~/logic/loginStatus'
 import api from '~/utils/api'
 import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure } from '~/utils/messaging'
+import { followStateTopic } from '~/utils/stateConsumer'
 import type { WatchLaterTarget } from '~/utils/watchLaterSnapshot'
 import { applyWatchLaterChange } from '~/utils/watchLaterSnapshot'
 
@@ -81,6 +82,23 @@ export function applyWatchLaterUpdate(update: WatchLaterUpdate) {
   const previous = snapshot.value
   if (previous && update.epoch === previous.epoch && update.revision <= previous.revision)
     return
+  if (update.type === 'count') {
+    if (!previous || update.epoch !== previous.epoch || update.baseRevision !== previous.revision) {
+      recoverProjection()
+      return
+    }
+    snapshot.value = {
+      ...previous,
+      revision: update.revision,
+      count: update.count,
+      countUpdatedAt: update.countUpdatedAt,
+      complete: update.complete,
+      updatedAt: update.updatedAt,
+      entries: update.entriesDropped ? [] : previous.entries,
+    }
+    lastUpdate.value = update
+    return
+  }
   if (!previous || update.epoch !== previous.epoch || update.baseRevision !== previous.revision) {
     // A gap/worker epoch is recovered from the owner, never guessed by applying
     // an unordered delta to a different base. Hidden tabs only become dirty.
@@ -99,6 +117,8 @@ export function applyWatchLaterUpdate(update: WatchLaterUpdate) {
 }
 
 async function read(full: boolean, force: boolean) {
+  // This document now shows Watch Later state; while hidden it is only marked stale.
+  followStateTopic('watchLater', recoverProjection)
   const id = syncAccount()
   if (!id || contextInvalidated)
     return false
@@ -116,14 +136,22 @@ async function read(full: boolean, force: boolean) {
   const invalidation = projectionInvalidation
   const task = Promise.resolve().then(async () => {
     try {
-      const result = await (full ? api.watchlater.getWatchLaterState : api.watchlater.getWatchLaterCount)({ accountId: id, force })
+      // A count read names the list this page holds, so an unchanged list is not resent.
+      const known = !full && existing?.accountId === id ? { knownEpoch: existing.epoch, knownRevision: existing.revision } : {}
+      const result = await (full ? api.watchlater.getWatchLaterState : api.watchlater.getWatchLaterCount)({ accountId: id, force, ...known })
       if (version !== generation || currentAccount() !== id || result.code !== 0 || invalidation !== projectionInvalidation)
         return false
-      const accepted = acceptSnapshot(result.data, true)
+      const reply = result.data as WatchLaterCountReply
+      const local = snapshot.value
+      if (reply.entriesOmitted && (local?.epoch !== reply.epoch || local.revision < (known.knownRevision ?? Infinity)))
+        return false
+      const { entriesOmitted, entries, ...fields } = reply
+      const data: WatchLaterSnapshot = { ...fields, entries: entriesOmitted ? local!.entries : entries ?? [] }
+      const accepted = acceptSnapshot(data, true)
       retryAt = 0
       if (accepted)
-        lastUpdate.value = { type: 'snapshot', snapshot: result.data }
-      return accepted && (full ? result.data.complete : result.data.count !== null)
+        lastUpdate.value = { type: 'snapshot', snapshot: data }
+      return accepted && (full ? data.complete : data.count !== null)
     }
     catch (error) {
       if (isExtensionContextInvalidatedError(error)) {

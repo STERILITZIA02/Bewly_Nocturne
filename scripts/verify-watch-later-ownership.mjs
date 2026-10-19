@@ -67,6 +67,8 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       '~/stores/topBarStore': { useTopBarStore: () => store },
       '~/utils/accountLifetime': await import('../src/utils/accountLifetime'),
       '~/utils/accountScope': await import('../src/utils/accountScope'),
+      // App feed dislike feedback is outside these ownership scenarios.
+      '~/utils/appFeedFeedback': { getAppFeedFeedbackTarget: () => null, isSameAppFeedFeedbackTarget: () => false, submitAppFeedFeedback: () => assert.fail('feedback is not part of watch later ownership') },
       '~/utils/api': { default: api },
       '~/utils/authProvider': {},
       '~/utils/dataFormatter': { parseStatNumber: value => value },
@@ -273,6 +275,93 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       assert.deepEqual(fixture.errors, [])
     }
     finally { fixture.scope.stop() }
+  })
+
+  check('watch later toolbar: discovery finds a late toolbar; once mounted, unrelated body churn is ignored and host replacement remounts', async () => {
+    const oldUrl = window.location.href
+    const frames = []
+    const observers = []
+    class RecordingObserver extends window.MutationObserver {
+      constructor(callback) {
+        super(callback)
+        this.targets = []
+        observers.push(this)
+      }
+
+      observe(target, options) {
+        this.targets.push({ target, options })
+        super.observe(target, options)
+      }
+
+      disconnect() {
+        this.targets = []
+        super.disconnect()
+      }
+    }
+    const store = Vue.reactive({ isLogin: false, userInfo: { mid: 0 }, watchLaterInvalidationVersion: 0, getUserInfo: async () => {}, ensureWatchLaterState: async () => true, isInWatchLater: () => false })
+    const native = await loadSourceModule('../src/utils/watchLaterButton.ts', {
+      'vue': Vue,
+      '~/logic': { settings: Vue.ref({ language: 'en', externalWatchLaterButton: true }) },
+      '~/stores/topBarStore': { useTopBarStore: () => store },
+      '~/utils/accountLifetime': await import('../src/utils/accountLifetime'),
+      '~/utils/accountScope': await import('../src/utils/accountScope'),
+      '~/utils/bilibiliApiError': { isBilibiliRiskControl: () => false },
+      '~/utils/i18n': { i18n: { global: { t: key => key, locale: Vue.ref('en') } } },
+      '~/utils/main': { getCSRF: () => '', getUserID: () => null },
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      '~/utils/watchLater': { resolveWatchLaterAid: async () => 101, updateOwnedWatchLater: async () => {} },
+    }, {
+      location: window.location,
+      MutationObserver: RecordingObserver,
+      requestAnimationFrame: callback => frames.push(callback),
+      cancelAnimationFrame: () => {},
+    })
+    const runFrames = async () => {
+      await new Promise(resolve => setTimeout(resolve, 0))
+      frames.splice(0).forEach(callback => callback())
+    }
+    const createToolbar = () => {
+      const toolbar = document.createElement('div')
+      toolbar.className = 'video-toolbar-container'
+      const more = toolbar.appendChild(document.createElement('button'))
+      more.className = 'video-tool-more'
+      more.getBoundingClientRect = () => ({ width: 40, height: 40 })
+      return toolbar
+    }
+    const page = document.body.appendChild(document.createElement('main'))
+    try {
+      window.history.replaceState(null, '', '/video/av101/')
+      const mounted = native.mountWatchLaterButtonWhenToolbarReady()
+      await runFrames()
+      const discovery = observers.find(observer => observer.targets.some(({ target, options }) => target === document.body && options.subtree))
+      assert.ok(discovery, 'discovery watches body insertions until a toolbar exists')
+      page.appendChild(createToolbar())
+      await runFrames()
+      assert.equal(await mounted, true)
+      const button = page.querySelector('.bewly-watch-later-btn')
+      assert.ok(button)
+      assert.ok(!observers.some(observer => observer.targets.some(({ target, options }) => target === document.body && (options.subtree || options.attributes))), 'the mounted phase leaves body attributes and subtree alone')
+      for (let index = 0; index < 50; index++) {
+        page.classList.toggle('noise')
+        document.body.style.setProperty('--noise', String(index))
+        document.body.appendChild(document.createElement('span')).remove()
+      }
+      await runFrames()
+      assert.equal(frames.length, 0, 'unrelated class/style/hidden and body churn schedule no toolbar search')
+      assert.equal(page.querySelector('.bewly-watch-later-btn'), button)
+      // Same URL, native component rebuilt: the host is replaced.
+      page.replaceChildren(createToolbar())
+      await runFrames()
+      await runFrames()
+      const remounted = page.querySelector('.bewly-watch-later-btn')
+      assert.ok(remounted && remounted !== button, 'a replaced toolbar receives a new button')
+    }
+    finally {
+      native.removeWatchLaterButton()
+      page.remove()
+      window.history.replaceState(null, '', oldUrl)
+    }
+    assert.ok(observers.every(observer => observer.targets.length === 0), 'removal disconnects both phases')
   })
 
   check('watch later: the real native toolbar rejects old readiness continuations and reconciles sent writes after its view is removed', async () => {

@@ -6,6 +6,8 @@
  * letting the browser perform the actual format negotiation and decode.
  */
 
+import { subscribeViewportFrame } from './viewportGeometry'
+
 export const IMAGE_LOAD_QUEUE_LIMIT = 6
 const DEFAULT_IMAGE_LOAD_TIMEOUT = 20_000
 
@@ -17,8 +19,14 @@ export interface ImageLoadQueueStartContext {
   isCurrent: () => boolean
 }
 
+export interface ImageLoadQueueGeometry {
+  element: Element
+  root: Element | null
+}
+
 export interface ImageLoadQueueOptions {
-  priority?: () => number
+  /** The element and scroll root that rank this task; measured once per geometry version. */
+  geometry?: () => ImageLoadQueueGeometry | null
   start: (context: ImageLoadQueueStartContext) => Promise<void> | void
   timeout?: number
   onCancel?: (reason: ImageLoadQueueCancelReason) => void
@@ -37,25 +45,74 @@ interface QueueTask {
   status: 'queued' | 'active' | 'settled'
   cancelled: boolean
   timeoutId: ReturnType<typeof setTimeout> | null
+  priority: number
+  /** Geometry version and element the priority was measured for. */
+  priorityVersion: number
+  measuredElement: Element | null
 }
+
+/** Slots kept free for on-screen pictures; off-screen work may use the rest. */
+const VISIBLE_RESERVED_SLOTS = 2
+const VISIBLE_PRIORITY_LIMIT = 1_000_000
 
 const pendingTasks: QueueTask[] = []
 const activeTasks = new Set<QueueTask>()
 let nextTaskId = 0
 let isPumping = false
 let pumpScheduled = false
+/** Bumped by scroll/layout frames of a subscribed root, fonts and visibility. */
+let geometryVersion = 0
+let resumeListenersAttached = false
 
-function getTaskPriority(task: QueueTask): number {
-  if (!task.options.priority)
-    return 0
-
+function measureTaskPriority(task: QueueTask, rootViewports: Map<Element | null, { top: number, bottom: number }>) {
+  let geometry: ImageLoadQueueGeometry | null | undefined
   try {
-    const priority = task.options.priority()
-    return Number.isFinite(priority) ? priority : Number.POSITIVE_INFINITY
+    geometry = task.options.geometry?.()
   }
   catch {
-    return Number.POSITIVE_INFINITY
+    geometry = null
   }
+  task.priorityVersion = geometryVersion
+  task.measuredElement = geometry?.element ?? null
+  if (!task.options.geometry) {
+    task.priority = 0
+    return
+  }
+  if (!geometry) {
+    task.priority = Number.POSITIVE_INFINITY
+    return
+  }
+  let viewport = rootViewports.get(geometry.root)
+  if (!viewport) {
+    viewport = getRootViewport(geometry.root)
+    rootViewports.set(geometry.root, viewport)
+  }
+  const priority = getImageLoadPriority(geometry.element, geometry.root, viewport)
+  task.priority = Number.isFinite(priority) ? priority : Number.POSITIVE_INFINITY
+}
+
+function isPriorityStale(task: QueueTask) {
+  if (task.priorityVersion !== geometryVersion)
+    return true
+  // A replaced element invalidates its own rank without a global re-measure.
+  try {
+    return (task.options.geometry?.()?.element ?? null) !== task.measuredElement
+  }
+  catch {
+    return true
+  }
+}
+
+function attachResumeListeners() {
+  if (resumeListenersAttached || typeof document === 'undefined')
+    return
+  resumeListenersAttached = true
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden)
+      invalidateImageLoadPriorities()
+  })
+  // Late fonts move text and therefore the pictures below it.
+  document.fonts?.addEventListener?.('loadingdone', invalidateImageLoadPriorities)
 }
 
 function removePendingTask(task: QueueTask) {
@@ -128,20 +185,37 @@ function startTask(task: QueueTask) {
   })
 }
 
+/**
+ * Fill every free slot in one pass. Priorities are reused until a scroll or
+ * layout frame, font load, visibility change or element replacement makes
+ * them stale; a freed slot with unchanged geometry neither measures nor sorts.
+ * Each root rectangle is read once per pump.
+ */
 function pumpQueue() {
   if (isPumping)
+    return
+  // Hidden documents start nothing; their tasks resume with fresh geometry.
+  if (typeof document !== 'undefined' && document.hidden)
     return
 
   isPumping = true
   try {
-    // Measure each queued image once per pump, never inside the sort comparator.
-    const priorities = new Map(pendingTasks.map(task => [task, getTaskPriority(task)]))
-    pendingTasks.sort((first, second) => (priorities.get(first)! - priorities.get(second)!) || first.id - second.id)
+    const stale = pendingTasks.filter(isPriorityStale)
+    if (stale.length) {
+      const rootViewports = new Map<Element | null, { top: number, bottom: number }>()
+      stale.forEach(task => measureTaskPriority(task, rootViewports))
+      pendingTasks.sort((first, second) => (first.priority - second.priority) || first.id - second.id)
+    }
     while (activeTasks.size < IMAGE_LOAD_QUEUE_LIMIT && pendingTasks.length > 0) {
-      const task = pendingTasks.shift()
-      if (!task || task.status !== 'queued' || task.cancelled)
+      const task = pendingTasks[0]
+      if (task.status !== 'queued' || task.cancelled) {
+        pendingTasks.shift()
         continue
-
+      }
+      // Off-screen buffer work cannot occupy the slots kept for visible pictures.
+      if (task.priority >= VISIBLE_PRIORITY_LIMIT && activeTasks.size >= IMAGE_LOAD_QUEUE_LIMIT - VISIBLE_RESERVED_SLOTS)
+        break
+      pendingTasks.shift()
       startTask(task)
     }
   }
@@ -169,8 +243,12 @@ export function enqueueImageLoad(options: ImageLoadQueueOptions): ImageLoadQueue
     status: 'queued',
     cancelled: false,
     timeoutId: null,
+    priority: 0,
+    priorityVersion: -1,
+    measuredElement: null,
   }
   pendingTasks.push(task)
+  attachResumeListeners()
   scheduleQueuePump()
 
   return {
@@ -180,30 +258,20 @@ export function enqueueImageLoad(options: ImageLoadQueueOptions): ImageLoadQueue
   }
 }
 
-/** Re-evaluate pending priorities after a scroll or another layout change. */
-export function refreshImageLoadQueue() {
+/** Scroll, layout or direction changed: pending ranks must be measured again. */
+export function invalidateImageLoadPriorities() {
+  geometryVersion++
   scheduleQueuePump()
 }
 
 interface ScrollRootRecord {
-  root: Element | null
   subscriberCount: number
   lastScrollTop: number
   direction: 1 | -1
-  target: Element | Window
-  onScroll: () => void
+  release: () => void
 }
 
 const scrollRootRecords = new Map<Element | null, ScrollRootRecord>()
-
-function getRootScrollTop(root: Element | null): number {
-  if (root && !isDocumentScrollingElement(root))
-    return root.scrollTop
-
-  if (typeof window === 'undefined')
-    return 0
-  return window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0
-}
 
 function isDocumentScrollingElement(root: Element): boolean {
   if (typeof document === 'undefined')
@@ -212,8 +280,9 @@ function isDocumentScrollingElement(root: Element): boolean {
 }
 
 /**
- * Subscribe once per real scroll root. The ref-counted listener supplies a
- * direction for queue ordering and is removed when the last picture leaves.
+ * Subscribe once per real scroll root. The ref-counted record follows the
+ * root's shared viewport frame for queue ordering, instead of reading the
+ * position on every scroll event, and is released with the last picture.
  */
 export function subscribeImageLoadRoot(root: Element | null): () => void {
   if (typeof window === 'undefined')
@@ -221,28 +290,23 @@ export function subscribeImageLoadRoot(root: Element | null): () => void {
 
   let record = scrollRootRecords.get(root)
   if (!record) {
-    const target = isDocumentScrollingElement(root as Element) ? window : root || window
-    record = {
-      root,
+    const viewport = (root && !isDocumentScrollingElement(root) ? root : document.scrollingElement) as HTMLElement | null
+    const created: ScrollRootRecord = {
       subscriberCount: 0,
-      lastScrollTop: getRootScrollTop(root),
+      lastScrollTop: viewport?.scrollTop ?? 0,
       direction: 1,
-      target,
-      onScroll: () => {
-        if (!record)
-          return
-
-        const scrollTop = getRootScrollTop(record.root)
-        if (scrollTop !== record.lastScrollTop)
-          record.direction = scrollTop > record.lastScrollTop ? 1 : -1
-        record.lastScrollTop = scrollTop
-        refreshImageLoadQueue()
-      },
+      release: () => {},
     }
-    scrollRootRecords.set(root, record)
-    target.addEventListener('scroll', record.onScroll, { passive: true })
-    if (target === window && root)
-      root.addEventListener('scroll', record.onScroll, { passive: true })
+    if (viewport) {
+      created.release = subscribeViewportFrame(viewport, ({ scrollTop }, reason) => {
+        if (reason === 'scroll' && scrollTop !== created.lastScrollTop)
+          created.direction = scrollTop > created.lastScrollTop ? 1 : -1
+        created.lastScrollTop = scrollTop
+        // Scrolling, a reversed direction and committed layout moves all re-rank.
+        invalidateImageLoadPriorities()
+      })
+    }
+    scrollRootRecords.set(root, record = created)
   }
 
   record.subscriberCount++
@@ -261,9 +325,7 @@ export function subscribeImageLoadRoot(root: Element | null): () => void {
     if (current.subscriberCount > 0)
       return
 
-    current.target.removeEventListener('scroll', current.onScroll)
-    if (current.target === window && current.root)
-      current.root.removeEventListener('scroll', current.onScroll)
+    current.release()
     scrollRootRecords.delete(root)
   }
 }
@@ -287,8 +349,7 @@ function getRootViewport(root: Element | null): { top: number, bottom: number } 
  * Lower values run first: visible pictures, then pictures in the current
  * scroll direction ordered by distance, then pictures behind the direction.
  */
-export function getImageLoadPriority(element: Element, root: Element | null): number {
-  const viewport = getRootViewport(root)
+export function getImageLoadPriority(element: Element, root: Element | null, viewport = getRootViewport(root)): number {
   const rect = element.getBoundingClientRect()
   const viewportCenter = (viewport.top + viewport.bottom) / 2
   const elementCenter = (rect.top + rect.bottom) / 2

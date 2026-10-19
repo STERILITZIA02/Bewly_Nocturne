@@ -8,7 +8,6 @@ import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, settings } from '
 import SettingsItem from '../components/SettingsItem.vue'
 import SettingsItemGroup from '../components/SettingsItemGroup.vue'
 import SettingsSectionHeading from '../components/SettingsSectionHeading.vue'
-import LiquidGlassSettings from './LiquidGlassSettings.vue'
 
 const { t } = useI18n()
 
@@ -155,8 +154,6 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
         <Radio v-model="settings.disableShadow" />
       </SettingsItem>
     </SettingsItemGroup>
-
-    <LiquidGlassSettings />
 
     <SettingsItemGroup :title="$t('settings.group_page_style')">
       <SettingsItem :title="$t('settings.enable_sidebar_cover_blur')" :desc="$t('settings.enable_sidebar_cover_blur_desc')" right-width="auto">

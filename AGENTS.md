@@ -45,24 +45,22 @@ pnpm typecheck
 - 使用液态指示器时，选项必须包含 `data-segment-item`，激活项使用 `data-active="true"`；无液态指示器的分组增加 `.bew-segment-control--static`。
 - 液态指示器统一使用 `src/components/LiquidSegmentIndicator.vue`，页面不要重复调用 `useLiquidSegmentIndicator` 或手写 `.bew-liquid-indicator` DOM；组件通过 `active-key` 接收当前值，必要时用组件 ref 调用 `updateIndicator(true)`。
 - 同一行的同类控件必须使用一致的 surface 变体、外层高度、padding、gap、圆角、阴影和交互状态，避免一个透明、一个悬浮或各自维护胶囊样式。
-- 2026-10-15 页面切换范围按用户后续收窄：不改页头、侧栏的结构、几何、材质或滚筒。主内容与首页 Tab 共用 `useReadyPageTransition`，代码就绪后 90ms 淡出、210ms 淡入；外壳不参与动画，滚动仅在旧内容退场后恢复。减少动态效果使用 30/70ms 纯透明度。首页外层 `KeepAlive max=1`，不活跃的网格按原卸载链路释放请求、预览和观察器，以数据缓存恢复。其他页面仅保留按账号隔离的内存视图状态，不缓存私信正文、请求所有者或 DOM。视频抽屉复用真实历史项，底层逻辑路由保持原页；返回/前进不能丢失查询或重复压栈。
+- 2026-10-15 页面切换范围按用户后续收窄：不改页头、侧栏的结构、几何、材质或滚筒。主内容与首页 Tab 共用 `useReadyPageTransition`，代码就绪后 90ms 淡出、210ms 淡入；外壳不参与动画，滚动仅在旧内容退场后恢复。减少动态效果使用 30/70ms 纯透明度。2026-10-19 首页 Tab 切换只替换内容网格：页头、搜索区与人物装饰不重建；未到内容顶部时保持当前滚动位置不跳到搜索框吸顶，已吸顶时才恢复该 Tab 自己的位置（不低于内容顶部）。首页外层 `KeepAlive max=1`，不活跃的网格按原卸载链路释放请求、预览和观察器，以数据缓存恢复。其他页面仅保留按账号隔离的内存视图状态，不缓存私信正文、请求所有者或 DOM。视频抽屉复用真实历史项，底层逻辑路由保持原页；返回/前进不能丢失查询或重复压栈。
 - 通用组件 token 使用 `--bew-control-*` / `--bew-segment-*` 命名；仅真正局限于 TopBar 的变量才使用 `--bew-top-bar-*`。
 
 ### 玻璃层级与颜色
 
 - 2026-10-16 用户明确要求 Dock 与顶栏的未读数字胶囊改用独立磨砂背景。仅 `CountBadge.vue` 为此允许叠在 Dock 原玻璃外壳之上；复用全局滤镜、派生着色与关闭毛玻璃时的实色降级，不扩展到其他嵌套控件，不新增液态折射或观察器。
 
-- 为性能和可读性考虑，玻璃（背景模糊或液态折射）之上的覆盖层不得再次使用玻璃。仅当覆盖层会延伸到原玻璃组件边界之外时，才允许保留独立玻璃表面；Teleport 本身不构成例外，应按实际覆盖范围判断。
+- 为性能和可读性考虑，玻璃（背景模糊）之上的覆盖层不得再次使用玻璃。仅当覆盖层会延伸到原玻璃组件边界之外时，才允许保留独立玻璃表面；Teleport 本身不构成例外，应按实际覆盖范围判断。
 - 玻璃内的文本、按钮、选项、搜索框和菜单使用实色或无滤镜的普通表面。禁止给实色背景继续附加无视觉收益的 backdrop-filter，也不要以低模糊强度代替移除重复采样。
 - 用户明确保留顶栏渐进模糊、设置窗口的 `PanelTopBlur.vue` 以及会话滚动边缘模糊，保持参数、遮罩、层级和裁切行为。2026-10-13 起其他弹窗移除顶部模糊。此保留项不作为新增内部玻璃控件的依据。
 - `LiquidSegmentIndicator` 只负责选中项的几何变形与滑动，不采样背景；保留其动画，使用实色选中表面，不把它误当成液态玻璃组件删除。
 - 2026-10-15 仅实施配色修订：深色默认使用无色调中性灰；`enableDarkModeTint` 默认关闭，关闭时保留 `darkModeBaseColor`，所有主题入口通过 `resolveDarkModeBaseColor` 读取实际值。主题色限于主操作按钮、当前位置圆点、开关与进度、未读圆点、链接和关键词、Logo、文本选区；选中面、普通徽标、导航文字、装饰与编辑反馈使用中性颜色。共享选中/悬停/按下使用 `--bew-selected-bg` / `--bew-hover-bg` / `--bew-pressed-bg`；旧 `--bew-theme-surface*` 是中性兼容别名。主按钮使用 `--bew-accent-solid` / `--bew-on-accent-solid`，保留用户选择的原始底色；亮色主题配深色文字，禁止通过压暗或混色底板换取白字。链接与关键词使用对比度校正的 `--bew-theme-foreground`，小圆点使用 `--bew-accent-marker`。此颜色约定优先于下文历史条目中的主题色要求，其他布局、材质、动效和业务行为维持现状。
-- 灰、黑、白的半透明颜色不受上述主题色限制，也可使用实色；此豁免不允许在玻璃内部再次添加模糊或折射。
+- 灰、黑、白的半透明颜色不受上述主题色限制，也可使用实色；此豁免不允许在玻璃内部再次添加模糊。
 - 玻璃内的实色控件可无边框，优先通过表面、实色前景和明确选中状态区分；移除装饰边框时仍须保留 focus-visible 与必要的分隔线。玻璃自身的色调设置和既有页面装饰渐变不用于表达控件状态。
-- 液态玻璃统一在“外观 → 悬浮表面材质”中管理，复用 `useLiquidGlassOptions`、`LiquidGlassSurface.vue` 和 `attachLiquidGlass` / `vLiquidGlass`。保留现有持久化键及自定义值；不得另建 Dock、播放页或设置页各自的材质状态。挂载目标必须已有定位；隐藏的 `v-show` 浮层传入明确布尔值，卸载时释放挂载与观察器。
-- 液态材质限于 Dock、播放页底部控制栏、独立搜索框及顶栏浮层等独立小表面。设置窗口、外侧纵向导航、普通 Dialog 与播放页侧栏使用原有毛玻璃，不挂载液态滤镜或其尺寸观察器；侧栏排版保留。设置内输入框、内嵌菜单和嵌套 Dialog 使用实色；播放页内的 Bewly 辅助按钮复用底部容器表面，不再添加玻璃。独立搜索框与已保留的顶栏边缘模糊相交时，继续保留边缘模糊，不将其推广成其他内部控件的叠层依据。
-- 播放栏液态玻璃的外壳不得使用 opacity / will-change: opacity 创建背景采样边界；沿用统一控制栏显隐值，对折射、着色和边框绘制层分别淡入淡出，保留 reduced-motion。
-- 跟随主题的玻璃色调使用浅色白、深色受限黑、OLED 纯黑；着色强度保留 0/100 端点及完整可调范围，自定义模式使用原始不透明度。完全实色时不挂载不可见的 SVG 折射与 backdrop 层。
+- 2026-10-19 液态玻璃已按用户要求完整移除（覆盖此前保留液态折射的条目）：不再有 SVG 位移 / 色散 / 折射层、`vLiquidGlass` / `attachLiquidGlass`、`LiquidGlassSurface.vue`、“悬浮表面材质”设置或 `@wxperia/liquid-glass-vue` 依赖，不得恢复，也不以开关或性能模式保留兼容壳。`enableDockLiquidGlass`、`dockLiquidGlass*` 只在 `RETIRED_SETTINGS_FIELDS` 中清理并拦截同步。Dock、播放页底部控制栏、独立搜索框、顶栏浮层、侧栏按钮与私信导航使用自身绘制的普通毛玻璃（`--bew-filter-glass-1`）、边框与阴影，`disableFrostedGlass` 时不采样背景；嵌套层级判断使用 `useGlassPanelMotion.ts` 的 `GLASS_SURFACE_CONTEXT`。设置窗口、外侧纵向导航、普通 Dialog 与播放页侧栏保持原有毛玻璃；设置内输入框、内嵌菜单和嵌套 Dialog 使用实色；播放页内的 Bewly 辅助按钮复用底部容器表面。独立搜索框与顶栏边缘模糊相交时继续保留边缘模糊，不推广为其他内部控件的叠层依据。`LiquidSegmentIndicator` 等纯几何能力不受影响。
+- 播放栏玻璃卡沿用统一控制栏显隐值，并保留 reduced-motion。
 
 ### 加载反馈
 
@@ -107,7 +105,7 @@ pnpm typecheck
 
 - 2026-10-13 内容卡片统一：视频卡片仅保留统一布局，旧 `videoCardLayout` 仅用于废弃字段清理。裸卡/表面卡交互复用 `contentCard.scss`，间距及封面控件复用 `--bew-card-*` / `--bew-cover-*` token；网格管理行距，不恢复卡片底部 margin。作者常态为中性前景、悬停及键盘聚焦使用主题前景；动态内嵌媒体与引用使用 8px 语义圆角。真实布局、内容开关和骨架同步，保留按需加载、虚拟测量和预览清理。详见 `docs/maintenance/2026-10-13-content-card-unification.md`。
 
-- 2026-10-11 资料库左栏统一：收藏、稍后再看、观看历史复用 `LibraryWorkspace.vue` 的贴边持久左栏，宽度与消息页一致，单层毛玻璃及实色降级复用消息页色调；保持页面级主滚动与原有分页／虚拟列表，不另建右侧滚动状态。`LibrarySidebarHeading.vue` 复用 WheelSelector，分类使用精简标题；`LibrarySearchField.vue` 统一全圆角、常驻细边框、单一清除按钮和右侧筛选图标，IME 与空查询门禁必须保留。顶栏搜索及菜单高于侧栏，侧栏高于右侧顶栏边缘模糊，Dock 保持现有层级。收藏目录选中为不透明主题色及匹配对比前景，管理菜单保留 hover/focus/touch 入口；不再把视频封面作为这三个左栏的玻璃背景。首屏骨架使用同一左栏布局。
+- 2026-10-11 资料库左栏统一：收藏、稍后再看、观看历史复用 `LibraryWorkspace.vue` 的贴边持久左栏，宽度与消息页一致，单层毛玻璃及实色降级复用消息页色调；保持页面级主滚动与原有分页／虚拟列表，不另建右侧滚动状态。`LibrarySidebarHeading.vue` 复用 WheelSelector，分类使用精简标题；`LibrarySearchField.vue` 统一全圆角、常驻细边框、单一清除按钮和右侧筛选图标，IME 与空查询门禁必须保留。顶栏搜索及菜单高于侧栏，侧栏高于右侧顶栏边缘模糊，Dock 保持现有层级。收藏目录展开 / 选中项使用与观看历史、稍后再看高级筛选器相同的底板（`--bew-message-pinned-background`），高级筛选各分组默认收起，展开状态按分组在当前标签页的 sessionStorage 中记忆（2026-10-19）；管理菜单保留 hover/focus/touch 入口；不再把视频封面作为这三个左栏的玻璃背景。首屏骨架使用同一左栏布局。
 
 - 2026-10-11 概览材质与切换修订：保留紧凑两列四卡及细边框，Insights 卡片内底完全透明，不采用生成图中的三分区布局。概览的父层间距通过实际残留 DOM 判断，退出淡出完成前不因会话选择改变而跳动。Composer 在会话初始化时即挂载、测高并预留空间，opening 阶段 inert，入场仅使用 8px transform 与内部内容 opacity；玻璃外壳自身及入场祖先保持不透明。透明会话滚动层的 height/padding 不再逐帧动画，仍保留原来的入场结束后请求历史、切换复用与 reduced-motion 生命周期。
 
@@ -121,7 +119,7 @@ pnpm typecheck
 - 品牌锁定字等极少量展示文字使用 `--bew-font-size-display`，比分等大号数据使用 `--bew-font-size-data/data-emphasis`；图标字体只使用 `--bew-icon-size-xs/sm/md/lg/xl`。caption 邻接图标使用 xs（14px），control 使用 sm（16px）。
 - 字重仅使用 `400/500/600/700` 对应的 `--bew-font-weight-regular/medium/semibold/bold`；不要新增 `650`、裸写 `bold` 或其他中间值。
 - 2026-10-14 字体规范覆盖冻结页面：正文、作者元信息与帮助文字用 `400`；卡片/列表标题、人名、控件、徽标与滚筒用 `500`；区块/弹窗/页面标题、内联 strong/b 和关键数字用 `600`；`700` 仅用于品牌字标。滚筒与静态侧栏标题共用 `--bew-wheel-label-weight`。不改用户明确加粗的图标（包括 ChevronIcon 的 2.5px）或既有页面布局。
-- Bewly 默认使用 `--bew-fonts-ui` 多字重系统字体栈并禁止合成粗体；默认模式下原生页保留原站字体，推荐/自定义模式继续沿用既有字体覆盖。Bewly 正文默认比例数字，只有计数、时间、进度和统计按需使用 tabular-nums；不在中文上加字距。2026-10-15 功能图标统一 Tabler 线性 1.75px，激活态使用该族实际存在的 filled 版本或保留同一线性图形；2026-10-18 起 Dock 未选中导航图标使用同族 `tabler-thin` 集合（1.5px，`unocss.config.ts` 的 `DOCK_NAVIGATION_ICONS` 生成 safelist），选中仍为 filled；同步 UnoCSS safelist，不跨族切换。品牌、内容图形和专用发送/加载状态保留；明确指定的 ChevronIcon 2.5px 不被全局 SVG 规则覆盖。
+- Bewly 默认使用 `--bew-fonts-ui` 多字重系统字体栈并禁止合成粗体；默认模式下原生页保留原站字体，推荐/自定义模式继续沿用既有字体覆盖。Bewly 正文默认比例数字，只有计数、时间、进度和统计按需使用 tabular-nums；不在中文上加字距。2026-10-15 功能图标统一 Tabler 线性 1.75px，激活态使用该族实际存在的 filled 版本或保留同一线性图形；2026-10-19 起全项目功能图标统一为 UnoCSS `i-tabler:*` 遮罩图标（1.75px），`@iconify/vue` 仅保留给受保护的 Dock / SideBar 明暗切换按钮与无 UnoCSS 的专栏 iframe 图库（后者以样式把描边统一为 1.75，由 `verify:ui-icons` 约束）；Dock 右侧按钮与导航图标同为 20px。“全 Bewly”页面模式使用品牌标志 `src/assets/branding/bewly-mark.svg`（中心断开、轻微旋转的 X），以 `.bew-mark-icon` 全局类渲染，可作为项目头像源文件；“自定义”模式使用 Tabler `adjustments-horizontal`（2026-10-19 用户认为同族断开 X 变体与全 Bewly 区分不足后替换）；同步 UnoCSS safelist，不跨族切换。品牌、内容图形和专用发送/加载状态保留；明确指定的 ChevronIcon 2.5px 不被全局 SVG 规则覆盖。
 - 页面主标题复用 `.bew-page-heading`，不要在页面里重复组合字号、字重和行高。
 - 同组标签的未选中与选中状态保持相同字重，依靠颜色、背景和液态指示器表达状态，避免切换字重导致文字宽度和指示器跳动。
 - 新样式不要混用无语义的 px/rem 字号；确需特殊字号时应先判断能否扩充语义 token。
@@ -131,6 +129,7 @@ pnpm typecheck
 - 2026-10-12 侧栏独立单行操作：卡片、分段控件之外仅含图标与文字的整行按钮复用 `.library-sidebar-action` 与 `sidebarAction.scss`。按钮命中区域等宽居中，内容靠左，首个图标或文字与滚筒标题对齐（2026-10-14 修订）；共同基线取侧栏内距加 `--bew-sidebar-label-inset`，相对搜索框左缘轻微内收 8px，且不超过搜索框圆角半径，不再跟随顶栏 Logo 内距。命中面通过 `--bew-sidebar-action-inset/padding` 向基线两侧对称延展。常态透明无边框，hover 在亮色/暗色略加深、OLED 略提亮；保留语义警告色、禁用和键盘焦点。卡片内部操作、播放全部卡片、分段筛选不套用此规范。
 
 - 默认规格：外层高 `36px`、padding `4px`、gap `4px`、内部项高 `28px`、文字 `13/18px 500`、图标 `16px`。
+- 2026-10-19 有底板的滑块选择器（首页 Tab / 布局切换 / 推荐模式 / 频道菜单、设置分段控件、Logo 样式）加 `.bew-segment-control--flush`：外层 padding 为 0，选项与选中滑块和整条容器同高（36px）；侧栏、Pop 内的透明分组和静态筛选维持默认 4px 内距。
 - 普通文字项水平 padding 为 `12px`；页面主标签使用 `.bew-segment-control__item--wide` 的 `16px`；纯图标项使用 `.bew-segment-control__item--icon`。
 - 必须覆盖 default、hover、focus-visible、active、disabled 状态；不要移除键盘焦点反馈。
 - `src/styles/main.scss` 提供全局 `focus-visible` 兜底；2026-10-10 起全项目选择、展开、聚焦与编辑描边统一使用中性 1px 的 `--bew-focus-ring` / `--bew-focus-ring-color` / `--bew-focus-shadow`，不再绘制主题色粗 outline、UnoCSS ring 或外扩阴影环。Input、Select、Slider、布局编辑器以及 MAIN world / 原生页注入样式均遵循此规则；不得通过关闭键盘焦点反馈来实现。组件只有在提供等价反馈时才能覆盖或移除焦点样式。
@@ -217,6 +216,12 @@ pnpm typecheck
 
 条目按记录日期理解；后续规则与当前源码优先。完整历史见[维护索引](docs/maintenance/README.md)，不把早期框架、实验门禁或临时验证状态当作当前能力。
 
+- 2026-10-19：第三阶段消息与资源（详见 `docs/maintenance/2026-10-19-runtime-convergence.md`）：共享状态经 `background/stateConsumers.ts` 只投递给实际使用该主题、仍在展示的同隐私上下文文档；隐藏页面只标记 stale，恢复后对账一次；不得恢复对所有匹配标签页的 `tabs.query` 广播。broker 按记录持久化与串行。设置本地捕获逐字段比较并只克隆变化分支，规范化按上次记录的依赖字段决定是否复用，canonical 应用、导入和重置时完整执行。内容样式只编译一次，由 `scripts/contentStyleSplit.ts` 拆成宿主 `style.css` 与 Shadow 副本。隔离世界不再假装清理原站全局对象。
+
+- 2026-10-19：第二阶段数据与媒体（详见 `docs/maintenance/2026-10-19-runtime-convergence.md`）：推荐与动态的已接受列表是唯一可写真值，使用 `useHomeTabState` / `usePageViewState` 的 `shallowRef` 并遵循替换根的不可变更新（首页全部标签与搜索结果同此；收藏内容与观看历史长列表用 `shallowReactive`，行对象只整体替换，收藏夹目录因原位编辑保持深响应式）；去重键索引与广告可见投影由 `recommendationFeed.ts` 按批维护，广告只隐藏不丢弃。行高与列总高经 `CardRowMetrics.append/truncate` 和 `momentColumnIndex` 增量维护，仅在列数、布局、删除重排等变化时重建。停放缓存按条目估算预算，先收缩可重建字段再整体淘汰，列表、游标与锚点成对保留。图片队列按几何版本复用优先级并为可见图片保留槽位。HLS `recoverMediaError` 每实例有界并仅在稳定播放后恢复预算；全屏监听经 `fullscreenChange.ts` 由实际持有媒体元素的预览订阅。
+
+- 2026-10-19：第一阶段运行时整理（详见 `docs/maintenance/2026-10-19-runtime-convergence.md`）：同一滚动所有者的几何由 `utils/viewportGeometry.ts` 每轮测量一次并按帧合并分发，App / Grid / 卡片窗口 / 动态 / 图片队列不再各自排 RAF；滚动帧只读 IntersectionObserver 预载状态，提交、恢复和尺寸变化后补查一次。分页恢复位置复用 `scrollIntent` 的位置声明，显式跳转、其他页面恢复和用户滚动优先；未推进游标是 `paginationStalled`（停止自动请求），不是“没有更多”。动态卡片描述拟合按批次读写，只用于宽版分栏卡片。评论树分 topology / content / geometry 更新，深链只协调目标线程。原生工具栏与播放页会话先有界发现、再只观察已挂载宿主与浅层祖先。
+
 - 2026-10-11：完整移除用户自定义样式功能及编辑器、设置/搜索入口、文案和页面/Shadow DOM 注入。旧字段只在统一废弃字段表中保留，用于权威存储加载后的清理与云同步拦截，不迁移或重新启用。保留字体、主题和原生页面适配所需的内部样式注入。
 
 - 2026-10-11：用户冻结消息页与稍后再看页当前设计。后续页面可复用既有组件、token 和交互样式，但不得借重构或统一样式改变这两页的已确认外观。观看历史沿用同一侧栏语言，独立扩展筛选、排序和批量管理。
@@ -253,7 +258,7 @@ pnpm typecheck
 
 ### 导航、顶栏与页面模式
 
-- 主 Dock 是完整胶囊；未选中导航项没有圆形底板。2026-10-18 起选中项使用无阴影的灰色半透明底板（`--bew-dock-navigation-active-bg`）与实心图标，图标在浅色为黑、深色为白；不显示选中小点。导航按钮 32px（宽屏 40px），Dock 外壳尺寸由按钮尺寸派生。项目不再使用任何发光效果（含 Dock、Logo、滚筒、Toast、进度条），不得恢复「关闭 Dock 发光」「Logo 发光」设置。唯一例外：用户明确保留 Dock 深色/浅色切换按钮的原有特色效果——深色下悬停时的月光光晕、其他按钮同步变暗及图标过渡，原样维持且不受开关控制，不得修改或移除。
+- 主 Dock 是完整胶囊；未选中导航项没有圆形底板。2026-10-18 起选中项使用无阴影的灰色半透明底板（`--bew-dock-navigation-active-bg`）与实心图标，图标在浅色为黑、深色为白；不显示选中小点。导航按钮 36px（宽屏 44px），外壳到按钮的内距 6px（`--dock-shell-rim`，用户指定、带注释的离网格光学内距；2026-10-19 试用 3/4/8px 后定为 6px），Dock 外壳尺寸由按钮尺寸派生。项目不再使用任何发光效果（含 Dock、Logo、滚筒、Toast、进度条），不得恢复「关闭 Dock 发光」「Logo 发光」设置。唯一例外：用户明确保留 Dock 深色/浅色切换按钮的原有特色效果——深色下悬停时的月光光晕、其他按钮同步变暗及图标过渡，原样维持且不受开关控制，不得修改或移除。
 - Dock 指示器动画和刷新后的严格居中行为必须保留；Bilibili / Bewly / 自定义三档页面模式及其持久化、与 Dock 内容设置的同步关系不得拆散。
 - Dock 收起模式保留 `button / hidden / automatic` 三档：按钮模式在设置按钮后显示收起入口，隐藏模式不提供收起功能，自动模式在指针离开后收起且 Hover 圆球立即展开。收起圆球必须保持展开 Dock 的几何中心；展开时同一玻璃外壳先沿主轴增长，完成后按钮组再轻移进入，收起时顺序反转。不得通过 Teleport、第二套 Dock 状态或两个表面交叉淡入实现。
 - 顶栏模式只在“Dock 内容调整”中作为特殊配置项存在，不是 Dock 导航项，不参与拖拽，也没有“新标签页”选项。全 Bewly 使用 Bewly 顶栏；全原版使用 Bilibili 原生 `.bili-header`；自定义模式根据现有配置选择 Bewly 或 Bilibili 原生顶栏。不得探测、适配或承诺支持第三方顶栏实现。
@@ -303,7 +308,7 @@ pnpm typecheck
 - Shadow DOM 的主样式未就绪前必须保持插件容器隐藏；样式加载失败时卸载并移除容器，绝不能把无样式的 Dock、Sidebar 或设置页暴露到 Bilibili 原版页面。
 - 顶栏动态尾页必须先追加当前 `items` 再设置结束状态；稍后再看使用显式页码、aid 去重和完整集合刷新；History 补屏保持单一 async 请求链。不得退回通过数组长度推页、未等待递归或旧 index 删除。
 - `src/utils/bilibiliUrl.ts` 是当前页与分享链接的统一净化来源，必须保留 `p`、`t`、hash 等导航/播放语义；不得为恢复 Bewly 全局快捷键而重建 `src/utils/keyboard.ts` / `src/utils/shortcuts.ts` 运行时。
-- 液态分段指示器保持固定启用及现有 morph、ResizeObserver 和 reduced-motion 行为；不得恢复 `enableLiquidSegmentIndicator` 的可见设置项、搜索入口或静态视觉分支。
+- 液态分段指示器保持固定启用及现有 morph、ResizeObserver 和 reduced-motion 行为；2026-10-19 起移动时长按跨越的格数计算：移动一格保持 300ms（含间距时略慢），距离越远越长，统一使用 `utils/motionTiming.ts` 的 `getTravelDuration`（次线性增长）；滚筒选择器的多格跳转复用同一函数。新增同类滑块不得写死单一时长；不得恢复 `enableLiquidSegmentIndicator` 的可见设置项、搜索入口或静态视觉分支。
 - `vite.config.content.ts` 的开发构建必须保持 `minify: false`，防止 Vite watch 增量更新后函数重命名与调用点错配；该约束仅用于 `pnpm dev`，不得借此改变生产构建策略。
 - `pnpm dev` 只启动 prepare、content/inject 和 background 等真实扩展任务；已移除的 popup/options HTML 入口、`build:web` 和 `dev:web` 不得恢复为假构建流程。
 

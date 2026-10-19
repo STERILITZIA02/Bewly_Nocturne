@@ -31,8 +31,12 @@ function measureAll() {
     listener(element.getBoundingClientRect().width)
 }
 
-/** One observer for mounted covers, no scroll listener or per-image polling. */
-export function observeCoverWidth(element: HTMLElement, listener: SizeListener): () => void {
+/**
+ * One observer for mounted covers, no scroll listener or per-image polling.
+ * ResizeObserver reports the first width before paint, so only covers that set
+ * their source during mount (`immediate`) pay for a synchronous layout read.
+ */
+export function observeCoverWidth(element: HTMLElement, listener: SizeListener, immediate = false): () => void {
   if (!listeners.size) {
     if (typeof ResizeObserver !== 'undefined') {
       observer = new ResizeObserver(entries => entries.forEach(entry => listeners.get(entry.target as HTMLElement)?.(entry.contentRect.width)))
@@ -42,7 +46,8 @@ export function observeCoverWidth(element: HTMLElement, listener: SizeListener):
     }
   }
   listeners.set(element, listener)
-  listener(element.getBoundingClientRect().width)
+  if (immediate || !observer)
+    listener(element.getBoundingClientRect().width)
   observer?.observe(element)
   return () => {
     if (listeners.get(element) !== listener)

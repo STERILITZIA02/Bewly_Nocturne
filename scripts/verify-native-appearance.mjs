@@ -2337,14 +2337,19 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       for (const mode of ['web', 'app']) {
         const settings = Vue.ref({ recommendationMode: mode, blockAds: false, language: 'en', rememberNoCookieRecommendationState: false })
         const slots = new Map()
-        const tab = { restored: false, isCurrent: () => true, capture: () => () => {}, ref(key, fallback) {
+        const tab = { restored: false, isCurrent: () => true, capture: () => () => {}, read: (_key, fallback) => fallback, ref(key, fallback) {
           if (!slots.has(key))
             slots.set(key, Vue.ref(fallback))
+          return slots.get(key)
+        }, shallowRef(key, fallback) {
+          if (!slots.has(key))
+            slots.set(key, Vue.shallowRef(fallback))
           return slots.get(key)
         } }
         const provider = { haveScrollbar: async () => true, handleBackToTop() {}, ...Object.fromEntries(['handleReachBottom', 'handlePageRefresh', 'undoForwardState', 'handleUndoRefresh', 'handleForwardRefresh'].map(key => [key, Vue.ref()])) }
         const promotion = { id: 900, goto: 'ad', card_type: 'cm_v1', args: { aid: 50 }, idx: 2, title: 'Promotion', uri: 'https://example.com/ad', owner: null, stat: null }
-        const normal = aid => ({ id: aid, aid, bvid: `BVfixture${aid}`, goto: 'av', card_type: 'small_cover_v2', args: { aid }, idx: aid + 2, title: `Video ${aid}`, owner: { mid: 7, name: 'Fixture' }, stat: {}, pic: '' })
+        // Web and App feeds name the card kind differently (`goto` / `card_goto`).
+        const normal = aid => ({ id: aid, aid, bvid: `BVfixture${aid}`, goto: 'av', card_goto: 'av', param: `${aid}`, card_type: 'small_cover_v2', args: { aid }, idx: aid + 2, title: `Video ${aid}`, owner: { mid: 7, name: 'Fixture' }, stat: {}, pic: '' })
         let reads = 0
         const read = async () => {
           const items = ++reads === 1 ? [normal(1), promotion] : [normal(50)]
@@ -2357,18 +2362,22 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
           '~/composables/useAppProvider': { useBewlyApp: () => provider, UndoForwardState: { Hidden: 0, ShowUndo: 1, ShowForward: 2 } },
           '~/composables/useHomeTabState': { useHomeTabState: () => tab },
           '~/contentScripts/views/Home/adapters/recommendationVideo': adapters,
+          '~/contentScripts/views/Home/adapters/appRecommendationItem': await import('../src/contentScripts/views/Home/adapters/appRecommendationItem'),
           '~/enums/appEnums': await import('../src/enums/appEnums'),
           '~/logic': { settings, appAuthTokens: Vue.ref({ accessToken: 'fixture' }) },
           '~/logic/appAuthorizationCoordinator': { appAuthorizationSuccessVersion: Vue.ref(0), reportAppAuthorizationInvalid() {}, requestAppAuthorization() {} },
+          '~/logic/appAuthStorage': { getAppAuthIdentity: () => 'fixture' },
           '~/logic/loginStatus': await import('../src/logic/loginStatus'),
           '~/utils/accountScope': await import('../src/utils/accountScope'),
           '~/utils/advertising': advertising,
           '~/utils/api': { default: { video: { getRecommendVideos: read, getNoCookieRecommendVideos: read, getAppRecommendVideos: read } } },
-          '~/utils/authProvider': { ensureFreshAppAccessToken: async () => true, getTvSign: () => '', isAppAccessTokenInvalidResponse: () => false, refreshInvalidAppAccessToken: async () => false, TVAppKey: { appkey: 'fixture' } },
+          // App mode reads the feed through the App client with the same fixture pages.
+          '~/utils/authProvider': { ensureFreshAppAccessToken: async () => true, captureAppAuth: () => ({ accessToken: 'fixture', generation: 1, mid: 42 }), isAppAuthCurrent: () => true, requestAppClient: read, isAppAccessTokenInvalidResponse: () => false, refreshInvalidAppAccessToken: async () => false },
           '~/utils/bilibiliApiError': { isBilibiliRiskControl: () => false },
           '~/utils/debug': { debugLog() {} },
           '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
           './forYouInitialData': await import('../src/contentScripts/views/Home/forYouInitialData'),
+          './recommendationFeed': await import('../src/contentScripts/views/Home/recommendationFeed'),
           './recommendationState': await import('../src/contentScripts/views/Home/recommendationState'),
           './useRecommendationHistory': await import('../src/contentScripts/views/Home/useRecommendationHistory'),
           './useRecommendationFilters': { useRecommendationFilters: () => ({ filterFunc: Vue.ref(() => true), appFilterFunc: Vue.ref(() => true), hasActiveWebRecommendationFilter: Vue.ref(true), hasActiveAppRecommendationFilter: Vue.ref(true), hasActiveRecommendationFilter: Vue.ref(true), requiresManualFilteredPaging: Vue.ref(false), recommendationFilterSettingsSignature: Vue.ref('fixture'), resetFilteredFeedPagingState() {}, recordFilteredFeedBatch() {} }) },

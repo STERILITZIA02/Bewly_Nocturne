@@ -41,12 +41,12 @@ const emit = defineEmits<{
 const tabState = useHomeTabState()
 const hasSettled = tabState.ref('hasSettled', false)
 const liveHasSettled = tabState.ref('liveHasSettled', false)
-const videoList = tabState.ref<VideoElement[]>('videoList', [])
+const videoList = tabState.shallowRef<VideoElement[]>('videoList', [])
 /**
  * Get all livestreaming videos of followed users
  */
 const livePage = tabState.ref<number>('livePage', 1)
-const liveVideoList = tabState.ref<LiveVideoElement[]>('liveVideoList', [])
+const liveVideoList = tabState.shallowRef<LiveVideoElement[]>('liveVideoList', [])
 const isLoading = ref<boolean>(false)
 const needToLoginFirst = tabState.ref<boolean>('needToLoginFirst', false)
 const recursionDepth = ref<number>(0) // 递归深度计数器
@@ -274,13 +274,15 @@ async function getLiveVideoList(generation = requestGeneration, accountId = load
         }))
       }
       else {
+        const nextList = liveVideoList.value.slice()
         resData.forEach((item, index) => {
-          liveVideoList.value[lastLiveVideoListLength + index] = {
+          nextList[lastLiveVideoListLength + index] = {
             uniqueId: `${item.roomid}`,
             item,
             displayData: mapLiveItemToVideo(item),
           }
         })
+        liveVideoList.value = nextList
       }
     }
   }
@@ -387,12 +389,14 @@ async function getFollowedUsersVideos(generation = requestGeneration, accountId 
         }))
       }
       else {
+        const nextList = videoList.value.slice()
         resData.forEach((video, index) => {
-          videoList.value[lastVideoListLength + index] = {
+          nextList[lastVideoListLength + index] = {
             ...video,
             displayData: mapMomentItemToVideo(video.item, video.authorList),
           }
         })
+        videoList.value = nextList
       }
 
       // 预加载由 VideoCardGrid 的虚拟滚动机制控制

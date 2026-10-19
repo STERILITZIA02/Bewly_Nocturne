@@ -38,6 +38,7 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       },
       '~/utils/bewlyWidescreen/session': { session },
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
+      '~/contentScripts/playerDomLifecycle': { observePlayerDom: () => () => {} },
       '~/utils/interfaceLanguage': {},
       '~/utils/pageBridgeChannel': {},
       '~/utils/playerMedia': { getPlayerRoot: () => ++rootReads === 1 ? root : null },
@@ -281,6 +282,11 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     root.addEventListener('click', () => clicks++)
     const module = await loadSourceModule('../src/contentScripts/videoQualityMemory.ts', {
       'vue': Vue,
+      // Quality memory is scoped per account; this fixture plays as a guest
+      // with no active store, which only affects login/VIP-restricted levels.
+      'pinia': { getActivePinia: () => undefined },
+      '~/stores/topBarStore': { useTopBarStore: () => ({}) },
+      '~/utils/main': { getUserID: () => '' },
       '~/logic': { settings: config },
       '~/composables/useRouteState': { useRouteState: () => route },
       '~/utils/playerMedia': { getPlayerRoot: () => root, getVideoElement: () => video },
@@ -717,7 +723,6 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     original.textContent = '.native-box { box-sizing: content-box; border: 3px solid rgb(1, 2, 3); border-radius: 7px; }'
     const layout = await loadSourceModule('../src/utils/bewlyWidescreen/styles/layout.ts', {
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
-      '~/styles/liquidGlass.scss?inline': { default: '' },
       '~/styles/segmentControl.scss?inline': { default: '' },
       '~/styles/sendButton.scss?inline': { default: '' },
       '~/styles/skeleton.scss?inline': { default: '' },

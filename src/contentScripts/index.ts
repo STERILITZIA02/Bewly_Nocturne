@@ -24,7 +24,6 @@ import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyPlaybackLayoutReady, 
 import { shouldSuppressWidescreenAutoEntry } from '~/utils/bewlyWidescreenPolicy'
 import { isConfirmedLiveEmbeddedFrame } from '~/utils/bilibiliLiveContext'
 import { getBilibiliLogicalPathname, toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
-import { cleanupBilibiliScripts } from '~/utils/bilibiliScriptCleanup'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, restoreOriginalBilibiliTopBarParent, restorePreparedOriginalBilibiliTopBars } from '~/utils/bilibiliTopBar'
 import { resolveDarkModeBaseColor } from '~/utils/darkModeTint'
 import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveIframeEscapeAction } from '~/utils/drawerEscape'
@@ -1677,7 +1676,9 @@ else if (shouldInitializeContentScript) {
     const activateHomePageAfterStyles = () => {
       if (!isAppMounted || !useViewportLayout)
         return
-      cleanupBilibiliScripts()
+      // The isolated world cannot release MAIN-world page objects; the hidden
+      // native home keeps its own lifecycle (see hiddenHomepageImages for the
+      // part this extension can release and restore).
       const topBarSource = resolveEffectiveTopBarSource(
         settings.value.pageMode,
         settings.value.useOriginalBilibiliTopBar,

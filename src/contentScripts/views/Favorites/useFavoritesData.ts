@@ -1,4 +1,4 @@
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, shallowReactive, watch } from 'vue'
 
 import { LIBRARY_AUTOFILL_PAGE_LIMIT } from '~/constants/library'
 import type { FavoriteArticle, FavoriteArticlesResult } from '~/models/article/favorite'
@@ -62,11 +62,12 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   const FAVORITE_ARTICLE_PAGE_SIZE = 20
   const favoriteCategories = reactive<CategoryItem[]>([])
   const collectedFavoriteSeasons = reactive<CollectedFavoriteSeason[]>([])
-  const favoriteResources = reactive<FavoriteItem[]>([])
-  const favoriteArticles = reactive<FavoriteArticle[]>([])
+  // Long content lists track the array only: rows are replaced, never edited in place.
+  const favoriteResources = shallowReactive<FavoriteItem[]>([])
+  const favoriteArticles = shallowReactive<FavoriteArticle[]>([])
   const otherFavoriteType = ref<OtherFavoriteKind>('article')
   const otherSearchScope = ref<OtherFavoriteSearchScope>('all')
-  const otherFavoriteItems = reactive<OtherFavoriteItem[]>([])
+  const otherFavoriteItems = shallowReactive<OtherFavoriteItem[]>([])
   const otherFavoriteCounts = reactive<Partial<Record<OtherFavoriteKind, number>>>({})
   const otherItemIds = new Set<string>()
   let stalledOtherStart: { page: number, length: number } | undefined

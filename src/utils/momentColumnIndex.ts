@@ -1,24 +1,54 @@
 import { CardRowMetrics } from './cardRowMetrics'
 import { resolveVirtualSpacerSize } from './momentsLayout'
 
-/** Derived height index. The caller remains the sole owner of measured card heights. */
-export function createMomentColumnIndex<T>(keyOf: (item: T) => string, heightOf: (item: T) => number, gap: number) {
+/**
+ * Derived height index. The caller remains the sole owner of measured card
+ * heights and of the column arrays, which only grow by `push` or are replaced.
+ * A grown column extends its rows; a replaced column rebuilds alone; a changed
+ * layout key (width, gap, measurement revision) or column count rebuilds all.
+ */
+export function createMomentColumnIndex<T>(keyOf: (item: T) => string, heightOf: (item: T) => number, gapOf: number | (() => number)) {
+  let gap = typeof gapOf === 'function' ? gapOf() : gapOf
   let columns: { items: T[], count: number, metrics: CardRowMetrics }[] = []
   let layout: unknown
   const locations = new Map<string, { column: number, row: number }>()
 
+  function buildColumn(items: T[], column: number) {
+    const metrics = new CardRowMetrics()
+    metrics.reset(items.map((item, row) => {
+      locations.set(keyOf(item), { column, row })
+      return heightOf(item) + gap
+    }))
+    return { items, count: items.length, metrics }
+  }
+
   function sync(next: T[][], layoutKey: unknown) {
-    if (layout === layoutKey && next.length === columns.length && next.every((items, index) => columns[index].items === items && columns[index].count === items.length))
+    if (layout !== layoutKey || next.length !== columns.length) {
+      layout = layoutKey
+      // The layout key covers the measured gap, so read it once per rebuild.
+      gap = typeof gapOf === 'function' ? gapOf() : gapOf
+      locations.clear()
+      columns = next.map(buildColumn)
       return
-    layout = layoutKey
-    locations.clear()
-    columns = next.map((items, column) => {
-      const metrics = new CardRowMetrics()
-      metrics.reset(items.map((item, row) => {
-        locations.set(keyOf(item), { column, row })
-        return heightOf(item) + gap
-      }))
-      return { items, count: items.length, metrics }
+    }
+    next.forEach((items, column) => {
+      const current = columns[column]
+      if (current.items === items && current.count === items.length)
+        return
+      if (current.items === items && items.length > current.count) {
+        const added = items.slice(current.count)
+        current.metrics.append(added.map((item, offset) => {
+          locations.set(keyOf(item), { column, row: current.count + offset })
+          return heightOf(item) + gap
+        }))
+        current.count = items.length
+        return
+      }
+      for (const [key, location] of locations) {
+        if (location.column === column)
+          locations.delete(key)
+      }
+      columns[column] = buildColumn(items, column)
     })
   }
 
@@ -26,6 +56,14 @@ export function createMomentColumnIndex<T>(keyOf: (item: T) => string, heightOf:
     const location = locations.get(key)
     if (location)
       columns[location.column].metrics.set(location.row, height + gap)
+  }
+
+  /** Stack height (rows plus inner gaps) of a column the index is in sync with. */
+  function stackHeight(items: T[]): number | undefined {
+    const column = columns.find(entry => entry.items === items)
+    if (!column || column.count !== items.length)
+      return undefined
+    return column.count ? column.metrics.total - gap : 0
   }
 
   function window(start: number, end: number, retained: ReadonlySet<string> = new Set()) {
@@ -66,5 +104,5 @@ export function createMomentColumnIndex<T>(keyOf: (item: T) => string, heightOf:
     })
   }
 
-  return { sync, updateHeight, window }
+  return { sync, updateHeight, stackHeight, locate: (key: string) => locations.get(key), window }
 }

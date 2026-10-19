@@ -128,7 +128,8 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
         await flush()
         state.restoreTabScrollPosition()
         assert.deepEqual({ ...state.searchStageStyle }, stageStyle, 'tab identity cannot change the search stage geometry')
-        assert.equal(state.showHomeSearchCharacter, tab.page === HomeSubPage.ForYou)
+        assert.equal(viewport.scrollTop, 0, 'a tab switch above the toolbar keeps the page where it is')
+        assert.equal(state.showHomeSearchCharacter, true, 'switching tabs cannot pin the search stage')
         assert.equal(state.reserveRecommendationModeSwitcher, true, 'toolbar geometry cannot switch by tab')
         assert.equal(state.shouldShowRecommendationModeSwitcher, tab.page === HomeSubPage.ForYou)
         assert.equal(state.getContentScrollTop(), 238)
@@ -152,11 +153,11 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       state.handleChangeTab(tabs[1])
       await flush()
       state.restoreTabScrollPosition()
-      assert.equal(viewport.scrollTop, state.getContentScrollTop(), 'new tabs begin at their toolbar after the outgoing fade')
+      assert.equal(viewport.scrollTop, beforeAccountReady, 'new tabs keep the current position above the toolbar')
       topBar.userInfo.mid = 43
       await flush()
       state.restoreTabScrollPosition()
-      assert.equal(viewport.scrollTop, state.getContentScrollTop(), 'account updates after switching tabs must preserve the current position')
+      assert.equal(viewport.scrollTop, beforeAccountReady, 'account updates after switching tabs must preserve the current position')
       const discoveryHeight = layout.resolveHomeSearchStage(false).height
       const content = viewport.appendChild(document.createElement('section'))
       content.getBoundingClientRect = () => ({ height: 1600 })
@@ -213,7 +214,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
         await flush()
         assert.equal(host.querySelector('[data-search]'), search)
         assert.equal(host.querySelector('.home-search-stage__logo'), logo)
-        assert.equal(search.dataset.character, tab.page === HomeSubPage.ForYou ? 'focus-character' : undefined, 'the existing hero decoration follows the restored scroll position')
+        assert.equal(search.dataset.character, 'focus-character', 'tab switches keep the page, so the hero decoration stays put')
         assert.equal(host.firstElementChild.getAttribute('style'), shellStyle)
         assert.equal(host.querySelector('.home-header').className, headerClass)
         const modes = host.querySelector('[data-mode-switcher]')
@@ -315,7 +316,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
     }
   })
 
-  check('Card preview: MP4/HLS/FLV retain the full skeleton until decoded data; stale and unmounted sessions cannot settle it', async () => {
+  check('Card preview: MP4/HLS/FLV keep the loading ring until decoded data; stale and unmounted sessions cannot settle it', async () => {
     const settings = Vue.ref({ enableVideoPreview: true, enableVideoCtrlBarOnVideoCard: true, enableVideoPreviewSwipeSeek: false })
     const blank = { render: () => null }
     const players = []
@@ -375,7 +376,8 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ render: () => Vue.h(Cover, props) })
     app.config.globalProperties.$t = key => key
-    const loading = () => host.querySelector('.video-card-preview__loading [data-bew-skeleton]')
+    // Buffering previews use the shared loading ring; only its spinning phase is pending.
+    const loading = () => host.querySelector('.video-card-preview__loading .bew-loading-ring[data-state="spinning"]')
     const settleTransition = async () => {
       await flush()
       await new Promise(resolve => setTimeout(resolve, 60))
@@ -389,7 +391,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       app.mount(host)
       await flush()
       const first = host.querySelector('video')
-      assert.ok(loading(), 'MP4 must enter the same full-cover skeleton as stream previews')
+      assert.ok(loading(), 'MP4 must enter the same loading state as stream previews')
       assert.equal(first.controls, false)
       first.dispatchEvent(new Event('loadedmetadata'))
       await flush()

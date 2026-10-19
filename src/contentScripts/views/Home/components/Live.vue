@@ -27,7 +27,7 @@ const emit = defineEmits<{
 
 const tabState = useHomeTabState()
 const hasSettled = tabState.ref('hasSettled', false)
-const videoList = tabState.ref<VideoElement[]>('videoList', [])
+const videoList = tabState.shallowRef<VideoElement[]>('videoList', [])
 const isLoading = ref<boolean>(false)
 const needToLoginFirst = tabState.ref<boolean>('needToLoginFirst', false)
 const page = tabState.ref<number>('page', 1)
