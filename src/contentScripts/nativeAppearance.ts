@@ -4,19 +4,31 @@ import '~/styles/adaptedStyles/common/nativeSurfaces.scss'
 import '~/styles/adaptedStyles/common/topBar.scss'
 import '~/styles/adaptedStyles/common/footer.scss'
 import '~/styles/adaptedStyles/common/btn.scss'
-import '~/styles/adaptedStyles/pages/nativeSites.scss'
 import '~/styles/blockAds.scss'
 
 import browser from 'webextension-polyfill'
 
 import { CONTENT_SCRIPT_COMMIT, CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG } from '~/constants/contentScript'
+import { getNativeSite } from '~/constants/nativeSites'
 import { settings, settingsInitializationState } from '~/logic/storage'
+import NATIVE_SITES_CSS from '~/styles/adaptedStyles/pages/nativeSites.scss?inline'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
+import { selectNativeSiteCss } from '~/utils/nativeSiteCss'
 
 import { setupNativeSiteAppearance } from './features/nativeSiteAppearance'
 
 const DISPOSE_EVENT = 'bewly:native-appearance-dispose'
 window.dispatchEvent(new Event(DISPOSE_EVENT))
+
+// Only this site's rules, in place from document_start like the manifest
+// sheet, and first in the document so native sheets still win ties.
+const nativeSite = getNativeSite(location.hostname, location.pathname)
+const siteStyle = nativeSite ? document.createElement('style') : undefined
+if (nativeSite && siteStyle) {
+  siteStyle.dataset.bewlyNativeSiteStyle = nativeSite
+  siteStyle.textContent = selectNativeSiteCss(NATIVE_SITES_CSS, nativeSite)
+  document.documentElement.prepend(siteStyle)
+}
 const events = new AbortController()
 let stopAppearance = () => {}
 let started = false
@@ -41,6 +53,7 @@ function startWhenDocumentComplete() {
 function dispose() {
   events.abort()
   started = false
+  siteStyle?.remove()
   try {
     browser.runtime.onMessage.removeListener(handleRuntimeMessage)
   }

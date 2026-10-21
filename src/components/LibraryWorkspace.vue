@@ -28,6 +28,7 @@ const sidebarHost = useSidebarRail()
 <style lang="scss">
 @use "../styles/breakpoints";
 @use "../styles/sidebarSurface";
+@use "../styles/scrollEdgeFade";
 @use "../styles/sidebarAction";
 .library-workspace {
   display: grid;
@@ -61,6 +62,8 @@ const sidebarHost = useSidebarRail()
 }
 .library-workspace__rail-scroll {
   @include sidebarSurface.vertical-scroll;
+  // Its bottom is the screen edge, which needs no fade.
+  @include scrollEdgeFade.vertical($bottom: false);
   flex: 1;
   min-height: 0;
   margin-inline: calc(-1 * var(--bew-sidebar-inline-padding));

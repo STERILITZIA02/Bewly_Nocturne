@@ -27,15 +27,18 @@ import { normalizeVideoCardTags, selectVisibleVideoCardTags } from '../src/compo
 import type { StorageLocalRuntime } from '../src/composables/useStorageLocal'
 import { CONTENT_SCRIPT_PONG, isCurrentContentScriptPong } from '../src/constants/contentScript'
 import { resolveDockCollapsedShellSize } from '../src/constants/dock'
-import { getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '../src/constants/pageBridge'
+import { getPageBridgeTargetOrigin, isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '../src/constants/pageBridge'
 import { createForYouInitialDataCoordinator } from '../src/contentScripts/views/Home/forYouInitialData'
 import { AppPage } from '../src/enums/appEnums'
 import { applyCommentReplyInteractionOverrides, loadCommentReplyPagesSequentially, mergeCommentReplyLists } from '../src/inject/commentReplyPagination'
+import { sortNativeDanmakuListBySender } from '../src/inject/danmakuSenderOrder'
+import { wakeNativeCommentLists } from '../src/inject/nativeCommentWake'
 import { isAccountRequestCurrent } from '../src/utils/accountScope'
 import { createBooleanSingleFlight, resolveAppAccessTokenFreshness, resolveAppAuthorizationState } from '../src/utils/appAuthTokenPolicy'
-import { canCommitWidescreenLayout, clampWidescreenSidebarWidth, hasWidescreenControlPopoverArea, isWidescreenBottomControlHoverRegion, isWidescreenPlayerControlHoverRegion, normalizeWidescreenSidebarStoredWidth, resolveWidescreenAnchoredPlayerGeometry, resolveWidescreenCenterGeometry, resolveWidescreenControlSurfaceState, resolveWidescreenEngagedState, resolveWidescreenSidebarHoverExpanded, resolveWidescreenSidebarResizeWidth, shortenCommentDateText, shouldBlockWidescreenSidebarReveal, shouldContinueWidescreenSidebarHydration, shouldScheduleWidescreenRefresh, shouldSuppressWidescreenAutoEntry, WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY } from '../src/utils/bewlyWidescreenPolicy'
+import { canCommitWidescreenLayout, interpolateWidescreenZoomFrame, isWidescreenBottomControlHoverRegion, isWidescreenPlayerControlHoverRegion, resolveWidescreenContentWidth, resolveWidescreenControlSurfaceState, resolveWidescreenEngagedState, resolveWidescreenSidebarHydrationPhase, resolveWidescreenZoomFrame, resolveWidescreenZoomVisual, shortenCommentDateText, shouldScheduleWidescreenRefresh, shouldSuppressWidescreenAutoEntry, WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY, WIDESCREEN_IDENTITY_ZOOM_FRAME } from '../src/utils/bewlyWidescreenPolicy'
 import { isBilibiliRiskControl } from '../src/utils/bilibiliApiError'
 import { resolveCanvasCssColor } from '../src/utils/canvasTheme'
+import { parseCommentListParams, toCommentComposerReply } from '../src/utils/commentComposerBridge'
 import { buildMomentCommentPermalink } from '../src/utils/commentPermalink'
 import { buildCommentTree } from '../src/utils/commentTree'
 import { resolveDialogKeyboardAction } from '../src/utils/dialogKeyboard'
@@ -390,7 +393,6 @@ function verifyWidescreenEngagementPolicy() {
     nativeControlsHidden: false,
     nativeControlsReady: true,
     pointerInsidePlayer: true,
-    sidebarExpanded: false,
   }), { hidden: true, ready: false })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
     bottomControlsFocused: false,
@@ -400,7 +402,6 @@ function verifyWidescreenEngagementPolicy() {
     nativeControlsHidden: false,
     nativeControlsReady: true,
     pointerInsidePlayer: true,
-    sidebarExpanded: false,
   }), { hidden: false, ready: true })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
     bottomControlsFocused: false,
@@ -410,7 +411,6 @@ function verifyWidescreenEngagementPolicy() {
     nativeControlsHidden: true,
     nativeControlsReady: true,
     pointerInsidePlayer: true,
-    sidebarExpanded: false,
   }), { hidden: true, ready: true })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
     bottomControlsFocused: false,
@@ -420,17 +420,6 @@ function verifyWidescreenEngagementPolicy() {
     nativeControlsHidden: true,
     nativeControlsReady: true,
     pointerInsidePlayer: false,
-    sidebarExpanded: false,
-  }), { hidden: true, ready: true })
-  assert.deepEqual(resolveWidescreenControlSurfaceState({
-    bottomControlsFocused: false,
-    textEditingActive: false,
-    bottomControlsHovered: false,
-    danmakuControlsReady: true,
-    nativeControlsHidden: false,
-    nativeControlsReady: true,
-    pointerInsidePlayer: true,
-    sidebarExpanded: true,
   }), { hidden: true, ready: true })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
     bottomControlsFocused: false,
@@ -440,15 +429,94 @@ function verifyWidescreenEngagementPolicy() {
     nativeControlsHidden: true,
     nativeControlsReady: true,
     pointerInsidePlayer: true,
-    sidebarExpanded: false,
   }), { hidden: false, ready: true })
-  assert.equal(shouldContinueWidescreenSidebarHydration({ complete: false, now: 100, deadline: 200 }), true)
-  assert.equal(shouldContinueWidescreenSidebarHydration({ complete: true, now: 100, deadline: 200 }), false)
-  assert.equal(shouldContinueWidescreenSidebarHydration({ complete: false, now: 200, deadline: 200 }), false)
+  // Visible time only. The notice waits for an in-flight native request, then
+  // hydration keeps watching so a late node clears it, and finally stops.
+  const phase = (elapsed: number, nativeRequestPending = false, complete = false) => resolveWidescreenSidebarHydrationPhase({ complete, elapsed, nativeRequestPending })
+  assert.equal(phase(0, false, true), 'complete')
+  assert.equal(phase(70_000, true, true), 'complete')
+  assert.equal(phase(11_999), 'hydrating')
+  assert.equal(phase(12_000), 'recovering')
+  assert.equal(phase(12_000, true), 'pending')
+  assert.equal(phase(29_999, true), 'pending')
+  assert.equal(phase(30_000, true), 'recovering')
+  assert.equal(phase(59_999), 'recovering')
+  assert.equal(phase(60_000), 'stopped')
+  // A list waiting below the fold for its lazy-load hit is released exactly as
+  // its observer would; only a reload request restarts a first page that spins.
+  const released: string[] = []
+  const reloaded: string[] = []
+  const lazyList = { lazyLoadDP: { resolve: () => released.push('lazy') } as { resolve: () => void } | null, shadowRoot: { querySelector: () => ({}) }, reload: async () => reloaded.push('lazy') }
+  const spinningList = { lazyLoadDP: null, shadowRoot: { querySelector: (selector: string) => selector === '#spinner-container' ? {} : null }, reload: async () => reloaded.push('spinning') }
+  const loadedList = { lazyLoadDP: null, shadowRoot: { querySelector: () => null }, reload: async () => reloaded.push('loaded') }
+  const previousDocument = (globalThis as { document?: unknown }).document
+  ;(globalThis as { document?: unknown }).document = { querySelectorAll: (selector: string) => selector === 'bili-comments' ? [lazyList, spinningList, loadedList] : [] }
+  try {
+    assert.equal(wakeNativeCommentLists({ reload: false }), 1)
+    assert.deepEqual(released, ['lazy'])
+    assert.equal(lazyList.lazyLoadDP, null)
+    assert.deepEqual(reloaded, [])
+    assert.equal(wakeNativeCommentLists({ reload: true }), 2)
+    assert.deepEqual(reloaded, ['lazy', 'spinning'])
+    assert.equal(wakeNativeCommentLists(null), 0)
+  }
+  finally {
+    ;(globalThis as { document?: unknown }).document = previousDocument
+  }
+  verifyDanmakuSenderOrder()
   assert.equal(resolveInterfaceLanguage('zh-CN', []), 'cmn-CN')
   assert.equal(resolveInterfaceLanguage('zh-TW', ['zh-HK', 'zh-TW']), 'jyut')
   assert.equal(resolveInterfaceLanguage('zh-TW', ['zh-TW']), 'cmn-TW')
   assert.equal(resolveInterfaceLanguage('en-NZ', ['en-NZ']), 'en')
+}
+
+// Bpx's header click (dmFunctionClick + order) as the sender order drives it.
+function verifyDanmakuSenderOrder() {
+  const nativeSort = Array.prototype.sort
+  const allDm = [{ uhash: 'b', stime: 3 }, { uhash: 'a', stime: 2 }, { uhash: 'b', stime: 1 }, { uhash: 'c', stime: 0 }]
+  const native = { orderby: 'stime', positive: true }
+  let className = 'bpx-player-dm-function'
+  let otherSorted: number[] = []
+  const carrier = {
+    click() {
+      const field = 'date'
+      if (native.orderby === field)
+        native.positive = !native.positive
+      else
+        Object.assign(native, { orderby: field, positive: true })
+      otherSorted = [3, 1, 2].sort((a, b) => a - b)
+      allDm.sort(() => 0)
+      className = `bpx-player-dm-function${native.positive ? '' : ' bpx-player-order-rotate'} bpx-player-order-${field}`
+    },
+  }
+  const row = {
+    get className() { return className },
+    set className(value: string) { className = value },
+    classList: {
+      contains: (name: string) => className.split(' ').includes(name),
+      [Symbol.iterator]: () => className.split(' ')[Symbol.iterator](),
+    },
+    querySelector: (selector: string) => selector === '[data-action="date"]' ? carrier : null,
+  } as unknown as Element
+  const senders = () => allDm.map(item => `${item.uhash}${item.stime}`).join(',')
+
+  // Most danmaku first, then by sender, each sender in playback order.
+  assert.equal(sortNativeDanmakuListBySender(row), true)
+  assert.equal(senders(), 'b1,b3,a2,c0')
+  assert.equal(className, 'bpx-player-dm-function bewly-dm-order-sender')
+  // The send-time column is left reversed: its next native click sorts ascending.
+  assert.deepEqual(native, { orderby: 'date', positive: false })
+  assert.equal(Array.prototype.sort, nativeSort)
+  assert.deepEqual(otherSorted, [1, 2, 3], 'other sorts keep their own comparator')
+  // Clicking again reverses the sender order.
+  assert.equal(sortNativeDanmakuListBySender(row), true)
+  assert.equal(senders(), 'a2,c0,b1,b3')
+  assert.equal(className, 'bpx-player-dm-function bewly-dm-order-sender bpx-player-order-rotate')
+  assert.deepEqual(native, { orderby: 'date', positive: false })
+  assert.equal(sortNativeDanmakuListBySender(row), true)
+  assert.equal(senders(), 'b1,b3,a2,c0')
+  assert.equal(sortNativeDanmakuListBySender(null), false)
+  assert.equal(Array.prototype.sort, nativeSort)
 }
 
 function verifyBilibiliApiErrorClassification() {
@@ -458,18 +526,11 @@ function verifyBilibiliApiErrorClassification() {
   assert.equal(isBilibiliRiskControl(new Error('ordinary network failure')), false)
 }
 
-function verifyWidescreenSidebarRevealPolicy() {
+function verifyWidescreenPointerAndZoomPolicy() {
   assert.equal(isWidescreenPlayerControlHoverRegion({ playerBottom: 1000, playerTop: 0, pointerY: 950 }), true)
   assert.equal(isWidescreenPlayerControlHoverRegion({ playerBottom: 1000, playerTop: 0, pointerY: 900 }), false)
   assert.equal(isWidescreenPlayerControlHoverRegion({ playerBottom: 1000, playerTop: 0, pointerY: 1001 }), false)
-  assert.equal(WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY, 320)
   assert.equal(WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY, 240)
-  assert.equal(shouldBlockWidescreenSidebarReveal({ bottomControlPopoverOpen: false, pointerInBottomControls: false }), false)
-  assert.equal(shouldBlockWidescreenSidebarReveal({ bottomControlPopoverOpen: true, pointerInBottomControls: false }), true)
-  assert.equal(shouldBlockWidescreenSidebarReveal({ bottomControlPopoverOpen: false, pointerInBottomControls: true }), true)
-  assert.equal(hasWidescreenControlPopoverArea(2, 2), false)
-  assert.equal(hasWidescreenControlPopoverArea(180, 32), true)
-  assert.equal(hasWidescreenControlPopoverArea(180, 0), false)
   const bottomSurface = {
     pointerX: 900,
     surfaceHeight: 53,
@@ -489,89 +550,66 @@ function verifyWidescreenSidebarRevealPolicy() {
     pointerY: 880,
     surfaceHeight: 160,
   }), true)
-  const rightSidebar = {
-    position: 'right' as const,
-    viewportStart: 0,
-    viewportEnd: 1920,
-    sidebarWidth: 460,
+
+  const near = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-6, `${actual} ≈ ${expected}`)
+  const nearRect = (actual: { left: number, top: number, width: number, height: number }, expected: typeof actual) => {
+    near(actual.left, expected.left)
+    near(actual.top, expected.top)
+    near(actual.width, expected.width)
+    near(actual.height, expected.height)
   }
-  assert.equal(resolveWidescreenSidebarHoverExpanded({
-    ...rightSidebar,
-    currentlyExpanded: false,
-    pointerX: 1850,
-  }), true)
-  assert.equal(resolveWidescreenSidebarHoverExpanded({
-    ...rightSidebar,
-    currentlyExpanded: false,
-    pointerX: 1847,
-  }), false)
-  assert.equal(resolveWidescreenSidebarHoverExpanded({
-    ...rightSidebar,
-    currentlyExpanded: true,
-    pointerX: 1430,
-  }), true)
-  assert.equal(resolveWidescreenSidebarHoverExpanded({
-    ...rightSidebar,
-    currentlyExpanded: true,
-    pointerX: 1411,
-  }), false)
-
-  const leftSidebar = { ...rightSidebar, position: 'left' as const }
-  assert.equal(resolveWidescreenSidebarHoverExpanded({
-    ...leftSidebar,
-    currentlyExpanded: false,
-    pointerX: 70,
-  }), true)
-  assert.equal(resolveWidescreenSidebarHoverExpanded({
-    ...leftSidebar,
-    currentlyExpanded: true,
-    pointerX: 490,
-  }), true)
-  assert.equal(resolveWidescreenSidebarHoverExpanded({
-    ...leftSidebar,
-    currentlyExpanded: true,
-    pointerX: 509,
-  }), false)
-
-  assert.equal(resolveWidescreenSidebarResizeWidth({
-    position: 'right',
-    startWidth: 520,
-    deltaX: 0,
-    viewportWidth: 1920,
-  }), 520)
-  assert.equal(resolveWidescreenSidebarResizeWidth({
-    position: 'right',
-    startWidth: 520,
-    deltaX: -400,
-    viewportWidth: 1920,
-  }), 920)
-  assert.equal(resolveWidescreenSidebarResizeWidth({
-    position: 'right',
-    startWidth: 520,
-    deltaX: -1400,
-    viewportWidth: 1920,
-  }), 1632)
-  assert.equal(resolveWidescreenSidebarResizeWidth({
-    position: 'right',
-    startWidth: 520,
-    deltaX: 520,
-    viewportWidth: 1920,
-  }), 360)
-  assert.equal(resolveWidescreenSidebarResizeWidth({
-    position: 'left',
-    startWidth: 400,
-    deltaX: 120,
-    viewportWidth: 1920,
-  }), 520)
-  assert.equal(clampWidescreenSidebarWidth(800, 1000), 800)
-  assert.equal(clampWidescreenSidebarWidth(1000, 1000), 850)
-  assert.equal(clampWidescreenSidebarWidth(0, 1920), 960)
-  assert.equal(clampWidescreenSidebarWidth(0, 1440), 720)
-  assert.equal(clampWidescreenSidebarWidth(4000, 3840), 3264)
-  assert.equal(normalizeWidescreenSidebarStoredWidth(Number.NaN), 0)
-  assert.equal(normalizeWidescreenSidebarStoredWidth(0), 0)
-  assert.equal(normalizeWidescreenSidebarStoredWidth(120), 360)
-  assert.equal(normalizeWidescreenSidebarStoredWidth(2600), 2600)
+  const widescreen = 16 / 9
+  const card = { left: 24, top: 24, width: 864, height: 486 }
+  const viewport = { left: 0, top: 0, width: 1440, height: 900 }
+  const cardVisual = { rect: card, contentWidth: resolveWidescreenContentWidth(card, widescreen) }
+  const viewportContentWidth = resolveWidescreenContentWidth(viewport, widescreen)
+  near(viewportContentWidth, 1440)
+  // Card → fill: the filled box starts with its video at the card's size and
+  // its letterbox clipped, so the first frame is exactly the card.
+  const grow = resolveWidescreenZoomFrame(cardVisual, viewport, viewportContentWidth)!
+  near(grow.scale, 0.6)
+  near(grow.clipX, 0)
+  near(grow.clipY, 45)
+  nearRect(resolveWidescreenZoomVisual(viewport, grow, viewportContentWidth).rect, card)
+  // Fill → card: the card starts scaled to the filled video, centred, which is
+  // where the letterboxed video was; the window letterbox is the backdrop's.
+  const shrink = resolveWidescreenZoomFrame({ rect: viewport, contentWidth: viewportContentWidth }, card, cardVisual.contentWidth)!
+  near(shrink.scale, 1440 / 864)
+  assert.deepEqual([shrink.clipX, shrink.clipY], [0, 0])
+  near(shrink.x + card.left, 0)
+  near(shrink.y + card.top + (card.height * shrink.scale) / 2, 450)
+  nearRect(resolveWidescreenZoomVisual(card, WIDESCREEN_IDENTITY_ZOOM_FRAME, cardVisual.contentWidth).rect, card)
+  // A wide window pillarboxes instead; the clip moves to the sides.
+  const ultrawide = { left: 0, top: 0, width: 2560, height: 1080 }
+  const wide = resolveWidescreenZoomFrame(cardVisual, ultrawide, resolveWidescreenContentWidth(ultrawide, widescreen))!
+  near(wide.scale, 0.45)
+  near(wide.clipY, 0)
+  near(wide.clipX, 320)
+  // A portrait video keeps its on-screen size: matched by picture, not box.
+  const portrait = 9 / 16
+  const portraitFrame = resolveWidescreenZoomFrame(
+    { rect: card, contentWidth: resolveWidescreenContentWidth(card, portrait) },
+    viewport,
+    resolveWidescreenContentWidth(viewport, portrait),
+  )!
+  near(resolveWidescreenContentWidth(viewport, portrait) * portraitFrame.scale, 486 * portrait)
+  // A reversal starts from the interpolated frame on screen.
+  const halfway = interpolateWidescreenZoomFrame(grow, WIDESCREEN_IDENTITY_ZOOM_FRAME, 0.5)
+  near(halfway.scale, 0.8)
+  near(halfway.clipY, 22.5)
+  const halfwayVisual = resolveWidescreenZoomVisual(viewport, halfway, viewportContentWidth)
+  near(halfwayVisual.contentWidth, 1152)
+  const back = resolveWidescreenZoomFrame(halfwayVisual, card, cardVisual.contentWidth)!
+  nearRect(resolveWidescreenZoomVisual(card, back, cardVisual.contentWidth).rect, {
+    ...halfwayVisual.rect,
+    // The card is shorter than the half-zoomed letterbox; the backdrop fills the rest.
+    top: halfwayVisual.rect.top + (halfwayVisual.rect.height - card.height * back.scale) / 2,
+    height: card.height * back.scale,
+  })
+  assert.deepEqual(interpolateWidescreenZoomFrame(grow, WIDESCREEN_IDENTITY_ZOOM_FRAME, 2), WIDESCREEN_IDENTITY_ZOOM_FRAME)
+  assert.equal(resolveWidescreenZoomFrame(cardVisual, { ...viewport, width: 0 }, viewportContentWidth), null)
+  assert.equal(resolveWidescreenZoomFrame({ ...cardVisual, rect: { ...card, height: Number.NaN } }, viewport, viewportContentWidth), null)
+  assert.equal(resolveWidescreenZoomFrame(cardVisual, viewport, 0), null)
 }
 
 function verifyRandomPlayRetryPolicy() {
@@ -2259,8 +2297,8 @@ async function verifyP2AccessibilityAndLocales() {
     assert.deepEqual([...keys].sort(), [...localeKeySets[0]].sort())
   for (const key of [
     'widescreen.enter',
-    'widescreen.close_sidebar',
-    'widescreen.resize_sidebar',
+    'widescreen.fill_window',
+    'widescreen.exit_fill_window',
     'widescreen.comments_loading',
     'settings.maintenance.build_id',
     'search_bar.input_label',
@@ -2369,7 +2407,7 @@ async function verifyContributorCache() {
 
 async function verifyP2WidescreenControl() {
   const root = process.cwd()
-  const [storage, contentScript, videoPlayback, playbackPage, maintenance, catalog, widescreen, pageModeSwitcher, watchLaterButton, tsconfig, about, prepare, dock, dockPolicy, bilibiliTopBar, sideBar, cmnCn, cmnTw, jyut, en, nativeAdaptation] = await Promise.all([
+  const [storage, contentScript, videoPlayback, playbackPage, maintenance, catalog, widescreen, pageModeSwitcher, watchLaterButton, tsconfig, about, prepare, dock, dockPolicy, bilibiliTopBar, sideBar, cmnCn, cmnTw, jyut, en, nativeAdaptation, retiredSettings] = await Promise.all([
     readFile(`${root}/src/logic/storage.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
     readFile(`${root}/src/components/Settings/BilibiliFeaturesEnhancement/VideoPlayback/VideoPlayback.vue`, 'utf8'),
@@ -2391,26 +2429,28 @@ async function verifyP2WidescreenControl() {
     readFile(`${root}/src/_locales/jyut.yml`, 'utf8'),
     readFile(`${root}/src/_locales/en.yml`, 'utf8'),
     readFile(`${root}/docs/maintenance/widescreen-native-adaptation.md`, 'utf8'),
+    readFile(`${root}/src/constants/retiredSettings.ts`, 'utf8'),
   ])
 
   assert.doesNotMatch(storage, /showBewlyWidescreenButton/)
-  assert.match(storage, /bewlyWidescreenLayoutPriority: BewlyWidescreenLayoutPriority/)
-  assert.match(storage, /bewlyWidescreenLayoutPriority: 'video-first'/)
-  assert.match(storage, /bewlyWidescreenCenterVideo: false/)
-  assert.match(storage, /bewlyWidescreenSidebarWidth: number/)
-  assert.match(storage, /bewlyWidescreenSidebarWidth: WIDESCREEN_SIDEBAR_DEFAULT_WIDTH/)
-  assert.doesNotMatch(playbackPage, /bewlyWidescreenSidebarWidth/)
+  // The card layout retired the overlay sidebar's priority, centering and width.
+  for (const field of ['bewlyWidescreenLayoutPriority', 'bewlyWidescreenCenterVideo', 'bewlyWidescreenSidebarWidth']) {
+    assert.doesNotMatch(storage, new RegExp(field))
+    assert.doesNotMatch(playbackPage, new RegExp(field))
+    assert.doesNotMatch(maintenance, new RegExp(field))
+    assert.match(retiredSettings, new RegExp(`'${field}'`))
+  }
+  assert.match(storage, /bewlyWidescreenSidebarPosition: 'right'/)
   assert.match(playbackPage, /settings\.defaultVideoPlayerMode/)
   assert.doesNotMatch(playbackPage, /settings\.showBewlyWidescreenButton/)
-  assert.match(playbackPage, /settings\.bewlyWidescreenCenterVideo/)
-  assert.match(playbackPage, /settings\.bewlyWidescreenLayoutPriority/)
+  assert.match(playbackPage, /settings\.bewlyWidescreenSidebarPosition/)
   assert.doesNotMatch(videoPlayback, /settings\.(?:defaultVideoPlayerMode|showBewlyWidescreenButton|bewlyWidescreenCenterVideo|bewlyWidescreenLayoutPriority)/)
   assert.doesNotMatch(videoPlayback, /sidebar_expansion_mode/)
-  assert.match(maintenance, /bewlyWidescreenLayoutPriority: \['video-first', 'sidebar-first'\]/)
   assert.match(maintenance, /const developmentBuildId = __DEV__ \? __BEWLY_BUILD_ID__ : ''/)
   assert.match(maintenance, /v-if="developmentBuildId"/)
   assert.doesNotMatch(catalog, /settings\.show_bewly_widescreen_button/)
-  assert.match(catalog, /bewly_widescreen_layout_priority/)
+  assert.doesNotMatch(catalog, /bewly_widescreen_(?:layout_priority|center_video)/)
+  assert.match(catalog, /bewly_widescreen_sidebar_position/)
   await assert.rejects(stat(`${root}/src/contentScripts/bewlyWidescreenControl.ts`))
   assert.doesNotMatch(contentScript, /BewlyWidescreenControl|bewlyWidescreenControl|bewly-widescreen-entry-control/)
   assert.match(pageModeSwitcher, /isVideoOrBangumiPage\(currentLocationHref\.value\)/)
@@ -2453,59 +2493,127 @@ async function verifyP2WidescreenControl() {
   )
   assert.match(hiddenNativeControlStyles, /\.map\(selector => `body\.\$\{BODY_CLASS\} \$\{selector\}`\)/)
   assert.match(hiddenNativeControlStyles, /display: none !important/)
-  assert.match(widescreen, /data-sidebar-layout/)
-  assert.match(widescreen, /data-sidebar-hover-expanded/)
-  assert.match(widescreen, /resolveWidescreenSidebarHoverExpanded/)
-  assert.match(widescreen, /grid-template-columns: minmax\(0, 100vw\) 0/)
-  assert.doesNotMatch(widescreen, /data-sidebar-layout="expanded"[^}]*--bewly-widescreen-player-target-width/)
-  assert.doesNotMatch(widescreen, /--bewly-widescreen-sidebar-compact-width/)
-  const sidebarSurfaceStyles = widescreen.slice(
-    widescreen.indexOf(`.bewly-widescreen-sidebar {`),
-    widescreen.indexOf(`[data-sidebar-layout="expanded"] .bewly-widescreen-sidebar`),
+  // Split layout: a flush, square video pane about half the window wide and
+  // the column beside it with the info on top; no edge reveal, resizer,
+  // centering or collapse toggle remains.
+  for (const retired of [/data-sidebar-layout/, /data-sidebar-hover-expanded/, /data-centered/, /sidebar-resizer/, /sidebar-toggle/, /bewly-widescreen-close/, /--bewly-widescreen-sidebar-(?:user|full|reserved|panel)-width/, /center-offset/])
+    assert.doesNotMatch(widescreen, retired)
+  // The rounded card, its border, the info below it and the bleeding column are gone.
+  for (const retired of [/--bewly-widescreen-card-radius/, /--bewly-widescreen-rail-bleed/, /--bewly-widescreen-rail-top/, /--bewly-widescreen-row-gap/, /--bewly-widescreen-column-gap/, /--bewly-widescreen-info-min-height/, /NATIVE_PLAYER_CLASS\}::after/, /readPlayerRadius/, /round \$\{radius\}/])
+    assert.doesNotMatch(widescreen, retired)
+  assert.match(widescreen, /grid-template-columns: var\(--bewly-widescreen-card-width\) minmax\(0, 1fr\)/)
+  assert.match(widescreen, /grid-template-areas: "player rail"/)
+  assert.match(widescreen, /\[data-sidebar-position="left"\] \.bewly-widescreen-stage \{[\s\S]{0,160}grid-template-areas: "rail player"/)
+  assert.match(widescreen, /--bewly-widescreen-card-width: min\(50vw, calc\(100vw - \$\{WIDESCREEN_SIDEBAR_MIN_WIDTH\}px\)\);/)
+  assert.match(widescreen, /#\$\{ROOT_ID\} \.bewly-widescreen-stage \{[\s\S]{0,260}height: 100dvh;\s*padding: 0;/)
+  assert.match(widescreen, /\.bewly-widescreen-player-frame \{[\s\S]{0,200}flex: 1 1 auto;[\s\S]{0,120}min-height: 0;/)
+  assert.doesNotMatch(widescreen.slice(widescreen.indexOf('.bewly-widescreen-player-frame {'), widescreen.indexOf('.bewly-widescreen-player-frame > ')), /border-radius|corner-shape|aspect-ratio/)
+  assert.match(widescreen, /body\.\$\{BODY_CLASS\} \.\$\{NATIVE_PLAYER_CLASS\} \{\s*border-radius: 0 !important;\s*\}/)
+  // The controls keep their own radius, inset from the pane's sides and bottom.
+  assert.match(widescreen, /\[\$\{PLAYER_DISPLAY_MODE_ATTRIBUTE\}="card"\],\s*#\$\{ROOT_ID\}\[data-display-mode="card"\] \.bewly-widescreen-danmaku-dock \{\s*--bewly-widescreen-controls-glass-inset: var\(--bewly-widescreen-card-inset\);\s*--bewly-widescreen-controls-glass-bottom: var\(--bewly-widescreen-card-inset\);/)
+  assert.match(widescreen, /\.\$\{DANMAKU_GLASS_CLASS\} \{[\s\S]{0,900}border-radius: var\(--bewly-widescreen-shell-radius\) !important/)
+  assert.match(widescreen, /\.\$\{NATIVE_PLAYER_CLASS\}:not\(\[\$\{PLAYER_ZOOMING_ATTRIBUTE\}\]\) \{\s*clip-path: none !important;/)
+  // Mode and zoom state never touch <body>: there a class change restyles the
+  // whole Bilibili document at the start and end of every zoom.
+  assert.doesNotMatch(widescreen, /CARD_MODE_CLASS|ZOOMING_CLASS|body\.classList\.(?:add|remove|toggle)\([^)]*(?:card|zoom)/i)
+  assert.match(widescreen, /\.\$\{NATIVE_PLAYER_CLASS\}\[\$\{PLAYER_ZOOMING_ATTRIBUTE\}\],\s*body\.\$\{BODY_CLASS\} #bewly\[\$\{HOST_ZOOMING_ATTRIBUTE\}\] \{\s*--bewly-widescreen-controls-opacity: 0;/)
+  assert.match(widescreen, /> \.bewly-widescreen-backdrop\[data-display-mode="card"\] \{/)
+  // The backdrop paints the pane's canvas on the pane's side, so the picture
+  // zooming out of the letterboxed pane leaves no gap above or below it.
+  assert.match(widescreen, /> \.bewly-widescreen-backdrop::before \{[\s\S]{0,200}inset-block: 0;\s*left: 0;\s*width: var\(--bewly-widescreen-card-width\);\s*background-color: var\(--bew-player-canvas\);/)
+  assert.match(widescreen, /> \.bewly-widescreen-backdrop\[data-sidebar-position="left"\]::before \{\s*right: 0;\s*left: auto;/)
+  assert.match(widescreen, /backdrop\.dataset\.sidebarPosition = sidebarPosition/)
+  assert.match(widescreen, /currentState\.backdrop\.dataset\.sidebarPosition = position/)
+  // Both ends are square: the zoom is the transform and a plain clip.
+  assert.match(widescreen, /return `inset\(\$\{frame\.clipY\}px \$\{frame\.clipX\}px\)`/)
+  assert.match(widescreen, /const shape = playerEl\.animate\(\[\{ clipPath: frameClip\(from\) \}, \{ clipPath: frameClip\(to\) \}\], timing\)/)
+  // The anchored box is read by the player alone; it must not restyle Bpx's tree.
+  for (const edge of ['top', 'left', 'width', 'height'])
+    assert.match(widescreen, new RegExp(`@property --bewly-widescreen-player-${edge} \\{ syntax: '\\*'; inherits: false; \\}`))
+  const shellSurfaceStyles = widescreen.slice(
+    widescreen.indexOf(`#\${ROOT_ID} .bewly-widescreen-sidebar {`),
+    widescreen.indexOf(`#\${ROOT_ID} .bewly-widescreen-info {`),
   )
-  assert.match(sidebarSurfaceStyles, /visibility: hidden/)
-  assert.match(sidebarSurfaceStyles, /pointer-events: none/)
-  assert.match(sidebarSurfaceStyles, /height: calc\(100dvh - var\(--bewly-widescreen-sidebar-floating-inset\) \* 2\)/)
-  assert.match(sidebarSurfaceStyles, /margin: var\(--bewly-widescreen-sidebar-floating-inset\)/)
-  assert.match(sidebarSurfaceStyles, /background: var\(--bew-elevated-alt\)/)
-  assert.match(sidebarSurfaceStyles, /border: 1px solid var\(--bew-surface-border-color\)/)
-  assert.match(sidebarSurfaceStyles, /border-radius: var\(--bewly-widescreen-shell-radius\)/)
+  // The column is layout only: no surface, border, radius, shadow or glass;
+  // padding keeps the spacing.
+  assert.match(shellSurfaceStyles, /background: transparent;/)
+  assert.doesNotMatch(shellSurfaceStyles, /border|corner-shape|box-shadow|backdrop-filter|--bew-elevated-alt|--bew-surface-border-color/)
+  assert.match(shellSurfaceStyles, /padding: var\(--bewly-widescreen-page-padding\) var\(--bewly-widescreen-page-padding\) 0;/)
   assert.match(widescreen, /--bewly-widescreen-shell-radius: var\(--bew-modal-radius, 24px\)/)
-  assert.match(sidebarSurfaceStyles, /corner-shape: var\(--bew-corner-shape\)/)
-  assert.match(sidebarSurfaceStyles, /box-shadow: var\(--bew-shadow-3\);/)
-  assert.match(sidebarSurfaceStyles, /backdrop-filter: var\(--bew-filter-glass-1\)/)
-  assert.match(sidebarSurfaceStyles, /transform: translate3d\(var\(--bewly-widescreen-sidebar-offset\), 0, 0\)/)
-  assert.match(sidebarSurfaceStyles, /transform var\(--bew-duration-moderate, 300ms\)/)
-  assert.match(sidebarSurfaceStyles, /backface-visibility: hidden/)
+  assert.match(shellSurfaceStyles, /pointer-events: auto/)
   assert.doesNotMatch(widescreen, /\.bewly-widescreen-sidebar::before/)
   assert.match(widescreen, /--bewly-widescreen-sidebar-bg: transparent/)
-  assert.match(widescreen, /--bewly-widescreen-surface-bg: var\(--bew-content-solid\)/)
-  assert.match(sidebarSurfaceStyles, /--bewly-widescreen-sidebar-offset: var\(--bewly-widescreen-sidebar-reserved-width\)/)
-  assert.doesNotMatch(sidebarSurfaceStyles, /-12px 0 28px|12px 0 28px/)
-  assert.match(widescreen, /data-centered="true"\] \.bewly-widescreen-player-frame > \*[\s\S]{0,220}100vw - var\(--bewly-widescreen-sidebar-reserved-width\)/)
-  assert.match(widescreen, /sidebarWidth: sidebarRect\.width \+ sidebarFloatingInset \* 2/)
+  assert.doesNotMatch(widescreen, /--bewly-widescreen-surface-bg/)
+  assert.match(widescreen, /\.bewly-widescreen-sidebar-top \{[\s\S]{0,640}background: transparent;/)
+  assert.match(widescreen, /\.bewly-widescreen-panels \{[\s\S]{0,200}background: transparent;/)
+  assert.doesNotMatch(widescreen.slice(widescreen.indexOf('.bewly-widescreen-sidebar-top {'), widescreen.indexOf('.bewly-widescreen-toolbar {')), /border-radius|corner-shape/)
+  assert.doesNotMatch(widescreen.slice(widescreen.indexOf('.bewly-widescreen-panels {'), widescreen.indexOf('.bewly-widescreen-panel {')), /border-radius|corner-shape/)
+  assert.match(widescreen, /\.bewly-widescreen-description-card \{\s*display: flex;\s*flex-direction: column;\s*gap: var\(--bew-space-3\);\s*min-width: 0;\s*\}/)
+  // The info heads the column, then the tabs, then the panels.
+  assert.match(widescreen, /sidebar\.append\(info, tablist, panelWrap\)/)
+  assert.match(widescreen, /playerSlot\.append\(playerFrame, danmakuDock, playerToolbar\)/)
+  assert.match(widescreen, /#\$\{ROOT_ID\} \.bewly-widescreen-info \{[\s\S]{0,200}flex: 0 1 auto;[\s\S]{0,120}min-height: 0;\s*max-height: 45%;\s*padding: 0;/)
+  assert.match(widescreen, /\.bewly-widescreen-tabs \{\s*position: relative;\s*z-index: 2;\s*display: flex;\s*flex: 0 0 auto;/)
+  // The panels run down to the window's bottom edge, under the docked composer.
+  assert.match(widescreen, /--bewly-widescreen-rail-bottom: calc\(var\(--bewly-widescreen-page-padding\) \+ var\(--bew-space-3\)\);/)
+  // The tabs, the panel content and the composer share one content line; the
+  // scrollers reach one space-1 past it so row fills and focus rings fit.
+  assert.match(widescreen, /\.bewly-widescreen-panels \{[\s\S]{0,160}margin-inline: calc\(var\(--bew-space-1\) \* -1\);/)
+  assert.match(widescreen, /\.bewly-widescreen-panel \{[\s\S]{0,160}padding: var\(--bew-space-3\) var\(--bew-space-1\) var\(--bewly-widescreen-rail-bottom\);/)
+  assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \{\s*position: relative;\s*padding: 0 var\(--bew-space-1\) var\(--bewly-widescreen-rail-bottom\);/)
+  assert.match(widescreen, /\.\$\{COMMENT_COMPOSER_HOST_CLASS\} \{\s*position: absolute;\s*right: var\(--bew-space-1\);\s*bottom: var\(--bewly-widescreen-rail-bottom\);\s*left: var\(--bew-space-1\);/)
+  // Narrow windows stack a 16:9 pane over the column; the backdrop pane is not needed.
+  assert.match(widescreen, /@media \(max-width: \$\{MOBILE_BREAKPOINT\}px\) \{[\s\S]*\.bewly-widescreen-player-frame \{\s*flex: 0 0 auto;\s*aspect-ratio: 16 \/ 9;[\s\S]{0,200}> \.bewly-widescreen-backdrop::before \{\s*display: none;/)
+  assert.match(widescreen, /\.bewly-widescreen-sidebar-top \{[\s\S]{0,640}margin-inline: calc\(var\(--bew-space-1\) \* -1\);\s*padding: 0 var\(--bew-space-1\) var\(--bew-space-3\);/)
+  assert.match(widescreen, /#\$\{ROOT_ID\} \.bewly-widescreen-title \{[^}]*text-box: trim-start text;/)
+  // Filling the window fades the column with opacity only: an inherited change
+  // would restyle the whole comment tree on the zoom's first frame.
+  assert.match(widescreen, /\[data-display-mode="fill"\] \.bewly-widescreen-sidebar \{\s*opacity: 0;\s*\}/)
+  assert.doesNotMatch(widescreen, /visibility 0s linear/)
+  // A native re-render after commit is re-anchored in the observer microtask,
+  // before the replacement paints at its native place.
+  const ancestrySection = playbackFunctions(widescreen, 'watchAnchoredPlayerAncestry')
+  assert.match(ancestrySection, /for \(let node = currentState\.playerEl\.parentElement; node; node = node\.parentElement\)\s*observer\.observe\(node, \{ childList: true \}\)/)
+  assert.match(ancestrySection, /currentState\.playerEl\.isConnected\)\s*return\s*ensureAnchoredPlayer\(currentState\)/)
+  assert.match(playbackFunctions(widescreen, 'setupAspectObservers'), /^export function setupAspectObservers\(currentState: BewlyWidescreenState\) \{\s*watchAnchoredPlayerAncestry\(currentState\)/)
+  assert.match(playbackFunctions(widescreen, 'clearAspectObservers'), /currentState\.playerAncestryObserver\?\.disconnect\(\)/)
+  const restModeSection = playbackFunctions(widescreen, 'syncDisplayModeAttributes')
+  assert.match(restModeSection, /const restMode = currentState\.heldRestMode \?\? mode/)
+  assert.match(restModeSection, /currentState\.sidebarEl\.inert = restMode === 'fill'/)
+  assert.match(widescreen, /#\$\{ROOT_ID\}\[data-zooming="true"\] \{\s*z-index: calc\(var\(--bew-z-widescreen\) - 2\);/)
+  assert.match(widescreen, /> \.bewly-widescreen-backdrop \{[\s\S]{0,120}z-index: calc\(var\(--bew-z-widescreen\) - 3\)/)
+  // The info module heads the column beside the video pane.
+  const createRootSection = playbackFunctions(widescreen, 'createRoot')
+  assert.match(createRootSection, /playerSlot\.append\(playerFrame, danmakuDock, playerToolbar\)/)
+  assert.match(createRootSection, /info\.append\(sidebarTop\)/)
+  assert.match(createRootSection, /sidebar\.append\(info, tablist, panelWrap\)/)
+  assert.match(createRootSection, /document\.body\.append\(backdrop, root\)/)
   const sidebarToolbarSection = playbackFunctions(widescreen, 'createSidebarToolbar')
-  assert.doesNotMatch(sidebarToolbarSection, /exitBewlyWidescreen/)
-  assert.match(sidebarToolbarSection, /setSidebarLayout\('compact', currentState, true\)/)
-  assert.match(sidebarToolbarSection, /sidebarToggleButton\.focus\(\{ preventScroll: true \}\)/)
+  assert.doesNotMatch(sidebarToolbarSection, /exitBewlyWidescreen|button/)
   const sidebarTopStyles = widescreen.slice(
     widescreen.indexOf(`.bewly-widescreen-sidebar-top {`),
     widescreen.indexOf(`.bewly-widescreen-toolbar {`),
   )
   assert.match(sidebarTopStyles, /z-index: 1/)
-  assert.match(sidebarTopStyles, /flex: 0 0 auto/)
-  assert.match(sidebarTopStyles, /max-height: 52%/)
+  assert.match(sidebarTopStyles, /flex: 1 1 auto/)
+  assert.doesNotMatch(sidebarTopStyles, /max-height/)
   const sidebarPanelStyles = widescreen.slice(
     widescreen.indexOf(`.bewly-widescreen-panels {`),
     widescreen.indexOf(`.bewly-widescreen-panel {`),
   )
   assert.match(sidebarPanelStyles, /z-index: 0/)
   assert.match(sidebarPanelStyles, /flex: 1 1 0/)
-  assert.match(widescreen, /resolveWidescreenCenterGeometry/)
   assert.match(widescreen, /setupActionGeometryObservers/)
   assert.match(widescreen, /waitForReadyLayout/)
   assert.match(widescreen, /canCommitWidescreenLayout\(\{[\s\S]{0,220}pageReady:[\s\S]{0,220}playerReady:[\s\S]{0,220}contentReady:/)
-  assert.match(widescreen, /contentReadyForLayout = isWidescreenTransferContentReady\(\)[\s\S]{0,160}hasWidescreenTransferSettleElapsed\(\)/)
+  assert.match(widescreen, /structureReadyForLayout = isWidescreenTransferContentReady\(\)[\s\S]{0,120}contentReadyForLayout = structureReadyForLayout[\s\S]{0,80}hasWidescreenTransferSettleElapsed\(\)/)
+  // Complete structure commits after DOM parse; only the settle fallback waits for load.
+  assert.match(widescreen, /pageReady: pageReadyForLayout \|\| \(structureReadyForLayout && document\.readyState !== 'loading'\)/)
+  assert.match(widescreen, /\(pageReadyForLayout \|\| structureReadyForLayout\) && playerReadyForLayout/, 'structure-ready stability keeps polling after the fast window')
+  // A committed shell is revealed even if native controls never settle.
+  assert.match(widescreen, /export const INITIAL_REVEAL_TIMEOUT = 4000/)
+  assert.match(widescreen, /nextState\.initialRevealTimer = setTimeout\([\s\S]{0,260}reveal\(\)[\s\S]{0,40}INITIAL_REVEAL_TIMEOUT\)/)
+  assert.match(widescreen, /clearTimeout\(currentState\.initialRevealTimer\)/)
   assert.match(widescreen, /function isWidescreenTransferContentReady/)
   assert.match(widescreen, /const TRANSFER_SETTLE_DELAY = 1200/)
   assert.match(widescreen, /const PAGE_READY_FALLBACK_DELAY = 3000/)
@@ -2613,7 +2721,7 @@ async function verifyP2WidescreenControl() {
   assert.match(playbackNavigationLifecycleSection, /currentState\.videoInfoIdentity = undefined/)
   assert.match(playbackNavigationLifecycleSection, /currentState\.hydratedTabs\.clear\(\)/)
   assert.doesNotMatch(playbackNavigationLifecycleSection, /currentState\.activeTab\s*=/)
-  assert.doesNotMatch(playbackNavigationLifecycleSection, /currentState\.sidebarLayout\s*=/)
+  assert.doesNotMatch(playbackNavigationLifecycleSection, /currentState\.displayMode\s*=/)
   assert.doesNotMatch(playbackNavigationLifecycleSection, /currentState\.root\.remove\(\)/)
   const refreshPlaybackNavigationSection = playbackFunctions(widescreen, 'refreshBewlyPlaybackPageNavigation')
   assert.match(refreshPlaybackNavigationSection, /loadFallbackVideoInfo\(currentState, videoInfoRequest\)/)
@@ -2622,13 +2730,30 @@ async function verifyP2WidescreenControl() {
   const anchoredPlayerReplacementSection = playbackFunctions(widescreen, 'clearAspectObservers', 'syncAnchoredPlayerGeometry', 'ensureAnchoredPlayer')
   assert.match(anchoredPlayerReplacementSection, /currentState\.playerEl = replacement/)
   assert.match(anchoredPlayerReplacementSection, /setupAspectObservers\(currentState\)/)
-  assert.match(anchoredPlayerReplacementSection, /setupSidebarToggleAutoHide\(currentState\)/)
+  // The card anchors to the shell frame; filling the window anchors to the overlay.
+  assert.match(anchoredPlayerReplacementSection, /\(currentState\.displayMode === 'fill' \? root : playerFrame\)\.getBoundingClientRect\(\)/)
   const playbackPageLoadingSection = playbackFunctions(widescreen, 'createWidescreenLoadingSkeleton', 'createLoadingSkeletonBlock', 'showWidescreenLoading', 'injectLoadingStyle')
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-stage/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-player/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-controls/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-sidebar/)
-  assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-list-row/)
+  // Comments have no known layout: one ring, not rows of avatar placeholders.
+  assert.match(playbackPageLoadingSection, /const list = createLoadingSkeletonElement\('bewly-widescreen-loading-skeleton-list'\)\s*list\.appendChild\(createLoadingRingElement\(\)\)/)
+  assert.doesNotMatch(widescreen, /skeleton-list-row|skeleton-list-avatar|panel-skeleton__row'[\s\S]{0,20}'comment'/)
+  const panelLoadingSection = playbackFunctions(widescreen, 'ensureLoadingRingPanel', 'finishPanelLoading', 'ensureLoadingPanel')
+  assert.match(panelLoadingSection, /if \(kind === 'comment'\) \{\s*ensureLoadingRingPanel\(panel, label\)/)
+  assert.match(panelLoadingSection, /loading\.append\(createLoadingRingElement\(\)\)/)
+  // The ring closes before it fades off the arrived list.
+  // Durations are read for every ring before the first write.
+  assert.match(panelLoadingSection, /getLoadingRingCloseDuration[\s\S]{0,260}for \(const \{ loading, closeDuration, fadeDuration \} of loadings\) \{\s*loading\.setAttribute\(LOADING_COMPLETE_ATTRIBUTE, ''\)[\s\S]{0,200}setTimeout\(\(\) => \{\s*loading\.classList\.add\('is-leaving'\)/)
+  assert.match(widescreen, /finishPanelLoading\(currentState\.panels\.comment\)/)
+  // Native loaders inside the shell become the same ring (MAIN).
+  const nativeSpinner = await readFile(`${root}/src/inject/commentLoadingRing.ts`, 'utf8')
+  assert.match(nativeSpinner, /:host-context\(#bewly-widescreen-root\) #spinner img \{\s*display: none !important;/)
+  assert.match(nativeSpinner, /stroke-dasharray='75 25'/)
+  const injectEntry = await readFile(`${root}/src/inject/index.ts`, 'utf8')
+  assert.match(injectEntry, /'bili-comments-spinner': \{\s*id: 'bewly-widescreen-comment-spinner-style',\s*css: COMMENT_SPINNER_RING_CSS,/)
+  assert.match(injectEntry, /name === 'bili-comments-spinner'[\s\S]{0,200}beforeUpdate: \(component\) => \{\s*if \(component\.shadowRoot\)\s*ensureCommentShadowStyle/)
   assert.match(playbackPageLoadingSection, /aria-hidden', 'true'/)
   assert.match(playbackPageLoadingSection, /data-bew-skeleton/)
   assert.match(playbackPageLoadingSection, /\$\{SKELETON_CSS\}/)
@@ -2638,7 +2763,16 @@ async function verifyP2WidescreenControl() {
   assert.match(playbackPageLoadingSection, /background: var\(--bew-elevated-alt-solid\)/)
   assert.doesNotMatch(playbackPageLoadingSection, /backdrop-filter: var\(--bew-filter-glass-1\)/)
   assert.match(playbackPageLoadingSection, /@media \(prefers-reduced-motion: reduce\)/)
-  assert.match(playbackPageLoadingSection, /data-sidebar-layout="compact"/)
+  // The skeleton mirrors the split layout: the square pane with controls,
+  // then the column with the info on top.
+  assert.doesNotMatch(playbackPageLoadingSection, /data-sidebar-layout|sidebar-user-width|skeleton-column|card-radius/)
+  assert.match(playbackPageLoadingSection, /sidebar\.appendChild\(info\)/)
+  assert.match(playbackPageLoadingSection, /stage\.append\(player, sidebar\)/)
+  assert.match(playbackPageLoadingSection, /\$\{CARD_LAYOUT_PROPERTIES\}/)
+  assert.match(playbackPageLoadingSection, /\.bewly-widescreen-loading-skeleton-player \{\s*position: relative;\s*grid-area: player;/)
+  // Pinned to the real column, the skeleton info takes the real info's height
+  // so the skeleton tabs land on the real ones.
+  assert.match(widescreen, /Object\.assign\(info\.style, \{ flex: 'none', height: `\$\{infoHeight\}px`, maxHeight: 'none' \}\)/)
   assert.match(playbackPageLoadingSection, /overlay\.dataset\.sidebarPosition = settings\.value\.bewlyWidescreenSidebarPosition/)
   assert.doesNotMatch(playbackPageLoadingSection, /loading\.gif|bewly-widescreen-loading-icon/)
   assert.match(widescreen, /@media \(prefers-reduced-motion: reduce\)/)
@@ -2723,59 +2857,187 @@ async function verifyP2WidescreenControl() {
   assert.match(sidebarTopStyles, /display: flex/)
   assert.match(sidebarTopStyles, /flex-direction: column/)
   assert.match(widescreen, /\.bewly-widescreen-metadata-slot \.video-info-meta,[\s\S]{0,420}position: static !important;[\s\S]{0,220}height: auto !important/)
-  assert.match(widescreen, /\.bewly-widescreen-author-actions \{[\s\S]{0,400}margin-top: var\(--bew-space-1\)/)
+  // Two full-width rows: the author with charge and follow at the right edge,
+  // then the actions; 16px / 12px / 16px rhythm around them.
+  assert.match(widescreen, /\.bewly-widescreen-author-actions \{\s*display: flex;\s*flex-direction: column;\s*align-items: stretch;\s*gap: var\(--bew-space-3\);\s*min-width: 0;\s*margin-block: var\(--bew-space-2\);/)
+  assert.match(widescreen, /\.bewly-widescreen-up-slot \.up-info__detail \{\s*flex: 1 1 calc\(var\(--bew-space-12\) \* 3\) !important;/)
+  assert.match(widescreen, /\.bewly-widescreen-up-slot \.up-info__btn-panel \{\s*flex: 0 0 auto !important;\s*margin-left: auto !important;/)
+  assert.doesNotMatch(widescreen, /max-width: calc\(var\(--bew-space-12\) \* 5\) !important/)
+  // The actions are neutral chips like charge and the tags; set states use the
+  // shared selected surface; presses settle slightly unless motion is reduced.
+  assert.match(widescreen, /\.bewly-watch-later-btn \{[\s\S]{0,1000}background: var\(--bewly-widescreen-control-bg\) !important;/)
+  assert.match(widescreen, /:is\(\.video-toolbar-left-item, \.video-toolbar-right-item\):is\(\.on, \.active, \.liked, \.collected, \.is-active\) \{\s*background: var\(--bew-selected-bg\) !important;/)
+  assert.match(widescreen, /\.bewly-watch-later-btn\):active,\s*#\$\{ROOT_ID\} \.bewly-widescreen-up-slot \.upinfo-btn-panel > \.default-btn:active \{\s*scale: 0\.97;/)
+  assert.match(widescreen, /prefers-reduced-motion: reduce[\s\S]*\.default-btn:active \{\s*scale: none;/)
+  assert.match(widescreen, /\.follow-btn\.not-follow:hover \{\s*filter: brightness\(1\.08\);/)
+  // Professional-app pass: one author line, quiet tags, one list row for the
+  // rail, the viewer count as status in the meta line.
+  assert.match(widescreen, /\.bewly-widescreen-up-slot \.up-info--right \{[\s\S]{0,120}flex-direction: row !important;\s*flex-wrap: wrap !important;/)
+  assert.match(widescreen, /\.bewly-widescreen-up-slot :is\(\.up-avatar-wrap, \.up-avatar, \.bili-avatar\) \{\s*width: var\(--bew-control-height-lg\) !important;/)
+  assert.match(widescreen, /\.bewly-widescreen-up-slot \.up-description \{[\s\S]{0,200}text-overflow: ellipsis !important;\s*white-space: nowrap !important;/)
+  assert.match(widescreen, /\.bewly-widescreen-title \{[\s\S]{0,200}font-weight: var\(--bew-font-weight-regular, 400\);/)
+  assert.match(widescreen, /> \.tag-link \{[\s\S]{0,200}height: var\(--bew-control-height-sm\) !important;[\s\S]{0,80}color: var\(--bew-text-2\) !important;\s*background: var\(--bew-fill-1\) !important;/)
+  assert.match(widescreen, /> \.tag-link > svg:last-child:not\(:first-child\) \{\s*display: none !important;/)
+  assert.doesNotMatch(widescreen, /\.tag-link:is\(:hover, :focus-visible\) \{\s*background: var\(--bew-theme-surface-hover\)/)
+  assert.match(widescreen, /--bewly-widescreen-row-thumb-width: calc\(var\(--bew-space-10\) \* 3\);/)
+  assert.match(widescreen, /:is\(\.normal-base-item, \.simple-base-item, \.video-page-card-small \.card-box\) \{[\s\S]{0,200}margin: 0 calc\(var\(--bew-space-1\) \* -1\) !important;\s*padding: var\(--bew-space-1\) !important;[\s\S]{0,80}border-radius: calc\(var\(--bew-media-radius\) \+ var\(--bew-space-1\)\) !important;/)
+  assert.match(widescreen, /:is\(\.normal-base-item, \.simple-base-item\)\.active \{\s*background: var\(--bew-selected-bg\) !important;/)
+  assert.match(widescreen, /\.active \.title::before \{[\s\S]{0,260}background: var\(--bew-accent-marker\);/)
+  assert.match(widescreen, /\.video-pod__body \{\s*box-sizing: border-box !important;\s*width: calc\(100% \+ var\(--bew-space-1\) \* 2\) !important;\s*margin-inline: calc\(var\(--bew-space-1\) \* -1\) !important;/)
+  assert.match(widescreen, /\.video-pod ~ :is\(\.recommend-list-v1, \.recommend-list\)::before \{\s*content: var\(--bewly-widescreen-up-next-label, none\);/)
+  assert.match(widescreen, /root\.style\.setProperty\('--bewly-widescreen-up-next-label', JSON\.stringify\(t\('widescreen\.up_next'\)\)\)/)
+  assert.match(widescreen, /\[\$\{PLAYER_DISPLAY_MODE_ATTRIBUTE\}="card"\] \$\{DANMAKU_SURFACE_SELECTOR\} \.bpx-player-video-info\[\$\{VIEWER_COUNT_MIRRORED_ATTRIBUTE\}\] \{\s*display: none !important;/)
+  assert.match(widescreen, /:is\(\.bpx-player-filter, \.bpx-player-dm-btn-time, \.dm-info-time\) \{\s*padding-left: 0 !important;/)
+  assert.match(widescreen, /#\$\{ROOT_ID\} \.bewly-widescreen-panel:not\(\[hidden\]\) \{\s*transition: opacity/)
+  assert.match(widescreen, /@starting-style \{\s*#\$\{ROOT_ID\} \.bewly-widescreen-panel:not\(\[hidden\]\) \{\s*opacity: 0;/)
+  // The docked app controls start the bar when the viewer pill is hidden, and
+  // a hairline separates them from the danmaku controls.
+  assert.match(widescreen, /const left = viewerRect && viewerRect\.width > 0 && viewerRect\.height > 0\s*\? viewerRect\.right \+ gap\s*: dockRect\.left \+ gap/)
+  assert.match(sideBar, /\.sidebar-content \{[\s\S]{0,600}&::after \{\s*content: "";\s*flex: none;\s*width: 1px;\s*height: var\(--bew-icon-size-md\);\s*background: var\(--bew-border-color\);/)
+  assert.match(widescreen, /updatePlayerControlTooltip\(button, filling \? `\$\{label\} \(Esc\)` : label\)/)
+  assert.match(widescreen, /button\.setAttribute\('aria-keyshortcuts', 'Escape'\)/)
+
+  assert.match(widescreen, /\.bewly-watch-later-btn \{[\s\S]{0,260}flex: 0 1 auto !important;\s*width: auto !important;/)
+  assert.match(widescreen, /-action-slot \.bewly-watch-later-btn \{\s*display: inline-flex !important;\s*width: var\(--bew-control-height, 36px\) !important;/)
+  assert.match(widescreen, /\.upinfo-btn-panel > \.default-btn:not\(\.follow-btn\) \{\s*color: var\(--bew-text-1\) !important;\s*background: var\(--bew-fill-1\) !important;\s*border: 0 !important;/)
   assert.match(widescreen, /\.bewly-widescreen-up-slot \.up-panel-container,[\s\S]{0,360}position: relative !important;[\s\S]{0,180}inset: auto !important/)
-  assert.match(widescreen, /className = 'bewly-widescreen-sidebar-resizer'/)
-  assert.match(widescreen, /role', 'separator'/)
-  assert.match(widescreen, /setPointerCapture\(event\.pointerId\)/)
-  assert.match(widescreen, /resolveWidescreenSidebarResizeWidth/)
-  assert.match(widescreen, /WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY/)
-  assert.match(widescreen, /data-sidebar-resizing="true"/)
-  assert.match(widescreen, /--bewly-widescreen-sidebar-resize-accent: var\(--bew-text-1, #fff\)/)
-  assert.doesNotMatch(widescreen, /--bewly-widescreen-sidebar-resize-accent: var\(--Wh0/)
-  assert.match(widescreen, /html:not\(\.dark\) #\$\{ROOT_ID\}[\s\S]{0,100}--bewly-widescreen-sidebar-resize-accent: var\(--bew-focus-ring-color/)
-  const resizeFeedback = widescreen.slice(
-    widescreen.indexOf('[data-sidebar-resizing="true"] .bewly-widescreen-sidebar {'),
-    widescreen.indexOf('[data-sidebar-resizing="true"] .bewly-widescreen-sidebar-resizer::before'),
-  )
-  assert.match(resizeFeedback, /var\(--bew-focus-shadow, 0 0 0 1px CanvasText\)/)
-  assert.doesNotMatch(resizeFeedback, /border-(?:color|width):|\binset\b/)
-  assert.doesNotMatch(resizeFeedback, /color-mix|--bew-theme-color|--bew-theme-focus-ring/)
-  const sidebarInteractionSection = playbackFunctions(widescreen, 'setupSidebarInteractionTracking')
-  assert.match(sidebarInteractionSection, /root\.dataset\.sidebarHoverExpanded !== nextValue/)
-  assert.match(sidebarInteractionSection, /window\.addEventListener\('pointermove', handlePointerMove/)
-  assert.match(sidebarInteractionSection, /isWidescreenPlayerControlHoverRegion/)
-  assert.match(sidebarInteractionSection, /isPointerInBottomControlContainer/)
-  assert.match(sidebarInteractionSection, /pendingPointerPosition = \{ x: event\.clientX, y: event\.clientY, type: event\.pointerType \}/)
-  assert.match(sidebarInteractionSection, /shouldBlockWidescreenSidebarReveal\(\{/)
-  assert.match(sidebarInteractionSection, /pointerInBottomControls: pointerIsInBottomControls/)
-  assert.match(sidebarInteractionSection, /bottomControlPopoverOpen:[\s\S]{0,120}isBottomControlPopoverOpen\(currentState\)/)
-  assert.doesNotMatch(sidebarInteractionSection, /playerControlsHidden === 'false'/)
-  assert.match(sidebarInteractionSection, /document\.documentElement\.addEventListener\('pointerenter', handlePointerMove/)
-  assert.match(sidebarInteractionSection, /document\.documentElement\.addEventListener\('pointerleave', handlePointerLeave/)
-  assert.doesNotMatch(sidebarInteractionSection, /root\.addEventListener\('pointermove'/)
-  assert.match(sidebarInteractionSection, /clearCollapseTimer\(\)/)
-  assert.match(sidebarInteractionSection, /releasePointerCapture/)
-  assert.match(sidebarInteractionSection, /removeEventListener\('pointerdown', handleResizePointerDown\)/)
-  assert.match(sidebarInteractionSection, /document\.documentElement\.removeEventListener\('pointerenter', handlePointerMove\)/)
-  assert.match(sidebarInteractionSection, /cancelAnimationFrame\(resizeFrame\)/)
-  const applySidebarWidthSection = sidebarInteractionSection.slice(
-    sidebarInteractionSection.indexOf('function applySidebarWidth'),
-    sidebarInteractionSection.indexOf('function flushPendingSidebarWidth'),
-  )
-  assert.doesNotMatch(applySidebarWidthSection, /schedulePlayerResizeSync/)
-  const finishResizeSection = sidebarInteractionSection.slice(
-    sidebarInteractionSection.indexOf('function finishResize'),
-    sidebarInteractionSection.indexOf('function handleResizeKeydown'),
-  )
-  assert.match(finishResizeSection, /schedulePlayerResizeSync\(currentState\)/)
-  assert.match(finishResizeSection, /persistSidebarWidth\(\)/)
-  assert.match(widescreen, /settings\.value\.bewlyWidescreenSidebarWidth = storedWidth/)
-  assert.match(widescreen, /--bewly-widescreen-sidebar-user-width',[\s\S]{0,220}settings\.value\.bewlyWidescreenSidebarWidth/)
-  assert.match(widescreen, /viewportBottom: rootRect\.bottom - glassBottom/)
-  const sidebarToggleAutoHideSection = playbackFunctions(widescreen, 'setupSidebarToggleAutoHide', 'disableNativeLightOffMode')
-  assert.match(sidebarToggleAutoHideSection, /playerEl\.addEventListener\('pointermove', showToggle/)
-  assert.doesNotMatch(sidebarToggleAutoHideSection, /playerSlot\.addEventListener\('pointermove'/)
+  // The comment panel docks the dynamic-card composer; native boxes stay
+  // hidden and native "reply" clicks retarget it (see maintenance 05b).
+  const injectSource = await readFile(new URL('../src/inject/index.ts', import.meta.url), 'utf8')
+  const externalComposer = await readFile(new URL('../src/inject/externalCommentComposer.ts', import.meta.url), 'utf8')
+  const appSource = await readFile(new URL('../src/contentScripts/views/App.vue', import.meta.url), 'utf8')
+  const playbackComposerView = await readFile(new URL('../src/contentScripts/views/PlaybackCommentComposer.vue', import.meta.url), 'utf8')
+  assert.match(injectSource, /#sort-actions bili-text-button \{[\s\S]{0,200}\}\s*\$\{EXTERNAL_COMPOSER_HEADER_CSS\}/)
+  assert.match(injectSource, /\$\{EXTERNAL_COMPOSER_COMMENT_BOX_CSS\}\s*`,/)
+  assert.match(injectSource, /if \(name === 'bili-comment-thread-renderer'\) \{\s*try \{\s*patchExternalComposerReply\(classConstructor, pageBridgeChannelId\)/)
+  assert.match(injectSource, /type: PAGE_BRIDGE_MESSAGE\.COMMENT_COMPOSER_INSERT,\s*\}\)\) \{\s*insertExternalComposerReply\(/)
+  assert.match(externalComposer, /:host-context\(\[\$\{EXTERNAL_COMMENT_COMPOSER_ATTRIBUTE\}\]\) \{\s*display: none !important;/)
+  assert.match(externalComposer, /:host-context\(\[\$\{EXTERNAL_COMMENT_COMPOSER_ATTRIBUTE\}\]\) #commentbox \{\s*display: none !important;/)
+  assert.match(externalComposer, /!list\.commentBoxDisabledState \? toCommentComposerReply\(target\) : null/)
+  assert.match(appSource, /<PlaybackCommentComposer v-if="!isInIframe\(\)" \/>/)
+  assert.match(playbackComposerView, /<Teleport v-if="playbackCommentComposer" :to="playbackCommentComposer\.mount">/)
+  assert.match(playbackComposerView, /<MomentReplyComposer[\s\S]{0,400}@posted="showPostedPlaybackComment"/)
+  assert.match(playbackComposerView, /if \(!request \|\| pending\.value \|\| composer\.value\?\.focus\(\) === false\)\s*return/)
+  assert.match(widescreen, /nextState\.commentComposerCleanup = setupPlaybackCommentComposer\(nextState\.panels\.comment\)/)
+  assert.match(widescreen, /currentState\.commentComposerCleanup\?\.\(\)/)
+  // Hydration wakes a native list still waiting for its first page every tick
+  // (a re-rendered list can wait below the fold), reloading it once per budget.
+  const hydrationSection = playbackFunctions(widescreen, 'startSidebarHydration')
+  assert.match(hydrationSection, /currentState\.commentListReloadRequested = false/)
+  assert.match(hydrationSection, /const reload = phase !== 'hydrating' && nativeRequestPending && !currentState\.commentListReloadRequested[\s\S]{0,120}wakeNativeCommentList\(reload\)/)
+  assert.ok(hydrationSection.indexOf('if (phase === \'stopped\')') < hydrationSection.indexOf('wakeNativeCommentList(reload)'))
+  // A ready danmaku list gets the sender column; MAIN sorts on its bridge message.
+  assert.match(widescreen, /if \(danmakuReady\) \{\s*clearEmptyPanel\(currentState\.panels\.danmaku\)\s*clearDanmakuSkeleton\(currentState\.panels\.danmaku\)\s*syncDanmakuSenderOrderButton\(currentState\.panels\.danmaku\)/)
+  assert.match(widescreen, /header\.insertBefore\(button, sendTime\)/)
+  assert.match(widescreen, /type: PAGE_BRIDGE_MESSAGE\.DANMAKU_SENDER_ORDER/)
+  // Pinned beside the panels, outside the scroller: overscroll and late pages
+  // cannot move it, and the comment panel keeps its measured height clear.
+  assert.match(widescreen, /#\$\{ROOT_ID\} \.\$\{COMMENT_COMPOSER_HOST_CLASS\} \{\s*position: absolute;[\s\S]{0,120}bottom: var\(--bewly-widescreen-rail-bottom\);/)
+  assert.doesNotMatch(widescreen, /COMMENT_COMPOSER_HOST_CLASS\} \{\s*position: sticky/)
+  assert.match(widescreen, /\.bewly-widescreen-panels:has\(> \.bewly-widescreen-panel-comment\[hidden\]\) > \.\$\{COMMENT_COMPOSER_HOST_CLASS\} \{\s*display: none;/)
+  assert.match(widescreen, /> \.bewly-widescreen-panel-comment \{\s*padding-bottom: calc\(var\(--bewly-widescreen-rail-bottom\) \+ var\(\$\{COMMENT_COMPOSER_HEIGHT_PROPERTY\}, 0px\) \+ var\(--bew-space-3\)\);/)
+  // Playback type ramp: one heading (the video title), section titles at
+  // 15/22, reading text at body 15/24, controls 13/18, metadata as 12/16 captions.
+  {
+    const commentStyles = await readFile(new URL('../src/inject/index.ts', import.meta.url), 'utf8')
+    assert.match(widescreen, /\.bewly-widescreen-title \{[\s\S]{0,260}font-size: var\(--bew-font-size-heading\);/)
+    assert.match(widescreen, /\.bewly-widescreen-metadata-slot :is\(\.item, \.view-text, \.dm-text, \.pubdate-ip-text, \.argue-text, \.copyright-text\) \{\s*font-size: var\(--bew-font-size-caption\) !important;/)
+    assert.match(widescreen, /\.basic-desc-info \{\s*height: auto !important;\s*color: var\(--bewly-widescreen-text-secondary\) !important;\s*font-size: var\(--bew-font-size-body, 15px\) !important;\s*line-height: var\(--bew-line-height-body, 24px\) !important;/)
+    assert.match(widescreen, /\.rec-title \.title-txt \{[\s\S]{0,80}font-size: var\(--bew-font-size-title\) !important;\s*font-weight: var\(--bew-font-weight-medium\) !important;/)
+    assert.match(widescreen, /\.pic-box \.duration \{\s*font-size: var\(--bew-font-size-caption\) !important;/)
+    assert.match(commentStyles, /#title h2 \{\s*font-size: var\(--bew-font-size-title\) !important;\s*font-weight: var\(--bew-font-weight-medium\) !important;/)
+    assert.doesNotMatch(commentStyles, /font-size: var\(--bew-font-size-heading\)/, 'only the video title is a heading')
+    assert.match(commentStyles, /:is\(#user-name, #user-name a\) \{\s*font-size: var\(--bew-font-size-control, 13px\) !important;/)
+    assert.match(commentStyles, /#location \{\s*color: var\(--bew-text-3\) !important;\s*font-size: var\(--bew-font-size-caption, 12px\) !important;/)
+    assert.match(commentStyles, /--text3: var\(--bew-text-3\);[\s\S]{0,80}:is\(#pubdate, #like, #dislike, #reply, #more, #count\) \{\s*font-size: var\(--bew-font-size-caption\) !important;/)
+    assert.match(commentStyles, /#view-more \{\s*color: var\(--bew-text-3\) !important;\s*font-size: var\(--bew-font-size-caption, 12px\) !important;/)
+    assert.match(commentStyles, /#content \{\s*font-size: var\(--bew-font-size-body, 15px\);\s*line-height: var\(--bew-line-height-body, 24px\);/)
+    // One entity indent: the 40px avatar plus space-3, for the author row and
+    // every comment and reply.
+    const entityIndent = /calc\(var\(--bew-control-height-lg, 40px\) \+ var\(--bew-space-3, 12px\)\)/
+    assert.match(commentStyles, new RegExp(`#body \\{\\s*padding-left: ${entityIndent.source};`))
+    assert.match(commentStyles, new RegExp(`#expander \\{\\s*padding-left: ${entityIndent.source};`))
+    assert.match(commentStyles, /#user-avatar \{\s*left: 0;\s*scale: calc\(5 \/ 6\);\s*transform-origin: 0 0;/)
+    assert.match(widescreen, /\.bewly-widescreen-up-slot :is\(\.up-avatar-wrap, \.up-avatar, \.bili-avatar\) \{\s*width: var\(--bew-control-height-lg\) !important;/)
+    // Grouping: the first thread sits under the header at the inter-thread rhythm.
+    assert.match(commentStyles, /'bili-comments': \{[\s\S]{0,300}#contents \{\s*padding-top: 0 !important;/)
+    assert.match(commentStyles, /:host-context\(#bewly-widescreen-root\) \{\s*display: block;\s*\}\s*:host-context\(#bewly-widescreen-root\) #navbar \{[\s\S]{0,140}margin-bottom: 0 !important;/)
+  }
+  // The follow widget over the video repeats the author row and is hidden;
+  // its corner is a fixed, empty, click-through slot for future pane icons.
+  assert.match(widescreen, /:is\(\.bpx-player-top-left-follow, \.bpx-player-top-follow\),[\s\S]{0,400}display: none !important;/)
+  assert.match(playbackFunctions(widescreen, 'createRoot'), /playerToolbar\.className = 'bewly-widescreen-player-toolbar'\s*playerSlot\.append\(playerFrame, danmakuDock, playerToolbar\)/)
+  assert.match(widescreen, /\.bewly-widescreen-player-toolbar \{\s*position: absolute;\s*top: var\(--bewly-widescreen-card-inset\);\s*left: var\(--bewly-widescreen-card-inset\);[\s\S]{0,200}width: calc\(var\(--bew-control-height\) \* 4 \+ var\(--bew-space-2\) \* 3\);\s*height: var\(--bew-control-height\);\s*pointer-events: none;/)
+  assert.match(widescreen, /:is\(\[data-display-mode="fill"\], \[data-zooming="true"\]\) \.bewly-widescreen-player-toolbar \{\s*visibility: hidden;/)
+  // Every player popover shares one surface constant, the feedback panel included.
+  assert.match(widescreen, /const PLAYER_POPOVER_SURFACE = `background: var\(--bew-elevated-alt-solid\) !important;\s*border: 1px solid var\(--bew-surface-border-color\) !important;\s*border-radius: var\(--bew-popover-radius\) !important;/)
+  assert.equal((widescreen.match(/\$\{PLAYER_POPOVER_SURFACE\}/g) ?? []).length, 6)
+  assert.equal((widescreen.match(/border-radius: var\(--bew-popover-radius\) !important;\s*corner-shape: var\(--bew-corner-shape\);\s*box-shadow: var\(--bew-popover-surface-shadow\) !important;/g) ?? []).length, 1, 'the popover surface is declared once')
+  const feedbackStyles = widescreen.slice(widescreen.indexOf('/* Player feedback, opened by the docked help button.'), widescreen.indexOf('/* 弹幕设置/弹幕样式弹窗文字颜色适配浅色模式'))
+  assert.match(feedbackStyles, /\.b-back-panel \{\s*\$\{PLAYER_POPOVER_SURFACE\}/)
+  assert.match(feedbackStyles, /\.b-back-tabmenu-list\.b-back-show::before \{\s*border-color: var\(--bew-text-1\) !important;/)
+  assert.match(feedbackStyles, /background: var\(--bew-accent-solid\) !important;/)
+  assert.match(feedbackStyles, /\.b-back-submit\.disable, \.b-back-content-fail-resubmit:not\(\.b-back-show\)\) \{\s*color: var\(--bew-text-3\) !important;\s*background: var\(--bew-fill-1\) !important;/)
+  assert.match(feedbackStyles, /background: var\(--bew-input-bg\) !important;\s*border: 1px solid var\(--bew-input-border-color\) !important;/)
+  // No rule keys on a bare element type or `*`, which would test every element on the page.
+  assert.doesNotMatch(feedbackStyles, /:where\(div|> \*|\) \* \{|\[class\*=/)
+  assert.match(widescreen, /prefers-reduced-motion: reduce[\s\S]*\.b-back-panel :is\(\.b-back-submit[^)]*\):active \{\s*scale: none;/)
+  // The flush pane has no card border, on the player or on the skeleton.
+  assert.doesNotMatch(widescreen, /\.bewly-widescreen-loading-skeleton-player::after/)
+  assert.match(widescreen, /sidebar\.appendChild\(createLoadingSkeletonBlock\('bewly-widescreen-loading-skeleton-composer'\)\)/)
+  assert.deepEqual(parseCommentListParams('1,117354126115716'), { type: 1, oid: '117354126115716' })
+  for (const invalid of [null, '', '0,1', '1,', '1,abc', 'x,1'])
+    assert.equal(parseCommentListParams(invalid), null)
+  const composerTarget = toCommentComposerReply({ rpid: 12, root: 0, oid: 34, type: 1, member: { mid: 5, uname: 'A' }, content: { message: 'm', pictures: [{ img_src: 'https://i0.hdslb.com/a.jpg' }, {}] }, replies: [{}] })
+  assert.deepEqual(composerTarget, { rpid_str: '12', root_str: '0', parent_str: '0', oid_str: '34', type: 1, mid_str: '5', ctime: 0, member: { mid: '5', uname: 'A' }, content: { message: 'm', pictures: [{ img_src: 'https://i0.hdslb.com/a.jpg' }] } })
+  assert.equal(toCommentComposerReply({ rpid_str: 'x', oid_str: '1', type: 1 }), null)
+  assert.equal(toCommentComposerReply({ rpid_str: '1', oid_str: '1', type: 0 }), null)
+  for (const type of [PAGE_BRIDGE_MESSAGE.COMMENT_COMPOSER_TARGET, PAGE_BRIDGE_MESSAGE.COMMENT_COMPOSER_INSERT]) {
+    assert.equal(isPageBridgeMessage({ protocol: PAGE_BRIDGE_PROTOCOL, channelId: 'c', type, data: {} }), true)
+    assert.equal(isPageBridgeMessage({ protocol: PAGE_BRIDGE_PROTOCOL, channelId: 'c', type }), false, 'composer messages carry data')
+  }
+  // The fill control replaces the hidden native wide / web / full buttons, and
+  // the zoom keeps URL, player tree and a single native resize.
+  const fillToggleSection = playbackFunctions(widescreen, 'createFillToggleButton', 'setupFillToggle', 'setWidescreenDisplayMode', 'stopWidescreenZoom')
+  assert.match(fillToggleSection, /className = `bpx-player-ctrl-btn \$\{FILL_TOGGLE_CLASS\}`/)
+  assert.match(fillToggleSection, /querySelector<HTMLElement>\('\.bpx-player-control-bottom-right'\)/)
+  assert.match(fillToggleSection, /bar\.append\(currentState\.fillToggleButton\)/)
+  assert.match(fillToggleSection, /observePlayerDom\(ensure\)/)
+  assert.match(fillToggleSection, /event\.preventDefault\(\)\s*event\.stopPropagation\(\)/)
+  assert.doesNotMatch(fillToggleSection, /history\.|location\.|requestFullscreen/)
+  assert.match(fillToggleSection, /const painted = shouldAnimate \? measurePaintedPlayer\(currentState\) : undefined\s*const restMode = currentState\.heldRestMode \?\? currentState\.displayMode\s*stopWidescreenZoom\(currentState\)/)
+  // Rest styles (player insets, column inertness) switch on the settled frame.
+  assert.match(fillToggleSection, /currentState\.heldRestMode = shouldAnimate \? restMode : undefined/)
+  assert.match(fillToggleSection, /stopWidescreenZoom\(currentState\)\s*releaseRestMode\(currentState\)/)
+  assert.match(fillToggleSection, /resolveWidescreenZoomFrame\(painted, layout, layoutContentWidth\)/)
+  assert.doesNotMatch(fillToggleSection, /radius|borderRadius/)
+  assert.match(fillToggleSection, /prefers-reduced-motion: reduce/)
+  assert.match(fillToggleSection, /holdAnimation\(motion\)/)
+  assert.match(fillToggleSection, /getMotionDuration\(style, '--bew-duration-moderate', 300\)/)
+  // Motion is transform-only so the compositor runs it through main-thread
+  // work; the clip animates separately on the same timing.
+  assert.match(fillToggleSection, /const motion = playerEl\.animate\(\[\{ transform: frameTransform\(from\) \}, \{ transform: frameTransform\(to\) \}\], timing\)/)
+  assert.match(playbackFunctions(widescreen, 'releaseRestMode'), /currentState\.heldRestMode = undefined\s*syncDisplayModeAttributes\(currentState\)/)
+  assert.match(widescreen, /'i-tabler:maximize'/)
+  // Bpx zeroes the control font size and sizes its icon box from an SVG; the
+  // mask glyph needs both a box height and its own size or it collapses to 0.
+  assert.match(widescreen, /\.\$\{FILL_TOGGLE_CLASS\} \.bpx-player-ctrl-btn-icon \{[\s\S]{0,160}width: 100%;\s*height: 100%;/)
+  assert.match(widescreen, /\.\$\{FILL_TOGGLE_CLASS\}__icon \{\s*flex: none;\s*width: var\(--bew-icon-size-md, 20px\);\s*height: var\(--bew-icon-size-md, 20px\);/)
+  assert.match(widescreen, /'i-tabler:minimize'/)
+  // The icon classes live only in a `.ts` file, which UnoCSS's watch pipeline
+  // skips; without the include comment a running `pnpm dev` drops minimize.
+  assert.match(widescreen, /\/\/ @unocss-include[\s\S]{0,160}const FILL_ICON_CLASS = 'i-tabler:maximize'\s*const CARD_ICON_CLASS = 'i-tabler:minimize'/)
+  // Escape returns the filled video to the card; F still hands over to native fullscreen.
+  assert.match(widescreen, /event\.key === 'Escape' && nextState\.displayMode === 'fill'[\s\S]{0,80}setWidescreenDisplayMode\(nextState, 'card'\)/)
+  // Transformed zoom frames never become a native resize or a measured control size.
+  assert.match(widescreen, /const signature = `\$\{currentState\.playerEl\.offsetWidth\}:\$\{currentState\.playerEl\.offsetHeight\}`/)
+  assert.match(playbackFunctions(widescreen, 'syncControlsGlassGeometry', 'syncAuxiliaryControlGeometry'), /if \(currentState\.zoom\)\s*return[\s\S]*if \(currentState\.zoom\)\s*return/)
+  const cleanupSection = playbackFunctions(widescreen, 'cleanupState')
+  assert.match(cleanupSection, /stopWidescreenZoom\(currentState\)/)
+  assert.match(cleanupSection, /currentState\.fillToggleCleanup\?\.\(\)/)
+  assert.match(cleanupSection, /currentState\.backdrop\.remove\(\)/)
+  assert.match(cleanupSection, /classList\.remove\(BODY_CLASS, BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\)/)
+  assert.match(widescreen, /viewportBottom: playerRect\.bottom - glassBottom/)
   const danmakuSurfaceMarker = '$' + '{DANMAKU_SURFACE_SELECTOR}'
   const danmakuSurfaceStyles = widescreen.slice(
     widescreen.indexOf(`${danmakuSurfaceMarker} {`),
@@ -2822,7 +3084,8 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf(`body.\${BODY_CLASS}.\${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS} .\${DANMAKU_GLASS_CLASS}`),
     widescreen.indexOf(`#\${ROOT_ID} .bewly-widescreen-danmaku-dock {`),
   )
-  assert.match(hiddenGlassStyles, /opacity: var\(--bewly-widescreen-controls-opacity, 0\) !important/)
+  // Hidden surfaces set their own opacity; nothing inherited changes on <body>.
+  assert.match(hiddenGlassStyles, /opacity: 0 !important/)
   assert.match(hiddenGlassStyles, /transform: none !important/)
   assert.doesNotMatch(hiddenGlassStyles, /translate3d/)
   assert.match(widescreen, /host\.parentElement\?\.insertBefore\(glass, host\)/)
@@ -2844,7 +3107,7 @@ async function verifyP2WidescreenControl() {
   assert.doesNotMatch(hiddenDanmakuSourceStyles, /translate3d/)
   assert.match(hiddenDanmakuSourceStyles, /pointer-events: none/)
   assert.match(widescreen, /\.bpx-player-control-wrap[\s\S]{0,260}bottom: calc\([\s\S]{0,120}--bewly-widescreen-controls-glass-bottom[\s\S]{0,120}--bewly-widescreen-bottom-controls-height\)\s*\)\s*!important/)
-  assert.match(widescreen, /body\.\$\{BODY_CLASS\}\.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\}[\s\S]{0,260}transform: none !important;\s*opacity: var\(--bewly-widescreen-controls-opacity, 0\) !important;\s*pointer-events: none !important/)
+  assert.match(widescreen, /body\.\$\{BODY_CLASS\}\.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\}[\s\S]{0,260}transform: none !important;\s*opacity: 0 !important;\s*pointer-events: none !important/)
   assert.match(widescreen, /controlsGlassAppliedHeight/)
   assert.match(widescreen, /NATIVE_PLAYER_CLASS\} :is\(\s*\.bpx-player-progress-wrap,[\s\S]{0,200}visibility: visible !important/)
   assert.match(widescreen, /value未变化跳过|同值跳过/)
@@ -2862,10 +3125,9 @@ async function verifyP2WidescreenControl() {
   )
   assert.match(nativePlayerPopoverStyles, /\.bpx-player-ctrl-setting-menu/)
   assert.match(nativePlayerPopoverStyles, /\.bpx-player-ctrl-pip-tip/)
-  assert.match(nativePlayerPopoverStyles, /background: var\(--bew-elevated-alt-solid\) !important/)
-  assert.match(nativePlayerPopoverStyles, /border: 1px solid var\(--bew-surface-border-color\) !important/)
-  assert.match(nativePlayerPopoverStyles, /border-radius: var\(--bew-popover-radius\) !important/)
-  assert.match(nativePlayerPopoverStyles, /box-shadow: var\(--bew-popover-surface-shadow\) !important/)
+  // The shared surface (asserted with PLAYER_POPOVER_SURFACE) carries the solid
+  // background, border, popover radius and shadow.
+  assert.match(nativePlayerPopoverStyles, /\$\{PLAYER_POPOVER_SURFACE\}/)
   assert.match(widescreen, /\.bpx-player-ctrl-setting-box \{[\s\S]{0,300}background: transparent !important;[\s\S]{0,160}border: 0 !important;[\s\S]{0,160}box-shadow: none !important/)
   assert.match(widescreen, /function syncControlsGlassGeometry/)
   assert.match(widescreen, /const HIGH_ENERGY_PROGRESS_SELECTOR = '\.bpx-player-pbp'/)
@@ -2877,7 +3139,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /currentState\.highEnergyProgressObserver\?\.disconnect\(\)/)
   assert.match(widescreen, /const controlsHeight = wrapHeight \+ highEnergyProgressHeight/)
   assert.match(widescreen, /\$\{controlsHeight\}px/)
-  assert.match(widescreen, /syncDanmakuInputSource\(currentState\)\s*syncControlsGlassGeometry\(currentState\)/)
+  assert.match(widescreen, /syncDanmakuInputSource\(currentState\)\s*syncViewerCount\(currentState\)\s*syncControlsGlassGeometry\(currentState\)/)
   assert.match(widescreen, /right: var\(--bewly-widescreen-controls-glass-inset\) !important[\s\S]{0,240}left: var\(--bewly-widescreen-controls-glass-inset\) !important/)
   assert.match(widescreen, /--bewly-widescreen-bottom-controls-height\) \+ var\(--bewly-widescreen-controls-block-padding, 12px\) \+ \$\{controlsHeight\}px/)
   assert.match(widescreen, /--bewly-widescreen-controls-glass-inset: 10%/)
@@ -2905,13 +3167,13 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /mode-selection-container :is\(span, div, li, a, p, i\)/)
   assert.match(widescreen, /\.bpx-player-progress-schedule-buffer \{\s*background: var\(--bewly-widescreen-progress-buffer\) !important/)
   assert.match(widescreen, /\.bpx-player-progress-schedule-current \{\s*background: var\(--bewly-widescreen-progress-played\) !important/)
-  assert.match(widescreen, /color: var\(--bew-text-1\) !important;\s*background: var\(--bew-elevated-alt-solid\) !important;/)
+  assert.match(widescreen, /color: var\(--bew-text-1\) !important;\s*\$\{PLAYER_POPOVER_SURFACE\}/)
   assert.match(widescreen, /bpx-player-dm-setting-box,[\s\S]{0,460}color: var\(--bew-text-1\) !important/)
   assert.match(widescreen, /--bewly-widescreen-controls-glass-bottom: var\(--bew-space-8, 32px\)/)
   assert.match(widescreen, /--bewly-widescreen-controls-opacity: 1/)
-  assert.match(widescreen, /body\.\$\{BODY_CLASS\}\.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\} \{\s*--bewly-widescreen-controls-opacity: 0;/)
+  assert.doesNotMatch(widescreen, /body\.\$\{BODY_CLASS\}\.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\} \{/)
   assert.match(widescreen, /opacity var\(--bew-duration-moderate, 300ms\) var\(--bew-ease-standard, ease\)/)
-  assert.match(widescreen, /body\.\$\{BODY_CLASS\} \.\$\{DANMAKU_GLASS_CLASS\},[\s\S]{0,80}#\$\{ROOT_ID\} \.bewly-widescreen-sidebar/)
+  assert.match(widescreen, /body\.\$\{BODY_CLASS\} \.\$\{DANMAKU_GLASS_CLASS\},[\s\S]{0,140}#\$\{ROOT_ID\} :is\(\.bewly-widescreen-info, \.bewly-widescreen-sidebar, \.bewly-widescreen-panel, \.bewly-widescreen-panel-loading\)/)
   assert.match(widescreen, /--bewly-widescreen-danmaku-bar-bg: var\(--bew-elevated-alt\)/)
   assert.doesNotMatch(widescreen, /--bewly-widescreen-danmaku-bar-bg: var\(--bew-content-solid/)
   assert.doesNotMatch(widescreen, /html\.dark\.oled-dark #\$\{ROOT_ID\}[\s\S]{0,160}--bewly-widescreen-danmaku-bar-bg/)
@@ -2982,7 +3244,7 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuViewerInfoStyles, /border: 0 !important/)
   assert.match(danmakuViewerInfoStyles, /box-shadow: none !important/)
   assert.match(widescreen, /--bewly-widescreen-aux-controls-width/)
-  assert.match(widescreen, /var\(--bew-control-height, 36px\) \* 4 \+ var\(--bew-space-2, 8px\) \* 4/)
+  assert.match(widescreen, /var\(--bew-control-height, 36px\) \* 5 \+ var\(--bew-space-2, 8px\) \* 5/)
   assert.match(widescreen, /body\.\$\{BODY_CLASS\} #bewly[\s\S]{0,180}z-index: calc\(var\(--bew-z-widescreen\) \+ 1\)/)
   assert.match(widescreen, /\.bpx-player-dm-root[\s\S]{0,220}margin-left: var\(--bewly-widescreen-aux-controls-width/)
   assert.match(sideBar, /useMutationObserver/)
@@ -3075,8 +3337,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /\.bpx-player-mode-selection-container[\s\S]{0,320}background: transparent !important/)
   assert.match(widescreen, /\.bpx-player-mode-selection-container \{[\s\S]{0,100}display: none !important/)
   assert.match(widescreen, /\.bpx-player-mode-selection-container\.active[\s\S]{0,80}display: block !important/)
-  assert.match(widescreen, /\.bpx-player-mode-selection-panel[\s\S]{0,500}background: var\(--bew-elevated-alt-solid\) !important[\s\S]{0,280}border-radius: var\(--bew-popover-radius\) !important/)
-  assert.match(widescreen, /\.bpx-player-mode-selection-panel[\s\S]{0,700}backdrop-filter: none !important/)
+  assert.match(widescreen, /\.bpx-player-mode-selection-panel \{\s*color: var\(--bew-text-1\) !important;\s*\$\{PLAYER_POPOVER_SURFACE\}/)
   const danmakuSendButtonStyles = await readFile(`${root}/src/styles/sendButton.scss`, 'utf8')
   assert.match(widescreen, /\$\{SEND_BUTTON_CSS\}/)
   assert.match(danmakuSendButtonStyles, /background: var\(--bew-theme-color/)
@@ -3112,9 +3373,7 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-setting-box {`),
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-setting-box .bui-panel-wrap`),
   )
-  assert.match(danmakuSettingPanelStyles, /background: var\(--bew-elevated-alt-solid\) !important/)
-  assert.match(danmakuSettingPanelStyles, /box-shadow: var\(--bew-popover-surface-shadow\) !important/)
-  assert.match(danmakuSettingPanelStyles, /backdrop-filter: none !important/)
+  assert.match(danmakuSettingPanelStyles, /\$\{PLAYER_POPOVER_SURFACE\}/)
   assert.match(danmakuSettingPanelStyles, /max-height: var\(--bew-dm-popover-max-height, calc\(/)
   assert.match(danmakuSettingPanelStyles, /overflow-y: auto !important/)
   assert.doesNotMatch(danmakuSettingPanelStyles, /--bewly-widescreen-player-available-height/)
@@ -3168,7 +3427,10 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /panels\.playlist\.addEventListener\('scroll', handlePlaylistScroll/)
   assert.match(widescreen, /panels\.playlist\.removeEventListener\('scroll', handlePlaylistScroll\)/)
   assert.match(widescreen, /\.pod-expand-btn,[\s\S]{0,140}PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR[\s\S]{0,100}display: none !important/)
-  assert.match(widescreen, /\.subscribe-btn:hover \{[\s\S]{0,180}background: var\(--bew-theme-surface-hover\) !important/)
+  // Subscribe matches the neutral collapse toggle; the collection box sits on the page.
+  assert.match(widescreen, /\.subscribe-btn:hover \{\s*color: var\(--bew-text-1\) !important;\s*background: var\(--bew-fill-2\) !important;/)
+  assert.match(widescreen, /\.bewly-widescreen-panel > \* \{\s*box-sizing: border-box !important;/)
+  assert.match(widescreen, /\.bewly-widescreen-panel-playlist \.video-pod \{\s*padding-inline: 0 !important;\s*background: transparent !important;/)
   assert.match(widescreen, /\.video-pod__header \.header-bottom > \.right \{[\s\S]{0,260}min-width: max-content !important[\s\S]{0,120}flex: 0 0 auto !important/)
   const subscribeButtonStyles = widescreen.slice(
     widescreen.indexOf('.bewly-widescreen-panel-playlist .subscribe-btn {'),
@@ -3220,7 +3482,7 @@ async function verifyP2WidescreenControl() {
   assert.doesNotMatch(widescreen, /previousHidden/)
   assert.doesNotMatch(widescreen, /`:not\(.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\}\) .\$\{NATIVE_PLAYER_CLASS\}`/)
   assert.match(widescreen, /body\.\$\{BODY_CLASS\}:not\(\.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\}\) \.\$\{NATIVE_PLAYER_CLASS\} :is\(/)
-  assert.match(widescreen, /sidebarExpanded: isWidescreenSidebarExpanded\(currentState\)/)
+  assert.doesNotMatch(widescreen, /sidebarExpanded|isWidescreenSidebarExpanded/)
   assert.match(widescreen, /dataset\.playerControlsReady = String\(ready\)/)
   const applyNowSection = playbackFunctions(widescreen, 'applyNow')
   assert.ok(
@@ -3229,21 +3491,18 @@ async function verifyP2WidescreenControl() {
   )
   assert.match(widescreen, /function forwardNativePlayerPointerActivity\(/)
   const pointerBridgeSection = playbackFunctions(widescreen, 'forwardNativePlayerPointerActivity')
-  assert.match(pointerBridgeSection, /if \(!event\.isTrusted \|\| \(!allowSidebarExpanded && isWidescreenSidebarExpanded\(currentState\)\)\)/)
-  assert.match(pointerBridgeSection, /isWidescreenPlayerControlHoverRegion\(\{[\s\S]{0,180}playerBottom: rootRect\.bottom/)
+  assert.match(pointerBridgeSection, /if \(!event\.isTrusted\)\s*return/)
+  // The card is no longer the window: forward only inside the player's own box.
+  assert.match(pointerBridgeSection, /event\.clientX < playerRect\.left \|\| event\.clientX > playerRect\.right \|\| !isWidescreenPlayerControlHoverRegion\(\{[\s\S]{0,120}playerBottom: playerRect\.bottom/)
   assert.match(pointerBridgeSection, /new PointerEvent\('pointermove'/)
   assert.match(pointerBridgeSection, /new MouseEvent\('mousemove'/)
   assert.match(pointerBridgeSection, /querySelector<HTMLElement>\('\.bpx-player-video-area'\) \?\? playerContainer/)
-  assert.match(pointerBridgeSection, /allowSidebarExpanded = false/)
-  assert.match(pointerBridgeSection, /!allowSidebarExpanded && isWidescreenSidebarExpanded\(currentState\)/)
   assert.match(widescreen, /window\.addEventListener\('pointermove', handleBottomPointerActivity, \{ passive: true \}\)/)
   assert.match(widescreen, /const handleBottomPointerActivity = \(event: PointerEvent\) => \{\s*if \(!event\.isTrusted\)/)
   assert.match(widescreen, /window\.removeEventListener\('pointermove', handleBottomPointerActivity\)/)
   assert.match(widescreen, /document\.documentElement\.addEventListener\('pointerleave', clearPlayerPointerState\)/)
   assert.match(widescreen, /document\.documentElement\.removeEventListener\('pointerleave', clearPlayerPointerState\)/)
   assert.match(widescreen, /playerPointerInside: false/)
-  const sidebarHoverStateSection = playbackFunctions(widescreen, 'setHoverExpanded')
-  assert.match(sidebarHoverStateSection, /syncNativePlayerControlVisibility\(currentState\)/)
   assert.match(widescreen, /bottomControlsHovered: false/)
   assert.match(widescreen, /dataset\.bottomControlsHovered = String\(hovered\)/)
   assert.match(widescreen, /isWidescreenBottomControlHoverRegion\(\{/)
@@ -3251,22 +3510,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /currentState\.danmakuDock\.contains\(node\)/)
   assert.match(widescreen, /WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY/)
   assert.match(widescreen, /bottomControlsLeaveTimer/)
-  assert.match(sidebarInteractionSection, /function handlePointerMove\(event: PointerEvent\) \{\s*if \(!event\.isTrusted\)/)
-  assert.match(sidebarInteractionSection, /forwardNativePlayerPointerActivity\([\s\S]{0,200}true\)[\s\S]{0,160}setHoverExpanded\(false\)/)
-  assert.doesNotMatch(sidebarInteractionSection, /bottomControlHandoffTimer|SIDEBAR_BOTTOM_CONTROL_HANDOFF_DELAY|clearBottomControlHandoffTimer/)
-  assert.match(widescreen, /const BOTTOM_CONTROL_POPOVER_SELECTOR = \[/)
-  assert.match(widescreen, /'\.bpx-player-ctrl-eplist-menu-wrap'/)
-  assert.match(widescreen, /:not\(\[class\*="-menu-item"\]\):not\(\[class\*="-menu-wrap"\]\)/)
-  assert.match(widescreen, /function isBottomControlPopoverOpen\(currentState: BewlyWidescreenState\)/)
-  assert.match(widescreen, /root\.querySelectorAll<HTMLElement>\(BOTTOM_CONTROL_POPOVER_SELECTOR\)/)
-  assert.match(widescreen, /hasWidescreenControlPopoverArea\(rect\.width, rect\.height\)/)
-  const sidebarPointerLeaveSection = sidebarInteractionSection.slice(
-    sidebarInteractionSection.indexOf('function handlePointerLeave'),
-    sidebarInteractionSection.indexOf('function handleResizePointerDown'),
-  )
-  assert.match(sidebarPointerLeaveSection, /clearSidebarEdgeRevealSuppression\(currentState\)/)
-  assert.match(widescreen, /function temporarilySuppressSidebarEdgeReveal[\s\S]{0,420}setTimeout\([\s\S]{0,260}WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY/)
-  assert.match(widescreen, /function cleanupState[\s\S]{0,180}clearSidebarEdgeRevealSuppression\(currentState\)/)
+  assert.doesNotMatch(widescreen, /setupSidebarInteractionTracking|SidebarEdgeReveal|setupSidebarToggleAutoHide/)
   assert.doesNotMatch(widescreen, /function setupDanmakuControlEventBridge|function withOriginalDanmakuEventRoot/)
   const danmakuSettingsToggleSection = playbackFunctions(widescreen, 'setupDanmakuSettingsClickToggle')
   assert.match(danmakuSettingsToggleSection, /currentPanel\.style\.display = nextPinned \? 'block' : 'none'/)
@@ -3292,13 +3536,13 @@ async function verifyP2WidescreenControl() {
   assert.match(sideBar, /widescreenControlsHidden/)
   assert.match(sideBar, /widescreen-controls-hidden/)
   assert.match(sideBar, /opacity: var\(--bewly-widescreen-controls-opacity, 0\)/)
-  assert.match(sideBar, /widescreen-controls-hidden \.sidebar-content \{\s*transform: none;\s*pointer-events: none;/)
+  assert.match(sideBar, /widescreen-controls-hidden \.sidebar-content \{\s*opacity: 0;\s*transform: none;\s*pointer-events: none;/)
   assert.match(sideBar, /--b-button-color: transparent/)
   assert.match(sideBar, /--b-button-color-hover: var\(--bew-fill-2\)/)
   assert.match(sideBar, /--b-button-border-width: 0px/)
   assert.match(sideBar, /page-mode-switcher--sidebar:hover:not\(:disabled\)[\s\S]{0,180}background: var\(--bew-fill-2\)[\s\S]{0,120}transform: none/)
   assert.doesNotMatch(sideBar, /translate3d\(0, calc\(100% \+ var\(--bew-space-2\)\), 0\)/)
-  assert.match(widescreen, /@media \(max-width: \$\{MOBILE_BREAKPOINT\}px\)[\s\S]{0,900}\$\{DANMAKU_SURFACE_SELECTOR\}[\s\S]{0,180}padding-inline: var\(--bew-space-4, 16px\)/)
+  assert.match(widescreen, /@media \(max-width: \$\{MOBILE_BREAKPOINT\}px\)[\s\S]{0,1400}\$\{DANMAKU_SURFACE_SELECTOR\}[\s\S]{0,180}padding-inline: var\(--bew-space-4, 16px\)/)
   assert.doesNotMatch(widescreen, /READY_RETRY_INTERVAL|sidebarExpansionMode|data-sidebar-mode|setSidebarMode/)
   const watchLaterScheduleSection = contentScript.slice(
     contentScript.indexOf('function scheduleAddWatchLaterButton'),
@@ -3328,70 +3572,6 @@ async function verifyP2WidescreenControl() {
 }
 
 function verifyStageRouteAndTopBarPolicies() {
-  assert.deepEqual(resolveWidescreenAnchoredPlayerGeometry({
-    centered: false,
-    frameHeight: 900,
-    frameLeft: 0,
-    frameTop: 0,
-    frameWidth: 1920,
-    sidebarPosition: 'right',
-    sidebarReservedWidth: 480,
-  }), { height: 900, left: 0, top: 0, width: 1920 })
-  assert.deepEqual(resolveWidescreenAnchoredPlayerGeometry({
-    centered: true,
-    frameHeight: 900,
-    frameLeft: 10,
-    frameTop: 20,
-    frameWidth: 1920,
-    sidebarPosition: 'right',
-    sidebarReservedWidth: 480,
-  }), { height: 900, left: 10, top: 20, width: 1440 })
-  assert.deepEqual(resolveWidescreenAnchoredPlayerGeometry({
-    centered: true,
-    frameHeight: 900,
-    frameLeft: 10,
-    frameTop: 20,
-    frameWidth: 1920,
-    sidebarPosition: 'left',
-    sidebarReservedWidth: 480,
-  }), { height: 900, left: 490, top: 20, width: 1440 })
-  assert.deepEqual(resolveWidescreenCenterGeometry({
-    centerEnabled: true,
-    compactLayout: true,
-    horizontalLayout: true,
-    viewportWidth: 3840,
-    playerHeight: 900,
-    visualAspect: 16 / 9,
-    sidebarWidth: 460,
-  }), { enabled: true, offset: 230, sideGap: 1120 })
-  assert.equal(resolveWidescreenCenterGeometry({
-    centerEnabled: true,
-    compactLayout: true,
-    horizontalLayout: true,
-    viewportWidth: 1920,
-    playerHeight: 900,
-    visualAspect: 16 / 9,
-    sidebarWidth: 460,
-  }).enabled, false)
-  assert.equal(resolveWidescreenCenterGeometry({
-    centerEnabled: true,
-    compactLayout: false,
-    horizontalLayout: true,
-    viewportWidth: 3840,
-    playerHeight: 900,
-    visualAspect: 16 / 9,
-    sidebarWidth: 460,
-  }).enabled, false)
-  assert.equal(resolveWidescreenCenterGeometry({
-    centerEnabled: true,
-    compactLayout: true,
-    horizontalLayout: false,
-    viewportWidth: 720,
-    playerHeight: 400,
-    visualAspect: 1,
-    sidebarWidth: 720,
-  }).enabled, false)
-
   assert.equal(isTopicPage('https://www.bilibili.com/v/topic/detail?topic_id=123'), true)
   assert.equal(isTopicPage('https://bilibili.com/v/topic/detail?topic_id=456#feed'), true)
   assert.equal(isTopicPage('https://www.bilibili.com/v/topic'), false)
@@ -3636,7 +3816,7 @@ async function verifyUpstreamReliabilityContracts() {
 
   assert.match(adaptedStyles, /const revision = \+\+styleSetupRevision/)
   assert.match(adaptedStyles, /revision === styleSetupRevision && window\.location\.href === currentUrl/)
-  assert.ok(adaptedStyles.indexOf('clearRouteStyles()') < adaptedStyles.indexOf('await import(\'./pages/homePage.scss\')'))
+  assert.ok(adaptedStyles.indexOf('clearRouteStyles()') < adaptedStyles.indexOf('import(\'./pages/homePage.scss?inline\')'))
   assert.match(adaptedStyles, /if \(!isCurrentSetup\(\)\)\s*return/)
   assert.match(adaptedStyles, /onRouteChange\(\(\{ href \}\) => \{[\s\S]{0,100}setupStyles\(href\)[\s\S]{0,40}\}, true\)/)
   assert.match(adaptedStyles, /export function stopAdaptedStyles\(\)[\s\S]{0,140}clearRouteStyles\(\)/)
@@ -3805,7 +3985,10 @@ async function verifyIncrementalInteractionContracts() {
   assert.match(widescreen, /export function isBewlyWidescreenEngaged\(\)/)
   assert.match(widescreen, /session\.entering \|\| waitingForLoad/)
   assert.match(widescreen, /exitBewlyWidescreen\(\{ userInitiated: true \}\)/)
-  assert.doesNotMatch(widescreen, /pendingEscape|event\.key !== 'Escape'|event\.key === 'Escape'/)
+  // Escape never leaves the Bewly page; it only returns a filled video to its card.
+  assert.doesNotMatch(widescreen, /pendingEscape|event\.key !== 'Escape'/)
+  assert.equal(widescreen.match(/event\.key === 'Escape'/g)?.length, 1)
+  assert.match(widescreen, /if \(event\.key === 'Escape' && nextState\.displayMode === 'fill'\) \{\s*setWidescreenDisplayMode\(nextState, 'card'\)\s*return\s*\}/)
   assert.match(widescreen, /event\.key\.toLowerCase\(\) === 'f'/)
   assert.match(widescreen, /addEventListener\('keydown', handleWidescreenKeydown, \{ capture: true \}\)/)
   assert.match(pageModeSwitcher, /if \(widescreenEngaged\.value\)/)
@@ -4091,9 +4274,6 @@ async function verifyIncrementalCorrectnessContracts() {
   assert.match(moments, /if \('hostUnfollowed' in response\) \{\s+handleUpFilterChange\(''\)/)
   assert.ok(moments.indexOf('api.user.getRelations({ fids: requestHostMid }, readOptions)') < moments.indexOf('api.moment.getMomentsByUp({'))
   assert.match(widescreen, /\.usercard-wrap,[\s\S]{0,120}bili-user-profile,[\s\S]{0,120}\.van-popover\.van-followed,[\s\S]{0,120}\.bili-dialog-m,[\s\S]{0,120}\.video-share-popover[\s\S]{0,160}z-index: var\(--bew-z-hud\)/)
-  assert.match(widescreen, /const NATIVE_ACTION_OVERLAY_SELECTOR = \[[\s\S]{0,120}'\.bili-dialog-m',[\s\S]{0,80}'\.video-share-popover'/)
-  assert.match(widescreen, /function isNativeActionOverlayOpen\(\)[\s\S]{0,700}rect\.width > 0 && rect\.height > 0/)
-  assert.match(widescreen, /shouldRemainExpanded \|\| \(currentlyExpanded && isNativeActionOverlayOpen\(\)\)[\s\S]{0,100}setHoverExpanded\(true\)/)
   assert.match(globalEvents, /BEWLY_NATIVE_USER_PROFILE_REQUEST/)
   assert.match(globalEvents, /BEWLY_NATIVE_USER_PROFILE_RELEASE/)
   assert.match(injectScript, /BILIBILI_USER_PROFILE_SCRIPT_URL = 'https:\/\/s1\.hdslb\.com\/bfs\/seed\/jinkela\/commentpc\/bili-comments\.js'/)
@@ -4128,7 +4308,6 @@ async function verifyAuditRemediationContracts() {
   assert.match(widescreen, /function scheduleInitialPanelScrollReset/)
   assert.match(widescreen, /session\.current\.hydrateSidebar\(\)/)
   assert.match(widescreen, /hydrateSidebar: \(\) => startSidebarHydration\(nextState\)/)
-  assert.match(widescreen, /pointerTrackingFrame = requestAnimationFrame/)
   assert.match(widescreen, /setupWidescreenDanmakuSemantics/)
   assert.match(widescreen, /syncDanmakuInputSource\(currentState, true\)/)
   assert.match(widescreen, /currentState\.activeTab === 'comment' && !findCommentRoot/)
@@ -4299,8 +4478,86 @@ async function verifySemanticPortContracts() {
   assert.match(momentCard, /grid-template-columns: minmax\(0, 3fr\) minmax\(320px, 2fr\)/)
 }
 
+// Track selectors (2026-10-20): every surfaced choice row slides one plate
+// 2px inside its track, hover only lifts a label, and the playback rail tabs
+// reuse the shared indicator through a teleport instead of painting their own.
+async function listSourceFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true })
+  const nested = await Promise.all(entries.map(entry => entry.isDirectory()
+    ? listSourceFiles(path.join(directory, entry.name))
+    : Promise.resolve([path.join(directory, entry.name)])))
+  return nested.flat()
+}
+
+async function verifyTrackSegmentControls() {
+  const root = process.cwd()
+  const [segmentControl, shell, layout, widescreen, railTabsView, app] = await Promise.all([
+    readFile(`${root}/src/styles/segmentControl.scss`, 'utf8'),
+    readFile(`${root}/src/utils/bewlyWidescreen/shell.ts`, 'utf8'),
+    readFile(`${root}/src/utils/bewlyWidescreen/styles/layout.ts`, 'utf8'),
+    readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+    readFile(`${root}/src/contentScripts/views/PlaybackRailTabsIndicator.vue`, 'utf8'),
+    readFile(`${root}/src/contentScripts/views/App.vue`, 'utf8'),
+  ])
+  assert.match(segmentControl, /\.bew-segment-control--track \{\s*--bew-control-padding: var\(--bew-space-0-5\);/)
+  assert.match(segmentControl, /:is\(\.bew-segment-control--track, \.bew-segment-control:has\(\.bew-liquid-indicator\)\)\s+\.bew-segment-control__item:hover:not\(\[data-active="true"\]\):not\(:disabled\) \{\s*background: transparent;/)
+  assert.doesNotMatch(segmentControl, /--flush/)
+  assert.match(shell, /'bewly-widescreen-tabs bew-segment-control bew-segment-control--surface bew-segment-control--track'/)
+  assert.match(shell, /publishRailTabs\(tablist, nextTab\)/)
+  assert.match(widescreen, /clearRailTabs\(currentState\.tabButtons\.comment\.parentElement!\)\s*currentState\.root\.remove\(\)/)
+  assert.match(railTabsView, /<Teleport v-if="playbackRailTabs" :to="playbackRailTabs\.tablist">\s*<LiquidSegmentIndicator :key="playbackRailTabs\.generation" :active-key="playbackRailTabs\.activeTab" \/>/)
+  assert.match(app, /<PlaybackRailTabsIndicator \/>/)
+  assert.match(layout, /\$\{SEGMENT_LIQUID_INDICATOR_CSS\}/)
+  assert.doesNotMatch(layout, /--bew-segment-item-hover-current-bg: var\(--bew-theme-surface-hover\)/)
+  assert.match(layout, /\.bewly-widescreen-tabs:not\(:has\(> \.bew-liquid-indicator\)\) > \.bewly-widescreen-tab\[data-active="true"\] \{\s*background: var\(--bew-liquid-indicator-bg\);/)
+
+  // Repository audit: every surfaced choice row is a track with the shared
+  // indicator. Pinned channels are shortcut links (no selection) and the
+  // channels menu is one menu trigger whose open state paints itself.
+  const sources = (await listSourceFiles(`${root}/src`)).filter(file => /\.(?:vue|ts)$/.test(file))
+  const surfacedExceptions = new Set(['src/components/TopBar/components/TopBarPinnedChannels.vue', 'src/contentScripts/views/Home/components/HomeChannelsMenu.vue'])
+  const tracks: string[] = []
+  for (const file of sources) {
+    const relative = path.relative(root, file)
+    const content = await readFile(file, 'utf8')
+    assert.doesNotMatch(content, /bew-segment-control--flush/, `${relative} still uses the retired flush modifier`)
+    if (!/(?:components\/LiquidSegmentIndicator\.vue|composables\/useLiquidSegmentIndicator\.ts)$/.test(relative))
+      assert.doesNotMatch(content, /\buseLiquidSegmentIndicator\(/, `${relative} must render LiquidSegmentIndicator instead of calling the composable`)
+    for (const match of content.matchAll(/(?:class="|className = ')([^"']*\bbew-segment-control--surface\b[^"']*)/g)) {
+      const classes = match[1]
+      if (surfacedExceptions.has(relative))
+        continue
+      assert.match(classes, /\bbew-segment-control--track\b/, `${relative}: a surfaced choice row must be a track (${classes})`)
+      assert.doesNotMatch(classes, /\bbew-segment-control--static\b/, `${relative}: a track row slides its selection (${classes})`)
+      if (relative.endsWith('.vue'))
+        assert.match(content, /<LiquidSegmentIndicator\b/, `${relative}: a track row renders the shared indicator`)
+      tracks.push(relative)
+    }
+  }
+  assert.ok(tracks.includes('src/utils/bewlyWidescreen/shell.ts'))
+  assert.ok(tracks.length >= 13, `expected every known track row, found ${tracks.length}`)
+
+  const { clearRailTabs, playbackRailTabs, publishRailTabs } = await import('../src/utils/bewlyWidescreen/railTabs')
+  const first = { id: 'first' } as unknown as HTMLElement
+  const second = { id: 'second' } as unknown as HTMLElement
+  publishRailTabs(first, 'comment')
+  const initial = playbackRailTabs.value!
+  publishRailTabs(first, 'comment')
+  assert.equal(playbackRailTabs.value, initial, 'an unchanged tab publishes nothing')
+  publishRailTabs(first, 'danmaku')
+  assert.equal(playbackRailTabs.value!.activeTab, 'danmaku')
+  assert.equal(playbackRailTabs.value!.generation, initial.generation, 'a tab change keeps the mounted indicator')
+  publishRailTabs(second, 'comment')
+  assert.notEqual(playbackRailTabs.value!.generation, initial.generation, 'a new tab list remounts the indicator')
+  clearRailTabs(first)
+  assert.equal(playbackRailTabs.value!.tablist, second, 'a departed shell cannot clear its replacement')
+  clearRailTabs(second)
+  assert.equal(playbackRailTabs.value, null)
+}
+
 async function verify() {
   verifyAccountScopes()
+  await verifyTrackSegmentControls()
   await verifyForYouInitialDataLifecycle()
   verifyMomentDescriptionPolicies()
   verifyPlaybackRatePolicy()
@@ -4310,7 +4567,7 @@ async function verify() {
   verifyFloatingMenuPolicy()
   verifyWidescreenEngagementPolicy()
   verifyBilibiliApiErrorClassification()
-  verifyWidescreenSidebarRevealPolicy()
+  verifyWidescreenPointerAndZoomPolicy()
   verifyRandomPlayRetryPolicy()
   verifyAppAuthTokenPolicy()
   await verifyAppAuthSingleFlight()

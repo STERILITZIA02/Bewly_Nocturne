@@ -540,7 +540,7 @@ function jumpToLoginPage() {
                   </div>
 
                   <IconButton
-                    class="history-list-card__action history-list-card__delete"
+                    class="history-list-card__action history-list-card__delete" shape="smooth-rect"
                     :label="$t('common.operation.delete')"
                     :disabled="timeline.deleting.has(`${entry.item.history.business}_${entry.item.history.oid}`)"
                     @click.prevent.stop="deleteHistoryItem(entry.item)"
@@ -815,6 +815,8 @@ function jumpToLoginPage() {
   align-self: flex-start;
   width: var(--bew-icon-button-size-md);
   height: var(--bew-icon-button-size-md);
+  // The row padding equals the card radius, so the corner leaves no concentric constraint.
+  border-radius: var(--bew-interactive-radius);
   color: var(--bew-text-3);
   font-size: var(--bew-icon-size-md);
   opacity: 0;

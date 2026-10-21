@@ -1,320 +1,330 @@
 # AGENTS.md
 
-Bewly_Nocturne：基于 BewlyCat 持续维护的 bilibili 浏览器扩展（Vue 3 + TS + Vite + UnoCSS，包管理用 `pnpm`）。
+Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS + Vite + UnoCSS，pnpm）。
 
-## 命令
+本文件写的是当前产品规则，与源码或用户最新要求冲突时以后者为准。决定的背景与细节在 `docs/maintenance/`（[索引](docs/maintenance/README.md)；精简前的完整条目见 [2026-10-21 存档](docs/maintenance/2026-10-21-agents-rules-archive.md)）。
 
-- `pnpm lint` / `pnpm lint:fix`
-- `pnpm typecheck`
-- 验证时不执行任何 `build` 操作；开发阶段使用 `pnpm dev` 持续编译与验证。
-- 删除全局自动注册的组件后，核对开发日志及 `extension/` 的实际产物。Vite watch 可能保留 `import.meta.glob` 的旧模块缓存；出现已删文件的 ENOENT 时，只重启本任务拥有的 watcher，并等待主脚本重新输出。lint、类型和组件测试通过不能代替产物更新或重载后的页面验证。
-- 构建产物：Chrome/Edge → `extension/`，Safari → `extension-safari/`
+## 工作方式
 
-仅当本次任务实际执行 `git commit` 时，提交前必须通过：
+- 读够周边代码就动手，范围限定在任务内。不做仪式性检查：不反复核对 remote、分支或哈希，不重复确认已给的授权。
+- 先看全局再写：搜一遍项目里同类功能的现有实现（见“共享能力速查”）。问题出在共享层就修共享层，让所有调用方一起受益；不在单个页面打补丁，也不复制一份再改。
+- 验证挑与改动最相关的一项：对应的 `pnpm verify:*` 或 `scripts/verify-*.mjs`、`pnpm lint`、`pnpm typecheck`，或在用户运行的 `pnpm dev` 下看页面。小改动不跑全套，不执行 build。verify 脚本多为源码文本回归断言；规则有意变更时直接更新断言。
+- 汇报说清做了什么、跑了哪些检查、哪些没验证。不写安全声明或免责说明。
 
-```sh
-pnpm lint
-pnpm typecheck
-```
+## 代码原则
 
-未执行 `git commit` 时，不要求运行上述检查。
+简洁直接：
 
-## 结构（速查）
+- 写满足需求的最少代码，数据流一眼能看清。不加只转发参数的薄包装、一次性抽象、多余的中间状态或配置项。
+- 不做防御性编程：不为假设场景加兜底、守卫、重试、开关或兼容层；只在真实边界（网络响应、用户输入、跨上下文消息、存储读写）处理失败，内部调用信任类型。
+- 被替代的实现和没有调用方的代码直接删除。退役设置字段只登记到 `src/constants/retiredSettings.ts` 的 `RETIRED_SETTINGS_FIELDS`（负责存储清理与拦截云同步），不迁移、不留兼容壳。
+- 注释只写代码本身看不出的原因。
+
+模块化与复用：
+
+- 每类问题只有一个权威实现：状态一个真值来源，视觉一个 token 或 mixin，行为一个 composable 或工具函数。
+- 同一逻辑出现第二处时抽成共享模块，并把旧副本一起替换掉；只有一处用到时不预先抽象。
+- 分层：无 Vue 依赖的纯逻辑放 `src/utils/`，带生命周期或响应式的放 `src/composables/`，视觉放 `src/styles/` 与 token，组件只负责组装。
+- 先用现有依赖；新增依赖要有当前需求。
+
+性能（扩展注入在 B 站页面里，每份开销都算在用户的页面上）：
+
+- 热路径（滚动、resize、指针移动、动画帧、Observer 回调、长列表渲染）不交错读写布局。几何走 `viewportGeometry.ts` 的每帧一次测量，不各自排 RAF 或挂 scroll / resize 监听。
+- 动画只动 transform 与 opacity；JS 驱动的动画经 `motionPriority.ts` 登记，内容挂载等动画结束。状态属性写在最小范围的元素上，不写 `body` 或根节点 class 触发整页样式重算；不写以 `*` 或元素类型结尾、会对整页元素求值的选择器。
+- 大列表与大对象用 `shallowRef` / `shallowReactive` 并整体替换，不做深响应式；索引与派生数据增量维护，不在每次更新时全量重建。
+- 观察器、监听器、定时器、请求与媒体按需创建，只观察真正需要的节点，随组件、页面、账号或可见性一起释放。隐藏的页面与分类不保留长列表或后台刷新。
+- 不轮询：用事件、Observer 或共享通道（`useRouteState`、`stateConsumers`）。同一请求 single-flight，缓存按账号隔离。
+- 首屏只加载可见所需，其余懒加载；图片走 `imageLoadQueue.ts`。
+- 玻璃不叠玻璃，实色上不加 backdrop-filter（见“材质与玻璃”）。
+
+## Git
+
+- 只在用户要求时 commit，提交前 `pnpm lint` 与 `pnpm typecheck` 通过（pre-commit 另由 lint-staged 跑 `eslint --fix`）。
+- 未经用户同意不 push，不创建或合并 PR；任何情况下都不推送到 `upstream`。
+- 工作区常有用户或其他会话未提交的改动：只提交自己改的文件；用户没要求就不 reset、clean、stash、切分支、删分支或改写历史。
+- 当前开发沿用 `message_feature`，不自动切分支或建 worktree。上游协作见下文“上游同步”。
+- 提交标头 `<type>(<scope>)!: <中文说明>`，type 取 feat / fix / docs / style / refactor / perf / test / build / ci / chore / revert / merge；合并 PR 写 `merge: 合并 PR #<number> <标题>`；有对应 [BewlyCat issue](https://github.com/keleus/BewlyCat/issues) 时附 `#{issue}`。PR 不提交 tests 文件。
+
+## 命令与开发环境
+
+- `pnpm dev`：用户自己运行，持续编译到 `extension/`（Chrome/Edge）；Safari 产物在 `extension-safari/`。只包含 prepare、content/inject、background 等真实任务，不恢复 popup/options 入口、`build:web`、`dev:web`。
+- `pnpm lint` / `pnpm lint:fix`、`pnpm typecheck`、`pnpm verify:*`。
+- UnoCSS 的 `content.filesystem` 与 safelist 只在 watcher 启动时读取，Vite 管线不扫描 `.ts`：只出现在 `.ts` 里的图标类要在该文件加 `// @unocss-include`。改 `unocss.config.ts` 后需要重启 `pnpm dev`，结果看 `extension/dist/contentScripts/style.css`。
+- 删除被 `import.meta.glob` 自动注册的文件后，Vite watch 可能报旧模块 ENOENT：只重启自己启动的 watcher。这类改动要在产物或重载后的页面上确认。
+- `vite.config.content.ts` 的开发构建保持 `minify: false`（watch 增量更新后函数重命名会与调用点错配），生产构建不变。
+- Chrome DevTools MCP 只在用户要求调试页面时使用。
+
+## 结构
 
 - `src/background/`：后台、消息与 API
 - `src/contentScripts/`：页面注入主逻辑（入口 `index.ts`）
 - `src/components/`：TopBar / Dock / VideoCard / Settings 等
-- `src/stores/`、`src/logic/storage.ts`：状态与设置
-- `src/manifest.ts`：manifest
-- `src/_locales/`：i18n
+- `src/stores/`、`src/logic/storage.ts`：状态与设置（默认值即当前设置结构）
+- `src/manifest.ts`、`src/_locales/`（四套 locale 与设置搜索目录 `searchCatalog.ts` 随入口同步）
 - 主 UI 跑在 Shadow DOM 内，注意样式隔离
 
-## 样式规范
+## 共享能力速查
 
-### Token 与复用
+新代码先用这些，缺能力时扩展它们，不另写一套。
 
-- 2026-10-17 用户确认 lieflat-charts 用于项目数据图表而非界面图标。图表以不透明 Mono 灰阶、刻度与细线表达，复用 `--bew-chart-*`、`dataChart.scss` 和 `ChartRungs.vue`；主题色只点亮当前读数或编辑点。投票每刻度 1%，保留小数末刻度、多选独立分母与零值无数据标记；通知柱使用共同单位且标记总数有界，未知值不能当零值。保留既有字体字重、紧凑四卡、主题适配和业务动作，不引入模板字体、图表 CDN 或演示数据到产品。
+| 需要 | 用 |
+| --- | --- |
+| 几何测量、滚动调度与位置恢复 | `utils/viewportGeometry.ts`、`utils/scrollIntent.ts` |
+| 动效时长与优先级 | `utils/motionTiming.ts`、`utils/motionPriority.ts` |
+| 页面 / Tab 切换 | `useReadyPageTransition` |
+| 弹窗与面板动效 | `useSourcePanelMotion`、`useGlassPanelMotion` |
+| 浮层定位 | `useAnchoredPopoverPosition`、`useFloatingMenuPosition` |
+| 展开收起 | `useMeasuredDisclosure` + `momentDisclosure.scss` |
+| 分段控件与滚筒 | `segmentControl.scss` + `LiquidSegmentIndicator.vue`、`WheelSelector.vue` |
+| 加载反馈 | `SkeletonBlock.vue`、`LoadingRing.vue`、`useLoadingRingPhase` |
+| 输入框 | `composer.scss`、`useComposerPicker`、`MomentReplyComposer.vue`、`sendButton.scss` |
+| 卡片与网格 | `contentCard.scss`、`useCardWindow`、`useGridLayout`、`MasonryGrid.vue`、`cardRowMetrics.ts` |
+| 侧栏页面 | `LibraryWorkspace.vue`、`LibrarySearchField.vue`、`LibrarySidebarHeading.vue`、`sidebarAction.scss` |
+| 滚动边缘渐隐 | `scrollEdgeFade.scss` |
+| 按钮与弹窗 | `IconButton`、`CloseButton`、`TagRemoveButton`、`Dialog`、`ConfirmDialog` / `useConfirmDialog`、`ContextMenu` |
+| 列表视图状态 | `useHomeTabState`、`usePageViewState` |
+| 图片 | `imageLoadQueue.ts`、`LazyPicture.vue` |
+| 扩展消息与共享状态 | `utils/messaging.ts`、`background/stateConsumers.ts` |
+| MAIN ↔ ISOLATED 页面桥 | `utils/pageBridgeChannel.ts`、`constants/pageBridge.ts` |
+| 路由 | `useRouteState.ts` |
+| 账号隔离与取消 | `utils/accountScope.ts`、`utils/abort.ts` |
+| 链接净化 | `utils/bilibiliUrl.ts` |
 
-- 2026-10-17 动态转发输入框与评论、私信共用 `composer.scss` 的表面与透明输入区，采用既有 32px Composer 圆角、底部图标工具栏和圆形发送按钮。空文案转发仍合法，不能套用评论的空输入禁用条件。评论与转发的外置表情 / @ / 话题面板共用 `useComposerPicker`，仅展开时监听定位与外部点击，收起及卸载清理；保持原转发事务、账号隔离、草稿与 IME 门禁。
+## 设计系统
 
-- 2026-10-17 动态卡片展开性能：评论 / 转发共用 `useMeasuredDisclosure` 与 `momentDisclosure.scss`，内层保持自然布局和不透明度，仅外层裁切高度按 200ms 标准曲线变化；不恢复过冲曲线、0fr 挤压或磨砂祖先的淡入。内容迟到时平滑重定目标，取消事件不能卸载重新打开的区域，缓存初始展开不重播。展开期间用既有交互保活保留卡片，瀑布流跳过中间高度的虚拟窗口提交，结束后强制提交最终高度；宽度变化、普通滚动、自动分页与资源清理仍沿用原链路。
+### Token
 
-- 全局视觉 token 统一维护在 `src/styles/variables.scss`，不要在页面组件中重复定义同义尺寸、字号、字重或状态颜色。
-- JavaScript 读取 CSS 动效时间 token 时统一使用 `utils/motionTiming.ts` 的 `getMotionDuration`，不得直接 `parseFloat()` 后当成毫秒；正式 CSS 压缩会将 `300ms` 改写为 `.3s`，开发与压缩产物都要覆盖回归。
-- 紧凑胶囊、标签栏、分段选择器和图标切换器使用 `src/styles/segmentControl.scss` 的 `.bew-segment-control` / `.bew-segment-control__item` 基础类；页面组件只负责定位、宽度和响应式布局。
-- 使用液态指示器时，选项必须包含 `data-segment-item`，激活项使用 `data-active="true"`；无液态指示器的分组增加 `.bew-segment-control--static`。
-- 液态指示器统一使用 `src/components/LiquidSegmentIndicator.vue`，页面不要重复调用 `useLiquidSegmentIndicator` 或手写 `.bew-liquid-indicator` DOM；组件通过 `active-key` 接收当前值，必要时用组件 ref 调用 `updateIndicator(true)`。
-- 同一行的同类控件必须使用一致的 surface 变体、外层高度、padding、gap、圆角、阴影和交互状态，避免一个透明、一个悬浮或各自维护胶囊样式。
-- 2026-10-15 页面切换范围按用户后续收窄：不改页头、侧栏的结构、几何、材质或滚筒。主内容与首页 Tab 共用 `useReadyPageTransition`，代码就绪后 90ms 淡出、210ms 淡入；外壳不参与动画，滚动仅在旧内容退场后恢复。减少动态效果使用 30/70ms 纯透明度。2026-10-19 首页 Tab 切换只替换内容网格：页头、搜索区与人物装饰不重建；未到内容顶部时保持当前滚动位置不跳到搜索框吸顶，已吸顶时才恢复该 Tab 自己的位置（不低于内容顶部）。首页外层 `KeepAlive max=1`，不活跃的网格按原卸载链路释放请求、预览和观察器，以数据缓存恢复。其他页面仅保留按账号隔离的内存视图状态，不缓存私信正文、请求所有者或 DOM。视频抽屉复用真实历史项，底层逻辑路由保持原页；返回/前进不能丢失查询或重复压栈。
-- 通用组件 token 使用 `--bew-control-*` / `--bew-segment-*` 命名；仅真正局限于 TopBar 的变量才使用 `--bew-top-bar-*`。
-
-### 玻璃层级与颜色
-
-- 2026-10-16 用户明确要求 Dock 与顶栏的未读数字胶囊改用独立磨砂背景。仅 `CountBadge.vue` 为此允许叠在 Dock 原玻璃外壳之上；复用全局滤镜、派生着色与关闭毛玻璃时的实色降级，不扩展到其他嵌套控件，不新增液态折射或观察器。
-
-- 为性能和可读性考虑，玻璃（背景模糊）之上的覆盖层不得再次使用玻璃。仅当覆盖层会延伸到原玻璃组件边界之外时，才允许保留独立玻璃表面；Teleport 本身不构成例外，应按实际覆盖范围判断。
-- 玻璃内的文本、按钮、选项、搜索框和菜单使用实色或无滤镜的普通表面。禁止给实色背景继续附加无视觉收益的 backdrop-filter，也不要以低模糊强度代替移除重复采样。
-- 用户明确保留顶栏渐进模糊、设置窗口的 `PanelTopBlur.vue` 以及会话滚动边缘模糊，保持参数、遮罩、层级和裁切行为。2026-10-13 起其他弹窗移除顶部模糊。此保留项不作为新增内部玻璃控件的依据。
-- `LiquidSegmentIndicator` 只负责选中项的几何变形与滑动，不采样背景；保留其动画，使用实色选中表面，不把它误当成液态玻璃组件删除。
-- 2026-10-15 仅实施配色修订：深色默认使用无色调中性灰；`enableDarkModeTint` 默认关闭，关闭时保留 `darkModeBaseColor`，所有主题入口通过 `resolveDarkModeBaseColor` 读取实际值。主题色限于主操作按钮、当前位置圆点、开关与进度、未读圆点、链接和关键词、Logo、文本选区；选中面、普通徽标、导航文字、装饰与编辑反馈使用中性颜色。共享选中/悬停/按下使用 `--bew-selected-bg` / `--bew-hover-bg` / `--bew-pressed-bg`；旧 `--bew-theme-surface*` 是中性兼容别名。主按钮使用 `--bew-accent-solid` / `--bew-on-accent-solid`，保留用户选择的原始底色；亮色主题配深色文字，禁止通过压暗或混色底板换取白字。链接与关键词使用对比度校正的 `--bew-theme-foreground`，小圆点使用 `--bew-accent-marker`。此颜色约定优先于下文历史条目中的主题色要求，其他布局、材质、动效和业务行为维持现状。
-- 灰、黑、白的半透明颜色不受上述主题色限制，也可使用实色；此豁免不允许在玻璃内部再次添加模糊。
-- 玻璃内的实色控件可无边框，优先通过表面、实色前景和明确选中状态区分；移除装饰边框时仍须保留 focus-visible 与必要的分隔线。玻璃自身的色调设置和既有页面装饰渐变不用于表达控件状态。
-- 2026-10-19 液态玻璃已按用户要求完整移除（覆盖此前保留液态折射的条目）：不再有 SVG 位移 / 色散 / 折射层、`vLiquidGlass` / `attachLiquidGlass`、`LiquidGlassSurface.vue`、“悬浮表面材质”设置或 `@wxperia/liquid-glass-vue` 依赖，不得恢复，也不以开关或性能模式保留兼容壳。`enableDockLiquidGlass`、`dockLiquidGlass*` 只在 `RETIRED_SETTINGS_FIELDS` 中清理并拦截同步。Dock、播放页底部控制栏、独立搜索框、顶栏浮层、侧栏按钮与私信导航使用自身绘制的普通毛玻璃（`--bew-filter-glass-1`）、边框与阴影，`disableFrostedGlass` 时不采样背景；嵌套层级判断使用 `useGlassPanelMotion.ts` 的 `GLASS_SURFACE_CONTEXT`。设置窗口、外侧纵向导航、普通 Dialog 与播放页侧栏保持原有毛玻璃；设置内输入框、内嵌菜单和嵌套 Dialog 使用实色；播放页内的 Bewly 辅助按钮复用底部容器表面。独立搜索框与顶栏边缘模糊相交时继续保留边缘模糊，不推广为其他内部控件的叠层依据。`LiquidSegmentIndicator` 等纯几何能力不受影响。
-- 播放栏玻璃卡沿用统一控制栏显隐值，并保留 reduced-motion。
-
-### 加载反馈
-
-- 2026-10-17 私信输入栏跟随用户确认的动态回复风格：上方透明正文输入区、下方表情 / 图片工具及圆形发送按钮；外层统一 32px 圆角普通磨砂，不再使用单行胶囊、内嵌实色输入底板或随多行拉长的发送按钮。外观复用 `styles/composer.scss` 与 `--bew-composer-radius`，仅外壳采样一次背景；保留关闭磨砂时的实色、键盘焦点、会话复用 / 入场时序、现有高度测量和 Dock 避让，以及发送、图片、输入法、只读权限门禁。
-
-- 2026-10-17 回复外观收尾：回复对象只在编辑器顶部出现一次；“转发到动态”为全透明按钮，常态灰字，hover / 选中只提亮文字，选中后尾部的勾按共享动效显现并支持 reduced-motion。评论图片使用撑满正文可用宽度的统一三列缩略图网格，单 / 双 / 多图大小一致，每行最多三张；共享 4px 间距，不恢复单图放大、半宽区域或两列特例。
-
-- 2026-10-17 动态卡片回复修订：展开评论即常驻 `MomentReplyComposer.vue`，固定在评论容器底部，列表按编辑器实测高度预留末尾空间。外壳使用大圆角、共享磨砂与实色降级，输入区透明、无独立底板；只有表情 / @ 面板 Teleport 到卡片外并复用共享定位与实色浮层。点击回复复用同一输入实例、提示回复对象并隐藏图片 / 同时转发，取消回复恢复顶层能力，草稿保留；常驻空闲编辑器不锁住虚拟列表。顶层评论支持评论表情、真实 MID 的 @、JPG/PNG 图片与同请求 `sync_to_dynamic`；回复评论仅表情和 @。根 / 父评论 ID 保持字符串，回复成功只合并服务端确认的数据。收起或换号清理临时内容及图片 URL；图片上传完成后再次核对归属再发评论；未确认结果不得自动重试公共写入。验证不得代用户真实发布，原站链接只作为异常时的主动检查入口。
-
-- 2026-10-18 加载反馈分工：布局已知的内容继续用骨架；单个图标位（按钮/菜单勾选/发送状态）、操作提交中、预览缓冲、通用 iframe 页面及尺寸未知的媒体等结果未知区域统一用 `LoadingRing.vue`（样式 `styles/loadingRing.scss`，非 Vue DOM 用 `utils/loadingRing.ts` 的 `createLoadingRingElement`）。圆环 3/4 弧旋转，完成时冻结并闭合后再恢复内容；图标位以默认插槽传入原图标并同格切换，避免布局跳动。需要等圆环闭合才能退场的容器（遮罩、加载更多行）复用 `useLoadingRingPhase`，不另写计时；转速与闭合时长取 `--bew-loading-ring-*` token，减少动态效果下闭合时长为 0。LIVE 状态图标不属于加载动画。
-
-- Nocturne 页面、数据组件、预览初始化和操作中的占位统一使用 `SkeletonBlock.vue` 与 `src/styles/skeleton.scss` 的 `[data-bew-skeleton]`；原生 Bilibili 播放器的媒体缓冲提示保持原样，LIVE 状态图标不属于加载动画。
-- 2026-10-10 用户指定发送控件例外：私信及弹幕发送按钮共用 `src/styles/sendButton.scss`，圆形按钮内显示上箭头，空输入仅显示暗淡静止的上箭头，实际发送/上传/冷却中才显示转圈状态，状态交叉淡入淡出并支持 reduced-motion；原生弹幕按钮保留原节点、事件和禁用权威，不另建发送逻辑。转发媒体卡片默认封面宽 384px、16:9、外侧 8px 留白，随消息区缩小而收窄，不允许固有图片宽度撑破网格或气泡。
-- 私信会话历史按 2026-09-08 的交互要求例外处理：点击会话先展开透明的右侧容器，展开结束再请求历史并逐条浮现，不使用历史骨架；会话列表及其他消息分类的骨架不变。展开期间刷新不能提前发出历史请求，关闭、切换或卸载须取消待开始的请求。
-- 2026-09-09：私信会话容器在 2026-10-10 消息页实验改版中移除左右两条竖线；滚动、到达历史起点、分页或返回最新消息均不改变展开形态。首次打开才展开容器，切换用户仅淡出消息记录并逐条显示新历史，外框和输入栏保持同一实例；再次点击当前用户关闭详情，不通过 history.back 恢复前一个用户。换号立即清理旧视图，离场记录不可继续交互。输入栏底部在右侧内容区避让 Dock；桌面下输入栏按整屏中线保持左右边距相等，极窄窗口保留控件所需最小宽度，外壳复用播放页底部容器的 modal 圆角、边框、材质和边缘阴影，内部输入区使用匹配嵌套关系的普通实色表面。
-- 消息页分类、搜索、筛选与会话列表共用持久侧栏，切换分类不卸载列表。分类复用 `WheelSelector.vue`：字号与几何取共享 token，无右侧箭头或选中背景；深色/OLED 使用白色与 67% 白字，亮色使用对应深色文字，hover 仅提亮文字，滚动支持连续及反向输入、惯性尾巴抑制与 reduced-motion。搜索和筛选采用全圆角，会话行沿用置顶分组圆角规则。侧栏外壳贴齐左、上、下边界，内部避让顶栏，并只采样一次毛玻璃。消息顶栏保持 absolute，右侧分类独立滚动，渐变模糊仅覆盖侧栏右边缘到视口右边缘；层级依次为搜索控件、侧栏、模糊、内容，Dock 高于底部模糊。隐藏的会话不继续读取或 ACK。输入栏、返回最新按钮、封面与骨架的最终规范见下方收尾规则，不恢复早期的主题色箭头、矮导航或逐帧几何动画。
-- 2026-10-10 消息交互补充：滚筒鼠标按下时不提前移动焦点位置，单次点击必须同时切换分类与页面；键盘方向键预览、Enter/Space 确认保持原语义。失效卡片提供独立的 288×96px 响应式占位。私信视频封面通过会话级 `usePrivateMessagePreviews` 复用 `useMomentPreviews` / `MomentVideoPreview`，封面悬停即开始请求并自动播放，保留暂停/进度控制；离开、离屏、会话/账号切换或隐藏时释放。普通动态/专栏封面只提供内容链接，不猜测其中的视频。聊天头像和会话列表头像通过有效 MID 与既有能力开关链接个人空间，会话选择按钮与头像链接互为兄弟，不嵌套交互控件或让头像导航触发会话选择。
-- 文本及图片输入入口在开发和打包构建中保持一致。现有 `experimental` 目录名称仅是代码路径，不代表运行时门禁；不得恢复已取消的图片隐藏开关。
-- 骨架复用真实内容的列数、封面比例、字号、行高、按钮尺寸和布局设置。已有数据及提交中的已知标签保持可读，只占位尚未取得的数据；不要用全页骨架遮住可继续使用的旧内容。
-- 加载结束后卸载占位，离屏图片停止骨架动画；请求归属和清理复用现有 generation/lifecycle，reduced-motion 统一由共享骨架样式处理。
-- Bewly 播放栏须在原生控制栏、弹幕栏和 Shadow DOM 中辅助按钮的实际布局稳定后退出初始化骨架；`playing` 事件不能代替控件布局就绪。
-- 播放页侧栏排版优先保留原生作者、关注、充电、消息、评论和播放器节点。原生评论内的排版通过 MAIN world 既有 Shadow DOM 样式桥且限定于 `#bewly-widescreen-root`，不得为换材质重建业务控件。
-- 播放页简介、标签和原生操作根节点的迟到更新/替换须由既有侧栏 Observer 处理；不可把它们与装饰、评论长列表和操作动画一概作为内部变化忽略。不克隆业务按钮，不复用已释放导航的节点，也不把脱落的 DOM 当作仍存活的原生组件重新挂回。
-- 普通 BV/AV 页的作者、操作栏、简介和标签在移交前通过现有 videoMetadataBridge 同步确认 MAIN world 的原生 Vue 组件已挂载且拥有该根节点。ISOLATED 不直接读取 `__vue__`；DOM 存在、原位标记、API 统计均不能替代组件存活判断。组件销毁通知复用侧栏刷新及统一清理，不新增轮询或第二套业务状态。
-- API 返回的点赞/投币/收藏/分享统计不代表原生操作就绪；缺少原生工具栏时不得将侧栏标记为完整。超时提供现有刷新/退出恢复入口，迟到的原生工具栏恢复后清除错误。
-- 播放侧栏由 aside 容器自身绘制唯一毛玻璃背景；2026-09-27 用户批准阅读层优化，头部和内容区使用完全不透明的语义阅读面，分类和留白保留外壳材质。内部不得再次采样背景，不使用负 z-index 伪元素承载整栏模糊。
-- 播放侧栏默认宽度为窗口 50%，可拖动至 85%；保留已保存的手动像素宽度。作者和完整操作栏按可用宽度并排或上下排布，简介与标签共用无滤镜的内嵌圆角容器；历史弹幕按钮只改变视觉定位，保留原生列表父子关系及模式显隐。
-
-- 2026-10-11 通知阅读与发送状态：Reply / At / Love 使用头像与正文两列、正文下方引用区，System 使用单色线框图标及标题/来源/正文；阅读内容最大宽度 960px，窄栏的引用区跨整行，多人点赞头像组可独立成行，骨架共用同一布局与容器断点。保留原渐变边缘、独立滚动、分类请求、账号隔离与已读提交。图标使用不透明语义前景，不使用 duotone。发送控件统一区分 ready / idle / pending / blocked：空输入是暗淡箭头，明确发送中或倒计时才转圈，原生禁用编辑器或会话 `canSend=false` 显示暗淡感叹号并说明不可发送。只读私信显示禁用 Composer，不赋予发送权限；文本、图片、Enter、表单和重试均须保持权限门禁。评论增强复用原生 Lit 更新与编辑器局部 input 事件，保留原按钮、事件、校验与禁用权威；不新增全局键盘监听或轮询。
-
-- 2026-10-11 底部导航细化：当前筛选结果含置顶会话时隐藏工具栏下分隔线，保留边框占位避免布局跳动。回到底部圆钮复用 `--bew-message-input-height`（44px），与单行输入框垂直中心对齐；搜索匹配胶囊保留现有桌面/窄屏高度。返回与匹配箭头使用 2.5px 线框，暗色/OLED 为纯白、亮色为纯黑，hover 经 300ms 过渡到主题前景；匹配按钮复用表情/图片的中性透明填充，计数增加左侧内距，保留键盘焦点与 reduced-motion。
-
-- 2026-10-11 消息页收尾检查：用户与历史搜索的防抖、读取间隔及结果展开批量由 `privateSearchPolicy.ts` 统一，导航箭头复用 `ChevronIcon.vue`；列表骨架使用最新卡片圆角并保留菜单位置。服务端屏蔽词 `words` 为 null/缺省时，在额度字段合法的前提下视为空列表；读取失败、增删失败及已提交未确认分别呈现，重试撤下旧错误，禁止以失败响应推断空列表。增删必须拥有已读取额度，重复词及越界输入不得发请求；成功写入需确认词的存在/不存在，未确认前不重复提交。已有词及新输入草稿在刷新和异步回读期间保持可读，换号、离场失效旧请求。
-
-- 2026-10-11 消息设置纠错与复查：屏蔽词允许 `words: null` 或缺省的合法空返回，仍验证服务端额度；通过独立 `loaded/failedOperation` 区分初读、增删和对账错误，重试期间撤下旧错误，失败时不显示“暂无”。已接受但未确认的增删必须刷新确认目标词的存在/不存在，不能重复提交；输入草稿保持可编辑且按提交时快照清空。筛选漏斗使用较细的单色线框并以间距 token 内移，保持原生 select 的键盘与筛选能力。
+- 全局视觉 token 在 `src/styles/variables.scss`，组件不重复定义同义的尺寸、字号、字重或颜色。
+- 通用控件 token 用 `--bew-control-*` / `--bew-segment-*`；只属于 TopBar 的才用 `--bew-top-bar-*`。
+- JS 读 CSS 动效时长用 `utils/motionTiming.ts` 的 `getMotionDuration`（压缩会把 `300ms` 写成 `.3s`）。滑块与滚筒的移动时长用 `getTravelDuration`：一格 300ms，距离越远越长（次线性），不写死。
 
 ### 排版
 
-- 2026-10-16 后续文字修订：用户认为加重文字不够精致，要求通过黑白程度与缩进表达层级。前一轮新增的页面 / 区块 / 弹窗标题、设置分组 / 子分组 / 行标题统一使用 400；字号与行高维持该轮规格。标题 text-1，分组和字段 text-2，说明 text-3。设置分组内容按 `--bew-settings-level-indent` 内缩 8px，子分组内容再内缩一级；不改变导航、外壳与控件尺寸。此条替代紧接下文的标题与标签 500/600 约定，已有卡片、品牌、计数及语义强调规则不作全局替换。
+- 基础文字五个角色：caption `12/16`、control `13/18`、body `15/24`、title `15/22`、heading `20/28`，用 `--bew-font-size-*` / `--bew-line-height-*`。展示文字用 `--bew-font-size-display`，大号数据用 `--bew-font-size-data/data-emphasis`。不新增无语义的 px/rem 字号，需要时先扩 token。
+- 字重只用 400/500/600/700 的 `--bew-font-weight-*`。层级靠黑白程度（text-1/2/3）与缩进表达，不靠加粗：页面 / 区块 / 弹窗标题、设置分组与行标题都是 400（`--bew-heading-weight` 等）；卡片 / 列表标题、人名、控件、徽标、滚筒用 500（滚筒与静态侧栏标题共用 `--bew-wheel-label-weight`）；内联 strong 与关键数字 600；700 只用于品牌字标。
+- 共享文字类：`.bew-page-heading`（页面主标题，不在页面里重组字号字重）、`.bew-subheading`、`.bew-section-label`、`.bew-ui-label`、`.bew-help`（text-3）。标题 text-1，分组与字段 text-2，说明 text-3。设置分组内容按 `--bew-settings-level-indent` 每级内缩 8px。
+- 字体栈 `--bew-fonts-ui`，禁止合成粗体。默认模式下原生页保留原站字体，推荐 / 自定义模式沿用既有覆盖。正文用比例数字，计数、时间、进度、统计用 tabular-nums；中文不加字距。
+- 同组标签选中与未选中字重相同，靠颜色、背景和指示器区分。
+- 圆形或胶囊里的数字（封面排名、`CountBadge`、序号）用 `main.scss` 的 `.bew-centered-numeral`，数字包在 `<span>` 里。
 
-- 2026-10-16 用户批准仅引入文字层级与视觉表面阶梯，明确不引入“外壳贴边 / 独立内容容器”的布局改版。设置通用页保留原面包屑中的唯一页标题，正文直接显示说明与分组；不改顶栏、侧栏几何或玻璃参数。共享文字角色使用 `.bew-page-heading`（20/28 500）、`.bew-subheading`（17/24 600）、`.bew-section-label`（12/16 500 text-3）、`.bew-ui-label`（14/20 500）与 `.bew-help`（13/20 400 text-3）；正文仍为 15/24 400。此条优先于历史标题 15/22 600 与页面标题 600 的约定，卡片标题仍为 15/22 500。表面从同一中性色对按用途派生：内容轻抬、独立浮层分离、输入内嵌，不按等差亮度逐层抬高。浅色、深色、OLED 分别校准，边框与玻璃规则维持原授权范围。
+### 图标
 
-- 2026-10-13 内容卡片统一：视频卡片仅保留统一布局，旧 `videoCardLayout` 仅用于废弃字段清理。裸卡/表面卡交互复用 `contentCard.scss`，间距及封面控件复用 `--bew-card-*` / `--bew-cover-*` token；网格管理行距，不恢复卡片底部 margin。作者常态为中性前景、悬停及键盘聚焦使用主题前景；动态内嵌媒体与引用使用 8px 语义圆角。真实布局、内容开关和骨架同步，保留按需加载、虚拟测量和预览清理。详见 `docs/maintenance/2026-10-13-content-card-unification.md`。
-
-- 2026-10-11 资料库左栏统一：收藏、稍后再看、观看历史复用 `LibraryWorkspace.vue` 的贴边持久左栏，宽度与消息页一致，单层毛玻璃及实色降级复用消息页色调；保持页面级主滚动与原有分页／虚拟列表，不另建右侧滚动状态。`LibrarySidebarHeading.vue` 复用 WheelSelector，分类使用精简标题；`LibrarySearchField.vue` 统一全圆角、常驻细边框、单一清除按钮和右侧筛选图标，IME 与空查询门禁必须保留。顶栏搜索及菜单高于侧栏，侧栏高于右侧顶栏边缘模糊，Dock 保持现有层级。收藏目录展开 / 选中项使用与观看历史、稍后再看高级筛选器相同的底板（`--bew-message-pinned-background`），高级筛选各分组默认收起，展开状态按分组在当前标签页的 sessionStorage 中记忆（2026-10-19）；管理菜单保留 hover/focus/touch 入口；不再把视频封面作为这三个左栏的玻璃背景。首屏骨架使用同一左栏布局。
-
-- 2026-10-11 概览材质与切换修订：保留紧凑两列四卡及细边框，Insights 卡片内底完全透明，不采用生成图中的三分区布局。概览的父层间距通过实际残留 DOM 判断，退出淡出完成前不因会话选择改变而跳动。Composer 在会话初始化时即挂载、测高并预留空间，opening 阶段 inert，入场仅使用 8px transform 与内部内容 opacity；玻璃外壳自身及入场祖先保持不透明。透明会话滚动层的 height/padding 不再逐帧动画，仍保留原来的入场结束后请求历史、切换复用与 reduced-motion 生命周期。
-
-- 2026-10-11 概览密度修订：Insights 在可用宽度 720px 起采用等宽两列、四张紧凑卡片；上排未读柱状图与活动折线，下排私信来源比例（合并已载入／置顶／免打扰统计）与四个最近会话。间距 12px、卡片内距 16px、环图 96px，折线与骨架复用 `--bew-insights-chart-height`；不再使用三列跨栏布局或独立的宽屏底部会话卡。常规桌面一屏呈现，窄屏回退单列并保留正常滚动，不裁切数据与操作。
-
-- 2026-10-11 消息概览：未选会话时使用 `ConversationInsights.vue` 展示权威未读计数、私信来源比例及已载入会话信息；粗柱状图使用不透明的主题色强度分级，活动折线使用主题前景与独立对比色，均复用语义圆角。近 7 天折线统计每个已载入会话的最近活动日期，不得伪称为完整收件历史或伪造趋势；未知计数用占位短线，真实零值保持 0。只有用户点击“全部标为已读”时才通过 `useMarkAllMessagesRead` 显式读取其他分类并遍历私信会话分页；复用真实 category read/update_cursor/ACK，不直接归零 Store。按服务端 seqno 确认成功后更新已载入会话，期间到达的更新序号保持未读，拒绝/停滞提示部分失败并允许重新读取后重试，换号、离页或卸载停止后续操作；系统 cursor 写入前再次确认账号与页面归属。
-
-- 2026-10-11 通知卡片紧凑化：四类 Native Feed 与骨架共用 `.native-notification-grid`，可用内容宽度达到 880px 时由 `MasonryGrid.vue` 按内容自然高度放入较短的一列，窄屏单列；DOM 保持时间顺序，分页追加不重分配已有卡片，ResizeObserver 与帧任务随组件卸载清理。引用与正文跨满卡片内宽，引用左侧与头像齐平，头像及标题区垂直居中；通知外层不再限制 960px 居中宽度。引用底色使用独立语义 token，暗色/OLED 向深色收敛；卡片与私信气泡共用弱化后的表面细边框，自己气泡仍保持不透明主题色。图片类气泡外圆角 16px、媒体 8px、留白 8px，保留双方气泡的指定直角。骨架同步列数、头像、正文与引用结构，点赞无正文占位、系统通知保留来源行；分页、已读与请求生命周期不因排布变化而改动。
-
-- 基础界面文字限定为：caption `12/16px`、control `13/18px`、body `15/24px`、title `15/22px`、heading `20/28px`，优先使用对应的 `--bew-font-size-*` 和 `--bew-line-height-*` token。
-- 品牌锁定字等极少量展示文字使用 `--bew-font-size-display`，比分等大号数据使用 `--bew-font-size-data/data-emphasis`；图标字体只使用 `--bew-icon-size-xs/sm/md/lg/xl`。caption 邻接图标使用 xs（14px），control 使用 sm（16px）。
-- 字重仅使用 `400/500/600/700` 对应的 `--bew-font-weight-regular/medium/semibold/bold`；不要新增 `650`、裸写 `bold` 或其他中间值。
-- 2026-10-14 字体规范覆盖冻结页面：正文、作者元信息与帮助文字用 `400`；卡片/列表标题、人名、控件、徽标与滚筒用 `500`；区块/弹窗/页面标题、内联 strong/b 和关键数字用 `600`；`700` 仅用于品牌字标。滚筒与静态侧栏标题共用 `--bew-wheel-label-weight`。不改用户明确加粗的图标（包括 ChevronIcon 的 2.5px）或既有页面布局。
-- Bewly 默认使用 `--bew-fonts-ui` 多字重系统字体栈并禁止合成粗体；默认模式下原生页保留原站字体，推荐/自定义模式继续沿用既有字体覆盖。Bewly 正文默认比例数字，只有计数、时间、进度和统计按需使用 tabular-nums；不在中文上加字距。2026-10-15 功能图标统一 Tabler 线性 1.75px，激活态使用该族实际存在的 filled 版本或保留同一线性图形；2026-10-19 起全项目功能图标统一为 UnoCSS `i-tabler:*` 遮罩图标（1.75px），`@iconify/vue` 仅保留给受保护的 Dock / SideBar 明暗切换按钮与无 UnoCSS 的专栏 iframe 图库（后者以样式把描边统一为 1.75，由 `verify:ui-icons` 约束）；Dock 右侧按钮与导航图标同为 20px。“全 Bewly”页面模式使用品牌标志 `src/assets/branding/bewly-mark.svg`（中心断开、轻微旋转的 X），以 `.bew-mark-icon` 全局类渲染，可作为项目头像源文件；“自定义”模式使用 Tabler `adjustments-horizontal`（2026-10-19 用户认为同族断开 X 变体与全 Bewly 区分不足后替换）；同步 UnoCSS safelist，不跨族切换。品牌、内容图形和专用发送/加载状态保留；明确指定的 ChevronIcon 2.5px 不被全局 SVG 规则覆盖。
-- 页面主标题复用 `.bew-page-heading`，不要在页面里重复组合字号、字重和行高。
-- 同组标签的未选中与选中状态保持相同字重，依靠颜色、背景和液态指示器表达状态，避免切换字重导致文字宽度和指示器跳动。
-- 新样式不要混用无语义的 px/rem 字号；确需特殊字号时应先判断能否扩充语义 token。
-
-### 紧凑控件
-
-- 2026-10-12 侧栏独立单行操作：卡片、分段控件之外仅含图标与文字的整行按钮复用 `.library-sidebar-action` 与 `sidebarAction.scss`。按钮命中区域等宽居中，内容靠左，首个图标或文字与滚筒标题对齐（2026-10-14 修订）；共同基线取侧栏内距加 `--bew-sidebar-label-inset`，相对搜索框左缘轻微内收 8px，且不超过搜索框圆角半径，不再跟随顶栏 Logo 内距。命中面通过 `--bew-sidebar-action-inset/padding` 向基线两侧对称延展。常态透明无边框，hover 在亮色/暗色略加深、OLED 略提亮；保留语义警告色、禁用和键盘焦点。卡片内部操作、播放全部卡片、分段筛选不套用此规范。
-
-- 默认规格：外层高 `36px`、padding `4px`、gap `4px`、内部项高 `28px`、文字 `13/18px 500`、图标 `16px`。
-- 2026-10-19 有底板的滑块选择器（首页 Tab / 布局切换 / 推荐模式 / 频道菜单、设置分段控件、Logo 样式）加 `.bew-segment-control--flush`：外层 padding 为 0，选项与选中滑块和整条容器同高（36px）；侧栏、Pop 内的透明分组和静态筛选维持默认 4px 内距。
-- 普通文字项水平 padding 为 `12px`；页面主标签使用 `.bew-segment-control__item--wide` 的 `16px`；纯图标项使用 `.bew-segment-control__item--icon`。
-- 必须覆盖 default、hover、focus-visible、active、disabled 状态；不要移除键盘焦点反馈。
-- `src/styles/main.scss` 提供全局 `focus-visible` 兜底；2026-10-10 起全项目选择、展开、聚焦与编辑描边统一使用中性 1px 的 `--bew-focus-ring` / `--bew-focus-ring-color` / `--bew-focus-shadow`，不再绘制主题色粗 outline、UnoCSS ring 或外扩阴影环。Input、Select、Slider、布局编辑器以及 MAIN world / 原生页注入样式均遵循此规则；不得通过关闭键盘焦点反馈来实现。组件只有在提供等价反馈时才能覆盖或移除焦点样式。
-- 点击目标不得小于 `24 × 24 CSS px`，普通文本与背景对比度目标不低于 `4.5:1`。
+- 功能图标统一 UnoCSS `i-tabler:*`（线性 1.75px），激活态用该族实际存在的 filled 版本或同一线性图形。`@iconify/vue` 只留给 Dock / SideBar 的明暗切换按钮和无 UnoCSS 的专栏 iframe 图库（描边统一为 1.75，由 `verify:ui-icons` 约束）。
+- 图标尺寸 `--bew-icon-size-xs/sm/md/lg/xl`：caption 旁用 xs（14px），control 旁用 sm（16px）；Dock 右侧按钮与导航图标 20px。
+- “全 Bewly”页面模式用品牌标志 `src/assets/branding/bewly-mark.svg`（`.bew-mark-icon`），“自定义”用 Tabler `adjustments-horizontal`，同步 UnoCSS safelist。
+- 用户指定的 `ChevronIcon` 2.5px 描边保留，不被全局 SVG 规则覆盖；品牌、内容图形和发送 / 加载专用状态图形保留。
 
 ### 间距
 
-- 布局使用 `4px` 基准网格，优先选用 `--bew-space-*`：`4/8/12/16/20/24/32/40/48px`。
-- `2px` token 仅用于边框、焦点环和光学微调，不用于常规容器 padding 或同级元素 gap。
-- 紧密内联元素使用 `4px`，控件内部或紧凑列表使用 `8px`，关联元素组使用 `12px`，组件/栏位之间使用 `16–24px`，页面区块之间使用 `32–48px`。
-- 同层级的卡片、列表和工具栏必须使用相同 gap；避免新增 `3/5/7/10/14/18px` 等一次性布局间距。确有视觉校正需求时需保留局部注释说明原因。
-- 区分容器 padding 与同级元素 gap，不用子元素 margin 拼接公共布局间距。
+- 4px 网格，`--bew-space-*`：4/8/12/16/20/24/32/40/48。2px 只用于边框、焦点环和光学微调（例外见分段轨道与 Dock 内距）。
+- 紧密内联 4、控件内部与紧凑列表 8、关联元素组 12、组件与栏位之间 16–24、页面区块之间 32–48。同层级卡片、列表、工具栏用相同 gap；需要 3/5/7/10/14/18 这类一次性值时写注释说明原因。
+- 公共间距用容器 padding 和 gap，不用子元素 margin 拼。
 
 ### 圆角
 
-- 圆角使用 `--bew-radius-sm/half/md/lg/xl/2xl/full`（`4/6/8/12/16/24px/full`），不要直接新增 `5/7/10/20/999px` 等一次性值。
-- 优先使用语义 token：卡片 `--bew-card-radius`、媒体封面 `--bew-media-radius`、普通面板 `--bew-panel-radius`、Dialog/设置窗口等大型模态容器 `--bew-modal-radius`、顶栏 Pop/浮层 `--bew-popover-radius`、普通交互项 `--bew-interactive-radius`、徽标/胶囊 `--bew-badge-radius`。
-- 视频卡片、动态卡片和同层级内容卡片默认使用 `12px`；内部按钮/菜单项通常使用 `8px`；小型状态块和骨架条使用 `4–6px`；头像等真实圆形可使用 `50%`。
-- 2026-10-13 封面下方信息区：左右内容边界须内收至封面圆角的直线切点，底部保留同等留白，标题、作者、元信息、操作与骨架均遵循。复用 `contentCard.scss` 的 `under-cover`，内收值直接取对应媒体圆角（独立封面 `--bew-media-radius`，内嵌媒体 `--bew-card-inset-radius`），不要复制数值或新增运行时测量。横向图文排版不套用纵向内收；可截断文本的元素不要添加底部 padding，以免破坏行数裁切，使用外层信息区或 margin。
-- 父子元素需要共享裁切轮廓时，子元素使用 `inherit`；不要通过 `calc(父圆角 - 任意像素)` 猜测内层圆角。
-- 同一个 Pop、卡片或媒体容器的四角必须来自同一语义 token，局部直角仅允许用于明确的相邻拼接结构。
-- 胶囊与面板之间需要动画时，不要直接从 `--bew-radius-full` 插值；起始值应使用胶囊真实几何半径，结束值使用语义圆角，避免大数值被持续裁切后在动画末尾突然跳变。
+- `--bew-radius-sm/half/md/lg/xl/2xl/full` = 4/6/8/12/16/24/full。优先语义 token：`--bew-card-radius`、`--bew-media-radius`、`--bew-panel-radius`、`--bew-modal-radius`、`--bew-popover-radius`、`--bew-interactive-radius`、`--bew-badge-radius`。卡片 12、内部按钮与菜单项 8、小状态块与骨架条 4–6、头像 50%。
+- 平滑圆角：普通圆角矩形用 `--bew-corner-shape: superellipse(1.7)`（保留 `border-radius` 回退，组件里不写别的数值）；真实圆形与完整胶囊用 `--bew-corner-shape-round`（头像、圆形按钮、关闭按钮、Switch、主 Dock）。
+- 同一容器四角来自同一 token；局部直角只用于明确的拼接结构。子元素共享裁切轮廓时用 `inherit`，不用 `calc(父圆角 - 任意像素)` 猜。
+- 卡片与封面角落里的控件（稍后再看、三点菜单、删除）用平滑圆角矩形：离角内距小于父圆角时取同心值（父圆角减内距，下限 `--bew-radius-sm`，见 `--bew-cover-action-radius` / `--bew-card-media-action-radius`），否则用 `--bew-interactive-radius`。
+- 胶囊与面板之间做动画时，起点用胶囊的真实几何半径，不从 `--bew-radius-full` 插值。
+- 视频封面由最外层媒体容器唯一裁切，图片、预览、骨架、遮罩继承同一圆角，悬停预览前后不跳角、不露底、无双边框。
 
-### Pop 与浮层
+### 颜色
 
-- 2026-10-17 头像悬停资料卡保留原生 `bili-user-profile` 与关注逻辑；通过 MAIN world 的既有 Lit 更新桥注入 `userProfile.scss`。外壳用 popover 圆角、按钮用统一 control 高度 / interactive 圆角，已关注与发消息为中性表面，未关注主操作使用原始实心主题色。显隐动效从头像锚点轻微缩放和淡入，支持中断与 reduced-motion。发消息以原生当前 UID 构建 Bewly 私信深链，在新标签页打开；目标会话按 ID 单独读取并选中，不扫描全部历史，不把目标的旧时间戳作为分页游标。新联系人使用真实用户卡和临时入口，不伪造历史会话；保留服务端只读权限、账号隔离、失败重试与侧栏选中状态。
+- 深色默认为无色调中性灰。`enableDarkModeTint` 默认关闭，关闭时保留 `darkModeBaseColor`；所有主题入口经 `resolveDarkModeBaseColor` 取值。深色网页底色由 `--bew-dark-base-color` 在 OKLCH 中约束明度与色度派生为 `--bew-dark-page-bg`，不用简单混黑。
+- 主题色只用于：主操作按钮、当前位置圆点、开关与进度、未读圆点、链接和关键词、Logo、文本选区。选中面、普通徽标、导航文字、装饰和编辑反馈用中性色。
+- 共享状态色 `--bew-selected-bg` / `--bew-hover-bg` / `--bew-pressed-bg`；`--bew-theme-surface*` 只是中性兼容别名。主按钮用 `--bew-accent-solid` / `--bew-on-accent-solid`，保持用户选择的原色，亮色主题配深色文字，不压暗或混色换白字。链接与关键词用对比度校正的 `--bew-theme-foreground`，小圆点用 `--bew-accent-marker`。`--bew-on-theme-color` 按主题色亮度选黑白，并同步到 document 根节点和 `#bewly` 宿主。
+- 表面从同一中性色对按用途派生：内容轻抬、独立浮层分离、输入内嵌，不按等差亮度逐层抬高；浅色、深色、OLED 分别校准。
+- 灰、黑、白的半透明或实色不受主题色限制。玻璃自身色调和既有装饰渐变不用于表达控件状态。暗色主题色渐变由 `useLinearGradientThemeColorBackground` 统一控制页面与顶栏。
+- OLED：`enableOledDarkMode` 只在有效深色主题下通过 `oled-dark` class 把 `--bew-bg`、`--bew-homepage-bg` 和插件 viewport 底层设为 `#000`，同步到相关 iframe；卡片、面板、输入框仍用各自层级。不覆盖 Bilibili `body`、滚动层或布局容器。播放页 URL（含视频抽屉 iframe）暂不启用纯黑（`useDark` 的 `isOledDark` 为 false），等用户补充设计后再移除此例外。
+- 边框：`--bew-border-color`（普通分隔线）、`--bew-surface-border-color`（表面）与输入框边框，浅色为前景 14% / 16% / 18% / 20.5%，深色与 OLED 在 `:root.dark` 为 12% / 12% / 16% / 20%，均在 11.5–20.5% 内（`scripts/serve-border-preview.mjs`）。浅色 `--bew-shadow-1..4` 各带一层 1–2px 贴边接触阴影，深色阴影不变。
+- 数据图表（lieflat-charts 风格）：不透明 Mono 灰阶、刻度与细线，复用 `--bew-chart-*`、`dataChart.scss`、`ChartRungs.vue`，主题色只点亮当前读数或编辑点。投票每刻度 1%，保留小数末刻度、多选独立分母与零值无数据标记；通知柱用共同单位、标记总数有界，未知值不当零。不引入模板字体、图表 CDN 或演示数据。
 
-- 顶栏搜索、设置搜索、搜索筛选等同类 Pop 默认与触发控件等宽，并复用实色 `.bew-popover-surface`；不要在组件内重复维护背景、边框、圆角、阴影。伸出顶栏边界的固定 `.bew-popover` 可使用独立玻璃，其内部菜单和控件仍用实色。
-- Pop 与视口或所属主面板至少保留 `8px` 安全边距；窄屏允许扩展到所属内容区的安全宽度，但不能依赖固定宽度越界后再裁切。
-- 结果数量可能变化的 Pop 必须根据下方可用空间限制 `max-height`，内容超出时只在 Pop 内部滚动，并使用 `overscroll-behavior: contain` 避免滚动穿透。
+### 材质与玻璃
 
-- 2026-10-10 搜索细化：搜索匹配导航的高度与横向锚点独立于 Composer 是否存在，桌面复用单行输入容器的 62px 语义尺寸，窄屏保留 40px 紧凑导航并避让输入栏。搜索状态不显示扫描条数，也不显示骨架条；结果列表独立滚动，底部居中胶囊保留同一按钮实例，运行时为旋转放大镜与往返浮光，暂停后为暂停图标及“继续搜索”，支持 reduced-motion。会话内定位使用无圆角的半透明主题色整行渐变，收到的从左向右消失、发出的反向；这是用户明确要求的主题色透明例外。发出消息的文本/媒体气泡、选中会话及结果关键词使用不透明主题色与对应前景。初始页面骨架按滚筒文字层级与 8px 控件轮廓占位；尚未读取的右侧会话保持透明，不绘制虚构历史和旧有边框卡片。
+- 毛玻璃默认开启，服从全局模糊强度。`disableFrostedGlass` 是唯一开关，开启后同时关闭毛玻璃与普通顶栏渐变并改用实色 token；不恢复 `enableFrostedGlass`、`enableTopBarGradient`、`alwaysUseTransparentTopBar` 等旧状态。
+- 玻璃之上不再叠玻璃：玻璃内的文本、按钮、选项、搜索框、菜单用实色或无滤镜表面，实色背景不加 backdrop-filter，也不用低模糊代替移除。只有延伸到原玻璃边界之外的覆盖层才可有独立玻璃（Teleport 本身不算理由）。嵌套判断用 `useGlassPanelMotion.ts` 的 `GLASS_SURFACE_CONTEXT`。唯一额外例外：`CountBadge.vue` 的未读胶囊可叠在 Dock 与顶栏玻璃上（复用全局滤镜与实色降级）。
+- 普通毛玻璃（`--bew-filter-glass-1` + 边框 + 阴影）用于：Dock、播放页底部控制栏、独立搜索框、顶栏浮层、侧栏按钮、私信导航、设置窗口、外侧纵向导航、普通 Dialog。设置内的输入框、内嵌菜单和嵌套 Dialog 用实色。
+- 液态玻璃已完整移除：没有 SVG 位移 / 色散 / 折射层、`vLiquidGlass`、`LiquidGlassSurface.vue`、“悬浮表面材质”设置或 `@wxperia/liquid-glass-vue`，不恢复。`enableDockLiquidGlass`、`dockLiquidGlass*` 只在退役字段表中。`LiquidSegmentIndicator` 是纯几何滑块（实色选中表面，不采样背景），不受影响。
+- 保留的模糊：顶栏渐进模糊、设置窗口的 `PanelTopBlur.vue`、会话与通知主内容区的滚动边缘模糊，参数与层级不改；独立搜索框与顶栏边缘模糊相交时两者都保留。其他弹窗没有顶部模糊。设置装饰层不绘制背景或边框、不承担裁切，遮罩在边界前衰减，清晰边框在模糊层上方单独绘制。
+- 卡片与侧栏内的纵向滚动列表用 `styles/scrollEdgeFade.scss` 的 `vertical` mixin（`.bew-scroll-edge-fade`）：只在该方向还有内容时渐隐，由 scroll-driven 动画驱动，不加监听；遮罩只放在不绘制玻璃的滚动元素上。边缘本就是屏幕边缘或底部有固定输入栏时用 `vertical($bottom: false)` / `.bew-scroll-edge-fade--no-bottom`，状态相关时设 `--bew-scroll-edge-bottom-off: 1`。
+- 玻璃内的实色控件可以无边框，但保留 focus-visible 和必要的分隔线。
 
-- 2026-10-10 左栏控件细化：搜索框及“全部 / 未读 / 置顶”（包括搜索时的“用户 / 消息”）使用全圆角；会话类型原生筛选以图标放在搜索框右端，不显示独立文字或 tooltip，保留无障碍名称、键盘焦点与 hover。清除按钮与筛选图标各占独立 28px 位置，中间保留 4px 间隔；类型筛选同时作用于用户和消息搜索结果；历史搜索的计数、选择及前后导航共用筛选后的集合，筛选变化不重新扫描历史。筛选图标 hover/点击/键盘聚焦不画边框或底板，仅在深色/OLED 变纯白、亮色变纯黑；搜索框边框常驻，清除按钮 hover 仅图标使用可读的主题色前景，背景保持透明。匹配渐变的绘制区从左栏右边界开始，不改变头像与气泡的水平位置，上下各超出消息行 8px；搜索时间线间距为 24px，避免渐变侵入相邻消息。搜索与筛选骨架同步采用胶囊轮廓，不再保留旧会话类型独立行。
+### 控件
 
-- 2026-10-10 消息页细化：无符合条件会话时只在列表可用区域水平/垂直居中显示文案，不挂载 Empty 插图，也不追加空列表结束提示。自己发送的消息复用顶栏响应式边距额外内缩，头像保持比顶栏头像更靠内。多行输入的发送按钮与输入框共同变为平滑圆角矩形，按钮随输入区拉高、保留 4px 内嵌间距，单行恢复圆形；继续复用发送/冷却状态与 reduced-motion。侧栏单一半透明磨砂表面改为页面底色的轻微中性偏移：亮色混入 6% 黑、深色/OLED 混入 16% 白（2026-10-14 材质提亮修订），再使用现有透明度合成；因此 OLED 侧栏略高于纯黑页面，而非与页面同为纯黑。关闭磨砂仍使用相应实色 token，初始骨架使用同一侧栏材质。
+- 分段控件、标签栏、图标切换器用 `src/styles/segmentControl.scss` 的 `.bew-segment-control` / `__item`；页面只负责定位、宽度和响应式。选项带 `data-segment-item`，激活项 `data-active="true"`；没有指示器的分组加 `--static`。
+- 滑块指示器只用 `src/components/LiquidSegmentIndicator.vue`（`active-key` 传当前值，必要时 ref 调 `updateIndicator(true)`），不手写 DOM 或直接调 `useLiquidSegmentIndicator`。始终启用，不恢复 `enableLiquidSegmentIndicator` 设置。
+- 有底板的横向选择组必须是轨道滑块 `.bew-segment-control--track`：滑块与轨道四周差 2px（`--bew-space-0-5`，用户指定），未选中项 hover 只把文字提亮到 text-1，只有滑块画底色。适用于首页 Tab / 布局 / 推荐模式 / 频道菜单、设置分段控件、Logo 样式、搜索结果分类与筛选、播放页右栏标签。例外：顶栏置顶频道（快捷链接）与首页频道菜单（单个触发器）；由 `verify:targeted-fixes` 扫描约束。顶栏 Pop 内无轨道的透明滑块保持 4px 内距，静态筛选维持原 hover。
+- 同一行同类控件用一致的表面、高度、padding、gap、圆角、阴影和状态。
+- 紧凑默认规格：外层高 36px、padding 4px、gap 4px、内部项高 28px、文字 13/18 500、图标 16px；文字项水平 padding 12px，页面主标签 `--wide` 16px，纯图标 `--icon`。
+- 覆盖 default / hover / focus-visible / active / disabled。焦点统一中性 1px：`--bew-focus-ring` / `--bew-focus-ring-color` / `--bew-focus-shadow`，`main.scss` 有全局兜底，MAIN world 与原生页注入样式同样遵循；不画主题色粗 outline 或外扩阴影环，不删除焦点反馈。
+- 点击目标不小于 24×24，普通文字对比度不低于 4.5:1。
+- 侧栏里卡片与分段控件之外的整行图标 + 文字按钮用 `.library-sidebar-action`（`sidebarAction.scss`）：命中区等宽居中、内容靠左，首个图标或文字对齐滚筒标题（侧栏内距 + `--bew-sidebar-label-inset`，比搜索框左缘内收 8px）；常态透明，hover 亮 / 暗色略加深、OLED 略提亮。
+- 滚筒选择器 `WheelSelector.vue`：字号与几何取共享 token，无箭头或选中背景，hover 只提亮文字；鼠标按下不提前移动焦点，单击同时切换分类与页面；方向键预览、Enter / Space 确认；支持连续与反向滚动、惯性尾巴抑制。
+- 圆形操作用 `IconButton.vue`，关闭浮层用 `CloseButton.vue`（surface 变体用 elevated solid），删除标签或搜索历史用 `TagRemoveButton.vue`，不在页面里复制。
 
-## 工具约束
+### 浮层与弹窗
 
-- 2026-10-11 搜索缓存与气泡细化：消息分类内修改关键词后按 350ms 防抖自动重新搜索，暂停可取消尚未开始的搜索。同一关键词切换“用户 / 消息”保留两类内存结果、用户分页、消息匹配位置及已展开的结果数量；隐藏分类暂停后续请求，切回时复用缓存或从已有游标继续，保留用户手动暂停的状态。关键词变化、换号或离开消息页清理对应历史缓存，不持久化私信正文。用户与消息结果的“查看更多”共用 `messageSearch.scss` 胶囊，与停止/继续搜索同材质、同高度，位于队尾留白之后居中。对方气泡左上角、自己气泡右上角为直角，这是本轮明确授权的气泡轮廓例外；文字、图片、分享卡片及失效消息外层统一处理，内部媒体圆角保留。
+- 同类 Pop（顶栏搜索、设置搜索、搜索筛选）默认与触发控件等宽，用实色 `.bew-popover-surface`；伸出顶栏边界的固定 `.bew-popover` 可有独立玻璃，其内部仍是实色。
+- Pop 与视口或所属面板至少留 8px；结果数量会变的 Pop 按下方可用空间限制 `max-height`，内部滚动并 `overscroll-behavior: contain`。
+- 居中弹窗与确认框用 `useSourcePanelMotion` / `useGlassPanelMotion`：从本次触发控件缩放进入，关闭沿原路返回并提前淡出；App 捕获本次激活来源，无来源时居中轻缩放。只动画 transform 与独立绘制层 opacity，玻璃祖先不淡化，中途取消从当前状态继续，离场 inert、结束后恢复焦点。菜单与日期选择器保持锚定。图片查看器离场结束前保留当前图像与缩放。
+- 设置页从 Dock 设置按钮的 `DOMRect` 展开并保留 KeepAlive，只动画最外层面板，遮罩独立淡入淡出，不缩放顶部模糊层。
+- 左下新版本提示与重载提示共用 `--bew-panel-radius` + round。顶栏登录按钮用实色主题背景与 `--bew-on-theme-color`。
+- 头像悬停资料卡保留原生 `bili-user-profile` 与关注逻辑，经 MAIN world 既有 Lit 桥注入 `userProfile.scss`：popover 圆角，control 高度按钮，已关注 / 发消息为中性，未关注为实心主题色；从头像锚点轻缩放淡入。发消息用原生 UID 构建 Bewly 私信深链在新标签页打开，目标会话按 ID 单独读取，新联系人用临时入口，不伪造历史。
 
-- 2026-10-11：主题切换的圆形裁切保持终态直到 `ViewTransition.finished`，不能在内部动画结束时移除快照样式；取消的旧回调不得重新提交主题。私信匹配渐变须覆盖到屏幕右边缘，并保持消息内缩不变。会话行三点菜单复用 `ContextMenu`/`Dialog` 与页面级 `usePrivateSessionActions`，置顶/免打扰/内容推送依当前发布客户端协议提交并回读，黑名单复用共享关系修改及通知；举报必须由用户选择理由并明确确认，最近最多 10 条证据消息只读、不 ACK、不持久化。“通知正常接收”是内容推送操作的说明，不是独立开关。读回未确认时不允许重复提交，刷新必须匹配目标状态；换号、离场、隐藏及关闭菜单释放临时状态。协议与验证边界见 `docs/maintenance/2026-10-11-private-session-actions.md`。
-- 2026-10-11 会话视觉细化：举报确认窗单独关闭顶部渐变模糊，不改变其他 Dialog。选中会话时间、名字和摘要均使用主题色对应的对比前景；会话 hover 轮廓改用 12px 卡片圆角。未选中置顶行在亮色下常驻纯白、暗色/OLED 下常驻加深底色；按当前实际相邻项连接，接缝直角、整组首尾圆角，独立置顶行保留四角。选中状态的实色主题背景优先，筛选及搜索分组不能跨越非相邻项连接。
+### 动效
 
-- **Chrome DevTools MCP**：仅在用户**主动要求排查/调试页面**时使用；非必要不要用。仅当本机已安装且可调用 chrome-devtools-mcp 时参考相关能力；未安装/未开启则整节忽略。
+- 处处支持 reduced-motion。
+- 运行中的分段滑块（含 Dock）、滚筒弹簧与面板缩放经 `utils/motionPriority.ts` 登记（`holdMotion` / `holdAnimation`）。`useReadyPageTransition` 把旧内容淡出拉长到剩余动画时长，动画结束（`afterMotion`，最长 800ms）后才挂载新内容。新增的 JS 驱动或缩放类动画同样登记。
+- 页面切换只作用于主内容与首页 Tab，不改页头、侧栏的结构、几何、材质或滚筒：代码就绪后 90ms 淡出、210ms 淡入，外壳不参与，滚动在旧内容退场后恢复；减少动态效果为 30/70ms 纯透明度。
+- 项目不使用发光效果（Dock、Logo、滚筒、Toast、进度条均无），不恢复相关设置。唯一保留：Dock 深 / 浅色切换按钮深色悬停时的月光光晕、其他按钮同步变暗及图标过渡，原样维持。
+- 主题切换的圆形裁切保持终态直到 `ViewTransition.finished`，取消的旧回调不得重新提交主题。
 
-## 提交规范
+### 加载反馈
 
-- 标头遵循 Conventional Commits：`<type>(<scope>)!: <description>`；`scope` 和表示破坏性变更的 `!` 均为可选项
-- 支持的 `type`：
-  - `feat:`：新增功能
-  - `fix:`：修复问题
-  - `docs:`：仅修改文档
-  - `style:`：仅调整格式，不改变代码行为
-  - `refactor:`：重构代码，不新增功能也不修复问题
-  - `perf:`：性能优化
-  - `test:`：新增或调整测试
-  - `build:`：构建系统或依赖变更
-  - `ci:`：CI 配置或脚本变更
-  - `chore:`：其他维护性变更
-  - `revert:`：回退既有提交
-  - `merge:`：将 PR 或分支合并到目标分支
-- 冒号后说明用中文，准确概括改动
-- 合并 PR 时使用 `merge: 合并 PR #<number> <标题>`
-- 有对应 [issue](https://github.com/keleus/BewlyCat/issues) 时在 commit 后附 `#{issue}`
-- PR 不要提交 tests 文件
+- 布局已知的内容用骨架：`SkeletonBlock.vue` + `src/styles/skeleton.scss` 的 `[data-bew-skeleton]`。骨架复用真实内容的列数、封面比例、字号行高与布局设置；已有数据保持可读，只占位缺的部分，不用全页骨架盖住可用的旧内容；加载完卸载，离屏图片停动画。
+- 结果未知的区域（单个图标位、操作提交中、预览缓冲、通用 iframe、尺寸未知的媒体）用 `LoadingRing.vue`（`styles/loadingRing.scss`，非 Vue DOM 用 `utils/loadingRing.ts` 的 `createLoadingRingElement`）：3/4 弧旋转，完成时闭合后再恢复内容；图标位把原图标传入默认插槽同格切换。要等圆环闭合才退场的容器用 `useLoadingRingPhase`；时长取 `--bew-loading-ring-*`，减少动态效果时闭合为 0。
+- 原生播放器的缓冲提示不动；LIVE 状态图标不是加载动画。
+- 发送按钮（私信、弹幕）共用 `src/styles/sendButton.scss`：圆形上箭头；状态 ready / idle（空输入，暗淡静止）/ pending（发送、上传、冷却中才转圈）/ blocked（原生禁用或 `canSend=false`，暗淡感叹号并说明原因），交叉淡入淡出。原生弹幕按钮保留原节点、事件与禁用权威。
 
-## 双仓库开发守则
+### Composer
 
-完整流程见[上游协作流程](docs/maintenance/upstream-workflow.md)，历史设计见[维护索引](docs/maintenance/README.md)。任务明确指定的分支优先于通用基线；当前连续开发沿用 `message_feature`，不自动切分支或创建 worktree。
+- 评论、私信、动态转发共用 `styles/composer.scss`：32px `--bew-composer-radius` 普通磨砂外壳（只采样一次背景），上方透明正文区，下方表情 / 图片等图标工具栏与圆形发送按钮；关闭磨砂时用实色。外置表情 / @ / 话题面板共用 `useComposerPicker`，只在展开时监听定位与外部点击。
+- 动态卡片展开评论即常驻 `MomentReplyComposer.vue`，固定在评论容器底部，列表按编辑器实测高度预留空间；只有表情 / @ 面板 Teleport 到卡片外。点回复复用同一实例，提示回复对象并隐藏图片与“同时转发”，取消回复恢复，草稿保留；回复对象只在编辑器顶部出现一次；常驻的空闲编辑器不锁住虚拟列表。顶层评论支持表情、真实 MID 的 @、JPG/PNG 图片与同请求 `sync_to_dynamic`；楼中回复只有表情和 @。
+- “转发到动态”是全透明按钮：常态灰字，hover / 选中只提亮文字，选中后尾部的勾随共享动效显现。
+- 评论图片为撑满正文宽度的统一三列网格，单 / 多图同尺寸，间距 4px。
+- 转发输入允许空文案（不套评论的空输入禁用）。
+- 原生评论增强复用原生 Lit 更新与编辑器局部 input 事件，保留原按钮、事件、校验与禁用权威，不加全局键盘监听或轮询（播放页的外置输入框是例外，见播放页）。
+- 写入事务：根 / 父评论 ID 保持字符串；只合并服务端确认的结果；图片上传完成后再核对账号归属再发；未确认的公共写入不自动重试；收起或换号清理临时内容与图片 URL。验证时不代用户真实发布。
 
-- 开始任何写入前，必须执行并阅读 `git status --short --branch`、`git remote -v` 和 `git branch -vv`；remote URL、当前分支或追踪关系与文档不符时，停止写入并报告。
-- 必须先按任务类型选择基线：Bewly_Nocturne 品牌、外观、交互、个人定制、`port/*` 和 `sync/*` 从最新 `origin/main` 创建；可独立贡献给 BewlyCat 的 `fix/*` 从最新 `upstream/main` 创建。
-- 推送目标必须与任务类型一致：`fix/*` 只能推送到 `contrib`，Bewly_Nocturne 功能、`port/*` 和 `sync/*` 只能推送到 `origin`，永远不得推送到 `upstream`。未经用户明确授权，不得 push 或创建、合并 PR。
-- 处理上游修复前，必须用 `git merge-base --is-ancestor upstream/main HEAD` 检查 ancestry，并用 `git log --oneline upstream/main..HEAD` 与 `git diff --stat upstream/main...HEAD` 检查提交和差异范围；发现 Bewly_Nocturne 定制内容时不得推送。
-- 移植修复只能在从 `origin/main` 创建的 `port/*` 上使用 `git cherry-pick -x <sha>`，并检查 `origin/main...HEAD` 的提交与 diff；不得 merge 整个 `fix/*`。
-- 同步上游只能在从 `origin/main` 创建的 `sync/*` 上显式执行 `git merge --no-ff upstream/main`，不得在 `main` 直接 merge。
-- 冲突必须逐项、逐块审查。复杂或语义不明确的 UI 冲突必须停止操作、列出行为差异并请求用户决定；不得整文件选择 ours/theirs，也不得使用 blanket ours/theirs 策略。
-- 必须保护用户已有的 staged、unstaged、untracked 和 stash 内容。未经明确授权，禁止 reset、clean、删除分支或 Worktree、改写历史以及其他 destructive Git 操作。
-- 上游 PR 必须排除 Bewly_Nocturne 专用 `AGENTS.md`、品牌化 `README.md`、维护文档、构建或打包产物，以及与修复无关的格式化；只包含可独立提交给 BewlyCat 的最小修复。
-- 实际执行 commit 前必须重新运行 `pnpm lint` 和 `pnpm typecheck`；只有各命令最新一次完整运行的退出码均为 `0`，才能声明检查通过。
+## 页面
 
-## Bewly_Nocturne 维护决策摘要
+### Dock、顶栏与页面模式
 
-条目按记录日期理解；后续规则与当前源码优先。完整历史见[维护索引](docs/maintenance/README.md)，不把早期框架、实验门禁或临时验证状态当作当前能力。
+- Dock 默认在底部，只允许底部和右侧（旧左侧值迁移到底部）。完整胶囊；未选中项无底板，选中项是无阴影的灰色半透明底板 `--bew-dock-navigation-active-bg` + 实心图标（浅色黑、深色白），无小点。按钮 36px（宽屏 44px），外壳内距 6px（`--dock-shell-rim`，用户指定），外壳尺寸由按钮派生。指示器动画与刷新后严格居中保留。
+- 收起模式 `button / hidden / automatic`：按钮模式在设置按钮后显示收起入口；隐藏模式不提供收起；自动模式指针离开后收起、悬停圆球立即展开。圆球保持展开 Dock 的几何中心；同一玻璃外壳先沿主轴变化尺寸，再让按钮组进出，收起时顺序相反。不用 Teleport、第二套状态或两个表面交叉淡入。
+- 三档页面模式（Bilibili / Bewly / 自定义）及其持久化、与 Dock 内容设置的同步保持一体。顶栏模式只作为 `DockAndSidebar.vue`“Dock 内容调整”里的特殊配置项：不是导航项、不参与拖拽、没有“新标签页”选项。全 Bewly 用 Bewly 顶栏，全原版用原生 `.bili-header`，自定义按配置选择。
+- 不适配第三方顶栏（Bilibili Evolved 已移除），不恢复 `BewlyOrBiliTopBarSwitcher.vue` 等旧切换入口。上游新的顶栏视觉或交互改动，移植前先取得用户同意。
+- 顶栏搜索框的异步宽度校正立即生效，水平 `transform` 不加过渡。TopBar 的 DOM Ref 注册表不用深层 `reactive`（会自动解包）。
+- 小电视独立于顶栏的滚动显隐，点击只回首页；分区浮层在首页标签栏右侧。
+- 动态尾页先追加 `items` 再设结束状态；稍后再看用显式页码、aid 去重与完整集合刷新；History 补屏保持单一 async 请求链。
 
-- 2026-10-19：第三阶段消息与资源（详见 `docs/maintenance/2026-10-19-runtime-convergence.md`）：共享状态经 `background/stateConsumers.ts` 只投递给实际使用该主题、仍在展示的同隐私上下文文档；隐藏页面只标记 stale，恢复后对账一次；不得恢复对所有匹配标签页的 `tabs.query` 广播。broker 按记录持久化与串行。设置本地捕获逐字段比较并只克隆变化分支，规范化按上次记录的依赖字段决定是否复用，canonical 应用、导入和重置时完整执行。内容样式只编译一次，由 `scripts/contentStyleSplit.ts` 拆成宿主 `style.css` 与 Shadow 副本。隔离世界不再假装清理原站全局对象。
+### 首页与搜索
 
-- 2026-10-19：第二阶段数据与媒体（详见 `docs/maintenance/2026-10-19-runtime-convergence.md`）：推荐与动态的已接受列表是唯一可写真值，使用 `useHomeTabState` / `usePageViewState` 的 `shallowRef` 并遵循替换根的不可变更新（首页全部标签与搜索结果同此；收藏内容与观看历史长列表用 `shallowReactive`，行对象只整体替换，收藏夹目录因原位编辑保持深响应式）；去重键索引与广告可见投影由 `recommendationFeed.ts` 按批维护，广告只隐藏不丢弃。行高与列总高经 `CardRowMetrics.append/truncate` 和 `momentColumnIndex` 增量维护，仅在列数、布局、删除重排等变化时重建。停放缓存按条目估算预算，先收缩可重建字段再整体淘汰，列表、游标与锚点成对保留。图片队列按几何版本复用优先级并为可见图片保留槽位。HLS `recoverMediaError` 每实例有界并仅在稳定播放后恢复预算；全屏监听经 `fullscreenChange.ts` 由实际持有媒体元素的预览订阅。
+- 首页默认整合搜索页并复用单个 SearchBar：初始位置带聚焦人物，滚到顶栏后原实例吸顶、人物隐藏，不生成第二个搜索框。独立搜索页由单一反向开关控制；关闭时 `AppPage.Search` 归一到首页，Dock 不显示搜索项。两种形态共用同一组搜索设置；搜索框最大宽度 550px。
+- 首页 Tab 切换只替换内容网格：页头、搜索区与人物装饰不重建；未到内容顶部时保持当前滚动，已吸顶时恢复该 Tab 自己的位置（不低于内容顶部）。首页外层 `KeepAlive max=1`，不活跃的网格卸载并释放请求、预览、观察器，靠数据缓存恢复。其他页面只保留按账号隔离的内存视图状态，不缓存私信正文、请求所有者或 DOM。
+- 视频抽屉复用真实历史项，底层逻辑路由保持原页；返回 / 前进不丢查询、不重复压栈。
+- 广告识别靠明确的广告标记、广告反馈入口与推广 URL；缺少“不感兴趣”菜单不算证据。首页 / 原版搜索用现有列表 Observer 标记外层广告槽位，不删 Vue 拥有的 DOM，不对简介、标签和操作弹窗做文本关键词过滤。广告只隐藏不丢弃。
 
-- 2026-10-19：第一阶段运行时整理（详见 `docs/maintenance/2026-10-19-runtime-convergence.md`）：同一滚动所有者的几何由 `utils/viewportGeometry.ts` 每轮测量一次并按帧合并分发，App / Grid / 卡片窗口 / 动态 / 图片队列不再各自排 RAF；滚动帧只读 IntersectionObserver 预载状态，提交、恢复和尺寸变化后补查一次。分页恢复位置复用 `scrollIntent` 的位置声明，显式跳转、其他页面恢复和用户滚动优先；未推进游标是 `paginationStalled`（停止自动请求），不是“没有更多”。动态卡片描述拟合按批次读写，只用于宽版分栏卡片。评论树分 topology / content / geometry 更新，深链只协调目标线程。原生工具栏与播放页会话先有界发现、再只观察已挂载宿主与浅层祖先。
+### 内容卡片
 
-- 2026-10-11：完整移除用户自定义样式功能及编辑器、设置/搜索入口、文案和页面/Shadow DOM 注入。旧字段只在统一废弃字段表中保留，用于权威存储加载后的清理与云同步拦截，不迁移或重新启用。保留字体、主题和原生页面适配所需的内部样式注入。
+- 视频卡片只有统一布局（旧 `videoCardLayout` 仅在退役字段中）。裸卡 / 表面卡交互复用 `contentCard.scss`，间距与封面控件用 `--bew-card-*` / `--bew-cover-*`；行距由网格管理，卡片不加底部 margin。
+- 作者常态中性前景，悬停与键盘聚焦用主题前景；动态内嵌媒体与引用用 8px 语义圆角。
+- 封面下方信息区左右内收到封面圆角的直线切点、底部留同等空白（`contentCard.scss` 的 `under-cover`，内收值直接取对应媒体圆角）；横向图文不套用；可截断文本元素不加底部 padding。
 
-- 2026-10-11：用户冻结消息页与稍后再看页当前设计。后续页面可复用既有组件、token 和交互样式，但不得借重构或统一样式改变这两页的已确认外观。观看历史沿用同一侧栏语言，独立扩展筛选、排序和批量管理。
-- 2026-10-11：动态页四类筛选与个人资料、发布入口、直播列表整合到 `LibraryWorkspace` 持久侧栏，分类复用滚筒。三模块仍受原设置控制，但窄窗口和关闭模块不得隐藏分类导航。右侧保留关注用户栏和原有动态流，以实际内容宽度计算列数；侧栏与顶栏沿用共享层级，内部不再采样玻璃背景。
-- 2026-10-11：动态页右侧热搜复用 `searchExperience` 的共享请求、缓存和可见性生命周期；关注用户栏与动态卡片共用中间列，不能延伸到热搜列。热搜在宽窗口停靠于顶栏下方，内容区过窄时改为顶部紧凑区域，保留可访问性和内部滚动，不另建热搜轮询。
-- 2026-10-11：小电视独立于顶栏的滚动显隐和动画，鼠标及触屏点击均只回到首页；分区浮层移至首页标签栏右侧，保留分区链接、键盘及触屏访问。Dock 只允许底部和右侧，旧左侧值统一迁移到底部，设置、布局预览和运行时复用同一位置策略。收藏侧栏不再显示滚筒上方的重复标题。
+### 播放页
 
-- 2026-08-06：完成顶栏模式切换重构。顶栏模式现作为 `DockAndSidebar.vue` 的特殊配置项，复用既有全局页面模式和顶栏状态；旧的搜索框下方悬浮切换器、Teleport、显隐控制、层级、设置项及废弃文案已清理。
-- 顶栏模式配置不属于 Dock 导航项，不参与拖拽排序，不显示“新标签页”选项；自定义顶栏选择与全 Bewly / 全原版模式保持同步，不恢复已删除的旧入口或兼容层。
-- 本次变更已在独立测试 Chrome 窗口中加载开发扩展并通过 Bilibili 页面注入验收。后续涉及上游顶栏实现的更新默认不批准，必须先取得用户明确授权后再移植或合入。
-- 2026-08-06：深色网页背景统一使用受 OKLCH 明度/色度约束的 `--bew-dark-page-bg` 派生 token；`enableOledDarkMode` 仅在有效深色主题下通过 `oled-dark` class 生效，并同步到相关 iframe。首页不直接覆盖 Bilibili `body` 背景，纯黑底色由插件自己的 viewport wrapper 承载，以保护原站布局和滚动层。
-- 2026-08-08：完整移除背景图片功能；不恢复壁纸设置、上传入口、存储字段、渲染层或旧数据兼容逻辑。
-- 2026-08-08：建立平滑连续圆角、语义表面边框和主题色前景对比系统；统一设置页与 Dialog 的顶部渐变模糊层、关闭按钮、标签删除按钮和媒体裁切轮廓。
-- 2026-08-08：毛玻璃默认开启；唯一的负向设置 `disableFrostedGlass` 同时关闭全局毛玻璃与普通顶栏渐变并切换到实色表面。暗色主题色渐变由 `useLinearGradientThemeColorBackground` 统一控制页面与顶栏，不恢复旧顶栏专用开关。
-- 2026-08-08：统一扩展失效消息处理和内容脚本刷新提示；开发模式关闭内容脚本压缩，避免长期 watch 后增量函数重命名失配，生产构建仍沿用原有压缩行为。
-- 2026-08-09：新版本与重载提示统一为 round 面板轮廓；顶栏登录入口和共享关闭按钮改用实色语义表面。“Bewly 页面”二级导航新增播放页与消息页独立空框架，不预设状态或兼容层。
-- 2026-08-09：Dock 新增按钮收起、隐藏收起入口、离开后自动收起三档行为；收起态复用单一 Dock 实例并保持在展开 Dock 的几何中心。同一毛玻璃外壳先连续改变真实宽高，再分阶段加载或退出按钮组，不恢复为两个表面交叉淡入。
-- 2026-08-09：Stage 2 完成动态、历史、稍后再看、订阅流、榜单、过滤、快捷键、视频预览和 URL 净化的确定性修复；分页只在成功响应后推进，尾页数据先消费再结束，异步响应按局部 generation 隔离。
-- 2026-08-09：扩展重载后的旧 content script 将 context invalidated 视为终止状态；停止共享状态轮询并收敛未处理 Promise。Shadow DOM 样式失败时卸载该次插件 UI，不得显示透明、错位的无样式 Dock 或设置页；刷新页面后由新上下文正常挂载。
-- 2026-08-09：For You、Moments 和 Following 的内容缓存、分页与本地状态按 Bilibili MID 隔离，未登录状态与任意已登录账号也必须分开；切换账号时旧请求必须失效。
-- 2026-08-09：稍后再看以 `topBarStore` 的完整 `aid` 集合为唯一成员状态源；Moments、VideoCard、顶栏和原站增强不得各自维护 aid/bvid/epid 真值，mutation 后通过专用失效消息跨标签重新获取服务端权威集合。
-- 2026-08-09：Bewly 全局播放器/页面快捷键和快捷键设置入口已移除，不得重新注册会与 Bilibili 原站竞争的 window/document 键盘监听；Dialog、Drawer、图片查看器和菜单/输入控件的局部无障碍键盘交互必须保留。
-- 2026-08-09：Cloud Sync 保留 pending/quota blocked/failed/synced 语义和有上限退避；存储初读失败不得解释为空存储并回写默认值。MV3 App Auth 使用 `browser.alarms` 保持 token 新鲜度，不恢复后台长期 interval。
-- 2026-08-09：站内导航收敛到 `useRouteState.ts` 单例，共享 pushstate/replacestate/popstate/hashchange 和一个低频 fallback；页面模式、主题、顶栏和内容脚本不得重新建立各自的高频 URL 轮询。截图、画面比例、触屏手势、随机播放和收藏弹窗的 observer/listener 必须跟随页面与设置生命周期启停。
-- 2026-08-09：TopBar DOM `Ref` 注册表不得使用会自动解包子 ref 的深层 `reactive`；未登录或元素尚未挂载时，transformer 必须仍获得 Ref 容器，不得因读取 `undefined.value` 阻断页面。
-- 2026-08-10：选择性同步并审查 BewlyCat 新增修复，同时完整移除 Bilibili Evolved 的样式、DOM 探测、运行时分支、设置和文案。原版顶栏从此严格指 Bilibili 原生 `.bili-header`，不得重新引入第三方顶栏兼容层。
-- 2026-08-10：顶栏搜索框的异步宽度校正必须立即生效，不得为水平 `transform` 添加过渡，避免页面重新加载时出现横向入场动画。
-- 2026-08-11：首页默认整合搜索页；独立搜索页由单一反向开关控制。整合模式下不得单独进入 `AppPage.Search`，Dock 隐藏搜索项并由首页承接搜索结果选中状态；两种搜索页面继续共用同一组持久化设置。
-- 上游审查范围根据已合入源码与[历史索引](docs/maintenance/README.md)中的固定 SHA 确认，不将旧日志游标视为当前远端进度。
+布局（2026-10-21 左右分区）：
 
-## Bewly_Nocturne 上游同步保护基线
+- 左侧视频区宽约窗口 50%（右栏不足 360px 时收窄，几何由 `styles/cardLayout.ts` 共享给骨架），贴齐窗口上、下与外侧边缘，整窗高、直角，播放器上下留黑边。窄窗口（≤900px）单列：16:9 视频区在上，右栏在下。
+- 右栏依次是信息模块 `.bewly-widescreen-info`（右栏首个子元素，最高约 45%，超出内部滚动）、标签栏、面板。右栏只负责布局：透明，无边框、圆角、阴影、毛玻璃或内嵌底板，不新增背景采样，不用负 z-index 伪元素做整栏模糊。四周有页面内距、底部除外，面板滚到窗口底边，`--bewly-widescreen-rail-bottom` 让末尾内容避开停靠的输入框。保留右栏左右位置设置；`layoutPriority`、`centerVideo`、`sidebarWidth` 及边缘展开、拖动调宽、收起按钮已删除。
+- 底部控制栏是玻璃卡，圆角不变，距视频区两侧和底边 `--bewly-widescreen-card-inset`；显隐沿用统一控制栏显隐值。控制栏只放控件，应用控件与弹幕控件间 1px 分隔线；Tabler 图标要给图标盒与字形显式尺寸（Bpx 控制栏 `font-size: 0`）。
+- 视频左上角原生头像 + 关注（`.bpx-player-top-left-follow` / `.bpx-player-top-follow`）隐藏，其他左上入口保留。该角预留空位 `.bewly-widescreen-player-toolbar`（card-inset 处，高 36px，宽 4 个 36px 图标加 8px 间隔），目前为空、不绘制、不拦截点击，将来的图标自己开启 pointer-events；铺满与缩放中隐藏。
+- 播放页内的 Bewly 辅助按钮复用底部控制栏表面。隐藏浮动小电视 Logo，改由停靠在控制栏的 SideBar 提供“首页”按钮（在页面模式切换之前）。
 
-以下是本项目有意区别于 BewlyCat 上游的产品设计。同步上游时必须逐项保护；发生冲突时按行为和实现锚点审查，不得直接以整个上游文件覆盖。
+显示模式（`card` / `fill`）：
 
-### 导航、顶栏与页面模式
+- 控制栏末尾的“铺满窗口”按钮（Tabler maximize / minimize）取代被隐藏的原生宽屏、网页全屏和全屏按钮；铺满只显示视频并让右栏淡出且 inert，Esc 返回，F 仍走原生全屏。
+- 切换不改地址、不重建播放器：播放器立即跳到终态几何（一次原生 resize），再从当前绘制帧（含中途反向）按画面宽度与中心缩放。位移缩放是只用 transform 的合成器动画，`inset()` 裁切用同时序的主线程动画，两端都是直角；从视频区放大时由背板 `::before` 画播放器底色补齐黑边。期间控制栏隐藏、跳过几何测量、壳层降到播放器下方，并经 `holdAnimation` 登记；减少动态效果时直接切换。
+- 起始帧只改不继承的样式；播放器模式样式与面板 `inert` 会重算整棵原生 / 评论树，经 `heldRestMode` 延到落定帧。B 站可能整体重渲染 `.app-v1`，由 `watchAnchoredPlayerAncestry` 在观察器微任务内重新锚定。
+- 模式与缩放状态只写在播放器（`data-bewly-display-mode` / `data-bewly-zooming`）、外壳、背板和 `#bewly` 宿主上，不写 `body` class（会整页重算样式 30–40ms）；锚定几何变量用 `@property` 注册为不继承。
 
-- 主 Dock 是完整胶囊；未选中导航项没有圆形底板。2026-10-18 起选中项使用无阴影的灰色半透明底板（`--bew-dock-navigation-active-bg`）与实心图标，图标在浅色为黑、深色为白；不显示选中小点。导航按钮 36px（宽屏 44px），外壳到按钮的内距 6px（`--dock-shell-rim`，用户指定、带注释的离网格光学内距；2026-10-19 试用 3/4/8px 后定为 6px），Dock 外壳尺寸由按钮尺寸派生。项目不再使用任何发光效果（含 Dock、Logo、滚筒、Toast、进度条），不得恢复「关闭 Dock 发光」「Logo 发光」设置。唯一例外：用户明确保留 Dock 深色/浅色切换按钮的原有特色效果——深色下悬停时的月光光晕、其他按钮同步变暗及图标过渡，原样维持且不受开关控制，不得修改或移除。
-- Dock 指示器动画和刷新后的严格居中行为必须保留；Bilibili / Bewly / 自定义三档页面模式及其持久化、与 Dock 内容设置的同步关系不得拆散。
-- Dock 收起模式保留 `button / hidden / automatic` 三档：按钮模式在设置按钮后显示收起入口，隐藏模式不提供收起功能，自动模式在指针离开后收起且 Hover 圆球立即展开。收起圆球必须保持展开 Dock 的几何中心；展开时同一玻璃外壳先沿主轴增长，完成后按钮组再轻移进入，收起时顺序反转。不得通过 Teleport、第二套 Dock 状态或两个表面交叉淡入实现。
-- 顶栏模式只在“Dock 内容调整”中作为特殊配置项存在，不是 Dock 导航项，不参与拖拽，也没有“新标签页”选项。全 Bewly 使用 Bewly 顶栏；全原版使用 Bilibili 原生 `.bili-header`；自定义模式根据现有配置选择 Bewly 或 Bilibili 原生顶栏。不得探测、适配或承诺支持第三方顶栏实现。
-- 已删除的 `BewlyOrBiliTopBarSwitcher.vue`、搜索框下方悬浮入口、Teleport、层级、显隐设置和废弃文案不得恢复。任何新的上游顶栏视觉或交互更新默认不批准，移植前必须取得用户明确授权。
-- 首页默认整合搜索页并复用单一 SearchBar 实例：初始位置保留聚焦人物，滚动到顶栏后原实例粘附且人物隐藏，不得再生成第二个顶栏搜索框。独立搜索页开关关闭时，`AppPage.Search` 路由归一到首页且 Dock 不显示搜索项；两种形态直接共用现有搜索设置，不恢复“与搜索页共用的配置”跳转入口。首页与搜索页只复用顶栏表面样式，必须保留搜索框自身的 `550px` 最大宽度。
-- Dock 默认位于底部；`Notifications` 当前正式基线是 Native Message Center：`reply / at / love / system` 使用 Vue Native Feed，`whisper` 是支持会话管理、文本与图片发送及历史搜索的 hybrid workspace。普通用户、官方助手、未关注和拦截的一对一会话均在当前 Bewly 页面读取；粉丝团和不支持的会话先进入 Native fallback 详情，只有用户明确点击“打开原版私信列表”才离开 Bewly。Whisper 未选择会话时显示当前账号的 Insights 与全部标为已读入口，不隐式挂载原版私信 iframe；无有效账号时保留空状态。Notifications 不包含消息设置分类；消息内容页不提供设置入口，消息设置只存在于全局“Bewly 页面 → 消息页”。旧 `notificationView=settings` 必须在 outlet 渲染前同步规范化并通过同一类型化 Settings API 打开该页面，当前发布版原版消息设置通过独立 background transport 与页面级 composable 原生接入；服务端值不得写入 Bewly 本地 settings，每个字段必须独立提交并以服务端回读结果对账，屏蔽词额度以服务端返回为准。Settings 二级纵向导航的选中态使用主题实色与 `--bew-on-theme-color` 前景，深浅主题保持一致且不使用半透明主题底色。System 只使用当前发布客户端已验证的 `unified + user` 首屏、单一 legacy cursor 历史流和 `update_cursor` 已读契约；系统条目采用独立文本/链接模型，禁止猜测图片、按钮或 module 数组。原版 System URL 必须保留为显式失败 fallback，但 Notifications 不再挂载 System iframe。
-- 四类 Native Feed 共用加载、错误、刷新、分页、滚动锚点、账号隔离和 read-commit 生命周期；页面级 controller 按分类保存状态，但同一时间只允许渲染当前一个 Native Feed DOM。隐藏分类不得保留完整长列表、IntersectionObserver 或 visibility listener，也不得通过 KeepAlive 保留多套 Feed 组件。
-- Reply / At / Love / System 的 items、cursor、read commit、请求 single-flight、缓存与 scrollTop 必须独立；System 使用专用通知模型和单一 string cursor，不得强塞入 actor 模型。所有 Feed 按当前 MID 隔离，账号变化后旧 generation 的响应不得写入新账号。通知解析、聚合或分页规则变更必须同步脱敏 fixture，并通过 `pnpm verify:notifications`，不得绕过该门禁。
-- Native Feed 的自动激活、未读变化与可见性刷新必须使用 `merge-head` 更新首部并保留已加载历史与视觉锚点；用户手动刷新使用 `replace`、重置分页并回到顶部。分页必须检查 cursor 或唯一条目是否前进，停滞后停止 Observer 自动请求；Retry 必须根据 `failedOperation` 精确重试首次加载、刷新或分页，不得根据 items 数量猜测。
-- Native Feed 的服务端已读成功后只通过 `topBarStore` 的单一权威路径同步未读与跨标签 broker；不得建立第二套 unread Store。System 必须先成功提交当前发布客户端真实的 `update_cursor`，再创建 read commit；没有逐条 unread 证据时不得推导逐条红点。`NotificationsDrawer` 与直接打开的原版页继续保持路由、滚动和状态独立，Whisper 与 System Native Feed 均不得隐式创建原版消息 iframe。
-- 私信 Web IM 固定通过后台 `api.vc.bilibili.com` Web endpoint、显式复用现有 WBI 签名并对已确认的 ID/seqno 字段做窄范围无损解析；消息正文与会话草稿不得持久化。会话历史按 `msg_seqno` 边界分页并以 `msg_key` 去重；ACK 只在当前会话可见且位于最新消息区域时提交，成功后才清除本地未读并通过 `topBarStore.syncUnreadMessageState()` 同步权威角标。会话详情状态按最近访问时间执行页面级 LRU，当前会话与 ACK 请求中的会话不得淘汰；每个会话的消息数组受设置上限约束，裁剪只保留最新消息且必须保留独立历史分页边界。离开 Notifications 必须释放消息数组和失效旧请求，隐藏组件不得保留 visibility listener、Observer 或后台刷新。
-- 2026-10-10 用户要求 Telegram 式统一搜索：左栏输入框不显示 placeholder，只保留一个自定义清除按钮；关键词存在时显示“用户 / 消息”分类，退出搜索恢复原筛选和列表滚动位置。用户搜索即时筛选已载入会话并在 350ms 停顿后查询完整关注列表，支持单字名称，不以本地无匹配为前提；关注结果每页 10 条，按服务端分页串行限速自动加载至结束，取消旧的三页上限，然后自动请求全站用户首屏；全站结果仍以每页 10 条、最多三页手动续载。两组分别保存分页、错误与账号/查询缓存，展示“已关注用户”和“所有用户”，跨组按 MID 去重，已关注用户不重复进入所有用户组；无关注结果不展示该组标题或空提示，两组都没有匹配项时仅居中显示“没有找到相关用户”。清空/换查询、隐藏、离场或换号须停止后续自动分页并失效旧响应。远端结果按 MID 去重；没有权威会话的结果只作为内存中的 transient recipient，不污染会话分页、游标、未读或服务端排序，首条消息确认后再换为真实 session。
-- 全会话历史搜索只在用户选择“消息”或提交关键词后开始，使用已验证的会话/历史分页接口，消息每页 20 条沿用当前原版客户端参数，串行限速读取并自动分轮续查；暂停、清空/更改查询、隐藏页面、离开或换号均停止后续扫描并失效旧响应。消息正文与搜索结果不持久化；大结果集分批显示并可继续下一批，不能把请求预算或显示上限当成全部检索完成。群聊/不可读取会话明确标注未覆盖，失败保留结果并支持重试或显式跳过。搜索绝不 ACK、不写入普通会话消息缓存或挤占其 LRU；定位结果先打开会话，再读取临时上下文，包含匹配前后的消息。匹配计数及前后导航在输入栏右侧复用原向下箭头的同一材质容器；桌面同高，极窄窗口放到输入栏上方右对齐避让。Enter / Shift+Enter 切换匹配，导航跨会话时保留按钮或输入框焦点，Escape 退出搜索并恢复输入焦点。
-- 普通用户与 transient recipient 的会话详情显示文本与图片 Composer；官方助手及不支持会话不开放发送。`send_msg` 的 WBI 只签 `w_sender_uid / w_receiver_id / w_dev_id`，`wts / w_rid` 仅进入 URL query，表单 body 不参与签名；同一账号的 UUID v4 `dev_id` 存于 extension local storage 并在 query/body 复用。Chromium 只对精确 `web_im/v1/web_im/send_msg` POST XHR 改写消息站 Origin/Referer。只有 API `code=0` 且服务端历史对账确认后才显示成功；accepted-but-unconfirmed 不得自动重发。2026-08-14 的真实 HTTP `412` 负向 fixture 必须继续作为 `risk-control` 回归样本，但不得再作为永久禁用 DEV 测试入口的 gate。2026-09-08 用户明确要求开放图片入口：复用现有 upload/send、optimistic/reconcile 与 Composer 资产，选图仅生成本地预览，明确发送后才上传；换号、切会话或卸载后停止未发出的上传/发送步骤并释放对象 URL。表情选择按账号读取原生用户表情目录，不能用历史 `e_infos` 代替用户可用表情包；实站发送验收以本轮维护记录为准。
+右栏内容：
 
-### 深色背景、OLED 与主题色
+- 对齐网格优先于容器：信息区每行从右栏内容线开始；标签栏、面板内容、输入框、原生评论头像与弹幕列表首列共用这条线，滚动层只向外扩 space-1 容纳悬停与焦点环。
+- 作者与操作分两行。第一行：头像 + 名字 / 发消息 + 单行签名占满剩余宽度（按宽度省略），充电 / 关注贴右缘，名字区窄于约三个头像宽时按钮才换行。第二行：点赞 / 投币 / 收藏 / 分享 / 稍后再看是中性 fill-1 胶囊（36px、interactive 圆角、宽随内容，稍后再看为正方形），hover 换 fill-2 并提亮文字，已操作态用 `--bew-selected-bg`。充电为中性填充，主题色只留在关注（未关注 hover 轻微提亮）。按下缩到 0.97（减少动态效果时不缩）。分享计数取消原生固定宽度与绝对定位。
+- 间距：标题→元信息 8px、元信息→作者 16px、作者→操作 12px、操作→简介 16px。简介与标签上下排列、不加容器；标签是中性 fill-1 胶囊。
+- 元信息行是克隆：在线人数镜像进来并保持在末尾（`syncViewerCount`）；去掉“未经作者授权，禁止转载”（`.copyright`，原生节点不动）；原生没画图标的项补 Tabler `clock` / `info-circle`（sm，`prepareMetadataClone`）；监听原生节点迟到的图标填充并刷新克隆（导航中不刷新）。
+- 选集与推荐同一行规格：120px 缩略图、13/18 两行标题、caption 元信息、同心圆角悬停底；正在播放为 `--bew-selected-bg` 加 `--bew-accent-marker` 圆点；合集后的推荐以“接下来播放”分组。选集面板子元素 border-box，合集框透明、对齐栏宽，订阅合集与收起同为中性描边按钮。
+- 文字层级（含原生评论 Shadow DOM，经 MAIN 既有样式补丁）只用五个角色：heading 20/28 400 只给视频标题；title 15/22 500 给“评论”“接下来播放”、合集标题、作者名；body 15/24 给评论正文（text-1）与简介（text-2）；control 13/18 给标签栏、按钮、操作胶囊、标签、排序、列表标题、评论用户名（500）；caption 12/16 text-3 给元信息、签名、发消息、地区、评论时间与点赞 / 回复、“共 N 条回复”、计数、时长角标、自动连播。评论操作行 hover 提亮，已点赞保留原生色。
+- 缩进统一 52px（40px 头像 + space-3）：作者行、评论与楼中楼都从这里开始；评论头像由原生 48px 以 `scale: 5/6` 自左上角缩到 40px（绝对定位，不改布局）。节奏：组内 4–8px、组间 16px、区块 24px；评论头部 host 改为 block、`#contents` 去顶部内距。
+- 弹幕列表表头在“发送时间”前加“用户”列：按发送者分组（弹幕多的在前、组内按播放时间），再点反转。列表仍是原生实例：MAIN 在一次原生表头点击期间临时替换排序比较器（`sortNativeDanmakuListBySender`，结束即还原 `Array.prototype.sort`），并让该列停在倒序；只用 `uhash`，不显示用户名。弹幕输入框不迁出原生播放器树；历史弹幕按钮只改视觉位置。
+- 播放器弹窗共用 `styles/layout.ts` 的 `PLAYER_POPOVER_SURFACE`（实色 `--bew-elevated-alt-solid`、1px 表面边框、popover 圆角与阴影、无背景采样）：控制栏菜单 / 提示、弹幕模式与设置、播放反馈面板。原生反馈面板（`.b-back-panel`）用同一表面并重排（标题行 + 分隔线、28px 关闭、两列选项、共享输入 token、主操作主题实色），保留原生节点与提交逻辑；只按 B 站自己设色的类名重设颜色，不写以元素类型或 `*` 结尾的选择器。
 
-- 深色网页底色必须从 `--bew-dark-base-color` 在 OKLCH 中约束明度和色度后派生为 `--bew-dark-page-bg`；不得退回简单混黑，也不得让基准色直接支配网页底色亮度。
-- `enableOledDarkMode` 只在有效深色主题下把 `--bew-bg`、`--bew-homepage-bg` 和必要的插件 viewport 底层设为 `#000`；卡片、面板、弹窗和输入框继续使用 content/elevated 层级。不得以覆盖 Bilibili `body`、滚动层或布局容器的方式实现纯黑。
-- `--bew-on-theme-color` 必须按最终主题色的 sRGB 相对亮度在黑白前景间选择，并同步到 document 根节点和 `#bewly` Shadow Host；近白主题色上的实色按钮、选中项和图标不得退回硬编码白色。
-- 背景图片功能已被产品级移除。上游同步不得重新引入壁纸设置、图片持久化、背景渲染组件或迁移/fallback。
+评论：
 
-### 圆角、表面与媒体轮廓
+- 评论区用与动态卡片相同的 `MomentReplyComposer`（`App.vue` 中 `PlaybackCommentComposer.vue` 经 Teleport 渲染）：绝对定位在 `.bewly-widescreen-panels` 右栏底部内距处，评论面板按 ResizeObserver 实测的 `--bewly-widescreen-composer-height`（写在评论面板自身、不继承）预留末尾空间；只在评论面板显示时出现，铺满时随右栏淡出并 inert。面板带 `data-bewly-external-composer` 时，MAIN 用 `:host-context` 隐藏原生输入框，并改写 `bili-comment-thread-renderer.handleReply` 把回复目标经 page bridge 交给 Bewly；列表 `commentBoxDisabledState`（未登录、关闭评论）时走原生路径。服务端确认后经 bridge 写入原生 `newItems`（根评论置顶、楼中回复追加）。这是“评论增强保留原生输入控件”在播放页的例外。
+- 加载统一为单个 `LoadingRing`：评论面板加载态、加载遮罩右栏，以及原生 `bili-comments-spinner`（MAIN 以遮罩画同一 3/4 弧，首帧前注入，保留无障碍文字）；面板圆环在评论就绪时先闭合再淡出。
 
-- 普通圆角矩形使用集中 token `--bew-corner-shape: superellipse(1.7)`，并保留原有语义 `border-radius` 作为不支持 `corner-shape` 时的回退；组件内不得各自写不同的 superellipse 数值。
-- 真实圆形和完整胶囊必须使用 `corner-shape: var(--bew-corner-shape-round)`。头像、圆形图标按钮、关闭按钮、Switch 滑块保持正圆；主 Dock、Switch 轨道和明确胶囊保持完整 round，不得被全局平滑矩形规则覆盖。
-- 设置页左侧 Dock 收起时是几何胶囊，展开时切换为 `--bew-modal-radius` 的平滑圆角矩形；表面统一使用 `--bew-elevated-alt`、`--bew-filter-glass-1` 和 `--bew-surface-border-color`，不得叠加更高模糊或更不透明的独立实现。
-- 表面边框使用不透明语义 token `--bew-surface-border-color`；深色和 OLED 均为 `#4B4C4E`。不要用它替换普通分隔线的 `--bew-border-color`，也不要在媒体父子层重复绘制边框。
-- 视频封面由最外层媒体容器负责唯一几何裁切；图片、视频预览、Skeleton、遮罩和底部渐变继承同一 radius 与 corner shape，Hover Preview 前后不得跳角、露底或出现双边框。
+原生节点与加载时序（细节见 `docs/maintenance/widescreen-native-adaptation.md`）：
 
-### 毛玻璃、设置页与共享组件
+- 优先保留原生作者、关注、充电、消息、评论和播放器节点，不为换材质重建业务控件、不克隆业务按钮、不复用已释放的节点。原生评论排版经 MAIN world 既有 Shadow DOM 样式桥，限定在 `#bewly-widescreen-root`。
+- 简介、标签和原生操作根节点的迟到更新或替换由既有侧栏 Observer 处理。普通 BV/AV 页的作者、操作栏、简介和标签移交前经 `videoMetadataBridge` 确认 MAIN world 的原生 Vue 组件已挂载并拥有该节点（ISOLATED 不读 `__vue__`；DOM 存在或 API 统计不算就绪）；组件销毁通知走侧栏刷新与统一清理。缺少原生工具栏时侧栏不算完整，超时提供刷新 / 退出入口，迟到恢复后清除错误。
+- 侧栏水合只计页面可见时间（隐藏时暂停，重新可见后重开 12s 预算）。原生评论首屏仍在请求（`#spinner-container`）时最多保持加载态到 30s；之后显示恢复提示但继续以 1s 节奏观察并保持评论预热到 60s，迟到的节点到达后自动清除提示（`resolveWidescreenSidebarHydrationPhase`）。评论缺失时每次水合经 page bridge 调 `wakeNativeCommentLists` 释放懒加载等待；12s 预算后首屏仍在转圈，每个预算只请求一次原生 `reload()`。
+- Bewly 播放栏在原生控制栏、弹幕栏和辅助按钮布局稳定后退出初始化骨架（`playing` 事件不算布局就绪）：原生结构齐备时 DOM 解析后即可提交，不等 `load`；提交后 4s 仍不稳定则照常揭示外壳；骨架期间只有自动连播可因 `playing` 提前撤骨架。
 
-- 毛玻璃默认开启并继续服从全局模糊强度。`disableFrostedGlass` 是唯一关闭入口，开启后同时关闭毛玻璃和普通顶栏渐变；不要恢复 `enableFrostedGlass`、`enableTopBarGradient`、`alwaysUseTransparentTopBar` 等独立或正向旧状态。
-- 仅设置窗口保留 `PanelTopBlur.vue` 顶部渐变模糊，普通及嵌套 Dialog 不再挂载。设置装饰层不绘制背景或边框、不承担内容裁切，遮罩必须在物理边界前衰减透明；清晰表面边框必须在模糊层上方单独绘制，不得以 `overflow: hidden`、实色背景或重复 backdrop-filter 破坏渐变或模糊顶部圆角/边框。
-- 2026-10-13：居中弹窗与确认框复用 `useSourcePanelMotion` / `useGlassPanelMotion`，从本次触发控件缩放移入，关闭沿相同路径返回并提前淡出。App 统一捕获本次激活来源，来源只保留当前事件周期；无来源时使用居中轻缩放，不借用旧点击。只动画 transform 与独立绘制层 opacity，玻璃祖先不淡化，取消从当前绘制状态继续，离场 inert、结束后释放并恢复焦点；保留 reduced-motion。菜单与日期选择器保持锚定位置。动态图片查看器离场结束前保留当前图像与缩放，禁止清空后再离场。
-- 设置页从实际 Dock 设置按钮的 `DOMRect` 起源展开并保留 KeepAlive；只动画最外层面板的 opacity/transform，遮罩独立淡入淡出，不缩放顶部模糊层。
-- 广告规则优先使用明确广告标记、广告反馈入口及推广 URL，正常推荐缺少“不感兴趣”菜单不能作为广告证据。首页/原版搜索复用现有列表 Observer 标记外层广告槽位，不删除 Vue 所有的 DOM，不对简介、标签和操作弹窗应用文本关键词过滤。
-- 圆形操作使用 `IconButton.vue`，关闭浮层使用 `CloseButton.vue`，删除搜索历史或 Chip 使用 `TagRemoveButton.vue`；不得重新在页面组件中复制几何、前景继承和交互样式，也不得混淆三种语义。
-- 左下新版本提示与内容脚本重载提示必须共用 `--bew-panel-radius` 和 `corner-shape: round`；不得将其中一个单独改回 superellipse。顶栏登录按钮使用实色主题背景与 `--bew-on-theme-color`，`CloseButton.vue` 的 surface 变体使用 elevated solid token，以保持深浅主题可读性。
-- 内存节省相关设置集中在“通用 → 内存节省”，保留各自持久化 key 和独立行为；不得在旧页面重复入口或把网络、画质、动画等无关性能项混入。
-- 播放页和消息页设置位于“Bewly 页面”的二级导航，分别由 `PlaybackPage/PlaybackPage.vue` 和 `MessagesPage/MessagesPage.vue` 作为独立叶子模块。实际页面设置出现前保持空内容，不新增存储字段、迁移、fallback 或重复入口。
+### 消息页
 
-### 设置与开发运行时
+消息页与稍后再看页的外观已由用户冻结：可复用它们的组件与 token，但不借重构改变已确认的外观。下列为行为与结构要点，视觉细节以源码为准（历史细节见存档与 `docs/notifications/`）。
 
-- 当前设置结构以 `src/logic/storage.ts` 的默认值为准；不恢复已移除功能。废弃字段只通过统一清理和同步拦截消退，不迁入新的功能状态。视觉设置搜索目录和四套 locale 必须与实际入口同步，`common.close` 等共享组件文案不得退回局部硬编码。
-- 内容脚本、顶栏共享状态和设置存储统一通过 `src/utils/messaging.ts` 发送扩展消息；扩展重载造成的 context invalidated、消息端口关闭或接收端缺失应作为同一失效状态收敛。TopBar 刷新批次的叶子请求必须把 context invalidated 交给共享协调器统一停止轮询，不得局部打印后吞掉。
-- Shadow DOM 的主样式未就绪前必须保持插件容器隐藏；样式加载失败时卸载并移除容器，绝不能把无样式的 Dock、Sidebar 或设置页暴露到 Bilibili 原版页面。
-- 顶栏动态尾页必须先追加当前 `items` 再设置结束状态；稍后再看使用显式页码、aid 去重和完整集合刷新；History 补屏保持单一 async 请求链。不得退回通过数组长度推页、未等待递归或旧 index 删除。
-- `src/utils/bilibiliUrl.ts` 是当前页与分享链接的统一净化来源，必须保留 `p`、`t`、hash 等导航/播放语义；不得为恢复 Bewly 全局快捷键而重建 `src/utils/keyboard.ts` / `src/utils/shortcuts.ts` 运行时。
-- 液态分段指示器保持固定启用及现有 morph、ResizeObserver 和 reduced-motion 行为；2026-10-19 起移动时长按跨越的格数计算：移动一格保持 300ms（含间距时略慢），距离越远越长，统一使用 `utils/motionTiming.ts` 的 `getTravelDuration`（次线性增长）；滚筒选择器的多格跳转复用同一函数。新增同类滑块不得写死单一时长；不得恢复 `enableLiquidSegmentIndicator` 的可见设置项、搜索入口或静态视觉分支。
-- `vite.config.content.ts` 的开发构建必须保持 `minify: false`，防止 Vite watch 增量更新后函数重命名与调用点错配；该约束仅用于 `pnpm dev`，不得借此改变生产构建策略。
-- `pnpm dev` 只启动 prepare、content/inject 和 background 等真实扩展任务；已移除的 popup/options HTML 入口、`build:web` 和 `dev:web` 不得恢复为假构建流程。
+- 结构：Notifications 是 Native Message Center。`reply / at / love / system` 是 Vue Native Feed；`whisper` 是支持会话管理、文本与图片发送、历史搜索的 hybrid workspace。普通用户、官方助手、未关注和拦截的一对一会话都在 Bewly 内读取；粉丝团和不支持的会话进 Native fallback 详情，只有用户点“打开原版私信列表”才离开。不隐式挂载原版私信或 System iframe（原版 System URL 保留为显式失败入口）。未选会话时显示 `ConversationInsights.vue` 与“全部标为已读”。
+- 布局：分类、搜索、筛选与会话列表在持久侧栏（贴齐左、上、下，内部避让顶栏，只采样一次毛玻璃，材质为页面底色亮色混 6% 黑、深色 / OLED 混 16% 白），切换分类不卸载列表；分类用 `WheelSelector.vue`。消息顶栏 absolute，渐变模糊只覆盖侧栏右缘到视口右缘，层级依次为搜索控件、侧栏、模糊、内容，Dock 高于底部模糊。
+- 通知 Feed：四类共用加载、错误、刷新、分页、滚动锚点、账号隔离与 read-commit 生命周期，但 items、cursor、read commit、single-flight、缓存与 scrollTop 各自独立；同一时间只渲染当前一个 Feed DOM，隐藏分类不保留长列表、Observer 或监听，不用 KeepAlive 留多套。自动激活、未读变化与可见性刷新用 `merge-head` 保留历史与锚点，手动刷新用 `replace` 回顶部；分页检查 cursor 或唯一条目是否前进，停滞即停止自动请求；Retry 按 `failedOperation` 精确重试。System 用专用模型与单一 string cursor，只用已验证的 `unified + user` 首屏、legacy cursor 历史与 `update_cursor` 已读，不猜图片、按钮或 module。解析或分页规则变更要同步脱敏 fixture 并通过 `pnpm verify:notifications`。
+- 已读：服务端成功后只经 `topBarStore`（`syncUnreadMessageState()`）同步未读与跨标签 broker，不建第二套 unread Store；System 先成功提交 `update_cursor` 再建 read commit，无逐条证据不推导红点。“全部标为已读”只在用户点击时经 `useMarkAllMessagesRead` 读取其他分类并遍历私信分页，按服务端 seqno 确认，期间新到的保持未读，部分失败可重试。
+- 通知卡片：Reply / At / Love 为头像 + 正文两列、正文下引用区，System 为单色线框图标 + 标题 / 来源 / 正文；可用宽度 ≥880px 时 `MasonryGrid.vue` 按自然高度放入较短列，DOM 保持时间顺序，分页不重排已有卡片。
+- Insights：可用宽度 ≥720px 等宽两列四卡（未读柱状、活动折线、私信来源比例、四个最近会话），间距 12、内距 16、环图 96，卡片内底透明，窄屏单列。近 7 天折线只统计已载入会话的最近活动日，不伪称完整历史；未知计数用短线，真实零值显示 0。
+- 私信协议：Web IM 走后台 `api.vc.bilibili.com` Web endpoint，复用 WBI 签名，对已确认的 ID / seqno 字段窄范围无损解析；正文与草稿不持久化。历史按 `msg_seqno` 分页、`msg_key` 去重；ACK 只在会话可见且位于最新区域时提交，成功后才清本地未读。会话详情按页面级 LRU 淘汰（当前会话与 ACK 中的不淘汰），每会话消息数受设置上限、只保留最新并保留分页边界；离开 Notifications 释放数组并失效旧请求。
+- 发送：普通用户与 transient recipient 显示文本与图片 Composer，官方助手与不支持会话不开放，只读会话显示禁用 Composer。`send_msg` 的 WBI 只签 `w_sender_uid / w_receiver_id / w_dev_id`，`wts / w_rid` 只进 URL query；每账号一个 UUID v4 `dev_id` 存 extension local storage。Chromium 只对精确的 `web_im/v1/web_im/send_msg` POST 改写消息站 Origin/Referer。API `code=0` 且历史对账确认后才显示成功，已接受未确认的不自动重发；HTTP `412` 归为 `risk-control`。图片选择只生成本地预览，明确发送后才上传；换号、切会话或卸载停止未发出的步骤并释放对象 URL。表情按账号读取原生用户表情目录。文本与图片入口在开发与打包构建中一致，`experimental` 只是目录名，不是运行时门禁。
+- 会话：点击会话先展开透明右侧容器，展开结束再请求历史并逐条浮现（不用历史骨架；关闭、切换或卸载取消待发请求）。切换用户只淡出消息、外框与输入栏保持同一实例；再点当前用户关闭详情。换号立即清理旧视图。输入栏在右侧内容区避让 Dock，桌面下按整屏中线左右等距。私信视频封面经 `usePrivateMessagePreviews` 复用 `useMomentPreviews` / `MomentVideoPreview`，悬停即请求并播放，离开、离屏、切换或隐藏时释放。头像（有效 MID 时链接个人空间）与选择按钮是兄弟元素，不嵌套交互控件。隐藏的会话不继续读取或 ACK。失效卡片用 288×96 响应式占位；转发媒体卡片封面默认 384px 宽、16:9、外侧 8px 留白，随消息区收窄。
+- 视觉例外（用户授权）：对方气泡左上角、自己气泡右上角为直角；会话内搜索定位用无圆角整行渐变（`--bew-message-search-highlight`，收到的从左向右消失、发出的反向，覆盖到屏幕右边缘，不改变消息内缩）。无符合条件的会话时只居中显示文案，不挂插图。
+- 会话菜单（`ContextMenu` / `Dialog` + `usePrivateSessionActions`）：置顶、免打扰、内容推送按当前客户端协议提交并回读，黑名单复用共享关系修改；举报须用户选理由并确认，最多 10 条证据消息只读、不 ACK、不持久化。读回未确认时不重复提交。协议见 `docs/maintenance/2026-10-11-private-session-actions.md`。
+- 搜索：左栏输入框无 placeholder、只有一个清除按钮；有关键词时显示“用户 / 消息”分类，退出恢复原筛选与滚动。用户搜索即时筛选已载入会话，350ms 停顿后查询完整关注列表（每页 10 条，串行限速自动加载到底），再请求全站用户（每页 10 条，最多三页手动续载）；两组按 MID 去重，无结果只居中显示“没有找到相关用户”。没有会话的结果是内存中的 transient recipient，首条消息确认后换成真实 session。消息搜索在选“消息”或提交关键词后开始，串行限速分轮扫描（每页 20 条），暂停、改查询、隐藏、离开或换号即停止；结果不持久化、不 ACK、不进普通会话缓存；群聊与不可读会话标注未覆盖。同一关键词切换分类保留两类内存结果与位置。防抖、间隔与批量参数集中在 `privateSearchPolicy.ts`。匹配导航在输入栏右侧，Enter / Shift+Enter 切换匹配，Escape 退出并恢复输入焦点。
+- 消息设置只在全局“Bewly 页面 → 消息页”，Notifications 内没有设置分类；旧 `notificationView=settings` 在渲染前规范化并打开该设置页。服务端设置值不写入本地 settings，每字段独立提交并以回读对账；屏蔽词 `words` 为 null 或缺省视为空列表（额度字段须合法），读取、增删与已提交未确认分别呈现，增删需先读到额度，未确认前不重复提交。
 
-## 通用工程原则
+### 资料库（收藏 / 稍后再看 / 观看历史）
 
-- 删除已被替代的实现和无消费者的兼容层；现存数据清理、有效原生 DOM 变体与网络失败降级须有实际用途和回归依据。
-- 以当前可运行架构为起点，按实际职责模块化；不为假设需求增加配置、状态机或重复实现。
-- 先复用项目组件与依赖，再评估成熟方案；新增依赖或重写须有当前需求依据。
-- 改动交付时保持完整行为、资源清理与回归覆盖，不留下临时分支和“以后再换”的实现。
+- 三页复用 `LibraryWorkspace.vue` 的贴边持久左栏（宽度与消息页一致，单层毛玻璃与实色降级复用消息页色调），保持页面级主滚动与原有分页 / 虚拟列表。标题用 `LibrarySidebarHeading.vue`（WheelSelector），搜索用 `LibrarySearchField.vue`（全圆角、常驻细边框、单一清除按钮；保留 IME 与空查询门禁）。不再用视频封面作左栏背景；首屏骨架用同一左栏布局。层级：顶栏搜索与菜单 > 侧栏 > 右侧顶栏边缘模糊。收藏侧栏不在滚筒上方重复显示标题。
+- 收藏目录展开 / 选中项与历史、稍后再看的高级筛选同用 `--bew-message-pinned-background` 底板。高级筛选各组默认收起，展开状态按组存在当前标签页 sessionStorage。收藏视频排序（最近收藏 / 最多播放 / 最新投稿）与历史、稍后再看的布局切换同用 `SettingsSegmentedControl` + `.library-rail-segments`，旁边的管理按钮与历史排序按钮同为 36px。收藏筛选用 `FavoriteFilterPanel`（搜索范围即时生效，UP 主 / 分区 / 关键词需“应用”，分区在分组首次展开后才请求）；订阅与其他收藏用搜索框右端的原生筛选。管理菜单保留 hover / focus / touch 入口。
+- 稍后再看以 `topBarStore` 的完整 `aid` 集合为唯一成员状态，其他组件不各自维护真值；修改后经专用失效消息跨标签重新获取。
+
+### 动态页
+
+- 四类筛选、个人资料、发布入口、直播列表整合在 `LibraryWorkspace` 侧栏，分类用滚筒；三个模块受原设置控制，但窄窗口或关闭模块不隐藏分类导航。右侧是关注用户栏与动态流，按实际内容宽度算列数。
+- 热搜复用 `searchExperience` 的请求、缓存与可见性生命周期，不另建轮询：宽窗口停靠在顶栏下方（卡片标题固定、内部列表滚动），过窄时改为顶部紧凑区域；关注用户栏与动态卡片共用中间列，不伸进热搜列。
+- 评论 / 转发展开共用 `useMeasuredDisclosure` 与 `momentDisclosure.scss`：内层保持自然布局，只有外层裁切高度按 200ms 标准曲线变化（不用过冲曲线、0fr 挤压或磨砂祖先淡入）；内容迟到时平滑重定目标，缓存的初始展开不重播。展开期间用既有交互保活保留卡片，瀑布流跳过中间高度的虚拟窗口提交，结束后提交最终高度。
+
+### 设置页
+
+- 当前设置结构以 `src/logic/storage.ts` 默认值为准。视觉设置搜索目录与四套 locale 与实际入口同步，共享文案（如 `common.close`）不改回硬编码。
+- 左侧 Dock 收起时为胶囊，展开时为 `--bew-modal-radius` 平滑圆角矩形，表面用 `--bew-elevated-alt` + `--bew-filter-glass-1` + `--bew-surface-border-color`。二级纵向导航选中态为主题实色 + `--bew-on-theme-color`。
+- 通用页保留面包屑中唯一的页标题，正文直接是说明与分组。内存节省相关项集中在“通用 → 内存节省”，各自保留原 key。
+- 播放页与消息页设置在“Bewly 页面”二级导航，分别由 `PlaybackPage/PlaybackPage.vue` 与 `MessagesPage/MessagesPage.vue` 承载。
+
+## 运行时与数据
+
+- 几何：同一滚动所有者每帧测一次并合并分发；滚动帧只读 IntersectionObserver 预载状态，提交、恢复和尺寸变化后补查一次。
+- 分页：只在成功响应后推进，异步响应按局部 generation 隔离；尾页先消费数据再结束；游标未推进是 `paginationStalled`（停止自动请求），不是“没有更多”。恢复位置用 `scrollIntent` 的位置声明，显式跳转与用户滚动优先。
+- 列表数据：推荐与动态的已接受列表是唯一可写真值（`useHomeTabState` / `usePageViewState` 的 `shallowRef`，替换根的不可变更新；首页各标签与搜索结果同此）。收藏内容与观看历史长列表用 `shallowReactive`、行对象整体替换；收藏夹目录因原位编辑保持深响应式。去重索引与广告可见投影由 `recommendationFeed.ts` 按批维护；行高与列总高经 `CardRowMetrics.append/truncate`、`momentColumnIndex` 增量维护。停放缓存按条目估算预算，先收缩可重建字段再整体淘汰，列表、游标与锚点成对保留。
+- 媒体：图片队列按几何版本复用优先级并为可见图片留槽位；HLS `recoverMediaError` 每实例有界，稳定播放后恢复预算；全屏监听经 `fullscreenChange.ts` 由实际持有媒体元素的预览订阅。评论树分 topology / content / geometry 更新，深链只协调目标线程。原生工具栏与播放页会话先有界发现，再只观察已挂载宿主与浅层祖先。
+- 账号隔离：推荐、动态、关注等的缓存、分页与本地状态按 MID 隔离（未登录单独一份），换号后旧请求失效、旧响应不写入。
+- 消息投递：扩展消息统一经 `src/utils/messaging.ts`。共享状态经 `background/stateConsumers.ts` 只投递给实际使用该主题、仍在展示的同隐私上下文文档；隐藏页面只标记 stale，恢复后对账一次；不对所有标签页广播。broker 按记录持久化与串行。
+- 扩展失效：重载后的旧 content script 把 context invalidated、端口关闭、接收端缺失视为终止状态，停止轮询（TopBar 刷新批次交给共享协调器统一停止）。Shadow DOM 主样式就绪前插件容器保持隐藏，加载失败就卸载容器，不暴露无样式的 UI。
+- 设置存储：本地捕获逐字段比较并只克隆变化分支；规范化按依赖字段决定是否复用，canonical 应用、导入和重置时完整执行。存储初读失败不当作空存储回写默认值。Cloud Sync 保留 pending / quota blocked / failed / synced 语义与有上限退避；MV3 App Auth 用 `browser.alarms` 保持 token 新鲜。
+- 样式：内容样式只编译一次，由 `scripts/contentStyleSplit.ts` 拆成宿主 `style.css` 与 Shadow 副本。默认模式下保留字体、主题与原生页适配所需的内部样式注入。
+- 页面专属 CSS（`adaptedStyles/pages/*`）以 `?inline` 文本按路由注入单个 `<style data-bewly-route-style>`，放在文档最前（原生样式仍赢同优先级），不进 manifest 样式与 Shadow 副本；原生子站入口用 `selectNativeSiteCss` 只注入当前站点的 `nativeSites` 规则。新增页面样式照此接入，不 `import` 进全局入口。
+- 样式重算（细节见 [2026-10-22 样式重算](docs/maintenance/2026-10-22-style-recalc.md)）：常驻样式（manifest 两份、Shadow 副本、播放页注入 CSS）不在主体以外的位置写 `[class*=…]` 等类名属性选择器，主体只是 `picture` / `img` 时除外，由 `pnpm verify:style-invalidation` 约束；需要按 CSS Module 祖先限定时，由 JS 给祖先打 data 属性（如 `data-bewly-action-animation`）。运行时不在 `body`、`html` 或大容器上改继承的自定义属性：显隐类状态直接写各表面的属性值，只被一个元素读的尺寸写在读取者上并以 `@property … inherits: false` 注册，Shadow DOM 内改用内联样式。高频事件里先读完几何再写状态。
+- 路由：站内导航只用 `useRouteState.ts` 单例（pushstate / replacestate / popstate / hashchange + 一个低频 fallback）。
+- 快捷键：不注册 Bewly 全局键盘监听（会与原站冲突）；Dialog、Drawer、图片查看器、菜单与输入控件的局部键盘交互保留。
+- URL：`src/utils/bilibiliUrl.ts` 是当前页与分享链接的统一净化来源，保留 `p`、`t`、hash 等语义。
+
+## 上游同步
+
+远端：`origin`（STERILITZIA02/Bewly_Nocturne，Nocturne 开发与发布）、`upstream`（keleus/BewlyCat，只读，永不推送）、`contrib`（STERILITZIA02/BewlyCat，贡献给上游的修复）。流程细节见 [upstream-workflow.md](docs/maintenance/upstream-workflow.md)。
+
+- 可独立贡献的修复：从 `upstream/main` 建 `fix/*`，只推 `contrib`，PR 只含最小修复（不带 Nocturne 的 `AGENTS.md`、品牌 README、维护文档、产物或无关格式化）。
+- 移回 Nocturne：从 `origin/main` 建 `port/*`，`git cherry-pick -x <sha>`，不 merge 整个 `fix/*`。
+- 同步上游：从 `origin/main` 建 `sync/*`，`git merge --no-ff upstream/main`，不在 `main` 直接 merge。逐块解决冲突，以本文件的产品规则为保护基线；语义不明的 UI 冲突列出差异请用户决定，不整文件选 ours/theirs。
+
+## 已移除，不要恢复
+
+背景图片 / 壁纸；用户自定义样式及其编辑器与注入；液态玻璃全套；Bewly 全局播放器 / 页面快捷键（`src/utils/keyboard.ts`、`shortcuts.ts`）；Bilibili Evolved 兼容；`BewlyOrBiliTopBarSwitcher.vue` 与搜索框下方悬浮切换器；Dock 与 Logo 发光设置；图片隐藏开关；popup / options 入口与 `build:web`、`dev:web`；`enableLiquidSegmentIndicator` 可见设置；播放页 `layoutPriority`、`centerVideo`、`sidebarWidth`、边缘展开与拖动调宽；Dock 左侧位置；Notifications 内的消息设置分类；旧 `videoCardLayout`；`enableFrostedGlass`、`enableTopBarGradient`、`alwaysUseTransparentTopBar`。相关旧字段只在 `RETIRED_SETTINGS_FIELDS` 中清理。

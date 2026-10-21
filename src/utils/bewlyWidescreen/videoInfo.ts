@@ -1,6 +1,6 @@
 import type { VideoInfo } from '~/models/video/videoInfo'
 import api from '~/utils/api'
-import { selectors } from '~/utils/bewlyWidescreen/constants'
+import { selectors, VIEWER_COUNT_MIRRORED_ATTRIBUTE } from '~/utils/bewlyWidescreen/constants'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { findFirst, findMovable, getTitleText, moveOrReplaceNode } from '~/utils/bewlyWidescreen/nativeDom'
 import { session } from '~/utils/bewlyWidescreen/session'
@@ -18,17 +18,131 @@ export function syncSidebarTitle(currentState: BewlyWidescreenState) {
     titleElement.textContent = nextTitle
 }
 
+// @unocss-include: `.ts` is outside UnoCSS's watch pipeline, so without it a
+// running `pnpm dev` never generates icons named only here.
+const VIEWER_COUNT_ICON_CLASS = 'i-tabler:users'
+const PUBLISH_DATE_ICON_CLASS = 'i-tabler:clock'
+const DECLARATION_ICON_CLASS = 'i-tabler:info-circle'
+const METADATA_ICON_CLASS = 'bewly-widescreen-metadata-icon'
+
+/**
+ * Prepares the cloned meta line: the reprint notice is boilerplate on every
+ * original upload and leaves; every other item leads with an icon. Bilibili
+ * draws none for the date (and may omit one on a declaration), so those get a
+ * Tabler glyph in the same size as the native ones.
+ */
+function prepareMetadataClone(clone: HTMLElement) {
+  clone.querySelectorAll('.copyright').forEach(item => item.remove())
+  clone.querySelectorAll<HTMLElement>('.item').forEach((item) => {
+    if (item.querySelector('svg, img'))
+      return
+    const icon = document.createElement('span')
+    icon.className = `${item.classList.contains('pubdate-ip') ? PUBLISH_DATE_ICON_CLASS : DECLARATION_ICON_CLASS} ${METADATA_ICON_CLASS}`
+    icon.setAttribute('aria-hidden', 'true')
+    item.prepend(icon)
+  })
+}
+
+export function clearViewerCount(currentState: BewlyWidescreenState) {
+  currentState.viewerCountObserver?.disconnect()
+  currentState.viewerCountObserver = undefined
+  currentState.viewerCountSource?.parentElement?.removeAttribute(VIEWER_COUNT_MIRRORED_ATTRIBUTE)
+  currentState.viewerCountSource = undefined
+  currentState.metadataSlot.querySelector('.bewly-widescreen-viewers')?.remove()
+}
+
+/**
+ * The live viewer count is status, not a control. While the card shows it
+ * reads at the end of the meta line under the title instead of as a pill in
+ * the control bar; filling the window shows the pill again. Only its text is
+ * mirrored: the native node stays in the player and keeps updating it.
+ */
+export function syncViewerCount(currentState: BewlyWidescreenState) {
+  const source = isPgcPlaybackPage()
+    ? null
+    : currentState.danmakuSemanticsSource?.querySelector<HTMLElement>('.bpx-player-video-info > .bpx-player-video-info-online') ?? null
+  if (source !== (currentState.viewerCountSource ?? null)) {
+    clearViewerCount(currentState)
+    if (source) {
+      currentState.viewerCountSource = source
+      currentState.viewerCountObserver = new MutationObserver(() => {
+        if (session.current === currentState)
+          syncViewerCount(currentState)
+      })
+      currentState.viewerCountObserver.observe(source, { characterData: true, childList: true, subtree: true })
+    }
+  }
+
+  const text = source?.textContent?.replace(/\s+/g, ' ').trim()
+  let item = currentState.metadataSlot.querySelector<HTMLElement>('.bewly-widescreen-viewers')
+  if (!source || !text) {
+    item?.remove()
+    source?.parentElement?.removeAttribute(VIEWER_COUNT_MIRRORED_ATTRIBUTE)
+    return
+  }
+  if (!item) {
+    item = document.createElement('span')
+    item.className = 'bewly-widescreen-viewers item'
+    const icon = document.createElement('span')
+    icon.className = `${VIEWER_COUNT_ICON_CLASS} ${METADATA_ICON_CLASS}`
+    icon.setAttribute('aria-hidden', 'true')
+    const label = document.createElement('span')
+    label.className = 'bewly-widescreen-viewers__label'
+    item.append(icon, label)
+  }
+  // The metadata clone is replaced whenever its source changes; keep this last.
+  if (currentState.metadataSlot.lastElementChild !== item)
+    currentState.metadataSlot.append(item)
+  const label = item.querySelector<HTMLElement>('.bewly-widescreen-viewers__label')!
+  if (label.textContent !== text)
+    label.textContent = text
+  source.parentElement?.setAttribute(VIEWER_COUNT_MIRRORED_ATTRIBUTE, '')
+}
+
+export function clearVideoMetadataObserver(currentState: BewlyWidescreenState) {
+  currentState.metadataObserver?.disconnect()
+  currentState.metadataObserver = undefined
+  currentState.metadataSource = undefined
+}
+
+/**
+ * The meta line is cloned, not moved, so nothing else watches the native one
+ * after the first pass. Bilibili fills its icon paths (and later counts) in
+ * after the text, so the clone follows the source's own changes.
+ */
+function observeMetadataSource(currentState: BewlyWidescreenState, source: HTMLElement | null) {
+  if (currentState.metadataSource === (source ?? undefined))
+    return
+  clearVideoMetadataObserver(currentState)
+  if (!source)
+    return
+  currentState.metadataSource = source
+  currentState.metadataObserver = new MutationObserver(() => {
+    // Mid-navigation the native line still shows the old video.
+    if (session.current === currentState && !currentState.navigationPending)
+      syncVideoMetadata(currentState)
+  })
+  currentState.metadataObserver.observe(source, { characterData: true, childList: true, subtree: true })
+}
+
+/** Text plus the drawn icon shapes: a late-filled icon changes the clone too. */
+function getMetadataSignature(source: HTMLElement) {
+  const text = source.textContent?.replace(/\s+/g, ' ').trim() || ''
+  return `${text}|${source.querySelectorAll('svg :is(path, circle, rect, use, g)').length}`
+}
+
 export function syncVideoMetadata(currentState: BewlyWidescreenState) {
   if (isPgcPlaybackPage())
     return moveOrReplaceNode(selectors.mediaInfo, currentState.metadataSlot, currentState.movedNodes).found
   const source = findMovable(selectors.metadata)
+  observeMetadataSource(currentState, source)
   const existing = currentState.metadataSlot.querySelector<HTMLElement>('.bewly-widescreen-metadata-clone')
   if (!source) {
     existing?.remove()
     return false
   }
 
-  const signature = source.textContent?.replace(/\s+/g, ' ').trim() || ''
+  const signature = getMetadataSignature(source)
   if (existing?.dataset.sourceSignature === signature)
     return true
 
@@ -42,9 +156,12 @@ export function syncVideoMetadata(currentState: BewlyWidescreenState) {
       image.setAttribute('src', normalized)
   })
   clone.removeAttribute('id')
+  prepareMetadataClone(clone)
   clone.classList.add('bewly-widescreen-metadata-clone')
   clone.dataset.sourceSignature = signature
-  currentState.metadataSlot.replaceChildren(clone)
+  // The mirrored viewer count stays last across clone replacements.
+  const viewers = currentState.metadataSlot.querySelector<HTMLElement>('.bewly-widescreen-viewers')
+  currentState.metadataSlot.replaceChildren(...(viewers ? [clone, viewers] : [clone]))
   return true
 }
 

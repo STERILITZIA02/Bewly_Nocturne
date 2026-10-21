@@ -415,8 +415,10 @@ export function registerPlaybackContentChecks(check) {
     let now = 0
     const timers = new Map()
     let timerId = 0
+    let commentWakes = 0
     const sidebar = await loadSourceModule('../src/utils/bewlyWidescreen/sidebar.ts', {
       '~/utils/bewlyWidescreen/actionEffects': { scheduleActionGeometrySync() {}, syncActionAnimationTheme() {} },
+      '~/utils/bewlyWidescreen/commentWake': { wakeNativeCommentList: () => ++commentWakes },
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/danmaku': { activateDanmakuTab() {}, clearDanmakuActivation() {}, isDanmakuPanelReady: () => false, syncDanmakuInputSource() {} },
       '~/utils/bewlyWidescreen/description': description,
@@ -427,8 +429,10 @@ export function registerPlaybackContentChecks(check) {
       '~/utils/bewlyWidescreen/playlist': { clearEpisodeSectionMarker() {}, placeRecommendAfterPlaylist() {}, syncEpisodeSectionMarker() {}, syncPlaylistToggleButton() {} },
       '~/utils/bewlyWidescreen/session': { session },
       '~/utils/bewlyWidescreen/shell': { scheduleInitialPanelScrollReset() {} },
-      '~/utils/bewlyWidescreen/videoInfo': { syncVideoMetadata: () => true, renderFallbackVideoInfo() {}, syncSidebarTitle() {} },
+      '~/utils/bewlyWidescreen/videoInfo': { syncVideoMetadata: () => true, syncViewerCount() {}, renderFallbackVideoInfo() {}, syncSidebarTitle() {} },
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
+      '~/utils/loadingRing': await import('../src/utils/loadingRing'),
+      '~/utils/motionTiming': await import('../src/utils/motionTiming'),
       '~/utils/videoMetadataBridge': { isNativeVideoComponentReady: () => true },
     }, {
       Date: { now: () => now },
@@ -447,18 +451,20 @@ export function registerPlaybackContentChecks(check) {
       assert.equal(state.root.dataset.sidebarCommentReady, 'true')
       assert.equal(state.root.dataset.sidebarTopReady, 'false')
       assert.equal(state.root.dataset.sidebarContentReady, 'false')
-      now = constants.SIDEBAR_HYDRATION_TIMEOUT
+      now = (await import('../src/utils/bewlyWidescreenPolicy')).WIDESCREEN_SIDEBAR_HYDRATION_BUDGET
       const next = timers.values().next().value
       timers.clear()
       next()
       assert.equal(state.sidebarHydrationTimedOut, true)
       assert.ok(state.sidebarTop.querySelector('.bewly-widescreen-panel-error'))
+      assert.equal(timers.size, 1, 'hydration keeps watching for the late toolbar')
       f.origin.append(toolbar)
       sidebar.startSidebarHydration(state)
       assert.equal(state.toolbarSlot.querySelector('#arc_toolbar_report'), toolbar)
       assert.equal(state.root.dataset.sidebarContentReady, 'true')
       assert.equal(state.sidebarTop.querySelector('.bewly-widescreen-panel-error'), null)
       assert.equal(timers.size, 0)
+      assert.equal(commentWakes, 0, 'ready comments never wake or reload the native list')
     }
     finally {
       sidebar.clearSidebarHydration(state)

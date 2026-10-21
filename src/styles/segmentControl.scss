@@ -22,12 +22,15 @@
   box-shadow: none;
 }
 
-// Sliding selectors: items take the track's full height, so the selected plate
-// is exactly as tall as the container. Item height is re-derived here because
-// the root token resolved the default padding already.
-.bew-segment-control--flush {
-  --bew-control-padding: 0px;
-  --bew-control-item-height: calc(var(--bew-control-height) - var(--bew-control-border-width) * 2);
+// Track selectors: a surfaced track whose sliding plate (LiquidSegmentIndicator)
+// sits 2px inside it on every side, the user-specified optical inset. Item
+// height is re-derived here because the root token resolved the default
+// padding already.
+.bew-segment-control--track {
+  --bew-control-padding: var(--bew-space-0-5);
+  --bew-control-item-height: calc(
+    var(--bew-control-height) - (var(--bew-control-border-width) + var(--bew-control-padding)) * 2
+  );
 }
 
 // Embedded panel controls use the same outline as nearby inputs and list rows.
@@ -96,6 +99,14 @@
 .bew-segment-control__item:hover:not([data-active="true"]):not(:disabled) {
   color: var(--bew-segment-item-hover-current-color, var(--bew-segment-item-hover-color));
   background: var(--bew-segment-item-hover-current-bg, var(--bew-segment-item-hover-bg));
+}
+
+// Where a sliding plate marks the selection (track rows and every group that
+// renders LiquidSegmentIndicator), the plate is the only surface: hovering
+// another item only lifts its grey label.
+:is(.bew-segment-control--track, .bew-segment-control:has(.bew-liquid-indicator))
+  .bew-segment-control__item:hover:not([data-active="true"]):not(:disabled) {
+  background: transparent;
 }
 
 .bew-segment-control__item:focus-visible:not([data-active="true"]):not(:disabled) {

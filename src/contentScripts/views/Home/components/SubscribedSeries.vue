@@ -315,6 +315,8 @@ defineExpose({ initData })
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/scrollEdgeFade";
+
 .series-group-actions {
   align-self: start;
   display: grid;
@@ -349,6 +351,7 @@ defineExpose({ initData })
   }
 }
 .series-updates-list {
+  @include scrollEdgeFade.vertical;
   max-height: calc(var(--bew-space-12) * 5);
   overflow-y: auto;
   overscroll-behavior: contain;

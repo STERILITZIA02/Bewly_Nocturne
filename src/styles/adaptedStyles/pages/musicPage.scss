@@ -1,0 +1,35 @@
+// Music uses CSS Modules. Match the observed semantic stems, not build hashes.
+html.bewly-design:not(.bewly-video-dark-only).musicPage {
+  [class^="_nav_"] > [class^="_item_"] {
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  [class^="_newMusic_"] a > [class^="_inlineVideoSquare_"],
+  [class^="_newMusic_"] a > [class^="_imgContainer_"] {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  [class^="_newMusic_"] a > [class^="_inlineVideoSquare_"] > :is(img, picture, video),
+  [class^="_newMusic_"] a > [class^="_imgContainer_"] > :is(img, picture, video) {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  #app > [class^="_bottom_"] {
+    background-color: var(--bew-bg);
+  }
+
+  // Native sections use width:100% but impose a 1114px minimum. Their
+  // carousel translations are percentages, so retain them and release only
+  // this minimum on narrow desktops, including the banner's inner overlays.
+  @media (max-width: 1114px) {
+    #app > :is([class^="_bannerTop_"], [class^="_nav_"], [class^="_newMusic_"], [class^="_hotRank_"]),
+    #app > :is([class^="_musician_"], [class^="_originalMusic_"], [class^="_reviews_"], [class^="_moreMusic_"]),
+    [class^="_bannerTop_"] [class^="_smallPic_"] > [class^="_content_"],
+    [class^="_bannerTop_"] [class^="_coverBar_"] > span {
+      min-width: 0;
+    }
+  }
+}

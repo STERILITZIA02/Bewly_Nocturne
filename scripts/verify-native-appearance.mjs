@@ -2142,7 +2142,6 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       '~/styles/adaptedStyles/common/topBar.scss',
       '~/styles/adaptedStyles/common/footer.scss',
       '~/styles/adaptedStyles/common/btn.scss',
-      '~/styles/adaptedStyles/pages/nativeSites.scss',
       '~/styles/blockAds.scss',
     ].map(path => [path, {}]))
     const prompt = document.body.appendChild(document.createElement('div'))
@@ -2158,6 +2157,9 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
           onMessage: { addListener: fn => callbacks.add(fn), removeListener: fn => callbacks.delete(fn) },
         } } },
         '~/constants/contentScript': constants,
+        '~/constants/nativeSites': await import('../src/constants/nativeSites'),
+        '~/styles/adaptedStyles/pages/nativeSites.scss?inline': { default: '' },
+        '~/utils/nativeSiteCss': await import('../src/utils/nativeSiteCss'),
         '~/logic/storage': { settings, settingsInitializationState: initialization },
         '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
         './features/nativeSiteAppearance': { setupNativeSiteAppearance() {
@@ -2201,7 +2203,6 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       '~/styles/adaptedStyles/common/topBar.scss',
       '~/styles/adaptedStyles/common/footer.scss',
       '~/styles/adaptedStyles/common/btn.scss',
-      '~/styles/adaptedStyles/pages/nativeSites.scss',
       '~/styles/blockAds.scss',
     ].map(path => [path, {}]))
     for (const mode of ['complete-event', 'health-ping', 'disposed', 'invalidated', 'failed']) {
@@ -2224,6 +2225,9 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
             onMessage: { addListener: fn => callbacks.add(fn), removeListener: fn => callbacks.delete(fn) },
           } } },
           '~/constants/contentScript': constants,
+          '~/constants/nativeSites': await import('../src/constants/nativeSites'),
+          '~/styles/adaptedStyles/pages/nativeSites.scss?inline': { default: '' },
+          '~/utils/nativeSiteCss': await import('../src/utils/nativeSiteCss'),
           '~/logic/storage': { settings, settingsInitializationState: initialization },
           '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
           './features/nativeSiteAppearance': { setupNativeSiteAppearance() {

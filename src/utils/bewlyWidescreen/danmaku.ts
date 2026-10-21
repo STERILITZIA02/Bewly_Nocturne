@@ -1,3 +1,4 @@
+import { PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { DANMAKU_EMPTY_STATE_SELECTOR, DANMAKU_GLASS_CLASS, DANMAKU_LIST_ITEM_SELECTOR, DANMAKU_LIST_VIEWPORT_SELECTOR, DANMAKU_RESIZE_DELAYS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, NANO_DANMAKU_INPUT_SELECTOR, selectors } from '~/utils/bewlyWidescreen/constants'
 import { resetControlsLayout, schedulePlayerResizeSync, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
@@ -5,7 +6,9 @@ import { findFirst, findMovable } from '~/utils/bewlyWidescreen/nativeDom'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 import { setupWidescreenDanmakuSemantics } from '~/utils/bewlyWidescreenNative'
+import { DANMAKU_SENDER_ORDER_BUTTON_CLASS } from '~/utils/danmakuSenderOrder'
 import { computeAnchoredPopoverPosition } from '~/utils/floatingMenu'
+import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 
 export function positionDanmakuSettingsPanel(setting: HTMLElement, panel: HTMLElement) {
   const anchor = setting.getBoundingClientRect()
@@ -330,6 +333,44 @@ export function isDanmakuPanelReady(panel: HTMLElement) {
 
   return !!panel.querySelector(DANMAKU_LIST_ITEM_SELECTOR)
     || !!panel.querySelector(DANMAKU_EMPTY_STATE_SELECTOR)
+}
+
+/**
+ * Adds a sender column to the danmaku list header, before the send time. The
+ * list itself stays native: MAIN sorts it (see sortNativeDanmakuListBySender).
+ * The per-user list Bpx opens from a danmaku keeps its own header.
+ */
+export function syncDanmakuSenderOrderButton(panel: HTMLElement) {
+  const header = Array.from(panel.querySelectorAll<HTMLElement>('[class*="-dm-function"]'))
+    .find(element => !element.closest('[class*="-dm-wrap-child"]'))
+  const sendTime = header?.querySelector<HTMLElement>(':scope > [data-action="date"]')
+  if (!header || !sendTime || header.querySelector(`:scope > .${DANMAKU_SENDER_ORDER_BUTTON_CLASS}`))
+    return false
+
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = DANMAKU_SENDER_ORDER_BUTTON_CLASS
+  button.title = t('widescreen.danmaku_sort_sender')
+  button.setAttribute('aria-label', button.title)
+  const label = document.createElement('span')
+  label.textContent = t('widescreen.danmaku_sender')
+  button.append(label)
+  // The same order arrow as the native columns, shown while this one is active.
+  const icon = sendTime.querySelector('[class$="-dm-btn-icon"]')?.cloneNode(true)
+  if (icon)
+    button.append(icon)
+  button.addEventListener('click', () => {
+    const channelId = getPageBridgeChannelId()
+    if (channelId) {
+      postPageBridgeMessage(window, {
+        protocol: PAGE_BRIDGE_PROTOCOL,
+        channelId,
+        type: PAGE_BRIDGE_MESSAGE.DANMAKU_SENDER_ORDER,
+      })
+    }
+  })
+  header.insertBefore(button, sendTime)
+  return true
 }
 
 export function activateDanmakuTab(currentState: BewlyWidescreenState) {

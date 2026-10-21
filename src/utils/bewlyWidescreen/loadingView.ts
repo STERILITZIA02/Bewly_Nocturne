@@ -35,16 +35,18 @@ export function createWidescreenLoadingSkeleton() {
     playerControls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-control-label'))
   controls.appendChild(playerControls)
 
+  // The viewer count sits in the info's meta line while the card shows.
   const danmakuControls = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-danmaku-controls')
-  danmakuControls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-viewers'))
-  for (let index = 0; index < 5; index += 1)
+  // Home, page mode, theme, settings and feedback, then the two danmaku toggles.
+  for (let index = 0; index < 7; index += 1)
     danmakuControls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-circle'))
   danmakuControls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-input'))
   danmakuControls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-send'))
   controls.appendChild(danmakuControls)
   player.appendChild(controls)
 
-  const sidebar = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-sidebar')
+  // Title, author, actions and description head the column.
+  const info = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-info')
   const sidebarTop = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-sidebar-top')
   const title = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-title')
   title.append(
@@ -58,6 +60,7 @@ export function createWidescreenLoadingSkeleton() {
   owner.append(
     createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-avatar'),
     createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line bewly-widescreen-loading-skeleton-line--owner'),
+    createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line bewly-widescreen-loading-skeleton-line--owner-sign'),
     createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-owner-action'),
     createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-owner-action bewly-widescreen-loading-skeleton-owner-action--wide'),
   )
@@ -75,25 +78,24 @@ export function createWidescreenLoadingSkeleton() {
     createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line bewly-widescreen-loading-skeleton-line--description-short'),
   )
   sidebarTop.appendChild(description)
-  sidebar.appendChild(sidebarTop)
+  info.appendChild(sidebarTop)
+
+  // The column beside the video pane: the info, then comments / danmaku /
+  // recommendations.
+  const sidebar = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-sidebar')
+  sidebar.appendChild(info)
 
   const tabs = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-tabs')
   for (let index = 0; index < 3; index += 1)
     tabs.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-tab'))
   sidebar.appendChild(tabs)
 
+  // Comments have no known layout: the same single ring as the comment panel.
   const list = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-list')
-  for (let index = 0; index < 6; index += 1) {
-    const row = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-list-row')
-    const rowContent = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-list-content')
-    rowContent.append(
-      createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line'),
-      createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line bewly-widescreen-loading-skeleton-line--list-short'),
-    )
-    row.append(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-list-avatar'), rowContent)
-    list.appendChild(row)
-  }
+  list.appendChild(createLoadingRingElement())
   sidebar.appendChild(list)
+  // The comment composer docked under the list.
+  sidebar.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-composer'))
 
   stage.append(player, sidebar)
   return stage

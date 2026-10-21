@@ -1826,8 +1826,7 @@ verify('private write assets reuse the existing controller while text and image 
 })
 
 verify('native message runtime protects cache limits and browser regression gates', async () => {
-  const [agentsSource, regressionSource, notificationsSource, messagesSource, workspaceSource, policyFixtureSource] = await Promise.all([
-    readFile(new URL('../AGENTS.md', import.meta.url), 'utf8'),
+  const [regressionSource, notificationsSource, messagesSource, workspaceSource, policyFixtureSource] = await Promise.all([
     readFile(new URL('../docs/notifications/native-message-regression.md', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/usePrivateMessages.ts', import.meta.url), 'utf8'),
@@ -1842,15 +1841,6 @@ verify('native message runtime protects cache limits and browser regression gate
     whisperImplementation: string
   }
 
-  for (const baseline of [
-    'Native Message Center',
-    '打包构建',
-    '页面级 LRU',
-    'experimental',
-    'HTTP `412`',
-  ]) {
-    assert.ok(agentsSource.includes(baseline), baseline)
-  }
   assert.ok(notificationsSource.includes('privateMessageWorkspace.release()'))
   assert.ok(notificationsSource.includes('maxCachedPrivateConversations'))
   assert.ok(notificationsSource.includes('maxPrivateMessagesPerConversation'))

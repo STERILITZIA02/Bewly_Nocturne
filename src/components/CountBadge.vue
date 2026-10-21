@@ -4,15 +4,12 @@ const count = computed(() => Number.isFinite(props.count) ? Math.max(0, Math.flo
 </script>
 
 <template>
-  <span v-if="count > 0" class="bew-count-badge" :aria-label="String(count)">{{ count > 99 ? '99+' : count }}</span>
+  <span v-if="count > 0" class="bew-count-badge bew-centered-numeral" :aria-label="String(count)"><span>{{ count > 99 ? '99+' : count }}</span></span>
 </template>
 
 <style scoped lang="scss">
 .bew-count-badge {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
   flex: 0 0 auto;
   min-width: var(--bew-space-5);
   height: var(--bew-space-5);
@@ -24,8 +21,6 @@ const count = computed(() => Number.isFinite(props.count) ? Math.max(0, Math.flo
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-medium);
-  line-height: var(--bew-line-height-caption);
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;
 

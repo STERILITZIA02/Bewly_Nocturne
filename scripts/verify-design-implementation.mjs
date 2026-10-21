@@ -110,6 +110,7 @@ export function registerDesignImplementationChecks(check, { Vue, compileComponen
       const Filters = await compileComponent(`../src/contentScripts/views/SearchResults/components/Search${kind}Filters.vue`, {
         'vue-i18n': { useI18n: () => ({ t: (key, params) => params?.filters ?? key }) },
         './DatePicker.vue': { default: { render: () => null } },
+        '~/components/LiquidSegmentIndicator.vue': { default: { render: () => null } },
       })
       const fields = kind === 'Video'
         ? { videoOrder: 'click', duration: 2, timeRange: 'custom', customStartDate: '2026-09-01', customEndDate: '2026-09-20' }
@@ -233,23 +234,28 @@ export function registerDesignImplementationChecks(check, { Vue, compileComponen
     assert.equal(module.getHistoryResumeUrl({ ...item, uri: 'https://example.com/video/other' }), undefined)
   })
 
-  check('design: the playback sidebar button owns Enter/Space before native document shortcuts', async () => {
-    const current = { sidebarLayout: 'compact' }
-    let activations = 0
+  check('design: the playback fill button owns Enter/Space before native document shortcuts', async () => {
+    const current = { displayMode: 'card' }
+    const modes = []
     let nativeKeys = 0
     const nativeHandler = () => nativeKeys++
     document.addEventListener('keydown', nativeHandler)
     document.addEventListener('keyup', nativeHandler)
-    const module = await loadSourceFunctions('../src/utils/bewlyWidescreen/shell.ts', ['createSidebarToggleButton'], {
+    const module = await loadSourceFunctions('../src/utils/bewlyWidescreen/displayMode.ts', ['createFillToggleButton'], {
       document,
-      session: { current },
-      setSidebarLayout: (layout) => {
-        current.sidebarLayout = layout
-        activations++
+      FILL_TOGGLE_CLASS: 'bewly-widescreen-fill-toggle',
+      FILL_ICON_CLASS: 'i-tabler:maximize',
+      createPlayerControlTooltip: () => document.createElement('span'),
+      setWidescreenDisplayMode: (state, mode) => {
+        modes.push(mode)
+        state.displayMode = mode
       },
     })
-    const button = document.body.appendChild(module.createSidebarToggleButton())
+    const button = document.body.appendChild(module.createFillToggleButton(current))
     try {
+      assert.equal(button.getAttribute('role'), 'button')
+      assert.equal(button.tabIndex, 0)
+      assert.ok(button.classList.contains('bpx-player-ctrl-btn'))
       button.focus()
       for (const key of ['Enter', ' ']) {
         button.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
@@ -257,9 +263,10 @@ export function registerDesignImplementationChecks(check, { Vue, compileComponen
         button.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true, cancelable: true }))
         assert.equal(document.activeElement, button)
       }
-      assert.equal(activations, 2)
-      assert.equal(nativeKeys, 0)
-      assert.equal(current.sidebarLayout, 'compact')
+      assert.deepEqual(modes, ['fill', 'card'], 'each key toggles once; repeats are ignored')
+      assert.equal(nativeKeys, 0, 'Space never also reaches the native play/pause shortcut')
+      button.click()
+      assert.deepEqual(modes, ['fill', 'card', 'fill'])
       const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
       button.dispatchEvent(tab)
       assert.equal(tab.defaultPrevented, false)

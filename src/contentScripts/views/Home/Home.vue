@@ -429,7 +429,7 @@ watch(tabContentLoading, (loading) => {
           <section
             v-if="shouldShowHomeTabs"
             v-layout-editable="'home-tabs'"
-            class="home-control-surface home-tabs-panel bew-segment-control bew-segment-control--surface bew-segment-control--flush"
+            class="home-control-surface home-tabs-panel bew-segment-control bew-segment-control--surface bew-segment-control--track"
             data-layout-editable-id="home-tabs"
           >
             <div class="home-tabs-scroll" h-full of-x-auto of-y-hidden>
@@ -469,7 +469,7 @@ watch(tabContentLoading, (loading) => {
           <div
             v-if="settings.enableGridLayoutSwitcher"
             v-layout-editable="'home-grid-switcher'"
-            class="home-control-surface home-grid-layout-switcher bew-segment-control bew-segment-control--surface bew-segment-control--flush"
+            class="home-control-surface home-grid-layout-switcher bew-segment-control bew-segment-control--surface bew-segment-control--track"
             data-layout-editable-id="home-grid-switcher"
             flex="~ shrink-0 items-center"
             box-border

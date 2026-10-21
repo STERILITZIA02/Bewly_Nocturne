@@ -64,6 +64,8 @@ import type { ViewportFrameReason, ViewportGeometry } from '~/utils/viewportGeom
 import { invalidateViewportGeometry, readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
 
 import { setupNecessarySettingsWatchers } from './necessarySettingsWatchers'
+import PlaybackCommentComposer from './PlaybackCommentComposer.vue'
+import PlaybackRailTabsIndicator from './PlaybackRailTabsIndicator.vue'
 
 const mainStore = useMainStore()
 registerSidebarWidth()
@@ -1041,6 +1043,8 @@ onBeforeUnmount(stopUrlCleaner)
 
     <AppAuthorizationDialog v-if="showAppAuthorizationDialog" />
     <LocalLoudnessPanel v-if="localLoudnessPanelOpen" />
+    <PlaybackCommentComposer v-if="!isInIframe()" />
+    <PlaybackRailTabsIndicator />
 
     <!-- Keep the static overlay removal before resolving a caller's request. -->
     <ConfirmDialog

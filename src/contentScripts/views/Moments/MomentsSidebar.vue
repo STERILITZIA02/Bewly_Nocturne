@@ -109,6 +109,8 @@ function select(value: string) {
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/scrollEdgeFade";
+
 .moments-sidebar {
   height: 100%;
   min-height: 0;
@@ -266,6 +268,7 @@ function select(value: string) {
   }
 }
 .moments-live-card__list {
+  @include scrollEdgeFade.vertical;
   display: grid;
   flex: 0 1 auto;
   min-height: 0;

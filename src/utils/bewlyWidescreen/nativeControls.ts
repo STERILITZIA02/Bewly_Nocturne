@@ -1,10 +1,9 @@
 import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } from '~/constants/globalEvents'
-import { BOTTOM_CONTROL_POPOVER_SELECTOR, MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR, NATIVE_ACTION_OVERLAY_SELECTOR, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, SIDEBAR_TOGGLE_IDLE_DELAY } from '~/utils/bewlyWidescreen/constants'
-import { isWidescreenSidebarExpanded, session } from '~/utils/bewlyWidescreen/session'
+import { MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR } from '~/utils/bewlyWidescreen/constants'
+import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
-import { hasWidescreenControlPopoverArea, isWidescreenBottomControlHoverRegion, isWidescreenPlayerControlHoverRegion, resolveWidescreenControlSurfaceState } from '~/utils/bewlyWidescreenPolicy'
+import { isWidescreenBottomControlHoverRegion, isWidescreenPlayerControlHoverRegion, resolveWidescreenControlSurfaceState } from '~/utils/bewlyWidescreenPolicy'
 import { getDeepActiveElement } from '~/utils/dialogFocus'
-import { isPhotoViewerOpen } from '~/utils/photoViewer'
 
 const NON_TEXT_INPUT_TYPES = new Set(['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'])
 
@@ -38,79 +37,28 @@ export function getNativePlayerContainer(
     : playerHost.querySelector<HTMLElement>('.bpx-player-container')
 }
 
-export function isBottomControlPopoverOpen(currentState: BewlyWidescreenState) {
-  const roots = new Set<HTMLElement>()
-  currentState.playerEl
-    .querySelectorAll<HTMLElement>(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR)
-    .forEach(root => roots.add(root))
-  if (currentState.danmakuSemanticsSource?.isConnected)
-    roots.add(currentState.danmakuSemanticsSource)
-
-  return [...roots].some(root => Array.from(
-    root.querySelectorAll<HTMLElement>(BOTTOM_CONTROL_POPOVER_SELECTOR),
-  ).some((element) => {
-    if (element.hidden || element.getAttribute('aria-hidden') === 'true')
-      return false
-    const style = getComputedStyle(element)
-    const opacity = Number.parseFloat(style.opacity)
-    if (style.display === 'none'
-      || style.visibility === 'hidden'
-      || style.visibility === 'collapse'
-      || style.pointerEvents === 'none'
-      || (Number.isFinite(opacity) && opacity <= 0)) {
-      return false
-    }
-    const rect = element.getBoundingClientRect()
-    // Bpx keeps 2px positioning anchors rendered while their menu is closed.
-    // Only an interaction-sized surface represents a genuinely open popover.
-    return hasWidescreenControlPopoverArea(rect.width, rect.height)
-  }))
-}
-
-export function isNativeActionOverlayOpen() {
-  if (isPhotoViewerOpen())
-    return true
-  return Array.from(document.querySelectorAll<HTMLElement>(NATIVE_ACTION_OVERLAY_SELECTOR)).some((element) => {
-    if (element.hidden || element.getAttribute('aria-hidden') === 'true')
-      return false
-
-    const style = getComputedStyle(element)
-    const opacity = Number.parseFloat(style.opacity)
-    if (style.display === 'none'
-      || style.visibility === 'hidden'
-      || style.visibility === 'collapse'
-      || style.pointerEvents === 'none'
-      || (Number.isFinite(opacity) && opacity <= 0)) {
-      return false
-    }
-
-    const rect = element.getBoundingClientRect()
-    return rect.width > 0 && rect.height > 0
-  })
-}
-
 export function isPointerInBottomControlContainer(
   currentState: BewlyWidescreenState,
   pointerX: number,
   pointerY: number,
+  playerRect: DOMRect,
 ) {
   const glass = currentState.danmakuGlass
   if (!glass?.isConnected)
     return false
 
   const rect = glass.getBoundingClientRect()
-  const rootRect = currentState.root.getBoundingClientRect()
   const glassBottom = Number.parseFloat(
-    getComputedStyle(currentState.root).getPropertyValue('--bewly-widescreen-controls-glass-bottom'),
+    getComputedStyle(currentState.playerEl).getPropertyValue('--bewly-widescreen-controls-glass-bottom'),
   ) || 0
   return isWidescreenBottomControlHoverRegion({
     currentlyHovered: currentState.bottomControlsHovered,
     pointerX,
     pointerY,
     surfaceHeight: rect.height,
-    // Anchor the hit region to the glass's stable layout edge so opacity-only
-    // hiding preserves the same reveal area without stealing the sidebar edge.
-    viewportBottom: rootRect.bottom - glassBottom,
+    // Anchor the hit region to the glass's stable layout edge inside the
+    // player, so opacity-only hiding preserves the same reveal area.
+    viewportBottom: playerRect.bottom - glassBottom,
     viewportLeft: rect.left,
     viewportRight: rect.right,
   })
@@ -152,7 +100,6 @@ export function syncNativePlayerControlVisibility(
     nativeControlsReady: currentState.controlsLayoutReady
       && !!nativeControls,
     pointerInsidePlayer: currentState.playerPointerInside,
-    sidebarExpanded: isWidescreenSidebarExpanded(currentState),
   })
   if (currentState.root.dataset.playerControlsReady !== String(ready))
     currentState.root.dataset.playerControlsReady = String(ready)
@@ -163,13 +110,14 @@ export function syncNativePlayerControlVisibility(
   currentState.updateIdleProgress?.()
 }
 
+/** `playerRect` is read before any state write in the same event, so forwarding never forces layout. */
 export function forwardNativePlayerPointerActivity(
   currentState: BewlyWidescreenState,
   playerHost: HTMLElement,
   event: PointerEvent,
-  allowSidebarExpanded = false,
+  playerRect: DOMRect,
 ) {
-  if (!event.isTrusted || (!allowSidebarExpanded && isWidescreenSidebarExpanded(currentState)))
+  if (!event.isTrusted)
     return
 
   const playerContainer = getNativePlayerContainer(currentState, playerHost)
@@ -180,10 +128,9 @@ export function forwardNativePlayerPointerActivity(
     return
   }
 
-  const rootRect = currentState.root.getBoundingClientRect()
-  if (!isWidescreenPlayerControlHoverRegion({
-    playerBottom: rootRect.bottom,
-    playerTop: rootRect.top,
+  if (event.clientX < playerRect.left || event.clientX > playerRect.right || !isWidescreenPlayerControlHoverRegion({
+    playerBottom: playerRect.bottom,
+    playerTop: playerRect.top,
     pointerY: event.clientY,
   })) {
     return
@@ -243,8 +190,6 @@ export function setupActiveWidescreenControl(currentState: BewlyWidescreenState)
       focusRoots.add(root)
     }
     syncNativePlayerControlVisibility(currentState)
-    currentState.sidebarInteractionFocusSync?.()
-    currentState.sidebarToggleFocusSync?.()
   }
   // focusout occurs before activeElement moves to the next control. Re-read the
   // DOM after the focus transfer rather than retaining a second focus state.
@@ -266,70 +211,5 @@ export function setupActiveWidescreenControl(currentState: BewlyWidescreenState)
       root.removeEventListener('focusout', handleControlFocusOut, true)
     }
     focusRoots.clear()
-  }
-}
-
-export function setupSidebarToggleAutoHide(currentState: BewlyWidescreenState) {
-  const { playerEl, sidebarToggleButton, root } = currentState
-  let idleTimer: ReturnType<typeof setTimeout> | undefined
-  let hoveringToggle = false
-
-  function clearIdleTimer() {
-    if (idleTimer) {
-      clearTimeout(idleTimer)
-      idleTimer = undefined
-    }
-  }
-
-  function hideToggle() {
-    if (isWidescreenTextEditing())
-      return
-    root.dataset.pointerActive = 'false'
-  }
-
-  function showToggle() {
-    root.dataset.pointerActive = 'true'
-    clearIdleTimer()
-    // Text editing anywhere on the page pauses the same idle timer.
-    if (!hoveringToggle && !isWidescreenTextEditing())
-      idleTimer = setTimeout(hideToggle, SIDEBAR_TOGGLE_IDLE_DELAY)
-  }
-
-  function onPointerLeave() {
-    clearIdleTimer()
-    hideToggle()
-  }
-
-  function onToggleEnter() {
-    hoveringToggle = true
-    root.dataset.pointerActive = 'true'
-    clearIdleTimer()
-  }
-
-  function onToggleLeave() {
-    hoveringToggle = false
-    showToggle()
-  }
-
-  playerEl.addEventListener('pointermove', showToggle, { passive: true })
-  playerEl.addEventListener('pointerleave', showToggle)
-  window.addEventListener('blur', onPointerLeave)
-  document.documentElement.addEventListener('pointerleave', onPointerLeave)
-  sidebarToggleButton.addEventListener('pointerenter', onToggleEnter)
-  sidebarToggleButton.addEventListener('pointerleave', onToggleLeave)
-  currentState.sidebarToggleFocusSync = showToggle
-  if (isWidescreenTextEditing())
-    showToggle()
-
-  currentState.sidebarToggleAutoHideCleanup = () => {
-    clearIdleTimer()
-    currentState.sidebarToggleFocusSync = undefined
-    playerEl.removeEventListener('pointermove', showToggle)
-    playerEl.removeEventListener('pointerleave', showToggle)
-    window.removeEventListener('blur', onPointerLeave)
-    document.documentElement.removeEventListener('pointerleave', onPointerLeave)
-    sidebarToggleButton.removeEventListener('pointerenter', onToggleEnter)
-    sidebarToggleButton.removeEventListener('pointerleave', onToggleLeave)
-    delete root.dataset.pointerActive
   }
 }

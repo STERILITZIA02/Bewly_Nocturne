@@ -58,7 +58,6 @@ export interface WidescreenControlSurfaceStateInput {
   nativeControlsHidden: boolean
   nativeControlsReady: boolean
   pointerInsidePlayer: boolean
-  sidebarExpanded: boolean
 }
 
 export function resolveWidescreenControlSurfaceState({
@@ -69,71 +68,57 @@ export function resolveWidescreenControlSurfaceState({
   nativeControlsHidden,
   nativeControlsReady,
   pointerInsidePlayer,
-  sidebarExpanded,
 }: WidescreenControlSurfaceStateInput) {
   const ready = danmakuControlsReady && nativeControlsReady
   return {
     // 页面任意文字编辑或底部控件持有焦点时，暂停原生闲置隐藏。
     // 失焦后重新采用原生空闲/指针状态，不冻结上一帧结果。
     hidden: !ready
-      || sidebarExpanded
       || (!textEditingActive && !bottomControlsFocused && !bottomControlsHovered && (pointerInsidePlayer ? nativeControlsHidden : true)),
     ready,
   }
 }
 
+/**
+ * hydrating: the loading state shows. pending: the budget is spent but the
+ * native comment request is still in flight, so loading still shows.
+ * recovering: the failure notice shows while hydration keeps watching at a
+ * slower pace, so a late native node clears it. stopped: give up watching.
+ */
+export type WidescreenSidebarHydrationPhase = 'complete' | 'hydrating' | 'pending' | 'recovering' | 'stopped'
+
+export const WIDESCREEN_SIDEBAR_HYDRATION_BUDGET = 12_000
+/** How long an in-flight native comment request may keep the loading state. */
+export const WIDESCREEN_SIDEBAR_HYDRATION_PENDING_LIMIT = 30_000
+export const WIDESCREEN_SIDEBAR_HYDRATION_RECOVERY_LIMIT = 60_000
+
 export interface WidescreenSidebarHydrationState {
   complete: boolean
-  now: number
-  deadline: number
+  /** Time spent while the page was visible; a hidden tab neither paints nor lazy-loads. */
+  elapsed: number
+  nativeRequestPending: boolean
 }
 
-export function shouldContinueWidescreenSidebarHydration({
+export function resolveWidescreenSidebarHydrationPhase({
   complete,
-  now,
-  deadline,
-}: WidescreenSidebarHydrationState): boolean {
-  return !complete && now < deadline
+  elapsed,
+  nativeRequestPending,
+}: WidescreenSidebarHydrationState): WidescreenSidebarHydrationPhase {
+  if (complete)
+    return 'complete'
+  if (elapsed < WIDESCREEN_SIDEBAR_HYDRATION_BUDGET)
+    return 'hydrating'
+  if (nativeRequestPending && elapsed < WIDESCREEN_SIDEBAR_HYDRATION_PENDING_LIMIT)
+    return 'pending'
+  return elapsed < WIDESCREEN_SIDEBAR_HYDRATION_RECOVERY_LIMIT ? 'recovering' : 'stopped'
 }
 
-export const WIDESCREEN_SIDEBAR_EDGE_ACTIVATION_WIDTH = 72
-export const WIDESCREEN_SIDEBAR_EDGE_EXIT_TOLERANCE = 48
-export const WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY = 320
 export const WIDESCREEN_PLAYER_CONTROL_HOVER_GUARD_HEIGHT = 96
 export const WIDESCREEN_BOTTOM_CONTROL_HOVER_ENTRY_TOLERANCE = 4
 export const WIDESCREEN_BOTTOM_CONTROL_HOVER_EXIT_TOLERANCE = 16
 export const WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY = 240
+/** Narrowest comment / danmaku / recommendation column beside the video card. */
 export const WIDESCREEN_SIDEBAR_MIN_WIDTH = 360
-// Zero keeps the default responsive; positive stored widths are user-resized pixels.
-export const WIDESCREEN_SIDEBAR_DEFAULT_WIDTH = 0
-export const WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO = 0.5
-export const WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO = 0.85
-const WIDESCREEN_CONTROL_POPOVER_MIN_SIZE = 24
-
-export function hasWidescreenControlPopoverArea(width: number, height: number): boolean {
-  return Number.isFinite(width)
-    && Number.isFinite(height)
-    && width >= WIDESCREEN_CONTROL_POPOVER_MIN_SIZE
-    && height >= WIDESCREEN_CONTROL_POPOVER_MIN_SIZE
-}
-
-export interface WidescreenSidebarRevealBlockInput {
-  bottomControlPopoverOpen: boolean
-  pointerInBottomControls: boolean
-}
-
-export function shouldBlockWidescreenSidebarReveal({
-  bottomControlPopoverOpen,
-  pointerInBottomControls,
-}: WidescreenSidebarRevealBlockInput): boolean {
-  return bottomControlPopoverOpen || pointerInBottomControls
-}
-
-export function normalizeWidescreenSidebarStoredWidth(width: number): number {
-  if (!Number.isFinite(width) || width === WIDESCREEN_SIDEBAR_DEFAULT_WIDTH)
-    return WIDESCREEN_SIDEBAR_DEFAULT_WIDTH
-  return Math.round(Math.max(width, WIDESCREEN_SIDEBAR_MIN_WIDTH))
-}
 
 export interface WidescreenPlayerControlHoverInput {
   playerBottom: number
@@ -190,166 +175,91 @@ export function isWidescreenBottomControlHoverRegion({
   return pointerY >= top && pointerY <= bottom
 }
 
-export interface WidescreenSidebarHoverInput {
-  position: 'left' | 'right'
-  currentlyExpanded: boolean
-  pointerX: number
-  viewportStart: number
-  viewportEnd: number
-  sidebarWidth: number
-}
+export type WidescreenDisplayMode = 'card' | 'fill'
 
-/**
- * Resolve edge reveal from stable viewport geometry instead of the moving
- * sidebar hitbox. The wider exit boundary provides hysteresis while the
- * sidebar is animating and while the pointer crosses its inner edge.
- */
-export function resolveWidescreenSidebarHoverExpanded({
-  position,
-  currentlyExpanded,
-  pointerX,
-  viewportStart,
-  viewportEnd,
-  sidebarWidth,
-}: WidescreenSidebarHoverInput): boolean {
-  const safeViewportStart = Math.min(viewportStart, viewportEnd)
-  const safeViewportEnd = Math.max(viewportStart, viewportEnd)
-  if (!Number.isFinite(pointerX) || pointerX < safeViewportStart || pointerX > safeViewportEnd)
-    return false
-
-  if (!currentlyExpanded) {
-    const edgeDistance = position === 'right'
-      ? safeViewportEnd - pointerX
-      : pointerX - safeViewportStart
-    return edgeDistance <= WIDESCREEN_SIDEBAR_EDGE_ACTIVATION_WIDTH
-  }
-
-  const safeSidebarWidth = Math.max(
-    0,
-    Math.min(sidebarWidth, safeViewportEnd - safeViewportStart),
-  )
-  return position === 'right'
-    ? pointerX >= safeViewportEnd - safeSidebarWidth - WIDESCREEN_SIDEBAR_EDGE_EXIT_TOLERANCE
-    : pointerX <= safeViewportStart + safeSidebarWidth + WIDESCREEN_SIDEBAR_EDGE_EXIT_TOLERANCE
-}
-
-export function clampWidescreenSidebarWidth(width: number, viewportWidth: number): number {
-  const safeViewportWidth = Math.max(0, viewportWidth)
-  const maxWidth = safeViewportWidth * WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO
-  const minWidth = Math.min(WIDESCREEN_SIDEBAR_MIN_WIDTH, maxWidth)
-  const safeWidth = normalizeWidescreenSidebarStoredWidth(width)
-    || safeViewportWidth * WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO
-  return Math.min(Math.max(safeWidth, minWidth), maxWidth)
-}
-
-export interface WidescreenSidebarResizeInput {
-  position: 'left' | 'right'
-  deltaX: number
-  startWidth: number
-  viewportWidth: number
-}
-
-export function resolveWidescreenSidebarResizeWidth({
-  position,
-  deltaX,
-  startWidth,
-  viewportWidth,
-}: WidescreenSidebarResizeInput): number {
-  const width = startWidth + (position === 'right' ? -deltaX : deltaX)
-  return clampWidescreenSidebarWidth(Math.max(width, WIDESCREEN_SIDEBAR_MIN_WIDTH), viewportWidth)
-}
-
-export interface WidescreenCenterGeometryInput {
-  centerEnabled: boolean
-  compactLayout: boolean
-  horizontalLayout: boolean
-  viewportWidth: number
-  playerHeight: number
-  visualAspect: number
-  sidebarWidth: number
-}
-
-export interface WidescreenCenterGeometry {
-  enabled: boolean
-  offset: number
-  sideGap: number
-}
-
-export interface WidescreenAnchoredPlayerGeometryInput {
-  centered: boolean
-  frameHeight: number
-  frameLeft: number
-  frameTop: number
-  frameWidth: number
-  sidebarPosition: 'left' | 'right'
-  sidebarReservedWidth: number
-}
-
-export interface WidescreenAnchoredPlayerGeometry {
-  height: number
+export interface WidescreenRect {
   left: number
   top: number
   width: number
+  height: number
 }
 
-export function resolveWidescreenAnchoredPlayerGeometry({
-  centered,
-  frameHeight,
-  frameLeft,
-  frameTop,
-  frameWidth,
-  sidebarPosition,
-  sidebarReservedWidth,
-}: WidescreenAnchoredPlayerGeometryInput): WidescreenAnchoredPlayerGeometry {
-  const left = Number.isFinite(frameLeft) ? frameLeft : 0
-  const top = Number.isFinite(frameTop) ? frameTop : 0
-  const width = Math.max(0, Number.isFinite(frameWidth) ? frameWidth : 0)
-  const height = Math.max(0, Number.isFinite(frameHeight) ? frameHeight : 0)
-  const reservedWidth = centered
-    ? Math.max(0, Math.min(Number.isFinite(sidebarReservedWidth) ? sidebarReservedWidth : 0, width))
-    : 0
-  const anchoredWidth = width - reservedWidth
+export interface WidescreenZoomFrame {
+  /** Uniform scale applied from the layout box's top-left corner. */
+  scale: number
+  x: number
+  y: number
+  /** Inset of the layout box (its own pixels) clipped away on each side. */
+  clipX: number
+  clipY: number
+}
 
-  return {
-    height,
-    left: left + (centered && sidebarPosition === 'left' ? reservedWidth : 0),
-    top,
-    width: anchoredWidth,
-  }
+/** What the viewer sees of the player: its visible outline and video width. */
+export interface WidescreenZoomVisual {
+  rect: WidescreenRect
+  contentWidth: number
+}
+
+function isUsableRect(rect: WidescreenRect) {
+  return [rect.left, rect.top, rect.width, rect.height].every(Number.isFinite) && rect.width > 0 && rect.height > 0
+}
+
+/** Width of a picture of `aspect` letterboxed into a box (object-fit: contain). */
+export function resolveWidescreenContentWidth(box: Pick<WidescreenRect, 'width' | 'height'>, aspect: number) {
+  return Math.min(box.width, box.height * (aspect > 0 ? aspect : 16 / 9))
 }
 
 /**
- * Resolve centering from measured geometry. The sidebar must fit entirely in a
- * single letterbox side; otherwise no offset is applied and the video keeps its
- * normal video-first layout.
+ * Frame that makes a player laid out at `layout` look like `from`: the video
+ * keeps its on-screen width and centre, and only the outline of `from` stays
+ * visible. Card ⇄ fill and any reversal in between share this one mapping, so
+ * the zoom never jumps however the video is letterboxed.
  */
-export function resolveWidescreenCenterGeometry({
-  centerEnabled,
-  compactLayout,
-  horizontalLayout,
-  viewportWidth,
-  playerHeight,
-  visualAspect,
-  sidebarWidth,
-}: WidescreenCenterGeometryInput): WidescreenCenterGeometry {
-  const safeViewportWidth = Math.max(0, viewportWidth)
-  const safePlayerHeight = Math.max(0, playerHeight)
-  const safeAspect = Number.isFinite(visualAspect) && visualAspect > 0 ? visualAspect : 16 / 9
-  const safeSidebarWidth = Math.max(0, Math.min(sidebarWidth, safeViewportWidth))
-  const visualWidth = Math.min(safePlayerHeight * safeAspect, safeViewportWidth)
-  const sideGap = Math.max((safeViewportWidth - visualWidth) / 2, 0)
-  const availablePlayerWidth = Math.max(safeViewportWidth - safeSidebarWidth, 0)
-  const maxOffset = Math.max((availablePlayerWidth - visualWidth) / 2, 0)
-  const enabled = centerEnabled
-    && compactLayout
-    && horizontalLayout
-    && safeSidebarWidth > 0
-    && sideGap >= safeSidebarWidth
-    && availablePlayerWidth >= visualWidth
+export function resolveWidescreenZoomFrame(
+  from: WidescreenZoomVisual,
+  layout: WidescreenRect,
+  layoutContentWidth: number,
+): WidescreenZoomFrame | null {
+  if (!isUsableRect(from.rect) || !isUsableRect(layout) || !(from.contentWidth > 0) || !(layoutContentWidth > 0))
+    return null
 
+  const scale = from.contentWidth / layoutContentWidth
+  const centerX = from.rect.left + from.rect.width / 2
+  const centerY = from.rect.top + from.rect.height / 2
   return {
-    enabled,
-    offset: enabled ? Math.min(safeSidebarWidth / 2, maxOffset) : 0,
-    sideGap,
+    scale,
+    x: centerX - layout.left - layout.width * scale / 2,
+    y: centerY - layout.top - layout.height * scale / 2,
+    clipX: Math.max(0, (layout.width * scale - from.rect.width) / (2 * scale)),
+    clipY: Math.max(0, (layout.height * scale - from.rect.height) / (2 * scale)),
+  }
+}
+
+/** The settled frame: the layout box itself. */
+export const WIDESCREEN_IDENTITY_ZOOM_FRAME: Readonly<WidescreenZoomFrame> = { scale: 1, x: 0, y: 0, clipX: 0, clipY: 0 }
+
+/** Linear in every component, as the browser interpolates the keyframes. */
+export function interpolateWidescreenZoomFrame(from: WidescreenZoomFrame, to: WidescreenZoomFrame, progress: number): WidescreenZoomFrame {
+  const p = Math.min(1, Math.max(0, Number.isFinite(progress) ? progress : 1))
+  const mix = (a: number, b: number) => a + (b - a) * p
+  return {
+    scale: mix(from.scale, to.scale),
+    x: mix(from.x, to.x),
+    y: mix(from.y, to.y),
+    clipX: mix(from.clipX, to.clipX),
+    clipY: mix(from.clipY, to.clipY),
+  }
+}
+
+/** What a frame shows of a player laid out at `layout`. */
+export function resolveWidescreenZoomVisual(layout: WidescreenRect, frame: WidescreenZoomFrame, layoutContentWidth: number): WidescreenZoomVisual {
+  return {
+    rect: {
+      left: layout.left + frame.x + frame.clipX * frame.scale,
+      top: layout.top + frame.y + frame.clipY * frame.scale,
+      width: Math.max(0, layout.width - frame.clipX * 2) * frame.scale,
+      height: Math.max(0, layout.height - frame.clipY * 2) * frame.scale,
+    },
+    contentWidth: layoutContentWidth * frame.scale,
   }
 }

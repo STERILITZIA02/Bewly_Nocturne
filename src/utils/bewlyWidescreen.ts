@@ -6,23 +6,25 @@ import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { VideoInfo } from '~/models/video/videoInfo'
 import { clearActionGeometry, setupActionGeometryObservers, syncActionAnimationTheme } from '~/utils/bewlyWidescreen/actionEffects'
-import { BODY_CLASS, DANMAKU_SKELETON_CLASS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, EMPTY_CLASS, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_PLAYER_CLASS, PAGE_READY_FALLBACK_DELAY, READY_POLL_FAST_DURATION, READY_POLL_INTERVAL, READY_STABILITY_DELAY, selectors, SIDEBAR_RELEVANT_SELECTOR, TRANSFER_SETTLE_DELAY } from '~/utils/bewlyWidescreen/constants'
+import { setupPlaybackCommentComposer } from '~/utils/bewlyWidescreen/commentComposer'
+import { BODY_CLASS, DANMAKU_SKELETON_CLASS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, EMPTY_CLASS, INITIAL_REVEAL_TIMEOUT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_PLAYER_CLASS, PAGE_READY_FALLBACK_DELAY, READY_POLL_FAST_DURATION, READY_POLL_INTERVAL, READY_STABILITY_DELAY, selectors, SIDEBAR_RELEVANT_SELECTOR, TRANSFER_SETTLE_DELAY } from '~/utils/bewlyWidescreen/constants'
 import { clearDanmakuActivation, syncDanmakuInputSource } from '~/utils/bewlyWidescreen/danmaku'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
-import { clearAnchoredPlayerElement, clearAspectObservers, clearAuxiliaryControlGeometry, clearPlayerResizeSync, ensureAnchoredPlayer, schedulePlayerResizeSync, setupAspectObservers, syncAnchoredPlayerGeometry, updateAspectRatio, updateSidebarLayoutState } from '~/utils/bewlyWidescreen/geometry'
+import { setupFillToggle, setWidescreenDisplayMode, stopWidescreenZoom, syncFillToggleButton } from '~/utils/bewlyWidescreen/displayMode'
+import { clearAnchoredPlayerElement, clearAspectObservers, clearAuxiliaryControlGeometry, clearPlayerResizeSync, ensureAnchoredPlayer, refreshPlayerLayout, schedulePlayerResizeSync, setupAspectObservers, syncAnchoredPlayerGeometry, updatePlayerLayoutState } from '~/utils/bewlyWidescreen/geometry'
 import { setupIdleProgress } from '~/utils/bewlyWidescreen/idleProgress'
-import { setupSidebarInteractionTracking } from '~/utils/bewlyWidescreen/interactions'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { createWidescreenLoading } from '~/utils/bewlyWidescreen/loading'
-import { setupActiveWidescreenControl, setupSidebarToggleAutoHide, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
+import { setupActiveWidescreenControl, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
 import { classifyWidescreenMutation, disableNativeLightOffMode, findCommentRoot, isReadyForLayout, isWidescreenTransferContentReady, leaveMutuallyExclusivePlayerModes, removeMovedNode, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
 import { clearEpisodeSectionMarker, setupPlaylistToggle, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
+import { clearRailTabs } from '~/utils/bewlyWidescreen/railTabs'
 import { session } from '~/utils/bewlyWidescreen/session'
-import { clearSidebarEdgeRevealSuppression, createRoot, setActiveTab, setSidebarLayout, syncSidebarToggleButton } from '~/utils/bewlyWidescreen/shell'
+import { createRoot, setActiveTab } from '~/utils/bewlyWidescreen/shell'
 import { clearSidebarHydration, clearSidebarRefreshTimer, scheduleSidebarRefresh, startSidebarHydration, suspendSidebarForVideoNavigation, syncSidebarReadiness } from '~/utils/bewlyWidescreen/sidebar'
 import { injectLayoutStyle } from '~/utils/bewlyWidescreen/styles/layout'
 import type { BewlyWidescreenState, ExitBewlyWidescreenOptions, MovedNode } from '~/utils/bewlyWidescreen/types'
-import { loadFallbackVideoInfo, renderFallbackVideoInfo, syncSidebarTitle } from '~/utils/bewlyWidescreen/videoInfo'
+import { clearVideoMetadataObserver, clearViewerCount, loadFallbackVideoInfo, renderFallbackVideoInfo, syncSidebarTitle } from '~/utils/bewlyWidescreen/videoInfo'
 import { canCommitWidescreenLayout, resolveWidescreenEngagedState, shouldScheduleWidescreenRefresh } from '~/utils/bewlyWidescreenPolicy'
 import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
@@ -51,6 +53,9 @@ let playerReadyForLayout = false
 
 let contentReadyForLayout = false
 
+/** Every transferable native structure is present (not the settle fallback). */
+let structureReadyForLayout = false
+
 let pageReadySince: number | undefined
 
 let readinessStableSince: number | undefined
@@ -73,21 +78,12 @@ function syncLocalizedWidescreenText(currentState = session.current) {
   if (!currentState || session.current !== currentState)
     return
 
-  const closeButton = currentState.sidebarTop.querySelector<HTMLButtonElement>('.bewly-widescreen-close')
-  if (closeButton) {
-    const closeLabel = t('widescreen.close_sidebar')
-    closeButton.textContent = closeLabel
-    closeButton.setAttribute('aria-label', closeLabel)
-  }
-  const resizeLabel = t('widescreen.resize_sidebar')
-  currentState.sidebarResizer.setAttribute('aria-label', resizeLabel)
-  currentState.sidebarResizer.title = resizeLabel
   currentState.tabButtons.comment.textContent = t('widescreen.comments')
   currentState.tabButtons.danmaku.textContent = t('widescreen.danmaku')
   currentState.tabButtons.playlist.textContent = currentState.panels.playlist.querySelector(selectors.playlist.join(','))
     ? t('widescreen.playlist')
     : t('widescreen.recommendations')
-  syncSidebarToggleButton(currentState)
+  syncFillToggleButton(currentState)
   syncDescription(currentState)
   syncPlaylistToggleButton(currentState)
   syncDanmakuInputSource(currentState, true)
@@ -134,16 +130,6 @@ function stopWidescreenLanguageWatch() {
 }
 
 function setupWidescreenSettingsWatchers(currentState: BewlyWidescreenState) {
-  const stopPriorityWatch = watch(
-    () => settings.value.bewlyWidescreenLayoutPriority,
-    priority => setSidebarLayout(priority === 'sidebar-first' ? 'expanded' : 'compact', currentState),
-    { flush: 'sync' },
-  )
-  const stopCenterWatch = watch(
-    () => settings.value.bewlyWidescreenCenterVideo,
-    () => updateSidebarLayoutState(currentState),
-    { flush: 'sync' },
-  )
   const stopThemeWatch = watch(
     () => [
       settings.value.themeColor,
@@ -161,19 +147,14 @@ function setupWidescreenSettingsWatchers(currentState: BewlyWidescreenState) {
         return
       currentState.sidebarPosition = position
       currentState.root.dataset.sidebarPosition = position
-      if (position === 'left')
-        currentState.stage.append(currentState.sidebarEl, currentState.playerSlot)
-      else
-        currentState.stage.append(currentState.playerSlot, currentState.sidebarEl)
-      syncSidebarToggleButton(currentState)
-      updateSidebarLayoutState(currentState)
+      currentState.backdrop.dataset.sidebarPosition = position
+      // The pane keeps its size while it changes side; no resize reports that.
+      updatePlayerLayoutState(currentState)
       schedulePlayerResizeSync(currentState)
     },
     { flush: 'sync' },
   )
   currentState.settingsWatchCleanup = [
-    stopPriorityWatch,
-    stopCenterWatch,
     stopThemeWatch,
     stopPositionWatch,
   ]
@@ -341,9 +322,11 @@ function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
 function cleanupState(currentState: BewlyWidescreenState) {
   currentState.sidebarReadyCleanup?.()
   currentState.escapeKeyCleanup?.()
-  clearSidebarEdgeRevealSuppression(currentState)
-  currentState.sidebarInteractionCleanup?.()
-  currentState.sidebarToggleAutoHideCleanup?.()
+  stopWidescreenZoom(currentState)
+  currentState.fillToggleCleanup?.()
+  currentState.fillToggleCleanup = undefined
+  currentState.commentComposerCleanup?.()
+  currentState.commentComposerCleanup = undefined
   currentState.idleProgressCleanup?.()
   currentState.activeControlCleanup?.()
   currentState.activeControlCleanup = undefined
@@ -359,6 +342,8 @@ function cleanupState(currentState: BewlyWidescreenState) {
   currentState.highEnergyProgressObserver?.disconnect()
   currentState.highEnergyProgressObserver = undefined
   currentState.highEnergyProgressElement = undefined
+  clearViewerCount(currentState)
+  clearVideoMetadataObserver(currentState)
   currentState.settingsWatchCleanup?.forEach(stop => stop())
   currentState.settingsWatchCleanup = undefined
   currentState.descriptionCleanup?.()
@@ -380,6 +365,8 @@ function cleanupState(currentState: BewlyWidescreenState) {
   currentState.panelScrollFrames.clear()
   clearSidebarHydration(currentState)
   clearPlayerResizeSync(currentState)
+  clearTimeout(currentState.initialRevealTimer)
+  currentState.initialRevealTimer = undefined
   clearActionGeometry(currentState)
   clearSidebarRefreshTimer()
   clearAnchoredPlayerElement(currentState.playerEl)
@@ -396,7 +383,9 @@ function cleanupState(currentState: BewlyWidescreenState) {
 
   clearEpisodeSectionMarker(currentState.panels.playlist, currentState.movedNodes)
   restoreMovedNodes(currentState.movedNodes)
+  clearRailTabs(currentState.tabButtons.comment.parentElement!)
   currentState.root.remove()
+  currentState.backdrop.remove()
   currentState.styleEl.remove()
   document.body.classList.remove(BODY_CLASS, BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS)
   window.dispatchEvent(new Event('resize'))
@@ -409,7 +398,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   if (!player)
     return false
 
-  const { root, stage, playerSlot, playerFrame, danmakuDock, sidebarEl, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton, sidebarResizer, sidebarToggleButton } = createRoot(sidebarPosition)
+  const { root, backdrop, stage, playerSlot, playerFrame, danmakuDock, sidebarEl, infoEl, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton } = createRoot(sidebarPosition)
   const styleEl = injectLayoutStyle()
   root.dataset.pageKind = isPgcPlaybackPage() ? 'pgc' : 'video'
   const movedNodes: MovedNode[] = []
@@ -420,12 +409,14 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     refreshSidebar: () => scheduleSidebarRefresh(nextState),
     hydrateSidebar: () => startSidebarHydration(nextState),
     root,
+    backdrop,
     stage,
     playerEl: player,
     playerSlot,
     playerFrame,
     danmakuDock,
     sidebarEl,
+    infoEl,
     sidebarTop,
     metadataSlot,
     upSlot,
@@ -435,12 +426,10 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     panels,
     tabButtons,
     playlistToggleButton,
-    sidebarResizer,
-    sidebarToggleButton,
     movedNodes,
     styleEl,
     activeTab: 'comment',
-    sidebarLayout: settings.value.bewlyWidescreenLayoutPriority === 'sidebar-first' ? 'expanded' : 'compact',
+    displayMode: 'card',
     sidebarPosition,
     descriptionExpanded: false,
     playlistCollapsed: false,
@@ -452,6 +441,8 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     playerPointerInside: false,
     controlsLayoutReady: false,
     onInitialLayoutReady: () => {
+      clearTimeout(nextState.initialRevealTimer)
+      nextState.initialRevealTimer = undefined
       loading.alignToCurrentLayout()
       loading.remove()
       if (session.current === nextState && !nextState.navigationPending)
@@ -484,6 +475,10 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     ))
     if (ownsPlayerShortcut)
       return
+    if (event.key === 'Escape' && nextState.displayMode === 'fill') {
+      setWidescreenDisplayMode(nextState, 'card')
+      return
+    }
     if (event.key.toLowerCase() === 'f') {
       // 只在 Bewly 播放页生命周期内先恢复原播放器；不接管或阻止 Bilibili 的原生快捷键。
       exitBewlyWidescreen({ userInitiated: true })
@@ -499,18 +494,27 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   setActiveTab('comment', false)
   startSidebarHydration(nextState)
   void loadFallbackVideoInfo(nextState)
-  setSidebarLayout(nextState.sidebarLayout, nextState)
   setupActionGeometryObservers(nextState)
   setupAspectObservers(nextState)
   setupDomRefreshObserver(nextState)
   setupWidescreenSettingsWatchers(nextState)
   setupActiveWidescreenControl(nextState)
-  setupSidebarInteractionTracking(nextState)
-  setupSidebarToggleAutoHide(nextState)
+  setupFillToggle(nextState)
+  nextState.commentComposerCleanup = setupPlaybackCommentComposer(nextState.panels.comment)
   setupIdleProgress(nextState)
   if (settings.value.showVerticalVideoZoomButton)
     initVerticalVideoZoom()
   schedulePlayerResizeSync(nextState)
+  // Native controls missing a part (e.g. no danmaku input bar) never settle;
+  // the shell is already built, so reveal it instead of holding the overlay.
+  nextState.initialRevealTimer = setTimeout(() => {
+    nextState.initialRevealTimer = undefined
+    const reveal = nextState.onInitialLayoutReady
+    if (session.current !== nextState || !reveal)
+      return
+    nextState.onInitialLayoutReady = undefined
+    reveal()
+  }, INITIAL_REVEAL_TIMEOUT)
 
   return true
 }
@@ -540,6 +544,7 @@ function clearReadyWait({ preserveCommentPrewarm = false }: { preserveCommentPre
   pageReadyForLayout = false
   playerReadyForLayout = false
   contentReadyForLayout = false
+  structureReadyForLayout = false
   pageReadySince = undefined
   readinessStableSince = undefined
   waitingForLoad = false
@@ -574,8 +579,11 @@ function waitForReadyLayout() {
       clearReadyWait({ preserveCommentPrewarm: true })
       return true
     }
+    // Complete native structure commits once the DOM is parsed; images, ads
+    // and other `load` dependencies never hold the skeleton. Only the settle
+    // fallback (structure still incomplete) waits for load or its bound.
     if (!canCommitWidescreenLayout({
-      pageReady: pageReadyForLayout,
+      pageReady: pageReadyForLayout || (structureReadyForLayout && document.readyState !== 'loading'),
       playerReady: playerReadyForLayout,
       contentReady: contentReadyForLayout,
     })) {
@@ -610,11 +618,12 @@ function waitForReadyLayout() {
       }
       startCommentPrewarm()
       playerReadyForLayout = isReadyForLayout()
-      contentReadyForLayout = isWidescreenTransferContentReady()
+      structureReadyForLayout = isWidescreenTransferContentReady()
+      contentReadyForLayout = structureReadyForLayout
         || hasWidescreenTransferSettleElapsed()
       if (!tryCommitLayout() && readyPollTimer === undefined
         && (Date.now() - readinessStartedAt < READY_POLL_FAST_DURATION
-          || (pageReadyForLayout && playerReadyForLayout
+          || ((pageReadyForLayout || structureReadyForLayout) && playerReadyForLayout
             && (!hasWidescreenTransferSettleElapsed() || readinessStableSince !== undefined)))) {
         readyPollTimer = setTimeout(() => {
           readyPollTimer = undefined
@@ -710,7 +719,7 @@ export function refreshBewlyPlaybackPageNavigation(videoInfoRequest?: Promise<Vi
   // A new episode/manuscript may render its native hosts anywhere again.
   currentState.restartDomDiscovery?.()
   scheduleSidebarRefresh(currentState)
-  updateAspectRatio(currentState)
+  refreshPlayerLayout(currentState)
   return true
 }
 

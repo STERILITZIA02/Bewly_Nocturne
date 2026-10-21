@@ -109,7 +109,7 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
     const video = document.body.appendChild(document.createElement('video'))
     video.autoplay = true
     const loadingModule = await loadSourceModule('../src/utils/bewlyWidescreen/loading.ts', {
-      '~/logic': { settings: { value: { bewlyWidescreenSidebarWidth: 400, bewlyWidescreenLayoutPriority: 'sidebar-first', bewlyWidescreenSidebarPosition: 'left' } } },
+      '~/logic': { settings: { value: { bewlyWidescreenSidebarPosition: 'left' } } },
       '~/utils/bewlyWidescreenPolicy': policy,
       '~/utils/player': { getVideoElement: () => video },
       './constants': constants,
@@ -134,18 +134,33 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       const overlay = document.getElementById(constants.LOADING_ROOT_ID)
       assert.ok(overlay.querySelector('[data-bew-skeleton]'))
       assert.equal(overlay.dataset.sidebarPosition, 'left')
-      assert.equal(overlay.style.getPropertyValue('--bewly-widescreen-sidebar-user-width'), `${policy.clampWidescreenSidebarWidth(400, window.innerWidth)}px`)
+      // The skeleton puts the square video pane beside the column, whose info
+      // comes first, above the tabs.
+      assert.ok(overlay.querySelector('.bewly-widescreen-loading-skeleton-stage > .bewly-widescreen-loading-skeleton-player + .bewly-widescreen-loading-skeleton-sidebar > .bewly-widescreen-loading-skeleton-info:first-child + .bewly-widescreen-loading-skeleton-tabs'))
+      assert.equal(overlay.querySelector('.bewly-widescreen-loading-skeleton-column'), null)
+      assert.ok(overlay.querySelector('.bewly-widescreen-loading-skeleton-player > .bewly-widescreen-loading-skeleton-controls'))
       session.entering = false
       session.current = {
-        danmakuGlass: { getBoundingClientRect: () => rect(24, 690, 1100, 150) },
-        sidebarEl: { getBoundingClientRect: () => rect(1140, 24, 400, 816) },
+        playerFrame: { getBoundingClientRect: () => rect(0, 0, 780, 900) },
+        danmakuGlass: { getBoundingClientRect: () => rect(12, 747, 756, 141) },
+        infoEl: { getBoundingClientRect: () => rect(804, 24, 732, 233) },
+        sidebarEl: { getBoundingClientRect: () => rect(780, 0, 780, 900) },
       }
       video.dispatchEvent(new Event('playing'))
       assert.equal(time.frames.size, 0)
       loading.alignToCurrentLayout()
-      const controls = overlay.querySelector('.bewly-widescreen-loading-skeleton-controls')
-      assert.equal(controls.style.top, '690px')
-      assert.equal(controls.style.width, '1100px')
+      for (const [selector, top, width] of [['player', '0px', '780px'], ['controls', '747px', '756px'], ['sidebar', '0px', '780px']]) {
+        const part = overlay.querySelector(`.bewly-widescreen-loading-skeleton-${selector}`)
+        assert.equal(part.style.position, 'fixed')
+        assert.equal(part.style.top, top)
+        assert.equal(part.style.width, width)
+      }
+      // The info stays in the pinned column's flow at the real info's height,
+      // so the skeleton tabs land on the real tabs.
+      const info = overlay.querySelector('.bewly-widescreen-loading-skeleton-info')
+      assert.equal(info.style.position, '')
+      assert.equal(info.style.height, '233px')
+      assert.equal(info.style.flex, '0 0 auto')
       loading.remove()
       time.step()
       assert.ok(overlay.classList.contains('is-leaving'))
@@ -155,6 +170,44 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       assert.equal(loading.hasOverlay, false)
       video.dispatchEvent(new Event('playing'))
       assert.equal(time.frames.size, 0, 'the listener is removed on exit')
+    }
+    finally {
+      loading.reset()
+      video.remove()
+    }
+  })
+
+  check('loading: autoplay before entry keeps the native page covered; only an automatic continuation may reveal it', async () => {
+    const time = frameClock()
+    const session = { entering: false, current: null }
+    const video = document.body.appendChild(document.createElement('video'))
+    video.autoplay = true
+    const loadingModule = await loadSourceModule('../src/utils/bewlyWidescreen/loading.ts', {
+      '~/logic': { settings: { value: { bewlyWidescreenSidebarPosition: 'right' } } },
+      '~/utils/bewlyWidescreenPolicy': policy,
+      '~/utils/player': { getVideoElement: () => video },
+      './constants': constants,
+      './labels': { t: key => key },
+      './loadingView': await import('../src/utils/bewlyWidescreen/loadingView'),
+      './session': { session },
+      './styles/loading': { injectLoadingStyle: () => document.head.appendChild(document.createElement('style')) },
+    }, {
+      ...time,
+      setTimeout: () => 0,
+      clearTimeout: () => {},
+      // A fresh page load: no user activation yet.
+      navigator: { userActivation: { hasBeenActive: false } },
+    })
+    const loading = loadingModule.createWidescreenLoading({ exit() {}, onPreparationTimeout() {} })
+    try {
+      loading.prepare()
+      video.dispatchEvent(new Event('playing'))
+      assert.equal(time.frames.size, 0, 'native autoplay must not start the overlay fade')
+      assert.equal(loading.hasOverlay, true)
+      loading.reset()
+      loading.prepare(true)
+      video.dispatchEvent(new Event('playing'))
+      assert.equal(time.frames.size, 1, 'an automatic continuation keeps its video in view')
     }
     finally {
       loading.reset()
@@ -180,12 +233,15 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
     root.getBoundingClientRect = () => rect(0, 0, 1440, 900)
     let playerWidth = 1100
     player.getBoundingClientRect = () => rect(0, 0, playerWidth, 860)
+    // Native resize follows the layout box, never a zoom's painted transform.
+    Object.defineProperties(player, { offsetWidth: { get: () => playerWidth }, offsetHeight: { get: () => 860 } })
     controls.getBoundingClientRect = () => rect(0, 700, 1100, 55)
     buttons.getBoundingClientRect = () => rect(0, 720, 1100, 35)
     source.getBoundingClientRect = () => rect(0, 780, 1100, 36)
     viewers.getBoundingClientRect = () => rect(8, 780, 80, 36)
     const state = {
       root,
+      backdrop: document.createElement('div'),
       playerEl: player,
       playerFrame: root.querySelector('.frame'),
       playerSlot: root.querySelector('.frame'),
@@ -196,7 +252,6 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       danmakuSourceHost: source,
       danmakuSemanticsSource: source,
       sidebarPosition: 'right',
-      sidebarLayout: 'compact',
       controlsLayoutReady: false,
       playerPointerInside: true,
     }
@@ -207,10 +262,9 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
     const native = await loadSourceModule('../src/utils/bewlyWidescreen/nativeControls.ts', {
       '~/constants/globalEvents': events,
       '~/utils/bewlyWidescreen/constants': constants,
-      '~/utils/bewlyWidescreen/session': { isWidescreenSidebarExpanded: () => false },
+      '~/utils/bewlyWidescreen/session': { session },
       '~/utils/bewlyWidescreenPolicy': policy,
       '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
-      '~/utils/photoViewer': { isPhotoViewerOpen: () => false },
     })
     let ending = false
     let descriptionMeasurements = 0
@@ -273,16 +327,11 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       assert.equal(reveals, 0, 'a geometry change restarts the existing stability window')
       time.step(1)
       assert.equal(reveals, 1)
-      root.dataset.sidebarResizing = 'true'
-      const beforeDragMeasurements = descriptionMeasurements
+      const beforeBurstMeasurements = descriptionMeasurements
       for (let i = 0; i < 100; i++)
         geometry.schedulePlayerResizeSync(state)
       time.step()
-      assert.equal(descriptionMeasurements, beforeDragMeasurements, 'live dragging does not repeatedly remove the native description clamp')
-      delete root.dataset.sidebarResizing
-      geometry.schedulePlayerResizeSync(state)
-      time.step()
-      assert.equal(descriptionMeasurements, beforeDragMeasurements + 1, 'release settles the description exactly once through the existing frame owner')
+      assert.equal(descriptionMeasurements, beforeBurstMeasurements + 1, 'a burst of observers settles the description once through the existing frame owner')
 
       const beforeRepeatedLayout = resizeCount
       for (let count = 0; count < 100; count++) {
@@ -333,6 +382,23 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       time.step(constants.READY_STABILITY_DELAY)
       assert.equal(state.controlsLayoutReady, true, 'the regular Dock mode does not wait for auxiliary buttons')
       assert.equal(document.body.style.getPropertyValue('--bewly-widescreen-aux-controls-width'), '0px')
+
+      // With the card the online count reads in the info's meta line and its
+      // hidden pill has no box; the controls must not wait for it.
+      viewers.setAttribute(constants.VIEWER_COUNT_MIRRORED_ATTRIBUTE, '')
+      viewers.getBoundingClientRect = () => rect(0, 0, 0, 0)
+      geometry.resetControlsLayout(state)
+      geometry.schedulePlayerResizeSync(state)
+      time.step()
+      time.step(constants.READY_STABILITY_DELAY)
+      assert.equal(state.controlsLayoutReady, true, 'a mirrored, hidden viewer pill does not hold the controls back')
+      viewers.removeAttribute(constants.VIEWER_COUNT_MIRRORED_ATTRIBUTE)
+      geometry.resetControlsLayout(state)
+      geometry.schedulePlayerResizeSync(state)
+      time.step()
+      time.step(constants.READY_STABILITY_DELAY)
+      assert.equal(state.controlsLayoutReady, false, 'an unmirrored BV pill is still part of the bar and must have laid out')
+      viewers.getBoundingClientRect = () => rect(8, 780, 80, 36)
 
       root.dataset.pageKind = 'pgc'
       viewers.remove()

@@ -142,6 +142,49 @@ export function registerTopBarSyncChecks(check, { Vue, flush, compileComponent }
     }
   }
 
+  check('watch-later popover sync: a reloaded extension stops shared messaging instead of rejecting into the mounted hook', async () => {
+    for (const [includeList, label] of [[true, 'list'], [false, 'count']]) {
+      const invalidated = () => Promise.reject(new Error('Extension context invalidated.'))
+      const fixture = await createStore((_request, reply) => reply(undefined), {
+        api: { watchlater: { getWatchLaterListByPage: invalidated } },
+        watchLaterState: {
+          watchLaterState: Vue.ref({ accountId: 123, count: 4 }),
+          watchLaterUpdate: Vue.ref(),
+          ensureWatchLaterCount: invalidated,
+          ensureWatchLaterState: async () => true,
+          isInWatchLater: () => undefined,
+          applyWatchLaterUpdate() {},
+        },
+      })
+      try {
+        fixture.store.startUpdateTimer()
+        assert.equal(fixture.timers.size, 1)
+        assert.equal(await fixture.store.syncWatchLaterState(includeList), false, label)
+        assert.equal(fixture.store.canReadUi(), false, `${label}: the stale script stops reading`)
+        assert.equal(fixture.timers.size, 0, `${label}: polling stops`)
+        assert.equal(fixture.store.isLoadingWatchLater, false)
+      }
+      finally { fixture.dispose() }
+    }
+
+    // Other failures still reach the caller.
+    const fixture = await createStore((_request, reply) => reply(undefined), {
+      watchLaterState: {
+        watchLaterState: Vue.ref({ accountId: 123, count: 4 }),
+        watchLaterUpdate: Vue.ref(),
+        ensureWatchLaterCount: () => Promise.reject(new Error('boom')),
+        ensureWatchLaterState: async () => true,
+        isInWatchLater: () => undefined,
+        applyWatchLaterUpdate() {},
+      },
+    })
+    try {
+      await assert.rejects(fixture.store.syncWatchLaterState(false), /boom/)
+      assert.equal(fixture.store.canReadUi(), true)
+    }
+    finally { fixture.dispose() }
+  })
+
   check('user panel terminal reads: both endpoints reuse the real TopBar terminal state and reopening cannot revive invalidated requests', async () => {
     for (const kind of ['stat', 'log']) {
       for (const reason of ['Extension context invalidated.', 'The message port closed before a response was received.', 'Could not establish connection. Receiving end does not exist.']) {

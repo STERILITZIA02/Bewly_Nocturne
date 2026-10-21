@@ -82,12 +82,12 @@ const historyFilters = createHistoryFilters()
           </div>
           <div class="library-rail-tools">
             <SkeletonBlock height="var(--bew-control-height)" radius="full" />
-            <div v-if="page === AppPage.Favorites" class="bew-page-async-loading__favorite-order">
+            <div v-if="page === AppPage.Favorites" class="bew-page-async-loading__favorite-order bew-segment-control--track">
               <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-item-height)" radius="full" />
               <SkeletonBlock width="var(--bew-control-item-height)" height="var(--bew-control-item-height)" radius="circle" />
             </div>
             <div v-if="page === AppPage.WatchLater || page === AppPage.History" class="bew-page-async-loading__watch-toolbar" :class="{ 'bew-page-async-loading__watch-toolbar--sort-only': !settings.enableGridLayoutSwitcher }">
-              <div v-if="settings.enableGridLayoutSwitcher" class="bew-page-async-loading__rail-layout">
+              <div v-if="settings.enableGridLayoutSwitcher" class="bew-page-async-loading__rail-layout bew-segment-control--track">
                 <SkeletonBlock v-for="index in 2" :key="index" width="100%" height="var(--bew-control-item-height)" radius="full" />
               </div>
               <SkeletonBlock class="bew-page-async-loading__sort" width="var(--bew-control-height)" height="var(--bew-control-height)" radius="circle" />

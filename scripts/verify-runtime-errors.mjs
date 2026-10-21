@@ -573,7 +573,10 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
       assert.equal(node.querySelector('img').getAttribute('src'), 'https://i0.hdslb.com/bfs/dm/fixture.png')
       replace(node)
     }
-    const module = await loadSourceFunctions('../src/utils/bewlyWidescreen/videoInfo.ts', ['syncVideoMetadata'], {
+    const module = await loadSourceFunctions('../src/utils/bewlyWidescreen/videoInfo.ts', ['syncVideoMetadata', 'prepareMetadataClone', 'observeMetadataSource', 'clearVideoMetadataObserver', 'getMetadataSignature', 'PUBLISH_DATE_ICON_CLASS', 'DECLARATION_ICON_CLASS', 'METADATA_ICON_CLASS'], {
+      document,
+      MutationObserver: window.MutationObserver,
+      session: { current: null },
       isPgcPlaybackPage: () => false,
       selectors: { metadata: ['.video-info-meta'] },
       findMovable: () => source,

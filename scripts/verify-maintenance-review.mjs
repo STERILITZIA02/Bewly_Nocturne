@@ -221,7 +221,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     assert.equal(pending.length, 3)
   })
 
-  async function themeFixture() {
+  async function themeFixture({ playbackPage = false } = {}) {
     const host = document.body.appendChild(document.createElement('div'))
     host.id = 'bewly'
     const shadow = host.attachShadow({ mode: 'open' })
@@ -279,7 +279,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       '~/logic': { settings },
       '~/utils/iframeMessage': { getParentMessageData: () => undefined },
       '~/utils/iframeDocument': await import('../src/utils/iframeDocument'),
-      '~/utils/main': { isVideoPlaybackPage: () => false, setCookie() {} },
+      '~/utils/main': { isVideoPlaybackPage: () => playbackPage, setCookie() {} },
     }, {
       ref: Vue.ref,
       shallowRef: Vue.shallowRef,
@@ -371,6 +371,23 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     finally {
       fixture.close()
       button.remove()
+    }
+  })
+
+  check('review pure black: playback pages keep the dark palette; other pages turn pure black', async () => {
+    for (const playbackPage of [false, true]) {
+      const fixture = await themeFixture({ playbackPage })
+      try {
+        fixture.settings.value.theme = 'dark'
+        fixture.settings.value.enableOledDarkMode = true
+        await flush()
+        assert.equal(fixture.state.isDark.value, true)
+        assert.equal(fixture.state.isOledDark.value, !playbackPage)
+        assert.equal(document.documentElement.classList.contains('dark'), true)
+        assert.equal(document.documentElement.classList.contains('oled-dark'), !playbackPage)
+        assert.equal(document.querySelector('#bewly').classList.contains('oled-dark'), !playbackPage)
+      }
+      finally { fixture.close() }
     }
   })
 

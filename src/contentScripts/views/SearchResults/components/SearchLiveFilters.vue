@@ -4,6 +4,8 @@ import './searchFilters.scss'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
+
 export type LiveSubCategory = 'all' | 'live_room' | 'live_user'
 
 interface LiveSubCategoryOption {
@@ -35,14 +37,15 @@ function handleSubCategoryChange(value: LiveSubCategory) {
   <div class="bew-search-filters">
     <!-- 子分类切换 -->
     <div
-      class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--static bew-segment-control--secondary"
+      class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--track"
       role="group"
       :aria-label="t('search.categories.live')"
     >
+      <LiquidSegmentIndicator :active-key="props.subCategory" />
       <button
         v-for="category in subCategories"
         :key="category.value"
-        class="bew-segment-control__item"
+        class="bew-segment-control__item" data-segment-item
         :data-active="props.subCategory === category.value ? 'true' : undefined"
         :aria-pressed="props.subCategory === category.value"
         type="button"

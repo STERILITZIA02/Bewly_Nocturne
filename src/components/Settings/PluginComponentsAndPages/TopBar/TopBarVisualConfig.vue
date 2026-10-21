@@ -226,7 +226,7 @@ function toggleChannel(value: string) {
         right-width="auto"
       >
         <div
-          class="logo-style-picker bew-segment-control bew-segment-control--surface bew-segment-control--flush"
+          class="logo-style-picker bew-segment-control bew-segment-control--surface bew-segment-control--track"
           role="radiogroup"
           :aria-label="$t('settings.top_bar_logo_style')"
         >

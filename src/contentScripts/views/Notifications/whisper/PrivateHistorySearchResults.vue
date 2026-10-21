@@ -125,6 +125,7 @@ function formatTime(timestamp: number) {
 
 <style scoped lang="scss">
 @use "../../../../styles/sidebarSurface";
+@use "../../../../styles/scrollEdgeFade";
 .private-history-results {
   display: flex;
   flex-direction: column;
@@ -135,6 +136,8 @@ function formatTime(timestamp: number) {
 }
 .private-history-results__list {
   @include sidebarSurface.vertical-scroll;
+  // Its bottom is the screen edge, which needs no fade.
+  @include scrollEdgeFade.vertical($bottom: false);
   display: grid;
   align-content: start;
   flex: 1 1 auto;

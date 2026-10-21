@@ -368,6 +368,12 @@ export function isCommentRootUsable(root: HTMLElement) {
   return hasCommentShadowTree(root)
 }
 
+/** The native list still waits for its first page: its spinner holds the place of the feed. */
+export function isNativeCommentRequestPending(root: ParentNode = document) {
+  return Array.from(root.querySelectorAll('bili-comments'))
+    .some(comments => !!comments.shadowRoot?.querySelector('#spinner-container'))
+}
+
 export function moveCommentRoot(target: HTMLElement, movedNodes: MovedNode[]) {
   // Once mounted, keep the same root. Replacing it in response to a body
   // mutation can race Bilibili's renderer and create another comment editor.

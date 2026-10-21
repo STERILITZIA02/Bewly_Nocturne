@@ -300,7 +300,10 @@ defineExpose({ initData })
       ease-in-out
       :class="{ hide: shouldMoveAsideUp }"
     >
-      <div h-inherit p-20px m--20px of-y-auto of-x-hidden>
+      <div
+        class="bew-scroll-edge-fade bew-scroll-edge-fade--no-bottom" h-inherit p-20px m--20px of-y-auto
+        of-x-hidden
+      >
         <ul flex="~ col gap-2">
           <li v-for="rankingType in rankingTypes" :key="rankingType.id">
             <button

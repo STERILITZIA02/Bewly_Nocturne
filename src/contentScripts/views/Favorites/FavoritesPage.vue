@@ -8,6 +8,7 @@ import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
+import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
 import type { FavoriteResource } from '~/components/TopBar/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -66,7 +67,8 @@ const folders = useFavoriteFolderManager({ api: api.favorite, data, writes, getC
 const { editor: folderEditor, form: folderForm, info: folderInfo, infoLoading: folderInfoLoading, infoFailed: folderInfoFailed, currentFolderId } = folders
 const viewState = usePageViewState('favorites')
 const restoredFilter = normalizeFavoriteFilterQuery(viewState.read<FavoriteFilterQuery>('filter', EMPTY_FAVORITE_FILTER))
-const filterOpen = ref(false)
+// Partitions are a remote scan; fetch them only once their section has been opened.
+const partitionsRequested = ref(false)
 const filterKeyword = ref('')
 const filterScan = useFavoriteFilterScan({
   api: api.favorite,
@@ -82,10 +84,6 @@ const filterActive = computed(() => favoriteView.value === 'video' && filterScan
 const filterStatus = filterScan.status
 const managedResources = computed(() => filterActive.value ? filterScan.items.value : favoriteResources)
 const filterUploaders = computed(() => collectFavoriteUploaders([...favoriteResources, ...filterScan.items.value]))
-const filterConditionCount = computed(() => {
-  const query = filterScan.applied.value
-  return query.mids.length + query.tids.length + query.keywords.length
-})
 const ownFolder = computed(() => Boolean(folderInfo.value && String(folderInfo.value.mid || folderInfo.value.upper.mid) === String(accountId.value)))
 
 const isResolvingSeasonPlayAll = ref<boolean>(false)
@@ -523,7 +521,10 @@ function handleSearch() {
   }
 }
 
-function handleSearchScopeChange() {
+function selectSearchScope(scope: string) {
+  if (scope !== 'current' && scope !== 'all')
+    return
+  searchScope.value = scope
   handleSearch()
 }
 
@@ -625,10 +626,9 @@ function applyFavoriteFilter(query: FavoriteFilterQuery) {
   filterScan.apply(normalizeFavoriteFilterQuery(query))
 }
 
-function toggleFilterPanel() {
-  filterOpen.value = !filterOpen.value
-  if (filterOpen.value)
-    void filterScan.loadPartitions()
+function requestPartitions() {
+  partitionsRequested.value = true
+  void filterScan.loadPartitions()
 }
 
 function handleFavoriteGridLoadMore() {
@@ -669,7 +669,7 @@ const filterStatusText = computed(() => {
 watch(() => [favoriteView.value, searchScope.value, selectedCategory.value?.id, videoOrder.value, categoryState.loaded, searchScope.value === 'all' ? favoriteCategories.map(item => item.id).join(',') : ''] as const, () => {
   if (filterScan.active.value)
     filterScan.refresh()
-  if (filterOpen.value && favoriteView.value === 'video')
+  if (partitionsRequested.value && favoriteView.value === 'video')
     void filterScan.loadPartitions()
 })
 let filterRestorePending = restoredFilter.mids.length + restoredFilter.tids.length + restoredFilter.keywords.length > 0
@@ -690,7 +690,6 @@ watch(accountId, () => {
   filterScan.apply(EMPTY_FAVORITE_FILTER)
   filterScan.invalidatePartitions()
   filterKeyword.value = ''
-  filterOpen.value = false
   data.resetAccount()
   writes.reset()
   closeBatchManage()
@@ -885,16 +884,13 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
         />
         <div class="library-rail-tools favorite-rail-tools">
           <LibrarySearchField
-            v-model="keyword" :label="favoriteView === 'video' ? (searchScope === 'all' ? t('favorites.global_search_placeholder') : t('favorites.search_placeholder')) : t(`favorites.search_${favoriteView}`)" :submit-disabled="favoriteView === 'video' && searchScope === 'all' && !keyword.trim()" :aria-busy="isLoading" @submit="handleSearch"
+            v-model="keyword" :label="favoriteView === 'video' ? (searchScope === 'all' ? t('favorites.global_search_placeholder') : t('favorites.search_placeholder')) : t(`favorites.search_${favoriteView}`)" :submit-disabled="favoriteView === 'video' && searchScope === 'all' && !keyword.trim()" :aria-busy="isLoading"
+            @submit="handleSearch"
             @clear="handleSearch"
           >
-            <template #filter>
-              <select v-if="favoriteView === 'video'" v-model="searchScope" :aria-label="t('library_tools.search_scope')" @change="handleSearchScopeChange()">
-                <option v-for="option in searchScopeOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-              <select v-else-if="favoriteView === 'season'" v-model="subscriptionFilter" :aria-label="t('favorites.subscription_filter')" @change="handleSubscriptionFilterChange">
+            <!-- Video filtering lives in the collapsible panel below, not behind the search icon. -->
+            <template v-if="favoriteView !== 'video'" #filter>
+              <select v-if="favoriteView === 'season'" v-model="subscriptionFilter" :aria-label="t('favorites.subscription_filter')" @change="handleSubscriptionFilterChange">
                 <option value="all">
                   {{ t('favorites.subscription_all') }}
                 </option>
@@ -919,24 +915,11 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
             </template>
           </LibrarySearchField>
           <div v-if="favoriteView === 'video'" class="favorite-rail-toolbar">
-            <div class="bew-segment-control bew-segment-control--static bew-segment-control--secondary favorite-video-order" role="group" :aria-label="t('favorites.video_order')">
-              <button
-                v-for="option in videoOrderOptions" :key="option.value" type="button" class="bew-segment-control__item"
-                :data-active="videoOrder === option.value ? 'true' : undefined" :aria-pressed="videoOrder === option.value"
-                @click="handleVideoOrderChange(option.value)"
-              >
-                {{ option.label }}
-              </button>
-            </div>
-            <Tooltip :content="t('favorites.filter_title')" placement="top">
-              <IconButton
-                class="favorite-folder-manager favorite-filter-toggle" :label="filterConditionCount ? t('favorites.filter_title_active', { count: filterConditionCount }) : t('favorites.filter_title')"
-                :aria-pressed="filterOpen" :aria-expanded="filterOpen" :data-active="filterConditionCount ? 'true' : undefined"
-                :disabled="isInitialSidebarLoading" @click="toggleFilterPanel"
-              >
-                <span :class="filterConditionCount ? 'i-tabler:filter-filled' : 'i-tabler:filter'" />
-              </IconButton>
-            </Tooltip>
+            <!-- Same sliding control as the History / Watch Later layout switchers. -->
+            <SettingsSegmentedControl
+              :model-value="videoOrder" class="library-rail-segments bew-segment-control--secondary favorite-video-order"
+              :options="videoOrderOptions" :label="t('favorites.video_order')" @change="handleVideoOrderChange"
+            />
             <Tooltip :content="t(isManagingFolder ? 'favorites.sidebar_manage_exit' : 'favorites.manage_folders')" placement="top">
               <IconButton
                 class="favorite-folder-manager" :label="t(isManagingFolder ? 'favorites.sidebar_manage_exit' : 'favorites.manage_folders')"
@@ -947,10 +930,11 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
             </Tooltip>
           </div>
           <FavoriteFilterPanel
-            v-if="favoriteView === 'video' && filterOpen"
-            :applied="filterScan.applied.value" :uploaders="filterUploaders" :partitions="filterScan.partitions.value"
-            :partitions-loading="filterScan.partitionsLoading.value" :partitions-failed="filterScan.partitionsFailed.value"
-            :disabled="isBatchOperating"
+            v-if="favoriteView === 'video'"
+            :scope="searchScope" :scope-options="searchScopeOptions" :applied="filterScan.applied.value"
+            :uploaders="filterUploaders" :partitions="filterScan.partitions.value" :partitions-loading="filterScan.partitionsLoading.value"
+            :partitions-failed="filterScan.partitionsFailed.value" :disabled="isBatchOperating || isInitialSidebarLoading"
+            @scope="selectSearchScope" @load-partitions="requestPartitions"
             @apply="applyFavoriteFilter" @retry-partitions="filterScan.invalidatePartitions(); filterScan.loadPartitions()"
           />
           <div v-if="isManagingFolder" class="sidebar-manage-bar">
@@ -1103,6 +1087,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 <style lang="scss" scoped>
 @use "../../../styles/breakpoints";
 @use "../../../styles/sidebarSurface";
+@use "../../../styles/scrollEdgeFade";
 @use "./favoritesLayout";
 
 .favorites-sidebar-content {
@@ -1168,10 +1153,6 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   font-weight: var(--bew-font-weight-medium);
   cursor: pointer;
 }
-.favorite-filter-toggle[data-active="true"] {
-  color: var(--bew-text-1);
-  background: var(--bew-selected-bg);
-}
 .favorite-rail-toolbar {
   display: flex;
   align-items: center;
@@ -1179,21 +1160,15 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   min-width: 0;
 }
 .favorite-video-order {
-  --bew-control-radius: var(--bew-radius-full);
-  --bew-control-item-radius: var(--bew-radius-full);
-  --bew-control-item-padding-x: 0;
+  --bew-control-item-padding-x: var(--bew-space-1);
   flex: 1;
   min-width: 0;
-  .bew-segment-control__item {
-    flex: 1 1 0;
-    min-width: 0;
-    white-space: nowrap;
-  }
 }
+// Matches the History sort button beside its layout switcher.
 .favorite-folder-manager {
   flex: none;
-  width: var(--bew-control-item-height);
-  height: var(--bew-control-item-height);
+  width: var(--bew-control-height);
+  height: var(--bew-control-height);
   color: var(--bew-sidebar-secondary);
   span {
     width: var(--bew-control-icon-size);
@@ -1301,6 +1276,8 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
 .category-list {
   @include sidebarSurface.vertical-scroll;
+  // Its bottom is the screen edge, which needs no fade.
+  @include scrollEdgeFade.vertical($bottom: false);
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;

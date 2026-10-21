@@ -27,17 +27,6 @@ const bewlyWidescreenSidebarPositionOptions = computed(() => [
   },
 ])
 
-const bewlyWidescreenLayoutPriorityOptions = computed(() => [
-  {
-    label: t('settings.video_player_mode.bewly_widescreen_layout_priority_video'),
-    value: 'video-first',
-  },
-  {
-    label: t('settings.video_player_mode.bewly_widescreen_layout_priority_sidebar'),
-    value: 'sidebar-first',
-  },
-])
-
 const videoPlayerModeOptions = computed(() => [
   {
     label: t('settings.video_player_mode.default'),
@@ -88,22 +77,6 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
       <SettingsItem :title="t('settings.show_widescreen_idle_progress')" :desc="t('settings.show_widescreen_idle_progress_desc')" right-width="auto">
         <Radio v-model="settings.showWidescreenIdleProgress" />
       </SettingsItem>
-      <SettingsItem
-        :title="t('settings.video_player_mode.bewly_widescreen_center_video')"
-        :desc="t('settings.video_player_mode.bewly_widescreen_center_video_desc')"
-        right-width="auto"
-      >
-        <Radio v-model="settings.bewlyWidescreenCenterVideo" />
-      </SettingsItem>
-
-      <SettingsItem
-        :title="t('settings.video_player_mode.bewly_widescreen_layout_priority')"
-        :desc="t('settings.video_player_mode.bewly_widescreen_layout_priority_desc')"
-        right-width="auto"
-      >
-        <Select v-model="settings.bewlyWidescreenLayoutPriority" :options="bewlyWidescreenLayoutPriorityOptions" w="160px" />
-      </SettingsItem>
-
       <SettingsItem
         :title="t('settings.video_player_mode.bewly_widescreen_sidebar_position')"
         :desc="t('settings.video_player_mode.bewly_widescreen_sidebar_position_desc')"

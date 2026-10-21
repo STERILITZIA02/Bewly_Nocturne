@@ -1,17 +1,20 @@
 import { scheduleActionGeometrySync, syncActionAnimationTheme } from '~/utils/bewlyWidescreen/actionEffects'
-import { COMMENT_TIME_SELECTOR, DANMAKU_SKELETON_CLASS, EMPTY_CLASS, selectors, SIDEBAR_HYDRATION_FAST_DURATION, SIDEBAR_HYDRATION_FAST_INTERVAL, SIDEBAR_HYDRATION_INTERVAL, SIDEBAR_HYDRATION_TIMEOUT } from '~/utils/bewlyWidescreen/constants'
-import { activateDanmakuTab, clearDanmakuActivation, isDanmakuPanelReady, syncDanmakuInputSource } from '~/utils/bewlyWidescreen/danmaku'
+import { wakeNativeCommentList } from '~/utils/bewlyWidescreen/commentWake'
+import { COMMENT_TIME_SELECTOR, DANMAKU_SKELETON_CLASS, EMPTY_CLASS, selectors, SIDEBAR_HYDRATION_FAST_DURATION, SIDEBAR_HYDRATION_FAST_INTERVAL, SIDEBAR_HYDRATION_INTERVAL, SIDEBAR_HYDRATION_RECOVERY_INTERVAL } from '~/utils/bewlyWidescreen/constants'
+import { activateDanmakuTab, clearDanmakuActivation, isDanmakuPanelReady, syncDanmakuInputSource, syncDanmakuSenderOrderButton } from '~/utils/bewlyWidescreen/danmaku'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
 import { ensureAnchoredPlayer, resetControlsLayout, schedulePlayerResizeSync, syncAuxiliaryControlGeometry, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
-import { findCommentRoot, findMovable, isCommentRootUsable, moveCommentRoot, moveMatchingNodes, moveNativeMusicPanel, moveNode, moveOrReplaceNode, movePlaylistControls, removeMovedNode, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
+import { findCommentRoot, findMovable, isCommentRootUsable, isNativeCommentRequestPending, moveCommentRoot, moveMatchingNodes, moveNativeMusicPanel, moveNode, moveOrReplaceNode, movePlaylistControls, removeMovedNode, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
 import { clearEpisodeSectionMarker, placeRecommendAfterPlaylist, syncEpisodeSectionMarker, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
 import { session } from '~/utils/bewlyWidescreen/session'
 import { scheduleInitialPanelScrollReset } from '~/utils/bewlyWidescreen/shell'
 import type { BewlyWidescreenState, WidescreenSidebarReadiness } from '~/utils/bewlyWidescreen/types'
-import { renderFallbackVideoInfo, syncSidebarTitle, syncVideoMetadata } from '~/utils/bewlyWidescreen/videoInfo'
-import { shortenCommentDateText, shouldContinueWidescreenSidebarHydration } from '~/utils/bewlyWidescreenPolicy'
+import { clearVideoMetadataObserver, renderFallbackVideoInfo, syncSidebarTitle, syncVideoMetadata, syncViewerCount } from '~/utils/bewlyWidescreen/videoInfo'
+import { resolveWidescreenSidebarHydrationPhase, shortenCommentDateText } from '~/utils/bewlyWidescreenPolicy'
+import { createLoadingRingElement, getLoadingRingCloseDuration } from '~/utils/loadingRing'
+import { getMotionDuration } from '~/utils/motionTiming'
 import { isNativeVideoComponentReady } from '~/utils/videoMetadataBridge'
 
 let sidebarRefreshFrame: number | undefined
@@ -84,6 +87,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
   renderFallbackVideoInfo(currentState)
 
   syncDanmakuInputSource(currentState)
+  syncViewerCount(currentState)
   syncControlsGlassGeometry(currentState)
   syncNativePlayerControlVisibility(currentState)
   syncAuxiliaryControlGeometry(currentState)
@@ -102,7 +106,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
         ensureLoadingPanel(currentState.panels.comment, t('widescreen.comments_loading'), 'comment')
     }
     else {
-      clearEmptyPanel(currentState.panels.comment)
+      finishPanelLoading(currentState.panels.comment)
       shortenCommentTimes(currentState.panels.comment)
     }
   }
@@ -130,6 +134,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
       if (danmakuReady) {
         clearEmptyPanel(currentState.panels.danmaku)
         clearDanmakuSkeleton(currentState.panels.danmaku)
+        syncDanmakuSenderOrderButton(currentState.panels.danmaku)
       }
       else if (currentState.sidebarHydrationTimedOut) {
         ensureSidebarHydrationFailure(currentState)
@@ -256,7 +261,50 @@ function ensureDanmakuSkeleton(panel: HTMLElement, label: string) {
   host.appendChild(createDanmakuSkeleton(label))
 }
 
+const PANEL_LOADING_CLASS = 'bewly-widescreen-panel-loading'
+const LOADING_COMPLETE_ATTRIBUTE = 'data-bew-loading-complete'
+
+/** Comments have no layout to sketch: one ring holds the whole panel. */
+function ensureLoadingRingPanel(panel: HTMLElement, label: string) {
+  const existing = panel.querySelector<HTMLElement>(`.${PANEL_LOADING_CLASS}:not([${LOADING_COMPLETE_ATTRIBUTE}])`)
+  if (existing) {
+    existing.setAttribute('aria-label', label)
+    return
+  }
+  clearEmptyPanel(panel)
+  const loading = createPanelEmpty('')
+  loading.classList.add(PANEL_LOADING_CLASS)
+  loading.setAttribute('role', 'status')
+  loading.setAttribute('aria-label', label)
+  loading.append(createLoadingRingElement())
+  panel.appendChild(loading)
+}
+
+/** The ring closes, then fades off the content it covered; other notices go at once. */
+function finishPanelLoading(panel: HTMLElement) {
+  panel.querySelectorAll(`.${EMPTY_CLASS}:not(.${PANEL_LOADING_CLASS})`).forEach(element => element.remove())
+  // Read every duration before the first write, so styles resolve once.
+  const loadings = Array.from(panel.querySelectorAll<HTMLElement>(`.${PANEL_LOADING_CLASS}:not([${LOADING_COMPLETE_ATTRIBUTE}])`))
+    .map(loading => ({
+      loading,
+      closeDuration: getLoadingRingCloseDuration(loading.querySelector('.bew-loading-ring')),
+      fadeDuration: getMotionDuration(getComputedStyle(loading), '--bew-duration-fast', 150),
+    }))
+  for (const { loading, closeDuration, fadeDuration } of loadings) {
+    loading.setAttribute(LOADING_COMPLETE_ATTRIBUTE, '')
+    loading.removeAttribute('role')
+    setTimeout(() => {
+      loading.classList.add('is-leaving')
+      setTimeout(() => loading.remove(), fadeDuration)
+    }, closeDuration)
+  }
+}
+
 function ensureLoadingPanel(panel: HTMLElement, label: string, kind: 'comment' | 'playlist') {
+  if (kind === 'comment') {
+    ensureLoadingRingPanel(panel, label)
+    return
+  }
   const existing = panel.querySelector<HTMLElement>('.bewly-widescreen-panel-skeleton')
   if (existing) {
     existing.setAttribute('aria-label', label)
@@ -302,6 +350,8 @@ export function clearSidebarHydration(currentState: BewlyWidescreenState) {
   if (currentState.sidebarHydrationTimer)
     clearTimeout(currentState.sidebarHydrationTimer)
   currentState.sidebarHydrationTimer = undefined
+  currentState.sidebarHydrationResumeCleanup?.()
+  currentState.sidebarHydrationResumeCleanup = undefined
 }
 
 function runSidebarHydration(currentState: BewlyWidescreenState): WidescreenSidebarReadiness | null {
@@ -313,10 +363,10 @@ function runSidebarHydration(currentState: BewlyWidescreenState): WidescreenSide
     currentState.sidebarHydrationWarningShown = false
     return readiness
   }
-  catch {
+  catch (error) {
     if (!currentState.sidebarHydrationWarningShown) {
       currentState.sidebarHydrationWarningShown = true
-      console.warn('[Bewly Nocturne] Sidebar hydration failed; retrying within the bounded hydration window.')
+      console.warn('[Bewly Nocturne] Sidebar hydration failed; retrying within the bounded hydration window.', error)
     }
     return null
   }
@@ -327,19 +377,62 @@ export function startSidebarHydration(currentState: BewlyWidescreenState) {
   if (currentState.navigationPending)
     return
 
+  // The budget counts visible time only: a hidden tab neither paints nor runs
+  // the native list's lazy-load observer, so hydration pauses and starts a
+  // fresh budget when the page shows again.
+  currentState.sidebarHydrationTimedOut = false
+  currentState.commentListReloadRequested = false
   const startedAt = Date.now()
-  const deadline = startedAt + SIDEBAR_HYDRATION_TIMEOUT
 
   const hydrate = () => {
     currentState.sidebarHydrationTimer = undefined
     if (session.current !== currentState || !currentState.root.isConnected || currentState.navigationPending)
       return
+    if (document.hidden) {
+      const resume = () => {
+        if (document.hidden)
+          return
+        clearSidebarHydration(currentState)
+        if (session.current === currentState && currentState.root.isConnected && !currentState.navigationPending)
+          startSidebarHydration(currentState)
+      }
+      document.addEventListener('visibilitychange', resume)
+      currentState.sidebarHydrationResumeCleanup = () => document.removeEventListener('visibilitychange', resume)
+      return
+    }
 
+    // Keeps the native list in view so its lazy-load can start; restored once
+    // it is moved, or when hydration gives up.
     if (currentState.activeTab === 'comment' && !findCommentRoot(currentState.panels.comment))
       startCommentPrewarm()
     const readiness = runSidebarHydration(currentState)
-    const now = Date.now()
-    if (!shouldContinueWidescreenSidebarHydration({ complete: readiness?.complete ?? false, now, deadline })) {
+    const elapsed = Date.now() - startedAt
+    const commentMissing = currentState.activeTab === 'comment' && !readiness?.comment
+    const nativeRequestPending = commentMissing && isNativeCommentRequestPending()
+    const phase = resolveWidescreenSidebarHydrationPhase({
+      complete: readiness?.complete ?? false,
+      elapsed,
+      nativeRequestPending,
+    })
+    if (phase === 'complete')
+      return
+    if (phase === 'stopped') {
+      if (!readiness?.comment)
+        restoreCommentPrewarm()
+      return
+    }
+    if (commentMissing) {
+      // The prewarm only works while it pins the current list; Bilibili may
+      // re-render it below the fold. Release the list's lazy-load wait every
+      // tick, and reload once a first page that outlasts the budget.
+      const reload = phase !== 'hydrating' && nativeRequestPending && !currentState.commentListReloadRequested
+      if (reload)
+        currentState.commentListReloadRequested = true
+      wakeNativeCommentList(reload)
+    }
+    if (phase === 'recovering') {
+      // A slow request or a late native component still finishes on its own;
+      // the next hydration that finds it removes the notice.
       if (!readiness?.top) {
         currentState.sidebarHydrationTimedOut = true
         ensureSidebarHydrationFailure(currentState, currentState.sidebarTop)
@@ -348,14 +441,11 @@ export function startSidebarHydration(currentState: BewlyWidescreenState) {
         currentState.sidebarHydrationTimedOut = true
         ensureSidebarHydrationFailure(currentState)
       }
-      if (!readiness?.comment)
-        restoreCommentPrewarm()
-      return
     }
 
-    const interval = now - startedAt < SIDEBAR_HYDRATION_FAST_DURATION
-      ? SIDEBAR_HYDRATION_FAST_INTERVAL
-      : SIDEBAR_HYDRATION_INTERVAL
+    const interval = phase === 'recovering'
+      ? SIDEBAR_HYDRATION_RECOVERY_INTERVAL
+      : elapsed < SIDEBAR_HYDRATION_FAST_DURATION ? SIDEBAR_HYDRATION_FAST_INTERVAL : SIDEBAR_HYDRATION_INTERVAL
     currentState.sidebarHydrationTimer = setTimeout(hydrate, interval)
   }
 
@@ -363,6 +453,7 @@ export function startSidebarHydration(currentState: BewlyWidescreenState) {
 }
 
 function clearNavigationFallbackContent(currentState: BewlyWidescreenState) {
+  clearVideoMetadataObserver(currentState)
   currentState.metadataSlot.querySelector('.bewly-widescreen-metadata-clone')?.remove()
   currentState.upSlot.querySelector('.bewly-widescreen-fallback-owner')?.remove()
   currentState.toolbarSlot.querySelector('.bewly-widescreen-fallback-stats')?.remove()

@@ -17,7 +17,6 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       '~/utils/bewlyWidescreen/session': sessionModule,
       '~/utils/bewlyWidescreenPolicy': policy,
       '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
-      '~/utils/photoViewer': { isPhotoViewerOpen: () => false },
     })
     const host = document.body.appendChild(document.createElement('div'))
     host.innerHTML = '<div class="bpx-player-container" data-ctrl-hidden="true"><div class="bpx-player-control-wrap"><button>Play</button></div><div class="danmaku"><input><button>Send</button></div></div><div class="dock"></div><div class="aux"></div><button class="outside">Outside</button>'
@@ -36,7 +35,6 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       controlsLayoutReady: true,
       bottomControlsHovered: false,
       playerPointerInside: false,
-      sidebarLayout: 'compact',
     }
     sessionModule.session.current = state
     controls.setupActiveWidescreenControl(state)
@@ -79,10 +77,6 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       assertHidden(true)
       replacement.querySelector('input').focus()
       assertHidden(false)
-      state.sidebarLayout = 'expanded'
-      controls.syncNativePlayerControlVisibility(state)
-      assertHidden(true)
-      state.sidebarLayout = 'compact'
       replacement.querySelector('input').blur()
       state.activeControlCleanup()
       sessionModule.session.current = null
@@ -99,25 +93,9 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
     }
   })
 
-  check('UI audit: page-wide and nested Shadow DOM editing pause both idle owners and release after editing or teardown', async () => {
-    const timers = new Map()
-    let timerId = 0
-    const clock = {
-      setTimeout(run, delay) {
-        const id = ++timerId
-        timers.set(id, { run, delay })
-        return id
-      },
-      clearTimeout(id) { timers.delete(id) },
-    }
-    const firePendingTimers = () => {
-      const pending = [...timers.values()]
-      timers.clear()
-      pending.forEach(timer => timer.run())
-    }
+  check('UI audit: page-wide and nested Shadow DOM editing pause the control idle owner and release after editing or teardown', async () => {
     const policy = await import('../src/utils/bewlyWidescreenPolicy')
     const constants = await loadSourceModule('../src/utils/bewlyWidescreen/constants.ts', {
-      '~/utils/bewlyWidescreenPolicy': policy,
       '~/utils/playerMedia': { PLAYER_MODE_CONTROL_SELECTORS: {} },
     })
     const sessionModule = await loadSourceModule('../src/utils/bewlyWidescreen/session.ts', {})
@@ -128,22 +106,10 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       '~/utils/bewlyWidescreen/session': sessionModule,
       '~/utils/bewlyWidescreenPolicy': policy,
       '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
-      '~/utils/photoViewer': { isPhotoViewerOpen: () => false },
-    }, clock)
-    const interaction = await loadSourceModule('../src/utils/bewlyWidescreen/interactions.ts', {
-      '~/logic': { settings: { value: { bewlyWidescreenSidebarWidth: 400 } } },
-      '~/utils/bewlyWidescreen/constants': constants,
-      '~/utils/bewlyWidescreen/geometry': { schedulePlayerResizeSync() {} },
-      '~/utils/bewlyWidescreen/nativeControls': controls,
-      '~/utils/bewlyWidescreen/session': sessionModule,
-      '~/utils/bewlyWidescreen/shell': { clearSidebarEdgeRevealSuppression(state) { delete state.root.dataset.sidebarEdgeRevealSuppressed } },
-      '~/utils/bewlyWidescreenPolicy': policy,
-    }, clock)
+    })
     const fixture = document.body.appendChild(document.createElement('div'))
-    fixture.innerHTML = '<div class="wide"><div class="bpx-player-container" data-ctrl-hidden="true"><div class="bpx-player-control-wrap"><button>Play</button></div><div class="danmaku"><input></div></div><aside><div class="comment-host"></div></aside><div class="resizer" tabindex="0"></div><button class="toggle">Sidebar</button><div class="dock"></div></div><input class="outside-input"><input class="checkbox" type="checkbox"><input class="read-only" readonly><button class="outside-button">Outside</button><div class="settings-host"></div><iframe title="Embedded editor"></iframe>'
+    fixture.innerHTML = '<div class="wide"><div class="bpx-player-container" data-ctrl-hidden="true"><div class="bpx-player-control-wrap"><button>Play</button></div><div class="danmaku"><input></div></div><aside><div class="comment-host"></div></aside><div class="dock"></div></div><input class="outside-input"><input class="checkbox" type="checkbox"><input class="read-only" readonly><button class="outside-button">Outside</button><div class="settings-host"></div><iframe title="Embedded editor"></iframe>'
     const root = fixture.querySelector('.wide')
-    const sidebar = root.querySelector('aside')
-    const outside = fixture.querySelector('.outside-button')
     const input = fixture.querySelector('.outside-input')
     const commentRoot = root.querySelector('.comment-host').attachShadow({ mode: 'open' })
     const commentEditorHost = commentRoot.appendChild(document.createElement('div'))
@@ -152,34 +118,22 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
     const editor = editorRoot.querySelector('[contenteditable]')
     const settingsRoot = fixture.querySelector('.settings-host').attachShadow({ mode: 'open' })
     settingsRoot.innerHTML = '<input type="search"><button>Done</button>'
-    root.getBoundingClientRect = () => ({ left: 0, top: 0, right: 1200, bottom: 900, width: 1200, height: 900 })
-    sidebar.getBoundingClientRect = () => ({ left: 800, top: 0, right: 1200, bottom: 900, width: 400, height: 900 })
     const state = {
       root,
       playerEl: root.querySelector('.bpx-player-container'),
       danmakuSemanticsSource: root.querySelector('.danmaku'),
       danmakuDock: root.querySelector('.dock'),
-      sidebarEl: sidebar,
-      sidebarResizer: root.querySelector('.resizer'),
-      sidebarToggleButton: root.querySelector('.toggle'),
-      sidebarLayout: 'compact',
-      sidebarPosition: 'right',
       controlsLayoutReady: true,
       bottomControlsHovered: false,
       playerPointerInside: false,
     }
-    state.playerEl.getBoundingClientRect = root.getBoundingClientRect
     sessionModule.session.current = state
     try {
       controls.setupActiveWidescreenControl(state)
-      interaction.setupSidebarInteractionTracking(state)
-      controls.setupSidebarToggleAutoHide(state)
 
       input.focus()
+      await flush()
       assert.equal(root.dataset.playerControlsHidden, 'false', 'text outside the bottom/player containers still holds the control bar')
-      window.dispatchEvent(new Event('blur'))
-      firePendingTimers()
-      assert.equal(root.dataset.pointerActive, 'true', 'window/pointer leave cannot hide the sidebar control while editing')
       fixture.querySelector('iframe').focus()
       await flush()
       controls.syncNativePlayerControlVisibility(state)
@@ -187,244 +141,45 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       for (const selector of ['.checkbox', '.read-only', '.outside-button']) {
         fixture.querySelector(selector).focus()
         await flush()
-        firePendingTimers()
         assert.equal(root.dataset.playerControlsHidden, 'true', 'non-editing controls outside the player do not lock idle visibility')
-        assert.equal(root.dataset.pointerActive, 'false')
       }
-
-      state.sidebarResizer.focus()
-      assert.equal(root.dataset.sidebarHoverExpanded, 'true')
-      outside.focus()
-      await flush()
-      const pendingCollapse = [...timers.values()].find(timer => timer.delay === policy.WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY)?.run
-      const pendingToggle = [...timers.values()].find(timer => timer.delay === constants.SIDEBAR_TOGGLE_IDLE_DELAY)?.run
-      assert.ok(pendingCollapse)
-      assert.ok(pendingToggle)
 
       editor.focus()
       editor.dispatchEvent(new window.CompositionEvent('compositionstart', { bubbles: true, composed: true }))
       for (const text of ['n', 'ni', '你好']) {
         editor.textContent = text
         editor.dispatchEvent(new window.InputEvent('input', { bubbles: true, composed: true, isComposing: text !== '你好' }))
-        window.dispatchEvent(new Event('blur'))
-        pendingCollapse()
-        pendingToggle()
-        firePendingTimers()
-        assert.equal(root.dataset.sidebarHoverExpanded, 'true', 'the native comment editor stays visible through idle and IME composition')
-        assert.equal(root.dataset.pointerActive, 'true')
+        await flush()
+        assert.equal(root.dataset.playerControlsHidden, 'false', 'the native comment editor keeps the controls through IME composition')
       }
       editor.dispatchEvent(new window.CompositionEvent('compositionend', { bubbles: true, composed: true }))
       editorRoot.querySelector('button').focus()
       await flush()
-      window.dispatchEvent(new Event('blur'))
-      firePendingTimers()
-      assert.equal(root.dataset.sidebarHoverExpanded, 'true', 'moving from the editor to its send button preserves the active sidebar interaction')
+      assert.equal(root.dataset.playerControlsHidden, 'true', 'moving from the editor to its send button resumes idle hiding')
 
       settingsRoot.querySelector('input').focus()
       await flush()
-      window.dispatchEvent(new Event('blur'))
-      firePendingTimers()
-      assert.equal(root.dataset.sidebarHoverExpanded, 'true', 'editing in Bewly Shadow DOM also pauses the existing sidebar collapse')
-      state.danmakuSemanticsSource.querySelector('input').focus()
-      await flush()
-      assert.equal(root.dataset.sidebarHoverExpanded, 'false', 'explicit focus in the bottom editor hands over from the hover sidebar')
-      assert.equal(root.dataset.playerControlsHidden, 'false', 'the focused bottom editor must remain visible after the handover')
-      state.sidebarResizer.focus()
-      settingsRoot.querySelector('input').focus()
-      await flush()
-      assert.equal(root.dataset.sidebarHoverExpanded, 'true')
+      assert.equal(root.dataset.playerControlsHidden, 'false', 'editing in Bewly Shadow DOM also pauses idle hiding')
       settingsRoot.querySelector('button').focus()
       await flush()
-      firePendingTimers()
-      assert.equal(root.dataset.sidebarHoverExpanded, 'false', 'focus moving within one Shadow host resumes idle collapse after editing')
-      assert.equal(root.dataset.playerControlsHidden, 'true')
-      assert.equal(root.dataset.pointerActive, 'false')
+      assert.equal(root.dataset.playerControlsHidden, 'true', 'focus moving within one Shadow host resumes idle hiding after editing')
+      state.danmakuSemanticsSource.querySelector('input').focus()
+      await flush()
+      assert.equal(root.dataset.playerControlsHidden, 'false', 'the focused bottom editor remains visible')
 
-      settingsRoot.querySelector('input').focus()
-      assert.equal(root.dataset.playerControlsHidden, 'false')
-      outside.focus()
-      state.sidebarInteractionCleanup()
-      state.sidebarToggleAutoHideCleanup()
+      fixture.querySelector('.outside-button').focus()
       state.activeControlCleanup()
       sessionModule.session.current = null
       root.dataset.playerControlsHidden = 'disposed'
-      root.dataset.sidebarHoverExpanded = 'disposed'
       editor.focus()
       await flush()
-      firePendingTimers()
       assert.equal(root.dataset.playerControlsHidden, 'disposed')
-      assert.equal(root.dataset.sidebarHoverExpanded, 'disposed')
-      assert.equal(timers.size, 0)
-      assert.equal(state.sidebarInteractionFocusSync, undefined)
-      assert.equal(state.sidebarToggleFocusSync, undefined)
     }
     finally {
-      state.sidebarInteractionCleanup?.()
-      state.sidebarToggleAutoHideCleanup?.()
       state.activeControlCleanup?.()
       sessionModule.session.current = null
       fixture.remove()
       document.body.classList.remove(events.BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS)
-    }
-  })
-
-  check('UI audit: sidebar resizing starts only after dragging, follows displacement, batches frames and releases every exit path', async () => {
-    const policy = await import('../src/utils/bewlyWidescreenPolicy')
-    const constants = await loadSourceModule('../src/utils/bewlyWidescreen/constants.ts', {
-      '~/utils/bewlyWidescreenPolicy': policy,
-      '~/utils/playerMedia': { PLAYER_MODE_CONTROL_SELECTORS: {} },
-    })
-    for (const position of ['right', 'left']) {
-      const frames = new Map()
-      let nextFrame = 0
-      let storedWidth = 0
-      let storageWrites = 0
-      let geometrySyncs = 0
-      let styleWrites = 0
-      const settings = { value: {} }
-      Object.defineProperty(settings.value, 'bewlyWidescreenSidebarWidth', {
-        get: () => storedWidth,
-        set: (value) => {
-          storedWidth = value
-          storageWrites++
-        },
-      })
-      const sessionModule = await loadSourceModule('../src/utils/bewlyWidescreen/session.ts', {})
-      const interactions = await loadSourceModule('../src/utils/bewlyWidescreen/interactions.ts', {
-        '~/logic': { settings },
-        '~/utils/bewlyWidescreen/constants': constants,
-        '~/utils/bewlyWidescreen/geometry': { schedulePlayerResizeSync() { geometrySyncs++ } },
-        '~/utils/bewlyWidescreen/nativeControls': {
-          isWidescreenTextEditing: () => false,
-          isWidescreenBottomControlFocused: () => false,
-          isNativeActionOverlayOpen: () => false,
-          syncNativePlayerControlVisibility() {},
-        },
-        '~/utils/bewlyWidescreen/session': sessionModule,
-        '~/utils/bewlyWidescreen/shell': { clearSidebarEdgeRevealSuppression() {} },
-        '~/utils/bewlyWidescreenPolicy': policy,
-      }, {
-        requestAnimationFrame: (run) => {
-          const id = ++nextFrame
-          frames.set(id, run)
-          return id
-        },
-        cancelAnimationFrame: id => frames.delete(id),
-      })
-      const root = document.body.appendChild(document.createElement('div'))
-      root.innerHTML = '<aside><div role="separator" tabindex="0"></div></aside>'
-      const sidebar = root.querySelector('aside')
-      const resizer = sidebar.querySelector('[role="separator"]')
-      const rect = { left: 0, top: 0, right: 1200, bottom: 900, width: 1200, height: 900 }
-      root.getBoundingClientRect = () => rect
-      const width = () => Number.parseFloat(root.style.getPropertyValue('--bewly-widescreen-sidebar-user-width')) || 600
-      sidebar.getBoundingClientRect = () => ({ ...rect, width: width() })
-      const setProperty = root.style.setProperty.bind(root.style)
-      root.style.setProperty = (...args) => {
-        styleWrites++
-        setProperty(...args)
-      }
-      let captured
-      const emit = (type, x, { id = 7, y = 400, button = 0 } = {}) => {
-        const event = new window.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button })
-        Object.defineProperties(event, { pointerId: { value: id }, pointerType: { value: 'mouse' } })
-        resizer.dispatchEvent(event)
-      }
-      resizer.setPointerCapture = id => captured = id
-      resizer.hasPointerCapture = id => captured === id
-      resizer.releasePointerCapture = (id) => {
-        captured = undefined
-        emit('lostpointercapture', 0, { id })
-      }
-      const flushFrames = () => {
-        const queued = [...frames.values()]
-        frames.clear()
-        queued.forEach(run => run())
-      }
-      const state = { root, playerEl: root, sidebarEl: sidebar, sidebarResizer: resizer, sidebarPosition: position, sidebarLayout: 'expanded' }
-      sessionModule.session.current = state
-      interactions.setupSidebarInteractionTracking(state)
-      const start = position === 'right' ? 601 : 599 // Floating inset and off-center hit target.
-      const direction = position === 'right' ? -1 : 1
-      try {
-        emit('pointerdown', start, { button: 2 })
-        emit('pointermove', start + direction * 100)
-        assert.equal(captured, undefined)
-        assert.equal(frames.size, 0)
-
-        emit('pointerdown', start)
-        assert.equal(document.activeElement, resizer)
-        assert.equal(width(), 600)
-        assert.equal(root.dataset.sidebarResizing, undefined)
-        emit('pointermove', start + 3, { y: 470 })
-        emit('pointerup', start + 3, { y: 470 })
-        assert.equal(styleWrites, 0, 'a click or vertical/slight pointer movement cannot shift content')
-        assert.equal(storedWidth, 0, 'a click preserves the responsive default instead of persisting a pixel width')
-        assert.equal(storageWrites, 0)
-
-        emit('pointerdown', start)
-        emit('pointermove', start + direction * 20)
-        emit('pointermove', start + direction * 100)
-        assert.equal(root.dataset.sidebarResizing, 'true')
-        assert.equal(styleWrites, 0)
-        assert.equal(frames.size, 1, 'multiple pointer samples share one frame')
-        flushFrames()
-        assert.equal(width(), 700, 'drag distance, not the offset inside the hit area, determines the width')
-        assert.equal(styleWrites, 1)
-        assert.equal(storageWrites, 0, 'drag frames do not write settings')
-        emit('pointerup', start + direction * 120)
-        assert.equal(width(), 720, 'the final pointerup position is flushed')
-        assert.equal(storedWidth, 720)
-        assert.equal(storageWrites, 1)
-        assert.equal(geometrySyncs, 1)
-        assert.equal(captured, undefined)
-        assert.equal(root.dataset.sidebarResizing, undefined)
-
-        emit('pointerdown', start)
-        emit('pointermove', start + direction * 5000)
-        flushFrames()
-        assert.equal(width(), 1020, 'the existing 85% limit remains authoritative')
-        emit('pointercancel', 0)
-        assert.equal(width(), 1020, 'cancel coordinates must not replace the last real drag sample')
-        assert.equal(storedWidth, 1020)
-        assert.equal(captured, undefined)
-
-        emit('pointerdown', start)
-        emit('pointermove', start - direction * 100)
-        emit('lostpointercapture', 0)
-        assert.equal(width(), 920)
-        assert.equal(root.dataset.sidebarResizing, undefined)
-        emit('pointerdown', start)
-        emit('pointermove', start - direction * 100)
-        window.dispatchEvent(new Event('blur'))
-        assert.equal(width(), 820)
-        assert.equal(storedWidth, 820)
-        assert.equal(captured, undefined)
-        assert.equal(frames.size, 0)
-
-        resizer.dispatchEvent(new window.KeyboardEvent('keydown', { key: position === 'right' ? 'ArrowLeft' : 'ArrowRight', bubbles: true }))
-        assert.equal(width(), 836, 'keyboard resizing keeps the 16px step')
-        resizer.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
-        assert.equal(width(), 360)
-        resizer.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true }))
-        assert.equal(width(), 1020)
-
-        emit('pointerdown', start)
-        emit('pointermove', start - direction * 200)
-        const beforeCleanup = styleWrites
-        state.sidebarInteractionCleanup()
-        sessionModule.session.current = null
-        flushFrames()
-        emit('pointermove', start - direction * 400)
-        assert.equal(styleWrites, beforeCleanup, 'teardown discards pending drag writes')
-        assert.equal(captured, undefined)
-        assert.equal(root.dataset.sidebarResizing, undefined)
-      }
-      finally {
-        state.sidebarInteractionCleanup()
-        sessionModule.session.current = null
-        root.remove()
-      }
     }
   })
 

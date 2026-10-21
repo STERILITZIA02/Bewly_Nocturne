@@ -6,6 +6,57 @@ import { createWatchLaterFilters, filterWatchLaterItems, sortWatchLaterItems, wa
 import { loadSourceFunctions } from './sourceFunctionHarness'
 
 export function registerLibraryToolChecks(check, { Vue, compileComponent, flush }) {
+  check('Favorites filter: collapsed sections hold scope and conditions; scope applies at once and partitions load on first open', async () => {
+    const Panel = await compileComponent('../src/contentScripts/views/Favorites/FavoriteFilterPanel.vue', {
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      '~/components/TagRemoveButton.vue': { default: { render: () => null } },
+      '~/contentScripts/views/WatchLater/WatchLaterFilterSection.vue': { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterFilterSection.vue', {}, { globals: { sessionStorage: window.sessionStorage } }) },
+    })
+    window.sessionStorage.clear()
+    const scopes = []
+    const loads = []
+    const scope = Vue.ref('current')
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ setup: () => () => Vue.h(Panel, {
+      applied: { mids: [], tids: [], keywords: [] },
+      uploaders: [],
+      partitions: [],
+      partitionsLoading: false,
+      partitionsFailed: false,
+      scope: scope.value,
+      scopeOptions: [{ value: 'current', label: 'Current' }, { value: 'all', label: 'All' }],
+      onScope: (value) => {
+        scopes.push(value)
+        scope.value = value
+      },
+      onLoadPartitions: () => loads.push(true),
+    }) })
+    app.mount(host)
+    try {
+      await flush()
+      const group = host.querySelector('[aria-label="library_tools.search_scope"]')
+      assert.ok(group, 'scope is part of the filter panel')
+      const [current, all] = group.querySelectorAll('button')
+      assert.equal(current.getAttribute('aria-pressed'), 'true')
+      current.click()
+      all.click()
+      await flush()
+      assert.deepEqual(scopes, ['all'], 'only a different scope emits')
+      assert.equal(group.querySelectorAll('button')[1].getAttribute('aria-pressed'), 'true')
+      const toggles = [...host.querySelectorAll('.watch-later-filter-section h2 button')]
+      assert.deepEqual(toggles.map(button => button.getAttribute('aria-expanded')), ['false', 'false', 'false', 'false'], 'every section starts collapsed like the other library sidebars')
+      assert.equal(host.querySelector('.favorite-filter__actions'), null, 'apply/reset appear only with a pending or applied condition')
+      assert.deepEqual(loads, [], 'partitions are not scanned before their section opens')
+      toggles[2].click()
+      await flush()
+      assert.deepEqual(loads, [true])
+      assert.equal(window.sessionStorage.getItem('bewly-library-filter-section:favorites:partition'), '1')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
   check('history recording status: unknown stays unknown, pending serializes writes, mismatched readback reports failure', async () => {
     const { useHistoryTimeline } = await import('../src/contentScripts/views/History/useHistoryTimeline')
     const reads = []

@@ -509,11 +509,7 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
   ...createEntries(playbackPageRoute, [
     'settings.group_player_display_mode',
     'settings.video_player_mode.bewly_widescreen_sidebar_position',
-    'settings.video_player_mode.bewly_widescreen_center_video',
     'settings.show_widescreen_idle_progress',
-    'settings.video_player_mode.bewly_widescreen_center_video_desc',
-    'settings.video_player_mode.bewly_widescreen_layout_priority',
-    'settings.video_player_mode.bewly_widescreen_layout_priority_desc',
     'settings.video_player_mode.enable_overrides',
     'settings.video_player_mode.overrides',
     'settings.video_player_scroll',

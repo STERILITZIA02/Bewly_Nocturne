@@ -255,6 +255,7 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
       '~/utils/favoriteSeason': await import('../src/utils/favoriteSeason'),
       '~/utils/main': { getUserID: () => '1', removeHttpFromUrl: value => value, scrollToTop() {} },
+      '~/utils/messaging': { isExtensionContextInvalidatedError: error => String(error?.message ?? error).includes('Extension context invalidated') },
       '~/utils/watchLater': { updateOwnedWatchLater: () => assert.fail('a stale folder cannot write') },
       './PopoverListSkeleton.vue': { default: { render: () => null } },
     })
@@ -669,9 +670,11 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       host.send({ type: protocol.IFRAME_DARK_MODE_CHANGE, isDark: true, isOledDark: true, darkModeBaseColor: '#242424' })
       deliver(parentMessages.at(-1))
       await flush()
-      assert.equal(state.isOledDark.value, true)
+      // A playback page keeps the dark palette under an inherited pure black.
+      assert.equal(state.isDark.value, true)
+      assert.equal(state.isOledDark.value, false)
       assert.equal(state.darkModeBaseColor.value, '#242424')
-      assert.ok(document.documentElement.classList.contains('oled-dark'))
+      assert.ok(!document.documentElement.classList.contains('oled-dark'))
       deliver(oldTheme)
       await flush()
       assert.equal(state.isDark.value, true, 'stale route reply is ignored')

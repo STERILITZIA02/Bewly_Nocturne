@@ -57,9 +57,13 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
     const layout = await loadSourceModule('../src/utils/bewlyWidescreen/styles/layout.ts', {
       '~/constants/globalEvents': { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS },
       '~/styles/segmentControl.scss?inline': { default: compile(fileURLToPath(new URL('../src/styles/segmentControl.scss', import.meta.url))).css },
+      '~/styles/segmentLiquidIndicator.scss?inline': { default: compile(fileURLToPath(new URL('../src/styles/segmentLiquidIndicator.scss', import.meta.url))).css },
       '~/styles/sendButton.scss?inline': { default: compile(fileURLToPath(new URL('../src/styles/sendButton.scss', import.meta.url))).css },
       '~/styles/skeleton.scss?inline': { default: '' },
+      '~/styles/loadingRing.scss?inline': { default: '' },
+      '~/utils/danmakuSenderOrder': await import('../src/utils/danmakuSenderOrder'),
       '~/utils/bewlyWidescreen/constants': constants,
+      '~/utils/bewlyWidescreen/styles/cardLayout': await import('../src/utils/bewlyWidescreen/styles/cardLayout'),
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
       '~/utils/main': { injectCSS: (css) => {
         style.textContent = css

@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { ref, useId, watch } from 'vue'
+import { onMounted, ref, useId, watch } from 'vue'
 
 // `memoryKey` names the section within its page; the open state is remembered
 // for this browser tab only and every section starts collapsed.
 const props = defineProps<{ title: string, memoryKey: string }>()
+// Lets a section defer expensive content (e.g. a remote option list) until opened.
+const emit = defineEmits<{ expanded: [value: boolean] }>()
 const storageKey = `bewly-library-filter-section:${props.memoryKey}`
 const expanded = ref(readExpanded())
+onMounted(() => {
+  if (expanded.value)
+    emit('expanded', true)
+})
 watch(expanded, (value) => {
+  emit('expanded', value)
   try {
     sessionStorage.setItem(storageKey, value ? '1' : '0')
   }

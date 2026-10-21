@@ -2,10 +2,11 @@
 import { Icon } from '@iconify/vue'
 import { useMediaQuery, useMutationObserver } from '@vueuse/core'
 
+import { useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'
 import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } from '~/constants/globalEvents'
-import type { AppPage } from '~/enums/appEnums'
+import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import {
   isLayoutEditing,
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   (e: 'settingsVisibilityChange', origin: DOMRect): void
 }>()
 const { isDark, toggleDark } = useDark()
+const { navigateToDockPage } = useBewlyApp()
 const sidebarPosition = useLayoutEditSettingValue('navigation.sidebar.position', () => settings.value.sidebarPosition)
 
 const widescreenDocked = ref(document.body.classList.contains('bewly-widescreen-active'))
@@ -103,6 +105,11 @@ function openSettings(event: MouseEvent) {
   emit('settingsVisibilityChange', (event.currentTarget as HTMLElement).getBoundingClientRect())
 }
 
+// Docked into the playback page, the controls replace the floating home logo.
+function openHome() {
+  navigateToDockPage(AppPage.Home)
+}
+
 function openPlayerFeedback() {
   document.querySelector<HTMLElement>('.bpx-player-top-issue')?.click()
 }
@@ -142,6 +149,20 @@ function openPlayerFeedback() {
       pointer-events-auto
       duration-300
     >
+      <Tooltip
+        v-if="widescreenDocked"
+        :content="$t('dock.home')"
+        :placement="tooltipPlacement"
+      >
+        <Button
+          class="ctrl-btn bew-shape-circle"
+          :aria-label="$t('dock.home')"
+          center size="small" round
+          @click="openHome"
+        >
+          <span class="sidebar-control-icon i-tabler:home" aria-hidden="true" />
+        </Button>
+      </Tooltip>
       <PageModeSwitcherButton
         v-if="settings.showBewlyOrBiliPageSwitcher"
         :activated-page="props.activatedPage"
@@ -370,9 +391,20 @@ function openPlayerFeedback() {
     transform: translate3d(0, 0, 0);
     transition: opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard);
     will-change: opacity;
+
+    /* Separates these app controls from the danmaku controls after them; the
+       measured width (syncAuxiliaryControlGeometry) includes it. */
+    &::after {
+      content: "";
+      flex: none;
+      width: 1px;
+      height: var(--bew-icon-size-md);
+      background: var(--bew-border-color);
+    }
   }
 
   &.widescreen-controls-hidden .sidebar-content {
+    opacity: 0;
     transform: none;
     pointer-events: none;
   }

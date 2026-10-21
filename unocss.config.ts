@@ -63,6 +63,8 @@ export default defineConfig({
     'i-tabler:clock',
     'i-tabler:clock-filled',
     'i-tabler:playlist',
+    'i-tabler:maximize',
+    'i-tabler:minimize',
     'i-tabler:windmill',
     'i-tabler:windmill-filled',
     'i-tabler:device-gamepad-2',

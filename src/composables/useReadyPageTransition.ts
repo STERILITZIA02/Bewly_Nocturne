@@ -2,6 +2,7 @@ import type { TransitionProps } from 'vue'
 import { nextTick, onScopeDispose, watch } from 'vue'
 
 import { restoreRetiringElement, retiringTransition } from '~/utils/motionPresence'
+import { afterMotion, getMotionRemaining } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 
 interface ReadyPageTransitionOptions {
@@ -12,7 +13,12 @@ interface ReadyPageTransitionOptions {
   rise?: () => boolean
 }
 
-/** Code readiness gates the 90ms exit; only the incoming content enters for 210ms. */
+/**
+ * Code readiness gates the 90ms exit; only the incoming content enters for 210ms.
+ * Interaction motion goes first: while a slide, wheel or panel scale is still
+ * running (utils/motionPriority), the old view fades out over that time and the
+ * new view mounts only after it settles, so mounting never drops its frames.
+ */
 export function useReadyPageTransition<T>(source: () => T, prepare: (component: T) => Promise<unknown>, options: ReadyPageTransitionOptions = {}): TransitionProps {
   let generation = 0
   let initialized = false
@@ -29,12 +35,12 @@ export function useReadyPageTransition<T>(source: () => T, prepare: (component: 
     return getComputedStyle(element).opacity || '1'
   }
 
-  function animate(element: Element, frames: Keyframe[], entering: boolean): Animation | undefined {
+  function animate(element: Element, frames: Keyframe[], entering: boolean, minDuration = 0): Animation | undefined {
     if (!(element instanceof HTMLElement) || typeof element.animate !== 'function')
       return
     const style = getComputedStyle(element)
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-    const duration = reduced ? (entering ? 70 : 30) : getMotionDuration(style, entering ? '--bew-page-enter-duration' : '--bew-page-exit-duration', entering ? 210 : 90)
+    const duration = reduced ? (entering ? 70 : 30) : Math.max(minDuration, getMotionDuration(style, entering ? '--bew-page-enter-duration' : '--bew-page-exit-duration', entering ? 210 : 90))
     const easing = style.getPropertyValue(entering ? '--bew-ease-out' : '--bew-ease-in').trim() || (entering ? 'ease-out' : 'ease-in')
     try {
       return element.animate(frames, { duration, easing, fill: 'both' })
@@ -58,13 +64,17 @@ export function useReadyPageTransition<T>(source: () => T, prepare: (component: 
       return
     const from = opacity(element)
     leaveAnimation?.cancel()
-    const animation = animate(element, [{ opacity: from }, { opacity: 0 }], false)
+    // Stretch the exit across the triggering slide instead of idling blank.
+    const animation = animate(element, [{ opacity: from }, { opacity: 0 }], false, getMotionRemaining())
     leaveAnimation = animation
     if (animation) {
       await animation.finished.catch(() => undefined)
       if (version !== generation || finishLeave !== done)
         return
     }
+    await afterMotion()
+    if (version !== generation || finishLeave !== done)
+      return
     finishLeave = undefined
     leaveElement = undefined
     leaveAnimation = undefined
