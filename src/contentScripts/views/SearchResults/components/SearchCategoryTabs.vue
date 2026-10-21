@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
+
 import type { SearchCategory, SearchCategoryOption } from '../types'
 
 const props = defineProps<{
@@ -17,11 +19,12 @@ function handleSelect(category: SearchCategory) {
 
 <template>
   <div class="search-categories" mb-4>
-    <div class="search-category-control bew-segment-control bew-segment-control--surface bew-segment-control--static" role="group" :aria-label="$t('search.page_title')">
+    <div class="search-category-control bew-segment-control bew-segment-control--surface bew-segment-control--track" role="group" :aria-label="$t('search.page_title')">
+      <LiquidSegmentIndicator :active-key="props.currentCategory" />
       <button
         v-for="category in props.categories"
         :key="category.value"
-        class="category-tab bew-segment-control__item bew-segment-control__item--wide"
+        class="category-tab bew-segment-control__item bew-segment-control__item--wide" data-segment-item
         :class="{ active: props.currentCategory === category.value }"
         :data-active="props.currentCategory === category.value ? 'true' : undefined"
         :aria-pressed="props.currentCategory === category.value"

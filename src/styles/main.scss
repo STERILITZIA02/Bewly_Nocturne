@@ -5,6 +5,9 @@
 @use "./brandMark";
 @use "./sendButton";
 @use "./messageSearch";
+@use "./scrollEdgeFade";
+
+@include scrollEdgeFade.global;
 
 :host,
 :host *,
@@ -274,6 +277,27 @@ html.dark.bewly-design {
   aspect-ratio: 1;
   border-radius: 50% !important;
   corner-shape: var(--bew-corner-shape-round) !important;
+}
+
+// Numerals centered in a fixed circle or capsule. A line box carries the
+// font's uneven ascent/descent (CJK system fonts especially) and borders shift
+// line-height centering, so the digits' own box is trimmed to cap height and
+// centered by the container; the result holds for every font weight. Wrap the
+// number in a <span>. Unsupported browsers keep plain line-height-1 centering.
+// Flex (not grid) keeps a number wider than the circle ("100") centered: it
+// overflows both sides equally instead of growing a track to the right.
+.bew-centered-numeral {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+}
+
+.bew-centered-numeral > span {
+  text-box: trim-both cap alphabetic;
 }
 
 .bew-surface-border {

@@ -172,3 +172,14 @@
 - `adoptedStyleSheets`、首页 MAIN 世界任务：理由同上文“宿主样式与 Shadow UI”和“未完成及原因”。
 
 验证：`pnpm test`、`pnpm lint`、`pnpm typecheck` 通过；Ranking 夹具改为 `shallowRef` 形状。未执行 build，未在实站验证。
+
+## 2026-10-19 动画优先的内容切换
+
+分段滑块指示器（首页 Tab、Dock、设置分段等）与滚筒弹簧都由 JS 每帧写入响应式几何；此前点击后约 90ms 新页面就开始挂载，挂载与首批渲染占用主线程，造成滑块中途掉帧。
+
+- `utils/motionPriority.ts`：运行中的交互动画登记一个有时长的 hold，结束、取消或卸载时释放；`afterMotion()` 在全部 hold 结束后返回，单次等待最长 `MAX_MOTION_WAIT_MS`（800ms），遗漏释放也不会阻塞加载。
+- 登记点：`useLiquidSegmentIndicator` 在 `active-key` 变化时先同步登记预估时长，morph 开始后换成按格数计算的实际时长；`useSpringValue`（滚筒）在目标变化时登记约 1.2 个响应周期；`useGlassPanelMotion`（Dialog、确认框、设置窗口及来源缩放）登记自身的 WAAPI 动画。
+- 消费点：`useReadyPageTransition`（App 页面、首页 Tab、设置分区、搜索分类、消息分类）把旧内容的淡出时长取为默认 90ms 与剩余动画时长的较大值，淡出完成后再等待 `afterMotion()`，之后才交换并挂载新内容、执行 210ms 淡入。没有交互动画时时序与原来一致；减少动态效果下滑块和弹簧不登记。
+- 设置窗口原本已在缩放结束后才挂载内容，未改动。
+
+验证：新增 `Motion: interaction motion plays first…` 检查（上限、重复释放、弹簧登记与释放、淡出覆盖滑块、滑块结束后才交换）；`pnpm test`、`pnpm lint`、`pnpm typecheck` 通过。未执行 build，未在实站验证。

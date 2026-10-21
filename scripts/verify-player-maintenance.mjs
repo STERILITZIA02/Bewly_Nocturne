@@ -17,7 +17,9 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     const video = root.appendChild(document.createElement('video'))
     const clockNode = root.appendChild(document.createElement('span'))
     const session = { current: null, entering: false }
-    const emptyImports = Object.fromEntries(['actionEffects', 'danmaku', 'description', 'geometry', 'idleProgress', 'interactions', 'labels', 'nativeControls', 'playlist', 'shell', 'sidebar', 'styles/layout', 'videoInfo'].map(name => [`~/utils/bewlyWidescreen/${name}`, {}]))
+    const emptyImports = Object.fromEntries(['actionEffects', 'commentComposer', 'danmaku', 'description', 'displayMode', 'geometry', 'idleProgress', 'labels', 'nativeControls', 'playlist', 'shell', 'sidebar', 'styles/layout', 'videoInfo'].map(name => [`~/utils/bewlyWidescreen/${name}`, {}]))
+    emptyImports['~/utils/bewlyWidescreen/videoInfo'] = { clearViewerCount() {} }
+    emptyImports['~/utils/bewlyWidescreen/railTabs'] = await import('../src/utils/bewlyWidescreen/railTabs')
     const constants = await import('../src/utils/bewlyWidescreen/constants')
     const module = await loadSourceModule('../src/utils/bewlyWidescreen.ts', {
       ...emptyImports,
@@ -561,47 +563,347 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     }
   })
 
-  check('maintenance 05: actual widescreen geometry retains ultrawide, 16:9, 4:3 and portrait source ratios', async () => {
+  check('maintenance 05: the player anchors to the video pane, fills the overlay, and zooms between them from its painted frame', async () => {
     const root = document.body.appendChild(document.createElement('div'))
     const frame = root.appendChild(document.createElement('div'))
-    const sidebar = root.appendChild(document.createElement('div'))
+    const backdrop = document.body.appendChild(document.createElement('div'))
+    const host = document.body.appendChild(document.createElement('div'))
+    host.id = 'bewly'
     const player = document.body.appendChild(document.createElement('div'))
-    const video = player.appendChild(document.createElement('video'))
-    let width = 2560
-    let height = 1080
-    Object.defineProperties(video, { videoWidth: { get: () => width }, videoHeight: { get: () => height } })
+    const bar = player.appendChild(document.createElement('div'))
+    bar.className = 'bpx-player-control-bottom-right'
     const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height })
+    const px = name => Number.parseFloat(player.style.getPropertyValue(name))
+    const near = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-6, `${message ?? ''} ${actual} ≈ ${expected}`)
     root.getBoundingClientRect = () => rect(0, 0, 1440, 900)
-    frame.getBoundingClientRect = () => rect(0, 0, 700, 800)
-    sidebar.getBoundingClientRect = () => rect(720, 0, 720, 900)
-    const state = { root, playerEl: player, playerFrame: frame, playerSlot: frame, sidebarEl: sidebar, sidebarPosition: 'right', sidebarLayout: 'expanded' }
+    // The square pane: half the window, its full height.
+    frame.getBoundingClientRect = () => rect(0, 0, 720, 900)
+    // Layout follows the anchored geometry; a running zoom transform does not resize it.
+    player.getBoundingClientRect = () => rect(px('--bewly-widescreen-player-left'), px('--bewly-widescreen-player-top'), px('--bewly-widescreen-player-width'), px('--bewly-widescreen-player-height'))
+    Object.defineProperty(player, 'offsetWidth', { configurable: true, get: () => px('--bewly-widescreen-player-width') })
+    Object.defineProperty(player, 'offsetHeight', { configurable: true, get: () => px('--bewly-widescreen-player-height') })
+    const sidebar = root.appendChild(document.createElement('aside'))
+    const info = sidebar.appendChild(document.createElement('section'))
+    const state = { root, backdrop, playerEl: player, playerFrame: frame, infoEl: info, sidebarEl: sidebar, displayMode: 'card', sidebarPosition: 'right' }
     const session = { current: state }
-    const module = await loadSourceModule('../src/utils/bewlyWidescreen/geometry.ts', {
-      '~/logic': { settings: { value: { alwaysUseDock: true, bewlyWidescreenCenterVideo: false } } },
+    let nativePlayerRoot = player
+    const constants = await import('../src/utils/bewlyWidescreen/constants')
+    const policy = await import('../src/utils/bewlyWidescreenPolicy')
+    let resizeSyncs = 0
+    const geometry = await loadSourceModule('../src/utils/bewlyWidescreen/geometry.ts', {
+      '~/logic': { settings: { value: { alwaysUseDock: true } } },
       '~/utils/bewlyWidescreen/actionEffects': { scheduleActionGeometrySync() {} },
-      '~/utils/bewlyWidescreen/constants': await import('../src/utils/bewlyWidescreen/constants'),
+      '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/description': {},
       '~/utils/bewlyWidescreen/nativeControls': { syncNativePlayerControlVisibility() {} },
       '~/utils/bewlyWidescreen/nativeDom': { exitNativeMiniPlayer() {} },
       '~/utils/bewlyWidescreen/session': { session },
-      '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
-      '~/utils/player': { getVideoElement: () => video, isPlayerShowingEndingRecommendation: () => false },
-      '~/utils/playerMedia': { getPlayerRoot: () => player },
-    }, { requestAnimationFrame: () => 1, cancelAnimationFrame() {} })
-    try {
-      for (const pair of [[2560, 1080], [1920, 1080], [1440, 1080], [1080, 1920]]) {
-        [width, height] = pair
-        module.updateAspectRatio(state)
-        assert.equal(Number(root.style.getPropertyValue('--bewly-widescreen-layout-aspect')), width / height)
-        assert.equal(Number(root.style.getPropertyValue('--bewly-widescreen-aspect')), width / height)
+      '~/utils/bewlyWidescreenPolicy': policy,
+      '~/utils/player': { getVideoElement: () => null, isPlayerShowingEndingRecommendation: () => false },
+      '~/utils/playerMedia': { getPlayerRoot: () => nativePlayerRoot },
+    }, { requestAnimationFrame: () => 1, cancelAnimationFrame() {}, MutationObserver: window.MutationObserver, ResizeObserver: class { observe() {} unobserve() {} disconnect() {} } })
+    const animations = []
+    player.animate = (keyframes, options) => {
+      let finish
+      const animation = { keyframes, options, cancelled: false, progress: 0, finished: new Promise((resolve, reject) => finish = { resolve, reject }) }
+      // Browsers create `finished` only when read; an unread one never rejects unhandled.
+      animation.finished.catch(() => {})
+      animation.effect = { getComputedTiming: () => ({ progress: animation.progress }) }
+      animation.cancel = () => {
+        animation.cancelled = true
+        finish.reject(new Error('cancelled'))
       }
+      animation.finish = () => finish.resolve()
+      animations.push(animation)
+      return animation
+    }
+    let reducedMotion = false
+    const holds = []
+    const displayMode = await loadSourceModule('../src/utils/bewlyWidescreen/displayMode.ts', {
+      '~/contentScripts/playerControlTooltip': await import('../src/contentScripts/playerControlTooltip'),
+      '~/contentScripts/playerDomLifecycle': { observePlayerDom: () => () => {} },
+      '~/utils/bewlyWidescreen/constants': constants,
+      '~/utils/bewlyWidescreen/geometry': { ...geometry, schedulePlayerResizeSync() { resizeSyncs++ } },
+      '~/utils/bewlyWidescreen/labels': { t: key => key },
+      '~/utils/bewlyWidescreen/session': { session },
+      '~/utils/bewlyWidescreenPolicy': policy,
+      '~/utils/motionPriority': { holdAnimation: animation => holds.push(animation) },
+      '~/utils/motionTiming': await import('../src/utils/motionTiming'),
+    }, { window: { matchMedia: () => ({ matches: reducedMotion }) } })
+    const flushMicrotasks = () => new Promise(resolve => setTimeout(resolve, 0))
+    const parseTransform = (value) => {
+      const match = /^translate\((\S+)px, (\S+)px\) scale\((\S+)\)$/.exec(value)
+      assert.ok(match, value)
+      return match.slice(1).map(Number)
+    }
+    const modeOf = element => element.getAttribute(constants.PLAYER_DISPLAY_MODE_ATTRIBUTE)
+    try {
+      geometry.syncAnchoredPlayerGeometry(state)
+      assert.deepEqual([px('--bewly-widescreen-player-left'), px('--bewly-widescreen-player-top'), px('--bewly-widescreen-player-width'), px('--bewly-widescreen-player-height')], [0, 0, 720, 900])
+      assert.deepEqual([modeOf(player), root.dataset.displayMode, backdrop.dataset.displayMode], ['card', 'card', 'card'])
+
+      displayMode.setupFillToggle(state)
+      const button = bar.querySelector(`.${constants.FILL_TOGGLE_CLASS}`)
+      assert.equal(button?.getAttribute('aria-label'), 'widescreen.fill_window')
+      assert.ok(button.querySelector('.i-tabler\\:maximize'))
+
+      const bodyClasses = document.body.className
+      button.click()
+      assert.equal(state.displayMode, 'fill')
+      // The shell fades at once; the player's rest styles and the column's
+      // inertness restyle whole trees, so they wait for the settled frame.
+      assert.deepEqual([modeOf(player), root.dataset.displayMode, backdrop.dataset.displayMode], ['card', 'fill', 'fill'])
+      assert.equal(sidebar.inert, false)
+      assert.equal(document.body.className, bodyClasses, 'mode and zoom never restyle the whole document through <body>')
+      assert.deepEqual([px('--bewly-widescreen-player-width'), px('--bewly-widescreen-player-height')], [1440, 900], 'filled, the player covers the overlay at once')
+      assert.equal(button.getAttribute('aria-label'), 'widescreen.exit_fill_window')
+      assert.ok(button.querySelector('.i-tabler\\:minimize'))
+      assert.equal(animations.length, 2)
+      const [motion, shape] = animations
+      assert.deepEqual(holds, [motion], 'content swaps wait for the zoom')
+      assert.equal(JSON.stringify(motion.keyframes.map(keyframe => Object.keys(keyframe))), '[["transform"],["transform"]]', 'the motion stays compositor-only')
+      // The picture keeps its width and centre in the pane; the scaled player
+      // is only as tall as the picture, the backdrop paints the pane around it.
+      assert.equal(motion.keyframes[0].transform, 'translate(0px, 225px) scale(0.5)', 'the first frame covers the picture in the pane')
+      assert.equal(motion.keyframes[1].transform, 'translate(0px, 0px) scale(1)')
+      assert.equal(shape.keyframes[0].clipPath, 'inset(0px 0px)', 'both ends are square')
+      assert.equal(shape.keyframes[1].clipPath, 'inset(0px 0px)')
+      assert.equal(JSON.stringify(shape.keyframes.map(keyframe => Object.keys(keyframe))), '[["clipPath"],["clipPath"]]', 'no corner radius animates')
+      assert.equal(shape.options, motion.options, 'clip and motion share one timing')
+      assert.equal(root.dataset.zooming, 'true')
+      assert.ok(player.hasAttribute(constants.PLAYER_ZOOMING_ATTRIBUTE))
+      assert.ok(host.hasAttribute(constants.HOST_ZOOMING_ATTRIBUTE))
+      assert.equal(state.zoom?.motion, motion)
+
+      // Reversing halfway continues from the frame on screen, not the layout box.
+      motion.progress = 0.5
+      const syncsBeforeReverse = resizeSyncs
+      displayMode.setWidescreenDisplayMode(state, 'card')
+      assert.equal(motion.cancelled, true)
+      assert.equal(shape.cancelled, true)
+      assert.equal(animations.length, 4)
+      assert.equal(modeOf(player), 'card')
+      assert.deepEqual([px('--bewly-widescreen-player-left'), px('--bewly-widescreen-player-width')], [0, 720])
+      const [x, y, scale] = parseTransform(animations[2].keyframes[0].transform)
+      near(scale, 1080 / 720, 'video width carries over')
+      near(x, 0)
+      near(y, -225)
+      // The tall pane is clipped to the half-zoomed frame on screen.
+      assert.equal(animations[3].keyframes[0].clipPath, 'inset(225px 0px)')
+      assert.equal(animations[3].keyframes[1].clipPath, 'inset(0px 0px)')
+      assert.ok(resizeSyncs > syncsBeforeReverse)
+      await flushMicrotasks()
+      assert.equal(state.zoom?.motion, animations[2], 'a cancelled zoom never settles over its successor')
+      const syncsBeforeSettle = resizeSyncs
+      animations[2].finish()
+      await flushMicrotasks()
+      assert.equal(state.zoom, undefined)
+      assert.equal(animations[3].cancelled, true, 'the shape animation ends with the motion')
+      assert.equal(root.dataset.zooming, undefined)
+      assert.equal(player.hasAttribute(constants.PLAYER_ZOOMING_ATTRIBUTE), false)
+      assert.equal(host.hasAttribute(constants.HOST_ZOOMING_ATTRIBUTE), false)
+      assert.equal(resizeSyncs, syncsBeforeSettle + 1, 'the settled layout re-measures glass and auxiliary controls once')
+      assert.equal(modeOf(player), 'card')
+
+      // Filling settles into the player's fill styles and inert, faded panels.
+      displayMode.setWidescreenDisplayMode(state, 'fill')
+      assert.equal(modeOf(player), 'card')
+      animations[4].finish()
+      await flushMicrotasks()
+      assert.equal(modeOf(player), 'fill')
+      // The info lives in the column and goes inert with it.
+      assert.deepEqual([sidebar.inert, info.parentElement], [true, sidebar])
+
+      // Reduced motion switches without animating; repeating the mode is a no-op.
+      reducedMotion = true
+      displayMode.setWidescreenDisplayMode(state, 'card')
+      displayMode.setWidescreenDisplayMode(state, 'card')
+      assert.equal(animations.length, 6)
+      assert.equal(state.displayMode, 'card')
+      assert.equal(modeOf(player), 'card')
+      assert.equal(sidebar.inert, false)
+      assert.equal(state.zoom, undefined)
+
+      // Bilibili may re-render its whole app after the shell commits. The new
+      // player is anchored in the observer microtask, before it can paint at
+      // its native place.
+      const app = document.body.appendChild(document.createElement('div'))
+      app.append(player)
+      state.danmakuDock = root.appendChild(document.createElement('div'))
+      state.descriptionSlot = root.appendChild(document.createElement('div'))
+      geometry.setupAspectObservers(state)
+      const nextApp = document.createElement('div')
+      const nextPlayer = nextApp.appendChild(document.createElement('div'))
+      nativePlayerRoot = nextPlayer
+      app.replaceWith(nextApp)
+      await Promise.resolve()
+      assert.equal(state.playerEl, nextPlayer)
+      assert.ok(nextPlayer.classList.contains(constants.NATIVE_PLAYER_CLASS))
+      assert.equal(modeOf(nextPlayer), 'card')
+      assert.equal(player.classList.contains(constants.NATIVE_PLAYER_CLASS), false, 'the discarded player is released')
+      geometry.clearAspectObservers(state)
+      nextApp.remove()
+
+      state.fillToggleCleanup()
+      assert.equal(bar.querySelector(`.${constants.FILL_TOGGLE_CLASS}`), null)
+      assert.equal(state.fillToggleButton, undefined)
     }
     finally {
-      module.clearPlayerResizeSync(state)
-      module.clearAnchoredPlayerElement(player)
-      module.clearAuxiliaryControlGeometry()
+      state.fillToggleCleanup?.()
+      geometry.clearAspectObservers(state)
+      geometry.clearPlayerResizeSync(state)
+      geometry.clearAnchoredPlayerElement(player)
+      geometry.clearAuxiliaryControlGeometry()
+      assert.equal(modeOf(player), null, 'a released player keeps no mode state')
       root.remove()
+      backdrop.remove()
+      host.remove()
       player.remove()
+    }
+  })
+
+  check('maintenance 05b: the playback comment composer takes over native replies and the native list shows confirmed ones', async () => {
+    const bridge = await import('../src/utils/commentComposerBridge')
+    const pageBridge = await import('../src/constants/pageBridge')
+    // The bridge reads the page origin from the global `location`.
+    const previousLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
+    Object.defineProperty(globalThis, 'location', { value: window.location, configurable: true, writable: true })
+    const constants = await import('../src/utils/bewlyWidescreen/constants')
+    const channelId = 'composer-channel'
+    const flushMicrotasks = () => new Promise(resolve => setTimeout(resolve, 0))
+    const main = await loadSourceModule('../src/inject/externalCommentComposer.ts', {
+      '~/constants/pageBridge': pageBridge,
+      '~/utils/commentComposerBridge': bridge,
+    })
+    const isolated = await loadSourceModule('../src/utils/bewlyWidescreen/commentComposer.ts', {
+      'vue': Vue,
+      '~/components/MomentCard/commentUtils': await import('../src/components/MomentCard/commentUtils'),
+      '~/constants/pageBridge': pageBridge,
+      '~/styles/reset.css?raw': { __esModule: true, default: '' },
+      '~/utils/bewlyWidescreen/constants': constants,
+      '~/utils/commentComposerBridge': bridge,
+      '~/utils/pageBridgeChannel': { getPageBridgeChannelId: () => channelId },
+    }, {
+      MutationObserver: window.MutationObserver,
+      ResizeObserver: class {
+        constructor(callback) { this.callback = callback }
+        observe(target) { this.callback([{ target }]) }
+        disconnect() {}
+      },
+    })
+    const messages = []
+    const record = event => messages.push(event.data)
+    // A browser clones posted data into the receiving realm and sets its
+    // origin and source; jsdom does neither.
+    const deliver = data => window.dispatchEvent(new window.MessageEvent('message', { data: JSON.parse(JSON.stringify(data)), origin: window.location.origin, source: window }))
+    window.addEventListener('message', record)
+    const appHost = document.body.appendChild(document.createElement('div'))
+    appHost.id = 'bewly'
+    appHost.className = 'dark oled-dark'
+    appHost.style.setProperty('--bew-dark-base-color', '#123456')
+    appHost.style.setProperty('visibility', 'hidden')
+    const panels = document.body.appendChild(document.createElement('div'))
+    const panel = panels.appendChild(document.createElement('section'))
+    const outside = document.body.appendChild(document.createElement('bili-comment-thread-renderer'))
+    const raw = (rpid, root, extra = {}) => ({ rpid_str: rpid, root_str: root, parent_str: root, oid_str: '100', type: 1, mid_str: '7', ctime: 1, member: { mid: 7, uname: 'Author' }, content: { message: 'hello', pictures: [] }, replies: [{ rpid_str: '9' }], ...extra })
+    let cleanup
+    try {
+      cleanup = isolated.setupPlaybackCommentComposer(panel)
+      // Pinned beside the panels, outside the scroller, which keeps its height clear.
+      const host = panels.lastElementChild
+      assert.ok(host?.classList.contains(constants.COMMENT_COMPOSER_HOST_CLASS))
+      assert.equal(host.parentElement, panels)
+      // The height sits on the panel that reads it (registered without inheritance).
+      assert.equal(panel.style.getPropertyValue(constants.COMMENT_COMPOSER_HEIGHT_PROPERTY), '0px')
+      assert.equal(panels.style.getPropertyValue(constants.COMMENT_COMPOSER_HEIGHT_PROPERTY), '')
+      assert.ok(host.shadowRoot, 'the composer renders in its own styled shadow root')
+      assert.ok(panel.hasAttribute(bridge.EXTERNAL_COMMENT_COMPOSER_ATTRIBUTE))
+      assert.equal(isolated.playbackCommentComposer.value, null, 'no comment list yet, nothing to post to')
+      // The app host's theme reaches the composer; its own layout styles do not.
+      assert.ok(host.classList.contains('dark') && host.classList.contains('oled-dark'))
+      assert.equal(host.style.getPropertyValue('--bew-dark-base-color'), '#123456')
+      assert.equal(host.style.getPropertyValue('visibility'), '')
+
+      // The native list arrives later (moved in by hydration); the host stays outside it.
+      const list = document.createElement('bili-comments')
+      list.setAttribute('data-params', '1,100')
+      panel.prepend(document.createElement('div'))
+      panel.append(list)
+      await flushMicrotasks()
+      assert.equal(host.parentElement, panels)
+      assert.ok(!panel.contains(host))
+      const context = isolated.playbackCommentComposer.value
+      assert.equal(context?.oid, '100')
+      assert.equal(context?.type, 1)
+      assert.ok(host.shadowRoot.contains(context.mount))
+
+      // MAIN: a native reply click in the panel targets the composer instead.
+      const listShadow = list.attachShadow({ mode: 'open' })
+      const thread = listShadow.appendChild(document.createElement('bili-comment-thread-renderer'))
+      const replies = thread.attachShadow({ mode: 'open' }).appendChild(document.createElement('bili-comment-replies-renderer'))
+      replies.root = '500'
+      const nativeCalls = []
+      class ThreadRenderer {
+        handleReply(target) {
+          nativeCalls.push(target)
+        }
+      }
+      assert.equal(main.patchExternalComposerReply(ThreadRenderer, channelId), true)
+      assert.equal(main.patchExternalComposerReply(ThreadRenderer, channelId), false, 'patched once')
+      ThreadRenderer.prototype.handleReply.call(thread, raw('501', '500'))
+      await flushMicrotasks()
+      const target = messages.find(message => message?.type === pageBridge.PAGE_BRIDGE_MESSAGE.COMMENT_COMPOSER_TARGET)
+      assert.equal(target?.channelId, channelId)
+      assert.equal(target.data.reply.rpid_str, '501')
+      assert.equal('replies' in target.data.reply, false, 'only the targeting fields cross the bridge')
+      assert.equal(nativeCalls.length, 0, 'no native reply box opens')
+      // Isolated: the request reaches the composer, for this list only.
+      deliver(target)
+      assert.equal(isolated.playbackCommentReplyRequest.value?.reply.rpid, '501')
+      assert.equal(isolated.playbackCommentReplyRequest.value.reply.author.name, 'Author')
+      deliver({ ...target, data: { reply: { ...target.data.reply, rpid_str: '777', oid_str: '999' } } })
+      assert.equal(isolated.playbackCommentReplyRequest.value.reply.rpid, '501', 'another list cannot retarget the composer')
+
+      // The native path stays for disabled lists, foreign threads and unusable targets.
+      list.commentBoxDisabledState = { source: 'unlogin' }
+      ThreadRenderer.prototype.handleReply.call(thread, raw('502', '500'))
+      delete list.commentBoxDisabledState
+      ThreadRenderer.prototype.handleReply.call(outside, raw('503', '0'))
+      ThreadRenderer.prototype.handleReply.call(thread, { member: {} })
+      assert.equal(nativeCalls.length, 3)
+
+      // Confirmed replies enter the native list the way the native box adds them.
+      const rootReply = raw('600', '0')
+      const nestedReply = raw('601', '500')
+      assert.equal(main.insertExternalComposerReply(rootReply), true)
+      assert.equal(list.newItems[0], rootReply)
+      assert.equal(main.insertExternalComposerReply(nestedReply), true)
+      assert.equal(replies.newItems.at(-1), nestedReply)
+      assert.equal(main.insertExternalComposerReply(raw('602', '999')), false, 'an unrendered thread loads it later')
+      assert.equal(main.insertExternalComposerReply({ ...rootReply, oid_str: '999' }), false)
+      assert.equal(isolated.showPostedPlaybackComment(rootReply), true)
+      await flushMicrotasks()
+      assert.equal(messages.at(-1)?.type, pageBridge.PAGE_BRIDGE_MESSAGE.COMMENT_COMPOSER_INSERT)
+      assert.equal(messages.at(-1).data.reply.rpid_str, '600')
+
+      cleanup()
+      cleanup = undefined
+      assert.equal(host.isConnected, false)
+      assert.equal(panel.style.getPropertyValue(constants.COMMENT_COMPOSER_HEIGHT_PROPERTY), '')
+      assert.equal(panel.hasAttribute(bridge.EXTERNAL_COMMENT_COMPOSER_ATTRIBUTE), false)
+      assert.equal(isolated.playbackCommentComposer.value, null)
+      assert.equal(isolated.playbackCommentReplyRequest.value, null)
+    }
+    finally {
+      cleanup?.()
+      window.removeEventListener('message', record)
+      if (previousLocation)
+        Object.defineProperty(globalThis, 'location', previousLocation)
+      else
+        delete globalThis.location
+      appHost.remove()
+      panels.remove()
+      outside.remove()
     }
   })
 
@@ -724,9 +1026,13 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     const layout = await loadSourceModule('../src/utils/bewlyWidescreen/styles/layout.ts', {
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/styles/segmentControl.scss?inline': { default: '' },
+      '~/styles/segmentLiquidIndicator.scss?inline': { default: '' },
       '~/styles/sendButton.scss?inline': { default: '' },
       '~/styles/skeleton.scss?inline': { default: '' },
+      '~/styles/loadingRing.scss?inline': { default: '' },
+      '~/utils/danmakuSenderOrder': await import('../src/utils/danmakuSenderOrder'),
       '~/utils/bewlyWidescreen/constants': constants,
+      '~/utils/bewlyWidescreen/styles/cardLayout': await import('../src/utils/bewlyWidescreen/styles/cardLayout'),
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
       '~/utils/main': { injectCSS: (css) => {
         style.textContent = css
@@ -757,6 +1063,139 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       root.remove()
       style.remove()
       original.remove()
+    }
+  })
+
+  check('playback info: the viewer count reads at the end of the meta line, follows the native count and leaves on cleanup', async () => {
+    const constants = await import('../src/utils/bewlyWidescreen/constants')
+    const session = { current: null }
+    const module = await loadSourceModule('../src/utils/bewlyWidescreen/videoInfo.ts', {
+      '~/utils/api': { default: {} },
+      '~/utils/bewlyWidescreen/constants': constants,
+      '~/utils/bewlyWidescreen/labels': { t: key => key },
+      '~/utils/bewlyWidescreen/nativeDom': {},
+      '~/utils/bewlyWidescreen/session': { session },
+      '~/utils/bilibiliApiError': {},
+      '~/utils/bilibiliUrl': {},
+      '~/utils/messaging': {},
+      '~/utils/videoMetadataBridge': { isPgcPlaybackPage: () => false },
+    }, { MutationObserver: globalThis.MutationObserver ?? window.MutationObserver })
+    const sendingArea = document.body.appendChild(document.createElement('div'))
+    const viewerInfo = sendingArea.appendChild(document.createElement('div'))
+    viewerInfo.className = 'bpx-player-video-info'
+    const online = viewerInfo.appendChild(document.createElement('div'))
+    online.className = 'bpx-player-video-info-online'
+    online.innerHTML = '<span class="bpx-player-video-info-online-num">4</span>人正在看'
+    const metadataSlot = document.createElement('div')
+    metadataSlot.append(document.createElement('div'))
+    const state = { danmakuSemanticsSource: sendingArea, metadataSlot }
+    session.current = state
+    const label = () => metadataSlot.querySelector('.bewly-widescreen-viewers__label')?.textContent
+
+    module.syncViewerCount(state)
+    assert.ok(metadataSlot.lastElementChild.classList.contains('bewly-widescreen-viewers'))
+    assert.equal(label(), '4人正在看')
+    assert.ok(viewerInfo.hasAttribute(constants.VIEWER_COUNT_MIRRORED_ATTRIBUTE), 'the card hides the pill only while the meta line shows it')
+
+    // The metadata clone is replaced whenever its text changes.
+    metadataSlot.prepend(document.createElement('div'))
+    module.syncViewerCount(state)
+    assert.ok(metadataSlot.lastElementChild.classList.contains('bewly-widescreen-viewers'))
+    assert.equal(metadataSlot.querySelectorAll('.bewly-widescreen-viewers').length, 1)
+
+    online.firstElementChild.textContent = '12'
+    await new Promise(resolve => setTimeout(resolve, 0))
+    assert.equal(label(), '12人正在看', 'native count updates reach the meta line')
+
+    online.textContent = ''
+    await new Promise(resolve => setTimeout(resolve, 0))
+    assert.equal(metadataSlot.querySelector('.bewly-widescreen-viewers'), null, 'an empty count leaves the meta line')
+    assert.equal(viewerInfo.hasAttribute(constants.VIEWER_COUNT_MIRRORED_ATTRIBUTE), false)
+
+    online.textContent = '7人正在看'
+    await new Promise(resolve => setTimeout(resolve, 0))
+    assert.equal(label(), '7人正在看')
+    module.clearViewerCount(state)
+    assert.equal(metadataSlot.querySelector('.bewly-widescreen-viewers'), null)
+    assert.equal(viewerInfo.hasAttribute(constants.VIEWER_COUNT_MIRRORED_ATTRIBUTE), false)
+    online.textContent = '9人正在看'
+    await new Promise(resolve => setTimeout(resolve, 0))
+    assert.equal(metadataSlot.querySelector('.bewly-widescreen-viewers'), null, 'cleanup disconnects the observer')
+    sendingArea.remove()
+  })
+
+  check('playback info: the cloned meta line drops the reprint notice, gives every item an icon and follows late-filled icons', async () => {
+    const constants = await import('../src/utils/bewlyWidescreen/constants')
+    const session = { current: null }
+    const native = document.body.appendChild(document.createElement('div'))
+    native.className = 'video-info-meta'
+    native.innerHTML = [
+      '<div class="video-info-detail-list">',
+      '<div class="view item"><svg class="view-icon"></svg><div class="view-text">9.7万</div></div>',
+      '<div class="pubdate-ip item"><div class="pubdate-ip-text">2026-10-20 23:30:00</div></div>',
+      '<div class="video-argue item"><div class="video-argue-inner"><svg class="remark-icon"></svg><div class="argue-text">含AI生成内容</div></div></div>',
+      '<div class="video-argue item"><div class="video-argue-inner"><div class="argue-text">其他声明</div></div></div>',
+      '<div class="copyright item"><svg class="copyright-icon"></svg><div class="copyright-text">未经作者授权，禁止转载</div></div>',
+      '</div>',
+    ].join('')
+    const module = await loadSourceModule('../src/utils/bewlyWidescreen/videoInfo.ts', {
+      '~/utils/api': { default: {} },
+      '~/utils/bewlyWidescreen/constants': constants,
+      '~/utils/bewlyWidescreen/labels': { t: key => key },
+      '~/utils/bewlyWidescreen/nativeDom': { findMovable: () => native },
+      '~/utils/bewlyWidescreen/session': { session },
+      '~/utils/bilibiliApiError': {},
+      '~/utils/bilibiliUrl': { normalizeBilibiliImageUrl: src => src },
+      '~/utils/messaging': {},
+      '~/utils/videoMetadataBridge': { isPgcPlaybackPage: () => false },
+    }, { MutationObserver: globalThis.MutationObserver ?? window.MutationObserver })
+    const metadataSlot = document.createElement('div')
+    const state = { metadataSlot, navigationPending: false }
+    session.current = state
+    try {
+      assert.equal(module.syncVideoMetadata(state), true)
+      const items = [...metadataSlot.querySelectorAll('.item')]
+      assert.deepEqual(items.map(item => item.className), ['view item', 'pubdate-ip item', 'video-argue item', 'video-argue item'])
+      assert.equal(metadataSlot.querySelector('.copyright'), null, 'the reprint notice leaves the meta line')
+      assert.ok(native.querySelector('.copyright'), 'the native notice stays in place')
+      for (const item of items)
+        assert.ok(item.querySelector('svg, .bewly-widescreen-metadata-icon'), `${item.textContent} leads with an icon`)
+      assert.equal(items[1].firstElementChild.className, 'i-tabler:clock bewly-widescreen-metadata-icon')
+      assert.equal(items[3].firstElementChild.className, 'i-tabler:info-circle bewly-widescreen-metadata-icon')
+      assert.equal(items[1].firstElementChild.getAttribute('aria-hidden'), 'true')
+      assert.equal(items[0].querySelectorAll('.bewly-widescreen-metadata-icon').length, 0, 'native icons are kept, not doubled')
+      assert.equal(native.querySelectorAll('.bewly-widescreen-metadata-icon').length, 0, 'the native line is not touched')
+
+      // Bilibili renders the icon boxes first and fills their paths later. The
+      // clone follows, and the mirrored viewer count stays last.
+      const viewers = metadataSlot.appendChild(document.createElement('span'))
+      viewers.className = 'bewly-widescreen-viewers item'
+      const clone = metadataSlot.firstElementChild
+      assert.equal(clone.querySelector('.view-icon').childElementCount, 0)
+      native.querySelector('.view-icon').innerHTML = '<path d="M0 0h1v1z"></path>'
+      await new Promise(resolve => setTimeout(resolve, 0))
+      assert.notEqual(metadataSlot.firstElementChild, clone, 'a late-filled icon refreshes the clone')
+      assert.equal(metadataSlot.querySelector('.view-icon').childElementCount, 1)
+      assert.equal(metadataSlot.lastElementChild, viewers)
+      assert.equal(metadataSlot.querySelector('.copyright'), null)
+
+      // Mid-navigation the native line still shows the old video.
+      state.navigationPending = true
+      const settled = metadataSlot.firstElementChild
+      native.querySelector('.view-text').textContent = '10万'
+      await new Promise(resolve => setTimeout(resolve, 0))
+      assert.equal(metadataSlot.firstElementChild, settled)
+      state.navigationPending = false
+
+      module.clearVideoMetadataObserver(state)
+      native.querySelector('.view-text').textContent = '11万'
+      await new Promise(resolve => setTimeout(resolve, 0))
+      assert.equal(metadataSlot.firstElementChild, settled, 'cleanup disconnects the observer')
+      assert.equal(state.metadataSource, undefined)
+    }
+    finally {
+      session.current = null
+      native.remove()
     }
   })
 

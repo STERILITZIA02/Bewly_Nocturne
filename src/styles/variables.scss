@@ -120,6 +120,11 @@
   --bew-card-sample-min-width: calc(var(--bew-space-10) * 4);
   --bew-cover-overlay-inset: var(--bew-space-2);
   --bew-cover-action-size: var(--bew-icon-button-size-md);
+  // Controls pinned near a rounded corner stay concentric with it: the parent
+  // radius minus the real inset, never below the small radius. Controls whose
+  // inset reaches the parent radius use the ordinary interactive radius.
+  --bew-cover-action-radius: max(var(--bew-radius-sm), calc(var(--bew-media-radius) - var(--bew-cover-overlay-inset)));
+  --bew-card-media-action-radius: max(var(--bew-radius-sm), calc(var(--bew-card-inset-radius) - var(--bew-space-2)));
   --bew-cover-scrim: rgb(0 0 0 / 56%);
   --bew-layout-sidebar-width: 200px;
   --bew-library-filter-padding: var(--bew-space-3);
@@ -350,18 +355,22 @@
   // #endregion
 
   // #region Shadows
-  // The shadows of the card, button, and other slightly elevated components1
-  --bew-shadow-1: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  // Light mode: white surfaces sit on a near-white canvas, so each level adds a
+  // tight contact layer that draws the edge; the soft layers carry the depth.
+  // Dark mode defines its own values below.
+  // The shadows of the card, button, and other slightly elevated components
+  --bew-shadow-1: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 8px -2px rgb(0 0 0 / 0.08);
 
   // The shadows of the top bar, header, elevated fixed buttons/cards and other components that are in the a fixed or sticky position
-  --bew-shadow-2: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.06);
+  --bew-shadow-2: 0 1px 3px rgb(0 0 0 / 0.07), 0 10px 15px -3px rgb(0 0 0 / 0.11), 0 4px 6px -4px rgb(0 0 0 / 0.07);
 
   // The shadows of the popover, dropdown
-  --bew-shadow-3: 0 20px 25px -5px rgb(0 0 0 / 0.12), 0 8px 10px -6px rgb(0 0 0 / 0.08);
+  --bew-shadow-3: 0 2px 4px rgb(0 0 0 / 0.06), 0 20px 25px -5px rgb(0 0 0 / 0.13), 0 8px 10px -6px rgb(0 0 0 / 0.09);
 
   // Only used in the dialog
   --bew-shadow-4:
-    0 34px 50px -20px rgb(0 0 0 / 0.14), 0 32px 45px -12px rgb(0 0 0 / 0.1), 0 30px 40px -8px rgb(0 0 0 / 0.12);
+    0 2px 6px rgb(0 0 0 / 0.06), 0 34px 50px -20px rgb(0 0 0 / 0.15), 0 32px 45px -12px rgb(0 0 0 / 0.1),
+    0 30px 40px -8px rgb(0 0 0 / 0.12);
 
   // #endregion
 
@@ -522,14 +531,17 @@
   --bew-fill-alt: color-mix(in srgb, var(--bew-neutral-bg) 45%, transparent);
   --bew-surface-inset-bg: color-mix(in srgb, var(--bew-neutral-fg) 4%, transparent);
   --bew-skeleton: color-mix(in srgb, var(--bew-neutral-fg) 7%, transparent);
-  --bew-border-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  // Light-mode edges: white surfaces on the 4% canvas need a little more line
+  // weight than dark mode, which pins its own values below. Keep 11.5–20.5%
+  // (scripts/serve-border-preview.mjs) so lines stay quieter than text.
+  --bew-border-color: color-mix(in srgb, var(--bew-neutral-fg) 14%, transparent);
   --un-default-border-color: var(--bew-border-color);
-  --bew-surface-border-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
-  --bew-comment-tree-line-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  --bew-surface-border-color: color-mix(in srgb, var(--bew-neutral-fg) 16%, transparent);
+  --bew-comment-tree-line-color: color-mix(in srgb, var(--bew-neutral-fg) 14%, transparent);
   --bew-input-bg: var(--bew-neutral-inset);
   --bew-input-bg-hover: color-mix(in srgb, var(--bew-neutral-fg) 3%, var(--bew-neutral-inset));
-  --bew-input-border-color: color-mix(in srgb, var(--bew-neutral-fg) 16%, transparent);
-  --bew-input-border-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 20%, transparent);
+  --bew-input-border-color: color-mix(in srgb, var(--bew-neutral-fg) 18%, transparent);
+  --bew-input-border-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 20.5%, transparent);
   --bew-switch-bg: var(--bew-fill-3);
   --bew-switch-thumb-active: var(--bew-on-theme-color);
   --bew-ip-tag-bg: var(--bew-fill-1);
@@ -576,6 +588,13 @@
   --bew-message-pinned-hover-background: color-mix(in srgb, var(--bew-neutral-bg) 36%, transparent);
   --bew-wheel-text: rgb(255 255 255 / 67%);
   --bew-dock-navigation-active-color: hsl(0 0% 100%);
+
+  // Edge weights approved for dark and OLED; light mode is tuned separately.
+  --bew-border-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  --bew-surface-border-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  --bew-comment-tree-line-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  --bew-input-border-color: color-mix(in srgb, var(--bew-neutral-fg) 16%, transparent);
+  --bew-input-border-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 20%, transparent);
 
   // #region shadow
   --bew-shadow-1: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);

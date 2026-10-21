@@ -16,6 +16,7 @@ import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getFavoriteResourceBvid, getFavoriteResourceKey, getFavoriteResourceUrl, isPlayableFavoriteVideo } from '~/utils/favoriteResource'
 import { mergeFavoriteSeasonPage } from '~/utils/favoriteSeason'
 import { getUserID, removeHttpFromUrl, scrollToTop } from '~/utils/main'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { retiringListTransition } from '~/utils/motionPresence'
 import { updateOwnedWatchLater } from '~/utils/watchLater'
 
@@ -253,6 +254,10 @@ async function getFavoriteCategories(requestVersion: number, requestAccountId: n
     return true
   }
   catch (error) {
+    // A reloaded extension leaves this script without a runtime; its reload
+    // prompt already tells the user, so nothing is logged or toasted here.
+    if (isExtensionContextInvalidatedError(error))
+      return false
     console.error('Failed to load favorite categories:', error)
     if (requestVersion === favoriteDataRequestVersion && requestAccountId === currentAccountId.value)
       toast.error(t('common.load_failed'))
@@ -345,9 +350,11 @@ async function getFavoriteResources(
   }
   catch (error) {
     if (requestVersion === favoriteResourcesRequestVersion && isFavoriteAccountCurrent(requestAccountId)) {
-      console.error('Failed to load favorite resources:', error)
       resourceRequestFailed.value = true
-      toast.error(t('common.load_failed'))
+      if (!isExtensionContextInvalidatedError(error)) {
+        console.error('Failed to load favorite resources:', error)
+        toast.error(t('common.load_failed'))
+      }
     }
     return false
   }

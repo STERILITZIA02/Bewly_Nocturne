@@ -1,5 +1,3 @@
-import { watch } from 'vue'
-
 import { hasPlayerMediaMutation, observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import { i18n } from '~/utils/i18n'
@@ -255,7 +253,7 @@ function bindHostActivity(host: HTMLElement) {
   let frame: number | undefined
   let resize: ResizeObserver
   let measuredControls = new Set<HTMLElement>()
-  const reservedTop = { left: 0, right: 0 }
+  let reservedTop = 0
   const scheduleGeometry = () => {
     if (frame !== undefined)
       return
@@ -280,15 +278,10 @@ function bindHostActivity(host: HTMLElement) {
       const style = getComputedStyle(host)
       const gap = Number.parseFloat(style.getPropertyValue('--bew-space-3')) || 12
       const height = Number.parseFloat(style.getPropertyValue('--bew-control-height')) || 36
-      const side = document.body.classList.contains('bewly-widescreen-active') && settings.value.bewlyWidescreenCenterVideo
-        && settings.value.bewlyWidescreenSidebarPosition !== 'left'
-        ? 'left'
-        : 'right'
-      const toolbarSelector = side === 'left' ? '.bpx-player-top-left, .bpx-player-top-left > *' : '.bpx-player-top-issue'
-      const toolbarRects = Array.from(host.querySelectorAll<HTMLElement>(toolbarSelector), node => node.getBoundingClientRect())
+      const toolbarRects = Array.from(host.querySelectorAll<HTMLElement>('.bpx-player-top-issue'), node => node.getBoundingClientRect())
         .filter(box => box.width > 0 && box.height > 0)
       if (toolbarRects.length)
-        reservedTop[side] = Math.max(...toolbarRects.map(box => (box.bottom - rect.top) / scale))
+        reservedTop = Math.max(...toolbarRects.map(box => (box.bottom - rect.top) / scale))
       const controlsRect = host.querySelector<HTMLElement>(BOTTOM_CONTROLS_SELECTOR)?.getBoundingClientRect()
       const availableBottom = controlsRect?.height ? (controlsRect.top - rect.top) / scale - gap : rect.height / scale - gap
       const video = getVideoElement()
@@ -297,12 +290,12 @@ function bindHostActivity(host: HTMLElement) {
         height: rect.height / scale,
         aspect: video?.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 9 / 16,
         zoomed: host.classList.contains(ZOOMED_CLASS),
-        side,
+        side: 'right',
         gap,
         buttonWidth: (button?.getBoundingClientRect().width || 48 * scale) / scale,
         buttonHeight: height,
         bottom: availableBottom,
-        toolbarBottom: reservedTop[side],
+        toolbarBottom: reservedTop,
       })
       for (const [key, value] of Object.entries({ 'controls-top': geometry.top, 'controls-left': geometry.left, 'map-top': geometry.mapTop, 'map-height': geometry.mapHeight, 'map-width': geometry.mapWidth })) {
         const property = `--bewly-vertical-video-${key}`
@@ -322,7 +315,6 @@ function bindHostActivity(host: HTMLElement) {
   refreshControlGeometry = scheduleGeometry
   window.addEventListener('resize', scheduleGeometry)
   document.addEventListener('fullscreenchange', scheduleGeometry)
-  const stopLayoutSettings = watch(() => [settings.value.bewlyWidescreenCenterVideo, settings.value.bewlyWidescreenSidebarPosition], scheduleGeometry)
   scheduleGeometry()
 
   const onPointerActivity = () => showControlsTemporarily(host)
@@ -334,7 +326,6 @@ function bindHostActivity(host: HTMLElement) {
 
   hostActivityCleanup = () => {
     resize.disconnect()
-    stopLayoutSettings()
     refreshControlGeometry = null
     window.removeEventListener('resize', scheduleGeometry)
     document.removeEventListener('fullscreenchange', scheduleGeometry)

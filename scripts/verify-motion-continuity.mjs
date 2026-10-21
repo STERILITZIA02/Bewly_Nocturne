@@ -575,4 +575,94 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     root.remove()
     window.matchMedia = previousMatchMedia
   })
+
+  check('Motion: card and sidebar lists fade only inner edges with more content; screen edges and composers stay crisp', async () => {
+    const css = compileString('@use "scrollEdgeFade"; @include scrollEdgeFade.global;', { loadPaths: ['src/styles'] }).css
+    assert.match(css, /@property --bew-scroll-edge-top-clear\s*\{[^}]*initial-value: 1/, 'a list that fits keeps both edges opaque')
+    assert.match(css, /animation-timeline: scroll\(self\), scroll\(self\)/)
+    assert.match(css, /@supports \(animation-timeline: scroll\(\)\)/, 'browsers without scroll timelines keep the list unmasked')
+    const owners = {
+      'src/components/LibraryWorkspace.vue': '.library-workspace__rail-scroll',
+      'src/contentScripts/views/Favorites/FavoritesPage.vue': '.category-list',
+      'src/contentScripts/views/Notifications/whisper/ConversationList.vue': '.conversation-list__items',
+      'src/contentScripts/views/Notifications/whisper/PrivateHistorySearchResults.vue': '.private-history-results__list',
+      'src/contentScripts/views/Home/following/FollowingSidebar.vue': '.following-sidebar__scroll',
+      'src/contentScripts/views/Moments/MomentsSidebar.vue': '.moments-live-card__list',
+      'src/contentScripts/views/Moments/MomentsHotSearch.vue': '.moments-hot-search__loading {',
+      'src/components/MomentCard/MomentCommentSection.vue': '.moment-comments__list',
+      'src/contentScripts/views/Home/components/SubscribedSeries.vue': '.series-updates-list',
+      'src/contentScripts/views/Favorites/FavoriteFilterPanel.vue': '.favorite-filter__chips',
+    }
+    for (const [file, selector] of Object.entries(owners)) {
+      const source = await readFile(file, 'utf8')
+      const start = source.indexOf(selector)
+      assert.ok(start >= 0 && source.slice(start, source.indexOf('}', start)).includes('@include scrollEdgeFade.vertical'), `${file} fades ${selector}`)
+    }
+    for (const file of ['src/components/LibraryWorkspace.vue', 'src/contentScripts/views/Favorites/FavoritesPage.vue', 'src/contentScripts/views/Notifications/whisper/ConversationList.vue', 'src/contentScripts/views/Notifications/whisper/PrivateHistorySearchResults.vue', 'src/contentScripts/views/Home/following/FollowingSidebar.vue'])
+      assert.match(await readFile(file, 'utf8'), /scrollEdgeFade\.vertical\(\$bottom: false\)/, `${file}: a sidebar bottom at the screen edge has no fade`)
+    assert.match(await readFile('src/contentScripts/views/Home/components/Ranking.vue', 'utf8'), /bew-scroll-edge-fade--no-bottom/)
+    assert.match(await readFile('src/components/MomentCard/MomentCommentSection.vue', 'utf8'), /has-composer[\s\S]*?--bew-scroll-edge-bottom-off: 1/, 'the pinned composer closes the comment list without a fade')
+    const offCss = compileString('@use "scrollEdgeFade"; .x { @include scrollEdgeFade.vertical($bottom: false); }', { loadPaths: ['src/styles'] }).css
+    assert.match(offCss, /--bew-scroll-edge-bottom-off: 1/)
+    assert.match(offCss, /max\(var\(--bew-scroll-edge-bottom-clear\), var\(--bew-scroll-edge-bottom-off, 0\)\)/)
+    const hotSearch = await readFile('src/contentScripts/views/Moments/MomentsHotSearch.vue', 'utf8')
+    const card = hotSearch.slice(hotSearch.indexOf('.moments-hot-search {'), hotSearch.indexOf('}', hotSearch.indexOf('.moments-hot-search {')))
+    assert.doesNotMatch(card, /scrollEdgeFade|vertical-scroll/, 'the glass card never carries the mask')
+  })
+
+  check('Motion: interaction motion plays first; swaps fade across it and mount only after it settles', async () => {
+    const priority = await import('../src/utils/motionPriority')
+    const { useReadyPageTransition } = await import('../src/composables/useReadyPageTransition')
+    const { useSpringValue } = await import('../src/composables/useSpringValue')
+    assert.equal(priority.getMotionRemaining(), 0)
+    await priority.afterMotion()
+    const release = priority.holdMotion(60_000)
+    assert.ok(priority.getMotionRemaining() <= priority.MAX_MOTION_WAIT_MS, 'a hold can never block loading beyond the cap')
+    let waited = false
+    const wait = priority.afterMotion().then(() => waited = true)
+    await flush()
+    assert.equal(waited, false)
+    release()
+    release()
+    await wait
+    assert.equal(priority.getMotionRemaining(), 0)
+
+    const target = Vue.ref(0)
+    const springScope = Vue.effectScope()
+    springScope.run(() => useSpringValue(() => target.value, () => 0.2))
+    target.value = 3
+    assert.ok(priority.getMotionRemaining() > 0, 'a moving wheel spring holds content swaps')
+    springScope.stop()
+    assert.equal(priority.getMotionRemaining(), 0, 'disposal releases the spring hold')
+
+    const previousMatchMedia = window.matchMedia
+    window.matchMedia = () => ({ matches: false })
+    const component = Vue.shallowRef({ id: 'a' })
+    const scope = Vue.effectScope()
+    const hooks = scope.run(() => useReadyPageTransition(() => component.value, () => Promise.resolve()))
+    const root = document.body.appendChild(document.createElement('section'))
+    const durations = []
+    root.animate = (_frames, options) => {
+      durations.push(options.duration)
+      return { finished: Promise.resolve(), cancel() {} }
+    }
+    try {
+      await flush()
+      const slide = priority.holdMotion(300)
+      let finished = 0
+      component.value = { id: 'b' }
+      hooks.onLeave(root, () => finished++)
+      await flush()
+      assert.ok(durations[0] >= 250, 'the old view fades across the slide instead of idling blank')
+      assert.equal(finished, 0, 'the new view does not mount while the slide is running')
+      slide()
+      await flush()
+      assert.equal(finished, 1, 'the swap follows as soon as the slide settles')
+    }
+    finally {
+      scope.stop()
+      root.remove()
+      window.matchMedia = previousMatchMedia
+    }
+  })
 }

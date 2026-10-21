@@ -11,7 +11,6 @@ import { removeRetiredSettings, RETIRED_LOCAL_STORAGE_KEYS } from '~/constants/r
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import type { AppPage } from '~/enums/appEnums'
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
-import { normalizeWidescreenSidebarStoredWidth, WIDESCREEN_SIDEBAR_DEFAULT_WIDTH } from '~/utils/bewlyWidescreenPolicy'
 import {
   MOBILE_LIST_LAYOUT_BREAKPOINT,
   normalizeListLayoutBreakpoint,
@@ -54,7 +53,6 @@ export type CustomPlayOrderOverrides = Record<CustomPlayOrderContext, CustomPlay
 export type CollectedSeasonPlayAllMode = 'beginning' | 'latest' | 'lastWatched'
 export type DefaultVideoPlayerMode = 'default' | 'webFullscreen' | 'widescreen' | 'bewlyWidescreen'
 export type BewlyWidescreenSidebarPosition = 'left' | 'right'
-export type BewlyWidescreenLayoutPriority = 'video-first' | 'sidebar-first'
 export type PlayerDefaultState = 'system' | 'remember' | 'on' | 'off'
 export type VideoPlayerScrollMode = 'sendingBar' | 'playerCenter'
 export type VideoAspectRatio = '0:0' | '4:3' | '16:9'
@@ -378,10 +376,7 @@ export interface Settings {
   // Video Player
   defaultVideoPlayerMode: DefaultVideoPlayerMode
   bewlyWidescreenSidebarPosition: BewlyWidescreenSidebarPosition
-  bewlyWidescreenLayoutPriority: BewlyWidescreenLayoutPriority
-  bewlyWidescreenCenterVideo: boolean
   showWidescreenIdleProgress: boolean
-  bewlyWidescreenSidebarWidth: number
   defaultDanmakuState: PlayerDefaultState
   defaultCaptionState: PlayerDefaultState
   lastDanmakuState: boolean
@@ -670,10 +665,7 @@ export const originalSettings: Settings = {
   // Video Player
   defaultVideoPlayerMode: 'default',
   bewlyWidescreenSidebarPosition: 'right',
-  bewlyWidescreenLayoutPriority: 'video-first',
-  bewlyWidescreenCenterVideo: false,
   showWidescreenIdleProgress: false,
-  bewlyWidescreenSidebarWidth: WIDESCREEN_SIDEBAR_DEFAULT_WIDTH,
   defaultDanmakuState: 'system',
   defaultCaptionState: 'system',
   lastDanmakuState: true,
@@ -982,10 +974,6 @@ function normalizeSettings(value: Settings) {
     record.defaultDanmakuState = originalSettings.defaultDanmakuState
   if (!validPlayerDefaultStates.includes(record.defaultCaptionState))
     record.defaultCaptionState = originalSettings.defaultCaptionState
-
-  record.bewlyWidescreenSidebarWidth = normalizeWidescreenSidebarStoredWidth(
-    record.bewlyWidescreenSidebarWidth,
-  )
 
   // 旧开关与新的按场景覆盖语义不同，直接清理并让用户重新设置。
   Reflect.deleteProperty(record, 'keepCollectionVideoDefaultMode')

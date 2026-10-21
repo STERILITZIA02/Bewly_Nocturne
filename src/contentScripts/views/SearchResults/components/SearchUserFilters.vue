@@ -4,6 +4,8 @@ import './searchFilters.scss'
 import { computed, nextTick, ref, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
+
 interface UserFilterOption {
   value: string | number
   label: string
@@ -50,13 +52,14 @@ function handleUserTypeSelect(value: number) {
     <div class="bew-search-filter-row">
       <span class="bew-search-filter-label">{{ t('search.filters.order') }}</span>
       <div
-        class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--static bew-segment-control--secondary"
+        class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--track"
         role="group" :aria-label="t('search.filters.order')"
       >
+        <LiquidSegmentIndicator :active-key="userOrder" />
         <button
           v-for="option in props.orderOptions"
           :key="option.value"
-          class="bew-segment-control__item"
+          class="bew-segment-control__item" data-segment-item
           :data-active="userOrder === option.value ? 'true' : undefined"
           :aria-pressed="userOrder === option.value"
           type="button"
@@ -83,14 +86,15 @@ function handleUserTypeSelect(value: number) {
       <div class="bew-search-filter-row">
         <span class="bew-search-filter-label">{{ t('search.filters.user_type') }}</span>
         <div
-          class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--static bew-segment-control--secondary"
+          class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--track"
           role="group"
           :aria-label="t('search.filters.user_type')"
         >
+          <LiquidSegmentIndicator :active-key="userType" />
           <button
             v-for="option in props.userTypeOptions"
             :key="option.value"
-            class="bew-segment-control__item"
+            class="bew-segment-control__item" data-segment-item
             :data-active="userType === option.value ? 'true' : undefined"
             :aria-pressed="userType === option.value"
             type="button"

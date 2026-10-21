@@ -2,6 +2,7 @@
 import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } from '~/constants/globalEvents'
 import { createPageBridgeChannelId, getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { setupLocalLoudnessBridge } from '~/inject/audio/localLoudnessBridge'
+import { COMMENT_SPINNER_RING_CSS } from '~/inject/commentLoadingRing'
 import { clearMissingCommentParents, isMissingCommentParentMutationNode, MISSING_COMMENT_PARENT_CSS, MISSING_COMMENT_PARENT_SELECTOR, syncMissingCommentParents } from '~/inject/commentMissingParents'
 import { getCommentReplyBranchPath, getCommentReplyBranchToggleY } from '~/inject/commentReplyGeometry'
 import { patchCommentReplyInteraction } from '~/inject/commentReplyInteraction'
@@ -9,6 +10,9 @@ import { createCommentReplyPaginationController } from '~/inject/commentReplyPag
 import { createNativeCommentReplyReader } from '~/inject/commentReplyReader'
 import { createCommentReplyReadingController, getCommentReplyGuideCoordinates } from '~/inject/commentReplyReading'
 import { updateCommentSendButton } from '~/inject/commentSendButton'
+import { sortPlaybackDanmakuListBySender } from '~/inject/danmakuSenderOrder'
+import { EXTERNAL_COMPOSER_COMMENT_BOX_CSS, EXTERNAL_COMPOSER_HEADER_CSS, insertExternalComposerReply, patchExternalComposerReply } from '~/inject/externalCommentComposer'
+import { wakeNativeCommentLists } from '~/inject/nativeCommentWake'
 import { patchNativeUserProfile } from '~/inject/nativeUserProfile'
 import { setupVideoMetadataBridge } from '~/inject/videoMetadata'
 import USER_PROFILE_CSS from '~/styles/adaptedStyles/shadowDom/userProfile.scss?inline'
@@ -354,7 +358,19 @@ else if (shouldInitializePageScript) {
     }
   `
 
+  // Playback page type roles (see AGENTS): names are controls (13/18 500),
+  // everything beside them is a caption (12/16, text-3).
   const WIDESCREEN_COMMENT_USER_CSS = `
+    :host-context(#bewly-widescreen-root) :is(#user-name, #user-name a) {
+      font-size: var(--bew-font-size-control, 13px) !important;
+      font-weight: var(--bew-font-weight-medium, 500) !important;
+      line-height: var(--bew-line-height-control, 18px) !important;
+    }
+    :host-context(#bewly-widescreen-root) #location {
+      color: var(--bew-text-3) !important;
+      font-size: var(--bew-font-size-caption, 12px) !important;
+      line-height: var(--bew-line-height-caption, 16px) !important;
+    }
     :host-context(#bewly-widescreen-root) #user-name a {
       color: var(--bew-text-1) !important;
     }
@@ -370,23 +386,52 @@ else if (shouldInitializePageScript) {
     'bili-comment-action-buttons-renderer': {
       id: 'bewly-widescreen-comment-action-style',
       css: `
+        /* The footer is metadata: one caption row in text-3; actions
+           brighten on hover, a set like keeps Bilibili's own colour. */
         :host-context(#bewly-widescreen-root) {
-          --text3: var(--bew-text-1);
+          --text3: var(--bew-text-3);
         }
-        :host-context(#bewly-widescreen-root) #pubdate {
-          color: var(--bew-text-1) !important;
+        :host-context(#bewly-widescreen-root) :is(#pubdate, #like, #dislike, #reply, #more, #count) {
           font-size: var(--bew-font-size-caption) !important;
           line-height: var(--bew-line-height-caption) !important;
+        }
+        :host-context(#bewly-widescreen-root) #pubdate {
+          color: var(--bew-text-3) !important;
+          font-variant-numeric: tabular-nums;
+        }
+        :host-context(#bewly-widescreen-root) :is(#like, #dislike, #reply, #more) {
+          transition: color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
+        }
+        :host-context(#bewly-widescreen-root) :is(#like, #dislike, #reply, #more):hover {
+          color: var(--bew-text-1);
+        }
+      `,
+    },
+    'bili-comments': {
+      id: 'bewly-widescreen-comments-style',
+      css: `
+        /* The first thread's own top padding is the gap under the header,
+           as between threads; the list adds none of its own. */
+        :host-context(#bewly-widescreen-root) #contents {
+          padding-top: 0 !important;
         }
       `,
     },
     'bili-comments-header-renderer': {
       id: 'bewly-widescreen-comment-header-style',
       css: `
+        /* A section title like the collection and recommendation headers,
+           well below the video title. The host is inline natively, which adds
+           a line-box strut under it; as a block, the first thread's own top
+           padding is the only gap, the same rhythm as between threads. */
+        :host-context(#bewly-widescreen-root) {
+          display: block;
+        }
         :host-context(#bewly-widescreen-root) #navbar {
           align-items: center;
           gap: var(--bew-space-4);
           min-height: var(--bew-control-height);
+          margin-bottom: 0 !important;
         }
         :host-context(#bewly-widescreen-root) #title {
           display: inline-flex;
@@ -394,9 +439,9 @@ else if (shouldInitializePageScript) {
           gap: var(--bew-space-2);
         }
         :host-context(#bewly-widescreen-root) #title h2 {
-          font-size: var(--bew-font-size-heading) !important;
-          font-weight: var(--bew-font-weight-semibold) !important;
-          line-height: var(--bew-line-height-heading) !important;
+          font-size: var(--bew-font-size-title) !important;
+          font-weight: var(--bew-font-weight-medium) !important;
+          line-height: var(--bew-line-height-title) !important;
         }
         :host-context(#bewly-widescreen-root) #count {
           margin: 0;
@@ -411,6 +456,7 @@ else if (shouldInitializePageScript) {
           font-size: var(--bew-font-size-control) !important;
           line-height: var(--bew-line-height-control) !important;
         }
+        ${EXTERNAL_COMPOSER_HEADER_CSS}
       `,
     },
     'bili-rich-text': {
@@ -447,6 +493,18 @@ else if (shouldInitializePageScript) {
       id: 'bewly-comment-replies-style',
       css: `
         ${MISSING_COMMENT_PARENT_CSS}
+        /* Replies stay under the root text, one entity indent in: the 40px
+           avatar and space-3, as the author row above (bili-comment-renderer). */
+        :host-context(#bewly-widescreen-root) #expander {
+          padding-left: calc(var(--bew-control-height-lg, 40px) + var(--bew-space-3, 12px));
+        }
+
+        :host-context(#bewly-widescreen-root) #view-more {
+          color: var(--bew-text-3) !important;
+          font-size: var(--bew-font-size-caption, 12px) !important;
+          line-height: var(--bew-line-height-caption, 16px) !important;
+        }
+
         #spinner {
           position: relative !important;
           inset: auto !important;
@@ -563,6 +621,28 @@ else if (shouldInitializePageScript) {
         #body .tag:empty {
           display: none !important;
         }
+
+        /* The playback page's column starts the avatar on its content line,
+           the edge its tabs, header and composer share. The avatar matches
+           the author's 40px one (Bilibili draws 48px with its pendant on a
+           canvas, so it scales from its corner; it is absolutely placed and
+           moves nothing), and the text starts one entity indent in. */
+        :host-context(#bewly-widescreen-root) #user-avatar {
+          left: 0;
+          scale: calc(5 / 6);
+          transform-origin: 0 0;
+        }
+
+        :host-context(#bewly-widescreen-root) #body {
+          padding-left: calc(var(--bew-control-height-lg, 40px) + var(--bew-space-3, 12px));
+        }
+
+        /* Reading text: the content box takes the body size its rich text
+           already uses, so no taller native line box sits around it. */
+        :host-context(#bewly-widescreen-root) #content {
+          font-size: var(--bew-font-size-body, 15px);
+          line-height: var(--bew-line-height-body, 24px);
+        }
       `,
     },
     'bili-comment-box': {
@@ -577,7 +657,12 @@ else if (shouldInitializePageScript) {
         :is(#pub button, button[data-v-risk="fingerprint"]):not(.bew-send-button):not(:hover, :active, .active) {
           background-color: var(--bew-theme-color) !important;
         }
+        ${EXTERNAL_COMPOSER_COMMENT_BOX_CSS}
       `,
+    },
+    'bili-comments-spinner': {
+      id: 'bewly-widescreen-comment-spinner-style',
+      css: COMMENT_SPINNER_RING_CSS,
     },
     'bili-comments-vote-card': {
       id: 'bewly-vote-card-style',
@@ -3144,6 +3229,15 @@ else if (shouldInitializePageScript) {
         }
       }
 
+      if (name === 'bili-comment-thread-renderer') {
+        try {
+          patchExternalComposerReply(classConstructor, pageBridgeChannelId)
+        }
+        catch (error) {
+          console.warn(`[Bewly Nocturne] Failed to patch ${name} replies.`, error)
+        }
+      }
+
       const shadowStylePatch = COMMENT_SHADOW_STYLE_PATCHES[name]
       if (shadowStylePatch) {
         try {
@@ -3179,7 +3273,15 @@ else if (shouldInitializePageScript) {
                 afterUpdate: animateCommentReplyMotion,
                 beforeUpdate: captureCommentReplyMotion,
               }
-            : undefined)
+            : name === 'bili-comments-spinner'
+              ? {
+                  // Styled before its first paint, so the native GIF never shows.
+                  beforeUpdate: (component) => {
+                    if (component.shadowRoot)
+                      ensureCommentShadowStyle(component.shadowRoot, shadowStylePatch.id, shadowStylePatch.css)
+                  },
+                }
+              : undefined)
         }
         catch (error) {
           console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
@@ -3363,6 +3465,33 @@ else if (shouldInitializePageScript) {
         commentReplyPagination.dispose(component)
         clearCommentReplyTreeState(component)
       }
+      return
+    }
+    if (targetOrigin && matchesPageBridgeEvent(event, {
+      source: window,
+      origin: targetOrigin,
+      channelId: pageBridgeChannelId,
+      type: PAGE_BRIDGE_MESSAGE.COMMENT_COMPOSER_INSERT,
+    })) {
+      insertExternalComposerReply((event.data.data as { reply?: unknown } | null)?.reply)
+      return
+    }
+    if (targetOrigin && matchesPageBridgeEvent(event, {
+      source: window,
+      origin: targetOrigin,
+      channelId: pageBridgeChannelId,
+      type: PAGE_BRIDGE_MESSAGE.COMMENT_LIST_WAKE,
+    })) {
+      wakeNativeCommentLists(event.data.data)
+      return
+    }
+    if (targetOrigin && matchesPageBridgeEvent(event, {
+      source: window,
+      origin: targetOrigin,
+      channelId: pageBridgeChannelId,
+      type: PAGE_BRIDGE_MESSAGE.DANMAKU_SENDER_ORDER,
+    })) {
+      sortPlaybackDanmakuListBySender()
       return
     }
     if (!targetOrigin || !matchesPageBridgeEvent(event, {

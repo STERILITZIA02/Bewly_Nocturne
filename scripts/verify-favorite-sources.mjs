@@ -902,6 +902,55 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
     assert.equal(transformFavoriteItem(audio).url, 'https://www.bilibili.com/audio/au1')
   })
 
+  check('favorite popover: a reloaded extension neither toasts nor logs the terminal read failure', async () => {
+    const store = Vue.reactive({ isLogin: true, userInfo: { mid: 1 }, isInWatchLater: () => undefined })
+    const toasts = []
+    const logged = []
+    let categoryReads = 0
+    const Popover = await compileComponent('../src/components/TopBar/components/pops/FavoritesPop.vue', {
+      '~/components/Tooltip.vue': { default: { inheritAttrs: false, setup: (_props, { slots }) => () => slots.default?.() } },
+      '~/utils/accountLifetime': await import('../src/utils/accountLifetime'),
+      '~/utils/watchLater': { updateOwnedWatchLater: () => assert.fail('no write') },
+      'pinia': { storeToRefs: () => ({ favoriteStateVersion: Vue.ref(0) }) },
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      'vue-toastification': { useToast: () => ({ error: message => toasts.push(message) }) },
+      '~/components/Empty.vue': { default: { render: () => null } },
+      '~/composables/useOptimizedScroll': { useOptimizedScroll() {} },
+      '~/stores/topBarStore': { useTopBarStore: () => store },
+      '~/utils/accountScope': await import('../src/utils/accountScope'),
+      '~/utils/api': { default: { favorite: {
+        getFavoriteCategories: () => {
+          categoryReads++
+          return Promise.reject(new Error('Extension context invalidated.'))
+        },
+        getFavoriteResources: () => assert.fail('no folder without categories'),
+      } } },
+      '~/utils/dataFormatter': { calcCurrentTime: () => '01:00' },
+      '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
+      '~/utils/favoriteSeason': await import('../src/utils/favoriteSeason'),
+      '~/utils/main': { getUserID: () => '1', removeHttpFromUrl: value => value, scrollToTop() {} },
+      '~/utils/messaging': { isExtensionContextInvalidatedError: error => String(error?.message ?? error).includes('Extension context invalidated') },
+      './PopoverListSkeleton.vue': { default: { render: () => null } },
+    }, { globals: { console: { ...console, error: (...args) => logged.push(args) } } })
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp(Popover)
+    app.component('ALink', { props: ['href'], setup: (props, { slots }) => () => Vue.h('a', { href: props.href }, slots.default?.()) })
+    app.component('Button', { setup: (_props, { slots }) => () => Vue.h('button', slots.default?.()) })
+    app.config.globalProperties.$t = key => key
+    try {
+      app.mount(host)
+      await flush()
+      await flush()
+      assert.equal(categoryReads, 1)
+      assert.deepEqual(toasts, [])
+      assert.deepEqual(logged, [])
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
   check('favorite popover: actual rendered cards share media keys, retain invalid entries, and pause duplicate/failed pagination', async () => {
     const store = Vue.reactive({ isLogin: true, userInfo: { mid: 1 }, isInWatchLater: () => undefined })
     let cookieMid = '1'
@@ -933,6 +982,7 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
       '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
       '~/utils/favoriteSeason': await import('../src/utils/favoriteSeason'),
       '~/utils/main': { getUserID: () => cookieMid, removeHttpFromUrl: value => value, scrollToTop() {} },
+      '~/utils/messaging': { isExtensionContextInvalidatedError: error => String(error?.message ?? error).includes('Extension context invalidated') },
       './PopoverListSkeleton.vue': { default: { render: () => null } },
     })
     const host = document.body.appendChild(document.createElement('div'))

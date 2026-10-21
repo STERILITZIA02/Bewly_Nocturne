@@ -1,0 +1,106 @@
+// Vertical twin of the Moments up-list edge treatment (2026-10-19): a list in a
+// card or sidebar fades out at an edge only while more of it lies beyond that
+// edge, using the up-list's curve (16% → 48% → 78% → opaque).
+//
+// The element's own scroll position drives two registered numbers through
+// scroll-driven animations, so there is no scroll listener, observer or JS; a
+// list that fits has no active timeline and shows no fade, and a browser
+// without scroll timelines shows the list unmasked. Put it on the scroll
+// container itself, never on an element that paints glass (the mask would fade
+// the glass too).
+//
+// An edge that is the screen edge (a full-height sidebar's bottom) or that a
+// pinned composer covers needs no fade: pass `$top: false` / `$bottom: false`,
+// or set `--bew-scroll-edge-top-off` / `--bew-scroll-edge-bottom-off` to 1 where
+// the condition is a state (e.g. a composer that may be absent).
+
+@mixin vertical($top: true, $bottom: true) {
+  @if not $top {
+    --bew-scroll-edge-top-off: 1;
+  }
+  @if not $bottom {
+    --bew-scroll-edge-bottom-off: 1;
+  }
+  --bew-scroll-edge-size: min(calc(var(--bew-space-12) + var(--bew-space-10)), 25%);
+  --bew-scroll-edge-ramp: var(--bew-space-6);
+  // A switched-off edge keeps its clear mask opaque, so the base fade never shows.
+  --bew-scroll-edge-top-mask: linear-gradient(
+    180deg,
+    rgb(0 0 0 / max(var(--bew-scroll-edge-top-clear), var(--bew-scroll-edge-top-off, 0))) 0,
+    transparent var(--bew-scroll-edge-size)
+  );
+  --bew-scroll-edge-bottom-mask: linear-gradient(
+    0deg,
+    rgb(0 0 0 / max(var(--bew-scroll-edge-bottom-clear), var(--bew-scroll-edge-bottom-off, 0))) 0,
+    transparent var(--bew-scroll-edge-size)
+  );
+  --bew-scroll-edge-base-mask: linear-gradient(
+    180deg,
+    transparent 0,
+    rgb(0 0 0 / 16%) calc(var(--bew-scroll-edge-size) * 0.18),
+    rgb(0 0 0 / 48%) calc(var(--bew-scroll-edge-size) * 0.45),
+    rgb(0 0 0 / 78%) calc(var(--bew-scroll-edge-size) * 0.73),
+    #000 var(--bew-scroll-edge-size),
+    #000 calc(100% - var(--bew-scroll-edge-size)),
+    rgb(0 0 0 / 78%) calc(100% - var(--bew-scroll-edge-size) * 0.73),
+    rgb(0 0 0 / 48%) calc(100% - var(--bew-scroll-edge-size) * 0.45),
+    rgb(0 0 0 / 16%) calc(100% - var(--bew-scroll-edge-size) * 0.18),
+    transparent 100%
+  );
+
+  @supports (animation-timeline: scroll()) {
+    -webkit-mask-image:
+      var(--bew-scroll-edge-top-mask), var(--bew-scroll-edge-bottom-mask), var(--bew-scroll-edge-base-mask);
+    mask-image: var(--bew-scroll-edge-top-mask), var(--bew-scroll-edge-bottom-mask), var(--bew-scroll-edge-base-mask);
+    mask-repeat: no-repeat;
+    animation:
+      bew-scroll-edge-top linear both,
+      bew-scroll-edge-bottom linear both;
+    animation-timeline: scroll(self), scroll(self);
+    animation-range:
+      0 var(--bew-scroll-edge-ramp),
+      calc(100% - var(--bew-scroll-edge-ramp)) 100%;
+  }
+}
+
+// Global registration: @property only takes effect at document level, which the
+// host stylesheet provides; the keyframes must also exist in the shadow copy.
+@mixin global {
+  @property --bew-scroll-edge-top-clear {
+    syntax: "<number>";
+    inherits: false;
+    initial-value: 1;
+  }
+
+  @property --bew-scroll-edge-bottom-clear {
+    syntax: "<number>";
+    inherits: false;
+    initial-value: 1;
+  }
+
+  @keyframes bew-scroll-edge-top {
+    from {
+      --bew-scroll-edge-top-clear: 1;
+    }
+    to {
+      --bew-scroll-edge-top-clear: 0;
+    }
+  }
+
+  @keyframes bew-scroll-edge-bottom {
+    from {
+      --bew-scroll-edge-bottom-clear: 0;
+    }
+    to {
+      --bew-scroll-edge-bottom-clear: 1;
+    }
+  }
+
+  .bew-scroll-edge-fade {
+    @include vertical;
+  }
+
+  .bew-scroll-edge-fade--no-bottom {
+    --bew-scroll-edge-bottom-off: 1;
+  }
+}

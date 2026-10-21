@@ -703,8 +703,9 @@ const VideoPageTopBarConfigEnum = VideoPageTopBarConfig
 
 <template>
   <div class="top-bar-container">
+    <!-- The playback page frames its card from the window corner; the Dock still leads home. -->
     <TopBarLogo
-      v-if="topBarStore.showTopBar"
+      v-if="topBarStore.showTopBar && !bewlyWidescreenActive"
       v-layout-editable="'topbar-logo'"
       class="floating-home-logo"
       floating

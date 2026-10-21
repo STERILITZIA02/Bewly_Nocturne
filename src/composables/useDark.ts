@@ -137,7 +137,12 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
   })
   const iframeDocument = createIframeDocumentClient()
   const isDark = computed(() => parentTheme.value?.isDark ?? (currentAppColorScheme.value === 'dark' || isVideoPageDark.value))
-  const isOledDark = computed(() => isDark.value && (parentTheme.value?.isOledDark ?? settings.value.enableOledDarkMode === true))
+  // Playback pages keep the dark-mode palette under pure black until they get
+  // a pure-black design of their own. The URL is known at document start, so
+  // the early loading cover and the playback page never flash black.
+  const isOledDark = computed(() => isDark.value
+    && !isVideoPlaybackPage(currentUrl.value)
+    && (parentTheme.value?.isOledDark ?? settings.value.enableOledDarkMode === true))
   const darkModeBaseColor = computed(() => parentTheme.value?.darkModeBaseColor ?? resolveDarkModeBaseColor(settings.value))
 
   const handleIframeThemeMessage = (event: MessageEvent) => {

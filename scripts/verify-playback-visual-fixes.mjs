@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict'
 
-import { clampWidescreenSidebarWidth, shouldContinueWidescreenSidebarHydration } from '../src/utils/bewlyWidescreenPolicy'
+import { resolveWidescreenSidebarHydrationPhase } from '../src/utils/bewlyWidescreenPolicy'
 import { patchCommentTransferLifecycle, transferCommentNode } from '../src/utils/commentDomTransfer'
 import { buildCommentTree } from '../src/utils/commentTree'
 import * as geometry from '../src/utils/commentTreeGeometry'
-import { isPhotoViewerOpen } from '../src/utils/photoViewer'
 import { playbackSourceFiles, readPlaybackSource } from './playbackSource'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 
@@ -55,8 +54,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
       session,
       document,
       window,
-      clampWidescreenSidebarWidth,
-      settings: { value: { bewlyWidescreenLayoutPriority: 'sidebar-first', bewlyWidescreenSidebarPosition: 'right' } },
+      settings: { value: { bewlyWidescreenSidebarPosition: 'right' } },
       t: key => key,
       getVideoElement: () => null,
       HTMLVideoElement: window.HTMLVideoElement,
@@ -109,45 +107,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     assert.equal(document.head.querySelectorAll('style').length, initialStyles)
   })
 
-  check('DOM fixture: photo preview keeps the sidebar open, including an already queued collapse', async () => {
-    const time = clock()
-    const changes = []
-    const context = await loadSourceFunctions(widescreenFile, [
-      'NATIVE_MUSIC_ENTRY_SELECTOR',
-      'NATIVE_ACTION_OVERLAY_SELECTOR',
-      'isNativeActionOverlayOpen',
-      'scheduleCollapse',
-    ], {
-      document,
-      getComputedStyle,
-      isPhotoViewerOpen,
-      ...time,
-      collapseTimer: undefined,
-      resizeGesture: undefined,
-      canTemporarilyExpand: () => true,
-      hasFocusedInteraction: () => false,
-      sidebarResizer: document.createElement('div'),
-      currentState: { playerEl: document.createElement('div') },
-      lastPointerX: undefined,
-      lastPointerY: undefined,
-      lastPointerEvent: undefined,
-      WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY: 200,
-      setHoverExpanded: value => changes.push(value),
-    })
-    context.scheduleCollapse()
-    const viewer = document.createElement('div')
-    viewer.className = 'pswp pswp--open'
-    viewer.getBoundingClientRect = () => rect(0, 0, 1000, 800)
-    document.body.append(viewer)
-    assert.equal(context.isNativeActionOverlayOpen(), true)
-    time.tick(200)
-    assert.deepEqual(changes, [])
-    viewer.style.display = 'none'
-    assert.equal(context.isNativeActionOverlayOpen(), false)
-    context.scheduleCollapse()
-    time.tick(200)
-    assert.deepEqual(changes, [false])
-    viewer.remove()
+  check('DOM fixture: photo preview stays above the playback page', async () => {
     const source = await readPlaybackSource()
     assert.match(source, /body\.\$\{BODY_CLASS\} > :is\(\$\{PHOTO_VIEWER_SELECTOR\}\) \{\s*z-index: var\(--bew-z-hud\)/)
   })
@@ -289,16 +249,33 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     panel.remove()
   })
 
-  check('DOM fixture: sidebar hydration stops at its deadline and exposes recovery instead of infinite loading', async () => {
+  check('DOM fixture: sidebar hydration spends visible time only, waits for an in-flight native request, and recovers after its notice', async () => {
     const time = clock()
     const root = document.createElement('div')
     const panels = Object.fromEntries(['comment', 'danmaku', 'playlist'].map(tab => [tab, document.createElement('section')]))
-    root.append(...Object.values(panels))
+    const sidebarTop = document.createElement('div')
+    root.append(sidebarTop, ...Object.values(panels))
     document.body.append(root)
-    const currentState = { root, panels, activeTab: 'comment', navigationPending: false }
+    const currentState = { root, panels, sidebarTop, activeTab: 'comment', navigationPending: false }
+    // A page the fixture can hide; elements still come from the real document.
+    const page = {
+      hidden: false,
+      listeners: new Set(),
+      createElement: name => document.createElement(name),
+      addEventListener: (_type, listener) => page.listeners.add(listener),
+      removeEventListener: (_type, listener) => page.listeners.delete(listener),
+      show() {
+        page.hidden = false
+        page.listeners.forEach(listener => listener())
+      },
+    }
+    let readiness = { top: true, comment: false, complete: false }
+    let nativeRequestPending = false
+    let prewarms = 0
     let restores = 0
     let exits = 0
     let reloads = 0
+    const wakes = []
     const context = await loadSourceFunctions(widescreenFile, [
       'startSidebarHydration',
       'clearSidebarHydration',
@@ -306,42 +283,90 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
       'createPanelEmpty',
       'clearEmptyPanel',
       'clearDanmakuSkeleton',
-      'SIDEBAR_HYDRATION_TIMEOUT',
       'SIDEBAR_HYDRATION_FAST_DURATION',
       'SIDEBAR_HYDRATION_FAST_INTERVAL',
       'SIDEBAR_HYDRATION_INTERVAL',
+      'SIDEBAR_HYDRATION_RECOVERY_INTERVAL',
       'EMPTY_CLASS',
       'DANMAKU_SKELETON_CLASS',
     ], {
       ...time,
-      document,
+      document: page,
       session: { current: currentState },
-      shouldContinueWidescreenSidebarHydration,
+      resolveWidescreenSidebarHydrationPhase,
+      isNativeCommentRequestPending: () => nativeRequestPending,
       findCommentRoot: () => null,
-      startCommentPrewarm: () => {},
+      startCommentPrewarm: () => prewarms++,
       restoreCommentPrewarm: () => restores++,
-      runSidebarHydration: () => ({ top: true, comment: false, complete: false }),
+      runSidebarHydration: () => readiness,
+      wakeNativeCommentList: reload => wakes.push(reload),
       t: key => key,
       location: { reload: () => reloads++ },
     })
     currentState.exit = ({ userInitiated }) => exits += Number(userInitiated)
+    const notice = () => panels.comment.querySelector('.bewly-widescreen-panel-error')
+
+    // Hidden time is not the native page's: hydration pauses, then restarts.
     context.startSidebarHydration(currentState)
+    page.hidden = true
+    time.tick(100)
+    assert.equal(time.tasks.size, 0, 'a hidden page schedules nothing')
+    time.tick(60_000)
+    assert.equal(notice(), null)
+    page.show()
+    assert.equal(page.listeners.size, 0)
+    assert.equal(time.tasks.size, 1)
+
+    // Every tick wakes a list that waits for its lazy-load hit.
+    assert.ok(wakes.length > 0)
+    assert.ok(wakes.every(reload => reload === false))
+
+    // An in-flight native request keeps the loading state past the budget,
+    // and a first page that outlasts it is reloaded once.
+    nativeRequestPending = true
     time.tick(12_000)
+    assert.equal(notice(), null)
+    assert.equal(currentState.sidebarHydrationTimedOut, false)
+    time.tick(3_000)
+    assert.equal(wakes.filter(Boolean).length, 1)
+    // Then the notice shows, and hydration keeps the list warm and watching.
+    nativeRequestPending = false
+    time.tick(1_000)
+    assert.ok(notice())
     assert.equal(currentState.sidebarHydrationTimedOut, true)
-    assert.equal(time.tasks.size, 0)
-    assert.equal(restores, 1)
-    const buttons = [...panels.comment.querySelectorAll('button')]
+    assert.equal(restores, 0, 'the native list stays in view so its lazy-load can still start')
+    const prewarmsBefore = prewarms
+    time.tick(5_000)
+    assert.ok(prewarms > prewarmsBefore)
+    assert.equal(time.tasks.size, 1)
+
+    const buttons = [...notice().querySelectorAll('button')]
     assert.equal(buttons.length, 2)
     buttons[0].click()
     buttons[1].click()
     assert.equal(reloads, 1)
     assert.equal(exits, 1)
+
+    // A late completion ends the watch (the notice itself is cleared by fillSidebar).
+    readiness = { top: true, comment: true, complete: true }
+    time.tick(1_000)
+    assert.equal(time.tasks.size, 0)
+
+    // Without a late node, watching stops and the list goes back.
+    readiness = { top: false, comment: false, complete: false }
+    context.startSidebarHydration(currentState)
+    time.tick(60_000)
+    assert.equal(time.tasks.size, 0)
+    assert.equal(restores, 1)
+    assert.ok(sidebarTop.querySelector('.bewly-widescreen-panel-error'), 'a missing top module shows its own notice')
+
     currentState.navigationPending = true
     buttons[0].click()
     assert.equal(reloads, 1, 'a stale panel cannot reload the next navigation')
     context.session.current = null
     buttons[1].click()
     assert.equal(exits, 1)
+    context.clearSidebarHydration(currentState)
     root.remove()
   })
 

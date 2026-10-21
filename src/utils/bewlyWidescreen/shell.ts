@@ -1,11 +1,10 @@
-import { settings } from '~/logic'
 import { ROOT_ID } from '~/utils/bewlyWidescreen/constants'
-import { schedulePlayerResizeSync, updateSidebarLayoutState } from '~/utils/bewlyWidescreen/geometry'
+import { schedulePlayerResizeSync } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { getTitleText } from '~/utils/bewlyWidescreen/nativeDom'
+import { publishRailTabs } from '~/utils/bewlyWidescreen/railTabs'
 import { session } from '~/utils/bewlyWidescreen/session'
-import type { BewlyWidescreenSidebarLayout, BewlyWidescreenState, BewlyWidescreenTab } from '~/utils/bewlyWidescreen/types'
-import { WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY } from '~/utils/bewlyWidescreenPolicy'
+import type { BewlyWidescreenState, BewlyWidescreenTab } from '~/utils/bewlyWidescreen/types'
 
 export function setActiveTab(nextTab: BewlyWidescreenTab, hydrate = true) {
   if (!session.current)
@@ -21,6 +20,9 @@ export function setActiveTab(nextTab: BewlyWidescreenTab, hydrate = true) {
     button.tabIndex = active ? 0 : -1
     session.current.panels[tab].hidden = !active
   }
+  const tablist = session.current.tabButtons[nextTab].parentElement
+  if (tablist)
+    publishRailTabs(tablist, nextTab)
 
   if (nextTab === 'danmaku') {
     // Native long-list virtualization measures the visible viewport on resize.
@@ -46,60 +48,6 @@ export function scheduleInitialPanelScrollReset(currentState: BewlyWidescreenSta
   currentState.panelScrollFrames.set(tab, frame)
 }
 
-export function syncSidebarToggleButton(currentState: BewlyWidescreenState) {
-  const isCompact = currentState.sidebarLayout === 'compact'
-  const isRight = currentState.sidebarPosition === 'right'
-  currentState.sidebarToggleButton.textContent = isRight
-    ? (isCompact ? '‹' : '›')
-    : (isCompact ? '›' : '‹')
-  currentState.sidebarToggleButton.title = t(isCompact
-    ? 'widescreen.show_full_sidebar'
-    : 'widescreen.show_compact_sidebar')
-  currentState.sidebarToggleButton.setAttribute('aria-label', currentState.sidebarToggleButton.title)
-  currentState.sidebarToggleButton.setAttribute('aria-pressed', String(!isCompact))
-}
-
-export function clearSidebarEdgeRevealSuppression(currentState: BewlyWidescreenState) {
-  if (currentState.sidebarEdgeRevealSuppressionTimer)
-    clearTimeout(currentState.sidebarEdgeRevealSuppressionTimer)
-  currentState.sidebarEdgeRevealSuppressionTimer = undefined
-  delete currentState.root.dataset.sidebarEdgeRevealSuppressed
-}
-
-function temporarilySuppressSidebarEdgeReveal(currentState: BewlyWidescreenState) {
-  clearSidebarEdgeRevealSuppression(currentState)
-  currentState.root.dataset.sidebarEdgeRevealSuppressed = 'true'
-  currentState.sidebarEdgeRevealSuppressionTimer = setTimeout(() => {
-    currentState.sidebarEdgeRevealSuppressionTimer = undefined
-    if (session.current === currentState && currentState.root.isConnected)
-      delete currentState.root.dataset.sidebarEdgeRevealSuppressed
-  }, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY)
-}
-
-export function setSidebarLayout(
-  nextLayout: BewlyWidescreenSidebarLayout,
-  currentState: BewlyWidescreenState | null = session.current,
-  userClosed = false,
-) {
-  if (!currentState || session.current !== currentState)
-    return
-
-  currentState.sidebarLayout = nextLayout
-  currentState.root.dataset.sidebarLayout = nextLayout
-  currentState.root.dataset.sidebarHoverExpanded = 'false'
-  if (userClosed && nextLayout === 'compact') {
-    temporarilySuppressSidebarEdgeReveal(currentState)
-    currentState.root.dataset.sidebarManuallyClosed = 'true'
-  }
-  else {
-    clearSidebarEdgeRevealSuppression(currentState)
-    if (nextLayout === 'expanded')
-      delete currentState.root.dataset.sidebarManuallyClosed
-  }
-  syncSidebarToggleButton(currentState)
-  updateSidebarLayoutState(currentState)
-}
-
 function createSidebarTitle() {
   const title = document.createElement('div')
   title.className = 'bewly-widescreen-title'
@@ -113,22 +61,7 @@ function createSidebarToolbar() {
   const titleGroup = document.createElement('div')
   titleGroup.className = 'bewly-widescreen-title-group'
   titleGroup.append(createSidebarTitle())
-
-  const closeButton = document.createElement('button')
-  closeButton.type = 'button'
-  closeButton.className = 'bewly-widescreen-close'
-  const closeLabel = t('widescreen.close_sidebar')
-  closeButton.textContent = closeLabel
-  closeButton.setAttribute('aria-label', closeLabel)
-  closeButton.addEventListener('click', () => {
-    const currentState = session.current
-    if (!currentState)
-      return
-    setSidebarLayout('compact', currentState, true)
-    currentState.sidebarToggleButton.focus({ preventScroll: true })
-  })
-
-  toolbar.append(titleGroup, closeButton)
+  toolbar.append(titleGroup)
   return toolbar
 }
 
@@ -141,44 +74,6 @@ function createTabButton(tab: BewlyWidescreenTab, label: string) {
   button.setAttribute('role', 'tab')
   button.addEventListener('click', () => setActiveTab(tab))
   return button
-}
-
-function createSidebarToggleButton() {
-  const button = document.createElement('button')
-  button.type = 'button'
-  button.className = 'bewly-widescreen-sidebar-toggle'
-  button.addEventListener('click', () => {
-    const nextLayout = session.current?.sidebarLayout === 'compact' ? 'expanded' : 'compact'
-    setSidebarLayout(nextLayout, session.current, nextLayout === 'compact')
-  })
-  button.addEventListener('keydown', (event) => {
-    if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey || !['Enter', ' '].includes(event.key))
-      return
-    // Keep this button's native activation ahead of Bpx's document shortcuts.
-    event.preventDefault()
-    event.stopPropagation()
-    if (!event.repeat)
-      button.click()
-  })
-  button.addEventListener('keyup', (event) => {
-    if (event.isComposing || !['Enter', ' '].includes(event.key))
-      return
-    event.preventDefault()
-    event.stopPropagation()
-  })
-  return button
-}
-
-function createSidebarResizer() {
-  const resizer = document.createElement('div')
-  resizer.className = 'bewly-widescreen-sidebar-resizer'
-  resizer.tabIndex = 0
-  resizer.setAttribute('role', 'separator')
-  resizer.setAttribute('aria-orientation', 'vertical')
-  const label = t('widescreen.resize_sidebar')
-  resizer.setAttribute('aria-label', label)
-  resizer.title = label
-  return resizer
 }
 
 function createPlaylistToggleButton() {
@@ -194,9 +89,19 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   const root = document.createElement('div')
   root.id = ROOT_ID
   root.dataset.sidebarPosition = sidebarPosition
-  if (settings.value.bewlyWidescreenSidebarWidth > 0) {
-    root.style.setProperty('--bewly-widescreen-sidebar-user-width', `${settings.value.bewlyWidescreenSidebarWidth}px`)
-  }
+  root.dataset.displayMode = 'card'
+  // The label of the recommendations that follow a collection (a CSS string).
+  root.style.setProperty('--bewly-widescreen-up-next-label', JSON.stringify(t('widescreen.up_next')))
+
+  // Covers the native page below the native player: the page background beside
+  // the video pane, the player canvas behind the pane and the filled video. The
+  // player sits above it and below the shell, so it cannot live inside the
+  // shell's stacking context.
+  const backdrop = document.createElement('div')
+  backdrop.className = 'bewly-widescreen-backdrop'
+  backdrop.setAttribute('aria-hidden', 'true')
+  backdrop.dataset.displayMode = 'card'
+  backdrop.dataset.sidebarPosition = sidebarPosition
 
   const stage = document.createElement('div')
   stage.className = 'bewly-widescreen-stage'
@@ -207,12 +112,16 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   playerFrame.className = 'bewly-widescreen-player-frame'
   const danmakuDock = document.createElement('div')
   danmakuDock.className = 'bewly-widescreen-danmaku-dock'
-  const sidebarToggleButton = createSidebarToggleButton()
-  playerSlot.append(playerFrame, danmakuDock, sidebarToggleButton)
+  // Empty for now: room for future icons over the pane's top-left corner.
+  const playerToolbar = document.createElement('div')
+  playerToolbar.className = 'bewly-widescreen-player-toolbar'
+  playerSlot.append(playerFrame, danmakuDock, playerToolbar)
 
   const sidebar = document.createElement('aside')
   sidebar.className = 'bewly-widescreen-sidebar'
-  const sidebarResizer = createSidebarResizer()
+  // Title, author, actions and description head the column, above the tabs.
+  const info = document.createElement('section')
+  info.className = 'bewly-widescreen-info'
 
   const sidebarTop = document.createElement('div')
   sidebarTop.className = 'bewly-widescreen-sidebar-top'
@@ -234,9 +143,10 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   descriptionCard.className = 'bewly-widescreen-description-card'
   descriptionCard.append(descriptionSlot, tagsSlot)
   sidebarTop.append(toolbar, metadataSlot, authorActions, descriptionCard)
+  info.append(sidebarTop)
 
   const tablist = document.createElement('div')
-  tablist.className = 'bewly-widescreen-tabs bew-segment-control bew-segment-control--surface bew-segment-control--static'
+  tablist.className = 'bewly-widescreen-tabs bew-segment-control bew-segment-control--surface bew-segment-control--track'
   tablist.setAttribute('role', 'tablist')
 
   const tabButtons = {
@@ -302,13 +212,11 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
     tabButtons[nextTab].focus({ preventScroll: true })
   })
 
-  sidebar.append(sidebarResizer, sidebarTop, tablist, panelWrap)
-  if (sidebarPosition === 'left')
-    stage.append(sidebar, playerSlot)
-  else
-    stage.append(playerSlot, sidebar)
-  root.appendChild(stage)
-  document.body.appendChild(root)
+  sidebar.append(info, tablist, panelWrap)
+  // Grid areas place both columns; DOM order keeps the video first for focus.
+  stage.append(playerSlot, sidebar)
+  root.append(stage)
+  document.body.append(backdrop, root)
 
-  return { root, stage, playerSlot, playerFrame, danmakuDock, sidebarEl: sidebar, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton, sidebarResizer, sidebarToggleButton }
+  return { root, backdrop, stage, playerSlot, playerFrame, danmakuDock, sidebarEl: sidebar, infoEl: info, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton }
 }

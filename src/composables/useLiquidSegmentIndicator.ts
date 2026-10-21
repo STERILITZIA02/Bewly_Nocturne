@@ -2,6 +2,7 @@ import { useResizeObserver } from '@vueuse/core'
 import type { MaybeRefOrGetter, Ref } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toValue, watch } from 'vue'
 
+import { holdMotion } from '~/utils/motionPriority'
 import { getTravelDuration } from '~/utils/motionTiming'
 
 export interface LiquidSegmentRect {
@@ -165,7 +166,19 @@ export function useLiquidSegmentIndicator(options: {
   let pendingImmediateMeasure = false
   let reducedMotionMediaQuery: MediaQueryList | undefined
   let disposed = false
+  let releaseMotionHold: (() => void) | undefined
   const prefersReducedMotion = ref(false)
+
+  // Content swaps wait for this slide (see utils/motionPriority).
+  function holdSlide(duration: number) {
+    releaseMotionHold?.()
+    releaseMotionHold = holdMotion(duration)
+  }
+
+  function releaseSlide() {
+    releaseMotionHold?.()
+    releaseMotionHold = undefined
+  }
 
   const indicatorStyle = computed(() => {
     const { x, y, width, height } = rect.value
@@ -229,6 +242,7 @@ export function useLiquidSegmentIndicator(options: {
     const token = ++animToken
     const start = performance.now()
     const duration = getTravelDuration(LIQUID_MOVE_DURATION_MS, getLiquidTravelSteps(from, to))
+    holdSlide(duration)
     markMoving()
     fromRect = { ...from }
 
@@ -244,12 +258,15 @@ export function useLiquidSegmentIndicator(options: {
         rafId = undefined
         applySettled(to)
         isMoving.value = false
+        releaseSlide()
       }
     }
     rafId = requestAnimationFrame(tick)
   }
 
   function measure(immediate = false) {
+    // Every branch below either settles at once or starts a morph that holds again.
+    releaseSlide()
     const container = options.containerRef.value
     if (!container) {
       cancelRaf()
@@ -370,6 +387,10 @@ export function useLiquidSegmentIndicator(options: {
     previewTarget = null
     previewProgress = 0
     scrubbing.value = false
+    // The morph starts a frame later; hold now so a swap triggered by the same
+    // input already sees the slide when it schedules its fade.
+    if (ready && visible.value && !prefersReducedMotion.value)
+      holdSlide(LIQUID_MOVE_DURATION_MS)
     void updateIndicator(false)
   })
 
@@ -389,6 +410,7 @@ export function useLiquidSegmentIndicator(options: {
     reducedMotionMediaQuery?.removeEventListener('change', handleReducedMotionChange)
     cancelMeasureFrame()
     cancelRaf()
+    releaseSlide()
   })
 
   return {

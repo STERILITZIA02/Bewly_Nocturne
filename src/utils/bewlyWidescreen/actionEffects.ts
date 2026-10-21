@@ -1,4 +1,4 @@
-import { BILIBILI_ACTION_ANIMATION_HUE } from '~/utils/bewlyWidescreen/constants'
+import { ACTION_ANIMATION_ATTRIBUTE, ACTION_ANIMATION_SELECTOR, BILIBILI_ACTION_ANIMATION_HUE } from '~/utils/bewlyWidescreen/constants'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 
@@ -166,12 +166,29 @@ export function scheduleActionGeometrySync(currentState: BewlyWidescreenState) {
   })
 }
 
+/**
+ * Tags the native animation containers so their icon rules can key on an
+ * attribute. Matching them by class substring above the subject would make
+ * every class change on the page restyle whole subtrees. Runs in the observer
+ * callback, before the inserted animation paints.
+ */
+function markActionAnimations(toolbarSlot: HTMLElement) {
+  toolbarSlot.querySelectorAll(ACTION_ANIMATION_SELECTOR).forEach((element) => {
+    if (!element.hasAttribute(ACTION_ANIMATION_ATTRIBUTE))
+      element.setAttribute(ACTION_ANIMATION_ATTRIBUTE, '')
+  })
+}
+
 export function setupActionGeometryObservers(currentState: BewlyWidescreenState) {
   currentState.toolbarMutationObserver = new MutationObserver((records) => {
-    if (records.some(record => record.addedNodes.length > 0 || record.removedNodes.length > 0))
+    const inserted = records.some(record => record.addedNodes.length > 0)
+    if (inserted || records.some(record => record.type === 'attributes'))
+      markActionAnimations(currentState.toolbarSlot)
+    if (inserted || records.some(record => record.removedNodes.length > 0))
       scheduleActionGeometrySync(currentState)
   })
-  currentState.toolbarMutationObserver.observe(currentState.toolbarSlot, { childList: true, subtree: true })
+  currentState.toolbarMutationObserver.observe(currentState.toolbarSlot, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] })
+  markActionAnimations(currentState.toolbarSlot)
 
   currentState.toolbarResizeObserver = new ResizeObserver(() => scheduleActionGeometrySync(currentState))
   currentState.toolbarResizeObserver.observe(currentState.toolbarSlot)

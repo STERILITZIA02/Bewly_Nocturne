@@ -538,15 +538,9 @@ settings:
     context_moments_dialog: Video opened from Moments
     context_moments_dialog_desc: Inherit keeps the video's multipart, collection or other context rules. This only affects in-page drawers opened from Moments.
     bewly_widescreen_sidebar_position: Bewly Playback Page Sidebar Position
-    bewly_widescreen_sidebar_position_desc: Choose where the sidebar appears on the Bewly Playback Page
+    bewly_widescreen_sidebar_position_desc: Choose which side of the video card holds comments, danmaku and recommendations
     bewly_widescreen_sidebar_position_left: Left
     bewly_widescreen_sidebar_position_right: Right
-    bewly_widescreen_center_video: Center video on the Bewly Playback Page
-    bewly_widescreen_center_video_desc: Center the video, danmaku, and click area across the viewport only in video-first layout when the measured letterbox space can contain the full sidebar. Otherwise, keep the video-first layout.
-    bewly_widescreen_layout_priority: Bewly Playback Page layout priority
-    bewly_widescreen_layout_priority_desc: Video-first fully hides the sidebar until the pointer reaches the edge. Sidebar-first starts fully expanded. Both states use an overlay and keep the player width unchanged.
-    bewly_widescreen_layout_priority_video: Video-first
-    bewly_widescreen_layout_priority_sidebar: Sidebar-first
   enable_video_preview: Enable video preview feature (if possible)
   enable_video_ctrl_bar_on_video_card: Display the video control bar on the video card
   video_preview_swipe_seek: Swipe to seek nearby
@@ -1944,8 +1938,8 @@ widescreen:
   reload_page: Reload page
   enter: Open Bewly Playback Page
   exit: Leave Bewly Playback Page
-  close_sidebar: Collapse sidebar
-  resize_sidebar: Resize sidebar
+  fill_window: Fill window
+  exit_fill_window: Exit fill window
   exit_loading: Leave Bewly Playback Page
   loading: Loading Bewly Playback Page…
   comments: Comments
@@ -1956,10 +1950,13 @@ widescreen:
   player_feedback: Playback feedback
   playlist: Playlist
   recommendations: Recommendations
+  up_next: Up next
   collapse: Collapse
   expand_more: Expand more
   comments_loading: Loading comments
   danmaku_loading: Loading danmaku
+  danmaku_sender: User
+  danmaku_sort_sender: Sort by sender
   list_loading: Loading list
   stat_likes: Likes
   stat_coins: Coins
@@ -1967,8 +1964,6 @@ widescreen:
   stat_shares: Shares
   video_description: Video description
   video_category: Video category
-  show_full_sidebar: Show full sidebar
-  show_compact_sidebar: Collapse sidebar
 search_bar:
   history_unavailable: Search history could not be read or confirmed. Please reload it.
   input_label: Search

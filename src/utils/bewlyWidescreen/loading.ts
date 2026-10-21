@@ -39,13 +39,7 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
 
     const overlay = document.createElement('div')
     overlay.id = LOADING_ROOT_ID
-    overlay.dataset.sidebarLayout = settings.value.bewlyWidescreenLayoutPriority === 'sidebar-first'
-      ? 'expanded'
-      : 'compact'
     overlay.dataset.sidebarPosition = settings.value.bewlyWidescreenSidebarPosition
-    if (settings.value.bewlyWidescreenSidebarWidth > 0) {
-      overlay.style.setProperty('--bewly-widescreen-sidebar-user-width', `${settings.value.bewlyWidescreenSidebarWidth}px`)
-    }
     overlay.setAttribute('role', 'status')
     overlay.setAttribute('aria-live', 'polite')
 
@@ -85,7 +79,7 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
       const video = event.target
       if (video instanceof HTMLVideoElement
         && video === getVideoElement()
-        && shouldDismissLoadingForPlaying(video)) {
+        && shouldDismissLoadingForPlaying()) {
         dismissWidescreenLoadingForPlaying()
       }
     }
@@ -96,14 +90,13 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
     }
   }
 
-  function shouldDismissLoadingForPlaying(video: HTMLVideoElement) {
+  function shouldDismissLoadingForPlaying() {
     // A playing event is media readiness, not the post-transfer shell layout.
+    // Ordinary (auto)play must keep the native page covered until the shell
+    // commits; only an automatic continuation may keep its video in view.
     if (session.entering || session.current)
       return false
     return loadingMayDismissOnPlaying
-      || video.autoplay
-      || video.hasAttribute('autoplay')
-      || navigator.userActivation?.hasBeenActive !== true
   }
 
   function dismissWidescreenLoadingForPlaying() {
@@ -176,7 +169,7 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
       && video
       && !video.paused
       && !video.ended
-      && shouldDismissLoadingForPlaying(video)) {
+      && shouldDismissLoadingForPlaying()) {
       dismissWidescreenLoadingForPlaying()
       return
     }
@@ -209,7 +202,10 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
     const currentState = session.current
     if (!loadingOverlay || !currentState)
       return
+    // The skeleton shares the shell's grid; pin each part to the measured
+    // surface so the crossfade has no residual offset.
     for (const [selector, source] of [
+      ['.bewly-widescreen-loading-skeleton-player', currentState.playerFrame],
       ['.bewly-widescreen-loading-skeleton-controls', currentState.danmakuGlass],
       ['.bewly-widescreen-loading-skeleton-sidebar', currentState.sidebarEl],
     ] as const) {
@@ -218,6 +214,7 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
       if (!target || !rect || rect.width <= 0 || rect.height <= 0)
         continue
       Object.assign(target.style, {
+        position: 'fixed',
         top: `${rect.top}px`,
         left: `${rect.left}px`,
         width: `${rect.width}px`,
@@ -227,6 +224,12 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
         boxSizing: 'border-box',
       })
     }
+    // The info flows at the top of the pinned column; taking the real info's
+    // height puts the skeleton tabs where the real tabs are.
+    const info = loadingOverlay.querySelector<HTMLElement>('.bewly-widescreen-loading-skeleton-info')
+    const infoHeight = currentState.infoEl.getBoundingClientRect().height
+    if (info && infoHeight > 0)
+      Object.assign(info.style, { flex: 'none', height: `${infoHeight}px`, maxHeight: 'none' })
   }
 
   function reset() {

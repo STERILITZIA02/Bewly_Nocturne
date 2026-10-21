@@ -85,6 +85,19 @@ const replyComposer = ref<InstanceType<typeof MomentReplyComposer> | null>(null)
 const replyTarget = shallowRef<MomentCommentItem | null>(null)
 const composerSlot = ref<HTMLElement | null>(null)
 const { height: composerHeight } = useElementSize(composerSlot, { width: 0, height: 0 }, { box: 'border-box' })
+// Reserve the measured editor height only at the end of the scroll content.
+// Inline on the reserving element: an inherited variable on the viewport
+// would restyle every comment each time the editor grows.
+const composerReserveStyle = computed(() => {
+  if (!target.value || !props.active)
+    return undefined
+  const height = `${composerHeight.value}px`
+  return {
+    paddingBottom: `calc(${height} + var(--bew-space-4))`,
+    minHeight: `min(60dvh, calc(${height} + var(--bew-comment-state-min-height)))`,
+    scrollPaddingBottom: `calc(${height} + var(--bew-space-4))`,
+  }
+})
 const replyInteracting = ref(false)
 watch(composerHeight, () => {
   const list = listRef.value
@@ -707,25 +720,26 @@ onBeforeUnmount(() => {
       </button>
     </header>
 
-    <div class="moment-comments__viewport" :style="{ '--moment-composer-height': `${composerHeight}px` }" :class="{ 'has-composer': target && active }">
-      <div v-if="resolvingTarget || (loading && !comments.length)" class="moment-comments__skeleton" role="status" :aria-label="t('moment_card.comments_loading')">
+    <div class="moment-comments__viewport" :class="{ 'has-composer': target && active }">
+      <div v-if="resolvingTarget || (loading && !comments.length)" class="moment-comments__skeleton" :style="composerReserveStyle" role="status" :aria-label="t('moment_card.comments_loading')">
         <MomentCommentSkeleton />
       </div>
 
-      <div v-else-if="loadError && !comments.length" class="moment-comments__state moment-comments__state--error" role="alert">
+      <div v-else-if="loadError && !comments.length" class="moment-comments__state moment-comments__state--error" :style="composerReserveStyle" role="alert">
         <span>{{ loadError }}</span>
         <button type="button" @click="refreshComments">
           {{ t('moment_card.comments_retry') }}
         </button>
       </div>
 
-      <div v-else-if="!comments.length" class="moment-comments__state" role="status">
+      <div v-else-if="!comments.length" class="moment-comments__state" :style="composerReserveStyle" role="status">
         <span i-tabler-message-circle aria-hidden="true" />
         <span>{{ t('moment_card.comments_empty') }}</span>
       </div>
 
       <div
-        v-else ref="listRef" class="moment-comments__list" tabindex="0" :aria-label="t('moment_card.comments')"
+        v-else ref="listRef" class="moment-comments__list" :style="composerReserveStyle" tabindex="0"
+        :aria-label="t('moment_card.comments')"
         @scroll.passive="loadMoreIfNearEnd"
       >
         <section
@@ -866,6 +880,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
+@use "../../styles/scrollEdgeFade";
+
 .moment-comments__skeleton {
   display: grid;
 }
@@ -950,6 +966,7 @@ onBeforeUnmount(() => {
   color: var(--bew-error-color);
 }
 .moment-comments__list {
+  @include scrollEdgeFade.vertical;
   display: flex;
   flex-direction: column;
   gap: var(--bew-space-3);
@@ -963,10 +980,9 @@ onBeforeUnmount(() => {
 .moment-comments__viewport.has-composer
   > :is(.moment-comments__list, .moment-comments__state, .moment-comments__skeleton) {
   box-sizing: border-box;
-  // Reserve the measured editor height only at the end of the scroll content.
-  padding-bottom: calc(var(--moment-composer-height) + var(--bew-space-4));
-  min-height: min(60dvh, calc(var(--moment-composer-height) + var(--bew-comment-state-min-height)));
-  scroll-padding-bottom: calc(var(--moment-composer-height) + var(--bew-space-4));
+  // The reserved editor height is inline (composerReserveStyle).
+  // The pinned composer already closes this edge; no bottom fade under it.
+  --bew-scroll-edge-bottom-off: 1;
 }
 .moment-comments__composer {
   position: absolute;

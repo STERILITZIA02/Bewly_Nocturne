@@ -1391,8 +1391,8 @@ onBeforeUnmount(() => {
   height: var(--bew-cover-action-size);
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
+  border-radius: var(--bew-card-media-action-radius);
+  corner-shape: var(--bew-corner-shape);
   place-items: center;
   color: #fff;
   background: var(--bew-cover-scrim);
@@ -1968,8 +1968,9 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: var(--bew-radius-full);
-  corner-shape: var(--bew-corner-shape-round);
+  // Its header inset exceeds the card radius, so no concentric constraint applies.
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
   place-items: center;
   color: var(--bew-text-2);
   background: transparent;

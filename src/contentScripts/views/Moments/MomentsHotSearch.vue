@@ -60,14 +60,17 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
 
 <style scoped lang="scss">
 @use "../../../styles/sidebarSurface";
+@use "../../../styles/scrollEdgeFade";
 
 .moments-hot-search {
   @include sidebarSurface.surface;
-  @include sidebarSurface.vertical-scroll;
+  // The card paints the glass, so its list scrolls (and fades) inside it.
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
   min-width: 0;
   max-height: var(--bew-moments-hot-search-max-height);
-  scrollbar-width: thin;
+  overflow: hidden;
   padding: var(--bew-space-4);
   border: 1px solid var(--bew-message-card-border);
   border-radius: var(--bew-card-radius);
@@ -78,6 +81,7 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
   @include sidebarSurface.solid;
 }
 .moments-hot-search__header {
+  flex: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -98,10 +102,16 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
 }
 .moments-hot-search__list,
 .moments-hot-search__loading {
+  @include sidebarSurface.vertical-scroll;
+  @include scrollEdgeFade.vertical;
+  flex: 1 1 auto;
+  min-height: 0;
+  scrollbar-width: thin;
   display: grid;
   gap: var(--bew-space-1);
-  margin: 0;
-  padding: 0;
+  // A hairline of room keeps focus rings inside the scroll clip.
+  margin: calc(-1 * var(--bew-space-0-5));
+  padding: var(--bew-space-0-5);
   list-style: none;
   min-width: 0;
 }

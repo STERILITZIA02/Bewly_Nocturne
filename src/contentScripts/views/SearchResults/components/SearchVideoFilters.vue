@@ -4,6 +4,8 @@ import './searchFilters.scss'
 import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
+
 import DatePicker from './DatePicker.vue'
 
 const props = defineProps<{
@@ -94,13 +96,14 @@ const maxDate = computed(() => formatDate(new Date()))
     <div class="bew-search-filter-row">
       <span class="bew-search-filter-label">{{ t('search.filters.order') }}</span>
       <div
-        class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--static bew-segment-control--secondary"
+        class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--track"
         role="group" :aria-label="t('search.filters.order')"
       >
+        <LiquidSegmentIndicator :active-key="videoOrder" />
         <button
           v-for="option in props.orderOptions"
           :key="option.value"
-          class="bew-segment-control__item"
+          class="bew-segment-control__item" data-segment-item
           :data-active="videoOrder === option.value ? 'true' : undefined"
           :aria-pressed="videoOrder === option.value"
           type="button"
@@ -127,14 +130,15 @@ const maxDate = computed(() => formatDate(new Date()))
       <div class="bew-search-filter-row">
         <span class="bew-search-filter-label">{{ t('search.filters.duration') }}</span>
         <div
-          class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--static bew-segment-control--secondary"
+          class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--track"
           role="group"
           :aria-label="t('search.filters.duration')"
         >
+          <LiquidSegmentIndicator :active-key="duration" />
           <button
             v-for="option in props.durationOptions"
             :key="option.value"
-            class="bew-segment-control__item"
+            class="bew-segment-control__item" data-segment-item
             :data-active="duration === option.value ? 'true' : undefined"
             :aria-pressed="duration === option.value"
             type="button"
@@ -150,13 +154,14 @@ const maxDate = computed(() => formatDate(new Date()))
         <span class="bew-search-filter-label">{{ t('search.filters.date') }}</span>
         <div class="bew-search-filter-choices">
           <div
-            class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--static bew-segment-control--secondary"
+            class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--track"
             role="group" :aria-label="t('search.filters.date')"
           >
+            <LiquidSegmentIndicator :active-key="timeRange" />
             <button
               v-for="option in props.timeRangeOptions"
               :key="option.value"
-              class="bew-segment-control__item"
+              class="bew-segment-control__item" data-segment-item
               :data-active="timeRange === option.value ? 'true' : undefined"
               :aria-pressed="timeRange === option.value"
               type="button"

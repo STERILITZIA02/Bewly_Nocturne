@@ -1,4 +1,3 @@
-import { WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO } from '~/utils/bewlyWidescreenPolicy'
 import { PLAYER_MODE_CONTROL_SELECTORS } from '~/utils/playerMedia'
 
 export const ROOT_ID = 'bewly-widescreen-root'
@@ -9,6 +8,26 @@ export const BODY_CLASS = 'bewly-widescreen-active'
 
 export const NATIVE_PLAYER_CLASS = 'bewly-widescreen-native-player'
 export const NATIVE_PLAYER_ANCESTOR_CLASS = 'bewly-widescreen-player-ancestor'
+/**
+ * Display mode and zoom state ride on the elements that use them (the native
+ * player, the shell, the backdrop, the Bewly host), never on <body>: there a
+ * class change restyles the whole Bilibili document, costing a dropped frame
+ * burst at the start and end of every zoom.
+ */
+export const PLAYER_DISPLAY_MODE_ATTRIBUTE = 'data-bewly-display-mode'
+export const PLAYER_ZOOMING_ATTRIBUTE = 'data-bewly-zooming'
+export const HOST_ZOOMING_ATTRIBUTE = 'data-bewly-widescreen-zooming'
+export const FILL_TOGGLE_CLASS = 'bewly-widescreen-fill-toggle'
+/** Marks Bilibili's like / coin / favourite animation containers in the toolbar. */
+export const ACTION_ANIMATION_ATTRIBUTE = 'data-bewly-action-animation'
+export const ACTION_ANIMATION_SELECTOR = [
+  '.video-toolbar-left-item :is([class*="anim"], [class*="Anim"]):not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon)',
+  '.toolbar-left-item-wrap > :is([class*="anim"], [class*="Anim"])',
+].join(', ')
+/** Host of the app's comment composer docked in the comment panel. */
+export const COMMENT_COMPOSER_HOST_CLASS = 'bewly-widescreen-comment-composer'
+/** The docked composer's measured height, which the comment panel keeps clear at its end. */
+export const COMMENT_COMPOSER_HEIGHT_PROPERTY = '--bewly-widescreen-composer-height'
 export const PGC_MEDIA_INFO_SELECTOR = '[class*="mediainfo_mediaInfoWrap"]'
 export const PGC_TOOLBAR_SELECTOR = `.player-left-components > .toolbar, #${ROOT_ID} .bewly-widescreen-action-slot > .toolbar`
 export const PGC_REACT_BRIDGE_ATTRIBUTE = 'data-bewly-react-bridge'
@@ -29,6 +48,9 @@ export const DANMAKU_SURFACE_SELECTOR = `:is(#${ROOT_ID} .bewly-widescreen-danma
 
 export const EPISODE_SECTION_CLASS = 'bewly-widescreen-episode-section'
 
+/** Marks the native viewer count while the info's meta line shows it (syncViewerCount). */
+export const VIEWER_COUNT_MIRRORED_ATTRIBUTE = 'data-bewly-viewers-mirrored'
+
 export const NATIVE_MUSIC_ENTRY_SELECTOR = '#bgm-entry'
 
 export const EPISODE_ITEM_SELECTOR = '.video-pod__item, .multi-page__item, .page-item, .list-item, .episode-item, .section-item, .collect-item'
@@ -41,12 +63,7 @@ export const NATIVE_LIGHT_OFF_CONTROL_SELECTORS = [
   '.squirtle-lightoff',
 ] as const
 
-export const SIDEBAR_RESIZE_KEYBOARD_STEP = 16
-export const SIDEBAR_RESIZE_DRAG_THRESHOLD = 4
-
 export const PLAYLIST_AUTO_EXPAND_THRESHOLD = 24
-
-export const SIDEBAR_MAX_VIEWPORT_PERCENT = WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO * 100
 
 export const MOBILE_BREAKPOINT = 900
 
@@ -66,15 +83,17 @@ export const TRANSFER_SETTLE_DELAY = 1200
 
 export const PAGE_READY_FALLBACK_DELAY = 3000
 
+/** After the shell commits, reveal it even if native controls never settle. */
+export const INITIAL_REVEAL_TIMEOUT = 4000
+
 export const SIDEBAR_HYDRATION_FAST_DURATION = 1500
 
 export const SIDEBAR_HYDRATION_FAST_INTERVAL = 100
 
 export const SIDEBAR_HYDRATION_INTERVAL = 250
 
-export const SIDEBAR_HYDRATION_TIMEOUT = 12_000
-
-export const SIDEBAR_TOGGLE_IDLE_DELAY = 1000
+/** Cadence while the failure notice shows and late native nodes may still arrive. */
+export const SIDEBAR_HYDRATION_RECOVERY_INTERVAL = 1000
 
 export const DANMAKU_RESIZE_DELAYS = [0, 80, 180, 360, 720] as const
 
@@ -112,27 +131,6 @@ export const NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR = [
   '.bilibili-player-video-control-wrap',
   '.bilibili-player-video-control',
   '.squirtle-controller',
-].join(',')
-
-export const BOTTOM_CONTROL_POPOVER_SELECTOR = [
-  '.bpx-player-dm-setting-wrap',
-  '.bpx-player-mode-selection-container.active',
-  '[role="dialog"]',
-  '[role="menu"]',
-  '[role="listbox"]',
-  '.bpx-player-ctrl-eplist-menu-wrap',
-  '[class*="bpx-player-ctrl-"][class*="-menu"]:not([class*="-menu-item"]):not([class*="-menu-wrap"])',
-  '[class*="bpx-player-ctrl-"][class*="-panel"]:not([class*="-panel-item"]):not([class*="-panel-wrap"])',
-  '[class*="bpx-player-ctrl-"][class*="-popup"]',
-  '[class*="bpx-player-ctrl-"][class*="-box"]',
-  '[class*="bilibili-player-video-btn-"][class*="-menu"]:not([class*="-menu-item"]):not([class*="-menu-wrap"])',
-  '[class*="squirtle-"][class*="-menu"]:not([class*="-menu-item"]):not([class*="-menu-wrap"])',
-].join(',')
-
-export const NATIVE_ACTION_OVERLAY_SELECTOR = [
-  '.bili-dialog-m',
-  '.video-share-popover',
-  `${NATIVE_MUSIC_ENTRY_SELECTOR} #musicApp`,
 ].join(',')
 
 export const HIGH_ENERGY_PROGRESS_SELECTOR = '.bpx-player-pbp'

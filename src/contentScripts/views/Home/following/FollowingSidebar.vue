@@ -193,6 +193,8 @@ onMounted(() => emit('scrollElement', scroller.value))
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/scrollEdgeFade";
+
 .following-sidebar {
   display: flex;
   flex-direction: column;
@@ -204,6 +206,8 @@ onMounted(() => emit('scrollElement', scroller.value))
   flex: none;
 }
 .following-sidebar__scroll {
+  // Its bottom is the screen edge, which needs no fade.
+  @include scrollEdgeFade.vertical($bottom: false);
   flex: 1;
   min-height: 0;
   padding: var(--bew-space-1);

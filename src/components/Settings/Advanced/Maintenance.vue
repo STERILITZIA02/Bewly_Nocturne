@@ -53,7 +53,6 @@ const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   videoCardMetaFontSize: ['xs', 'sm', 'base', 'lg'],
   defaultVideoPlayerMode: ['default', 'webFullscreen', 'widescreen', 'bewlyWidescreen'],
   bewlyWidescreenSidebarPosition: ['left', 'right'],
-  bewlyWidescreenLayoutPriority: ['video-first', 'sidebar-first'],
   defaultDanmakuState: ['system', 'remember', 'on', 'off'],
   defaultCaptionState: ['system', 'remember', 'on', 'off'],
   autoPlayMultipart: ['default', 'autoPlay', 'autoPlayWithRecommend', 'pauseAtEnd', 'loop'],

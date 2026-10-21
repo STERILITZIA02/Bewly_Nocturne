@@ -385,6 +385,7 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
 <style scoped lang="scss">
 @use "../../../../styles/breakpoints";
 @use "../../../../styles/sidebarSurface";
+@use "../../../../styles/scrollEdgeFade";
 
 .conversation-list {
   display: flex;
@@ -421,7 +422,22 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
 
 .conversation-list__items {
   @include sidebarSurface.vertical-scroll;
+  // Its bottom is the screen edge, which needs no fade.
+  @include scrollEdgeFade.vertical($bottom: false);
   animation: conversation-results-enter var(--bew-duration-fast) var(--bew-ease-standard);
+
+  // Keep the entrance alongside the edge-fade timelines instead of replacing them.
+  @supports (animation-timeline: scroll()) {
+    animation:
+      conversation-results-enter var(--bew-duration-fast) var(--bew-ease-standard),
+      bew-scroll-edge-top linear both,
+      bew-scroll-edge-bottom linear both;
+    animation-timeline: auto, scroll(self), scroll(self);
+    animation-range:
+      normal,
+      0 var(--bew-scroll-edge-ramp),
+      calc(100% - var(--bew-scroll-edge-ramp)) 100%;
+  }
 }
 @keyframes conversation-results-enter {
   from {

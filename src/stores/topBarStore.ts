@@ -1398,8 +1398,16 @@ export const useTopBarStore = defineStore('topBar', () => {
     })
   }
 
-  function syncWatchLaterState(includeList = false) {
-    return includeList ? getWatchLaterPreview() : getWatchLaterCount()
+  // Popovers call this directly: like syncSharedData, a reloaded extension
+  // stops shared messaging here instead of rejecting into the caller.
+  function syncWatchLaterState(includeList = false): Promise<boolean> {
+    return (includeList ? getWatchLaterPreview() : getWatchLaterCount()).catch((error) => {
+      if (!isExtensionContextInvalidatedError(error))
+        throw error
+
+      disableSharedStateMessaging()
+      return false
+    })
   }
 
   function invalidateUnreadMessageState() {

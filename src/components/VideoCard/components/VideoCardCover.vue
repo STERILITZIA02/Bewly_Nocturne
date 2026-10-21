@@ -493,23 +493,22 @@ onBeforeUnmount(() => {
       >
         <div
           v-if="Number(video?.rank) <= 3"
-          class="bew-shape-circle"
-          bg="$bew-selected-bg" text-center lh-0 h-28px w-28px
+          class="bew-shape-circle bew-centered-numeral"
+          bg="$bew-selected-bg" h-28px w-28px
           text="$bew-text-1 xl" shadow="$bew-shadow-1"
           border="1 $bew-surface-border-color"
-          grid="~ place-content-center"
           fw-bold
         >
-          {{ video?.rank }}
+          <span>{{ video?.rank }}</span>
         </div>
         <div
           v-else
-          class="bew-shape-circle"
-          bg="$bew-elevated-solid" text-center lh-28px h-28px w-28px
+          class="bew-shape-circle bew-centered-numeral"
+          bg="$bew-elevated-solid" h-28px w-28px
           shadow="$bew-shadow-1"
           border="1 $bew-border-color"
         >
-          {{ video?.rank }}
+          <span>{{ video?.rank }}</span>
         </div>
       </div>
 
@@ -632,8 +631,8 @@ onBeforeUnmount(() => {
   height: var(--bew-cover-action-size);
   padding: 0;
   margin: var(--bew-cover-overlay-inset);
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
+  border-radius: var(--bew-cover-action-radius);
+  corner-shape: var(--bew-corner-shape);
   font-size: var(--bew-icon-size-md);
   background: var(--bew-cover-scrim);
   appearance: none;

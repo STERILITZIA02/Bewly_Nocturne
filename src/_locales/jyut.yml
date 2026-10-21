@@ -868,15 +868,9 @@ settings:
     context_moments_dialog: 動態影片彈窗
     context_moments_dialog_desc: 繼承時會繼續按影片所屬嘅多 P、合集等場景決定；只影響由動態打開嘅站內彈窗。
     bewly_widescreen_sidebar_position: Bewly播放頁側邊欄位置
-    bewly_widescreen_sidebar_position_desc: 選擇 Bewly 播放頁側邊欄嘅顯示位置
+    bewly_widescreen_sidebar_position_desc: 揀留言、彈幕同推薦欄擺喺影片卡片邊一邊
     bewly_widescreen_sidebar_position_left: 左側
     bewly_widescreen_sidebar_position_right: 右側
-    bewly_widescreen_center_video: Bewly播放頁畫面置中
-    bewly_widescreen_center_video_desc: 只會喺影片優先而且實際單邊黑邊足夠完整容納側欄嗰陣，令影片、彈幕同點擊區域喺成個畫面水平置中；空間唔夠就維持影片優先版面。
-    bewly_widescreen_layout_priority: Bewly播放頁版面優先次序
-    bewly_widescreen_layout_priority_desc: 影片優先預設完全收埋側欄，靠近邊緣時展開；側欄優先預設展開完整側欄。兩種狀態都會用覆蓋層顯示，唔會改變播放器闊度。
-    bewly_widescreen_layout_priority_video: 影片優先
-    bewly_widescreen_layout_priority_sidebar: 側欄優先
   show_ip_location: 顯示 IP 歸屬地
   show_ip_location_desc: 喺影片/動向頁留言區顯示 IP 歸屬地。
   show_sex: 顯示用戶性別
@@ -1895,8 +1889,8 @@ widescreen:
   reload_page: 重新整理頁面
   enter: 進入 Bewly 播放頁
   exit: 退出 Bewly 播放頁
-  close_sidebar: 收埋側欄
-  resize_sidebar: 調整側欄闊度
+  fill_window: 鋪滿視窗
+  exit_fill_window: 退出鋪滿視窗
   exit_loading: 退出 Bewly 播放頁
   loading: 載入緊 Bewly 播放頁…
   comments: 留言
@@ -1907,10 +1901,13 @@ widescreen:
   player_feedback: 播放回報
   playlist: 選集
   recommendations: 推介
+  up_next: 跟住播
   collapse: 收起
   expand_more: 展開更多
   comments_loading: 留言區載入緊
   danmaku_loading: 彈幕列表載入緊
+  danmaku_sender: 用戶
+  danmaku_sort_sender: 按發送用戶排序
   list_loading: 列表載入緊
   stat_likes: 讚好
   stat_coins: 投幣
@@ -1918,8 +1915,6 @@ widescreen:
   stat_shares: 分享
   video_description: 影片簡介
   video_category: 影片分區
-  show_full_sidebar: 顯示完整側欄
-  show_compact_sidebar: 收埋側欄
 search_bar:
   history_unavailable: 暫時讀取唔到或者確認唔到搜尋記錄，請重新讀取。
   input_label: 搜尋
