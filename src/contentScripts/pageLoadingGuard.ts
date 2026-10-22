@@ -18,19 +18,17 @@ export function createPageLoadingGuard(doc: Document, inIframe: boolean): PageLo
   const playback = !inIframe && url.hostname === 'www.bilibili.com' && /^\/(?:video\/|bangumi\/play\/|list\/|medialist\/play)/.test(pathname)
   const pageStyle = doc.createElement('style')
   const headerStyle = doc.createElement('style')
-  const playbackCover = playback ? doc.createElement('div') : undefined
-  playbackCover?.setAttribute('data-bewly-page-loading-cover', '')
-  playbackCover?.setAttribute('aria-hidden', 'true')
+  const pageCover = homepage || playback ? doc.createElement('div') : undefined
+  pageCover?.setAttribute('data-bewly-page-loading-cover', '')
+  pageCover?.setAttribute('aria-hidden', 'true')
   pageStyle.dataset.bewlyPageLoading = ''
   headerStyle.dataset.bewlyHeaderLoading = ''
-  // Keep native playback visible to its own startup observers. An owned cover
-  // conceals the early layout without hiding the player or its ancestors.
-  pageStyle.textContent = homepage
-    ? 'html > body { opacity: 0 !important; pointer-events: none !important; transition: none !important; }'
-    : playback
-      ? `[data-bewly-page-loading-cover] { position: fixed; inset: 0; z-index: 2147483646; background: var(--bew-bg, #f6f7f8); }
-         @media (prefers-color-scheme: dark) { [data-bewly-page-loading-cover] { background: var(--bew-bg, #050607); } }`
-      : ''
+  // A sibling cover avoids making body a backdrop root while Vue mounts,
+  // and keeps native media visible to its own startup observers.
+  pageStyle.textContent = pageCover
+    ? `[data-bewly-page-loading-cover] { position: fixed; inset: 0; z-index: 2147483646; background: var(--bew-bg, #f6f7f8); }
+       @media (prefers-color-scheme: dark) { [data-bewly-page-loading-cover] { background: var(--bew-bg, #050607); } }`
+    : ''
   headerStyle.textContent = '.bili-header, #biliMainHeader, .header-channel, .bili-header-channel-panel { visibility: hidden !important; }'
   let active = true
   let contentVisible = false
@@ -43,8 +41,8 @@ export function createPageLoadingGuard(doc: Document, inIframe: boolean): PageLo
       return
     if (!contentVisible && (homepage || playback))
       doc.documentElement.append(pageStyle)
-    if (!contentVisible && playbackCover)
-      doc.documentElement.append(playbackCover)
+    if (!contentVisible && pageCover)
+      doc.documentElement.append(pageCover)
     if (!headerVisible)
       doc.documentElement.append(headerStyle)
     observer.disconnect()
@@ -56,12 +54,12 @@ export function createPageLoadingGuard(doc: Document, inIframe: boolean): PageLo
     observer.disconnect()
     clearTimeout(timeout)
     pageStyle.remove()
-    playbackCover?.remove()
+    pageCover?.remove()
     headerStyle.remove()
     removeOverlay?.(immediate)
     removeOverlay = undefined
   }
-  timeout = setTimeout(() => dispose(true), PAGE_LOADING_TIMEOUT_MS)
+  timeout = setTimeout(dispose, PAGE_LOADING_TIMEOUT_MS, true)
   observer.observe(doc, { childList: true })
   attach()
   return {
@@ -71,7 +69,7 @@ export function createPageLoadingGuard(doc: Document, inIframe: boolean): PageLo
       // must remain visible to their own initialization/readiness observers.
       contentVisible = true
       pageStyle.remove()
-      playbackCover?.remove()
+      pageCover?.remove()
     },
     revealHeader() {
       headerVisible = true

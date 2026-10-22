@@ -461,7 +461,7 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
     const old = Object.fromEntries(['play', 'pause', 'load'].map(key => [key, media[key]]))
     media.play = async () => {}
     media.pause = media.load = () => {}
-    const props = Vue.reactive({ video, removed: false, isHover: true, previewVideoUrl: 'https://example.com/a.mp4', previewIdentity: policy.getVideoPreviewIdentity(video), previewCurrentTime: 23, isInWatchLater: false, showWatchLater: false, coverImageUrl: '' })
+    const props = Vue.reactive({ video, removed: false, isHover: true, previewVideoUrl: 'https://example.com/a.mp4', previewIdentity: policy.getVideoPreviewIdentity(video), previewCurrentTime: 23, coverImageUrl: '' })
     const writes = []
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ render: () => Vue.h(Cover, { ...props, onPreviewProgress: (time, identity) => {

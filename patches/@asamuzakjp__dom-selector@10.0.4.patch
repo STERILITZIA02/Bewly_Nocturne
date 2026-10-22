@@ -1,0 +1,29 @@
+diff --git a/src/index.js b/src/index.js
+index 91473e65ed63341da7036d4278fcf72204f3f571..69fd7b9c369e17fa0a8aa06802dc7b7bed618f5a 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -576,6 +576,24 @@ export class DOMSelector {
+    */
+   #findNodes(selector, node, opt, targetType) {
+     try {
++      // Element queries constrain results, not the ancestors used to match.
++      // Keep explicit :scope selectors on the original context element.
++      const treeRoot = node.getRootNode();
++      if (node.nodeType === ELEMENT_NODE && treeRoot !== node &&
++          (targetType === TARGET_ALL || targetType === TARGET_FIRST) &&
++          !selector.includes(':scope')) {
++        const candidates = this.#finder.setup(selector, treeRoot, opt).find(TARGET_ALL);
++        if (candidates instanceof Set) {
++          const results = new Set();
++          for (const candidate of candidates) {
++            if (candidate !== node && node.contains(candidate)) {
++              results.add(candidate);
++              if (targetType === TARGET_FIRST) break;
++            }
++          }
++          return results;
++        }
++      }
+       const res = this.#finder.setup(selector, node, opt).find(targetType);
+       if (res instanceof Set) {
+         return res;

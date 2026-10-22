@@ -3,7 +3,7 @@
 :root,
 :host {
   --bew-fonts-ui:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "PingFang TC", "HarmonyOS Sans", MiSans,
+    system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "PingFang TC", "HarmonyOS Sans", MiSans,
     "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Noto Sans CJK SC", "Noto Sans CJK TC", "Source Han Sans SC",
     "Source Han Sans TC", "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   --bew-fonts-basic:
@@ -21,11 +21,13 @@
 
 :host {
   font-family: var(--bew-fonts-ui);
+  font-optical-sizing: auto;
   font-synthesis-weight: none;
 }
 
 .bewly-wrapper {
   font-family: var(--bew-fonts-ui);
+  font-optical-sizing: auto;
   font-synthesis-weight: none;
 }
 

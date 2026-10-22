@@ -53,10 +53,6 @@ function refreshUnreadMessageSharedState() {
   })
 }
 
-// 将 DOM 引用移到组件内部
-const avatarImg = ref<HTMLElement | null>(null)
-const avatarShadow = ref<HTMLElement | null>(null)
-
 const {
   getTopBarItemHref,
   handleClickTopBarItem,
@@ -222,7 +218,7 @@ const shouldShowDivider = computed(() => {
           <!-- Moments -->
           <div
             v-if="isComponentVisible('moments')"
-            ref="moments"
+            :ref="el => moments = (el as HTMLElement | null)"
             v-layout-editable="getTopBarItemLayoutEditableId('moments')"
             class="right-side-item"
             :data-layout-editable-id="getTopBarItemLayoutEditableId('moments')"
@@ -265,7 +261,7 @@ const shouldShowDivider = computed(() => {
           <!-- Favorites -->
           <div
             v-if="isComponentVisible('favorites')"
-            ref="favorites"
+            :ref="el => favorites = (el as HTMLElement | null)"
             v-layout-editable="getTopBarItemLayoutEditableId('favorites')"
             class="right-side-item"
             :data-layout-editable-id="getTopBarItemLayoutEditableId('favorites')"
@@ -297,7 +293,7 @@ const shouldShowDivider = computed(() => {
           <!-- History -->
           <div
             v-if="isComponentVisible('history')"
-            ref="history"
+            :ref="el => history = (el as HTMLElement | null)"
             v-layout-editable="getTopBarItemLayoutEditableId('history')"
             class="right-side-item"
             :data-layout-editable-id="getTopBarItemLayoutEditableId('history')"
@@ -329,7 +325,7 @@ const shouldShowDivider = computed(() => {
           <!-- Watch later -->
           <div
             v-if="isComponentVisible('watchLater')"
-            ref="watchLater"
+            :ref="el => watchLater = (el as HTMLElement | null)"
             v-layout-editable="getTopBarItemLayoutEditableId('watchLater')"
             class="right-side-item"
             :data-layout-editable-id="getTopBarItemLayoutEditableId('watchLater')"
@@ -392,7 +388,7 @@ const shouldShowDivider = computed(() => {
 
         <!-- More -->
         <div
-          ref="more"
+          :ref="el => more = (el as HTMLElement | null)"
           v-layout-editable="'topbar-more'"
           class="right-side-item lg:!hidden flex"
           data-layout-editable-id="topbar-more"
@@ -432,7 +428,7 @@ const shouldShowDivider = computed(() => {
           <!-- Upload -->
           <div
             v-if="isComponentVisible('upload')"
-            ref="upload"
+            :ref="el => upload = (el as HTMLElement | null)"
             v-layout-editable="getTopBarItemLayoutEditableId('upload')"
             class="right-side-item"
             :data-layout-editable-id="getTopBarItemLayoutEditableId('upload')"
@@ -463,7 +459,7 @@ const shouldShowDivider = computed(() => {
           <!-- Notifications -->
           <div
             v-if="isComponentVisible('notifications')"
-            ref="notifications"
+            :ref="el => notifications = (el as HTMLElement | null)"
             v-layout-editable="getTopBarItemLayoutEditableId('notifications')"
             class="right-side-item"
             :data-layout-editable-id="getTopBarItemLayoutEditableId('notifications')"
@@ -513,7 +509,7 @@ const shouldShowDivider = computed(() => {
 
       <div
         v-if="isLogin"
-        ref="avatar"
+        :ref="el => avatar = (el as HTMLElement | null)"
         :class="{ hover: popupVisible?.userPanel }"
         class="avatar right-side-item"
         @click="(event: MouseEvent) => handleClickTopBarItem(event, 'userPanel')"
@@ -526,7 +522,6 @@ const shouldShowDivider = computed(() => {
         />
 
         <ALink
-          ref="avatarImg"
           :href="`https://space.bilibili.com/${mid}`"
           type="topBar"
           class="avatar-img top-bar-trigger"
@@ -536,7 +531,6 @@ const shouldShowDivider = computed(() => {
           }"
         />
         <div
-          ref="avatarShadow"
           class="avatar-shadow"
           :class="{ hover: popupVisible?.userPanel }"
           :style="{

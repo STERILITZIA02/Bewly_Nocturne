@@ -1,25 +1,24 @@
 <script lang="ts" setup>
-import { computed, ref, watch, watchEffect } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { computed, ref, watch } from 'vue'
 
+import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useUserRelations } from '~/composables/useUserRelations'
 import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import { settings } from '~/logic'
-import { calcCurrentTime, numFormatter } from '~/utils/dataFormatter'
 import { recordVideoVisit } from '~/utils/videoVisitHistory'
 
 import VideoCardCover from './components/VideoCardCover.vue'
 import VideoCardInfo from './components/VideoCardInfo.vue'
 import { useVideoCardLogic } from './composables/useVideoCardLogic'
-import { normalizeVideoCardTags } from './tagPolicy'
 import type { Video, VideoCardState } from './types'
+import type { VideoCardContextMenuExtraOption } from './VideoCardContextMenu/VideoCardContextMenu.vue'
 import VideoCardContextMenu from './VideoCardContextMenu/VideoCardContextMenu.vue'
 
 const props = withDefaults(defineProps<Props>(), {
   showWatchLater: true,
   type: 'common',
-  moreBtn: true,
+  contextMenu: true,
   disableContentVisibility: false,
 })
 
@@ -31,7 +30,11 @@ interface Props {
   showWatchLater?: boolean
   horizontal?: boolean
   showPreview?: boolean
-  moreBtn?: boolean
+  /** Right-click (or long-press / context-menu key) opens the card menu; off falls back to the browser menu. */
+  contextMenu?: boolean
+  /** Page-specific menu items, built only while the menu is open. */
+  getMenuExtraGroups?: (item: unknown) => VideoCardContextMenuExtraOption[][]
+  menuItem?: unknown
   hideAuthor?: boolean
   disableContentVisibility?: boolean
   isFollowingPage?: boolean
@@ -43,7 +46,6 @@ interface Props {
 const logic = useVideoCardLogic(props, props.persistentState)
 defineExpose({ canRecycle: computed(() => !logic.showVideoOptions.value && !logic.isPreviewFullscreen.value && !logic.isPreviewScrubbing.value && !logic.isHover.value && !logic.isUpdatingWatchLater.value && !logic.isUndoing.value) })
 const { mainAppRef } = useBewlyApp()
-const { t } = useI18n()
 const { userRelations, retainUserRelations } = useUserRelations()
 watch(() => {
   const authors = props.video?.author
@@ -61,89 +63,7 @@ const relationVideo = computed(() => {
 })
 
 // 使用共享样式（避免每个卡片重复计算）
-const { titleFontSizeClass, titleStyle, authorFontSizeClass, metaFontSizeClass, metaStyle } = useVideoCardSharedStyles()
-
-// Shared cover statistics; presentation settings retain their individual gates.
-const statSuffixPattern = /(播放量?|观看|弹幕|点赞|views?|likes?|danmakus?|comments?|回复|人气|转发|分享|[次条人])/gi
-const statSeparatorPattern = /[•·]/g
-
-function formatStatValue(count?: number, countStr?: string) {
-  if (typeof count === 'number')
-    return numFormatter(count).trim()
-  if (!countStr)
-    return ''
-  const sanitized = countStr
-    .replace(statSuffixPattern, '')
-    .replace(statSeparatorPattern, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return sanitized || countStr.trim()
-}
-
-const coverStatValues = computed(() => {
-  if (!props.video) {
-    return {
-      view: '',
-      danmaku: '',
-      like: '',
-      duration: '',
-    }
-  }
-
-  const stats = logic.videoStatNumbers.value
-
-  return {
-    view: formatStatValue(stats.view, props.video.viewStr),
-    danmaku: formatStatValue(stats.danmaku, props.video.danmakuStr),
-    like: formatStatValue(stats.like, props.video.likeStr),
-    duration: props.video.duration
-      ? calcCurrentTime(props.video.duration)
-      : props.video.durationStr ?? '',
-  }
-})
-
-const coverStatsVisibility = computed(() => {
-  const { view, danmaku, like, duration } = coverStatValues.value
-
-  // 无用户信息模式下，只显示播放量和时长
-  if (props.hideAuthor) {
-    return {
-      view: settings.value.showVideoCardViewCount && Boolean(view),
-      danmaku: false,
-      like: false,
-      duration: settings.value.showVideoCardDuration && Boolean(duration),
-    }
-  }
-
-  // 所有统计项默认显示，由 CSS Container Query 控制响应式隐藏
-  // 这避免了 JS 监听宽度变化带来的性能问题
-  return {
-    view: settings.value.showVideoCardViewCount && Boolean(view),
-    danmaku: settings.value.showVideoCardDanmakuCount && Boolean(danmaku),
-    like: settings.value.showVideoCardLikeCount && Boolean(like),
-    duration: settings.value.showVideoCardDuration && Boolean(duration),
-  }
-})
-
-const hasCoverStats = computed(() => {
-  const visibility = coverStatsVisibility.value
-  const values = coverStatValues.value
-
-  return (
-    (visibility.view && values.view)
-    || (visibility.danmaku && values.danmaku)
-    || (visibility.like && values.like)
-    || (visibility.duration && values.duration)
-  )
-})
-
-const shouldHideCoverStats = computed(() =>
-  props.showPreview
-  && settings.value.enableVideoPreview
-  && logic.isHover.value
-  && logic.previewVideoUrl.value
-  && logic.shouldHideOverlayElements.value,
-)
+const { textStyle } = useVideoCardSharedStyles()
 
 const previewEnabled = computed(() =>
   Boolean(props.showPreview && settings.value.enableVideoPreview),
@@ -187,118 +107,9 @@ const coverEvents = computed(() =>
     : {},
 )
 
-const primaryTags = computed(() => {
-  const video = props.video
-  if (!video)
-    return []
-  return normalizeVideoCardTags(video).map(tag => tag.text)
-})
-
-// Highlight tags calculation - 使用查找表优化性能
-const LIKE_RATIO_THRESHOLDS = [
-  { view: 1_000_000, ratio: 0.01 },
-  { view: 200_000, ratio: 0.025 },
-  { view: 100_000, ratio: 0.04 },
-  { view: 10_000, ratio: 0.05 },
-] as const
-
-const DANMAKU_RATIO_THRESHOLDS = [
-  { view: 1_000_000, ratio: 0.001 },
-  { view: 200_000, ratio: 0.0025 },
-  { view: 100_000, ratio: 0.004 },
-  { view: 0, ratio: 0.005 },
-] as const
-
-const highlightTags = computed(() => {
-  if (!props.video)
-    return [] as string[]
-
-  // 如果设置为不显示推荐标签，则不显示插件计算的标签
-  if (!settings.value.showVideoCardRecommendTag)
-    return [] as string[]
-
-  const tags: string[] = []
-  const durationTag = getDurationHighlight(props.video)
-  const stats = logic.videoStatNumbers.value
-  const viewCount = stats.view ?? 0
-
-  if (viewCount <= 0)
-    return durationTag ? [durationTag] : tags
-
-  if (viewCount >= 10_000) {
-    const likeCount = stats.like ?? 0
-    const likeRatio = likeCount / viewCount
-
-    // 使用查找表快速判断是否高赞
-    const likeThreshold = LIKE_RATIO_THRESHOLDS.find(t => viewCount >= t.view)
-    if (likeThreshold && likeRatio >= likeThreshold.ratio) {
-      tags.push(t('video_card.highlight_high_like'))
-    }
-
-    const danmakuCount = stats.danmaku ?? 0
-    const danmakuRatio = danmakuCount / viewCount
-
-    // 使用查找表快速判断是否高互动
-    const danmakuThreshold = DANMAKU_RATIO_THRESHOLDS.find(t => viewCount >= t.view)
-    if (danmakuThreshold && danmakuRatio > danmakuThreshold.ratio) {
-      tags.push(t('video_card.highlight_high_engagement'))
-    }
-  }
-
-  if (durationTag)
-    tags.unshift(durationTag)
-
-  // 百万播放标签 - 只有在外部tag没有播放字眼时显示，且优先级最后
-  if (viewCount >= 1_000_000) {
-    const hasPlayKeyword = primaryTags.value.some(tag => /播放|观看|views?|play/i.test(tag))
-    if (!hasPlayKeyword)
-      tags.push(t('video_card.highlight_million_views'))
-  }
-
-  return primaryTags.value.length >= 2 ? [] : tags.slice(0, 1)
-})
-
-function getDurationHighlight(video: Video) {
-  const durationInSeconds = getDurationInSeconds(video)
-
-  if (!durationInSeconds)
-    return
-
-  if (durationInSeconds >= 40 * 60)
-    return t('video_card.highlight_extra_long')
-
-  if (durationInSeconds >= 20 * 60)
-    return t('video_card.highlight_long')
-}
-
-function getDurationInSeconds(video: Video) {
-  const { duration } = video
-  if (typeof duration === 'number' && duration > 0)
-    return duration
-
-  return parseDurationStr(video.durationStr)
-}
-
-function parseDurationStr(durationStr?: string) {
-  if (!durationStr)
-    return
-
-  const parts = durationStr.split(':').map(part => Number(part))
-  if (parts.some(part => Number.isNaN(part)))
-    return
-
-  let seconds = 0
-  for (const value of parts)
-    seconds = seconds * 60 + value
-
-  return seconds
-}
-
 const coverImageUrl = computed(() =>
   props.video ? `${logic.removeHttpFromUrl(props.video.cover)}@672w_378h_1c_!web-home-common-cover` : '',
 )
-
-const infoComponentRef = ref()
 
 // Cover 骨架屏状态：只依赖数据骨架屏，让图片能立即开始加载
 const coverSkeleton = computed(() => props.skeleton)
@@ -307,17 +118,20 @@ const coverSkeleton = computed(() => props.skeleton)
 // 这避免了滚动时图片加载触发的大量 DOM 重构
 const infoSkeleton = computed(() => props.skeleton)
 
-// Expose moreBtnRef from child component
-watchEffect(() => {
-  if (infoComponentRef.value?.moreBtnRef) {
-    logic.moreBtnRef.value = infoComponentRef.value.moreBtnRef
-  }
-})
-
-function closeVideoOptionsAndRestoreFocus() {
-  logic.showVideoOptions.value = false
-  void nextTick(() => logic.moreBtnRef.value?.focus())
+function handleContextMenu(event: MouseEvent) {
+  // Shift keeps the browser menu, and a text selection keeps native copy.
+  if (!props.contextMenu || !props.video || props.skeleton || logic.removed.value || event.shiftKey || document.getSelection()?.toString())
+    return
+  event.preventDefault()
+  logic.openContextMenu(event)
 }
+
+// The gradient-blur halo exists only while a mouse is over the card.
+const haloActive = ref(false)
+
+const watchLaterMenuState = computed(() => props.showWatchLater && !props.video?.roomid
+  ? { added: logic.isInWatchLater.value, toggle: logic.toggleWatchLater }
+  : undefined)
 
 provide('getVideoType', () => props.type!)
 </script>
@@ -334,7 +148,11 @@ provide('getVideoType', () => props.type!)
     :style="disableContentVisibility
       ? { contentVisibility: 'visible', containIntrinsicSize: 'none' }
       : undefined"
+    @contextmenu="handleContextMenu"
+    @pointerenter="haloActive = $event.pointerType === 'mouse'"
+    @pointerleave="haloActive = false"
   >
+    <ProgressiveBlur v-if="haloActive && !skeleton" class="video-card-halo" edge="center" radius="var(--bew-card-hover-blur-radius)" />
     <div
       class="video-card group"
       w="full"
@@ -366,15 +184,8 @@ provide('getVideoType', () => props.type!)
             :preview-video-url="logic.previewVideoUrl.value || ''"
             :preview-identity="logic.previewMediaIdentity.value"
             :preview-current-time="logic.videoCurrentTime.value"
-            :is-in-watch-later="logic.isInWatchLater.value"
-            :show-watch-later="showWatchLater && settings.showVideoCardWatchLater"
             :cover-top-left-always-visible="coverTopLeftAlwaysVisible"
             :cover-image-url="coverImageUrl"
-            :cover-stat-values="coverStatValues"
-            :cover-stats-visibility="coverStatsVisibility"
-            :has-cover-stats="Boolean(hasCoverStats)"
-            :should-hide-cover-stats="Boolean(shouldHideCoverStats)"
-            @toggle-watch-later="logic.toggleWatchLater"
             @undo="logic.handleUndo"
             @preview-error="logic.clearPreviewVideoUrl"
             @preview-fullscreen-change="logic.handlePreviewFullscreenChange"
@@ -390,22 +201,13 @@ provide('getVideoType', () => props.type!)
         <!-- Other Information -->
         <VideoCardInfo
           v-if="!logic.removed.value"
-          ref="infoComponentRef"
           :class="{ 'horizontal-card-info': horizontal }"
           :skeleton="infoSkeleton"
           :video="relationVideo"
           :horizontal="horizontal || false"
           :video-url="logic.videoUrl.value"
-          :more-btn="moreBtn"
-          :show-video-options="logic.showVideoOptions.value"
-          :title-font-size-class="titleFontSizeClass"
-          :meta-style="metaStyle"
-          :title-style="titleStyle"
-          :author-font-size-class="authorFontSizeClass"
-          :meta-font-size-class="metaFontSizeClass"
-          :highlight-tags="highlightTags"
+          :text-style="textStyle"
           :hide-author="hideAuthor"
-          @more-btn-click="logic.handleMoreBtnClick"
         />
         <div
           v-else-if="horizontal"
@@ -428,7 +230,10 @@ provide('getVideoType', () => props.type!)
         }"
         :context-menu-styles="logic.videoOptionsFloatingStyles.value"
         :is-following-page="props.isFollowingPage"
-        @close="closeVideoOptionsAndRestoreFocus"
+        :watch-later="watchLaterMenuState"
+        :layout-target="logic.contextMenuLayoutTarget.value"
+        :extra-groups="getMenuExtraGroups?.(menuItem)"
+        @close="logic.closeContextMenu"
         @removed="logic.handleRemoved"
       />
     </Teleport>
@@ -437,12 +242,6 @@ provide('getVideoType', () => props.type!)
 
 <style lang="scss" scoped>
 @use "../../styles/contentCard";
-.video-card:focus-within :deep(.video-card-watch-later) {
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
-  transition: none;
-}
 
 .video-card-container {
   contain: layout style;
@@ -456,6 +255,17 @@ provide('getVideoType', () => props.type!)
      确保容器在加载过程中保持稳定的最小高度 */
   min-height: fit-content;
   @include contentCard.bare;
+  @include contentCard.hover-halo;
+}
+
+.video-card-halo {
+  @include contentCard.hover-halo-layer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .video-card-container:hover :deep(.video-card-cover) {
+    box-shadow: var(--bew-shadow-2);
+  }
 }
 
 /* 骨架屏状态：禁用交互；各内容块自身已经提供骨架反馈。 */
@@ -470,7 +280,8 @@ provide('getVideoType', () => props.type!)
 }
 
 .horizontal-card-cover {
-  --uno: "w-full aspect-video";
+  --uno: "w-full";
+  aspect-ratio: var(--bew-video-cover-aspect-ratio);
   flex: var(--video-card-cover-flex, 50) 1 0;
   min-width: 0;
   max-width: var(--video-card-cover-max-width, 400px);
@@ -483,17 +294,5 @@ provide('getVideoType', () => props.type!)
 
 .vertical-card-cover {
   --uno: "w-full";
-}
-
-/* 使用固定样式变量 */
-:deep(.video-card-stats) {
-  --video-card-stats-font-size: var(--bew-font-size-caption);
-  --video-card-stats-line-height: var(--bew-line-height-caption);
-  --video-card-stats-overlay-scale: 1.4;
-  --video-card-stats-icon-size: var(--bew-icon-size-xs);
-}
-
-.video-card-container:is(:hover, :focus-within) :deep(.video-card__more-btn) {
-  color: var(--bew-text-1);
 }
 </style>

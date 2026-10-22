@@ -1,4 +1,4 @@
-import { GRID_BREAKPOINTS } from '~/constants/layout'
+import { VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
 
 export { GRID_BREAKPOINTS } from '~/constants/layout'
 
@@ -31,46 +31,9 @@ export function normalizeListLayoutBreakpoint(value: unknown): number {
 
 export type ListGridLayout = 'twoColumns' | 'oneColumn'
 
-export interface AdaptiveGridColumns {
-  base: number
-  sm: number
-  md: number
-  lg: number
-  xl: number
-  xxl: number
-}
-
-const DEFAULT_ADAPTIVE_GRID_COLUMNS: AdaptiveGridColumns = {
-  base: 1,
-  sm: 2,
-  md: 3,
-  lg: 4,
-  xl: 5,
-  xxl: 6,
-}
-
-function normalizeColumnCount(value: unknown, fallback: number): number {
-  const normalized = Number(value)
-  if (!Number.isFinite(normalized) || normalized <= 0)
-    return fallback
-  return Math.max(1, Math.round(normalized))
-}
-
-export function getAdaptiveGridColumnCount(width: number, columns: AdaptiveGridColumns): number {
-  let breakpoint: keyof AdaptiveGridColumns = 'base'
-
-  if (width >= GRID_BREAKPOINTS.xxl)
-    breakpoint = 'xxl'
-  else if (width >= GRID_BREAKPOINTS.xl)
-    breakpoint = 'xl'
-  else if (width >= GRID_BREAKPOINTS.lg)
-    breakpoint = 'lg'
-  else if (width >= GRID_BREAKPOINTS.md)
-    breakpoint = 'md'
-  else if (width >= GRID_BREAKPOINTS.sm)
-    breakpoint = 'sm'
-
-  return normalizeColumnCount(columns[breakpoint], DEFAULT_ADAPTIVE_GRID_COLUMNS[breakpoint])
+/** Same rule as the CSS `auto-fill` grid: as many minimum-width covers as fit. */
+export function getAdaptiveGridColumnCount(width: number, gap: number): number {
+  return Math.max(1, Math.floor((width + gap) / (VIDEO_CARD_MIN_WIDTH + gap)))
 }
 
 export function getListGridColumnCount(

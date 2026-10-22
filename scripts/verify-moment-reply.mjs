@@ -27,7 +27,7 @@ export function registerMomentReplyChecks(check, { Vue, compileComponent, flush 
     assert.equal(isMomentReplyImage({ type: 'image/png', size: 20 * 1024 * 1024 }), false)
     const picture = { img_src: 'https://i0.hdslb.com/bfs/test.png', img_width: 32, img_height: 32, img_size: 1 }
     assert.deepEqual(JSON.parse(buildMomentReplyForm({ ...draft, pictures: [picture] }, 'csrf').get('pictures')), [picture])
-    assert.throws(() => buildMomentReplyForm({ ...draft, pictures: Array.from({ length: 10 }, () => picture) }, 'csrf'))
+    assert.throws(() => buildMomentReplyForm({ ...draft, pictures: Array.from({ length: 10 }).fill(picture) }, 'csrf'))
   })
 
   check('moment reply: background checks account again after signing and never retries an ambiguous public write', async () => {

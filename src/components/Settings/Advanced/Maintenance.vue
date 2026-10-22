@@ -50,7 +50,6 @@ const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   collectedSeasonPlayAllMode: ['beginning', 'latest', 'lastWatched'],
   videoCardTitleFontSize: ['xs', 'sm', 'base', 'lg'],
   videoCardAuthorFontSize: ['xs', 'sm', 'base', 'lg'],
-  videoCardMetaFontSize: ['xs', 'sm', 'base', 'lg'],
   defaultVideoPlayerMode: ['default', 'webFullscreen', 'widescreen', 'bewlyWidescreen'],
   bewlyWidescreenSidebarPosition: ['left', 'right'],
   defaultDanmakuState: ['system', 'remember', 'on', 'off'],
@@ -99,7 +98,7 @@ function matchesSettingType(value: unknown, defaultValue: unknown): boolean {
       return false
     const keys = Object.keys(value)
     return keys.length === Object.keys(defaultValue).length && keys.every(key =>
-      Object.prototype.hasOwnProperty.call(defaultValue, key)
+      Object.hasOwn(defaultValue, key)
       && matchesSettingType(value[key], defaultValue[key]),
     )
   }
@@ -122,11 +121,8 @@ const settingValueValidators: Partial<Record<keyof Settings, (value: unknown) =>
   commentReplyTreeContainerHeight: value => Number.isSafeInteger(value) && Number(value) >= COMMENT_REPLY_CONTAINER_HEIGHT.min && Number(value) <= COMMENT_REPLY_CONTAINER_HEIGHT.max,
   savedVideoQuality: value => value === null || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0),
   videoScreenshotShortcut: isValidScreenshotShortcut,
-  videoCardContextMenuConfig: value => Array.isArray(value) && value.every(item =>
-    isPlainObject(item)
-    && hasExactProperties(item, ['key', 'visible'])
-    && videoCardContextMenuKeys.includes(item.key as typeof videoCardContextMenuKeys[number])
-    && typeof item.visible === 'boolean'),
+  videoCardContextMenuAdvanced: value => Array.isArray(value) && value.every(key =>
+    videoCardContextMenuKeys.includes(key as typeof videoCardContextMenuKeys[number])),
   topBarComponentsConfig: value => Array.isArray(value) && value.every(item =>
     isPlainObject(item)
     && hasExactProperties(item, ['key', 'visible', 'badgeType'])
@@ -194,7 +190,7 @@ function handleImportFile(event: Event) {
       let ignoredCount = 0
       Object.keys(importedSettings).forEach((key) => {
         if (blockedPropertyNames.has(key)
-          || !Object.prototype.hasOwnProperty.call(originalSettings, key)) {
+          || !Object.hasOwn(originalSettings, key)) {
           ignoredCount++
           return
         }

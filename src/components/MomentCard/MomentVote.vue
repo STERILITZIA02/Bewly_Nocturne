@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useNow } from '@vueuse/core'
+import { useIntervalFn, useNow } from '@vueuse/core'
 import { computed, onBeforeUnmount, reactive, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -23,7 +23,7 @@ const { t, locale } = useI18n()
 const topBarStore = useTopBarStore()
 const state = reactive(createMomentVoteState())
 const groupId = useId()
-const now = useNow({ interval: 30_000 })
+const now = useNow({ scheduler: callback => useIntervalFn(callback, 30_000) })
 const identity = () => `${topBarStore.userInfo.mid || 'guest'}:${getUserID() ?? 'guest'}:${props.momentId}:${props.voteId}`
 const voterId = () => Number(getUserID())
 const controller = createMomentVoteController({

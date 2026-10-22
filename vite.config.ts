@@ -8,10 +8,41 @@ import AutoImport from 'unplugin-auto-import/vite'
 import type { UserConfig } from 'vite'
 import { defineConfig } from 'vite'
 
-import { buildCommit, isDev, isSafari, port, r } from './scripts/utils'
+import { buildCommit, isDev, isSafari, port, r } from './scripts/utils.ts'
 // import { MV3Hmr } from './vite-mv3-hmr'
 
 const buildId = process.env.BEWLY_BUILD_ID || (isDev ? Date.now().toString(36) : '')
+// Profiling every plugin callback is diagnostic work, not a correctness check.
+export const bundlerChecks = { bundlerTimings: process.env.BEWLY_PROFILE_BUILD === '1' }
+
+const localePlugins = [VueI18nPlugin({
+  runtimeOnly: true,
+  compositionOnly: true,
+  strictMessage: false,
+  include: [r('./src/_locales/**')],
+})].flat()
+
+// Filter in Rolldown before crossing into JS for every application module.
+for (const plugin of localePlugins) {
+  if (plugin.load) {
+    plugin.load = {
+      ...(typeof plugin.load === 'function' ? { handler: plugin.load } : plugin.load),
+      filter: { id: /@intlify\/unplugin-vue-i18n\/messages$/ },
+    }
+  }
+  if (plugin.resolveId) {
+    plugin.resolveId = {
+      ...(typeof plugin.resolveId === 'function' ? { handler: plugin.resolveId } : plugin.resolveId),
+      filter: { id: /^@intlify\/unplugin-vue-i18n\/messages$/ },
+    }
+  }
+  if (plugin.transform) {
+    plugin.transform = {
+      ...(typeof plugin.transform === 'function' ? { handler: plugin.transform } : plugin.transform),
+      filter: { id: /[/\\]src[/\\]_locales[/\\].*\.(?:json5?|ya?ml)(?:\?.*)?$/ },
+    }
+  }
+}
 
 export const sharedConfig: UserConfig = {
   root: r('src'),
@@ -35,13 +66,7 @@ export const sharedConfig: UserConfig = {
       ],
     }),
 
-    // https://github.com/intlify/bundle-tools/tree/main/packages/unplugin-vue-i18n
-    VueI18nPlugin({
-      runtimeOnly: true,
-      compositionOnly: true,
-      strictMessage: false,
-      include: [r('./src/_locales/**')],
-    }),
+    ...localePlugins,
 
     // https://github.com/unocss/unocss
     // UnoCSS(),
@@ -89,6 +114,7 @@ export default defineConfig(({ command }) => ({
     },
   },
   build: {
+    rolldownOptions: { checks: bundlerChecks },
     outDir: r(isSafari ? 'extension-safari/dist' : 'extension/dist'),
     emptyOutDir: true,
     sourcemap: false, // https://github.com/vitejs/vite-plugin-vue/issues/35

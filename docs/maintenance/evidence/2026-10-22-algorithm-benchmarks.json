@@ -1,0 +1,133 @@
+{
+  "node": "v26.12.1",
+  "timing": "median of 7 warmed samples; synthetic inputs, no browser rendering",
+  "filter": [
+    {
+      "ruleCount": 20,
+      "items": 1000,
+      "titleCurrentMs": 3.9685,
+      "titleNormalizedOnceMs": 0.6289,
+      "userCurrentMs": 0.2779,
+      "userSetMs": 0.0893
+    },
+    {
+      "ruleCount": 200,
+      "items": 1000,
+      "titleCurrentMs": 34.3124,
+      "titleNormalizedOnceMs": 4.6562,
+      "userCurrentMs": 0.4523,
+      "userSetMs": 0.0932
+    },
+    {
+      "ruleCount": 2000,
+      "items": 1000,
+      "titleCurrentMs": 335.696,
+      "titleNormalizedOnceMs": 29.8947,
+      "userCurrentMs": 1.8785,
+      "userSetMs": 0.0943
+    }
+  ],
+  "favoriteSearch": [
+    {
+      "items": 1000,
+      "queryCurrentMs": 0.8783,
+      "indexedQueryMs": 0.0678,
+      "emptyQueryCurrentMs": 0.6445
+    },
+    {
+      "items": 10000,
+      "queryCurrentMs": 7.5573,
+      "indexedQueryMs": 0.4497,
+      "emptyQueryCurrentMs": 6.3294
+    }
+  ],
+  "historySort": [
+    {
+      "results": 200,
+      "alreadySortedRawMs": 0.0091,
+      "alreadySortedReactiveMs": 0.1766
+    },
+    {
+      "results": 2000,
+      "alreadySortedRawMs": 0.0408,
+      "alreadySortedReactiveMs": 1.8097
+    }
+  ],
+  "commentTree": [
+    {
+      "nodes": 240,
+      "maxDepth": 6,
+      "chainMs": 1.4739,
+      "flatMs": 0.1287
+    },
+    {
+      "nodes": 1000,
+      "maxDepth": 6,
+      "chainMs": 23.9478,
+      "flatMs": 0.4717
+    },
+    {
+      "nodes": 3000,
+      "maxDepth": 6,
+      "chainMs": 212.8957,
+      "flatMs": 1.502
+    }
+  ],
+  "rowMetrics": [
+    {
+      "rows": 1000,
+      "queries": 20000,
+      "queryMs": 2.5283
+    },
+    {
+      "rows": 100000,
+      "queries": 20000,
+      "queryMs": 2.8072
+    }
+  ],
+  "masonry": [
+    {
+      "existing": 100,
+      "appended": 20,
+      "attributeChecks": 240,
+      "childHeightReads": 20,
+      "retainedDOM": 120
+    },
+    {
+      "existing": 1000,
+      "appended": 20,
+      "attributeChecks": 2040,
+      "childHeightReads": 20,
+      "retainedDOM": 1020
+    },
+    {
+      "existing": 5000,
+      "appended": 20,
+      "attributeChecks": 10040,
+      "childHeightReads": 20,
+      "retainedDOM": 5020
+    }
+  ],
+  "filterBatch": {
+    "items": 60,
+    "rules": 2000,
+    "currentMs": 20.782749999999965,
+    "normalizedOnceMs": 2.513749999999959
+  },
+  "regexBudgetProbe": [
+    {
+      "length": 18,
+      "matched": false,
+      "ms": 16.848
+    },
+    {
+      "length": 22,
+      "matched": false,
+      "ms": 262.853292
+    },
+    {
+      "length": 26,
+      "timedOutAfterMs": 500
+    }
+  ]
+}

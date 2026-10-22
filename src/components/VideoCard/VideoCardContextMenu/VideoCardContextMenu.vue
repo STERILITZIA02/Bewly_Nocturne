@@ -3,9 +3,14 @@ import type { CSSProperties } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import ChevronIcon from '~/components/ChevronIcon.vue'
+import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useMeasuredDisclosure } from '~/composables/useMeasuredDisclosure'
 import { useUserRelations } from '~/composables/useUserRelations'
 import { settings } from '~/logic'
+import type { findLayoutEditableTarget } from '~/logic/layoutEdit'
+import { enterLayoutEditMode } from '~/logic/layoutEdit'
 import type { VideoCardContextMenuKey } from '~/logic/storage'
 import { Type as ThreePointV2Type } from '~/models/video/appForYou'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -35,6 +40,10 @@ const props = withDefaults(defineProps<{
   video: Video
   contextMenuStyles: CSSProperties
   isFollowingPage?: boolean
+  /** Membership from `topBarStore`; `undefined` while it is still being confirmed. */
+  watchLater?: { added: boolean | undefined, toggle: () => void }
+  /** Layout region under the pointer; adds "edit layout" and "open setting". */
+  layoutTarget?: ReturnType<typeof findLayoutEditableTarget>
   extraGroups?: VideoCardContextMenuExtraOption[][]
 }>(), {
   isFollowingPage: false,
@@ -44,14 +53,13 @@ const emit = defineEmits<{
   (event: 'removed', selectedOpt?: { reasonId?: number, feedbackId?: number }): void
   (event: 'close'): void
 }>()
-// 添加滚动相关的变量和方法
 const menuListRef = ref<HTMLElement | null>(null)
 const canScrollUp = ref(false)
 const canScrollDown = ref(false)
 let closeRequested = false
 let observedVisualViewport: VisualViewport | null = null
 
-// 处理滚动事件，更新箭头显示状态
+// Edge blurs show only while more of the list lies beyond that edge.
 function handleScroll() {
   if (!menuListRef.value)
     return
@@ -61,30 +69,11 @@ function handleScroll() {
   canScrollDown.value = scrollTop < scrollHeight - clientHeight - 5 // 5px 容差
 }
 
-// 滚动到顶部
-function scrollToTop() {
-  if (!menuListRef.value)
-    return
-  menuListRef.value.scrollTo({
-    top: 0,
-    behavior: 'smooth',
-  })
-}
-
-// 滚动到底部
-function scrollToBottom() {
-  if (!menuListRef.value)
-    return
-  menuListRef.value.scrollTo({
-    top: menuListRef.value.scrollHeight,
-    behavior: 'smooth',
-  })
-}
-
+// Collapsed advanced items stay mounted for the height animation but are inert.
 function getMenuItems() {
   return Array.from(menuListRef.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+    .filter(item => !item.closest('[inert]'))
 }
-
 function focusMenuItem(index: number) {
   const items = getMenuItems()
   if (items.length === 0)
@@ -142,10 +131,6 @@ const { batchQueryUserRelations } = useUserRelations()
 const currentAccountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
 let relationPending = false
 let disposed = false
-const videoOptions = computed(() => [
-  { id: 1, key: 'notInterested' as const, name: t('video_card.operation.not_interested') },
-  { id: 2, key: 'notInterestedUploader' as const, name: t('video_card.operation.not_interested_uploader') },
-].filter(option => isOptionVisible(option.key)))
 const showContextMenu = ref<boolean>(false)
 const showDislikeDialog = ref<boolean>(false)
 const showBlockUserDialog = ref<boolean>(false)
@@ -154,133 +139,119 @@ const showUnfollowUserDialog = ref<boolean>(false)
 const showFavoriteDialog = ref(false)
 const showPipWindow = ref<boolean>(false)
 const loadingWebDislike = ref<boolean>(false)
-const { openIframeDrawer } = useBewlyApp()
+const { openLayoutEditorSetting } = useBewlyApp()
 
-enum VideoOption {
-  Favorite,
-  OpenInNewTab,
-  OpenInBackground,
-  OpenInCurrentTab,
-  OpenInNewWindow,
-  OpenInDrawer,
+interface MenuItem { key: string, name: string, icon: string, color?: string, run: () => void }
+type ConfigurableItem = Omit<MenuItem, 'key'> & { key: VideoCardContextMenuKey }
 
-  ViewTheOriginalCover,
-  ViewThisUserChannel,
-
-  CopyVideoLink,
-  CopyCleanVideoLink,
-  CopyBVNumber,
-  CopyAVNumber,
-
-  FollowUser,
-  UnfollowUser,
-  BlockUser,
+function closeThen(action: () => void) {
+  return () => {
+    action()
+    handleClose()
+  }
 }
 
-interface OptionItem { command: VideoOption, key: VideoCardContextMenuKey, name: string, icon: string, color?: string }
-
-function isOptionVisible(key: VideoCardContextMenuKey) {
-  return settings.value.videoCardContextMenuConfig.find(item => item.key === key)?.visible ?? true
+function getAuthorFollowed() {
+  return Array.isArray(props.video.author) ? props.video.author[0]?.followed : props.video.author?.followed
 }
 
-const commonOptions = computed((): OptionItem[][] => {
-  let result: OptionItem[][] = [
-    canFavoriteVideo(props.video)
-      ? [{ command: VideoOption.Favorite, key: 'favorite', name: t('video_card.operation.favorite'), icon: 'i-tabler:star' }]
+// Every configurable item, grouped in display order. The settings list decides
+// which ones fold under “高级选项”; nothing is hidden outright.
+const configurableGroups = computed((): ConfigurableItem[][] => {
+  const video = props.video
+  const type = getVideoType()
+  const isMedia = type === 'bangumi' || type === 'live'
+  const authorMid = getAuthorMid()
+  const recommendation: ConfigurableItem[] = type === 'appRcmd'
+    ? (video.threePointV2 ?? []).some(option => option.type === ThreePointV2Type.Dislike)
+        ? [{ key: 'notInterested', name: t('video_card.operation.not_interested'), icon: 'i-tabler:mood-sad', run: openAppDislikeDialog }]
+        : []
+    : type === 'rcmd'
+      ? [
+          { key: 'notInterested', name: t('video_card.operation.not_interested'), icon: 'i-tabler:mood-sad', run: () => handleWebDislike(1) },
+          { key: 'notInterestedUploader', name: t('video_card.operation.not_interested_uploader'), icon: 'i-tabler:mood-sad', run: () => handleWebDislike(2) },
+        ]
+      : []
+  const followed = getAuthorFollowed()
+  const isFollowed = followed === true || (props.isFollowingPage && followed !== false)
+  return [
+    recommendation,
+    [
+      ...(props.watchLater
+        ? [props.watchLater.added
+            ? { key: 'watchLater' as const, name: t('common.remove_from_watch_later'), icon: 'i-tabler:playlist-x', run: closeThen(props.watchLater.toggle) }
+            : { key: 'watchLater' as const, name: t(props.watchLater.added === undefined ? 'common.save_to_watch_later' : 'common.add_to_watch_later'), icon: 'i-tabler:playlist-add', run: closeThen(props.watchLater.toggle) }]
+        : []),
+      ...(!isMedia && canFavoriteVideo(video)
+        ? [{ key: 'favorite' as const, name: t('video_card.operation.favorite'), icon: 'i-tabler:star', run: openFavoriteDialog }]
+        : []),
+    ],
+    video.url
+      ? [
+          { key: 'openInNewTab', name: t('video_card.operation.open_in_new_tab'), icon: 'i-tabler:layout-bottombar', run: closeThen(() => openLinkToNewTab(video.url!)) },
+          { key: 'openInBackground', name: t('video_card.operation.open_in_background'), icon: 'i-tabler:layout-bottombar', run: closeThen(() => openLinkInBackground(video.url!)) },
+          { key: 'openInNewWindow', name: t('video_card.operation.open_in_new_window'), icon: 'i-tabler:maximize', run: () => showPipWindow.value = true },
+          { key: 'openInCurrentTab', name: t('video_card.operation.open_in_current_tab'), icon: 'i-tabler:layout-bottombar', run: closeThen(() => window.open(video.url, '_self')) },
+        ]
       : [],
     [
-      ...(props.video.url
+      ...(video.url
         ? [
-            { command: VideoOption.OpenInNewTab, key: 'openInNewTab' as const, name: t('video_card.operation.open_in_new_tab'), icon: 'i-tabler:layout-bottombar' },
-            { command: VideoOption.OpenInBackground, key: 'openInBackground' as const, name: t('video_card.operation.open_in_background'), icon: 'i-tabler:layout-bottombar' },
-            { command: VideoOption.OpenInNewWindow, key: 'openInNewWindow' as const, name: t('video_card.operation.open_in_new_window'), icon: 'i-tabler:maximize' },
-            { command: VideoOption.OpenInCurrentTab, key: 'openInCurrentTab' as const, name: t('video_card.operation.open_in_current_tab'), icon: 'i-tabler:layout-bottombar' },
-            { command: VideoOption.OpenInDrawer, key: 'openInDrawer' as const, name: t('video_card.operation.open_in_drawer'), icon: 'i-tabler:picture-in-picture' },
+            { key: 'copyVideoLink' as const, name: t('video_card.operation.copy_video_link'), icon: 'i-tabler:link', run: closeThen(copyCleanLink) },
+            { key: 'copyOriginalLink' as const, name: t('video_card.operation.copy_original_link'), icon: 'i-tabler:copy', run: closeThen(() => void navigator.clipboard.writeText(video.url!)) },
           ]
         : []),
-    ],
-
-    [
-      ...(props.video.url
-        ? [{ command: VideoOption.CopyVideoLink, key: 'copyVideoLink' as const, name: t('video_card.operation.copy_video_link'), icon: 'i-tabler:copy' }]
+      ...(!isMedia && video.bvid
+        ? [{ key: 'copyBVNumber' as const, name: t('video_card.operation.copy_bv_number'), icon: 'i-tabler:copy', run: closeThen(() => void navigator.clipboard.writeText(video.bvid!)) }]
         : []),
-      ...(settings.value.enableCleanShareLink && props.video.url
-        ? [{ command: VideoOption.CopyCleanVideoLink, key: 'copyCleanVideoLink' as const, name: t('video_card.operation.copy_clean_video_link'), icon: 'i-tabler:link' }]
-        : []),
-      ...(props.video.bvid
-        ? [{ command: VideoOption.CopyBVNumber, key: 'copyBVNumber' as const, name: t('video_card.operation.copy_bv_number'), icon: 'i-tabler:copy' }]
-        : []),
-      ...(props.video.id
-        ? [{ command: VideoOption.CopyAVNumber, key: 'copyAVNumber' as const, name: t('video_card.operation.copy_av_number'), icon: 'i-tabler:copy' }]
+      ...(!isMedia && video.id
+        ? [{ key: 'copyAVNumber' as const, name: t('video_card.operation.copy_av_number'), icon: 'i-tabler:copy', run: closeThen(() => void navigator.clipboard.writeText(`av${video.id}`)) }]
         : []),
     ],
-
+    video.cover
+      ? [{ key: 'viewOriginalCover', name: t('video_card.operation.view_the_original_cover'), icon: 'i-tabler:photo', run: closeThen(() => window.open(video.cover, '_blank')) }]
+      : [],
     [
-      ...(props.video.cover
-        ? [{ command: VideoOption.ViewTheOriginalCover, key: 'viewOriginalCover' as const, name: t('video_card.operation.view_the_original_cover'), icon: 'i-tabler:photo' }]
+      // Follow state is known when passed in, or implied on the Following page.
+      ...(authorMid && (followed !== undefined || props.isFollowingPage)
+        ? [isFollowed
+            ? { key: 'followUser' as const, name: t('video_card.operation.unfollow_user'), icon: 'i-tabler:user-minus', run: openUnfollowUserConfirmDialog }
+            : { key: 'followUser' as const, name: t('video_card.operation.follow_user'), icon: 'i-tabler:user-plus', run: openFollowUserConfirmDialog }]
+        : []),
+      // Without an author mid a block request would be invalid.
+      ...(authorMid
+        ? [{ key: 'blockUser' as const, name: t('video_card.operation.block_user'), icon: 'i-tabler:user-cancel', color: 'text-$bew-error-color', run: openBlockUserConfirmDialog }]
         : []),
     ],
   ]
-
-  // 添加关注/取消关注选项
-  // 1. 如果明确传入了 followed 状态，根据状态显示
-  // 2. 如果在 Following 页面且未传入 followed，默认显示"取消关注"（因为都是已关注的UP主）
-  // 3. 其他情况不显示
-  const authorMid = getAuthorMid()
-  const authorFollowed = Array.isArray(props.video.author)
-    ? props.video.author[0]?.followed
-    : props.video.author?.followed
-
-  if (authorMid && (authorFollowed !== undefined || props.isFollowingPage)) {
-    // 判断是否已关注：明确为 true，或者在 Following 页面且未明确为 false
-    const isFollowed = authorFollowed === true || (props.isFollowingPage && authorFollowed !== false)
-
-    if (isFollowed) {
-      result.push([
-        { command: VideoOption.UnfollowUser, key: 'followUser', name: t('video_card.operation.unfollow_user'), icon: 'i-tabler:user-minus' },
-      ])
-    }
-    else {
-      result.push([
-        { command: VideoOption.FollowUser, key: 'followUser', name: t('video_card.operation.follow_user'), icon: 'i-tabler:user-plus' },
-      ])
-    }
-  }
-
-  // 添加拉黑用户选项；缺少作者 mid 时隐藏，避免点击后发出无效请求。
-  if (authorMid) {
-    result.push([
-      { command: VideoOption.BlockUser, key: 'blockUser', name: t('video_card.operation.block_user'), icon: 'i-tabler:user-cancel', color: 'text-$bew-error-color' },
-    ])
-  }
-
-  if (getVideoType() === 'bangumi' || getVideoType() === 'live') {
-    result = result.map((group) => {
-      return group.filter((opt) => {
-        return opt.command !== VideoOption.Favorite && opt.command !== VideoOption.CopyBVNumber && opt.command !== VideoOption.CopyAVNumber && opt.command !== VideoOption.CopyCleanVideoLink && opt.command !== VideoOption.ViewThisUserChannel
-      })
-    })
-  }
-  return result.map(group => group.filter(option => isOptionVisible(option.key))).filter(group => group.length > 0)
 })
 
+const layoutGroup = computed((): MenuItem[] => {
+  const target = props.layoutTarget
+  if (!target)
+    return []
+  return [
+    { key: 'layout:edit', name: t('layout_editor.edit_layout'), icon: 'i-tabler:edit', run: closeThen(() => enterLayoutEditMode(target.descriptor.id)) },
+    { key: 'layout:setting', name: t('layout_editor.open_setting'), icon: 'i-tabler:settings', run: closeThen(() => openLayoutEditorSetting(target.descriptor.settingId, target.element.getBoundingClientRect())) },
+  ]
+})
+
+const advancedKeys = computed(() => new Set<string>(settings.value.videoCardContextMenuAdvanced))
 const menuGroups = computed(() => {
-  const recommendation = getVideoType() === 'appRcmd'
-    ? (props.video.threePointV2 ?? []).filter(option => option.type === ThreePointV2Type.Dislike && isOptionVisible('notInterested')).filter((option, index, all) => all.findIndex(item => item.type === option.type) === index).map(option => ({ key: `app:${option.type}`, name: t('video_card.operation.not_interested'), icon: 'i-tabler:mood-sad', color: undefined, run: () => openAppDislikeDialog() }))
-    : getVideoType() === 'rcmd'
-      ? videoOptions.value.map(option => ({ key: `web:${option.id}`, name: option.name, icon: 'i-tabler:mood-sad', color: undefined, run: () => handleMoreCommand(option.id) }))
-      : []
-  const extra = props.extraGroups.map(group => group.map(option => ({
-    ...option,
-    run: () => {
-      handleClose()
-      option.run()
-    },
-  })))
-  return [recommendation, ...commonOptions.value.map(group => group.map(option => ({ ...option, run: () => handleCommonCommand(option.command) }))), ...extra].filter(group => group.length)
+  const extra = props.extraGroups.map(group => group.map(option => ({ ...option, run: closeThen(option.run) })))
+  const main = configurableGroups.value.map(group => group.filter(item => !advancedKeys.value.has(item.key)))
+  return [...main, ...extra, layoutGroup.value].filter(group => group.length > 0)
 })
+const advancedGroups = computed(() => configurableGroups.value
+  .map(group => group.filter(item => advancedKeys.value.has(item.key)))
+  .filter(group => group.length > 0))
 
-// 在菜单显示后检查是否需要显示滚动指示器
+const advancedOpen = ref(false)
+const advancedOuterRef = ref<HTMLElement | null>(null)
+const advancedInnerRef = ref<HTMLElement | null>(null)
+const { height: advancedHeight, onTransitionEnd: handleAdvancedTransitionEnd } = useMeasuredDisclosure(advancedOuterRef, advancedInnerRef, advancedOpen, () => {}, () => {})
+
+// 在菜单显示后检查边缘模糊状态
 watch(() => showContextMenu.value, (newVal) => {
   if (newVal) {
     nextTick(() => {
@@ -289,7 +260,7 @@ watch(() => showContextMenu.value, (newVal) => {
   }
 })
 
-// 监听菜单列表尺寸变化，确保滚动指示器状态正确
+// 监听菜单列表尺寸变化（含高级选项展开），确保边缘模糊状态正确
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
@@ -367,78 +338,22 @@ async function submitWebDislike(command: number) {
   }
 }
 
-function handleMoreCommand(command: number) {
+function handleWebDislike(command: number) {
   handleRemoved()
   void submitWebDislike(command)
 }
 
-function handleCommonCommand(command: VideoOption) {
-  switch (command) {
-    case VideoOption.Favorite:
-      showFavoriteDialog.value = true
-      showContextMenu.value = false
-      break
-    case VideoOption.OpenInNewTab:
-      openLinkToNewTab(props.video.url!)
-      handleClose()
-      break
-    case VideoOption.OpenInBackground:
-      openLinkInBackground(props.video.url!)
-      handleClose()
-      break
-    case VideoOption.OpenInNewWindow:
-      showPipWindow.value = true
-      break
-    case VideoOption.OpenInCurrentTab:
-      window.open(props.video.url, '_self')
-      handleClose()
-      break
-    case VideoOption.OpenInDrawer:
-      openIframeDrawer(props.video.url || '')
-      handleClose()
-      break
+// "复制链接" always copies the cleaned link (optionally titled); the raw link is a separate item.
+function copyCleanLink() {
+  const cleanUrl = cleanBilibiliUrl(props.video.url!)
+  void navigator.clipboard.writeText(settings.value.cleanShareLinkIncludeTitle && props.video.title
+    ? `${props.video.title} ${cleanUrl}`
+    : cleanUrl)
+}
 
-    case VideoOption.CopyVideoLink:
-      navigator.clipboard.writeText(
-        settings.value.enableCleanShareLink && settings.value.cleanShareLinkRemoveTrackingParams
-          ? cleanBilibiliUrl(props.video.url!)
-          : props.video.url!,
-      )
-      handleClose()
-      break
-    case VideoOption.CopyCleanVideoLink: {
-      const cleanUrl = cleanBilibiliUrl(props.video.url!)
-      const text = settings.value.cleanShareLinkIncludeTitle && props.video.title
-        ? `${props.video.title} ${cleanUrl}`
-        : cleanUrl
-      navigator.clipboard.writeText(text)
-      handleClose()
-      break
-    }
-    case VideoOption.CopyBVNumber:
-      navigator.clipboard.writeText(props.video.bvid!)
-      handleClose()
-      break
-    case VideoOption.CopyAVNumber:
-      navigator.clipboard.writeText(`av${props.video.id.toString()}`)
-      handleClose()
-      break
-
-    case VideoOption.ViewTheOriginalCover:
-      window.open(props.video.cover, '_blank')
-      handleClose()
-      break
-
-    case VideoOption.FollowUser:
-      openFollowUserConfirmDialog()
-      break
-    case VideoOption.UnfollowUser:
-      openUnfollowUserConfirmDialog()
-      break
-    case VideoOption.BlockUser:
-      openBlockUserConfirmDialog()
-      break
-  }
+function openFavoriteDialog() {
+  showFavoriteDialog.value = true
+  showContextMenu.value = false
 }
 
 function openAppDislikeDialog() {
@@ -521,28 +436,15 @@ const unfollowUser = () => writeRelation(2)
 
 <template>
   <div>
-    <!-- more popup -->
     <div v-if="showContextMenu">
       <div
         :style="contextMenuStyles"
         class="context-menu-container bew-popover-surface"
       >
-        <!-- 顶部滚动指示器 -->
-        <button
-          v-show="canScrollUp"
-          type="button"
-          class="scroll-indicator scroll-indicator-top"
-          :aria-label="$t('video_card.operation.scroll_to_top')"
-          @click="scrollToTop"
-        >
-          <i class="i-tabler:chevron-up" aria-hidden="true" />
-        </button>
-
         <ul
           ref="menuListRef"
           role="menu"
           :aria-label="$t('video_card.operation.more_options')"
-          flex="~ col gap-1"
           class="context-menu-list"
           @scroll="handleScroll"
           @keydown="handleMenuKeydown"
@@ -559,18 +461,50 @@ const unfollowUser = () => writeRelation(2)
               </button>
             </li>
           </template>
+
+          <template v-if="advancedGroups.length">
+            <li role="separator" class="divider" />
+            <li role="presentation">
+              <button
+                type="button" class="context-menu-item context-menu-advanced-toggle" role="menuitem" tabindex="-1"
+                :aria-expanded="advancedOpen"
+                @click="advancedOpen = !advancedOpen"
+              >
+                <i class="item-icon i-tabler:adjustments-horizontal" aria-hidden="true" />
+                {{ $t('video_card.operation.advanced_options') }}
+                <ChevronIcon class="context-menu-advanced-chevron" :direction="advancedOpen ? 'up' : 'down'" />
+              </button>
+            </li>
+            <li
+              ref="advancedOuterRef"
+              role="presentation"
+              class="context-menu-advanced"
+              :class="{ 'is-open': advancedOpen }"
+              :style="{ height: advancedHeight === undefined ? undefined : `${advancedHeight}px` }"
+              :inert="!advancedOpen"
+              @transitionend="handleAdvancedTransitionEnd($event); handleScroll()"
+            >
+              <ul ref="advancedInnerRef" role="presentation" class="context-menu-advanced__inner">
+                <template v-for="(optionGroup, index) in advancedGroups" :key="optionGroup[0].key">
+                  <li v-if="index" role="separator" class="divider" />
+                  <li v-for="option in optionGroup" :key="option.key" role="presentation">
+                    <button
+                      type="button" class="context-menu-item" :class="option.color" role="menuitem" tabindex="-1"
+                      @click="option.run"
+                    >
+                      <i class="item-icon" :class="[option.icon, option.color]" aria-hidden="true" />
+                      {{ option.name }}
+                    </button>
+                  </li>
+                </template>
+              </ul>
+            </li>
+          </template>
         </ul>
 
-        <!-- 底部滚动指示器 -->
-        <button
-          v-show="canScrollDown"
-          type="button"
-          class="scroll-indicator scroll-indicator-bottom"
-          :aria-label="$t('video_card.operation.scroll_to_bottom')"
-          @click="scrollToBottom"
-        >
-          <i class="i-tabler:chevron-down" aria-hidden="true" />
-        </button>
+        <!-- Gradient blur where the list is cut off; no arrow buttons. -->
+        <ProgressiveBlur class="context-menu-edge context-menu-edge--top" edge="top" :visible="canScrollUp" />
+        <ProgressiveBlur class="context-menu-edge context-menu-edge--bottom" edge="bottom" :visible="canScrollDown" />
       </div>
     </div>
 
@@ -649,8 +583,7 @@ const unfollowUser = () => writeRelation(2)
   }
 
   &:focus-visible {
-    outline: var(--bew-focus-ring, 1px solid CanvasText);
-    outline-offset: calc(-1 * var(--bew-space-0-5));
+    outline: var(--bew-focus-ring);
   }
 
   &:active {
@@ -669,82 +602,116 @@ const unfollowUser = () => writeRelation(2)
   flex: none;
 }
 
+// Same frosted glass as the other overlays outside a glass parent: the shared
+// translucent surface, the global blur token and the glass surface border.
+// The glass lives on a background layer, not the container: a container with
+// backdrop-filter would hide the page from the edge blurs inside it.
 .context-menu-container {
+  position: fixed;
   width: min(240px, calc(100vw - var(--bew-space-4)));
   max-height: min(406px, calc(100vh - var(--bew-space-4)));
   display: flex;
   flex-direction: column;
   padding: var(--bew-space-1);
-  overflow: hidden;
+  // A superellipse overflow clip on an ancestor makes Chromium drop the edge
+  // layers' gradient masks. The surface, list and blur layers clip themselves.
   z-index: var(--bew-z-popover);
+  background: transparent;
   animation: bew-context-menu-enter var(--bew-duration-fast) var(--bew-ease-standard) both;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    corner-shape: inherit;
+    background: var(--bew-popover-surface-background);
+    backdrop-filter: var(--bew-filter-glass-1);
+    -webkit-backdrop-filter: var(--bew-filter-glass-1);
+  }
 }
 
 .context-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-1);
   min-height: 0;
   max-height: 100%;
+  margin: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
   padding: 0;
+  list-style: none;
   > li {
     flex: none;
   }
 
-  /* 完全隐藏滚动条 */
-  -ms-overflow-style: none; /* IE 和 Edge */
+  -ms-overflow-style: none;
   scrollbar-width: none;
 
-  /* 隐藏 Webkit 浏览器的滚动条 */
   &::-webkit-scrollbar {
     display: none;
   }
 }
 
-.scroll-indicator {
-  height: 20px;
-  padding: 0;
-  font: inherit;
-  border: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  background: var(--bew-popover-surface-background);
-  border-radius: inherit;
-  corner-shape: inherit;
-  position: absolute;
-  left: 0;
-  right: 0;
-  z-index: 1;
-
-  &:hover {
-    color: var(--bew-text-color-1);
-    background: var(--bew-fill-2);
-  }
-
-  &-top {
-    top: 0;
-    border-bottom: 1px solid var(--bew-border-color);
-    border-bottom-right-radius: 0;
-    border-bottom-left-radius: 0;
-  }
-
-  &-bottom {
-    bottom: 0;
-    border-top: 1px solid var(--bew-border-color);
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
-  }
+.context-menu-advanced-chevron {
+  width: var(--bew-icon-size-xs);
+  height: var(--bew-icon-size-xs);
+  margin-left: auto;
+  color: var(--bew-text-3);
 }
 
+// Measured disclosure (useMeasuredDisclosure): only the clipped outer height animates.
+.context-menu-advanced {
+  display: block;
+  height: 0;
+  overflow: clip;
+  transition: height var(--bew-duration-normal) var(--bew-ease-standard);
+}
+
+.context-menu-advanced.is-open {
+  height: auto;
+}
+
+.context-menu-advanced__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-1);
+  margin: 0;
+  padding: var(--bew-space-1) 0 0;
+  list-style: none;
+}
+
+// Gradient blur over the cut-off rows (a user-requested exception to "no glass on
+// glass"; it samples only the menu's own content).
+.context-menu-edge {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  height: var(--bew-space-10);
+  border-radius: inherit;
+  corner-shape: inherit;
+}
+
+.context-menu-edge--top {
+  top: 0;
+}
+
+.context-menu-edge--bottom {
+  bottom: 0;
+}
+
+// Scale only: a glass surface is never faded.
 @keyframes bew-context-menu-enter {
   from {
-    opacity: 0;
     transform: scale(0.98);
   }
 
   to {
-    opacity: 1;
     transform: scale(1);
   }
 }
@@ -752,6 +719,10 @@ const unfollowUser = () => writeRelation(2)
 @media (prefers-reduced-motion: reduce) {
   .context-menu-container {
     animation: none;
+  }
+
+  .context-menu-advanced {
+    transition: none;
   }
 }
 </style>

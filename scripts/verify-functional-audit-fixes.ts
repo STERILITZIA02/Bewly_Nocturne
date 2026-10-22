@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 
+import * as sass from 'sass'
 import { computed, effectScope, nextTick, ref, watch } from 'vue'
 
 import { decodeHtmlEntities } from '../src/utils/htmlDecode'
@@ -209,22 +211,60 @@ async function verifyVideoIdentityReuse() {
 }
 
 async function verifySharedVideoStyles() {
-  const settings = ref({ videoCardTitleFontSize: 'base', videoCardAuthorFontSize: 'sm', videoCardMetaFontSize: 'xs' })
+  const settings = ref({ videoCardTitleFontSize: 'base', videoCardAuthorFontSize: 'sm' })
   const context = await loadSourceFunctions('../src/composables/useVideoCardSharedStyles.ts', [
-    'VIDEO_CARD_FONT_SIZE_MAP',
-    'VIDEO_CARD_LINE_HEIGHT_MAP',
-    'titleFontSizeClass',
-    'titleStyle',
-    'authorFontSizeClass',
-    'metaFontSizeClass',
-    'metaStyle',
+    'VIDEO_CARD_TYPE_ROLES',
+    'typeRole',
+    'textStyle',
     'useVideoCardSharedStyles',
   ], { computed, settings })
   const cards = Array.from({ length: 200 }, () => context.useVideoCardSharedStyles())
-  assert.equal(new Set(cards.map(card => card.titleFontSizeClass)).size, 1)
+  assert.equal(new Set(cards.map(card => card.textStyle)).size, 1)
+  assert.equal(cards[0].textStyle.value['--video-card-title-size'], 'var(--bew-font-size-title)', 'sizes are type tokens that follow the browser font scale')
   settings.value.videoCardTitleFontSize = 'lg'
-  assert.equal(cards[0].titleFontSizeClass.value, 'text-lg')
-  assert.equal(cards[199].titleFontSizeClass.value, 'text-lg', 'all cards still react to settings updates')
+  assert.equal(cards[199].textStyle.value['--video-card-title-size'], 'var(--bew-font-size-subheading)', 'all cards still react to settings updates')
+
+  for (const [path, title, details, coverGap] of [
+    ['../src/components/VideoCard/components/VideoCardInfo.vue', '.video-card-info-title', '.video-card-info', '.video-card-info'],
+    ['../src/contentScripts/views/WatchLater/WatchLaterGridCard.vue', '.watch-later-grid-card__title', '.watch-later-grid-card__body', '.watch-later-grid-card'],
+    ['../src/contentScripts/views/History/History.vue', '.history-list-card__title', '.history-list-card--grid .history-list-card__details', '.history-list-card--grid .history-list-card__content'],
+  ]) {
+    const url = new URL(path, import.meta.url)
+    const source = await readFile(url, 'utf8')
+    const scss = source.match(/<style[^>]*>([\s\S]*?)<\/style>/)![1]
+    const css = sass.compileString(scss, { url, logger: sass.Logger.silent }).css
+    const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)${selector.replaceAll('.', '\\.')}\\s*\\{([^}]*)\\}`))![1]
+    assert.doesNotMatch(rule(title), /(?:^|;)\s*(?:min-|max-)?height\s*:/, `${path}: uploader follows actual title height`)
+    assert.match(rule(title), /font-size: var\(--video-card-title-size\)/, `${path}: shared title size`)
+    assert.match(rule(title), /font-weight: var\(--bew-font-weight-regular\)/, `${path}: regular album title`)
+    assert.match(rule(details), /gap: var\(--bew-space-1\)/, `${path}: consistent title/uploader gap`)
+    assert.match(rule(coverGap), /(?:margin-top|gap): var\(--bew-space-3\)/, `${path}: cover gap exceeds text gap`)
+  }
+}
+
+async function verifyPreferredFontScale() {
+  let fontSize = '16px'
+  let preferred = '1'
+  let mounted = 0
+  const context = await loadSourceFunctions('../src/utils/browserFontScale.ts', ['readBrowserFontScale'], {
+    document: {
+      createElement: () => ({ style: { cssText: '' }, remove: () => mounted-- }),
+      documentElement: { append: () => mounted++ },
+    },
+    getComputedStyle: () => ({ fontSize, getPropertyValue: () => preferred }),
+  })
+  for (const [pixels, systemScale, expected] of [
+    ['16px', '1', 1],
+    ['20px', '1', 1.25],
+    ['20px', '', 1.25],
+    ['24px', '1.5', 1.5],
+    ['16px', '0.8', 0.8],
+  ] as const) {
+    fontSize = pixels
+    preferred = systemScale
+    assert.equal(context.readBrowserFontScale(), expected, 'OS and browser scaling must not multiply each other')
+    assert.equal(mounted, 0, 'the one-shot preference probe is removed')
+  }
 }
 
 async function verifyHorizontalWheelBoundary() {
@@ -248,6 +288,7 @@ async function verifyHorizontalWheelBoundary() {
 }
 
 export async function verifyFunctionalAuditFixes() {
+  await verifyPreferredFontScale()
   // Search suggestions now mount the real component in verify-maintenance-review.mjs.
   await verifySelectOptionChanges()
   await verifyRankingLoadingEvents()

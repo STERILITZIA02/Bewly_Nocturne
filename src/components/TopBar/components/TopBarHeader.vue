@@ -2,6 +2,7 @@
 import { useMediaQuery, useMutationObserver } from '@vueuse/core'
 import { computed, onMounted, ref } from 'vue'
 
+import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import SearchFocusOverlay from '~/components/SearchFocusOverlay.vue'
 import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
@@ -53,29 +54,6 @@ function fogGradient(color: string, peak: number) {
   const stops = fogStops(peak).map(([pos, alpha]) => `rgb(${color} / ${fogAlpha(alpha)}%) ${pos}%`)
   return `linear-gradient(to bottom, ${stops.join(', ')})`
 }
-
-// 仿 iOS 的 scroll edge effect：让模糊半径本身自顶向下衰减，内容像穿过一层雾
-// 那样逐渐变清晰。单层 backdrop-filter 配 mask 做不到这件事 —— 那只是把清晰
-// 图像和固定强度的模糊图像按比例混合，两份内容同时可见，会留下重影和边界感。
-//
-// 真正的渐进模糊要靠堆叠：每层 blur 半径翻倍，mask 窗口逐层向顶部收缩，
-// 后一层的 backdrop 是前一层绘制后的结果，于是模糊沿高度累积衰减。
-// 顶部五层叠满约等于 blur(18px)，到底部只剩不足 1px，自然归零。
-const BLUR_LAYER_COUNT = 5
-
-const blurLayers = Array.from({ length: BLUR_LAYER_COUNT }, (_, index) => {
-  const solid = ((BLUR_LAYER_COUNT - 1 - index) / BLUR_LAYER_COUNT) * 100
-  const fade = ((BLUR_LAYER_COUNT - index) / BLUR_LAYER_COUNT) * 100
-  const mask = `linear-gradient(to bottom, rgb(0 0 0 / 100%) 0, rgb(0 0 0 / 100%) ${solid}%, rgb(0 0 0 / 0%) ${fade}%)`
-  // 饱和度只加在覆盖最广的最底层，避免逐层累积把颜色推过头
-  const filter = index === 0 ? `blur(${2 ** index}px) saturate(180%)` : `blur(${2 ** index}px)`
-  return {
-    backdropFilter: filter,
-    WebkitBackdropFilter: filter,
-    maskImage: mask,
-    WebkitMaskImage: mask,
-  }
-})
 
 // 雾化层只改清晰度，还需要一层雾色叠上去才有"雾"的质感。
 const tintBackground = computed(() => {
@@ -202,16 +180,7 @@ function refreshSearchContent() {
   >
     <!-- 顶栏边缘雾化：渐进模糊 + 雾色 -->
     <div v-if="!settings.disableFrostedGlass" class="top-bar-header__scroll-edge" :style="{ height: OVERLAY_HEIGHT }">
-      <Transition name="fade">
-        <div v-if="!reachTop" class="top-bar-header__blur-stack">
-          <div
-            v-for="(layer, index) in blurLayers"
-            :key="index"
-            class="top-bar-header__blur-layer"
-            :style="layer"
-          />
-        </div>
-      </Transition>
+      <ProgressiveBlur class="top-bar-header__blur-stack" edge="top" radius="18px" saturate :visible="!reachTop" />
 
       <div
         class="top-bar-header__tint"
@@ -305,7 +274,6 @@ function refreshSearchContent() {
 }
 
 .top-bar-header__blur-stack,
-.top-bar-header__blur-layer,
 .top-bar-header__tint {
   position: absolute;
   inset: 0;

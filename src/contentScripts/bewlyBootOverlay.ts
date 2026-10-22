@@ -106,7 +106,7 @@ export function mountBewlyBootOverlay(doc: Document): BewlyBootOverlayController
       if (overlay.dataset.leaving === 'true')
         return
       overlay.dataset.leaving = 'true'
-      removalTimer = setTimeout(() => remove(true), BOOT_OVERLAY_FADE_MS)
+      removalTimer = setTimeout(remove, BOOT_OVERLAY_FADE_MS, true)
       return
     }
 

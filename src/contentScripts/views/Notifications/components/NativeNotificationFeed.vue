@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import MasonryGrid from '~/components/MasonryGrid.vue'
+import MasonryGrid from '~/components/WindowedMasonryGrid.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
@@ -61,7 +61,7 @@ let resolveBadgeRetry: ((shouldContinue: boolean) => void) | null = null
 let lifecycleActive = true
 
 const AUTO_REFRESH_TOP_THRESHOLD_PX = 32
-const masonryRef = ref<InstanceType<typeof MasonryGrid> | null>(null)
+const masonryRef = ref<{ layout: () => void, itemOffset: (key: string) => number | undefined } | null>(null)
 
 interface NotificationScrollAnchor {
   atTop: boolean
@@ -138,11 +138,9 @@ async function restoreScrollAnchor(anchor: NotificationScrollAnchor | null) {
     return
   }
 
-  const viewportTop = viewport.getBoundingClientRect().top
-  const anchoredElement = Array.from(feed.querySelectorAll<HTMLElement>('[data-notification-id]'))
-    .find(element => element.dataset.notificationId === anchor.id)
-  const nextScrollTop = anchoredElement
-    ? viewport.scrollTop + (anchoredElement.getBoundingClientRect().top - viewportTop - anchor.offset)
+  const offset = masonryRef.value?.itemOffset(anchor.id)
+  const nextScrollTop = offset !== undefined
+    ? offset - anchor.offset
     : anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight)
   state.scrollTop = Math.max(0, nextScrollTop)
   viewport.scrollTo({ top: state.scrollTop })
@@ -455,18 +453,17 @@ defineExpose({ refresh })
     </div>
 
     <template v-else>
-      <MasonryGrid ref="masonryRef" class="native-notification-feed__items native-notification-grid">
-        <template v-for="item in state.items" :key="item.id">
+      <MasonryGrid
+        ref="masonryRef" :items="state.items" :item-key="item => item.id" :viewport="scrollViewportRef" :active="active"
+        :snapshot="state.masonrySnapshot" class="native-notification-feed__items native-notification-grid"
+        @snapshot="state.masonrySnapshot = $event"
+      >
+        <template #default="{ item }">
           <NativeSystemNotificationItem v-if="item.kind === 'system'" :item="item" />
           <NativeNotificationItem v-else :item="item" />
         </template>
-        <NativeNotificationFeedSkeleton
-          v-if="state.loadingMore"
-          data-masonry-full-width
-          :count="2"
-          :label="feedAriaLabel" :section="section"
-        />
       </MasonryGrid>
+      <NativeNotificationFeedSkeleton v-if="state.loadingMore" :count="2" :label="feedAriaLabel" :section="section" />
 
       <div v-if="state.errorKind" class="native-notification-feed__pagination-state" role="status">
         <span>{{ errorMessage }}</span>

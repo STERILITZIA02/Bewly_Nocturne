@@ -98,7 +98,7 @@ function getKnownCloudEntry(field: string) {
 
 function isKnownCloudEntryUnreadable(field: string) {
   const key = createSettingsCloudSyncKey(field)
-  return Object.prototype.hasOwnProperty.call(knownCloudItems, key)
+  return Object.hasOwn(knownCloudItems, key)
     && normalizeSettingsCloudSyncEntry(knownCloudItems[key]) == null
 }
 
@@ -312,7 +312,7 @@ function prepareUploadBatch(entries: Array<[string, SettingsCloudSyncEntry]>) {
       continue
     }
 
-    const previousExists = Object.prototype.hasOwnProperty.call(knownCloudItems, key)
+    const previousExists = Object.hasOwn(knownCloudItems, key)
     const previousBytes = previousExists
       ? safeEstimateItemBytes(key, knownCloudItems[key])
       : 0
@@ -340,7 +340,7 @@ async function restoreUnreadableCloudItems(items: Record<string, SettingsCloudSy
   const restorations: Record<string, unknown> = {}
   for (const key of Object.keys(items)) {
     if (
-      Object.prototype.hasOwnProperty.call(knownCloudItems, key)
+      Object.hasOwn(knownCloudItems, key)
       && normalizeSettingsCloudSyncEntry(knownCloudItems[key]) == null
     ) {
       restorations[key] = knownCloudItems[key]
@@ -383,7 +383,7 @@ async function flushUploads() {
 
     for (const [field, entry] of batchEntries) {
       const key = createSettingsCloudSyncKey(field)
-      if (!Object.prototype.hasOwnProperty.call(items, key) || restoredKeys.has(key))
+      if (!Object.hasOwn(items, key) || restoredKeys.has(key))
         continue
       if (
         (incompatibleFieldGenerations.get(field) ?? 0) !== batchIncompatibleGenerations.get(field)

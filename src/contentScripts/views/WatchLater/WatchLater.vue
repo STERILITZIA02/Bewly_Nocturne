@@ -19,6 +19,7 @@ import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useGridLayout } from '~/composables/useGridLayout'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { usePageViewState } from '~/composables/usePageViewState'
+import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
 import { LIBRARY_AUTOFILL_PAGE_LIMIT } from '~/constants/library'
 import { settings } from '~/logic'
 import { isLayoutEditing, useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
@@ -77,7 +78,7 @@ const watchLaterLayoutMode = useLayoutEditSettingValue(
   'page.watchLater.layout',
   () => settings.value.watchLaterLayoutMode,
 )
-const { gridClass: watchLaterGridClass, gridCssVars: watchLaterGridCssVars } = useGridLayout(() => 'adaptive')
+const { gridClass: watchLaterGridClass } = useGridLayout(() => 'adaptive')
 const cardContainer = ref<HTMLElement | null>(null)
 const cardColumns = ref(1)
 const cardWidth = ref(0)
@@ -98,7 +99,7 @@ const cardWindow = useCardWindow({
   columns: cardColumns,
   gap: cardGap,
   enabled: computed(() => currentWatchLaterList.value.length > CARD_WINDOW_THRESHOLD),
-  estimatedHeight: computed(() => watchLaterLayoutMode.value === 'list' ? 190 : cardWidth.value * 9 / 16 + 112),
+  estimatedHeight: computed(() => watchLaterLayoutMode.value === 'list' ? 190 : cardWidth.value / VIDEO_CARD_COVER_ASPECT_RATIO + 112),
   layout: computed(() => `${watchLaterLayoutMode.value}:${settings.value.videoCardTitleFontSize}:${settings.value.videoCardAuthorFontSize}`),
   canRelease: key => !isLayoutEditing.value && pendingAction.value?.aid !== key,
 })
@@ -741,13 +742,14 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                     flex="shrink-0"
                     rounded="$bew-radius"
                     overflow-hidden
-                    aspect-video
+                    style="aspect-ratio: var(--bew-video-cover-aspect-ratio)"
                   >
                     <LazyPicture
                       v-if="item.pic"
                       responsive-cover
+                      aspect-ratio="var(--bew-video-cover-aspect-ratio)"
                       w="full"
-                      aspect-video
+                      h-full
                       :src="removeHttpFromUrl(`${item.pic}@480w_270h_1c`)"
                       :alt="item.title"
                       object-cover
@@ -899,7 +901,6 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
             ref="cardContainer"
             class="watch-later-grid"
             :class="watchLaterGridClass"
-            :style="watchLaterGridCssVars"
           >
             <TransitionGroup name="library-list" :css="currentWatchLaterList.length <= CARD_WINDOW_THRESHOLD" v-bind="currentWatchLaterList.length <= CARD_WINDOW_THRESHOLD ? retiringListTransition : {}">
               <template v-for="row in renderedRows" :key="row.key">

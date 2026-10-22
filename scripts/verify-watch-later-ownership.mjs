@@ -64,6 +64,7 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       '~/composables/useAppProvider': { useBewlyApp: () => ({ openIframeDrawer() {} }) },
       '~/constants/mediaPreview': { DELAYED_MEDIA_PREVIEW_MS: 1200 },
       '~/logic': { appAuthTokens: Vue.ref({}), settings: Vue.ref({ enableVideoPreview: preview }) },
+      '~/logic/layoutEdit': { findLayoutEditableTarget: () => undefined },
       '~/stores/topBarStore': { useTopBarStore: () => store },
       '~/utils/accountLifetime': await import('../src/utils/accountLifetime'),
       '~/utils/accountScope': await import('../src/utils/accountScope'),
@@ -132,6 +133,7 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       const fixture = await cardFixture({ pendingMember: true, mounted: true })
       try {
         fixture.props.value.showWatchLater = true
+        fixture.card.showVideoOptions.value = true
         await flush()
         if (failure === 'disposed')
           fixture.scope.stop()

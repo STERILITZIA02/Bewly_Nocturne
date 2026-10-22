@@ -304,7 +304,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   function redistributeColumns() {
     const count = Math.max(1, gridColumnCount.value)
     const next = Array.from({ length: count }, () => [] as DisplayMoment[])
-    const heights = Array.from({ length: count }, () => 0)
+    const heights = Array.from<number>({ length: count }).fill(0)
 
     feedOrder.clear()
     nextFeedOrder = 0

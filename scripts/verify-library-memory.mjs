@@ -133,7 +133,7 @@ export function registerLibraryMemoryChecks(check, { Vue, compileComponent, flus
     loader.dispose()
   })
 
-  check('memory: favorite metadata pages do not fetch offscreen avatars; only requested visible items enrich once', async () => {
+  check('memory: favorite pages fetch no uploader avatars (video cards show none)', async () => {
     const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
     let reads = 0
     const data = useFavoritesData({ api: { getFavoriteResources: async () => ({ code: 0, data: {
@@ -148,15 +148,9 @@ export function registerLibraryMemoryChecks(check, { Vue, compileComponent, flus
       data.selectedCategory.value = { id: 1 }
       await data.loadSelectedContent()
       assert.equal(data.favoriteResources.length, 20)
+      await flush()
       assert.equal(reads, 0)
-      data.loadResourceAvatars(data.favoriteResources.slice(0, 3))
-      await flush()
-      assert.equal(reads, 3)
-      data.loadResourceAvatars(data.favoriteResources.slice(0, 3))
-      await flush()
-      assert.equal(reads, 3)
-      assert.ok(data.favoriteResources.slice(0, 3).every(item => item.upper.face))
-      assert.ok(data.favoriteResources.slice(3).every(item => !item.upper.face))
+      assert.equal('loadResourceAvatars' in data, false)
     }
     finally { data.dispose() }
   })

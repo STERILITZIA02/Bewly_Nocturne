@@ -987,7 +987,7 @@ function appendMoments(items: DisplayMoment[]) {
 </script>
 
 <template>
-  <section ref="layoutRef" class="moments-page">
+  <section :ref="el => layoutRef = (el as HTMLElement | null)" class="moments-page">
     <LibraryWorkspace :label="t('moments.moments')">
       <template #sidebar="{ contentId }">
         <MomentsSidebar
@@ -1002,7 +1002,7 @@ function appendMoments(items: DisplayMoment[]) {
         <template #sidebar>
           <MomentsHotSearch />
         </template>
-        <main ref="momentsContentRef" class="moments-content">
+        <main :ref="el => momentsContentRef = (el as HTMLElement | null)" class="moments-content">
           <section
             v-if="showMomentsUpList"
             v-layout-editable="'moments-up-list'"
@@ -1148,7 +1148,7 @@ function appendMoments(items: DisplayMoment[]) {
           </div>
           <div
             v-else-if="moments.length"
-            ref="gridRef"
+            :ref="el => gridRef = (el as HTMLElement | null)"
             v-layout-editable="'moments-grid'"
             class="moments-grid"
             data-layout-editable-id="moments-grid"
@@ -1292,7 +1292,7 @@ function appendMoments(items: DisplayMoment[]) {
       <Transition v-bind="imageViewerMotion" @after-leave="details.finishDetailImageViewerClose">
         <div
           v-if="detailImageViewerOpen"
-          ref="detailImageViewerRef"
+          :ref="el => detailImageViewerRef = (el as HTMLElement | null)"
           class="moment-image-viewer"
           role="dialog"
           aria-modal="true"
@@ -1977,8 +1977,7 @@ function appendMoments(items: DisplayMoment[]) {
 }
 .moment-image-viewer__nav:focus-visible,
 .moment-image-viewer__toolbar button:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 2px;
+  outline: var(--bew-focus-ring);
 }
 .moment-image-viewer__close {
   position: absolute;

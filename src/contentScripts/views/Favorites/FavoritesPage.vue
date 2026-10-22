@@ -58,7 +58,7 @@ type SidebarManageSection = 'folder' | 'season'
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
-const data = useFavoritesData({ api: api.favorite, user: api.user, getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null, haveScrollbar, t })
+const data = useFavoritesData({ api: api.favorite, getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null, haveScrollbar, t })
 const { favoriteCategories, collectedFavoriteSeasons, favoriteResources, favoriteView, selectedCategory, selectedSeason, keyword, searchScope, isLoading, isFullPageLoading, bootstrapFailed, failedContentPage, stalledContentPage, noMoreContent, loadedSeasonComplete, articleFavoriteCount, initData, retryFavoritesBootstrap, loadSelectedContent, loadNextPage, retryFavoriteContent, contentVersion, categoryState, subscriptionState, loadMoreSubscriptions } = data
 const { visibleSubscriptions, visibleResources, visibleArticles, folderCovers, loadFolderCover } = data
 const { videoOrder, subscriptionFilter, otherFavoriteType, otherSearchScope, otherFavoriteCounts, visibleOtherFavorites } = data
@@ -619,6 +619,10 @@ async function handleUnfavorite(resource: FavoriteResource) {
   await runResourceWrite({ kind: 'delete', sourceId, resourceKeys: [getFavoriteResourceKey(resource)] }, true)
 }
 
+function getFavoriteMenuGroups(resource: FavoriteResource) {
+  return [[{ key: 'favorite:remove', name: t('favorites.unfavorite'), icon: 'i-tabler:star-off', color: 'text-$bew-error-color', run: () => void handleUnfavorite(resource) }]]
+}
+
 function applyFavoriteFilter(query: FavoriteFilterQuery) {
   closeBatchManage()
   exitSidebarManage()
@@ -810,18 +814,17 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
           :no-more-content="filterActive ? filterStatus !== 'scanning' : noMoreContent"
           :request-failed="filterActive ? false : failedContentPage !== null || stalledContentPage !== null"
           :empty-description="$t(keyword.trim() || filterActive ? 'library_tools.no_matches' : 'common.no_data')"
-          :more-btn="favoriteView === 'video' && searchScope === 'current' && !isBatchManaging"
+          :context-menu="favoriteView === 'video' && (searchScope === 'current' || filterActive) && !isBatchManaging"
+          :get-menu-extra-groups="getFavoriteMenuGroups"
           :hide-author="favoriteView === 'season' && selectedSeason?.type === 21"
           :card-click-handler="isBatchManaging ? handleFavoriteCardClick : undefined"
           :cover-top-left-always-visible="isBatchManaging"
           enable-row-padding
           @refresh="handleFavoriteGridRefresh"
           @load-more="handleFavoriteGridLoadMore"
-          @author-items-visible="data.loadResourceAvatars"
         >
-          <template v-if="favoriteView === 'video' && (searchScope === 'current' || filterActive)" #coverTopLeft="{ item }">
+          <template v-if="favoriteView === 'video' && isBatchManaging" #coverTopLeft="{ item }">
             <button
-              v-if="isBatchManaging"
               class="favorite-card-action"
               :class="{ selected: isSelectedFavoriteResource(item) }"
               :aria-label="t('favorites.batch_select_item')"
@@ -830,11 +833,6 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
             >
               <Tooltip :content="$t('favorites.batch_select_item')" placement="bottom-left" type="dark">
                 <div :class="isSelectedFavoriteResource(item) ? 'i-tabler:checkbox' : 'i-tabler:square'" />
-              </Tooltip>
-            </button>
-            <button v-else class="favorite-card-action danger" :aria-label="t('favorites.unfavorite')" @click.prevent.stop="handleUnfavorite(item)">
-              <Tooltip :content="$t('favorites.unfavorite')" placement="bottom-left" type="dark">
-                <div i-ic-baseline-clear />
               </Tooltip>
             </button>
           </template>
@@ -1403,11 +1401,6 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 .favorite-card-action.selected {
   color: var(--bew-text-1);
   background: var(--bew-selected-bg);
-}
-
-.favorite-card-action.danger:hover {
-  color: #fff;
-  background: var(--bew-error-color);
 }
 
 .batch-transfer-dialog {

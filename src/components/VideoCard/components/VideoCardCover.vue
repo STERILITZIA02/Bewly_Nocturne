@@ -6,7 +6,6 @@ import type { ErrorData, Events } from 'hls.js'
 import Button from '~/components/Button.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
-import Tooltip from '~/components/Tooltip.vue'
 import { useVideoPreviewSwipeSeek } from '~/composables/useVideoPreviewSwipeSeek'
 import { settings } from '~/logic'
 import { loadFlvModule } from '~/utils/flv'
@@ -26,31 +25,13 @@ interface Props {
   previewVideoUrl: string
   previewIdentity?: string
   previewCurrentTime?: number | null
-  isInWatchLater: boolean | undefined
-  showWatchLater: boolean
   coverTopLeftAlwaysVisible?: boolean
   coverImageUrl: string
-  // Shared cover metadata
-  coverStatValues?: {
-    view: string
-    danmaku: string
-    like: string
-    duration: string
-  }
-  coverStatsVisibility?: {
-    view: boolean
-    danmaku: boolean
-    like: boolean
-    duration: boolean
-  }
-  hasCoverStats?: boolean
-  shouldHideCoverStats?: boolean
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
   previewProgress: [time: number, identity: string]
-  toggleWatchLater: []
   undo: []
   previewError: []
   previewFullscreenChange: [isFullscreen: boolean]
@@ -391,18 +372,17 @@ onBeforeUnmount(() => {
   <div
     class="video-card-cover group/cover bew-shape-smooth-rect"
     shrink-0
-    relative bg="$bew-skeleton" rounded="$bew-media-radius"
+    relative bg="$bew-skeleton" rounded="$bew-video-cover-radius"
     overflow-hidden
     cursor-pointer
     group-hover:z-2
-    style="aspect-ratio: 16 / 9; contain: layout style; will-change: auto;"
+    style="aspect-ratio: var(--bew-video-cover-aspect-ratio); contain: layout style; will-change: auto;"
   >
     <!-- Skeleton mode -->
     <div
       v-if="skeleton"
       data-bew-skeleton
       w-full h-full bg="$bew-skeleton" rounded-inherit
-      style="aspect-ratio: 16 / 9;"
     />
 
     <!-- Normal mode -->
@@ -410,6 +390,8 @@ onBeforeUnmount(() => {
       <!-- Video cover -->
       <LazyPicture
         responsive-cover
+        aspect-ratio="var(--bew-video-cover-aspect-ratio)"
+        h-full
         :src="coverImageUrl"
         loading="lazy"
         :retain-screens="3"
@@ -418,7 +400,7 @@ onBeforeUnmount(() => {
 
       <div
         v-if="removed"
-        pos="absolute top-0 left-0" w-full h-fit aspect-video flex="~ col gap-2 items-center justify-center"
+        pos="absolute top-0 left-0" w-full h-full flex="~ col gap-2 items-center justify-center"
         bg="$bew-fill-4" backdrop-blur-20px mix-blend-luminosity rounded-inherit z-2
       >
         <p mb-2 color-white text-lg>
@@ -442,7 +424,7 @@ onBeforeUnmount(() => {
           class="video-card-preview"
           :aria-busy="isPreviewLoading"
           :class="{ 'video-card-preview--scrubbable': shouldEnableSwipeSeek }"
-          pos="absolute top-0 left-0" w-full aspect-video rounded-inherit bg-black
+          pos="absolute top-0 left-0" w-full h-full rounded-inherit bg-black
           v-on="previewInteractionEvents"
         >
           <video
@@ -547,73 +529,19 @@ onBeforeUnmount(() => {
         >
           {{ video?.badge?.text }}
         </div>
-
-        <!-- Keep the action focusable independently of hover/preview playback. -->
-        <button
-          v-if="showWatchLater"
-          type="button"
-          :aria-label="isInWatchLater === undefined ? $t('common.watch_later_status_unknown') : isInWatchLater ? $t('common.added') : $t('common.save_to_watch_later')"
-          pos="absolute top-0 right-0" z="2"
-          class="video-card-watch-later"
-          @click.prevent.stop="emit('toggleWatchLater')"
-          @keydown.enter.prevent.stop="emit('toggleWatchLater')"
-          @keydown.space.prevent.stop="emit('toggleWatchLater')"
-        >
-          <Tooltip v-if="!isInWatchLater" :content="isInWatchLater === undefined ? $t('common.watch_later_status_unknown') : $t('common.save_to_watch_later')" placement="bottom-right" type="dark">
-            <div i-tabler:playlist />
-          </Tooltip>
-          <Tooltip v-else :content="$t('common.added')" placement="bottom-right" type="dark">
-            <div i-tabler:check />
-          </Tooltip>
-        </button>
-
-        <!-- Cover stats (bottom overlay) -->
-        <div
-          v-if="hasCoverStats"
-          class="video-card-cover-stats video-card-stats"
-          :class="{
-            'video-card-cover-stats--hidden': shouldHideCoverStats,
-          }"
-        >
-          <div class="video-card-cover-stats__items">
-            <span
-              v-if="coverStatsVisibility?.view"
-              class="video-card-cover-stats__item cover-stat-view"
-            >
-              <span class="video-card-cover-stats__icon i-tabler:player-play" aria-hidden="true" />
-              <span class="video-card-cover-stats__value">{{ coverStatValues?.view }}</span>
-            </span>
-
-            <span
-              v-if="coverStatsVisibility?.danmaku"
-              class="video-card-cover-stats__item cover-stat-danmaku"
-            >
-              <span class="video-card-cover-stats__icon i-tabler:message" aria-hidden="true" />
-              <span class="video-card-cover-stats__value">{{ coverStatValues?.danmaku }}</span>
-            </span>
-
-            <span
-              v-if="coverStatsVisibility?.like"
-              class="video-card-cover-stats__item cover-stat-like"
-            >
-              <span class="video-card-cover-stats__icon i-tabler:thumb-up" aria-hidden="true" />
-              <span class="video-card-cover-stats__value">{{ coverStatValues?.like }}</span>
-            </span>
-          </div>
-
-          <span
-            v-if="coverStatsVisibility?.duration"
-            class="video-card-cover-stats__item video-card-cover-stats__item--duration"
-          >
-            <span class="video-card-cover-stats__value">{{ coverStatValues?.duration }}</span>
-          </span>
-        </div>
       </template>
     </template>
   </div>
 </template>
 
 <style lang="scss" scoped>
+@use "../../../styles/contentCard";
+
+.video-card-cover {
+  @include contentCard.media-frame;
+  transition: box-shadow var(--bew-duration-moderate) var(--bew-ease-standard);
+}
+
 .video-card-overlay-transition {
   transition: opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease);
 }
@@ -622,54 +550,6 @@ onBeforeUnmount(() => {
   transition:
     opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
     transform var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease);
-}
-
-.video-card-watch-later {
-  display: grid;
-  place-items: center;
-  width: var(--bew-cover-action-size);
-  height: var(--bew-cover-action-size);
-  padding: 0;
-  margin: var(--bew-cover-overlay-inset);
-  border-radius: var(--bew-cover-action-radius);
-  corner-shape: var(--bew-corner-shape);
-  font-size: var(--bew-icon-size-md);
-  background: var(--bew-cover-scrim);
-  appearance: none;
-  color: white;
-  line-height: 1;
-  border: 0;
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  transform: scale(0.95);
-  transition:
-    opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
-    transform var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
-    color var(--bew-duration-fast) var(--bew-ease-standard),
-    background-color var(--bew-duration-fast) var(--bew-ease-standard),
-    box-shadow var(--bew-duration-fast) var(--bew-ease-standard);
-}
-
-.video-card-cover:hover .video-card-watch-later,
-.video-card-watch-later:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .video-card-watch-later {
-    transform: none;
-    transition-property: opacity, color, background-color, box-shadow;
-  }
-}
-
-.video-card-watch-later:hover,
-.video-card-watch-later:focus-visible {
-  color: var(--bew-text-1);
-  background-color: var(--bew-selected-bg);
-  box-shadow: var(--bew-shadow-1);
 }
 
 .video-card-preview--scrubbable {
@@ -714,110 +594,5 @@ onBeforeUnmount(() => {
   background: var(--bew-theme-color);
   transform-origin: left center;
   will-change: transform;
-}
-
-.video-card-cover-stats {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--bew-space-2);
-  padding: var(--bew-cover-overlay-inset);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--bew-font-weight-medium);
-  color: #fff;
-  font-size: var(--video-card-stats-font-size, 0.75rem);
-  line-height: var(--video-card-stats-line-height, 1rem);
-  opacity: 1;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-  /* 只让下面两个角继承圆角，上面保持直线 */
-  border-bottom-left-radius: inherit;
-  border-bottom-right-radius: inherit;
-  corner-shape: inherit;
-  /* 确保容器不会溢出 */
-  overflow: hidden;
-}
-
-.video-card-cover-stats::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  /* 简化渐变：从6层减少到3层，提升性能 */
-  background: var(
-    --bew-video-card-shadow-gradient,
-    linear-gradient(to top, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.35) 50%, transparent 100%)
-  );
-  height: var(--bew-video-card-shadow-height-multiplier, calc(var(--video-card-stats-overlay-scale, 1.4) * 100%));
-  border-bottom-left-radius: inherit;
-  border-bottom-right-radius: inherit;
-  corner-shape: inherit;
-  pointer-events: none;
-}
-
-.video-card-cover-stats > * {
-  position: relative;
-  z-index: 1;
-}
-
-.video-card-cover-stats__items {
-  display: flex;
-  flex: 1 1 0;
-  align-items: center;
-  align-content: flex-start;
-  gap: var(--bew-space-2);
-  height: var(--video-card-stats-line-height, 1rem);
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  flex-wrap: wrap;
-}
-
-.video-card-cover-stats__item {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--bew-space-1);
-  max-width: 100%;
-  min-width: 0;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.video-card-cover-stats__icon {
-  flex: none;
-  width: 1em;
-  height: 1em;
-  font-size: var(--video-card-stats-icon-size, calc(var(--video-card-stats-font-size, 0.75rem) * 1.1));
-}
-
-.video-card-cover-stats__value {
-  min-width: 0;
-  overflow: hidden;
-  font-size: var(--video-card-stats-font-size, 0.75rem);
-  line-height: var(--video-card-stats-line-height, 1rem);
-  text-overflow: ellipsis;
-}
-
-.video-card-cover-stats__item--duration {
-  font-weight: var(--bew-font-weight-medium);
-  margin-left: auto;
-  font-size: var(--video-card-stats-font-size, 0.75rem);
-  /* 时长固定在最右侧，不收缩 */
-  flex-shrink: 0;
-
-  .video-card-cover-stats__value {
-    overflow: visible;
-    text-overflow: clip;
-  }
-}
-
-.video-card-cover-stats--hidden {
-  opacity: 0;
-  visibility: hidden;
 }
 </style>

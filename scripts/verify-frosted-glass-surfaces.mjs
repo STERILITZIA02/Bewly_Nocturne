@@ -82,7 +82,9 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
         .filter(rule => rule.selectorText && rule.style.getPropertyValue('backdrop-filter') && glass.matches(rule.selectorText))
         .map(rule => rule.style.getPropertyValue('backdrop-filter'))
       assert.deepEqual(backdropDeclarations, ['var(--bew-filter-glass-1)'], 'one host-owned sample; disable-frosted-glass resolves the token to none')
-      assert.notEqual(getComputedStyle(glass).borderStyle, 'none', 'the frame stays on the surface itself')
+      // JSDOM cannot resolve var() inside border shorthands either.
+      const border = [...style.sheet.cssRules].findLast(rule => rule.selectorText && rule.style.getPropertyValue('border') && glass.matches(rule.selectorText))?.style.getPropertyValue('border')
+      assert.equal(border, '1px solid var(--bew-surface-border-color)', 'the frame stays on the surface itself')
     }
     finally {
       glass.remove()

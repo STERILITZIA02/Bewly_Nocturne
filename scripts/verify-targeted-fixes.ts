@@ -23,7 +23,6 @@ import {
   toggleMomentDisclosure,
 } from '../src/components/MomentCard/momentForwardContent'
 import type { DisplayMoment } from '../src/components/MomentCard/types'
-import { normalizeVideoCardTags, selectVisibleVideoCardTags } from '../src/components/VideoCard/tagPolicy'
 import type { StorageLocalRuntime } from '../src/composables/useStorageLocal'
 import { CONTENT_SCRIPT_PONG, isCurrentContentScriptPong } from '../src/constants/contentScript'
 import { resolveDockCollapsedShellSize } from '../src/constants/dock'
@@ -317,21 +316,6 @@ function verifyIncrementalCorrectnessPolicies() {
   assert.equal(getFavoriteFolderPrivacy(false), 1)
   assert.equal(getFavoriteFolderEditedAttr(3, true), 2)
   assert.equal(getFavoriteFolderEditedAttr(2, false), 3)
-
-  const normalizedTags = normalizeVideoCardTags({
-    displayTags: ['推荐理由'],
-    searchableTags: ['音乐'],
-  })
-  assert.deepEqual(normalizedTags, [
-    { text: '推荐理由', searchable: false },
-    { text: '音乐', searchable: true },
-  ])
-  assert.deepEqual(selectVisibleVideoCardTags(normalizedTags, ['高赞', '长视频'], true, true), {
-    leading: normalizedTags,
-    highlights: [],
-  })
-  assert.equal(selectVisibleVideoCardTags(normalizedTags.slice(0, 1), ['高赞', '长视频'], true, true).highlights.length, 1)
-  assert.deepEqual(selectVisibleVideoCardTags([], ['高赞', '长视频', '百万播放'], true, true).highlights, ['高赞'])
 
   assert.equal(resolveMomentHostFollowState({ code: 0, data: { 42: { attribute: 1 } } }, '42'), 'followed')
   assert.equal(resolveMomentHostFollowState({ code: 0, data: { 42: { attribute: 2 } } }, '42'), 'followed')
@@ -2283,7 +2267,8 @@ async function verifyP2AccessibilityAndLocales() {
     assert.match(select, new RegExp(`case '${key}'`))
   assert.match(select, /nextTick\(\(\) => triggerRef\.value\?\.focus\(\)\)/)
 
-  assert.match(videoInfo, /aria-haspopup="menu"/)
+  // Card actions live in the right-click menu; the info row has no more button.
+  assert.doesNotMatch(videoInfo, /video-card__more-btn|aria-haspopup/)
   assert.match(contextMenu, /role="menu"/)
   assert.match(contextMenu, /role="menuitem"/)
   for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Escape'])
@@ -2302,7 +2287,7 @@ async function verifyP2AccessibilityAndLocales() {
     'widescreen.comments_loading',
     'settings.maintenance.build_id',
     'search_bar.input_label',
-    'video_card.operation.scroll_to_bottom',
+    'video_card.operation.advanced_options',
     'common.operation.delete',
   ]) {
     localeKeySets.forEach(keys => assert.equal(keys.has(key), true, `missing locale key: ${key}`))
@@ -3805,10 +3790,9 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(videoCardSkeleton, /<SkeletonBlock/)
   assert.match(videoCard, /--video-card-cover-flex/)
   assert.match(videoCard, /--video-card-info-flex/)
-  assert.match(videoCard, /if \(viewCount <= 0\)[\s\S]{0,80}return durationTag \? \[durationTag\] : tags/)
-  assert.match(videoCardCover, /\.video-card-cover-stats__items \{[\s\S]{0,260}flex: 1 1 0;[\s\S]{0,260}overflow: hidden;/)
-  assert.match(videoCardCover, /\.video-card-cover-stats__item--duration \{[\s\S]{0,160}flex-shrink: 0;/)
-  assert.doesNotMatch(videoCardCover, /@media \(min-width:.*cover-stat-danmaku/)
+  assert.doesNotMatch(videoCard, /highlightTags|durationTag/)
+  // Covers carry no view/like/danmaku/duration overlay (album-art presentation).
+  assert.doesNotMatch(videoCardCover, /video-card-cover-stats|cover-stat-/)
   assert.match(topBarStyles, /\.right-side-item \.login \{[\s\S]{0,400}height: var\(--bew-control-height\);/)
   assert.match(storage, /videoCardCoverRatioOneColumn: 50/)
   assert.match(storage, /record\.videoCardCoverRatioOneColumn = normalizeVideoCardCoverRatio/)
@@ -3966,12 +3950,15 @@ async function verifyIncrementalInteractionContracts() {
   }
 
   assert.match(contextMenu, /context-menu-container bew-popover-surface/)
-  assert.doesNotMatch(contextMenu, /translateY\(-100%\)|--b-context-menu-glass|backdrop-filter/)
+  // The card menu is shared frosted glass (global blur token) with edge blurs instead of arrows.
+  assert.doesNotMatch(contextMenu, /translateY\(-100%\)|--b-context-menu-glass|scroll-indicator/)
+  assert.match(contextMenu, /backdrop-filter: var\(--bew-filter-glass-1\)/)
   assert.match(contextMenu, /window\.addEventListener\('resize', handleViewportResize\)/)
   assert.match(contextMenu, /window\.removeEventListener\('resize', handleViewportResize\)/)
   assert.match(contextMenu, /observedVisualViewport\?\.addEventListener\('resize', handleViewportResize\)/)
   assert.match(contextMenu, /observedVisualViewport\?\.removeEventListener\('resize', handleViewportResize\)/)
-  assert.match(videoCardLogic, /bottom: position\.bottom[\s\S]{0,160}bottom right' : 'top right'/)
+  // The card menu opens at the pointer, so it grows from its left corner.
+  assert.match(videoCardLogic, /bottom: position\.bottom[\s\S]{0,160}bottom left' : 'top left'/)
   assert.match(momentCard, /bottom: position\.bottom[\s\S]{0,160}bottom right' : 'top right'/)
 
   assert.match(topBarInteraction, /export function resetTopBarTransientInteraction\(\)/)
@@ -4197,11 +4184,10 @@ async function verifyDrawerAndMomentsLayoutContracts() {
 
 async function verifyIncrementalCorrectnessContracts() {
   const root = process.cwd()
-  const [videoCard, videoCardInfo, videoCardTypes, videoCardTagPolicy, forYou, searchTransforms, contentScript, contentScriptConstants, refreshPrompt, viteContent, manifest, favorites, favoriteApi, cmnCn, cmnTw, jyut, en, moments, momentCard, widescreen, injectScript, globalEvents] = await Promise.all([
+  const [videoCard, videoCardInfo, videoCardTypes, forYou, searchTransforms, contentScript, contentScriptConstants, refreshPrompt, viteContent, manifest, favorites, favoriteApi, cmnCn, cmnTw, jyut, en, moments, momentCard, widescreen, injectScript, globalEvents] = await Promise.all([
     readFile(`${root}/src/components/VideoCard/VideoCard.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/components/VideoCardInfo.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/types.ts`, 'utf8'),
-    readFile(`${root}/src/components/VideoCard/tagPolicy.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Home/adapters/recommendationVideo.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/SearchResults/searchTransforms.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
@@ -4224,14 +4210,12 @@ async function verifyIncrementalCorrectnessContracts() {
 
   assert.match(videoCardTypes, /displayTags\?: string\[\]/)
   assert.match(videoCardTypes, /searchableTags\?: string\[\]/)
-  const cardMeta = await readFile(`${root}/src/components/VideoCard/components/VideoCardMeta.vue`, 'utf8')
-  assert.match(videoCardInfo, /<VideoCardMeta/)
-  assert.match(cardMeta, /:href="getTagSearchUrl\(searchable\.text\)"/)
-  assert.match(cardMeta, /target="_blank" @click\.stop/)
+  // Video cards show no tags or badges; only "followed" sits beside the author name.
+  assert.doesNotMatch(videoCardInfo, /VideoCardMeta|VideoWatchedTag|tagPolicy|VideoCardAuthorAvatar/)
   assert.match(videoCard, /v-else-if="horizontal"[\s\S]{0,120}class="horizontal-card-info"/)
   assert.match(forYou, /displayTags:/)
   assert.match(searchTransforms, /searchableTags:/)
-  assert.doesNotMatch([videoCard, videoCardInfo, videoCardTypes, videoCardTagPolicy].join('\n'), /MAX_INTERFACE_TAG_COUNT|typename.*displayTags|category.*displayTags/i)
+  assert.doesNotMatch([videoCard, videoCardInfo, videoCardTypes].join('\n'), /MAX_INTERFACE_TAG_COUNT|typename.*displayTags|category.*displayTags/i)
 
   assert.match(contentScriptConstants, /interface ContentScriptPong/)
   assert.match(refreshPrompt, /isCurrentContentScriptPong/)
@@ -4369,7 +4353,8 @@ async function verifyP4CleanupContracts() {
   assert.match(segmentStyles, /font-size: var\(--bew-control-label-size\)/)
   assert.match(segmentStyles, /font-weight: var\(--bew-control-label-weight\)/)
   assert.match(tokens, /--bew-control-label-size: var\(--bew-font-size-control\)/)
-  assert.match(tokens, /--bew-control-label-weight: var\(--bew-font-weight-medium\)/)
+  // Control labels are regular weight (user rule: medium read heavy at 13px).
+  assert.match(tokens, /--bew-control-label-weight: var\(--bew-font-weight-regular\)/)
   assert.doesNotMatch(segmentStyles, /\[data-active="true"\] \{[^}]*font-weight:/)
   for (const legacyStyle of [
     'padding: 8px 10px 8px',

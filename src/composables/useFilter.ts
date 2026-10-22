@@ -1,5 +1,9 @@
+import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
+
 import { settings } from '~/logic'
 import { compileFilterRules } from '~/utils/filterRules'
+import { createRegexBatchRunner } from '~/utils/regexBatchRunner'
 import { isVerticalVideo } from '~/utils/uriParse'
 
 const get = (obj: any, path: string[]) => path.reduce((acc, part) => acc && acc[part], obj)
@@ -24,6 +28,13 @@ type FuncMap = { [key in FilterType]: {
 type KeyPath = Array<string>[]
 
 export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], keyList: KeyPath) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const regexRunner = createRegexBatchRunner()
+  onScopeDispose(regexRunner.dispose)
+  const compiledTitleRules = computed(() => compileFilterRules(settings.value.filterByTitle))
+  const compiledUserRules = computed(() => compileFilterRules(settings.value.filterByUser))
+  const userNames = computed(() => new Set(compiledUserRules.value.stringValues))
   function filterOutVerticalVideos(item: any, keyPath: string[], _filterValue: number) {
     const value = get(item, keyPath)
     return !isVerticalVideo(value)
@@ -75,13 +86,13 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
   function compareTitle(item: any, keyPath: string[], _filterValue: string) {
     const value = get(item, keyPath)
 
-    return !(filterByTitleStringValues.some(keyword => `${value}`.toUpperCase().includes(keyword))
-      || filterByTitleRegExpValues.some(regex => regex.test(value)))
+    const normalized = `${value}`.toUpperCase()
+    return !filterByTitleStringValues.some(keyword => normalized.includes(keyword))
   }
   // #endregion
 
   // #region filter by user
-  let filterByUserStringValues: string[] = []
+  let filterByUserStringValues = new Set<string>()
   let filterByUserRegExpValues: RegExp[] = []
 
   /**
@@ -93,8 +104,7 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
   function compareUser(item: any, keyPath: string[], _filterValue: string) {
     const value = get(item, keyPath)
 
-    return !(filterByUserStringValues.includes(`${value}`.toUpperCase())
-      || filterByUserRegExpValues.some(regex => regex.test(value)))
+    return !filterByUserStringValues.has(`${value}`.toUpperCase())
   }
   // #endregion
 
@@ -162,7 +172,7 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
     },
   }
 
-  const filter = ref<((item: any) => boolean) | null>(null)
+  const filter = shallowRef<((items: any[]) => Promise<boolean[]>) | null>(null)
 
   watch(() => [
     settings.value.filterOutVerticalVideos,
@@ -175,15 +185,18 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
     settings.value.filterByDuration,
     settings.value.filterByViewCount,
     settings.value.filterByLikeCount,
-    settings.value.filterByTitle,
-    settings.value.filterByUser,
+    compiledTitleRules.value,
+    compiledUserRules.value,
     settings.value.filterByPublishTime,
+    settings.value.recommendationMode,
+    settings.value.disableFilterForFollowedUser,
   ], ([filterOutVerticalVideos, durationFilter, viewCountFilter, likeCountFilter, titleFilter, userFilter, publishTimeFilter]) => {
-    const titleRules = compileFilterRules(settings.value.filterByTitle)
-    const userRules = compileFilterRules(settings.value.filterByUser)
+    regexRunner.dispose()
+    const titleRules = compiledTitleRules.value
+    const userRules = compiledUserRules.value
     filterByTitleStringValues = titleRules.stringValues
     filterByTitleRegExpValues = titleRules.regExpValues
-    filterByUserStringValues = userRules.stringValues
+    filterByUserStringValues = userNames.value
     filterByUserRegExpValues = userRules.regExpValues
 
     if (!filterOutVerticalVideos && !durationFilter && !viewCountFilter && !likeCountFilter && !titleFilter && !userFilter && !publishTimeFilter) {
@@ -191,9 +204,9 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
       return
     }
     filter.value = factoryFilter(funcMap, filterOpt, keyList)
-  }, { deep: true, immediate: true })
+  }, { immediate: true })
 
-  function factoryFilter(funcMap: FuncMap, filterOpt: FilterType[], keyList: KeyPath): (item: any) => boolean {
+  function factoryFilter(funcMap: FuncMap, filterOpt: FilterType[], keyList: KeyPath) {
     interface FuncParams {
       keyPath: string[]
       func: (item: any, keyPath: string[], filterValue: any) => boolean
@@ -215,27 +228,42 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
       }
     })
 
-    return (item: object): boolean => {
-      const result = funcs.every(({ keyPath, func, value }) => {
-        if (isAllowedContent(item))
-          return true
+    const regexGroups = [FilterType.title, FilterType.user].map(type => ({
+      rules: (type === FilterType.title ? filterByTitleRegExpValues : filterByUserRegExpValues).map(regex => regex.source),
+      paths: filterOpt.flatMap((entry, index) => entry === type && Reflect.get(settings.value, funcMap[type].enabledKey) ? [keyList[index]] : []),
+    })).filter(group => group.rules.length && group.paths.length)
 
-        return func(item, keyPath, value)
+    return async (items: any[]): Promise<boolean[]> => {
+      const allowed = items.map(item => item === null || isAllowedContent(item))
+      const accepted = items.map((item, index) => allowed[index] || funcs.every(({ keyPath, func, value }) => func(item, keyPath, value)))
+      if (!regexGroups.length)
+        return accepted
+      const candidates = items.flatMap((item, index) => accepted[index] && !allowed[index] ? [{ item, index }] : [])
+      if (!candidates.length)
+        return accepted
+      let matches: boolean[][]
+      try {
+        matches = await regexRunner.run(regexGroups.map(({ rules, paths }) => ({ rules, values: candidates.map(({ item }) => paths.map(path => String(get(item, path)))) })))
+      }
+      catch (error) {
+        if ((error as Error).name !== 'AbortError')
+          toast.error(t('filter_rule_execution_failed'))
+        throw error
+      }
+      candidates.forEach(({ index }, position) => {
+        accepted[index] = !matches.some(group => group[position])
       })
-      return result
+      return accepted
     }
   }
 
   function isAllowedContent(item: any): boolean {
-    if (settings.value.recommendationMode !== 'app') {
-      const isFollowed = get(item, isFollowedKeyPath)
-      return isFollowed && settings.value.disableFilterForFollowedUser
-    }
-    if (settings.value.recommendationMode === 'app') {
-      const isFollowed = get(item, isFollowedKeyPath) === '已关注' || get(item, isFollowedKeyPath) === '已關注'
-      return isFollowed && settings.value.disableFilterForFollowedUser
-    }
-    return false
+    if (!settings.value.disableFilterForFollowedUser)
+      return false
+    const followed = get(item, isFollowedKeyPath)
+    return settings.value.recommendationMode === 'app'
+      ? followed === '已关注' || followed === '已關注'
+      : Boolean(followed)
   }
   return filter
 }

@@ -37,18 +37,18 @@ const groups = computed<MenuGroup[]>(() => [
       { key: 'openInBackground', label: t('video_card.operation.open_in_background'), icon: 'i-tabler:layout-navbar' },
       { key: 'openInNewWindow', label: t('video_card.operation.open_in_new_window'), icon: 'i-tabler:maximize' },
       { key: 'openInCurrentTab', label: t('video_card.operation.open_in_current_tab'), icon: 'i-tabler:layout-bottombar' },
-      { key: 'openInDrawer', label: t('video_card.operation.open_in_drawer'), icon: 'i-tabler:picture-in-picture' },
     ],
   },
   {
     id: 'copying',
     label: t('settings.video_card_context_menu_region_copying'),
     elements: [
-      { key: 'copyVideoLink', label: t('video_card.operation.copy_video_link'), icon: 'i-tabler:copy' },
-      { key: 'copyCleanVideoLink', label: t('video_card.operation.copy_clean_video_link'), icon: 'i-tabler:link' },
+      { key: 'copyVideoLink', label: t('video_card.operation.copy_video_link'), icon: 'i-tabler:link' },
+      { key: 'copyOriginalLink', label: t('video_card.operation.copy_original_link'), icon: 'i-tabler:copy' },
       { key: 'copyBVNumber', label: t('video_card.operation.copy_bv_number'), icon: 'i-tabler:copy' },
       { key: 'copyAVNumber', label: t('video_card.operation.copy_av_number'), icon: 'i-tabler:copy' },
       { key: 'viewOriginalCover', label: t('video_card.operation.view_the_original_cover'), icon: 'i-tabler:photo' },
+      { key: 'watchLater', label: t('common.save_to_watch_later'), icon: 'i-tabler:playlist-add' },
       { key: 'favorite', label: t('video_card.operation.favorite'), icon: 'i-tabler:star' },
     ],
   },
@@ -62,13 +62,14 @@ const groups = computed<MenuGroup[]>(() => [
   },
 ])
 
+// On = shown directly in the menu; off = folded under “高级选项”.
 function isVisible(key: VideoCardContextMenuKey) {
-  return settings.value.videoCardContextMenuConfig.find(item => item.key === key)?.visible ?? true
+  return !settings.value.videoCardContextMenuAdvanced.includes(key)
 }
 
 function setVisible(key: VideoCardContextMenuKey, visible: boolean) {
-  const config = settings.value.videoCardContextMenuConfig.filter(item => item.key !== key)
-  settings.value.videoCardContextMenuConfig = [...config, { key, visible }]
+  const advanced = settings.value.videoCardContextMenuAdvanced.filter(item => item !== key)
+  settings.value.videoCardContextMenuAdvanced = visible ? advanced : [...advanced, key]
 }
 </script>
 

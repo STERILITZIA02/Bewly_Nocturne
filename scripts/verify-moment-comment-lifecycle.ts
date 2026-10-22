@@ -172,7 +172,7 @@ export async function verifyMomentCommentLifecycle() {
   }
   const evaluate = (source: string) => {
     const exports: Record<string, any> = {}
-    const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
+    const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: false } }).outputText
     vm.runInNewContext(code, { exports, Error, AbortController, document: { hidden: false, addEventListener() {}, removeEventListener() {} }, require: (name: string) => {
       assert.ok(name in mockModules, `Unexpected module: ${name}`)
       return mockModules[name]

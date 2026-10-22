@@ -21,42 +21,50 @@
   --bew-page-max-width: 2280px;
 
   // #region Typography
-  // Use semantic roles instead of one-off size/weight pairs. Body and title share
-  // Bilibili's 15px base, with line height and weight providing their hierarchy.
-  --bew-font-size-caption: 12px;
-  --bew-font-size-control: 13px;
-  --bew-font-size-ui: 14px;
-  --bew-font-size-body: 15px;
-  --bew-font-size-title: 15px;
-  --bew-font-size-subheading: 17px;
-  --bew-font-size-heading: 20px;
+  // macOS text styles: 13/16 body, 12/15 callout, 11/14 supporting labels,
+  // 15/20 and 17/22 headings, 22/26 display, 26/32 large display.
+  // The user's OS/browser preference scales every role together.
+  --bew-font-scale: 1;
+  --bew-font-size-caption: calc(11px * var(--bew-font-scale));
+  --bew-font-size-callout: calc(12px * var(--bew-font-scale));
+  --bew-font-size-control: calc(13px * var(--bew-font-scale));
+  --bew-font-size-ui: var(--bew-font-size-control);
+  --bew-font-size-body: calc(13px * var(--bew-font-scale));
+  --bew-font-size-title: var(--bew-font-size-body);
+  --bew-font-size-subheading: calc(15px * var(--bew-font-scale));
+  --bew-font-size-heading: calc(17px * var(--bew-font-scale));
   // Rare display text and large numerals are not part of the interface text scale.
-  --bew-font-size-display: 24px;
+  --bew-font-size-display: calc(22px * var(--bew-font-scale));
   --bew-font-size-data: var(--bew-font-size-display);
-  --bew-font-size-data-emphasis: 28px;
-  --bew-line-height-caption: 16px;
-  --bew-line-height-control: 18px;
-  --bew-line-height-ui: 20px;
-  --bew-line-height-help: 20px;
-  --bew-line-height-body: 24px;
-  --bew-line-height-title: 22px;
-  --bew-line-height-subheading: 24px;
-  --bew-line-height-heading: 28px;
-  --bew-line-height-data: 32px;
+  --bew-font-size-data-emphasis: calc(26px * var(--bew-font-scale));
+  --bew-line-height-caption: calc(14px * var(--bew-font-scale));
+  --bew-line-height-callout: calc(15px * var(--bew-font-scale));
+  --bew-line-height-control: calc(16px * var(--bew-font-scale));
+  --bew-line-height-ui: var(--bew-line-height-control);
+  --bew-line-height-help: var(--bew-line-height-callout);
+  --bew-line-height-body: calc(16px * var(--bew-font-scale));
+  --bew-line-height-title: var(--bew-line-height-body);
+  --bew-line-height-subheading: calc(20px * var(--bew-font-scale));
+  --bew-line-height-heading: calc(22px * var(--bew-font-scale));
+  --bew-line-height-display: calc(26px * var(--bew-font-scale));
+  --bew-line-height-data: calc(32px * var(--bew-font-scale));
   --bew-font-weight-regular: 400;
   --bew-font-weight-medium: 500;
   --bew-font-weight-semibold: 600;
   --bew-font-weight-bold: 700;
-  // Hierarchy is conveyed by foreground tone and indentation, not heavier type.
-  --bew-heading-weight: var(--bew-font-weight-regular);
-  --bew-subheading-weight: var(--bew-font-weight-regular);
+  // Section headings are emphasized; content and control labels stay regular.
+  --bew-heading-weight: var(--bew-font-weight-semibold);
+  --bew-subheading-weight: var(--bew-font-weight-semibold);
   --bew-label-weight: var(--bew-font-weight-regular);
   --bew-control-press-scale: 0.97;
-  // Focus is independent of the user accent. Reuse this neutral, single-pixel
-  // treatment for selection controls, keyboard focus and injected native UI.
-  --bew-focus-ring-color: var(--bew-text-3);
-  --bew-focus-ring: 1px solid var(--bew-focus-ring-color);
-  --bew-focus-shadow: 0 0 0 1px var(--bew-focus-ring-color);
+  // Selecting or focusing an element never adds an emphasis border (user rule).
+  // The ring tokens draw nothing, and focus/selected border colours resolve to
+  // the resting border, so states read through background and text tone only.
+  --bew-focus-ring-color: var(--bew-border-color);
+  --bew-focus-ring: none;
+  --bew-focus-shadow: 0 0 0 transparent;
+  // The layout editor's target outline is editor chrome, not element styling.
+  --bew-layout-editor-outline-color: var(--bew-text-3);
   --bew-base-font-size: var(--bew-font-size-body);
   // Compact media rows shared by Favorites, History, Moments and Watch Later pops.
   --bew-media-pop-title-font-size: var(--bew-font-size-title);
@@ -87,6 +95,8 @@
   --bew-radius: var(--bew-radius-lg);
   --bew-card-radius: var(--bew-radius-lg);
   --bew-media-radius: var(--bew-radius-lg);
+  // Video card covers read as album art: one step rounder than other media.
+  --bew-video-cover-radius: var(--bew-radius-xl);
   --bew-panel-radius: var(--bew-radius-lg);
   --bew-modal-radius: var(--bew-radius-2xl);
   --bew-popover-radius: var(--bew-radius-lg);
@@ -111,9 +121,17 @@
 
   // #region Layout
   --bew-layout-content-gap: var(--bew-space-5);
+  // Content to window edge on full-width pages (Moments right column, Home feed).
+  --bew-page-inline-inset: var(--bew-space-6);
+  // 320x168 minimum: 14/15 of the former 16:9 height, with integer dimensions.
+  // Keep aligned with the video cover constants in constants/layout.ts.
+  --bew-video-card-min-width: 320px;
+  --bew-video-cover-aspect-ratio: 40 / 21;
   --bew-card-inset: var(--bew-space-4);
   --bew-card-stack-gap: var(--bew-space-3);
   --bew-card-hover-outset: var(--bew-space-2);
+  --bew-card-hover-scale: 1.07;
+  --bew-card-hover-blur-radius: 6px;
   --bew-card-row-gap: var(--bew-space-8);
   --bew-card-inset-radius: var(--bew-radius-md);
   --bew-card-avatar-size: var(--bew-space-8);
@@ -123,7 +141,6 @@
   // Controls pinned near a rounded corner stay concentric with it: the parent
   // radius minus the real inset, never below the small radius. Controls whose
   // inset reaches the parent radius use the ordinary interactive radius.
-  --bew-cover-action-radius: max(var(--bew-radius-sm), calc(var(--bew-media-radius) - var(--bew-cover-overlay-inset)));
   --bew-card-media-action-radius: max(var(--bew-radius-sm), calc(var(--bew-card-inset-radius) - var(--bew-space-2)));
   --bew-cover-scrim: rgb(0 0 0 / 56%);
   --bew-layout-sidebar-width: 200px;
@@ -154,7 +171,7 @@
   --bew-wheel-label-size: var(--bew-font-size-display);
   --bew-wheel-label-weight: var(--bew-font-weight-medium);
   --bew-message-share-width: calc(var(--bew-space-12) * 8);
-  --bew-wheel-label-line-height: 32px;
+  --bew-wheel-label-line-height: var(--bew-line-height-data);
   --bew-wheel-radius: calc((var(--bew-wheel-label-line-height) + var(--bew-space-2)) * 2);
   --bew-wheel-viewport-height: calc(var(--bew-line-height-control) * 3 + var(--bew-space-2) * 4);
   --bew-sidebar-heading-height: calc(var(--bew-wheel-viewport-height) + var(--bew-space-2));
@@ -267,7 +284,8 @@
   --bew-control-icon-size: 16px;
   --bew-control-label-size: var(--bew-font-size-control);
   --bew-control-label-line-height: var(--bew-line-height-control);
-  --bew-control-label-weight: var(--bew-font-weight-medium);
+  // Regular, like Apple Music: medium labels read heavy at 13px.
+  --bew-control-label-weight: var(--bew-font-weight-regular);
   --bew-control-background: var(--bew-elevated-solid);
   --bew-control-selected-background: color-mix(in srgb, var(--bew-text-1) 9%, var(--bew-content-solid));
   --bew-control-background-white: var(--bew-top-bar-solid-background-force-white);
@@ -345,6 +363,8 @@
   // #region Filters
   // Use this in all components (except dialogs) if you want to add a frosted glass effect
   --bew-filter-glass-1: blur(20px) saturate(180%);
+  // The same radius as a length, for gradient blurs (ProgressiveBlur.vue).
+  --bew-glass-blur-radius: 20px;
 
   // Use this in dialogs if you want to add a frosted glass effect
   --bew-filter-glass-2: blur(30px) saturate(180%);
@@ -404,7 +424,8 @@
   --bew-hover-bg: color-mix(in srgb, var(--bew-neutral-fg) 7%, transparent);
   --bew-selected-bg: color-mix(in srgb, var(--bew-neutral-fg) 8%, var(--bew-content-solid));
   --bew-pressed-bg: color-mix(in srgb, var(--bew-neutral-fg) 9%, var(--bew-content-solid));
-  --bew-selected-ring: inset 0 0 0 1px color-mix(in srgb, var(--bew-neutral-fg) 6%, transparent);
+  // Selection reads through --bew-selected-bg alone; no ring (user rule).
+  --bew-selected-ring: 0 0 0 transparent;
   // Compatibility aliases for existing secondary surfaces; never tinted by accent.
   --bew-theme-surface: var(--bew-selected-bg);
   --bew-theme-surface-hover: var(--bew-pressed-bg);
@@ -487,8 +508,10 @@
   --bew-neutral-ramp-9: color-mix(in srgb, var(--bew-neutral-fg) 88%, var(--bew-neutral-bg));
   --bew-text-auto: var(--bew-neutral-bg);
   --bew-text-1: var(--bew-neutral-fg);
-  --bew-text-2: color-mix(in srgb, var(--bew-neutral-fg) 76%, transparent);
-  --bew-text-3: color-mix(in srgb, var(--bew-neutral-fg) 67%, transparent);
+  // Native label hierarchy: primary content, secondary details, supporting
+  // information, then disabled/placeholder. Reading levels retain contrast.
+  --bew-text-2: color-mix(in srgb, var(--bew-neutral-fg) 70%, transparent);
+  --bew-text-3: color-mix(in srgb, var(--bew-neutral-fg) 64%, transparent);
   // Disabled/placeholder only; never use this level for reading content.
   --bew-text-4: color-mix(in srgb, var(--bew-neutral-fg) 38%, transparent);
 
@@ -537,6 +560,10 @@
   --bew-border-color: color-mix(in srgb, var(--bew-neutral-fg) 14%, transparent);
   --un-default-border-color: var(--bew-border-color);
   --bew-surface-border-color: color-mix(in srgb, var(--bew-neutral-fg) 16%, transparent);
+  // Album-art hairline (Apple Music): drawn over covers, finer and crisper than
+  // surface edges. A device-pixel line on HiDPI, so the colour carries more weight.
+  --bew-media-edge-color: rgb(0 0 0 / 14%);
+  --bew-media-edge-width: 1px;
   --bew-comment-tree-line-color: color-mix(in srgb, var(--bew-neutral-fg) 14%, transparent);
   --bew-input-bg: var(--bew-neutral-inset);
   --bew-input-bg-hover: color-mix(in srgb, var(--bew-neutral-fg) 3%, var(--bew-neutral-inset));
@@ -546,6 +573,13 @@
   --bew-switch-thumb-active: var(--bew-on-theme-color);
   --bew-ip-tag-bg: var(--bew-fill-1);
   --bew-ip-tag-text: var(--bew-text-3);
+}
+
+@media (min-resolution: 2dppx) {
+  :host,
+  :root {
+    --bew-media-edge-width: 0.5px;
+  }
 }
 
 @media (max-width: breakpoints.$compact-max) {
@@ -592,6 +626,8 @@
   // Edge weights approved for dark and OLED; light mode is tuned separately.
   --bew-border-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
   --bew-surface-border-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  // A light rim on artwork, brighter than surface edges (dark and OLED).
+  --bew-media-edge-color: rgb(255 255 255 / 22%);
   --bew-comment-tree-line-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
   --bew-input-border-color: color-mix(in srgb, var(--bew-neutral-fg) 16%, transparent);
   --bew-input-border-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 20%, transparent);
@@ -612,6 +648,7 @@
 
   --bew-neutral-bg: #141414;
   --bew-neutral-fg: #ebebeb;
+  --bew-text-3: color-mix(in srgb, var(--bew-neutral-fg) 60%, transparent);
   --bew-neutral-canvas: var(--bew-neutral-bg);
   // Calibrated by role: quiet reading surfaces, distinct overlays, recessed fields.
   // These amounts reproduce the approved visual balance, not equal numeric steps.
@@ -653,6 +690,17 @@
   // The inherited neutral sidebar tint stays slightly lifted above the OLED black page.
 }
 
+@media (prefers-contrast: more) {
+  :host,
+  :root,
+  :host(.dark),
+  :root.dark {
+    --bew-text-2: color-mix(in srgb, var(--bew-neutral-fg) 88%, transparent);
+    --bew-text-3: color-mix(in srgb, var(--bew-neutral-fg) 76%, transparent);
+    --bew-text-4: color-mix(in srgb, var(--bew-neutral-fg) 55%, transparent);
+  }
+}
+
 :host(.disable-frosted-glass),
 :root.disable-frosted-glass {
   --bew-content-opacity: 1;
@@ -660,6 +708,7 @@
   --bew-elevated-alt-hover: var(--bew-elevated-alt-solid-hover);
   --bew-filter-glass-1: none;
   --bew-filter-glass-2: none;
+  --bew-glass-blur-radius: 0px;
   --bew-fill-alt: var(--bew-content-solid);
   --bew-popover-surface-background: var(--bew-popover-surface-background-solid);
 }

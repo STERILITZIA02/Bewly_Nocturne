@@ -1,20 +1,21 @@
 <script setup lang="ts">
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 
 defineProps<{ history?: boolean }>()
+const { textStyle } = useVideoCardSharedStyles()
 </script>
 
 <template>
-  <article class="library-video-skeleton" :class="{ 'library-video-skeleton--history': history }" aria-hidden="true">
+  <article class="library-video-skeleton" :class="{ 'library-video-skeleton--history': history }" :style="textStyle" aria-hidden="true">
     <SkeletonBlock class="library-video-skeleton__cover" height="auto" radius="media" />
     <div class="library-video-skeleton__details">
       <div class="library-video-skeleton__title">
-        <SkeletonBlock width="88%" height="var(--bew-font-size-title)" />
-        <SkeletonBlock width="68%" height="var(--bew-font-size-title)" />
+        <SkeletonBlock width="88%" height="var(--video-card-title-size)" />
+        <SkeletonBlock width="68%" height="var(--video-card-title-size)" />
       </div>
       <div class="library-video-skeleton__author">
-        <SkeletonBlock width="var(--bew-space-6)" height="var(--bew-space-6)" radius="circle" />
-        <SkeletonBlock width="45%" height="var(--bew-line-height-control)" />
+        <SkeletonBlock width="45%" height="var(--bew-author-line-height)" />
       </div>
       <div v-if="history" class="library-video-skeleton__time">
         <SkeletonBlock width="60%" height="var(--bew-line-height-control)" />
@@ -36,15 +37,15 @@ defineProps<{ history?: boolean }>()
 }
 .library-video-skeleton__cover {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: var(--bew-video-cover-aspect-ratio);
 }
 .library-video-skeleton__details {
   display: grid;
-  gap: var(--bew-space-2);
+  gap: var(--bew-space-1);
 }
 .library-video-skeleton__title {
   display: grid;
-  grid-template-rows: repeat(2, var(--bew-line-height-title));
+  grid-template-rows: repeat(2, var(--bew-title-line-height));
   align-items: center;
 }
 .library-video-skeleton__author {

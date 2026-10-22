@@ -91,26 +91,8 @@ export interface LocalSettings {
  * 网格列数配置
  * 固定的媒体断点，只允许配置每个断点的列数
  */
-export interface GridColumnsConfig {
-  base: number // 默认列数 (< 640px)
-  sm: number // >= 640px
-  md: number // >= 768px
-  lg: number // >= 1024px
-  xl: number // >= 1280px
-  xxl: number // >= 1536px
-}
-
-// 默认列数配置
-export const defaultGridColumns: GridColumnsConfig = {
-  base: 1,
-  sm: 2,
-  md: 3,
-  lg: 4,
-  xl: 5,
-  xxl: 6,
-}
-
 export const videoCardContextMenuKeys = [
+  'watchLater',
   'favorite',
   'notInterested',
   'notInterestedUploader',
@@ -118,9 +100,8 @@ export const videoCardContextMenuKeys = [
   'openInBackground',
   'openInNewWindow',
   'openInCurrentTab',
-  'openInDrawer',
   'copyVideoLink',
-  'copyCleanVideoLink',
+  'copyOriginalLink',
   'copyBVNumber',
   'copyAVNumber',
   'viewOriginalCover',
@@ -129,14 +110,6 @@ export const videoCardContextMenuKeys = [
 ] as const
 
 export type VideoCardContextMenuKey = typeof videoCardContextMenuKeys[number]
-
-export interface VideoCardContextMenuConfigItem {
-  key: VideoCardContextMenuKey
-  visible: boolean
-}
-
-export const defaultVideoCardContextMenuConfig: VideoCardContextMenuConfigItem[]
-  = videoCardContextMenuKeys.map(key => ({ key, visible: true }))
 
 export interface Settings {
   touchScreenOptimization: boolean
@@ -158,7 +131,6 @@ export interface Settings {
   externalWatchLaterButton: boolean // 稍后再看按钮外置
 
   // Grid 相关设置
-  gridColumns: GridColumnsConfig
   autoSwitchListLayout: boolean
   /** Automatic two-column -> one-column switch threshold in CSS pixels. */
   autoSwitchListLayoutBreakpoint: number
@@ -197,10 +169,7 @@ export interface Settings {
   enableVideoPreviewSwipeSeek: boolean
   hoverVideoCardDelayed: boolean
   onlyCoverVideoPreview: boolean
-  showVideoCardAuthorAvatar: boolean
   showVideoCardAuthorName: boolean
-  showVideoCardVideoTag: boolean
-  showVideoCardRecommendTag: boolean
   showVideoCardPublishTime: boolean
   showVideoCardViewCount: boolean
   showVideoCardDanmakuCount: boolean
@@ -208,7 +177,8 @@ export interface Settings {
   showVideoCardDuration: boolean
   showVideoCardWatchLater: boolean
   showVideoWatchedBadge: boolean
-  videoCardContextMenuConfig: VideoCardContextMenuConfigItem[]
+  /** Card menu items folded under “高级选项” at the bottom; every other item shows directly. */
+  videoCardContextMenuAdvanced: VideoCardContextMenuKey[]
 
   // Desktop & Dock
   autoHideTopBar: boolean
@@ -360,7 +330,6 @@ export interface Settings {
   // Video card author (UP) font size token
   videoCardAuthorFontSize: VideoCardFontSizeSetting
   // Video card tag/meta font size token
-  videoCardMetaFontSize: VideoCardFontSizeSetting
   // Preferred video card layout
   // Video card shadow customization (modern layout only)
   videoCardShadowCurve: ShadowCurvePoint[]
@@ -450,7 +419,6 @@ export const originalSettings: Settings = {
   externalWatchLaterButton: true, // 默认开启稍后再看按钮外置
 
   // Grid 相关默认设置
-  gridColumns: { ...defaultGridColumns },
   autoSwitchListLayout: true,
   autoSwitchListLayoutBreakpoint: MOBILE_LIST_LAYOUT_BREAKPOINT,
   // Preserve the former equal split and 400px maximum at default values.
@@ -488,10 +456,7 @@ export const originalSettings: Settings = {
   enableVideoPreviewSwipeSeek: false,
   hoverVideoCardDelayed: false,
   onlyCoverVideoPreview: false,
-  showVideoCardAuthorAvatar: true,
   showVideoCardAuthorName: true,
-  showVideoCardVideoTag: true,
-  showVideoCardRecommendTag: true,
   showVideoCardPublishTime: true,
   showVideoCardViewCount: true,
   showVideoCardDanmakuCount: true,
@@ -499,7 +464,7 @@ export const originalSettings: Settings = {
   showVideoCardDuration: true,
   showVideoCardWatchLater: true,
   showVideoWatchedBadge: false,
-  videoCardContextMenuConfig: defaultVideoCardContextMenuConfig.map(item => ({ ...item })),
+  videoCardContextMenuAdvanced: ['copyOriginalLink', 'copyBVNumber', 'copyAVNumber'],
 
   // Desktop & Dock
   autoHideTopBar: false,
@@ -647,7 +612,6 @@ export const originalSettings: Settings = {
   homeAdaptiveTitleAutoSize: true,
   videoCardTitleFontSize: 'base',
   videoCardAuthorFontSize: 'sm',
-  videoCardMetaFontSize: 'xs',
   videoCardShadowCurve: [
     { position: 0, opacity: 80 },
     { position: 30, opacity: 70 },

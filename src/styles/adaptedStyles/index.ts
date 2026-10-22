@@ -157,7 +157,8 @@ async function setupStyles(currentUrl: string) {
     // moments
     /https?:\/\/t\.bilibili\.com\/.*/.test(routeUrl)
     // moment detail, new articles page
-    || /https?:\/\/www\.bilibili\.com\/opus\/.*/.test(routeUrl)) {
+    || /https?:\/\/www\.bilibili\.com\/opus\/.*/.test(routeUrl)
+  ) {
     const css = await loadStyle(import('./pages/momentsPage.scss?inline'))
     if (!activatePage(css, 'momentsPage'))
       return

@@ -718,22 +718,24 @@ export function useForYouRecommendations(emit: {
       }
 
       if (response.code === 0 && Array.isArray(response.data.item)) {
-      // 只在成功时递增 refreshIdx
-        refreshIdx.value = currentRefreshIdx + 1
-        webFetchRow.value = fetchRow
-
         const accepted: VideoElement[] = []
         const batchKeys = new Set<string>()
         const activeWebFilter = hasActiveWebRecommendationFilter.value ? filterFunc.value : null
+        const classifications = response.data.item.map((item: VideoItem) => ({ advertisement: isBilibiliAdvertisement(item), usable: Boolean(item.owner && item.stat) }))
+        const filterMatches = activeWebFilter ? await activeWebFilter(response.data.item.map((item: VideoItem, index: number) => classifications[index].advertisement || !classifications[index].usable ? null : item)) : null
+        if (!isCurrentWebRequest(version, recommendationMode, accountId))
+          return
+        refreshIdx.value = currentRefreshIdx + 1
+        webFetchRow.value = fetchRow
         let filteredCandidateCount = 0
         let filteredKeptCount = 0
 
         // Only this page is classified, deduped (against the maintained key
         // index), filtered and transformed; the accumulated list is not rescanned.
-        response.data.item.forEach((item: VideoItem) => {
-          const advertisement = isBilibiliAdvertisement(item)
+        response.data.item.forEach((item: VideoItem, index: number) => {
+          const { advertisement, usable } = classifications[index]
           // 过滤掉缺少必要字段的数据（owner 或 stat 为 null）
-          if (!advertisement && (!item.owner || !item.stat))
+          if (!advertisement && !usable)
             return
 
           const itemKey = getWebVideoKey(item)
@@ -744,7 +746,7 @@ export function useForYouRecommendations(emit: {
           if (activeWebFilter && !advertisement)
             filteredCandidateCount++
 
-          if (activeWebFilter && !advertisement && !activeWebFilter(item))
+          if (filterMatches && !advertisement && !filterMatches[index])
             return
 
           if (activeWebFilter && !advertisement)
@@ -926,16 +928,22 @@ export function useForYouRecommendations(emit: {
         }
 
         if (response.code === 0 && Array.isArray(response.data?.items)) {
-          appFeedIdx.value = idx + 1
           const activeAppFilter = hasActiveAppRecommendationFilter.value ? appFilterFunc.value : null
+          const advertisements = response.data.items.map(isBilibiliAdvertisement)
+          const normalizedItems = response.data.items.map((item: AppVideoItem, index: number) => advertisements[index] ? item : normalizeAppVideoItem(item))
+          const representable = normalizedItems.map((item, index) => !advertisements[index] && isRepresentableAppVideo(item))
+          const filterMatches = activeAppFilter ? await activeAppFilter(normalizedItems.map((item, index) => representable[index] ? item : null)) : null
+          if (!isCurrentAppRequest())
+            return
+          appFeedIdx.value = idx + 1
           let filteredCandidateCount = 0
           let filteredKeptCount = 0
 
           const accepted: AppVideoElement[] = []
           const batchKeys = new Set<string>()
           const isSeen = (key: string) => appFeed.has(key) || batchKeys.has(key)
-          response.data.items.forEach((rawItem: AppVideoItem) => {
-            if (isBilibiliAdvertisement(rawItem)) {
+          response.data.items.forEach((rawItem: AppVideoItem, index: number) => {
+            if (advertisements[index]) {
               const displayData = toAdvertisementCard(rawItem)
               const uniqueId = displayData.advertisementKey!
               if (!isSeen(uniqueId)) {
@@ -944,8 +952,8 @@ export function useForYouRecommendations(emit: {
               }
               return
             }
-            const item = normalizeAppVideoItem(rawItem)
-            if (!isRepresentableAppVideo(item))
+            const item = normalizedItems[index]
+            if (!representable[index])
               return
 
             const videoKeys = getAppVideoKeys(item)
@@ -955,7 +963,7 @@ export function useForYouRecommendations(emit: {
 
             if (activeAppFilter) {
               filteredCandidateCount++
-              if (!activeAppFilter(item))
+              if (!filterMatches![index])
                 return
               filteredKeptCount++
             }

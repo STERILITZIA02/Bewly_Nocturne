@@ -29,7 +29,6 @@ defineExpose({ initData, undoRefresh, goForward, canGoBack, canGoForward })
       :get-item-key="(item: VideoElement | AppVideoElement) => item.uniqueId"
       :video-type="isWebRecommendationMode ? 'rcmd' : 'appRcmd'"
       show-preview
-      more-btn
       @refresh="retryRecommendation"
       @login="jumpToLoginPage"
       @load-more="handleLoadMore"

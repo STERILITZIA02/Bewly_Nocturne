@@ -25,6 +25,7 @@ import { shouldSuppressWidescreenAutoEntry } from '~/utils/bewlyWidescreenPolicy
 import { isConfirmedLiveEmbeddedFrame } from '~/utils/bilibiliLiveContext'
 import { getBilibiliLogicalPathname, toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, restoreOriginalBilibiliTopBarParent, restorePreparedOriginalBilibiliTopBars } from '~/utils/bilibiliTopBar'
+import { readBrowserFontScale } from '~/utils/browserFontScale'
 import { resolveDarkModeBaseColor } from '~/utils/darkModeTint'
 import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveIframeEscapeAction } from '~/utils/drawerEscape'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
@@ -1649,6 +1650,12 @@ else if (shouldInitializeContentScript) {
 
     // 立即设置Shadow DOM容器的基准颜色，确保Vue组件能够访问到正确的CSS变量
     container.style.setProperty('--bew-dark-base-color', resolveDarkModeBaseColor(settings.value))
+    // Resolve OS/browser text scaling once; the default adds no style writes.
+    const fontScale = readBrowserFontScale()
+    if (fontScale !== 1) {
+      container.style.setProperty('--bew-font-scale', String(fontScale))
+      document.documentElement.style.setProperty('--bew-font-scale', String(fontScale))
+    }
 
     const root = document.createElement('div')
     const useViewportLayout = !isInIframe() && isHomePage()

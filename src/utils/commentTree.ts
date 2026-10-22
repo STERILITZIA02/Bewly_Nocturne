@@ -49,12 +49,17 @@ function wouldCreateCycle(
   nodeId: string,
   parentId: string,
   candidateParentById: Map<string, string | null>,
+  acyclic: Set<string>,
 ): boolean {
+  if (acyclic.has(parentId))
+    return false
   const visited = new Set<string>()
   let currentId: string | null = parentId
   while (currentId) {
     if (currentId === nodeId)
       return true
+    if (acyclic.has(currentId))
+      break
     // An ancestor's own edge will break its cycle. Keep valid descendants
     // attached instead of promoting every reply below that cycle to a root.
     if (visited.has(currentId))
@@ -62,6 +67,8 @@ function wouldCreateCycle(
     visited.add(currentId)
     currentId = candidateParentById.get(currentId) ?? null
   }
+  for (const id of visited)
+    acyclic.add(id)
   return false
 }
 
@@ -92,15 +99,16 @@ export function buildCommentTree(inputs: CommentTreeNodeInput[], maxDepth = Numb
   })
 
   const resolvedById = new Map<string, ResolvedCommentTreeNode>()
+  const acyclic = new Set<string>()
   uniqueInputs.forEach((input) => {
     const originalParentId = normalizeRelationId(input.parentId)
     const rootId = normalizeRelationId(input.rootId)
     let parentId = candidateParentById.get(input.id) ?? null
     let directParentVisible = !originalParentId || originalParentId === input.id || inputById.has(originalParentId)
 
-    if (parentId && wouldCreateCycle(input.id, parentId, candidateParentById)) {
+    if (parentId && wouldCreateCycle(input.id, parentId, candidateParentById, acyclic)) {
       const fallbackRootId = rootId && rootId !== input.id && inputById.has(rootId) ? rootId : null
-      parentId = fallbackRootId && !wouldCreateCycle(input.id, fallbackRootId, candidateParentById)
+      parentId = fallbackRootId && !wouldCreateCycle(input.id, fallbackRootId, candidateParentById, acyclic)
         ? fallbackRootId
         : null
       directParentVisible = false
@@ -108,6 +116,8 @@ export function buildCommentTree(inputs: CommentTreeNodeInput[], maxDepth = Numb
     if (originalParentId && originalParentId !== input.id && !inputById.has(originalParentId))
       directParentVisible = false
     candidateParentById.set(input.id, parentId)
+    if (!parentId || acyclic.has(parentId))
+      acyclic.add(input.id)
 
     resolvedById.set(input.id, {
       input,
@@ -121,17 +131,22 @@ export function buildCommentTree(inputs: CommentTreeNodeInput[], maxDepth = Numb
   // Flatten only the visual parent beyond the depth limit. Capping CSS offsets
   // alone leaves parent and child avatars in the same column and breaks rails.
   const depthById = new Map<string, number>()
-  const resolveDepth = (node: ResolvedCommentTreeNode): number => {
-    const cached = depthById.get(node.input.id)
-    if (cached !== undefined)
-      return cached
-    const parent = node.parentId ? resolvedById.get(node.parentId) : undefined
-    const parentDepth = parent ? resolveDepth(parent) : -1
-    const depth = Math.min(parentDepth + 1, Math.max(1, maxDepth))
-    if (parent && depth <= parentDepth)
-      node.parentId = parent.parentId
-    depthById.set(node.input.id, depth)
-    return depth
+  const resolveDepth = (node: ResolvedCommentTreeNode) => {
+    const path: ResolvedCommentTreeNode[] = []
+    let current: ResolvedCommentTreeNode | undefined = node
+    while (current && !depthById.has(current.input.id)) {
+      path.push(current)
+      current = current.parentId ? resolvedById.get(current.parentId) : undefined
+    }
+    for (let index = path.length - 1; index >= 0; index--) {
+      const entry = path[index]
+      const parent = entry.parentId ? resolvedById.get(entry.parentId) : undefined
+      const parentDepth = parent ? depthById.get(parent.input.id)! : -1
+      const depth = Math.min(parentDepth + 1, Math.max(1, maxDepth))
+      if (parent && depth <= parentDepth)
+        entry.parentId = parent.parentId
+      depthById.set(entry.input.id, depth)
+    }
   }
   if (Number.isFinite(maxDepth))
     resolvedById.forEach(resolveDepth)
@@ -148,16 +163,9 @@ export function buildCommentTree(inputs: CommentTreeNodeInput[], maxDepth = Numb
   resolvedById.forEach(node => node.children.sort(compareTreeNodes))
 
   const layout: CommentTreeLayoutNode[] = []
-  const visited = new Set<string>()
-  const visit = (
-    node: ResolvedCommentTreeNode,
-    depth: number,
-    isLastSibling: boolean,
-    ancestorContinuationDepths: number[],
-  ) => {
-    if (visited.has(node.input.id))
-      return
-    visited.add(node.input.id)
+  const stack = roots.map((node, index) => ({ node, depth: 0, isLastSibling: index === roots.length - 1, ancestorContinuationDepths: [] as number[] })).reverse()
+  while (stack.length) {
+    const { node, depth, isLastSibling, ancestorContinuationDepths } = stack.pop()!
     layout.push({
       id: node.input.id,
       parentId: node.parentId,
@@ -172,18 +180,9 @@ export function buildCommentTree(inputs: CommentTreeNodeInput[], maxDepth = Numb
     const childContinuationDepths = isLastSibling
       ? ancestorContinuationDepths
       : [...ancestorContinuationDepths, depth]
-    node.children.forEach((child, index) => visit(
-      child,
-      depth + 1,
-      index === node.children.length - 1,
-      childContinuationDepths,
-    ))
+    for (let index = node.children.length - 1; index >= 0; index--)
+      stack.push({ node: node.children[index], depth: depth + 1, isLastSibling: index === node.children.length - 1, ancestorContinuationDepths: childContinuationDepths })
   }
-  roots.forEach((root, index) => visit(root, 0, index === roots.length - 1, []))
-  resolvedById.forEach((node) => {
-    if (!visited.has(node.input.id))
-      visit(node, 0, true, [])
-  })
 
   return layout
 }

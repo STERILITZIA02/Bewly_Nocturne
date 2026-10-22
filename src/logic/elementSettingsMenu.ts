@@ -5,22 +5,23 @@ import type { useSettingsStore } from '~/stores/settingsStore'
 import { getBadgeType, getComponentConfig, isComponentVisible } from '~/utils/topBarBadge'
 
 import type { LayoutEditableDescriptor } from './layoutEdit'
-import { getLayoutEditableDescriptor, getLayoutEditableDescriptors, getSettingDescriptor } from './layoutEdit'
+import { findLayoutEditableTarget, getLayoutEditableDescriptors, getSettingDescriptor } from './layoutEdit'
 import { settings } from './storage'
 
 export type ElementSettingsAction = ContextMenuOption & { run: () => void }
+
+/** Native controls, cards with their own menu and open menus keep right-click for themselves. */
+export function ownsContextMenu(elements: Element[]) {
+  return elements.some(node => (node instanceof HTMLElement && node.isContentEditable) || node.matches('input, textarea, select, video, audio, iframe, .video-card-container, .moment-card, [role="menu"], [data-bewly-dialog-active]'))
+}
 
 export function findElementSettingsTarget(path: EventTarget[], root: HTMLElement | null) {
   if (!root || !path.includes(root))
     return
   const elements = path.filter((node): node is HTMLElement => node instanceof HTMLElement)
-  if (elements.some(node => node.isContentEditable || node.matches('input, textarea, select, video, audio, iframe, .video-card-container, .moment-card, [role="menu"], [data-bewly-dialog-active]')))
+  if (ownsContextMenu(elements))
     return
-  for (const element of elements) {
-    const descriptor = getLayoutEditableDescriptor(element.dataset.layoutEditableId ?? '')
-    if (descriptor)
-      return { element, descriptor }
-  }
+  return findLayoutEditableTarget(elements)
 }
 
 const relatedSettings: Record<string, string[]> = {

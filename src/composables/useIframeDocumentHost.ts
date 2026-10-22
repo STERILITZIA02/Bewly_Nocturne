@@ -22,7 +22,7 @@ export function useIframeDocumentHost(frame: Ref<HTMLIFrameElement | null | unde
     pendingRate?.finish(false)
     return new Promise((resolve) => {
       const id = ++commandId
-      const timer = setTimeout(() => finish(false), 1500)
+      const timer = setTimeout(finish, 1500, false)
       function finish(applied: boolean) {
         clearTimeout(timer)
         if (pendingRate?.id === id)

@@ -8,7 +8,6 @@ import type { ContextMenuOption } from '~/components/ContextMenu.vue'
 import ContextMenu from '~/components/ContextMenu.vue'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useUserRelations } from '~/composables/useUserRelations'
-import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { getUserID, openLinkToNewTab } from '~/utils/main'
@@ -48,7 +47,6 @@ const capability = computed(() => props.moment.moreCapability)
 const canDelete = computed(() => Boolean(isOwnMoment.value && capability.value?.canDelete && capability.value.deleteParams))
 const canReport = computed(() => Boolean(accountId.value !== null && !isOwnMoment.value && capability.value?.canReport))
 const following = computed(() => authorMid.value ? userRelations.value[authorMid.value]?.isFollowing : undefined)
-const followVisible = computed(() => settings.value.videoCardContextMenuConfig.find(item => item.key === 'followUser')?.visible ?? true)
 
 const menuVideo = computed<Video | null>(() => {
   const video = props.video
@@ -77,7 +75,7 @@ const options = computed<ContextMenuOption[]>(() => {
     result.push({ value: 'open', label: t('video_card.operation.open_in_new_tab'), icon: 'i-tabler:layout-bottombar' })
   if (props.moment.url)
     result.push({ value: 'copy', label: t('moment_card.copy_link'), icon: 'i-tabler:copy' })
-  if (authorMid.value && accountId.value !== null && !isOwnMoment.value && following.value !== undefined && followVisible.value) {
+  if (authorMid.value && accountId.value !== null && !isOwnMoment.value && following.value !== undefined) {
     result.push(following.value
       ? { value: 'unfollow', label: t('video_card.operation.unfollow_user'), icon: 'i-tabler:user-minus' }
       : { value: 'follow', label: t('video_card.operation.follow_user'), icon: 'i-tabler:user-plus' })

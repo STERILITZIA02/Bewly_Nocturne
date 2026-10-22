@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { useSidebarRail } from '~/composables/useSidebarHost'
@@ -475,6 +476,11 @@ defineExpose({ refresh })
       tabindex="0"
       :aria-label="t(`notifications.sections.${view}.label`)"
     >
+      <!-- Feed scroll-edge gradient blur; geometry and layering unchanged. -->
+      <template v-if="view !== 'whisper'">
+        <ProgressiveBlur class="whisper-workspace__feed-edge whisper-workspace__feed-edge--top" edge="top" />
+        <ProgressiveBlur class="whisper-workspace__feed-edge whisper-workspace__feed-edge--bottom" edge="bottom" />
+      </template>
       <Transition mode="out-in" v-bind="outletTransition">
         <div :key="view" class="whisper-workspace__outlet-page">
           <slot v-if="view !== 'whisper'" />
@@ -630,39 +636,22 @@ defineExpose({ refresh })
 .whisper-workspace__detail--feed,
 .whisper-workspace__detail:has(> .conversation-insights) {
   padding: 0;
-
-  &::before,
-  &::after {
-    position: fixed;
-    right: 0;
-    left: var(--bew-messages-sidebar-width);
-    z-index: var(--bew-z-topbar);
-    height: var(--bew-space-12);
-    content: "";
-    pointer-events: none;
-    backdrop-filter: var(--bew-filter-glass-1);
-    -webkit-backdrop-filter: var(--bew-filter-glass-1);
-  }
-
-  &::before {
-    top: 0;
-    mask-image: linear-gradient(to bottom, black, transparent);
-    -webkit-mask-image: linear-gradient(to bottom, black, transparent);
-  }
-
-  &::after {
-    bottom: 0;
-    mask-image: linear-gradient(to bottom, transparent, black 70%);
-    -webkit-mask-image: linear-gradient(to bottom, transparent, black 70%);
-  }
 }
 
-.whisper-workspace--solid .whisper-workspace__detail--feed {
-  &::before,
-  &::after {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
+.whisper-workspace__feed-edge {
+  position: fixed;
+  right: 0;
+  left: var(--bew-messages-sidebar-width);
+  z-index: var(--bew-z-topbar);
+  height: var(--bew-space-12);
+}
+
+.whisper-workspace__feed-edge--top {
+  top: 0;
+}
+
+.whisper-workspace__feed-edge--bottom {
+  bottom: 0;
 }
 
 .whisper-workspace--solid .whisper-workspace__fallback {

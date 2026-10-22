@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url'
+
 import { defineConfig, presetAttributify, presetIcons, presetTypography, presetWind3, transformerDirectives } from 'unocss'
 
 const remRE = /(-?[.\d]+)rem/g
@@ -21,7 +23,7 @@ const fullRadiusRE = /^(?:9999px|var\(--bew-(?:radius-full|badge-radius|control-
 export default defineConfig({
   content: {
     filesystem: [
-      '**/*.{js,ts,vue,svelte,jsx,tsx,mdx,md,astro,elm,php,phtml,html}',
+      fileURLToPath(new URL('./src/**/*.{js,ts,vue,html}', import.meta.url)).replaceAll('\\', '/'),
     ],
   },
   blocklist: [

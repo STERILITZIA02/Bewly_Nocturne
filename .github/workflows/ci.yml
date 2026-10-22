@@ -29,9 +29,13 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .node-version
 
       - name: Check protected files and third-party dependencies
         env:
@@ -43,7 +47,6 @@ jobs:
     name: Test
     strategy:
       matrix:
-        node: [lts/*]
         os: [ubuntu-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -52,15 +55,15 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
-      - name: Set node ${{ matrix.node }}
-        uses: actions/setup-node@v4
+      - name: Set project Node.js
+        uses: actions/setup-node@v7.1.0
         with:
-          node-version: ${{ matrix.node }}
+          node-version-file: .node-version
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6.1.0
         with:
           run_install: |
             - args: [--frozen-lockfile]
@@ -68,6 +71,9 @@ jobs:
       - name: Lint
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: pnpm run lint
+
+      - name: Dependency security audit
+        run: pnpm audit --audit-level low
 
       - name: Type check
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -85,8 +91,8 @@ jobs:
         run: pnpm build
 
       - name: Upload Chrome extension
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.node == 'lts/*' && github.ref_name == 'main' }}
-        uses: actions/upload-artifact@v4.3.1
+        if: ${{ matrix.os == 'ubuntu-latest' && github.ref_name == 'main' }}
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: Bewly-Nocturne-chrome-extension
           path: extension

@@ -186,7 +186,7 @@ function getUserSamplesWithPlaceholders(samples: any[]) {
   const columns = userSamplesColumns.value
   const actualSamples = samples.slice(0, columns)
   const placeholdersCount = Math.max(0, columns - actualSamples.length)
-  const placeholders = Array.from({ length: placeholdersCount }, () => null)
+  const placeholders = Array.from({ length: placeholdersCount }).fill(null)
   return [...actualSamples, ...placeholders]
 }
 

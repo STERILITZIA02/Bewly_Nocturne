@@ -1,6 +1,14 @@
 import { CardRowMetrics } from './cardRowMetrics'
 import { resolveVirtualSpacerSize } from './momentsLayout'
 
+export interface MasonryWindowSnapshot {
+  width: number
+  gap: number
+  keys: string[]
+  columns: string[][]
+  heights: Array<[string, number]>
+}
+
 /**
  * Derived height index. The caller remains the sole owner of measured card
  * heights and of the column arrays, which only grow by `push` or are replaced.
@@ -104,5 +112,10 @@ export function createMomentColumnIndex<T>(keyOf: (item: T) => string, heightOf:
     })
   }
 
-  return { sync, updateHeight, stackHeight, locate: (key: string) => locations.get(key), window }
+  function offsetOf(key: string) {
+    const location = locations.get(key)
+    return location ? columns[location.column].metrics.offset(location.row) : undefined
+  }
+
+  return { sync, updateHeight, stackHeight, locate: (key: string) => locations.get(key), offsetOf, window }
 }

@@ -223,7 +223,7 @@ function waitForScrollTop(viewport: HTMLElement, generation: number, startedAt: 
     return
   }
 
-  refreshScrollTimer = setTimeout(() => waitForScrollTop(viewport, generation, startedAt, refresh), 50)
+  refreshScrollTimer = setTimeout(waitForScrollTop, 50, viewport, generation, startedAt, refresh)
 }
 
 const canRefreshCurrentPage = computed((): boolean => {
@@ -376,7 +376,6 @@ const showBewlyPage = computed((): boolean => {
   return onHomePage
 })
 
-const pageContentRef = ref<HTMLElement>()
 const pageContentMinHeight = ref<number>()
 let scrollRestoreObserver: ResizeObserver | undefined
 let pendingPageScroll: number | undefined
@@ -798,6 +797,7 @@ provide<BewlyAppProvider>('BEWLY_APP', {
   setActiveDrawer,
   getDockPageHref,
   navigateToDockPage,
+  openLayoutEditorSetting,
   openSettingsAt,
 })
 
@@ -1000,9 +1000,8 @@ onBeforeUnmount(stopUrlCleaner)
               :class="{ 'bewly-page-container--messages': displayedPage === AppPage.Notifications, 'bewly-page-container--library': isLibraryPage }"
             >
               <div
-                ref="pageContentRef"
                 class="bewly-page-content"
-                :class="{ 'bewly-page-content--messages': displayedPage === AppPage.Notifications, 'bewly-page-content--library': isLibraryPage }"
+                :class="{ 'bewly-page-content--messages': displayedPage === AppPage.Notifications, 'bewly-page-content--library': isLibraryPage, 'bewly-page-content--home': displayedPage === AppPage.Home }"
                 p="t-[calc(var(--bew-top-bar-height)+10px)]" m-auto
                 w="lg:[calc(100%-200px)] [calc(100%-150px)]"
                 :style="{
@@ -1109,6 +1108,11 @@ onBeforeUnmount(stopUrlCleaner)
 .bewly-page-content.bewly-page-content--library {
   width: 100%;
   padding-top: 0;
+}
+
+// The home feed reaches as close to the window edge as the Moments right column.
+.bewly-page-content.bewly-page-content--home {
+  width: calc(100% - var(--bew-page-inline-inset) * 2);
 }
 
 .bewly-page-container--messages,

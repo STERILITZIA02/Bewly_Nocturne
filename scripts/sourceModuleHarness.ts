@@ -33,7 +33,7 @@ export async function loadSourceModule(file: string, imports: Record<string, unk
   }
   const exports: Record<string, any> = {}
   const browserWindow = Reflect.get(globalThis, 'window')
-  const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
+  const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: false } }).outputText
   vm.runInNewContext(code, {
     ...Object.fromEntries(['window', 'location', 'document', 'Document', 'Node', 'Element', 'HTMLElement', 'HTMLVideoElement', 'HTMLMediaElement', 'HTMLImageElement', 'HTMLIFrameElement', 'ShadowRoot', 'ResizeObserver', 'IntersectionObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'getComputedStyle'].map(name => [name, Reflect.get(globalThis, name) ?? (browserWindow ? Reflect.get(browserWindow, name) : undefined)])),
     exports,

@@ -7,6 +7,16 @@ export const GRID_BREAKPOINTS = {
   xxl: 1536,
 } as const
 
+/**
+ * Smallest video cover width in adaptive grids (320x168 at 40:21). Columns are as
+ * many as fit, so covers are never smaller and grow until another column fits.
+ * Keep aligned with --bew-video-card-min-width in variables.scss.
+ */
+export const VIDEO_CARD_MIN_WIDTH = 320
+
+/** 14/15 of the former 16:9 height; keep aligned with --bew-video-cover-aspect-ratio. */
+export const VIDEO_CARD_COVER_ASPECT_RATIO = 40 / 21
+
 export const LAYOUT_BREAKPOINTS = {
   mobileMax: GRID_BREAKPOINTS.md - 1,
   compactMax: GRID_BREAKPOINTS.xl - 1,

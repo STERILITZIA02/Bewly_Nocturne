@@ -333,7 +333,7 @@ export function useCardWindow(options: {
     measuredColumns = columns
     indices.clear()
     rowCount = Math.ceil(keys.length / columns)
-    const heights = Array.from({ length: rowCount }, () => 0)
+    const heights = Array.from<number>({ length: rowCount }).fill(0)
     keys.forEach((key, index) => {
       indices.set(key, index)
       const row = Math.floor(index / columns)

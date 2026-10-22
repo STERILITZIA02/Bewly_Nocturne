@@ -424,7 +424,7 @@ function handleContributorImageError() {
   margin-top: var(--bew-space-2);
   font-size: var(--bew-font-size-display);
   font-weight: var(--bew-font-weight-bold);
-  line-height: var(--bew-line-height-data);
+  line-height: var(--bew-line-height-display);
 }
 
 .about-info-card {

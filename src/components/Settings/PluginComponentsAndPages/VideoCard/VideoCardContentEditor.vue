@@ -8,10 +8,7 @@ import SettingsToggleTag from '../../components/SettingsToggleTag.vue'
 const { t } = useI18n()
 
 type ContentSettingKey
-  = | 'showVideoCardAuthorAvatar'
-    | 'showVideoCardAuthorName'
-    | 'showVideoCardVideoTag'
-    | 'showVideoCardRecommendTag'
+  = | 'showVideoCardAuthorName'
     | 'showVideoCardPublishTime'
     | 'showVideoCardViewCount'
     | 'showVideoCardDanmakuCount'
@@ -44,20 +41,11 @@ const groups = computed<ContentGroup[]>(() => [
     ],
   },
   {
-    id: 'tags',
-    label: t('settings.video_card_content_region_tags'),
-    elements: [
-      { setting: 'showVideoCardPublishTime', label: t('settings.show_video_card_publish_time'), icon: 'i-tabler:calendar-plus' },
-      { setting: 'showVideoCardVideoTag', label: t('settings.show_video_card_video_tag'), icon: 'i-tabler:tag' },
-      { setting: 'showVideoCardRecommendTag', label: t('settings.show_video_card_recommend_tag'), icon: 'i-tabler:sparkles' },
-    ],
-  },
-  {
     id: 'other',
     label: t('settings.video_card_content_region_other'),
     elements: [
-      { setting: 'showVideoCardAuthorAvatar', label: t('settings.show_video_card_author_avatar'), icon: 'i-tabler:user' },
       { setting: 'showVideoCardAuthorName', label: t('settings.show_video_card_author_name'), icon: 'i-tabler:edit' },
+      { setting: 'showVideoCardPublishTime', label: t('settings.show_video_card_publish_time'), icon: 'i-tabler:calendar-plus' },
       { setting: 'showVideoWatchedBadge', label: t('settings.show_video_watched_badge'), icon: 'i-tabler:eye' },
       { setting: 'showVideoCardWatchLater', label: t('settings.show_video_card_watch_later'), icon: 'i-tabler:playlist' },
     ],

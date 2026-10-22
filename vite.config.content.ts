@@ -2,10 +2,10 @@ import UnoCSS from 'unocss/vite'
 import type { Plugin } from 'vite'
 import { defineConfig } from 'vite'
 
-import packageJson from './package.json'
-import { splitContentStyles } from './scripts/contentStyleSplit'
-import { isDev, isSafari, r } from './scripts/utils'
-import { sharedConfig } from './vite.config'
+import packageJson from './package.json' with { type: 'json' }
+import { splitContentStyles } from './scripts/contentStyleSplit.ts'
+import { isDev, isSafari, r } from './scripts/utils.ts'
+import { bundlerChecks, sharedConfig } from './vite.config.ts'
 
 const BUNDLED_STYLE_GLOBAL = '__BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__'
 
@@ -58,9 +58,8 @@ export default defineConfig({
       name: packageJson.name,
       formats: ['iife'],
     },
-    rollupOptions: {
-      // Disable Rollup cache in dev mode to ensure locale file changes are picked up
-      cache: isDev ? false : undefined,
+    rolldownOptions: {
+      checks: bundlerChecks,
       output: {
         entryFileNames: 'index.global.js',
         assetFileNames: 'style.css',

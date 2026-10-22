@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { computed, onScopeDispose, reactive, watch } from 'vue'
+import { computed, onScopeDispose, shallowReactive, watch } from 'vue'
 
 import type { DisplayPrivateMessage } from './privateMessage'
 import { comparePrivateMessageSeqno, transformPrivateMessages } from './privateMessage'
@@ -31,9 +31,23 @@ const RESULT_LIMIT = 2000
 const PAGE_SIZE = 20
 const CONTEXT_SIZE = PAGE_SIZE
 
+function compareMatches(left: PrivateHistoryMatch, right: PrivateHistoryMatch) {
+  return right.message.timestamp - left.message.timestamp || left.key.localeCompare(right.key)
+}
+
+function mergeMatches(current: PrivateHistoryMatch[], incoming: PrivateHistoryMatch[]) {
+  incoming.sort(compareMatches)
+  const merged: PrivateHistoryMatch[] = []
+  let left = 0
+  let right = 0
+  while (left < current.length && right < incoming.length)
+    merged.push(compareMatches(current[left], incoming[right]) <= 0 ? current[left++] : incoming[right++])
+  return merged.concat(current.slice(left), incoming.slice(right))
+}
+
 /** Explicit, resumable reads across the server's history; never writes ACKs or the conversation cache. */
 export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDependencies) {
-  const state = reactive({
+  const state = shallowReactive({
     query: '',
     typeFilter: 'all' as PrivateSessionTypeFilter,
     results: [] as PrivateHistoryMatch[],
@@ -127,6 +141,7 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
     if (!current())
       return
     const task = (async () => {
+      const query = state.query.normalize('NFKC').toLocaleLowerCase()
       try {
         if (!dependencies.sessions.state.loaded)
           await dependencies.sessions.loadInitial()
@@ -179,18 +194,19 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
           const hasMore = Boolean(data.has_more) && !(oldest && isUsablePrivateMessageHistoryFloor(data.min_seqno) && comparePrivateMessageSeqno(oldest, data.min_seqno) <= 0)
           if (hasMore && (!oldest || (cursor.endSeqno && comparePrivateMessageSeqno(oldest, cursor.endSeqno) >= 0)))
             throw new Error('history-pagination-stalled')
-          const query = state.query.normalize('NFKC').toLocaleLowerCase()
+          const matches: PrivateHistoryMatch[] = []
           for (const message of messages) {
             const key = `${cursor.session.key}:${message.msgKey}`
             const text = privateMessageSearchText(message.content).normalize('NFKC')
             const index = text.toLocaleLowerCase().indexOf(query)
             if (index >= 0 && !seen.has(key)) {
               seen.add(key)
-              state.results.push({ key, session: cursor.session, message, snippet: text.slice(Math.max(0, index - 32), index + query.length + 128) })
+              matches.push({ key, session: cursor.session, message, snippet: text.slice(Math.max(0, index - 32), index + query.length + 128) })
             }
           }
           state.scannedMessages += messages.length
-          state.results.sort((a, b) => b.message.timestamp - a.message.timestamp || a.key.localeCompare(b.key))
+          if (matches.length)
+            state.results = mergeMatches(state.results, matches)
           cursor.endSeqno = oldest
           cursor.done = !hasMore
           failedCursor = null

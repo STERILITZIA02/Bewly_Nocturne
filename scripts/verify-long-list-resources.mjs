@@ -393,7 +393,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     const gridPolicy = await import('../src/utils/gridLayout')
     const coverPolicy = await import('../src/utils/videoCardLayout')
     const events = await import('../src/constants/globalEvents')
-    const settings = Vue.ref({ gridColumns: { base: 4, sm: 4, md: 4, lg: 4, xl: 4, xxl: 4 }, autoSwitchListLayout: false, videoCardCoverRatioOneColumn: 40, videoCardCoverRatioTwoColumns: 50, videoCardContextMenuConfig: [{ key: 'followUser', visible: true }] })
+    const settings = Vue.ref({ autoSwitchListLayout: false, videoCardCoverRatioOneColumn: 40, videoCardCoverRatioTwoColumns: 50, showVideoCardAuthorName: true })
     const relationWindows = []
     const editing = Vue.ref(false)
     const mode = Vue.ref('adaptive')
@@ -504,7 +504,8 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       await settle()
       assert.ok(mounted > 0 && mounted < 350)
       assert.equal(root.querySelectorAll('.video-card-slot').length, mounted)
-      settings.value.videoCardContextMenuConfig[0].visible = false
+      // Relations only feed the followed badge beside author names.
+      settings.value.showVideoCardAuthorName = false
       await settle()
       assert.equal(relationWindows.at(-1).length, 0, 'hidden relation controls release their query interest')
       outside.remove()

@@ -9,7 +9,6 @@ import { getDefaultCustomUseOriginalBiliPage, resolvePluginSearchResultsUsage } 
 import { resolveSearchOpenAction } from '~/utils/searchNavigationCore'
 import { openLinkInBackground } from '~/utils/tabs'
 
-export { isActualHomepage, resolveSearchOpenAction } from './searchNavigationCore'
 export { getPluginSearchResultsUrl } from './searchUrl'
 
 /**

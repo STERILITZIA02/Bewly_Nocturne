@@ -94,7 +94,9 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       // JSDOM does not compute backdrop-filter; read the compiled declaration. The
       // token resolves to none under disable-frosted-glass, so no sample remains.
       assert.equal(backdropOf(owner), 'var(--bew-filter-glass-1)')
-      assert.notEqual(getComputedStyle(owner).borderStyle, 'none', 'surfaces keep their own frame')
+      // JSDOM also leaves border shorthands containing var() unresolved.
+      const border = [...style.sheet.cssRules].findLast(rule => rule.selectorText && rule.style.getPropertyValue('border') && owner.matches(rule.selectorText))?.style.getPropertyValue('border')
+      assert.equal(border, '1px solid var(--bew-surface-border-color)', 'surfaces keep their own frame')
       assert.equal(owner.querySelector('svg filter, [data-bew-liquid-glass]'), null)
     }
     assert.equal(host.querySelector('[data-bew-liquid-glass]'), null)

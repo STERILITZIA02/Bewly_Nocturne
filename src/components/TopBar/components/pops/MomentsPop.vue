@@ -225,7 +225,7 @@ defineExpose({
                     >
                       {{ author.name }}
                     </ALink>
-                    <span v-if="authorIndex < moment.authors.length - 1" text="$bew-text-2">/</span>
+                    <span v-if="Number(authorIndex) < moment.authors.length - 1" text="$bew-text-2">/</span>
                   </template>
                 </div>
                 <!-- 单个作者 -->

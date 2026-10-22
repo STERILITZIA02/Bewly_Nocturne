@@ -104,13 +104,14 @@ export interface FloatingMenuPosition {
   direction: 'up' | 'down'
 }
 
+/** `end` hangs the menu under a button's right edge; a pointer anchor (`left === right`) opens at the pointer. */
 export function computeFloatingMenuPosition(
-  anchor: { top: number, right: number, bottom: number },
+  anchor: { top: number, right: number, bottom: number, left?: number },
   viewportWidth: number,
   viewportHeight: number,
+  { gap = 8, align = 'end' }: { gap?: number, align?: 'start' | 'end' } = {},
 ): FloatingMenuPosition {
   const inset = 8
-  const gap = 8
   const availableWidth = Math.max(0, viewportWidth - inset * 2)
   const availableHeight = Math.max(0, viewportHeight - inset * 2)
   const width = Math.min(240, availableWidth)
@@ -119,7 +120,7 @@ export function computeFloatingMenuPosition(
   const spaceAbove = Math.max(0, anchor.top - gap - inset)
   const openUp = maximumHeight > spaceBelow && spaceAbove > spaceBelow
   const maxHeight = Math.min(maximumHeight, openUp ? spaceAbove : spaceBelow)
-  const left = clamp(anchor.right - width, inset, Math.max(inset, viewportWidth - width - inset))
+  const left = clamp(align === 'start' ? anchor.left ?? anchor.right : anchor.right - width, inset, Math.max(inset, viewportWidth - width - inset))
 
   return {
     top: openUp ? undefined : `${anchor.bottom + gap}px`,

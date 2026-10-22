@@ -11,7 +11,7 @@ const { t } = useI18n()
   <article class="bew-promotion-card" :class="{ 'bew-promotion-card--horizontal': horizontal }">
     <component :is="video.url ? 'a' : 'div'" :href="video.url" :target="video.url ? '_blank' : undefined" :rel="video.url ? 'noopener noreferrer' : undefined" class="bew-promotion-card__link">
       <div class="bew-promotion-card__cover">
-        <LazyPicture v-if="video.cover" :src="video.cover" :alt="video.title" />
+        <LazyPicture v-if="video.cover" :src="video.cover" :alt="video.title" aspect-ratio="var(--bew-video-cover-aspect-ratio)" />
       </div>
       <div class="bew-promotion-card__info">
         <span class="bew-promotion-card__label">{{ t('common.advertisement') }}</span>
@@ -22,6 +22,8 @@ const { t } = useI18n()
 </template>
 
 <style scoped lang="scss">
+@use "../../styles/contentCard";
+
 .bew-promotion-card {
   min-width: 0;
   color: var(--bew-text-1);
@@ -36,11 +38,13 @@ const { t } = useI18n()
   corner-shape: var(--bew-corner-shape);
 }
 .bew-promotion-card__cover {
-  aspect-ratio: 16 / 9;
+  position: relative;
+  aspect-ratio: var(--bew-video-cover-aspect-ratio);
   overflow: hidden;
   background: var(--bew-content-solid);
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-video-cover-radius);
   corner-shape: var(--bew-corner-shape);
+  @include contentCard.media-frame;
 
   :deep(picture),
   :deep(img) {

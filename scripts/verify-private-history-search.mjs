@@ -43,6 +43,8 @@ export function registerPrivateHistorySearchChecks(check, { Vue, flush }) {
     try {
       await search.search('Ｎｅｅｄｌｅ')
       assert.deepEqual(search.state.results.map(item => item.message.msgKey), ['2-100', '4-70', '2-50'])
+      assert.equal(Vue.isReactive(search.state.results), false, 'sorted results use immutable shallow updates')
+      assert.equal(Vue.isReactive(search.state.results[0].message), false, 'read-only message content is not deeply proxied')
       assert.equal(search.state.complete, true)
       assert.equal(search.state.skippedSessions, 1)
       assert.equal(acks, 0)

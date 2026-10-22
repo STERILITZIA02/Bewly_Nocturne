@@ -1,3 +1,5 @@
+import type { MasonryWindowSnapshot } from '~/utils/momentColumnIndex'
+
 import type { DisplayNotification } from '../notification'
 import type { NativeNotificationSection } from '../notificationSections'
 
@@ -19,6 +21,7 @@ export type FirstPageApplyMode = 'replace' | 'merge-head'
 
 export interface NotificationFeedState {
   items: DisplayNotification[]
+  masonrySnapshot?: MasonryWindowSnapshot
   cursorId: string
   cursorTime: number
   loading: boolean
