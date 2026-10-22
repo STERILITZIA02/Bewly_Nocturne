@@ -578,7 +578,6 @@ defineExpose({ refresh })
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-shadow-2);
   backdrop-filter: var(--bew-filter-glass-1);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
 .whisper-workspace__sessions {
@@ -656,7 +655,6 @@ defineExpose({ refresh })
 .whisper-workspace--solid .whisper-workspace__fallback {
   background: var(--bew-elevated-alt-solid);
   backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 .whisper-detail-enter-active,

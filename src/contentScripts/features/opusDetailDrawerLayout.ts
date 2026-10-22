@@ -527,7 +527,6 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-g
   background: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
   z-index: 6 !important;
   opacity: 0 !important;
   transform: translateY(8px) !important;
@@ -632,7 +631,6 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer {
   overflow: hidden !important;
   background: rgba(18, 18, 18, 0.72) !important;
   backdrop-filter: blur(14px) !important;
-  -webkit-backdrop-filter: blur(14px) !important;
   color: #fff !important;
   touch-action: none !important;
 }

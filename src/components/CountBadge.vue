@@ -26,10 +26,9 @@ const count = computed(() => Number.isFinite(props.count) ? Math.max(0, Math.flo
 
   // Explicitly requested for the Dock and top-bar unread capsules, including
   // over the Dock's glass shell; do not generalize this to other nested controls.
-  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  @supports (backdrop-filter: blur(1px)) {
     background: var(--bew-count-badge-bg);
     backdrop-filter: var(--bew-filter-glass-1);
-    -webkit-backdrop-filter: var(--bew-filter-glass-1);
   }
 }
 </style>

@@ -1917,7 +1917,6 @@ function appendMoments(items: DisplayMoment[]) {
   inset: 0;
   background: rgb(18 18 18 / 76%);
   backdrop-filter: var(--bew-filter-glass-1);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
   pointer-events: none;
 }
 .moment-image-viewer__stage {

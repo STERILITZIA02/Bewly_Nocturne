@@ -880,7 +880,6 @@ function handleClearKeyword() {
     --b-search-bar-current-corner: var(--bew-corner-shape-round);
     background: var(--b-search-bar-normal-color);
     backdrop-filter: var(--bew-filter-glass-1);
-    -webkit-backdrop-filter: var(--bew-filter-glass-1);
     transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
     border-radius: var(--b-search-bar-current-radius);
     corner-shape: var(--b-search-bar-current-corner);

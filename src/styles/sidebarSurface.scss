@@ -10,7 +10,6 @@
 @mixin material {
   background: var(--bew-sidebar-background);
   backdrop-filter: var(--bew-filter-glass-1);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
 @mixin surface {
@@ -33,7 +32,6 @@
 @mixin solid {
   background: var(--bew-sidebar-background-solid);
   backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 // Apply at the rail's own scoped selector. A parent-level override can tie
@@ -47,7 +45,6 @@
     border-inline-end: 0;
     background: transparent;
     backdrop-filter: none;
-    -webkit-backdrop-filter: none;
   }
 }
 
