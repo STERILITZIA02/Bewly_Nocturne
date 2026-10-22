@@ -31,7 +31,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 性能（扩展注入在 B 站页面里，每份开销都算在用户的页面上）：
 
 - 热路径（滚动、resize、指针移动、动画帧、Observer 回调、长列表渲染）不交错读写布局。几何走 `viewportGeometry.ts` 的每帧一次测量，不各自排 RAF 或挂 scroll / resize 监听。
-- 动画只动 transform 与 opacity；JS 驱动的动画经 `motionPriority.ts` 登记，内容挂载等动画结束。状态属性写在最小范围的元素上，不写 `body` 或根节点 class 触发整页样式重算；不写以 `*` 或元素类型结尾、会对整页元素求值的选择器。
+- 动画只动 transform 与 opacity（例外：侧栏与小电视圆之间的形变改一个无子节点固定层的几何，因为圆角、边框与背景采样无法用缩放表达）；JS 驱动的动画经 `motionPriority.ts` 登记，内容挂载等动画结束。状态属性写在最小范围的元素上，不写 `body` 或根节点 class 触发整页样式重算；不写以 `*` 或元素类型结尾、会对整页元素求值的选择器。
 - 大列表与大对象用 `shallowRef` / `shallowReactive` 并整体替换，不做深响应式；索引与派生数据增量维护，不在每次更新时全量重建。
 - 观察器、监听器、定时器、请求与媒体按需创建，只观察真正需要的节点，随组件、页面、账号或可见性一起释放。隐藏的页面与分类不保留长列表或后台刷新。
 - 不轮询：用事件、Observer 或共享通道（`useRouteState`、`stateConsumers`）。同一请求 single-flight，缓存按账号隔离。
@@ -137,6 +137,8 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 - 深色默认为无色调中性灰。`enableDarkModeTint` 默认关闭，关闭时保留 `darkModeBaseColor`；所有主题入口经 `resolveDarkModeBaseColor` 取值。深色网页底色由 `--bew-dark-base-color` 在 OKLCH 中约束明度与色度派生为 `--bew-dark-page-bg`，不用简单混黑。
 - 主题色只用于：主操作按钮、当前位置圆点、开关与进度、未读圆点、链接和关键词、Logo、文本选区。选中面、普通徽标、导航文字、装饰和编辑反馈用中性色。
 - 共享状态色 `--bew-selected-bg` / `--bew-hover-bg` / `--bew-pressed-bg`；`--bew-theme-surface*` 只是中性兼容别名。主按钮用 `--bew-accent-solid` / `--bew-on-accent-solid`，保持用户选择的原色，亮色主题配深色文字，不压暗或混色换白字。链接与关键词用对比度校正的 `--bew-theme-foreground`，小圆点用 `--bew-accent-marker`。`--bew-on-theme-color` 按主题色亮度选黑白，并同步到 document 根节点和 `#bewly` 宿主。
+- 主题色设置 `themeColor` 是十六进制色或 `NEUTRAL_THEME_COLOR`（“无主题色”，设置里与预设并列）：无主题色时 `--bew-theme-color` 及派生值浅色取黑、深色取白，`--bew-on-theme-color` 随之取反。所有 token 由 `utils/themeColor.ts` 的 `getThemeColorTokens` 计算、`applyThemeColorTokens` 统一写入，不另加开关。品牌标志的彩色强调用 `--bew-brand-accent`（有主题色时等于主题色，无主题色时为 `--bew-bili-pink`）。
+- 自定义主题色须与纯白、纯黑页面都保持至少 1.8:1 对比度（`THEME_COLOR_MIN_PAGE_CONTRAST`，最低的预设 `#fda4af` 为 1.89:1）：`clampThemeColor` 保持 OKLCH 色相、只移动明度（必要时降色度进 sRGB）；颜色选择器输入与存储规范化（`normalizeThemeColor`）都经它钳制，`verify:color-policy` 约束预设在范围内。
 - 表面从同一中性色对按用途派生：内容轻抬、独立浮层分离、输入内嵌，不按等差亮度逐层抬高；浅色、深色、OLED 分别校准。
 - 灰、黑、白的半透明或实色不受主题色限制。玻璃自身色调和既有装饰渐变不用于表达控件状态。暗色主题色渐变由 `useLinearGradientThemeColorBackground` 统一控制页面与顶栏。
 - OLED：`enableOledDarkMode` 只在有效深色主题下通过 `oled-dark` class 把 `--bew-bg`、`--bew-homepage-bg` 和插件 viewport 底层设为 `#000`，同步到相关 iframe；卡片、面板、输入框仍用各自层级。不覆盖 Bilibili `body`、滚动层或布局容器。播放页 URL（含视频抽屉 iframe）暂不启用纯黑（`useDark` 的 `isOledDark` 为 false），等用户补充设计后再移除此例外。
@@ -149,8 +151,8 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 - 玻璃之上不再叠玻璃：玻璃内的文本、按钮、选项、搜索框、菜单用实色或无滤镜表面，实色背景不加 backdrop-filter，也不用低模糊代替移除。只有延伸到原玻璃边界之外的覆盖层才可有独立玻璃（Teleport 本身不算理由）。嵌套判断用 `useGlassPanelMotion.ts` 的 `GLASS_SURFACE_CONTEXT`。唯一额外例外：`CountBadge.vue` 的未读胶囊可叠在 Dock 与顶栏玻璃上（复用全局滤镜与实色降级）。
 - 普通毛玻璃（`--bew-filter-glass-1` + 边框 + 阴影）用于：Dock、播放页底部控制栏、独立搜索框、顶栏浮层、侧栏按钮、私信导航、设置窗口、外侧纵向导航、普通 Dialog。设置内的输入框、内嵌菜单和嵌套 Dialog 用实色。
 - 液态玻璃已完整移除：没有 SVG 位移 / 色散 / 折射层、`vLiquidGlass`、`LiquidGlassSurface.vue`、“悬浮表面材质”设置或 `@wxperia/liquid-glass-vue`，不恢复。`enableDockLiquidGlass`、`dockLiquidGlass*` 只在退役字段表中。`LiquidSegmentIndicator` 是纯几何滑块（实色选中表面，不采样背景），不受影响。
-- 渐变模糊只用 `ProgressiveBlur.vue`（`utils/progressiveBlur.ts`）：五层 backdrop 模糊半径逐层翻倍、遮罩窗口逐层向强端收缩，强度默认取 `--bew-glass-blur-radius`（随全局模糊强度，关闭毛玻璃时不渲染），淡入淡出用组件的 `visible`（祖先降不透明度会让模糊失效）。它不能放在 backdrop root 里（祖先有 `backdrop-filter` / `filter` / `mask`）：那样各层只看得到祖先自身的绘制、看不到后面的页面，带区会显出矩形；宿主是玻璃时把玻璃移到背景层（如 `.context-menu-container::before`、`.settings-content__surface`），渐变层祖先也不能同时使用平滑圆角与 `overflow: hidden/clip/auto/scroll`：Chromium 会丢弃子层的渐变遮罩，绘成矩形带；让背景、滚动列表与各模糊层各自裁切，保留平滑圆角。开发构建会检查 backdrop root（含透明度、clip-path、混合与 will-change）及这种圆角裁切并在控制台警告；所有调用方都用组件，不直接调用层生成函数或淡化整组祖先。饱和度只在模糊本身就是表面时开（顶栏 `saturate`），叠在玻璃上会给带区染色。禁止单层 `backdrop-filter` 配渐变 / 径向遮罩：那只是清晰图和定强模糊图按比例混合，会留下矩形或椭圆边界。`pnpm verify:style-invalidation` 用 `scripts/maskedBlurPolicy.ts` 扫描所有样式（按元素合并 BEM 修饰类与伪元素）和内联 `backdropFilter` + `maskImage`，只放行该组件的层。
-- 保留的模糊：顶栏渐进模糊、设置窗口的 `PanelTopBlur.vue`、会话与通知主内容区的滚动边缘模糊，位置、尺寸、强度与层级不改，实现统一为 `ProgressiveBlur`；独立搜索框与顶栏边缘模糊相交时两者都保留。其他弹窗没有顶部模糊。设置装饰层不绘制背景或边框、不承担裁切，遮罩在边界前衰减，清晰边框在模糊层上方单独绘制。
+- 渐变模糊只用 `ProgressiveBlur.vue`（`utils/progressiveBlur.ts`）：五层 backdrop 模糊半径逐层翻倍、遮罩窗口逐层向强端收缩，强度默认取 `--bew-glass-blur-radius`（随全局模糊强度，关闭毛玻璃时不渲染），淡入淡出用组件的 `visible`（祖先降不透明度会让模糊失效）。它不能放在 backdrop root 里（祖先有 `backdrop-filter` / `filter` / `mask`）：那样各层只看得到祖先自身的绘制、看不到后面的页面，带区会显出矩形；宿主是玻璃时把玻璃移到背景层（如 `.context-menu-container::before`、`.settings-content__surface`），渐变层祖先也不能同时使用平滑圆角与 `overflow: hidden/clip/auto/scroll`：Chromium 会丢弃子层的渐变遮罩，绘成矩形带；让背景、滚动列表与各模糊层各自裁切，保留平滑圆角。开发构建会检查 backdrop root（含透明度、clip-path、混合与 will-change）及这种圆角裁切并在控制台警告；所有调用方都用组件，不直接调用层生成函数或淡化整组祖先。不给渐变模糊加饱和度，叠在玻璃上会给带区染色。禁止单层 `backdrop-filter` 配渐变 / 径向遮罩：那只是清晰图和定强模糊图按比例混合，会留下矩形或椭圆边界。`pnpm verify:style-invalidation` 用 `scripts/maskedBlurPolicy.ts` 扫描所有样式（按元素合并 BEM 修饰类与伪元素）和内联 `backdropFilter` + `maskImage`，只放行该组件的层。
+- 保留的模糊：设置窗口的 `PanelTopBlur.vue`、会话与通知主内容区的滚动边缘模糊，位置、尺寸、强度与层级不改，实现统一为 `ProgressiveBlur`。顶栏没有渐进模糊或雾色层（用户要求移除，不恢复）。其他弹窗没有顶部模糊。设置装饰层不绘制背景或边框、不承担裁切，遮罩在边界前衰减，清晰边框在模糊层上方单独绘制。
 - 卡片与侧栏内的纵向滚动列表用 `styles/scrollEdgeFade.scss` 的 `vertical` mixin（`.bew-scroll-edge-fade`）：只在该方向还有内容时渐隐，由 scroll-driven 动画驱动，不加监听；遮罩只放在不绘制玻璃的滚动元素上。边缘本就是屏幕边缘或底部有固定输入栏时用 `vertical($bottom: false)` / `.bew-scroll-edge-fade--no-bottom`，状态相关时设 `--bew-scroll-edge-bottom-off: 1`。
 - 玻璃内的实色控件可以无边框，保留必要的分隔线。
 
@@ -179,7 +181,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 ### 动效
 
 - 处处支持 reduced-motion。
-- 运行中的分段滑块（含 Dock）、滚筒弹簧与面板缩放经 `utils/motionPriority.ts` 登记（`holdMotion` / `holdAnimation`）。`useReadyPageTransition` 把旧内容淡出拉长到剩余动画时长，动画结束（`afterMotion`，最长 800ms）后才挂载新内容。新增的 JS 驱动或缩放类动画同样登记。
+- 运行中的分段滑块（含 Dock）、滚筒弹簧与面板缩放经 `utils/motionPriority.ts` 登记（`holdMotion` / `holdAnimation`）。页面切换引起的界面动画必须在导航的同一轮刷新里登记（同步 watch 或过渡的 before 钩子），以目标页而不是仍在显示的页驱动：侧栏收展（`PersistentSidebar` 以 `activatedPage` 判断）与顶栏胶囊按钮增减都先于新页面挂载与加载。`useReadyPageTransition` 把旧内容淡出拉长到剩余动画时长，动画结束（`afterMotion`，最长 800ms）后才挂载新内容。新增的 JS 驱动或缩放类动画同样登记。
 - 页面切换只作用于主内容与首页 Tab，不改页头、侧栏的结构、几何、材质或滚筒：代码就绪后 90ms 淡出、210ms 淡入，外壳不参与，滚动在旧内容退场后恢复；减少动态效果为 30/70ms 纯透明度。
 - 项目不使用发光效果（Dock、Logo、滚筒、Toast、进度条均无），不恢复相关设置。唯一保留：Dock 深 / 浅色切换按钮深色悬停时的月光光晕、其他按钮同步变暗及图标过渡，原样维持。
 - 主题切换的圆形裁切保持终态直到 `ViewTransition.finished`，取消的旧回调不得重新提交主题。
@@ -205,19 +207,24 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 
 ### Dock、顶栏与页面模式
 
+- 在展开的 Dock 上双指左右滑（`deltaX`）或滚轮（`deltaY`）切换到相邻页面，每个手势只切一页（`utils/wheelStep.ts` 的 `createWheelStepper({ oncePerGesture: true })`，惯性尾巴不连跳）；滚轮步进规则只此一份，`WheelSelector` 同样复用。
 - Dock 默认在底部，只允许底部和右侧（旧左侧值迁移到底部）。完整胶囊；未选中项无底板，选中项是无阴影的灰色半透明底板 `--bew-dock-navigation-active-bg` + 实心图标（浅色黑、深色白），无小点。按钮 36px（宽屏 44px），外壳内距 6px（`--dock-shell-rim`，用户指定），外壳尺寸由按钮派生。指示器动画与刷新后严格居中保留。
 - 收起模式 `button / hidden / automatic`：按钮模式在设置按钮后显示收起入口；隐藏模式不提供收起；自动模式指针离开后收起、悬停圆球立即展开。圆球保持展开 Dock 的几何中心；同一玻璃外壳先沿主轴变化尺寸，再让按钮组进出，收起时顺序相反。不用 Teleport、第二套状态或两个表面交叉淡入。
 - 三档页面模式（Bilibili / Bewly / 自定义）及其持久化、与 Dock 内容设置的同步保持一体。顶栏模式只作为 `DockAndSidebar.vue`“Dock 内容调整”里的特殊配置项：不是导航项、不参与拖拽、没有“新标签页”选项。全 Bewly 用 Bewly 顶栏，全原版用原生 `.bili-header`，自定义按配置选择。
 - 不适配第三方顶栏（Bilibili Evolved 已移除），不恢复 `BewlyOrBiliTopBarSwitcher.vue` 等旧切换入口。上游新的顶栏视觉或交互改动，移植前先取得用户同意。
-- 顶栏搜索框的异步宽度校正立即生效，水平 `transform` 不加过渡。TopBar 的 DOM Ref 注册表不用深层 `reactive`（会自动解包）。
-- 小电视独立于顶栏的滚动显隐，点击只回首页；分区浮层在首页标签栏右侧。
+- 顶栏铺满窗口：左侧内距是小电视的位置，搜索框紧跟小电视（不再居中，最宽 550px），置顶频道在搜索框之后；有侧栏的页面搜索框紧跟侧栏右缘（顶栏左内距为侧栏宽度，小电视占位隐藏）。TopBar 的 DOM Ref 注册表不用深层 `reactive`（会自动解包）。
+- 顶栏右侧没有消息按钮（连同消息弹层、消息抽屉与“以抽屉打开通知页”设置一并移除，不恢复；未读数只在 Dock 显示）。除头像外的右侧按钮放在一个玻璃胶囊 `.top-bar-tools` 里，与小电视的圆共用 `sidebarSurface.floating`（侧栏材质、边框与 `--bew-shadow-1`），高度同小电视；玻璃画在按钮后面的 `::before` 层，弹层不落进它的 backdrop root。胶囊内图标不再走头图页白色强制。顶栏左内距是小电视位置（`--bew-home-logo-inline-start`），右内距是页面内容内距 `--bew-page-inline-inset`（与动态页右栏到右缘一致）。头像在同材质的玻璃圆正中，圆与头像是一个整体 `.avatar-orb`：悬停只把它放大一点（1.06），点击才打开用户面板（`setupTopBarItemHoverEvent('userPanel', { openOnClick: true })`，再点、点外部或 Esc 关闭；头像本身不再跳转，个人空间从面板里的名字进入）。面板在头像下方打开（默认锚定位置与 `slide-in`），不盖住胶囊按钮；打开时整个圆带着头像移入面板右上角并放大，圆在途中淡出，收回时圆在面板处先淡入再随头像回到原位。面板材质同为 `sidebarSurface.floating`，右上角圆角与放大后的头像同心（`--avatar-panel-face-radius` + space-2，round）；位移按 `computeAnchoredPopoverPosition` 的 8px 间距与 16px 边距推算，身份信息为头像留出空间。
+- 顶栏始终显示：没有滚动自动隐藏、个人空间强制隐藏或视频页显示方式（`autoHideTopBar`、`videoPageTopBarConfig` 已退役，原版顶栏也不再被隐藏），不恢复。只在 Bewly 宽屏播放页与原页面固定页头（含个人空间吸顶导航）出现时让位，避免两层页头重叠。
+- 胶囊内按钮（含分隔线）增减或轮换时统一用 `top-bar-item` 过渡，三段时间线：离开的按钮先淡出（fast），然后所有槽位一起以匀速曲线 `--bew-ease-in-out` 收起 / 展开（moderate，胶囊随之伸缩），最后进入的按钮淡入；轮换时胶囊不会先长后缩；只有这些小按钮在变化期间布局（宽度动画的用户指定例外），首屏不播放，减少动态效果时直接切换。
+- 右侧按钮在其目标页上不显示：正在动态、收藏、历史或稍后再看页（Bewly 页面或对应原版页面）时隐藏该按钮（`isCurrentTopBarItemPage`）。
+- 小电视点击只回首页；分区浮层在首页标签栏右侧。图标样式的小电视与持久侧栏（`PersistentSidebar`）是同一块玻璃：有侧栏的页面（资料库、动态、消息）小电视没有容器、直接放在侧栏上，图标左缘与侧栏内容线（侧栏内距 + `--bew-sidebar-label-inset`，即滚筒标题与操作图标）对齐；无侧栏页面小电视位置不变，侧栏收成它背后的圆（`.logo-circle`，同侧栏材质与边框加 `--bew-shadow-1`，几何来自 `--bew-home-logo-inline-start` / `-block-start`）。切换时侧栏玻璃层 `.persistent-sidebar__surface` 以流体形变收进 / 铺出圆（窄成液柱、缩成水滴、挤压回弹，`--bew-sidebar-morph-duration`，经 `holdAnimation` 登记，可中途反向，减少动态效果时直接切换），结束后交给小电视的圆；形变只改这个无子节点的固定层的几何，内容层只淡入淡出。小电视经 `useSidebarHost` 的 `logo` / `railOpen` / `morphing` 与侧栏协作；没有图标小电视时侧栏照旧平移收起。hover 只把图标变为 `--bew-brand-accent`，玻璃不变。图标 `--bew-icon-size-lg`，viewBox 裁到图形自身的居中方框。字标样式不变。
 - 动态尾页先追加 `items` 再设结束状态；稍后再看用显式页码、aid 去重与完整集合刷新；History 补屏保持单一 async 请求链。
 
 ### 首页与搜索
 
 - 推荐过滤按批次异步返回结果；普通关键词在页面内处理，正则只在 `src/regex/worker.ts` 执行，复用 `regexBatchRunner` 与扩展同源宿主。保留原 JS 正则语法，宿主预算 250ms，超时/退出终止 Worker；失败不回退到主线程。规则变更和页面退出释放旧任务，游标与列表只能在当前请求过滤成功后提交。
 
-- 首页默认整合搜索页并复用单个 SearchBar：初始位置带聚焦人物，滚到顶栏后原实例吸顶、人物隐藏，不生成第二个搜索框。独立搜索页由单一反向开关控制；关闭时 `AppPage.Search` 归一到首页，Dock 不显示搜索项。两种形态共用同一组搜索设置；搜索框最大宽度 550px。
+- 首页默认整合搜索页并复用单个 SearchBar：初始位置带聚焦人物，滚到顶栏后原实例吸顶、人物隐藏，吸顶后继续下滑的 `--bew-home-search-dock-travel` 内随滚动从居中平移到小电视之后（`--bew-home-search-dock-start`，与其他页顶栏搜索同列）：用页面滚动层的具名时间线 `--bew-page-scroll` 驱动的 CSS 滚动动画，只动 translate，居中位置只在 layout 帧测量；不支持滚动时间线的浏览器保持居中，不生成第二个搜索框。独立搜索页由单一反向开关控制；关闭时 `AppPage.Search` 归一到首页，Dock 不显示搜索项。两种形态共用同一组搜索设置；搜索框最大宽度 550px。聚焦时搜索框保持同一胶囊形状、材质与阴影，不变方、不变不透明；没有聚焦时的全屏模糊 / 暗化遮罩及其设置（`disableSearchFocusEffect` 已退役），不恢复。
 - 首页 Tab 切换只替换内容网格：页头、搜索区与人物装饰不重建；未到内容顶部时保持当前滚动，已吸顶时恢复该 Tab 自己的位置（不低于内容顶部）。首页外层 `KeepAlive max=1`，不活跃的网格卸载并释放请求、预览、观察器，靠数据缓存恢复。其他页面只保留按账号隔离的内存视图状态，不缓存私信正文、请求所有者或 DOM。
 - 视频抽屉复用真实历史项，底层逻辑路由保持原页；返回 / 前进不丢查询、不重复压栈。
 - 广告识别靠明确的广告标记、广告反馈入口与推广 URL；缺少“不感兴趣”菜单不算证据。首页 / 原版搜索用现有列表 Observer 标记外层广告槽位，不删 Vue 拥有的 DOM，不对简介、标签和操作弹窗做文本关键词过滤。广告只隐藏不丢弃。
@@ -279,7 +286,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 消息页与稍后再看页的外观已由用户冻结：可复用它们的组件与 token，但不借重构改变已确认的外观。下列为行为与结构要点，视觉细节以源码为准（历史细节见存档与 `docs/notifications/`）。
 
 - 结构：Notifications 是 Native Message Center。`reply / at / love / system` 是 Vue Native Feed；`whisper` 是支持会话管理、文本与图片发送、历史搜索的 hybrid workspace。普通用户、官方助手、未关注和拦截的一对一会话都在 Bewly 内读取；粉丝团和不支持的会话进 Native fallback 详情，只有用户点“打开原版私信列表”才离开。不隐式挂载原版私信或 System iframe（原版 System URL 保留为显式失败入口）。未选会话时显示 `ConversationInsights.vue` 与“全部标为已读”。
-- 布局：分类、搜索、筛选与会话列表在持久侧栏（贴齐左、上、下，内部避让顶栏，只采样一次毛玻璃，材质为页面底色亮色混 6% 黑、深色 / OLED 混 16% 白），切换分类不卸载列表；分类用 `WheelSelector.vue`。消息顶栏 absolute，渐变模糊只覆盖侧栏右缘到视口右缘，层级依次为搜索控件、侧栏、模糊、内容，Dock 高于底部模糊。
+- 布局：分类、搜索、筛选与会话列表在持久侧栏（贴齐左、上、下，内部避让顶栏，只采样一次毛玻璃，材质为页面底色亮色混 6% 黑、深色 / OLED 混 16% 白），切换分类不卸载列表；分类用 `WheelSelector.vue`。消息顶栏 absolute，层级依次为搜索控件、侧栏、内容，Dock 高于底部模糊。
 - 通知 Feed：四类共用加载、错误、刷新、分页、滚动锚点、账号隔离与 read-commit 生命周期，但 items、cursor、read commit、single-flight、缓存与 scrollTop 各自独立；同一时间只渲染当前一个 Feed DOM，隐藏分类不保留长列表、Observer 或监听，不用 KeepAlive 留多套。自动激活、未读变化与可见性刷新用 `merge-head` 保留历史与锚点，手动刷新用 `replace` 回顶部；分页检查 cursor 或唯一条目是否前进，停滞即停止自动请求；Retry 按 `failedOperation` 精确重试。System 用专用模型与单一 string cursor，只用已验证的 `unified + user` 首屏、legacy cursor 历史与 `update_cursor` 已读，不猜图片、按钮或 module。解析或分页规则变更要同步脱敏 fixture 并通过 `pnpm verify:notifications`。
 - 已读：服务端成功后只经 `topBarStore`（`syncUnreadMessageState()`）同步未读与跨标签 broker，不建第二套 unread Store；System 先成功提交 `update_cursor` 再建 read commit，无逐条证据不推导红点。“全部标为已读”只在用户点击时经 `useMarkAllMessagesRead` 读取其他分类并遍历私信分页，按服务端 seqno 确认，期间新到的保持未读，部分失败可重试。
 - 通知卡片：Reply / At / Love 为头像 + 正文两列、正文下引用区，System 为单色线框图标 + 标题 / 来源 / 正文；可用宽度 ≥880px 时 `WindowedMasonryGrid.vue` 按自然高度放入较短列，DOM 保持时间顺序，分页不重排已有卡片。窗口复用 `momentColumnIndex` / Fenwick 索引，只挂载视口与缓冲区及焦点项；按分类保存列分配与测量值用于滚动恢复。骨架高度一致，使用 CSS 网格，不添加逐项测量器。
@@ -294,7 +301,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 
 ### 资料库（收藏 / 稍后再看 / 观看历史）
 
-- 三页复用 `LibraryWorkspace.vue` 的贴边持久左栏（宽度与消息页一致，单层毛玻璃与实色降级复用消息页色调），保持页面级主滚动与原有分页 / 虚拟列表。标题用 `LibrarySidebarHeading.vue`（WheelSelector），搜索用 `LibrarySearchField.vue`（全圆角、常驻细边框、单一清除按钮；保留 IME 与空查询门禁）。不再用视频封面作左栏背景；首屏骨架用同一左栏布局。层级：顶栏搜索与菜单 > 侧栏 > 右侧顶栏边缘模糊。收藏侧栏不在滚筒上方重复显示标题。
+- 三页复用 `LibraryWorkspace.vue` 的贴边持久左栏（宽度与消息页一致，单层毛玻璃与实色降级复用消息页色调），保持页面级主滚动与原有分页 / 虚拟列表。标题用 `LibrarySidebarHeading.vue`（WheelSelector），搜索用 `LibrarySearchField.vue`（全圆角、常驻细边框、单一清除按钮；保留 IME 与空查询门禁）。不再用视频封面作左栏背景；首屏骨架用同一左栏布局。层级：顶栏搜索与菜单 > 侧栏。收藏侧栏不在滚筒上方重复显示标题。
 - 收藏目录展开 / 选中项与历史、稍后再看的高级筛选同用 `--bew-message-pinned-background` 底板。高级筛选各组默认收起，展开状态按组存在当前标签页 sessionStorage。收藏视频排序（最近收藏 / 最多播放 / 最新投稿）与历史、稍后再看的布局切换同用 `SettingsSegmentedControl` + `.library-rail-segments`，旁边的管理按钮与历史排序按钮同为 36px。收藏筛选用 `FavoriteFilterPanel`（搜索范围即时生效，UP 主 / 分区 / 关键词需“应用”，分区在分组首次展开后才请求）；订阅与其他收藏用搜索框右端的原生筛选。管理菜单保留 hover / focus / touch 入口。
 - 稍后再看以 `topBarStore` 的完整 `aid` 集合为唯一成员状态，其他组件不各自维护真值；修改后经专用失效消息跨标签重新获取。
 
@@ -338,4 +345,4 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 
 ## 已移除，不要恢复
 
-背景图片 / 壁纸；用户自定义样式及其编辑器与注入；液态玻璃全套；Bewly 全局播放器 / 页面快捷键（`src/utils/keyboard.ts`、`shortcuts.ts`）；Bilibili Evolved 兼容；`BewlyOrBiliTopBarSwitcher.vue` 与搜索框下方悬浮切换器；Dock 与 Logo 发光设置；图片隐藏开关；popup / options 入口与 `build:web`、`dev:web`；`enableLiquidSegmentIndicator` 可见设置；播放页 `layoutPriority`、`centerVideo`、`sidebarWidth`、边缘展开与拖动调宽；Dock 左侧位置；Notifications 内的消息设置分类；旧 `videoCardLayout`；`enableFrostedGlass`、`enableTopBarGradient`、`alwaysUseTransparentTopBar`。相关旧字段只在 `RETIRED_SETTINGS_FIELDS` 中清理。
+背景图片 / 壁纸；用户自定义样式及其编辑器与注入；液态玻璃全套；Bewly 全局播放器 / 页面快捷键（`src/utils/keyboard.ts`、`shortcuts.ts`）；Bilibili Evolved 兼容；`BewlyOrBiliTopBarSwitcher.vue` 与搜索框下方悬浮切换器；Dock 与 Logo 发光设置；图片隐藏开关；popup / options 入口与 `build:web`、`dev:web`；`enableLiquidSegmentIndicator` 可见设置；播放页 `layoutPriority`、`centerVideo`、`sidebarWidth`、边缘展开与拖动调宽；Dock 左侧位置；Notifications 内的消息设置分类；旧 `videoCardLayout`；`enableFrostedGlass`、`enableTopBarGradient`、`alwaysUseTransparentTopBar`；顶栏渐进模糊与雾色层；搜索框聚焦变形与全屏模糊遮罩（`SearchFocusOverlay`、`disableSearchFocusEffect`）。相关旧字段只在 `RETIRED_SETTINGS_FIELDS` 中清理。

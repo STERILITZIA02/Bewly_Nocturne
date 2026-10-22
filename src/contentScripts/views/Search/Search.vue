@@ -1,11 +1,9 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 
-import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { settings } from '~/logic'
 
 const searchInput = ref<string>('')
-const searchFocusEffect = useSearchFocusEffect()
 </script>
 
 <template>
@@ -23,8 +21,6 @@ const searchFocusEffect = useSearchFocusEffect()
     />
     <SearchBar
       v-model="searchInput"
-      :darken-on-focus="searchFocusEffect.darkened"
-      :blurred-on-focus="searchFocusEffect.blurred"
       :focused-character="settings.searchPageSearchBarFocusCharacter"
       :show-hot-search="settings.showHotSearchInTopBar"
       :top-bar-appearance="true"

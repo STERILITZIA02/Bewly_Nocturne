@@ -9,9 +9,7 @@ import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 import type { List as RankingVideoItem, RankingResult } from '~/models/video/ranking'
 import type { List as RankingPgcItem, RankingPgcResult } from '~/models/video/rankingPgc'
-import { useSettingsStore } from '~/stores/settingsStore'
 import api from '~/utils/api'
-import { showBewlyTopBar } from '~/utils/effectiveTopBarSource'
 import { getListGridColumnCount } from '~/utils/gridLayout'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { reportRuntimeFailure } from '~/utils/messaging'
@@ -25,7 +23,6 @@ interface RankingVideoElement extends RankingVideoItem {
 
 const props = defineProps<{
   gridLayout: GridLayoutType
-  topBarVisibility: boolean
 }>()
 
 const emit = defineEmits<{
@@ -35,7 +32,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { handleBackToTop, handlePageRefresh } = useBewlyApp()
-const settingsStore = useSettingsStore()
 
 const rankingTypes = computed((): RankingType[] => {
   return [
@@ -77,7 +73,6 @@ const activatedRankingType = computed<RankingType>({
 // Each response replaces the whole list; rows are read-only display data.
 const videoList = tabState.shallowRef<RankingVideoElement[]>('videoList', [])
 const PgcList = tabState.shallowRef<RankingPgcItem[]>('pgcList', [])
-const shouldMoveAsideUp = ref<boolean>(false)
 const noMoreContent = tabState.ref<boolean>('noMoreContent', true) // 排行榜没有分页
 const rankingGridRef = ref<HTMLElement | null>(null)
 const rankingGridWidth = ref(0)
@@ -169,19 +164,6 @@ watch(() => activatedRankingType.value.id, () => {
   handleBackToTop(tabState.getContentScrollTop())
 
   void initData()
-})
-
-watch(() => props.topBarVisibility, () => {
-  shouldMoveAsideUp.value = false
-
-  // Allow moving tabs up only when the Bewly top bar is visible and set to auto-hide.
-  if (settings.value.autoHideTopBar && showBewlyTopBar(settingsStore.getEffectiveTopBarSource())) {
-    if (props.topBarVisibility)
-      shouldMoveAsideUp.value = false
-
-    else
-      shouldMoveAsideUp.value = true
-  }
 })
 
 onMounted(() => {
@@ -298,7 +280,6 @@ defineExpose({ initData })
       pos="sticky" top="$bew-layout-sidebar-sticky-top" h="[calc(100vh-var(--bew-layout-sidebar-viewport-offset))]" w="$bew-layout-sidebar-width" shrink-0
       duration-300
       ease-in-out
-      :class="{ hide: shouldMoveAsideUp }"
     >
       <div
         class="bew-scroll-edge-fade bew-scroll-edge-fade--no-bottom" h-inherit p-20px m--20px of-y-auto
@@ -394,10 +375,6 @@ defineExpose({ initData })
 .active {
   color: var(--bew-on-theme-surface);
   background: var(--bew-theme-surface);
-}
-
-.hide {
-  --uno: "h-[calc(100vh-70)] translate-y--70px";
 }
 
 /* Bangumi Grid 布局 */

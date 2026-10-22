@@ -143,21 +143,135 @@ export function readThemeContrastSurfaces(root: HTMLElement): string[] {
   return [...new Set([...readOpaqueCssColors(root, THEME_CONTRAST_SURFACES).values()].map(toHex))]
 }
 
+/** Theme color setting value meaning "no accent": black in light mode, white in dark mode. */
+export const NEUTRAL_THEME_COLOR = 'neutral'
+export const DEFAULT_THEME_COLOR = '#00a1d6'
+/**
+ * A custom accent must stay distinguishable from both a white page and a pure
+ * black (OLED) page; every preset clears it (lowest: #fda4af at 1.89:1 on white).
+ */
+export const THEME_COLOR_MIN_PAGE_CONTRAST = 1.8
+
+function srgbToLinear(channel: number): number {
+  const value = channel / 255
+  return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+}
+
+function linearToSrgb(value: number): number {
+  return 255 * (value <= 0.0031308 ? value * 12.92 : 1.055 * value ** (1 / 2.4) - 0.055)
+}
+
+function rgbToOklch({ r, g, b }: RgbColor) {
+  const [lr, lg, lb] = [r, g, b].map(srgbToLinear)
+  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
+  const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)
+  const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb)
+  const a = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
+  const bAxis = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+  return {
+    l: 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    c: Math.hypot(a, bAxis),
+    h: Math.atan2(bAxis, a),
+  }
+}
+
+/** Linear sRGB channels; values outside 0..1 are out of gamut. */
+function oklchToLinear(lightness: number, chroma: number, hue: number): [number, number, number] {
+  const a = chroma * Math.cos(hue)
+  const b = chroma * Math.sin(hue)
+  const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3
+  const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3
+  const s = (lightness - 0.0894841775 * a - 1.2914855480 * b) ** 3
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+  ]
+}
+
+/** Keep lightness and hue; reduce chroma until the color fits sRGB. */
+function oklchToHex(lightness: number, chroma: number, hue: number): string {
+  const inGamut = (value: number) => oklchToLinear(lightness, value, hue).every(channel => channel >= -1e-6 && channel <= 1 + 1e-6)
+  let fitted = chroma
+  if (!inGamut(chroma)) {
+    let low = 0
+    let high = chroma
+    for (let index = 0; index < 16; index += 1) {
+      const amount = (low + high) / 2
+      if (inGamut(amount))
+        low = amount
+      else
+        high = amount
+    }
+    fitted = low
+  }
+  const [r, g, b] = oklchToLinear(lightness, fitted, hue).map(channel => Math.min(255, Math.max(0, linearToSrgb(Math.min(1, Math.max(0, channel))))))
+  return toHex({ r, g, b })
+}
+
+function isWithinThemeColorRange(color: string): boolean {
+  return relativeContrast(color, '#ffffff') >= THEME_COLOR_MIN_PAGE_CONTRAST
+    && relativeContrast(color, '#000000') >= THEME_COLOR_MIN_PAGE_CONTRAST
+}
+
+/** Move a too-dark or too-light custom accent to the nearest allowed OKLCH lightness, keeping its hue. */
+export function clampThemeColor(color: string): string {
+  const rgb = parseHexColor(color)
+  if (!rgb)
+    return DEFAULT_THEME_COLOR
+  const hex = toHex(rgb)
+  if (isWithinThemeColorRange(hex))
+    return hex
+  const { l, c, h } = rgbToOklch(rgb)
+  // Mid lightness is inside the range for every hue; search towards the original.
+  let allowed = 0.6
+  let rejected = l
+  for (let index = 0; index < 20; index += 1) {
+    const lightness = (allowed + rejected) / 2
+    if (isWithinThemeColorRange(oklchToHex(lightness, c, h)))
+      allowed = lightness
+    else
+      rejected = lightness
+  }
+  return oklchToHex(allowed, c, h)
+}
+
+/** Storage boundary: keep the neutral option, clamp custom colors, replace invalid values. */
+export function normalizeThemeColor(value: unknown): string {
+  if (value === NEUTRAL_THEME_COLOR)
+    return value
+  return typeof value === 'string' ? clampThemeColor(value) : DEFAULT_THEME_COLOR
+}
+
 export function getThemeColorTokens(themeColor: string, isDark: boolean, surfaces: readonly string[] = []) {
   const backgrounds = surfaces.filter(surface => parseHexColor(surface))
   if (!backgrounds.length)
     backgrounds.push(isDark ? '#121212' : '#ffffff')
   const direction = isDark ? '#ffffff' : '#000000'
-  const onTheme = getContrastingForeground(themeColor)
+  const neutral = themeColor === NEUTRAL_THEME_COLOR
+  const theme = neutral ? direction : themeColor
+  const onTheme = getContrastingForeground(theme)
   return {
     // Solid actions always keep the chosen RGB value; only their foreground
     // changes. Contrast correction below is exclusively for text and markers.
-    theme: themeColor,
+    theme,
     onTheme,
+    // Brand marks keep a chromatic hover even without an accent.
+    brandAccent: neutral ? 'var(--bew-bili-pink)' : theme,
     // Keep native checkbox artwork, with the same contrast decision as text.
     checkmarkImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3 7.2 5.7 10 11 4.5' stroke='${encodeURIComponent(onTheme)}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-    switchThumb: relativeContrast('#ffffff', themeColor) >= 3 ? '#ffffff' : '#000000',
-    foreground: ensureContrast(themeColor, backgrounds, direction, 4.5),
-    focusRing: ensureContrast(themeColor, backgrounds, direction, 3),
+    switchThumb: relativeContrast('#ffffff', theme) >= 3 ? '#ffffff' : '#000000',
+    foreground: ensureContrast(theme, backgrounds, direction, 4.5),
+    focusRing: ensureContrast(theme, backgrounds, direction, 3),
   }
+}
+
+export function applyThemeColorTokens(element: HTMLElement, tokens: ReturnType<typeof getThemeColorTokens>) {
+  element.style.setProperty('--bew-theme-color', tokens.theme)
+  element.style.setProperty('--bew-on-theme-color', tokens.onTheme)
+  element.style.setProperty('--bew-brand-accent', tokens.brandAccent)
+  element.style.setProperty('--bew-theme-checkmark-image', tokens.checkmarkImage)
+  element.style.setProperty('--bew-switch-thumb-active', tokens.switchThumb)
+  element.style.setProperty('--bew-theme-foreground', tokens.foreground)
+  element.style.setProperty('--bew-theme-focus-ring', tokens.focusRing)
 }

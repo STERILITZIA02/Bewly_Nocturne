@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import Select from '~/components/Select.vue'
 import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, settings } from '~/logic'
+import { clampThemeColor, DEFAULT_THEME_COLOR, NEUTRAL_THEME_COLOR } from '~/utils/themeColor'
 
 import SettingsItem from '../components/SettingsItem.vue'
 import SettingsItemGroup from '../components/SettingsItemGroup.vue'
@@ -63,8 +64,9 @@ const darkModeBaseColorOptions = computed<Array<string>>(() => {
   ]
 })
 
+const isNeutralThemeColor = computed(() => settings.value.themeColor === NEUTRAL_THEME_COLOR)
 const isCustomColor = computed<boolean>(() => {
-  return !themeColorOptions.value.includes(settings.value.themeColor)
+  return !isNeutralThemeColor.value && !themeColorOptions.value.includes(settings.value.themeColor)
 })
 
 const isCustomDarkModeBaseColor = computed<boolean>(() => {
@@ -112,7 +114,8 @@ const themeOptions = computed<Array<{ value: string, label: string }>>(() => {
 function changeThemeColor(color: string) {
   settings.value.themeColor = color
 }
-const changeThemeColorThrottle = useThrottleFn((color: string) => changeThemeColor(color), 100)
+// The native picker cannot restrict its range, so out-of-range picks snap back into it.
+const changeThemeColorThrottle = useThrottleFn((color: string) => changeThemeColor(clampThemeColor(color)), 100)
 
 function changeDarkModeBaseColor(color: string) {
   settings.value.darkModeBaseColor = color
@@ -191,8 +194,23 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
 
         <Radio v-model="settings.videoPageDarkMode" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.theme_color')" right-width="auto">
+      <SettingsItem :title="$t('settings.theme_color')" :desc="$t('settings.theme_color_desc')" right-width="auto">
         <div class="theme-color-options" flex="~ gap-2 wrap" justify-end>
+          <button
+            type="button"
+            class="color-option color-option--preset color-option--neutral"
+            :aria-label="`${$t('settings.theme_color')}: ${$t('settings.theme_color_opt.neutral')}`"
+            :title="$t('settings.theme_color_opt.neutral')"
+            :aria-pressed="isNeutralThemeColor"
+            w-20px h-20px p-0 appearance-none rounded-8
+            cursor-pointer transition duration-300 box-border
+            :style="{
+              transform: isNeutralThemeColor ? 'scale(1.3)' : 'scale(1)',
+              border: isNeutralThemeColor ? '1px solid var(--bew-focus-ring-color)' : '1px solid var(--bew-border-color)',
+              boxShadow: isNeutralThemeColor ? '0 0 0 1px var(--bew-border-color), var(--bew-shadow-1)' : 'none',
+            }"
+            @click="changeThemeColor(NEUTRAL_THEME_COLOR)"
+          />
           <button
             v-for="color in themeColorOptions" :key="color"
             type="button"
@@ -225,7 +243,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
               pointer-events-none
             />
             <input
-              :value="settings.themeColor"
+              :value="isNeutralThemeColor ? DEFAULT_THEME_COLOR : settings.themeColor"
               type="color"
               :aria-label="$t('settings.theme_color')"
               w-30px h-30px p-0 m-0 block
@@ -351,6 +369,11 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
     inset: calc(-1 * var(--bew-space-0-5));
     content: "";
   }
+}
+
+// Black in light mode, white in dark mode.
+.color-option--neutral {
+  background: linear-gradient(135deg, #000000 50%, #ffffff 50%);
 }
 
 .color-option:hover {

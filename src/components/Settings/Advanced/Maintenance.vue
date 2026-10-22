@@ -34,7 +34,6 @@ const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   videoCardLinkOpenMode: ['drawer', 'newTab', 'currentTab', 'background'],
   topBarLinkOpenMode: ['currentTab', 'currentTabIfNotHomepage', 'currentTabIfHomepage', 'newTab', 'background'],
   searchBarLinkOpenMode: ['currentTab', 'currentTabIfNotHomepage', 'currentTabIfHomepage', 'newTab', 'background'],
-  videoPageTopBarConfig: ['alwaysShow', 'alwaysHide', 'showOnMouse', 'showOnScroll'],
   topBarLogoStyle: ['icon', 'brand'],
   momentsGridColumns: ['1', '2', '3'],
   historyLayout: ['list', 'grid'],

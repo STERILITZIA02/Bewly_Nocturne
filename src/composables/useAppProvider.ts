@@ -16,7 +16,6 @@ export enum UndoForwardState {
 export enum DrawerType {
   None = 'none',
   IframeDrawer = 'iframe',
-  NotificationsDrawer = 'notifications',
 }
 
 export type SettingsNavigationTarget

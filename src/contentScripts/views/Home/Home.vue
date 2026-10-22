@@ -8,8 +8,7 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { provideHomeTabCache } from '~/composables/useHomeTabState'
 import { usePageScrollPositions } from '~/composables/usePageViewState'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
-import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
-import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
+import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
 import { resolveHomeSearchStage } from '~/constants/layout'
 import { gridLayout, settings } from '~/logic'
 import { isLayoutEditing, useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
@@ -24,6 +23,7 @@ import { normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import emitter from '~/utils/mitt'
 import { retiringTransition } from '~/utils/motionPresence'
 import { scrollToPosition } from '~/utils/scrollIntent'
+import { subscribeViewportFrame } from '~/utils/viewportGeometry'
 
 import HomeChannelsMenu from './components/HomeChannelsMenu.vue'
 import RecommendationModeSwitcher from './components/RecommendationModeSwitcher.vue'
@@ -36,7 +36,6 @@ defineOptions({ name: 'BewlyHomePage' })
 const mainStore = useMainStore()
 const topBarStore = useTopBarStore()
 const forYouStore = useForYouStore()
-const searchFocusEffect = useSearchFocusEffect()
 const {
   homeActivatedPage,
   homeActivatedPageTouched,
@@ -53,6 +52,7 @@ const searchStage = computed(() => resolveHomeSearchStage(shortViewport.value))
 const searchStageStyle = computed(() => ({
   '--bew-layout-home-search-stage-lead-height': `${searchStage.value.lead}px`,
   '--bew-layout-home-search-stage-tail-height': `${searchStage.value.tail}px`,
+  '--bew-layout-home-search-stage-sticky-scroll-top': `${searchStage.value.stickyScrollTop}px`,
 }))
 const showHomeSearchCharacter = ref(true)
 function setCachedScrollTop(scrollTop: number) {
@@ -60,6 +60,7 @@ function setCachedScrollTop(scrollTop: number) {
   showHomeSearchCharacter.value = scrollTop < searchStage.value.stickyScrollTop
 }
 watch(() => searchStage.value.stickyScrollTop, () => setCachedScrollTop(cachedScrollTop))
+
 const tabScrollPositions = usePageScrollPositions('Home:')
 const homeActive = ref(true)
 let pendingTabScrollTop: number | null = null
@@ -67,17 +68,35 @@ let resetScrollOnEntry = settings.value.useSearchPageModeOnHomePage
 let tabSwitchFrame: number | null = null
 let homeEventsAttached = false
 
+// Once the search sticks under the top bar, further scrolling slides it from the
+// centre to just after the logo (a scroll-driven CSS animation). The centred
+// position only changes with layout, so it is measured on layout frames.
+const searchDock = useTemplateRef<HTMLElement>('searchDock')
+function measureSearchDock() {
+  const dock = searchDock.value
+  const stage = dock?.parentElement
+  if (dock && stage)
+    dock.style.setProperty('--bew-home-search-left', `${stage.getBoundingClientRect().left + dock.offsetLeft}px`)
+}
+watch([searchDock, () => scrollViewportRef?.value, homeActive], ([dock, viewport, active], _, onCleanup) => {
+  if (!dock || !viewport || !active)
+    return
+  measureSearchDock()
+  onCleanup(subscribeViewportFrame(viewport, (_geometry, reason) => {
+    if (reason === 'layout')
+      measureSearchDock()
+  }))
+}, { flush: 'post' })
+
 function subscribeHomeEvents() {
   if (homeEventsAttached)
     return
   homeEventsAttached = true
   emitter.on(OVERLAY_SCROLL_BAR_SCROLL, handleOverlayScroll)
-  emitter.on(TOP_BAR_VISIBILITY_CHANGE, handleTopBarVisibilityChange)
 }
 function unsubscribeHomeEvents() {
   homeEventsAttached = false
   emitter.off(OVERLAY_SCROLL_BAR_SCROLL, handleOverlayScroll)
-  emitter.off(TOP_BAR_VISIBILITY_CHANGE, handleTopBarVisibilityChange)
 }
 
 // 使用全局的homeActivatedPage状态
@@ -160,7 +179,6 @@ const tabContentLoading = ref<boolean>(false)
 const currentTabs = ref<HomeTab[]>([])
 const tabContentRef = ref<HTMLElement>()
 const tabContentMinHeight = ref<number>()
-const topBarVisibility = ref<boolean>(true)
 const shouldShowHomeTabs = computed(() => currentTabs.value.length > 1)
 const recommendationSwitcherEnabled = useLayoutEditSettingValue('page.home.recommendationSwitcher', () => settings.value.showRecommendationModeSwitcher)
 const reserveRecommendationModeSwitcher = computed(() => recommendationSwitcherEnabled.value || isLayoutEditing.value)
@@ -276,10 +294,6 @@ watch(() => settings.value.homePageTabVisibilityList, () => {
 
 function handleOverlayScroll(scrollTop: number) {
   setCachedScrollTop(scrollTop)
-}
-
-function handleTopBarVisibilityChange(visible: boolean) {
-  topBarVisibility.value = visible
 }
 
 function computeTabs(): HomeTab[] {
@@ -405,13 +419,17 @@ watch(tabContentLoading, (loading) => {
             class="home-search-stage__sticky-search"
             data-layout-editable-id="home-search"
           >
-            <SearchBar
-              :darken-on-focus="searchFocusEffect.darkened"
-              :blurred-on-focus="searchFocusEffect.blurred"
-              :focused-character="showHomeSearchCharacter ? settings.searchPageSearchBarFocusCharacter : undefined"
-              :show-hot-search="settings.showHotSearchInTopBar"
-              :top-bar-appearance="true"
-            />
+            <div
+              ref="searchDock"
+              class="home-search-stage__dock"
+              :class="{ 'home-search-stage__dock--brand-logo': settings.topBarLogoStyle === 'brand' }"
+            >
+              <SearchBar
+                :focused-character="showHomeSearchCharacter ? settings.searchPageSearchBarFocusCharacter : undefined"
+                :show-hot-search="settings.showHotSearchInTopBar"
+                :top-bar-appearance="true"
+              />
+            </div>
           </div>
           <div class="home-search-stage__tail" aria-hidden="true" />
         </div>
@@ -521,7 +539,6 @@ watch(tabContentLoading, (loading) => {
             :is="pages[activatedPage]"
             v-else :key="`${activatedPageCacheKey}:${homeAccountGeneration}`"
             :grid-layout="homeGridLayout"
-            :top-bar-visibility="topBarVisibility"
             @before-loading="toggleTabContentLoading(true)"
             @after-loading="toggleTabContentLoading(false)"
           />
@@ -574,6 +591,45 @@ watch(tabContentLoading, (loading) => {
 
 .home-search-stage__sticky-search :deep(#search-wrap) {
   pointer-events: auto;
+}
+
+.home-search-stage__dock {
+  width: min(var(--b-search-bar-max-width, 550px), 100%);
+  min-width: 0;
+  margin-inline: auto;
+}
+
+// Without scroll timelines the search simply stays centred.
+@supports (animation-timeline: scroll()) {
+  .home-search-stage__dock {
+    animation: home-search-dock linear both;
+    animation-timeline: --bew-page-scroll;
+    animation-range: var(--bew-layout-home-search-stage-sticky-scroll-top)
+      calc(var(--bew-layout-home-search-stage-sticky-scroll-top) + var(--bew-home-search-dock-travel));
+  }
+}
+
+// Reduced motion: no glide, it moves once the travel range is passed.
+@media (prefers-reduced-motion: reduce) {
+  .home-search-stage__dock {
+    animation-timing-function: steps(1, jump-end);
+  }
+}
+
+@keyframes home-search-dock {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: calc(var(--bew-home-search-dock-start) - var(--bew-home-search-left, 0px)) 0;
+  }
+}
+
+.home-search-stage__dock--brand-logo {
+  --bew-home-search-dock-start: calc(
+    var(--bew-home-logo-inline-start) + var(--bew-top-bar-brand-logo-width) + var(--bew-space-2) * 2 +
+      var(--bew-top-bar-section-gap)
+  );
 }
 
 .content-enter-active,

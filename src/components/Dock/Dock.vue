@@ -32,6 +32,7 @@ import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveActiveDockItemPage } from '~/utils/dockActiveItem'
 import { isHomePage, openLinkToNewTab } from '~/utils/main'
+import { createWheelStepper } from '~/utils/wheelStep'
 
 import CountBadge from '../CountBadge.vue'
 import IconButton from '../IconButton.vue'
@@ -543,6 +544,24 @@ function isDockItemActivated(dockItem: DockItem): boolean {
   return activeDockItemPage.value === dockItem.page
 }
 
+// A two-finger horizontal swipe or the wheel over the Dock steps to the
+// neighbouring page, once per gesture (momentum tails cannot skip pages).
+const dockWheelStepper = createWheelStepper({ oncePerGesture: true })
+function handleDockWheel(event: WheelEvent) {
+  if (event.ctrlKey)
+    return
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+  const items = currentDockItems.value
+  const index = items.findIndex(item => item.page === activeDockItemPage.value)
+  if (!delta || index < 0)
+    return
+  // Also keeps the page and the browser's swipe-back navigation out of it.
+  event.preventDefault()
+  const next = items[index + dockWheelStepper.step(delta, event.deltaMode, event.timeStamp)]
+  if (next && next !== items[index])
+    emit('dockItemClick', next)
+}
+
 const { width: windowWidth, height: windowHeight } = useWindowSize()
 
 // The initial 0 -> measured scale must render without a transition; later
@@ -792,6 +811,7 @@ onUnmounted(() => {
           :class="{ visible: isDockContentVisible }"
           :aria-hidden="!isDockContentVisible"
           :inert="!isDockContentVisible"
+          @wheel="handleDockWheel"
         >
           <div class="dock-page-navigation bew-segment-control">
             <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator bew-shape-circle" :active-key="activeDockItemPage" />

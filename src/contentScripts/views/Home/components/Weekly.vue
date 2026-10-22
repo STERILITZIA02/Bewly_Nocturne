@@ -18,7 +18,6 @@ interface VideoElement extends PopularSeriesVideoItem {
 
 defineProps<{
   gridLayout: GridLayoutType
-  topBarVisibility: boolean
 }>()
 
 const emit = defineEmits<{

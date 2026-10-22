@@ -554,14 +554,6 @@ settings:
   show_video_card_duration: Show video duration
   show_video_card_watch_later: Show Watch Later button
   show_video_watched_badge: Track and show watched
-  auto_hide_top_bar: Auto-hide top bar
-  video_page_top_bar_config: Video page top bar configuration
-  video_page_top_bar_config_desc: 'Controls when the top bar appears on video pages. "On hover" shows it when the pointer enters the top of the page; "On scroll" shows it while the page scrolls.'
-  video_page_top_bar_config_opt:
-    alwaysShow: Always show
-    alwaysHide: Always hide
-    showOnMouse: On hover
-    showOnScroll: On scroll
   show_bewly_or_bili_page_switcher: Show page mode switcher
   filter_articles_in_moments: Filter articles
   filter_articles_in_moments_desc: Hide articles from the moments feed and only show videos
@@ -578,7 +570,6 @@ settings:
   auto_receive_vip_exp: Auto receive VIP experience
   auto_receive_vip_exp_desc: When enabled, will automatically receive daily VIP experience
   auto_receive_vip_exp_success: VIP experience received automatically
-  open_notifications_page_as_drawer: Open notifications page as drawer
   show_like_notification_reminder: Show like notifications
   show_like_notification_reminder_desc: When enabled, likes are included in the top bar notifications badge count.
 
@@ -657,6 +648,9 @@ settings:
   video_page_dark_mode: Video page dark mode only
   video_page_dark_mode_desc: Keep the global theme unchanged and enable Bewly Nocturne dark styles only on video playback pages.
   theme_color: Theme color
+  theme_color_desc: Custom colors keep at least 1.8:1 contrast against pure black and pure white pages; colors that are too dark or too light are adjusted automatically. "No theme color" is black in light mode and white in dark mode.
+  theme_color_opt:
+    neutral: No theme color
   dark_mode_base_color: Dark mode base color
   enable_dark_mode_tint: Dark background tint
   enable_dark_mode_tint_desc: Use neutral gray by default. Enable to use the tint below; disabling preserves your chosen color.
@@ -672,8 +666,6 @@ settings:
     scroll: Infinite Scroll
     pagination: Pagination
   logo_visibility: Logo visibility
-  disable_search_focus_effect: Remove search focus effect
-  disable_search_focus_effect_desc: When enabled, focusing the search bar no longer blurs or darkens the page background.
   choose_search_bar_focused_character: Choose the character that appears when the search bar is focused
   show_hot_search_in_top_bar: Show trending searches
   show_hot_search_in_top_bar_desc: Display trending searches when the search box is focused
@@ -956,7 +948,6 @@ auth:
   auth_access_key_first: Before doing this, authorize BewlyBewly to use the access key.
 topbar:
   sign_in: Sign in
-  notifications: Notifications
   moments: Moments
   favorites: Favorites
   history: History

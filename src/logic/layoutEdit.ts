@@ -317,7 +317,6 @@ const topBarItemDescriptors = [
   ['topbar-item-watch-later', 'watchLater', 'topbar.watch_later'],
   ['topbar-item-creator-center', 'creatorCenter', 'topbar.creative_center'],
   ['topbar-item-upload', 'upload', 'topbar.upload'],
-  ['topbar-item-notifications', 'notifications', 'topbar.notifications'],
 ] as const
 
 const topBarItemEditableIdByKey = new Map<string, string>(
@@ -343,7 +342,6 @@ registerSettingDescriptors([
   { id: 'navigation.sidebar.position', category: 'BewlyComponents', page: 'dock', group: 'sidebar', titleKey: 'settings.sidebar_position', get: () => settings.value.sidebarPosition, set: value => settings.value.sidebarPosition = value as typeof settings.value.sidebarPosition },
   { id: 'navigation.sidebar.autoHide', category: 'BewlyComponents', page: 'dock', group: 'sidebar', titleKey: 'settings.auto_hide_sidebar', get: () => settings.value.autoHideSidebar, set: value => settings.value.autoHideSidebar = Boolean(value) },
   { id: 'navigation.topBar.mode', category: 'BewlyComponents', page: 'dock', group: 'top-bar', titleKey: 'settings.topbar_mode', get: () => settings.value.useOriginalBilibiliTopBar, set: value => settings.value.useOriginalBilibiliTopBar = Boolean(value) },
-  { id: 'navigation.topBar.autoHide', category: 'BewlyComponents', page: 'topbar', group: 'top-bar', titleKey: 'settings.auto_hide_top_bar', get: () => settings.value.autoHideTopBar, set: value => settings.value.autoHideTopBar = Boolean(value) },
   { id: 'navigation.topBar.logo', category: 'BewlyComponents', page: 'topbar', group: 'logo', titleKey: 'settings.top_bar_logo_style', get: () => settings.value.topBarLogoStyle, set: value => settings.value.topBarLogoStyle = value as typeof settings.value.topBarLogoStyle },
   { id: 'navigation.topBar.pinnedChannels', category: 'BewlyComponents', page: 'topbar', group: 'channels', titleKey: 'settings.topbar_pinned_channels_title', get: () => settings.value.topBarPinnedChannels, set: value => settings.value.topBarPinnedChannels = value as typeof settings.value.topBarPinnedChannels },
   { id: 'navigation.topBar.components', category: 'BewlyComponents', page: 'topbar', group: 'actions', titleKey: 'settings.topbar_actions', get: () => settings.value.topBarComponentsConfig, set: value => settings.value.topBarComponentsConfig = value as typeof settings.value.topBarComponentsConfig },
@@ -374,7 +372,7 @@ registerSettingDescriptors([
     },
   },
   { id: 'page.watchLater.layout', category: 'BewlyPages', page: 'watch-later', group: 'layout', titleKey: 'settings.watch_later_layout_mode', get: () => settings.value.watchLaterLayoutMode, set: value => settings.value.watchLaterLayoutMode = value as typeof settings.value.watchLaterLayoutMode },
-  { id: 'search.focus.disable', category: 'BewlyPages', page: 'search', group: 'focus', titleKey: 'settings.disable_search_focus_effect', get: () => settings.value.disableSearchFocusEffect, set: value => settings.value.disableSearchFocusEffect = Boolean(value) },
+  { id: 'search.bar.recommendation', category: 'BewlyPages', page: 'search', group: 'searchBar', titleKey: 'settings.show_search_recommendation', get: () => settings.value.showSearchRecommendation, set: value => settings.value.showSearchRecommendation = Boolean(value) },
   { id: 'messages.autoMarkRead', category: 'BewlyPages', page: 'messages', group: 'reading', titleKey: 'settings.messages_auto_mark_read', get: () => settings.value.autoMarkPrivateMessagesRead, set: value => settings.value.autoMarkPrivateMessagesRead = Boolean(value) },
   { id: 'messages.followNew', category: 'BewlyPages', page: 'messages', group: 'reading', titleKey: 'settings.messages_follow_new', get: () => settings.value.followNewPrivateMessages, set: value => settings.value.followNewPrivateMessages = Boolean(value) },
   { id: 'messages.autoLoadImages', category: 'BewlyPages', page: 'messages', group: 'reading', titleKey: 'settings.messages_auto_load_images', get: () => settings.value.autoLoadPrivateMessageImages, set: value => settings.value.autoLoadPrivateMessageImages = Boolean(value) },
@@ -409,9 +407,9 @@ registerLayoutEditableDescriptors([
   { id: 'sidebar-page-mode-switcher', section: 'sidebar', category: 'navigation', settingId: 'navigation.pageMode', titleKey: 'layout_editor.target_page_mode_switcher', scope: 'all-pages' },
   { id: 'sidebar-theme-toggle', section: 'sidebar', category: 'navigation', settingId: 'appearance.theme', titleKey: 'settings.theme', scope: 'all-pages' },
   { id: 'sidebar-auto-hide', section: 'sidebar', category: 'navigation', settingId: 'navigation.sidebar.autoHide', titleKey: 'settings.auto_hide_sidebar', scope: 'all-pages' },
-  { id: 'topbar', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.autoHide', titleKey: 'layout_editor.target_topbar', scope: 'all-pages' },
+  { id: 'topbar', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.components', titleKey: 'layout_editor.target_topbar', scope: 'all-pages' },
   { id: 'topbar-logo', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.logo', titleKey: 'layout_editor.target_topbar_logo', scope: 'all-pages' },
-  { id: 'topbar-search', section: 'topBar', category: 'navigation', settingId: 'search.focus.disable', titleKey: 'layout_editor.target_search_bar', scope: 'all-pages' },
+  { id: 'topbar-search', section: 'topBar', category: 'navigation', settingId: 'search.bar.recommendation', titleKey: 'layout_editor.target_search_bar', scope: 'all-pages' },
   { id: 'topbar-pinned-channels', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.pinnedChannels', titleKey: 'layout_editor.target_topbar_pinned_channels', scope: 'all-pages' },
   { id: 'topbar-more', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.components', titleKey: 'layout_editor.target_topbar_actions', scope: 'all-pages' },
   {
@@ -447,7 +445,7 @@ registerLayoutEditableDescriptors([
   },
   { id: 'home-tabs', section: 'page', category: 'page-layout', settingId: 'page.home.tabs', titleKey: 'layout_editor.target_home_tabs', scope: 'current-page' },
   { id: 'home-grid-switcher', section: 'page', category: 'page-layout', settingId: 'page.home.gridLayout', titleKey: 'layout_editor.target_home_grid_switcher', scope: 'current-page' },
-  { id: 'home-search', section: 'page', category: 'page-layout', settingId: 'search.focus.disable', titleKey: 'layout_editor.target_search_bar', scope: 'current-page' },
+  { id: 'home-search', section: 'page', category: 'page-layout', settingId: 'search.bar.recommendation', titleKey: 'layout_editor.target_search_bar', scope: 'current-page' },
   { id: 'home-recommendation-switcher', section: 'page', category: 'page-layout', settingId: 'page.home.recommendationSwitcher', titleKey: 'settings.show_recommendation_mode_switcher', scope: 'current-page' },
   {
     id: 'moments-grid',

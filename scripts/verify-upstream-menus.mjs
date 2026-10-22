@@ -5,7 +5,7 @@ import { loadSourceModule } from './sourceModuleHarness'
 export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent }) {
   check('element menu: existing descriptors retain radio/toggle truth, native menus and new dialog focus', async () => {
     const enums = await import('../src/enums/appEnums')
-    const settings = Vue.ref({ dockPosition: 'bottom', dockCollapseMode: 'button', autoHideTopBar: false, dockItemsConfig: [], topBarComponentsConfig: [] })
+    const settings = Vue.ref({ dockPosition: 'bottom', dockCollapseMode: 'button', dockItemsConfig: [], topBarComponentsConfig: [] })
     const layout = await loadSourceModule('../src/logic/layoutEdit.ts', {
       'vue': Vue,
       '~/constants/dock': await import('../src/constants/dock'),
@@ -84,10 +84,8 @@ export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent
       assert.equal(native.defaultPrevented, false)
       ownMenu.remove()
       const topbar = layout.getLayoutEditableDescriptor('topbar')
-      let actions = menu.getElementSettingsActions(topbar, [], {}, key => key)
-      actions.find(action => action.value === 'navigation.topBar.autoHide').run()
-      actions = menu.getElementSettingsActions(topbar, [], {}, key => key)
-      assert.equal(actions.find(action => action.value === 'navigation.topBar.autoHide').checked, true)
+      const actions = menu.getElementSettingsActions(topbar, [], {}, key => key)
+      assert.equal(actions.some(action => action.value === 'navigation.topBar.autoHide'), false, 'the top bar no longer hides')
     }
     finally {
       app.unmount()

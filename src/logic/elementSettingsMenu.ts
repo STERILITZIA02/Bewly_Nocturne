@@ -27,7 +27,6 @@ export function findElementSettingsTarget(path: EventTarget[], root: HTMLElement
 const relatedSettings: Record<string, string[]> = {
   dock: ['navigation.dock.collapseMode', 'navigation.dock.themeSwitcher', 'navigation.dock.actionButtons', 'navigation.dock.undoRefresh'],
   sidebar: ['navigation.sidebar.autoHide'],
-  topbar: ['navigation.topBar.autoHide'],
 }
 
 function descriptorActions(target: LayoutEditableDescriptor, t: (key: string) => string): ElementSettingsAction[] {
@@ -79,14 +78,12 @@ function topBarActions(target: LayoutEditableDescriptor, t: (key: string) => str
     const actions: ElementSettingsAction[] = [{ value: `topbar:${key}:visible`, label: t(target.topBarKey ? 'settings.visibility' : item.titleKey), icon: 'i-tabler:eye', kind: 'toggle', closeOnSelect: false, checked: isComponentVisible(key), run: () => {
       ensureConfig().visible = !isComponentVisible(key)
     } }]
-    if (!target.topBarKey || !['moments', 'watchLater', 'notifications'].includes(key))
+    if (!target.topBarKey || !['moments', 'watchLater'].includes(key))
       return actions
-    const current = key === 'notifications' && getBadgeType(key) === 'number' && settings.value.showLikeNotificationReminder ? 'number_with_likes' : getBadgeType(key)
-    for (const badge of key === 'notifications' ? ['number', 'number_with_likes', 'dot', 'none'] as const : ['number', 'dot', 'none'] as const) {
+    const current = getBadgeType(key)
+    for (const badge of ['number', 'dot', 'none'] as const) {
       actions.push({ value: `badge:${badge}`, label: `${t('settings.badge_type')} · ${t(`settings.top_bar_icon_badges_opt.${badge}`)}`, icon: 'i-tabler:bell', kind: 'radio', closeOnSelect: false, checked: current === badge, run: () => {
-        ensureConfig().badgeType = badge === 'number_with_likes' ? 'number' : badge
-        if (key === 'notifications')
-          settings.value.showLikeNotificationReminder = badge === 'number_with_likes'
+        ensureConfig().badgeType = badge
       } })
     }
     return actions

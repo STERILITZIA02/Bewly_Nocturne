@@ -3,6 +3,7 @@ import { computed, nextTick, ref, useId, watch } from 'vue'
 
 import { useSpringValue } from '~/composables/useSpringValue'
 import { getMotionDuration, getTravelDuration } from '~/utils/motionTiming'
+import { createWheelStepper } from '~/utils/wheelStep'
 
 const props = defineProps<{
   modelValue: string
@@ -26,20 +27,14 @@ const position = useSpringValue(() => cursor.value, () => {
   // selection) settle more slowly than a single step.
   return getTravelDuration(duration, Math.abs(cursor.value - position.value)) / 1000
 })
-let wheelDistance = 0
-let lastWheelTime = 0
-let lastWheelCommitTime = -Infinity
-let lastWheelDirection = 0
+const wheelStepper = createWheelStepper()
 let interactionGeneration = 0
 
 watch(selectedIndex, index => cursor.value = index)
 watch(() => props.scope, () => {
   interactionGeneration++
   cursor.value = selectedIndex.value
-  wheelDistance = 0
-  lastWheelTime = 0
-  lastWheelCommitTime = -Infinity
-  lastWheelDirection = 0
+  wheelStepper.reset()
 }, { flush: 'sync' })
 
 function itemStyle(index: number) {
@@ -98,23 +93,9 @@ function handleWheel(event: WheelEvent) {
   if (next < 0 || next >= props.items.length)
     return
   event.preventDefault()
-  const now = event.timeStamp
-  if (now - lastWheelTime > 180 || direction !== lastWheelDirection) {
-    wheelDistance = 0
-    lastWheelCommitTime = -Infinity
-  }
-  lastWheelTime = now
-  lastWheelDirection = direction
-  if (Math.sign(wheelDistance) !== direction)
-    wheelDistance = 0
-  wheelDistance += event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 120 : 1)
-  // Continuous gestures can advance again, but short inertial tails cannot.
   // The spring retains its position and velocity across consecutive commits.
-  if (Math.abs(wheelDistance) < 48 || now - lastWheelCommitTime < 220)
-    return
-  wheelDistance = 0
-  lastWheelCommitTime = now
-  select(next)
+  if (wheelStepper.step(event.deltaY, event.deltaMode, event.timeStamp))
+    select(next)
 }
 
 function resetPreview(event: FocusEvent) {

@@ -15,7 +15,6 @@ import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
 import { openSearchResults, resolveSearchNavigationTarget, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 
-import SearchFocusOverlay from '../SearchFocusOverlay.vue'
 import TagRemoveButton from '../TagRemoveButton.vue'
 import type { HistoryItem, SuggestionItem, SuggestionResponse } from './searchHistoryProvider'
 import {
@@ -29,8 +28,6 @@ type KeyboardSelectionMode = 'none' | 'suggestions' | 'history'
 
 const props = withDefaults(defineProps<{
   active?: boolean
-  darkenOnFocus?: boolean
-  blurredOnFocus?: boolean
   focusedCharacter?: string
   showHotSearch?: boolean
   modelValue?: string
@@ -100,7 +97,6 @@ const topBarAppearanceStyle = computed<CSSProperties | undefined>(() => {
     '--b-search-bar-normal-color': settings.value.disableFrostedGlass
       ? 'var(--bew-elevated)'
       : 'color-mix(in oklab, var(--bew-elevated-solid), transparent 60%)',
-    '--b-search-bar-focus-color': 'var(--bew-elevated)',
     '--b-search-bar-normal-icon-color': foreground,
     '--b-search-bar-normal-text-color': foreground,
     '--b-search-bar-hover-text-color': foreground,
@@ -557,23 +553,13 @@ function handleClearKeyword() {
   <div
     id="search-wrap"
     ref="searchWrapRef"
-    :class="{
-      'search-wrap--top-bar': topBarMode,
-      'search-wrap--focus-overlay': isFocus && (darkenOnFocus || blurredOnFocus),
-    }"
+    :class="{ 'search-wrap--top-bar': topBarMode }"
     :style="topBarAppearanceStyle"
     w="full"
     max-w="550px"
     pos="relative"
     @focusout="handleFocusOut"
   >
-    <SearchFocusOverlay
-      :active="!topBarMode && isFocus && Boolean(darkenOnFocus || blurredOnFocus)"
-      :darkened="darkenOnFocus"
-      :blurred="blurredOnFocus"
-      @dismiss="closeSearch(true)"
-    />
-
     <div
       class="search-bar group"
       :class="isFocus ? 'focus' : ''"
@@ -865,7 +851,6 @@ function handleClearKeyword() {
   height: var(--b-search-bar-height, var(--bew-top-bar-primary-control-height, 46px));
 
   --b-search-bar-normal-color: var(--bew-content);
-  --b-search-bar-focus-color: var(--bew-elevated);
 
   --b-search-bar-normal-icon-color: var(--bew-text-1);
   --b-search-bar-hover-icon-color: var(--bew-text-1);
@@ -875,48 +860,20 @@ function handleClearKeyword() {
   --b-search-bar-hover-text-color: var(--bew-text-1);
   --b-search-bar-focus-text-color: var(--bew-text-1);
 
-  &.search-wrap--focus-overlay {
-    z-index: var(--bew-z-topbar-interaction);
-
-    .search-bar {
-      z-index: 1;
-    }
-  }
-
   @mixin card-content {
     --uno: "text-base outline-none w-full bg-transparent border-1 border-$bew-surface-border-color";
   }
 
-  .search-bar::before,
-  .search-bar::after {
+  // Focus keeps the same pill, material and shadow; no shape or opacity change.
+  .search-bar::before {
     content: "";
     position: absolute;
     inset: 0;
     z-index: 1;
     border-radius: var(--b-search-bar-current-radius);
     corner-shape: var(--b-search-bar-current-corner);
-    pointer-events: none;
-    transition:
-      opacity var(--bew-duration-normal) var(--bew-ease-standard),
-      border-radius var(--bew-duration-moderate) var(--bew-ease-standard);
-  }
-
-  .search-bar::before {
     box-shadow: var(--bew-shadow-2);
-    opacity: 1;
-  }
-
-  .search-bar::after {
-    box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText), var(--bew-shadow-2);
-    opacity: 0;
-  }
-
-  .search-bar.focus::before {
-    opacity: 0;
-  }
-
-  .search-bar.focus::after {
-    opacity: 1;
+    pointer-events: none;
   }
 
   .search-bar {
@@ -931,12 +888,6 @@ function handleClearKeyword() {
       --b-search-bar-radius,
       calc(var(--b-search-bar-height, var(--bew-top-bar-primary-control-height, 46px)) / 2)
     );
-
-    &.focus {
-      --b-search-bar-current-radius: var(--bew-radius);
-      --b-search-bar-current-corner: var(--bew-corner-shape);
-      background: var(--b-search-bar-focus-color);
-    }
 
     .focus-character-image {
       position: absolute;
@@ -967,8 +918,7 @@ function handleClearKeyword() {
         background-color var(--bew-duration-normal) var(--bew-ease-standard),
         color var(--bew-duration-normal) var(--bew-ease-standard),
         opacity var(--bew-duration-normal) var(--bew-ease-standard),
-        border-color var(--bew-duration-normal) var(--bew-ease-standard),
-        border-radius var(--bew-duration-moderate) var(--bew-ease-standard);
+        border-color var(--bew-duration-normal) var(--bew-ease-standard);
 
       &::placeholder {
         color: inherit;

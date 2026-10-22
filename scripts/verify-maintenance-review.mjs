@@ -66,18 +66,11 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
 
   check('review TopBar lifetime: deferred initialization cannot reactivate a store after its component unmounts', async () => {
     const activations = []
-    const settings = Vue.ref({ videoPageTopBarConfig: 'alwaysShow', touchScreenOptimization: false, autoHideTopBar: true })
+    const settings = Vue.ref({ touchScreenOptimization: false })
     const viewport = document.body.appendChild(document.createElement('div'))
-    const rail = viewport.appendChild(document.createElement('div'))
-    rail.setAttribute('data-top-bar-scroll', '')
-    const sidebar = viewport.appendChild(document.createElement('aside'))
-    sidebar.setAttribute('data-top-bar-scroll-ignore', '')
-    const sidebarList = sidebar.appendChild(document.createElement('div'))
-    sidebarList.setAttribute('data-top-bar-scroll', '')
-    const menu = rail.appendChild(document.createElement('div'))
     const scrollViewportRef = Vue.ref(viewport)
     const activatedPage = Vue.ref('Home')
-    const store = { showTopBar: true, popupVisible: {}, drawerVisible: { notifications: false }, setTopBarVisible() {}, setUiActive: async value => activations.push(value), cleanup: () => activations.push(false) }
+    const store = { showTopBar: true, popupVisible: {}, setUiActive: async value => activations.push(value), cleanup: () => activations.push(false) }
     const noUI = { render: () => null }
     const TopBar = await compileComponent('../src/components/TopBar/TopBar.vue', {
       '@vueuse/core': { onKeyStroke() {}, useMediaQuery: () => Vue.ref(false), useMouseInElement: () => ({ isOutside: Vue.ref(true) }) },
@@ -96,7 +89,6 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       '~/utils/main': { isHomePage: () => true, isInIframe: () => false, isUserSpacePage: () => false, isVideoOrBangumiPage: () => false },
       '~/utils/messaging': { reportRuntimeFailure: (_context, error) => { throw error } },
       '~/utils/mitt': { default: { on() {}, off() {}, emit() {} } },
-      './components/NotificationsDrawer.vue': { default: noUI },
       './components/TopBarHeader.vue': { default: noUI },
       './components/TopBarLogo.vue': { default: { render: () => Vue.h('a', { href: '/', 'data-home-logo': '' }, 'Home') } },
       './composables/useTopBarInteraction': { resetTopBarTransientInteraction() {}, useTopBarInteraction: () => ({ forceWhiteIcon: Vue.ref(false) }) },
@@ -110,84 +102,19 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     assert.equal(activations.includes(true), false)
     const nextHost = document.body.appendChild(document.createElement('div'))
     const nextApp = Vue.createApp(TopBar)
-    const instance = nextApp.mount(nextHost)
+    nextApp.mount(nextHost)
     try {
       await flush()
-      instance.toggleTopBarVisible(false)
-      await flush()
-      assert.ok(nextHost.querySelector('header.hide'))
       const logo = nextHost.querySelector('[data-home-logo]')
       assert.ok(logo)
-      assert.equal(logo.closest('header'), null, 'home logo must remain outside the hidden/animated header')
-      instance.toggleTopBarVisible(true)
-      const scroll = async (target, top) => {
-        target.scrollTop = top
-        target.dispatchEvent(new window.Event('scroll', { bubbles: false }))
+      assert.equal(logo.closest('header'), null, 'home logo must remain outside the animated header')
+      for (const top of [60, 400, 20, 0]) {
+        viewport.scrollTop = top
+        viewport.dispatchEvent(new window.Event('scroll', { bubbles: false }))
+        window.dispatchEvent(new window.Event('scroll'))
         await flush()
+        assert.equal(nextHost.querySelector('header.hide'), null, 'the top bar never hides on scroll')
       }
-      await scroll(viewport, 60)
-      assert.ok(nextHost.querySelector('header.hide'), 'the shared outer viewport hides the header')
-      await scroll(viewport, 20)
-      assert.equal(nextHost.querySelector('header.hide'), null)
-      await scroll(menu, 100)
-      assert.equal(nextHost.querySelector('header.hide'), null, 'unmarked nested menus do not control the header')
-      await scroll(rail, 60)
-      assert.ok(nextHost.querySelector('header.hide'), 'non-bubbling content scroll reaches the capture listener')
-      await scroll(viewport, 25)
-      assert.ok(nextHost.querySelector('header.hide'), 'switching scroll roots must not compare unrelated offsets')
-      await scroll(rail, 20)
-      assert.equal(nextHost.querySelector('header.hide'), null)
-      rail.setAttribute('inert', '')
-      await scroll(rail, 120)
-      assert.equal(nextHost.querySelector('header.hide'), null, 'retiring views cannot drive the header')
-      rail.removeAttribute('inert')
-      settings.value.autoHideTopBar = false
-      await flush()
-      await scroll(rail, 200)
-      assert.equal(nextHost.querySelector('header.hide'), null, 'the setting is respected by nested viewports')
-      settings.value.autoHideTopBar = true
-      await flush()
-      await scroll(rail, 240)
-      assert.ok(nextHost.querySelector('header.hide'))
-      await scroll(rail, 0)
-      assert.equal(nextHost.querySelector('header.hide'), null, 'reaching the top restores the header')
-      scrollViewportRef.value = null
-      await flush()
-      await scroll(rail, 300)
-      assert.equal(nextHost.querySelector('header.hide'), null, 'detached workspace listeners are removed')
-      scrollViewportRef.value = viewport
-      for (const page of ['Moments', 'Notifications', 'History', 'WatchLater', 'Favorites']) {
-        viewport.scrollTop = 100
-        rail.scrollTop = 100
-        activatedPage.value = page
-        await flush()
-        await scroll(viewport, 140)
-        assert.ok(nextHost.querySelector('header.hide'), `${page}: downward scrolling hides the top bar`)
-        window.dispatchEvent(new window.MouseEvent('pointermove', { clientY: 12 }))
-        await flush()
-        assert.ok(nextHost.querySelector('header.hide'), 'the retired pointer reveal listener is absent')
-        await scroll(viewport, 80)
-        assert.equal(nextHost.querySelector('header.hide'), null, `${page}: upward scrolling reveals the top bar`)
-        await scroll(sidebarList, 140)
-        assert.equal(nextHost.querySelector('header.hide'), null, `${page}: sidebar scrolling cannot hide the top bar`)
-        await scroll(rail, 140)
-        assert.ok(nextHost.querySelector('header.hide'), `${page}: content downward scrolling hides it`)
-        await scroll(sidebarList, 0)
-        assert.ok(nextHost.querySelector('header.hide'), `${page}: sidebar scrolling cannot reveal the top bar either`)
-        await scroll(rail, 80)
-        assert.equal(nextHost.querySelector('header.hide'), null, `${page}: content upward scrolling reveals it`)
-        await scroll(rail, 140)
-        await scroll(rail, 0)
-        assert.equal(nextHost.querySelector('header.hide'), null, `${page}: reaching top restores the header`)
-        await scroll(rail, 140)
-        nextHost.querySelector('header').dispatchEvent(new window.Event('focusin', { bubbles: true }))
-        await flush()
-        assert.equal(nextHost.querySelector('header.hide'), null, 'keyboard focus remains accessible')
-      }
-      settings.value.autoHideTopBar = false
-      await flush()
-      await scroll(rail, 400)
-      assert.equal(nextHost.querySelector('header.hide'), null, 'workspace auto hide remains opt-in')
     }
     finally {
       nextApp.unmount()
@@ -569,7 +496,6 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       '~/utils/searchHighlight': { sanitizeSearchHighlight: value => value },
       '~/utils/searchNavigation': { openSearchResults() {}, resolveSearchNavigationTarget: value => `https://www.bilibili.com/?keyword=${value}`, shouldUsePluginSearchResultsPage: () => true },
-      '../SearchFocusOverlay.vue': { default: { render: () => null } },
       '../TagRemoveButton.vue': { default: Vue.defineComponent({ props: ['label', 'disabled'], emits: ['click'], setup: (props, { emit }) => () => Vue.h('button', { 'aria-label': props.label, 'disabled': props.disabled, 'onClick': event => emit('click', event) }, 'Remove') }) },
       './searchHistoryProvider': {
         getSearchHistory: async () => {

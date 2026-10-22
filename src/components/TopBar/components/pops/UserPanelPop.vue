@@ -238,19 +238,16 @@ function handleClickChannel() {
   >
     <div class="bew-popover__scroll user-panel-pop__scroll">
       <div
+        class="user-panel-pop__identity"
         text="xl" font-medium flex="~ items-center gap-2"
       >
-        <Button
-          v-if="settings.touchScreenOptimization"
-          type="secondary" strong @click="handleClickChannel"
-        >
+        <!-- Clicking the avatar opens this panel, so the name leads to the profile. -->
+        <Button type="secondary" strong @click="handleClickChannel">
           {{ userInfo.uname ? userInfo.uname : '-' }}
         </Button>
-        <span v-else>
-          {{ userInfo.uname ? userInfo.uname : '-' }}
-        </span>
       </div>
       <div
+        class="user-panel-pop__identity"
         text="xs $bew-text-2"
         m="t-1 b-2"
       >
@@ -444,10 +441,26 @@ function handleClickChannel() {
 
 <style lang="scss" scoped>
 @use "../../styles/index.scss";
+@use "../../../../styles/sidebarSurface";
 
 .userPanel-pop {
   width: 300px;
   max-height: min(620px, var(--bew-popover-max-height));
+}
+
+// Same glass material, border and shadow as the circles and capsule in the top
+// bar. The top-right corner is concentric with the enlarged avatar sitting a
+// space-2 inside it (--avatar-panel-face-radius comes from the .avatar host).
+.userPanel-pop.bew-popover-surface {
+  @include sidebarSurface.floating;
+  border-radius: var(--bew-popover-radius) calc(var(--avatar-panel-face-radius) + var(--bew-space-2))
+    var(--bew-popover-radius) var(--bew-popover-radius);
+  corner-shape: var(--bew-corner-shape) round var(--bew-corner-shape) var(--bew-corner-shape);
+}
+
+// Keep the name and balances clear of the enlarged avatar in the top-right corner.
+.user-panel-pop__identity {
+  padding-inline-end: calc(var(--avatar-panel-face-radius) * 2 + var(--bew-space-2) * 2);
 }
 
 .user-panel-pop__scroll {

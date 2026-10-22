@@ -55,7 +55,7 @@ import { homeTabStateKey, resolveDefaultAppPage } from '~/utils/homeRoute'
 import { readIframeDrawerHistory } from '~/utils/iframeDrawerHistory'
 import { getIframeMessageData } from '~/utils/iframeMessage'
 import { isSentinelWithinLoadThreshold } from '~/utils/loadMoreSentinel'
-import { getUserID, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, openLinkToNewTab, scrollToTop } from '~/utils/main'
+import { getUserID, isHomePage, isInIframe, isVideoOrBangumiPage, openLinkToNewTab, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
 import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pageMode'
@@ -191,7 +191,9 @@ const pages = {
   [AppPage.Notifications]: definePageComponent(() => import('./Notifications/Notifications.vue')),
 }
 const mainAppRef = ref<HTMLElement>() as Ref<HTMLElement>
-const isLibraryPage = computed(() => [AppPage.Favorites, AppPage.WatchLater, AppPage.History, AppPage.Moments].includes(displayedPage.value))
+const LIBRARY_PAGES = [AppPage.Favorites, AppPage.WatchLater, AppPage.History, AppPage.Moments]
+const RAIL_PAGES = [...LIBRARY_PAGES, AppPage.Notifications]
+const isLibraryPage = computed(() => LIBRARY_PAGES.includes(displayedPage.value))
 const scrollViewportRef = ref<HTMLElement | null>(null)
 const loadMoreSentinelRef = ref<HTMLElement>() // ✅ IntersectionObserver 哨兵元素
 const handlePageRefresh = ref<() => void>()
@@ -296,7 +298,6 @@ const { stop: stopLoadMoreObserver } = useIntersectionObserver(
     threshold: 0,
   },
 )
-const topBarRef = ref()
 const reachTop = ref<boolean>(true)
 /** Coalesced into the viewport's next layout frame, after the pending DOM commit. */
 function scheduleLoadMoreSentinelCheck() {
@@ -480,10 +481,6 @@ const showTopBar = computed((): boolean => {
   if (isVideoOrBangumiPage() && isInIframe())
     return false
 
-  // when user open the notifications page as a drawer, don't show the top bar
-  if (isNotificationPage() && settings.value.openNotificationsPageAsDrawer && isInIframe())
-    return false
-
   // Always show TopBar in the outer layer, never inside iframe
   // This ensures TopBar is always visible outside of iframe content
   if (isInIframe())
@@ -635,7 +632,6 @@ function handleBackToTop(targetScrollTop = 0 as number) {
   const viewport = scrollViewportRef.value
   if (viewport) {
     scrollToTop(viewport, targetScrollTop)
-    topBarRef.value?.toggleTopBarVisible(true)
   }
 
   iframePageRef.value?.handleBackToTop()
@@ -958,14 +954,15 @@ onBeforeUnmount(stopUrlCleaner)
       />
     </div>
 
-    <PersistentSidebar :active="showBewlyPage && (isLibraryPage || activatedPage === AppPage.Notifications)" />
+    <!-- The destination page (not the one still displayed) drives the rail, so it
+         folds or unfolds before the incoming page mounts. -->
+    <PersistentSidebar :active="showBewlyPage && RAIL_PAGES.includes(activatedPage)" />
 
     <!-- TopBar -->
     <div
       v-if="showTopBar"
       class="top-bar-host"
       :class="{ 'top-bar-host--messages': showBewlyPage && activatedPage === AppPage.Notifications, 'top-bar-host--library': showBewlyPage && isLibraryPage }"
-      m-auto max-w="$bew-page-max-width"
       :style="{
         opacity: hideUIForIframePhotoViewer ? 0 : 1,
         pointerEvents: hideUIForIframePhotoViewer ? 'none' : 'auto',
@@ -973,7 +970,6 @@ onBeforeUnmount(stopUrlCleaner)
       }"
     >
       <TopBar
-        ref="topBarRef"
         class="top-bar-layer"
         pos="top-0 left-0" w-full
       />
@@ -1028,7 +1024,7 @@ onBeforeUnmount(stopUrlCleaner)
       </Transition>
 
       <Transition v-if="!showBewlyPage && iframePageURL && !isInIframe()" name="fade">
-        <IframePage ref="iframePageRef" :url="iframePageURL" @scroll="!useOriginalBilibiliTopBar && topBarRef?.handleScroll($event)" />
+        <IframePage ref="iframePageRef" :url="iframePageURL" />
       </Transition>
     </div>
 
@@ -1073,8 +1069,8 @@ onBeforeUnmount(stopUrlCleaner)
   z-index: var(--bew-z-topbar-host);
 }
 
-// Let the persistent message rail sit above the decorative blur, while keeping
-// top-bar controls/popovers above it. Blur geometry and material stay unchanged.
+// Let the persistent rail sit above the top bar's own surface, while keeping
+// top-bar controls/popovers above it.
 .top-bar-host--messages,
 .top-bar-host--library {
   :deep(.top-bar-layer),
@@ -1089,12 +1085,13 @@ onBeforeUnmount(stopUrlCleaner)
     position: absolute;
   }
 
-  :deep(.top-bar-header__scroll-edge) {
-    position: fixed;
-    left: var(--bew-messages-sidebar-width);
-    right: 0;
-    width: auto;
-    z-index: var(--bew-z-topbar);
+  // The logo sits on the rail; the search starts right after the rail.
+  :deep(.top-bar-header) {
+    padding-inline-start: var(--bew-messages-sidebar-width);
+  }
+
+  :deep(.top-bar-header__side--left) {
+    display: none;
   }
 
   :deep(.top-bar-header__side),
@@ -1136,5 +1133,7 @@ onBeforeUnmount(stopUrlCleaner)
 .bewly-scroll-viewport {
   outline: none;
   scrollbar-gutter: stable;
+  // Page-level scroll progress for scroll-driven effects (the home search dock).
+  scroll-timeline: --bew-page-scroll block;
 }
 </style>

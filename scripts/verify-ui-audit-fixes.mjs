@@ -433,7 +433,7 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       '~/utils/htmlDecode': { decodeHtmlEntities: text => text },
       '~/utils/messaging': { reportRuntimeFailure() {} },
     })
-    const app = Vue.createApp(Weekly, { gridLayout: 'adaptive', topBarVisibility: true })
+    const app = Vue.createApp(Weekly, { gridLayout: 'adaptive' })
     app.config.globalProperties.$t = key => key
     try {
       app.mount(host)

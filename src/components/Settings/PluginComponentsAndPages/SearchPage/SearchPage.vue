@@ -37,7 +37,7 @@ async function clearSearchHistory() {
     </SettingsItemGroup>
 
     <SettingsItemGroup :title="$t('settings.group_search_bar')">
-      <SettingsItem :title="$t('settings.show_search_recommendation')" :desc="$t('settings.show_search_recommendation_desc')" right-width="auto">
+      <SettingsItem setting-id="search.bar.recommendation" :title="$t('settings.show_search_recommendation')" :desc="$t('settings.show_search_recommendation_desc')" right-width="auto">
         <Radio v-model="settings.showSearchRecommendation" />
       </SettingsItem>
 
@@ -49,10 +49,6 @@ async function clearSearchHistory() {
         <Button type="secondary" @click="clearSearchHistory">
           {{ $t('search_bar.clear_history') }}
         </Button>
-      </SettingsItem>
-
-      <SettingsItem setting-id="search.focus.disable" :title="$t('settings.disable_search_focus_effect')" :desc="$t('settings.disable_search_focus_effect_desc')" right-width="auto">
-        <Radio v-model="settings.disableSearchFocusEffect" />
       </SettingsItem>
 
       <SettingsItem :title="$t('settings.choose_search_bar_focused_character')">

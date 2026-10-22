@@ -10,13 +10,13 @@ import { DEFAULT_SEARCH_BAR_CHARACTER } from '~/constants/imgs'
 import { removeRetiredSettings, RETIRED_LOCAL_STORAGE_KEYS } from '~/constants/retiredSettings'
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import type { AppPage } from '~/enums/appEnums'
-import { VideoPageTopBarConfig } from '~/enums/appEnums'
 import {
   MOBILE_LIST_LAYOUT_BREAKPOINT,
   normalizeListLayoutBreakpoint,
 } from '~/utils/gridLayout'
 import { LOCAL_LOUDNESS_DEFAULTS, normalizeLocalLoudnessValue } from '~/utils/localLoudnessProtocol'
 import type { PageMode } from '~/utils/pageMode'
+import { DEFAULT_THEME_COLOR, normalizeThemeColor } from '~/utils/themeColor'
 import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
 import { DEFAULT_SCREENSHOT_SHORTCUT, isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
@@ -181,13 +181,10 @@ export interface Settings {
   videoCardContextMenuAdvanced: VideoCardContextMenuKey[]
 
   // Desktop & Dock
-  autoHideTopBar: boolean
-  videoPageTopBarConfig: VideoPageTopBarConfig
   showBewlyOrBiliPageSwitcher: boolean
   topBarLogoStyle: TopBarLogoStyle
   topBarComponentsConfig: { key: string, visible: boolean, badgeType: 'number' | 'dot' | 'none' }[]
   topBarPinnedChannels: string[]
-  openNotificationsPageAsDrawer: boolean
   showLikeNotificationReminder: boolean
   showReplyNotificationReminder: boolean
   showAtNotificationReminder: boolean
@@ -263,13 +260,13 @@ export interface Settings {
   themeScheduleStart: string
   themeScheduleEnd: string
   videoPageDarkMode: boolean
+  /** Hex accent, or `NEUTRAL_THEME_COLOR` for black (light) / white (dark). */
   themeColor: string
   darkModeBaseColor: string // 深色模式基准颜色
   enableDarkModeTint: boolean
   enableOledDarkMode: boolean
   useLinearGradientThemeColorBackground: boolean
 
-  disableSearchFocusEffect: boolean
   searchPageLogoColor: 'white' | 'themeColor'
   searchPageShowLogo: boolean
   searchPageSearchBarFocusCharacter: string
@@ -467,8 +464,6 @@ export const originalSettings: Settings = {
   videoCardContextMenuAdvanced: ['copyOriginalLink', 'copyBVNumber', 'copyAVNumber'],
 
   // Desktop & Dock
-  autoHideTopBar: false,
-  videoPageTopBarConfig: VideoPageTopBarConfig.ShowOnScroll,
   showBewlyOrBiliPageSwitcher: true,
   topBarLogoStyle: 'icon',
   topBarComponentsConfig: [
@@ -478,10 +473,8 @@ export const originalSettings: Settings = {
     { key: 'watchLater', visible: true, badgeType: 'number' },
     { key: 'creatorCenter', visible: true, badgeType: 'none' },
     { key: 'upload', visible: true, badgeType: 'none' },
-    { key: 'notifications', visible: true, badgeType: 'number' },
   ],
   topBarPinnedChannels: [],
-  openNotificationsPageAsDrawer: true,
   showLikeNotificationReminder: false,
   showReplyNotificationReminder: true,
   showAtNotificationReminder: true,
@@ -550,13 +543,12 @@ export const originalSettings: Settings = {
   themeScheduleStart: '06:00',
   themeScheduleEnd: '18:00',
   videoPageDarkMode: false,
-  themeColor: '#00a1d6',
+  themeColor: DEFAULT_THEME_COLOR,
   darkModeBaseColor: '#2a2d32', // 开启可选色调时使用；关闭时保留此值
   enableDarkModeTint: false,
   enableOledDarkMode: false,
   useLinearGradientThemeColorBackground: false,
 
-  disableSearchFocusEffect: false,
   searchPageLogoColor: 'themeColor',
   searchPageShowLogo: true,
   searchPageSearchBarFocusCharacter: DEFAULT_SEARCH_BAR_CHARACTER,
@@ -717,6 +709,7 @@ function normalizeSettings(value: Settings) {
   if (typeof value.enableDarkModeTint !== 'boolean')
     value.enableDarkModeTint = false
   value.dockPosition = normalizeDockPosition(value.dockPosition)
+  value.themeColor = normalizeThemeColor(value.themeColor)
   if (typeof value.autoRemoveWatchLaterOnEnd !== 'boolean')
     value.autoRemoveWatchLaterOnEnd = false
   for (const key of ['topBarLinkOpenMode', 'searchBarLinkOpenMode'] as const) {
@@ -791,6 +784,9 @@ function normalizeSettings(value: Settings) {
 
   const unsupportedBadgeKeys = new Set(['favorites', 'history'])
   if (Array.isArray(record.topBarComponentsConfig)) {
+    // The top bar notifications button was removed.
+    if (record.topBarComponentsConfig.some(component => component.key === 'notifications'))
+      record.topBarComponentsConfig = record.topBarComponentsConfig.filter(component => component.key !== 'notifications')
     const hasUnsupportedBadge = record.topBarComponentsConfig.some((component) => {
       return unsupportedBadgeKeys.has(component.key) && component.badgeType !== 'none'
     })

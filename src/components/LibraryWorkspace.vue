@@ -13,7 +13,7 @@ const sidebarHost = useSidebarRail()
   <div class="library-workspace" :class="{ 'library-workspace--solid': settings.disableFrostedGlass, 'library-workspace--bottom-dock': settings.dockPosition === 'bottom' }">
     <div v-if="sidebarHost" aria-hidden="true" />
     <Teleport :to="sidebarHost?.rail.value ?? 'body'" :disabled="!sidebarHost?.rail.value">
-      <aside class="library-workspace__rail" :class="{ 'bew-sidebar-hosted': sidebarHost }" data-top-bar-scroll-ignore :aria-label="label">
+      <aside class="library-workspace__rail" :class="{ 'bew-sidebar-hosted': sidebarHost }" :aria-label="label">
         <div class="library-workspace__rail-scroll">
           <slot name="sidebar" :content-id="contentId" />
         </div>

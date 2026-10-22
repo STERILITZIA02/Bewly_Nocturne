@@ -6,7 +6,6 @@ import Button from '~/components/Button.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
-import { VideoPageTopBarConfig } from '~/enums/appEnums'
 import { settings } from '~/logic'
 
 import { allChannelConfigs } from '../../../TopBar/constants/channels'
@@ -70,25 +69,12 @@ const topBarComponents = computed<TopBarComponent[]>(() => [
     icon: 'i-tabler:upload',
     supportsBadge: false,
   },
-  {
-    key: 'notifications',
-    i18nKey: 'topbar.notifications',
-    icon: 'i-tabler:bell',
-    supportsBadge: true,
-  },
 ])
 
 const badgeOptions = computed(() => [
   { label: t('settings.top_bar_icon_badges_opt.number'), value: 'number' },
   { label: t('settings.top_bar_icon_badges_opt.dot'), value: 'dot' },
   { label: t('settings.top_bar_icon_badges_opt.none'), value: 'none' },
-])
-
-const videoPageTopBarConfigOptions = computed(() => [
-  { label: t('settings.video_page_top_bar_config_opt.alwaysShow'), value: VideoPageTopBarConfig.AlwaysShow },
-  { label: t('settings.video_page_top_bar_config_opt.alwaysHide'), value: VideoPageTopBarConfig.AlwaysHide },
-  { label: t('settings.video_page_top_bar_config_opt.showOnMouse'), value: VideoPageTopBarConfig.ShowOnMouse },
-  { label: t('settings.video_page_top_bar_config_opt.showOnScroll'), value: VideoPageTopBarConfig.ShowOnScroll },
 ])
 
 function createDefaultComponentConfig(component: TopBarComponent) {
@@ -199,19 +185,6 @@ function toggleChannel(value: string) {
         right-width="auto"
       >
         <Radio v-model="settings.openTopBarItemsInBewly" />
-      </SettingsItem>
-      <SettingsItem setting-id="navigation.topBar.autoHide" :title="$t('settings.auto_hide_top_bar')" right-width="auto">
-        <Radio v-model="settings.autoHideTopBar" />
-      </SettingsItem>
-      <SettingsItem
-        :title="$t('settings.video_page_top_bar_config')"
-        :desc="$t('settings.video_page_top_bar_config_desc')"
-        right-width="auto"
-      >
-        <Select v-model="settings.videoPageTopBarConfig" :options="videoPageTopBarConfigOptions" w="160px" />
-      </SettingsItem>
-      <SettingsItem :title="$t('settings.open_notifications_page_as_drawer')" right-width="auto">
-        <Radio v-model="settings.openNotificationsPageAsDrawer" />
       </SettingsItem>
     </SettingsItemGroup>
 

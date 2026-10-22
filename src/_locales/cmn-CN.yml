@@ -625,14 +625,6 @@ settings:
   show_video_card_duration: 显示视频时长
   show_video_card_watch_later: 显示稍后再看按钮
   show_video_watched_badge: 记录并显示已观看
-  auto_hide_top_bar: 自动隐藏顶栏
-  video_page_top_bar_config: 视频页顶栏配置
-  video_page_top_bar_config_desc: 控制视频页顶栏的显示时机。“鼠标显示”表示鼠标移入页面顶部时显示；“滚动显示”表示页面滚动时显示。
-  video_page_top_bar_config_opt:
-    alwaysShow: 总是显示
-    alwaysHide: 总是隐藏
-    showOnMouse: 鼠标显示
-    showOnScroll: 滚动显示
   show_bewly_or_bili_page_switcher: 显示页面模式切换按钮
   filter_articles_in_moments: 过滤专栏
   filter_articles_in_moments_desc: 在动态列表中过滤掉专栏内容，仅显示视频
@@ -662,7 +654,6 @@ settings:
   auto_receive_vip_exp: 大会员经验自动领取
   auto_receive_vip_exp_desc: 启用后，将自动领取大会员每日经验
   auto_receive_vip_exp_success: 大会员经验自动领取成功
-  open_notifications_page_as_drawer: 以抽屉形式打开通知页面
   show_like_notification_reminder: 显示点赞提醒
   show_like_notification_reminder_desc: 启用后，顶栏通知角标会将收到的赞计入总数。
 
@@ -741,6 +732,9 @@ settings:
   video_page_dark_mode: 仅视频播放页深色模式
   video_page_dark_mode_desc: 保持全站主题设置不变，仅在视频播放页启用 Bewly Nocturne 深色样式。
   theme_color: 主题色
+  theme_color_desc: 自定义颜色与纯黑、纯白页面的对比度至少为 1.8:1，过暗或过亮时会自动调整明度。“无主题色”在浅色模式下为黑、深色模式下为白。
+  theme_color_opt:
+    neutral: 无主题色
   dark_mode_base_color: 深色模式基准颜色
   enable_dark_mode_tint: 深色背景色调
   enable_dark_mode_tint_desc: 默认使用无色调的中性灰。开启后使用下方的背景色调；关闭会保留已选颜色。
@@ -756,8 +750,6 @@ settings:
     scroll: 滚动加载
     pagination: 翻页
   logo_visibility: Logo 可见性
-  disable_search_focus_effect: 去除搜索栏聚焦效果
-  disable_search_focus_effect_desc: 开启后，搜索栏聚焦时不再模糊或暗化页面背景。
   choose_search_bar_focused_character: 选择搜索栏聚焦时出现的人物
   show_hot_search_in_top_bar: 显示热搜
   show_hot_search_in_top_bar_desc: 在搜索框聚焦时显示热搜列表
@@ -913,7 +905,6 @@ auth:
   auth_access_key_first: 在这之前请先授权 Bewly Nocturne 使用 access key
 topbar:
   sign_in: 登录
-  notifications: 通知
   moments: 动态
   favorites: 收藏
   history: 历史

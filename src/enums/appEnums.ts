@@ -16,10 +16,3 @@ export enum AppPage {
   Moments = 'Moments',
   Notifications = 'Notifications',
 }
-
-export enum VideoPageTopBarConfig {
-  AlwaysShow = 'alwaysShow', // 总是显示
-  AlwaysHide = 'alwaysHide', // 总是隐藏
-  ShowOnMouse = 'showOnMouse', // 鼠标显示
-  ShowOnScroll = 'showOnScroll', // 滚动显示
-}
