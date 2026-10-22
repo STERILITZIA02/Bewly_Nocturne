@@ -671,8 +671,6 @@ else if (shouldInitializeContentScript) {
       'bewly-video-dark-only',
       'remove-top-bar',
       'bewly-outer-top-bars-suppressed',
-      'bewly-original-video-top-bar-controlled',
-      'bewly-original-video-top-bar-hidden',
     )
     document.documentElement.removeAttribute(EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE)
     restorePreparedOriginalBilibiliTopBars(document)
@@ -1861,9 +1859,8 @@ else if (shouldInitializeContentScript) {
   // 为 iframe 中运行时添加 ESC 键监听（消息页面、视频页面、动态详情）
   const isMomentDetailPage = /https?:\/\/t\.bilibili\.com\/\d+/.test(currentUrl)
     || /https?:\/\/(?:www\.)?bilibili\.com\/opus\/\d+/.test(currentUrl)
-  const isNotificationsDrawer = isNotificationPage() && window.name === 'bewly-notifications-drawer'
   const isIframeDrawer = window.name === 'bewly-iframe-drawer'
-  if (isInIframe() && (isIframeDrawer || isNotificationsDrawer || isVideoOrBangumiPage() || isMomentDetailPage)) {
+  if (isInIframe() && (isIframeDrawer || isVideoOrBangumiPage() || isMomentDetailPage)) {
     window.addEventListener('keydown', (event: KeyboardEvent) => {
       if (!isEligibleDrawerEscape(event))
         return

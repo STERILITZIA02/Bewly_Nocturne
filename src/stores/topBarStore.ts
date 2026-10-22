@@ -155,13 +155,8 @@ export const useTopBarStore = defineStore('topBar', () => {
   let lastLoggedOutMid: number | undefined
 
   // UI State
-  const drawerVisible = reactive({
-    notifications: false,
-  })
-  const notificationsDrawerUrl = ref<string>('https://message.bilibili.com/')
   const popupVisible = reactive({
     userPanel: false,
-    notifications: false,
     moments: false,
     favorites: false,
     history: false,
@@ -171,7 +166,6 @@ export const useTopBarStore = defineStore('topBar', () => {
   })
 
   // TopBar visibility state
-  const topBarVisible = ref<boolean>(true)
   const searchKeyword = ref<string>('')
 
   // 从 useTopBarReactive 整合的计算属性
@@ -216,12 +210,10 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   function closeAccountScopedSurfaces() {
-    const accountScopedPopups = ['userPanel', 'notifications', 'moments', 'favorites', 'history', 'watchLater'] as const
+    const accountScopedPopups = ['userPanel', 'moments', 'favorites', 'history', 'watchLater'] as const
     accountScopedPopups.forEach((key) => {
       popupVisible[key] = false
     })
-    drawerVisible.notifications = false
-    notificationsDrawerUrl.value = 'https://message.bilibili.com/'
   }
 
   function resetAccountScopedState() {
@@ -1160,13 +1152,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     return index < newMomentsCount.value
   }
 
-  function handleNotificationsItemClick(item: { name: string, url: string, unreadCount: number, icon: string }) {
-    if (settings.value.openNotificationsPageAsDrawer) {
-      drawerVisible.notifications = true
-      notificationsDrawerUrl.value = item.url
-    }
-  }
-
   function closeAllPopups(exceptionKey?: string) {
     Object.keys(popupVisible).forEach((key) => {
       if (key !== exceptionKey)
@@ -1554,7 +1539,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     resetAccountScopedState()
 
     closeAllPopups()
-    drawerVisible.notifications = false
   }
 
   async function setUiActive(active: boolean) {
@@ -1574,11 +1558,6 @@ export const useTopBarStore = defineStore('topBar', () => {
       startUpdateTimer()
   }
 
-  // 设置TopBar可见状态
-  function setTopBarVisible(visible: boolean) {
-    topBarVisible.value = visible
-  }
-
   return {
     canReadUi: canRefreshUi,
     invalidateExtensionContext: disableSharedStateMessaging,
@@ -1592,8 +1571,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     watchLaterList,
     favoriteStateVersion,
     isLoadingWatchLater,
-    drawerVisible,
-    notificationsDrawerUrl,
     popupVisible,
 
     isSearchPage,
@@ -1604,7 +1581,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     reconcileLocalLoginState,
     getUnreadMessageCount,
     getTopBarNewMomentsCount,
-    handleNotificationsItemClick,
     closeAllPopups,
     initData,
     setUiActive,
@@ -1645,8 +1621,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     bCoinAlreadyReceived,
     vipExpAlreadyReceived,
 
-    topBarVisible,
     searchKeyword,
-    setTopBarVisible,
   }
 })

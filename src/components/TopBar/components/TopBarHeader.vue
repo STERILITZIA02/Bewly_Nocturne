@@ -1,11 +1,6 @@
 <script setup lang="ts">
-import { useMediaQuery, useMutationObserver } from '@vueuse/core'
-import { computed, onMounted, ref } from 'vue'
+import { ref } from 'vue'
 
-import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
-import SearchFocusOverlay from '~/components/SearchFocusOverlay.vue'
-import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
-import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
 import { vLayoutEditable } from '~/logic/layoutEdit'
 
@@ -15,155 +10,14 @@ import TopBarPinnedChannels from './TopBarPinnedChannels.vue'
 import TopBarRight from './TopBarRight.vue'
 import TopBarSearch from './TopBarSearch.vue'
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   active?: boolean
   reachTop: boolean
   isDark: boolean
 }>(), { active: true })
 
-const { forceWhiteIcon, handleNotificationsItemClick, showSearchBar } = useTopBarInteraction()
-const searchFocusEffect = useSearchFocusEffect()
-const isNarrowLayout = useMediaQuery(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`)
-
-const OVERLAY_HEIGHT = 'calc(var(--bew-top-bar-height) * 1.35)'
-
-// 雾色沿高度从 peak 衰减到几乎透明。
-//
-// 曲线必须处处平滑：alpha 的斜率只要在中途跳一次，人眼就会在那个一阶导数断点
-// 上看到一条并不存在的亮带（马赫带）。手挑 stop 数值保证不了这件事 —— 曾经
-// 用「peak → mid@45% → 0」三段，末端斜率突变成 0 长出一条亮带；改成手调的
-// S 形后，为了迁就 mid 又在 45% 处压出 2 倍斜率跳变，亮带只是搬到了中间。
-//
-// 所以改为采样余弦衰减 cos 曲线：它两端斜率天然为 0、中间单调，不存在断点。
-// FOG_GAMMA < 1 让曲线上凸，中段留住足够浓度（0.7 时 45% 处约为 peak 的 69%）。
-const FOG_GAMMA = 0.7
-const FOG_STOP_COUNT = 10
-
-function fogStops(peak: number): [number, number][] {
-  return Array.from({ length: FOG_STOP_COUNT }, (_, index) => {
-    const t = index / (FOG_STOP_COUNT - 1)
-    const decay = ((1 + Math.cos(Math.PI * t)) / 2) ** FOG_GAMMA
-    return [+(t * 100).toFixed(1), peak * decay]
-  })
-}
-
-// 保留两位小数，末端那点残量不能被取整抹平
-const fogAlpha = (alpha: number) => +alpha.toFixed(2)
-
-function fogGradient(color: string, peak: number) {
-  const stops = fogStops(peak).map(([pos, alpha]) => `rgb(${color} / ${fogAlpha(alpha)}%) ${pos}%`)
-  return `linear-gradient(to bottom, ${stops.join(', ')})`
-}
-
-// 雾化层只改清晰度，还需要一层雾色叠上去才有"雾"的质感。
-const tintBackground = computed(() => {
-  if (forceWhiteIcon.value)
-    return fogGradient('0 0 0', 42)
-
-  // 亮色白雾、暗色黑雾。这里不能图省事用 --bew-bg：
-  // 它在暗色下是深灰，跟深色页面几乎同色，压上去看不出任何变化。
-  return props.isDark
-    ? fogGradient('0 0 0', 75)
-    : fogGradient('255 255 255', 80)
-})
-
-const leftSection = ref<HTMLElement | null>(null)
-const rightSection = ref<HTMLElement | null>(null)
-const searchSection = ref<HTMLElement | null>(null)
-const searchContent = ref<HTMLElement | null>(null)
-
-const leftWidth = ref(0)
-const rightWidth = ref(0)
-const centerWidth = ref(0)
-const searchContentWidth = ref(0)
+const { forceWhiteIcon, showSearchBar } = useTopBarInteraction()
 const topBarSearchFocused = ref(false)
-
-// 使用单个 ResizeObserver 监听多个元素，减少开销
-let resizeObserver: ResizeObserver | null = null
-
-function setupResizeObserver() {
-  if (resizeObserver)
-    resizeObserver.disconnect()
-
-  resizeObserver = new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      const width = entry.contentRect.width
-      if (entry.target === leftSection.value) {
-        leftWidth.value = width
-      }
-      else if (entry.target === rightSection.value) {
-        rightWidth.value = width
-      }
-      else if (entry.target === searchSection.value) {
-        centerWidth.value = width
-        refreshSearchContent()
-      }
-      else if (entry.target === searchContent.value) {
-        searchContentWidth.value = width
-      }
-    }
-  })
-
-  if (leftSection.value)
-    resizeObserver.observe(leftSection.value)
-  if (rightSection.value)
-    resizeObserver.observe(rightSection.value)
-  if (searchSection.value)
-    resizeObserver.observe(searchSection.value)
-}
-
-// 监听 searchContent 变化
-watch(searchContent, (newEl, oldEl) => {
-  if (resizeObserver) {
-    if (oldEl)
-      resizeObserver.unobserve(oldEl)
-    if (newEl)
-      resizeObserver.observe(newEl)
-  }
-})
-
-onBeforeUnmount(() => {
-  resizeObserver?.disconnect()
-  resizeObserver = null
-})
-
-useMutationObserver(searchSection, () => {
-  refreshSearchContent()
-}, { childList: true, subtree: true })
-
-onMounted(() => {
-  leftWidth.value = leftSection.value?.offsetWidth ?? 0
-  rightWidth.value = rightSection.value?.offsetWidth ?? 0
-  centerWidth.value = searchSection.value?.offsetWidth ?? 0
-  refreshSearchContent()
-  setupResizeObserver()
-})
-
-const maxOffset = computed(() => {
-  if (!centerWidth.value || !searchContentWidth.value)
-    return 0
-  return Math.max(0, (centerWidth.value - searchContentWidth.value) / 2)
-})
-
-const searchOffset = computed(() => {
-  // 窄屏优先把完整的中间栏交给搜索框，避免平移后浪费可用宽度。
-  if (isNarrowLayout.value)
-    return 0
-
-  // 左右区域宽度不同时，补偿一半宽度差，让有足够空余的搜索框相对页面居中。
-  // 实际偏移仍受搜索区域剩余空间限制，空间不足时不会挤压两侧控件。
-  const desired = (rightWidth.value - leftWidth.value) / 2
-  const limit = maxOffset.value
-  if (!limit)
-    return 0
-  return Math.min(Math.max(desired, -limit), limit)
-})
-
-function refreshSearchContent() {
-  const el = searchSection.value?.querySelector<HTMLElement>('[data-top-bar-search-content]')
-  searchContent.value = el ?? null
-  searchContentWidth.value = el?.offsetWidth ?? 0
-}
 </script>
 
 <template>
@@ -173,21 +27,8 @@ function refreshSearchContent() {
       'top-bar-header--solid': settings.disableFrostedGlass,
       'top-bar-header--solid-force-white': settings.disableFrostedGlass && forceWhiteIcon,
     }"
-    max-w="$bew-page-max-width"
-    grid="~ cols-[auto_1fr_auto] items-center gap-4"
-    m-auto
     h="$bew-top-bar-height"
   >
-    <!-- 顶栏边缘雾化：渐进模糊 + 雾色 -->
-    <div v-if="!settings.disableFrostedGlass" class="top-bar-header__scroll-edge" :style="{ height: OVERLAY_HEIGHT }">
-      <ProgressiveBlur class="top-bar-header__blur-stack" edge="top" radius="18px" saturate :visible="!reachTop" />
-
-      <div
-        class="top-bar-header__tint"
-        :style="{ background: tintBackground, opacity: reachTop ? 0.8 : 1 }"
-      />
-    </div>
-
     <!-- Top bar theme color gradient -->
     <Transition name="fade">
       <div
@@ -197,60 +38,48 @@ function refreshSearchContent() {
       />
     </Transition>
 
-    <div
-      ref="leftSection"
-      class="top-bar-header__side top-bar-header__side--left"
-    >
+    <!-- Reserves the floating logo's box; the search sits right after it. -->
+    <div class="top-bar-header__side top-bar-header__side--left">
       <TopBarLogo :force-white-icon="forceWhiteIcon" placeholder />
-      <TopBarPinnedChannels :force-white-icon="forceWhiteIcon" />
     </div>
 
     <!-- search bar -->
     <div
-      ref="searchSection"
       v-layout-editable="'topbar-search'"
       class="top-bar-header__search"
       data-layout-editable-id="topbar-search"
       :class="{ 'top-bar-header__search--focused': topBarSearchFocused }"
-      :style="{ transform: `translateX(${searchOffset}px)` }"
     >
-      <div
-        class="top-bar-header__search-content"
-        data-top-bar-search-content
-      >
-        <div
-          v-if="showSearchBar"
-          class="top-bar-header__search-control"
-        >
-          <TopBarSearch :active="active" @focus-change="topBarSearchFocused = $event" />
-        </div>
+      <div v-if="showSearchBar" class="top-bar-header__search-control">
+        <TopBarSearch :active="active" @focus-change="topBarSearchFocused = $event" />
       </div>
     </div>
 
-    <SearchFocusOverlay
-      :active="topBarSearchFocused && Boolean(searchFocusEffect.darkened || searchFocusEffect.blurred)"
-      :darkened="searchFocusEffect.darkened"
-      :blurred="searchFocusEffect.blurred"
-    />
+    <div class="top-bar-header__side top-bar-header__side--channels">
+      <TopBarPinnedChannels :force-white-icon="forceWhiteIcon" />
+    </div>
 
     <!-- right content -->
-    <div ref="rightSection" class="top-bar-header__side top-bar-header__side--right">
-      <TopBarRight
-        @notifications-click="handleNotificationsItemClick"
-      />
+    <div class="top-bar-header__side top-bar-header__side--right">
+      <TopBarRight />
     </div>
   </main>
 </template>
 
 <style scoped lang="scss">
-@use "../../../styles/breakpoints";
-
+// The header spans the window: the logo is pinned to the rail content line on
+// every page, and the search follows it rather than centring in the bar.
 .top-bar-header {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: grid;
+  grid-template-columns: auto minmax(0, var(--b-search-bar-max-width, 550px)) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--bew-top-bar-section-gap);
   box-sizing: border-box;
   min-width: 0;
   min-height: var(--bew-top-bar-height);
-  padding-inline: var(--bew-top-bar-inline-padding);
+  // The logo sits on the rail content line; the avatar's right edge matches the
+  // page content inset (the Moments right column's distance from the edge).
+  padding-inline: var(--bew-home-logo-inline-start) var(--bew-page-inline-inset);
 }
 
 .top-bar-header--solid {
@@ -265,44 +94,29 @@ function refreshSearchContent() {
   background: var(--bew-top-bar-solid-background-force-white);
 }
 
-.top-bar-header__scroll-edge {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  pointer-events: none;
-}
-
-.top-bar-header__blur-stack,
-.top-bar-header__tint {
-  position: absolute;
-  inset: 0;
-}
-
-.top-bar-header__tint {
-  transition: opacity 0.3s ease;
-}
-
 .top-bar-header__side {
   display: flex;
   align-items: center;
   min-width: 0;
+  gap: var(--bew-space-2);
 }
 
 .top-bar-header__side--left {
-  justify-self: start;
-  gap: var(--bew-space-2);
+  grid-column: 1;
+}
+
+.top-bar-header__side--channels {
+  grid-column: 3;
 }
 
 .top-bar-header__side--right {
+  grid-column: 4;
   justify-self: end;
-  gap: var(--bew-space-2);
 }
 
 .top-bar-header__search {
+  grid-column: 2;
   display: flex;
-  justify-content: center;
-  width: 100%;
   min-width: 0;
 }
 
@@ -311,31 +125,8 @@ function refreshSearchContent() {
   z-index: 1;
 }
 
-.top-bar-header__search-content {
-  display: flex;
-  width: 100%;
-  max-width: 600px;
-  min-width: 0;
-  align-items: center;
-  justify-content: center;
-}
-
 .top-bar-header__search-control {
   width: 100%;
   min-width: 0;
-  flex: 1 1 auto;
-}
-
-// 窄屏响应式 padding（避免窄屏下 x-48px 过于挤压）
-@media (max-width: breakpoints.$compact-max) {
-  .top-bar-header {
-    gap: var(--bew-space-3);
-  }
-}
-
-@media (max-width: breakpoints.$mobile-max) {
-  .top-bar-header {
-    gap: var(--bew-space-2);
-  }
 }
 </style>

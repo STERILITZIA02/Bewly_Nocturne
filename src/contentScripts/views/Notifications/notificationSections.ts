@@ -71,10 +71,6 @@ const NOTIFICATION_VIEW_SET = new Set<NotificationView>(
   NOTIFICATION_SECTIONS.map(section => section.id),
 )
 
-export const TOP_BAR_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
-  section => section.unreadSource !== null,
-)
-
 export function isNotificationView(value: unknown): value is NotificationView {
   return typeof value === 'string' && NOTIFICATION_VIEW_SET.has(value as NotificationView)
 }

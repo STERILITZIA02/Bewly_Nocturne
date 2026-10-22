@@ -2,7 +2,6 @@
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 
-import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 
@@ -15,7 +14,6 @@ const emit = defineEmits<{
 const { showSearchBar, forceWhiteIcon } = useTopBarInteraction()
 const topBarStore = useTopBarStore()
 const { searchKeyword } = storeToRefs(topBarStore)
-const searchFocusEffect = useSearchFocusEffect()
 
 const useLightText = computed(() => forceWhiteIcon.value && !settings.value.disableFrostedGlass)
 </script>
@@ -28,8 +26,6 @@ const useLightText = computed(() => forceWhiteIcon.value && !settings.value.disa
         v-model="searchKeyword"
         :active="active"
         class="search-bar"
-        :darken-on-focus="searchFocusEffect.darkened"
-        :blurred-on-focus="searchFocusEffect.blurred"
         :force-light-text="useLightText"
         :show-hot-search="settings.showHotSearchInTopBar"
         :top-bar-appearance="true"

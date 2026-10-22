@@ -15,7 +15,7 @@ import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/ef
 import { postMessageToIframe } from '~/utils/iframeMessage'
 import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { cleanBilibiliShareText, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
-import { getThemeColorTokens, readThemeContrastSurfaces, syncNativeNeutralRgb } from '~/utils/themeColor'
+import { applyThemeColorTokens, getThemeColorTokens, readThemeContrastSurfaces, syncNativeNeutralRgb } from '~/utils/themeColor'
 
 function isFestivalPage(): boolean {
   return /https?:\/\/(?:www\.)?bilibili\.com\/festival\/.*/.test(location.href)
@@ -325,14 +325,7 @@ export function setupNecessarySettingsWatchers() {
       const themeTokens = getThemeColorTokens(settings.value.themeColor, isDark.value, surfaces)
       const targets = [document.documentElement, bewlyElement].filter((element): element is HTMLElement => Boolean(element))
 
-      targets.forEach((element) => {
-        element.style.setProperty('--bew-theme-color', themeTokens.theme)
-        element.style.setProperty('--bew-on-theme-color', themeTokens.onTheme)
-        element.style.setProperty('--bew-theme-checkmark-image', themeTokens.checkmarkImage)
-        element.style.setProperty('--bew-switch-thumb-active', themeTokens.switchThumb)
-        element.style.setProperty('--bew-theme-foreground', themeTokens.foreground)
-        element.style.setProperty('--bew-theme-focus-ring', themeTokens.focusRing)
-      })
+      targets.forEach(element => applyThemeColorTokens(element, themeTokens))
     },
     { immediate: true, flush: 'post' },
   )

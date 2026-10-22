@@ -57,18 +57,14 @@ const STACK_SPREAD = 18
 
 /**
  * `radius` is any CSS length; it defaults to the global frosted-glass radius.
- * `saturate` boosts colour on the widest layer only, for a blur that is itself
- * the surface (the top bar). Over glass it would tint the band and outline it.
  */
-export function createProgressiveBlurLayers(edge: ProgressiveBlurEdge, radius = 'var(--bew-glass-blur-radius)', saturate = false) {
+export function createProgressiveBlurLayers(edge: ProgressiveBlurEdge, radius = 'var(--bew-glass-blur-radius)') {
   const shape = edge === 'center' ? 'radial-gradient(closest-side' : `linear-gradient(${edge === 'top' ? 'to bottom' : 'to top'}`
   return Array.from({ length: PROGRESSIVE_BLUR_LAYER_COUNT }, (_, index) => {
     const solid = ((PROGRESSIVE_BLUR_LAYER_COUNT - 1 - index) / PROGRESSIVE_BLUR_LAYER_COUNT) * 100
     const fade = ((PROGRESSIVE_BLUR_LAYER_COUNT - index) / PROGRESSIVE_BLUR_LAYER_COUNT) * 100
     const mask = `${shape}, #000 0, #000 ${solid}%, transparent ${fade}%)`
-    const blur = `blur(calc(${radius} * ${+(2 ** index / STACK_SPREAD).toFixed(4)}))`
-    // Saturation only on the widest layer, so it does not compound.
-    const filter = saturate && index === 0 ? `${blur} saturate(180%)` : blur
+    const filter = `blur(calc(${radius} * ${+(2 ** index / STACK_SPREAD).toFixed(4)}))`
     return {
       backdropFilter: filter,
       WebkitBackdropFilter: filter,

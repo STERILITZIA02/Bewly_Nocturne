@@ -15,7 +15,6 @@ import { releaseIframeMedia } from '~/utils/mediaResources'
 const props = defineProps<{
   url: string
 }>()
-const emit = defineEmits<{ scroll: [scrollTop: number] }>()
 const { reachTop } = useBewlyApp()
 const { t } = useI18n()
 const toast = useToast()
@@ -58,7 +57,6 @@ function updateReachTopFromIframe() {
     const scrollElement = doc?.scrollingElement ?? doc?.documentElement ?? doc?.body
     const scrollTop = scrollElement?.scrollTop ?? iframeWindow.scrollY ?? 0
     reachTop.value = scrollTop <= 0
-    emit('scroll', scrollTop)
   }
   catch (error) {
     if (!iframeScrollSyncFailed.value) {

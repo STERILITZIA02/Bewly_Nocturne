@@ -184,8 +184,6 @@ const autoPlayModeOptionKeys = [
 const topBarGlobalTitleKeys = [
   'settings.group_topbar',
   'settings.topbar_display_settings',
-  'settings.auto_hide_top_bar',
-  'settings.video_page_top_bar_config',
   'settings.open_top_bar_items_in_bewly',
   'settings.open_notifications_page_as_drawer',
 ]
@@ -429,7 +427,6 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
   ...[
     ['moments', 'topbar.moments'],
     ['watchLater', 'topbar.watch_later'],
-    ['notifications', 'topbar.notifications'],
   ].flatMap(([, titleKey]) => createEntries(topBarRoute, [titleKey!], {
     keywordKeys: ['settings.visibility', 'settings.badge_type', 'settings.top_bar_icon_badges_opt'],
   })),
@@ -474,7 +471,6 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.group_search_bar',
     'settings.show_search_recommendation',
     'settings.enable_search_history',
-    'settings.disable_search_focus_effect',
     'settings.choose_search_bar_focused_character',
     'settings.group_hot_search',
     'settings.show_hot_search_in_search_page',
@@ -598,7 +594,9 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.theme',
     'settings.theme_schedule',
     'settings.video_page_dark_mode',
-    'settings.theme_color',
+  ]),
+  ...createEntries(appearanceRoute, ['settings.theme_color'], { keywordKeys: ['settings.theme_color_opt.neutral'] }),
+  ...createEntries(appearanceRoute, [
     'settings.enable_dark_mode_tint',
     'settings.enable_oled_dark_mode',
     'settings.gradient_theme_color_background',

@@ -3,7 +3,7 @@ import { effectScope, onScopeDispose, watch } from 'vue'
 import { stopDarkState, useDark } from '~/composables/useDark'
 import { getNativeSite } from '~/constants/nativeSites'
 import { settings, settingsInitializationState } from '~/logic/storage'
-import { getThemeColorTokens, readThemeContrastSurfaces, syncNativeNeutralRgb } from '~/utils/themeColor'
+import { applyThemeColorTokens, getThemeColorTokens, readThemeContrastSurfaces, syncNativeNeutralRgb } from '~/utils/themeColor'
 
 import { setupNativePageKeyboard } from './nativePageKeyboard'
 
@@ -141,13 +141,7 @@ export function setupNativeSiteAppearance() {
         }, { immediate: true })
         watch([() => settings.value.themeColor, isDark, isOledDark, darkModeBaseColor], ([themeColor, dark]) => {
           syncNativeNeutralRgb(root)
-          const tokens = getThemeColorTokens(themeColor, dark, readThemeContrastSurfaces(root))
-          root.style.setProperty('--bew-theme-color', tokens.theme)
-          root.style.setProperty('--bew-on-theme-color', tokens.onTheme)
-          root.style.setProperty('--bew-theme-checkmark-image', tokens.checkmarkImage)
-          root.style.setProperty('--bew-switch-thumb-active', tokens.switchThumb)
-          root.style.setProperty('--bew-theme-foreground', tokens.foreground)
-          root.style.setProperty('--bew-theme-focus-ring', tokens.focusRing)
+          applyThemeColorTokens(root, getThemeColorTokens(themeColor, dark, readThemeContrastSurfaces(root)))
         }, { immediate: true, flush: 'post' })
       })
     }, { immediate: true })

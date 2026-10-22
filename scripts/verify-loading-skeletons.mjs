@@ -539,7 +539,6 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       '~/utils/searchHighlight': { sanitizeSearchHighlight: value => value },
       '~/utils/searchNavigation': { openSearchResults() {}, resolveSearchNavigationTarget: value => value },
-      '../SearchFocusOverlay.vue': { default: {} },
       '../TagRemoveButton.vue': { default: {} },
       './searchHistoryProvider': {
         getSearchHistory: () => {

@@ -3818,13 +3818,9 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(necessaryWatchers, /currentLocationHref,[\s\S]{0,300}isOriginalMomentsFeed && !showUserCard/)
 
   assert.match(topBar, /settingsStore\.getEffectiveTopBarSource\(\)/)
-  assert.match(topBar, /configuredMode === VideoPageTopBarConfig\.ShowOnMouse[\s\S]{0,100}VideoPageTopBarConfig\.AlwaysShow/)
-  assert.match(topBar, /syncOriginalVideoTopBarVisibility\(shouldShow\)/)
-  assert.match(topBar, /settings\.value\.videoPageTopBarConfig !== VideoPageTopBarConfig\.ShowOnMouse/)
-  assert.match(topBar, /clearOriginalVideoTopBarVisibility\(\)/)
-  const topBarMountSection = topBar.slice(topBar.indexOf('onMounted(() =>'), topBar.indexOf('function handleVisibilityChange'))
-  assert.ok(topBarMountSection.indexOf('setupScrollListeners()') < topBarMountSection.indexOf('await topBarStore.setUiActive('))
-  assert.match(removeTopBarStyles, /\.bewly-original-video-top-bar-controlled[\s\S]{0,500}\.bewly-original-video-top-bar-hidden/)
+  // The top bar no longer hides itself (scroll, video page modes or the native bar).
+  assert.doesNotMatch(topBar, /VideoPageTopBarConfig|autoHideTopBar|setupScrollListeners|toggleTopBarVisible/)
+  assert.doesNotMatch(removeTopBarStyles, /bewly-original-video-top-bar/)
   assert.doesNotMatch(removeTopBarStyles, /body > \.bili-header ~ #app \.bili-header/)
   assert.match(bilibiliTopBar, /const header = getNativeDocumentTopBar\(doc\)/)
   assert.match(bilibiliTopBar, /Keep Bilibili's Vue-owned header in its native application tree/)
@@ -3866,7 +3862,7 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(storage, /key: 'favorites', visible: true, badgeType: 'none'/)
   assert.match(storage, /key: 'history', visible: true, badgeType: 'none'/)
   assert.match(storage, /unsupportedBadgeKeys[\s\S]{0,500}badgeType: unsupportedBadgeKeys\.has\(component\.key\) \? 'none'/)
-  assert.match(searchCatalog, /\['moments', 'topbar\.moments'\],[\s\S]{0,100}\['watchLater',[\s\S]{0,100}\['notifications'/)
+  assert.match(searchCatalog, /\['moments', 'topbar\.moments'\],[\s\S]{0,100}\['watchLater', 'topbar\.watch_later'\],\n {2}\]/)
   assert.match(searchCatalog, /\['favorites', 'topbar\.favorites'\],[\s\S]{0,100}\['history',[\s\S]{0,300}keywordKeys: \['settings\.visibility'\]/)
   const gradientCondition = topBarHeader.match(/v-if="[^"]*useLinearGradientThemeColorBackground[^"]*"/)?.[0] ?? ''
   assert.doesNotMatch(gradientCondition, /forceWhiteIcon/)
@@ -3986,13 +3982,12 @@ async function verifyIncrementalInteractionContracts() {
 
 async function verifySecurityContracts() {
   const root = process.cwd()
-  const [contentScript, injectScript, allSearchPage, searchBar, searchHistoryProvider, notificationsDrawer] = await Promise.all([
+  const [contentScript, injectScript, allSearchPage, searchBar, searchHistoryProvider] = await Promise.all([
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
     readFile(`${root}/src/inject/index.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/SearchResults/pages/AllSearchPage.vue`, 'utf8'),
     readFile(`${root}/src/components/SearchBar/SearchBar.vue`, 'utf8'),
     readFile(`${root}/src/components/SearchBar/searchHistoryProvider.ts`, 'utf8'),
-    readFile(`${root}/src/components/TopBar/components/NotificationsDrawer.vue`, 'utf8'),
   ])
 
   const sendSettingsStart = contentScript.indexOf('function sendSettingsToPage')
@@ -4026,8 +4021,6 @@ async function verifySecurityContracts() {
   assert.ok(searchHistoryProvider.indexOf('iframe.addEventListener(\'load\', handleLoad)') < searchHistoryProvider.indexOf('iframe.src = BilibiliStorageProvider.BILIBILI_COLS_IFRAME_URL'))
   assert.match(searchHistoryProvider, /if \(!loaded\) \{[\s\S]{0,80}iframe\.remove\(\)/)
   assert.match(searchHistoryProvider, /if \(!postMessageToIframe\(iframe/)
-  assert.match(notificationsDrawer, /markIframeReadyForMessaging\(iframe\)/)
-  assert.match(notificationsDrawer, /getIframeMessageData\(event, iframeRef\.value\)/)
 }
 
 async function verifyDrawerAndMomentsLayoutContracts() {
@@ -4108,10 +4101,9 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.equal(supportsWideMomentCardLayout({ ...videoMoment, additional: { isVote: true } }), false)
 
   const root = process.cwd()
-  const [app, iframeDrawer, notificationsDrawer, contentScript, escapePriority, photoViewerDetector, moments, momentCard, photoViewer, randomPlay, widescreen, topBar, globalEvents] = await Promise.all([
+  const [app, iframeDrawer, contentScript, escapePriority, photoViewerDetector, moments, momentCard, photoViewer, randomPlay, widescreen, topBar, globalEvents] = await Promise.all([
     readFile(`${root}/src/contentScripts/views/App.vue`, 'utf8'),
     readFile(`${root}/src/components/IframeDrawer.vue`, 'utf8'),
-    readFile(`${root}/src/components/TopBar/components/NotificationsDrawer.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
     readFile(`${root}/src/utils/escapePriority.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/features/iframePhotoViewerDetector.ts`, 'utf8'),
@@ -4124,10 +4116,7 @@ async function verifyDrawerAndMomentsLayoutContracts() {
     readFile(`${root}/src/constants/globalEvents.ts`, 'utf8'),
   ])
   assert.equal((iframeDrawer.match(/addEventListener\('keydown'/g) || []).length, 1)
-  assert.equal((notificationsDrawer.match(/addEventListener\('keydown'/g) || []).length, 1)
-  assert.doesNotMatch(notificationsDrawer, /@keydown="handleKeydown"/)
   assert.match(iframeDrawer, /window\.setTimeout\(\(\) => \{[\s\S]*event\.defaultPrevented[\s\S]*event\.cancelBubble/)
-  assert.match(notificationsDrawer, /window\.setTimeout\(\(\) => \{[\s\S]*event\.defaultPrevented[\s\S]*event\.cancelBubble/)
   assert.match(iframeDrawer, /name="bewly-iframe-drawer"/)
   assert.match(globalEvents, /BEWLY_IFRAME_DRAWER_HOST_CLASS = 'bewly-iframe-drawer-host'/)
   const drawerMountedSection = iframeDrawer.slice(iframeDrawer.indexOf('onMounted(() => {'), iframeDrawer.indexOf('onBeforeUnmount'))
@@ -4136,7 +4125,6 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   const drawerReleaseSection = iframeDrawer.slice(iframeDrawer.indexOf('function releaseIframeDrawerHost'), iframeDrawer.indexOf('function updateCurrentUrl'))
   assert.ok(drawerReleaseSection.indexOf('restoreOriginUrl()') < drawerReleaseSection.indexOf('classList.remove(BEWLY_IFRAME_DRAWER_HOST_CLASS)'))
   assert.match(topBar, /isIframeDrawerHost\(\)/)
-  assert.match(topBar, /cleanupScrollListeners\(\)[\s\S]{0,220}clearOriginalVideoTopBarVisibility\(\)/)
   assert.match(contentScript, /if \(isIframeDrawerHost\(\)\) \{[\s\S]{0,180}cancelPlayerRetryTasks\(\)[\s\S]{0,80}return/)
   assert.match(contentScript, /if \(isBewlyPlaybackLayoutReady\(\)\) \{\s*clearPlayerModeRetry\(\)\s*application.onApplied\(\)/)
   assert.match(contentScript, /window\.name === 'bewly-iframe-drawer'/)

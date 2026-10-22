@@ -531,6 +531,9 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/utils/momentColumnIndex': await import('../src/utils/momentColumnIndex'),
     '~/utils/scrollIntent': await import('../src/utils/scrollIntent'),
     '~/utils/viewportGeometry': await import('../src/utils/viewportGeometry'),
+    '~/utils/motionPriority': await import('../src/utils/motionPriority'),
+    '~/utils/motionTiming': await import('../src/utils/motionTiming'),
+    '~/utils/wheelStep': await import('../src/utils/wheelStep'),
     './messageInsights': await import('../src/contentScripts/views/Notifications/whisper/messageInsights'),
     './whisper/messageInsights': await import('../src/contentScripts/views/Notifications/whisper/messageInsights'),
     './composables/useMarkAllMessagesRead': await import('../src/contentScripts/views/Notifications/composables/useMarkAllMessagesRead'),
@@ -683,8 +686,6 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   }
   if (text.includes('\'~/utils/responsiveImage\'') && !modules['~/utils/responsiveImage'])
     modules['~/utils/responsiveImage'] = await import('../src/utils/responsiveImage')
-  if (text.includes('\'~/utils/motionTiming\'') && !modules['~/utils/motionTiming'])
-    modules['~/utils/motionTiming'] = await import('../src/utils/motionTiming')
   if (text.includes('\'~/composables/useLoadingRingPhase\'') && !modules['~/composables/useLoadingRingPhase'])
     modules['~/composables/useLoadingRingPhase'] = await import('../src/composables/useLoadingRingPhase')
   if (text.includes('\'~/components/LoadingRing.vue\'') && !modules['~/components/LoadingRing.vue'])

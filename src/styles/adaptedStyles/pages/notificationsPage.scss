@@ -6,34 +6,6 @@
   .side-bar {
     font-weight: 400 !important;
   }
-
-  &.drawer {
-    body {
-      background: unset;
-      background-color: var(--bew-homepage-bg) !important;
-    }
-
-    #message-navbar + .container,
-    #link-message-container .container {
-      width: 100vw !important;
-      max-width: unset !important;
-      margin: 0 !important;
-    }
-
-    #message-navbar + .container::after {
-      display: none;
-    }
-
-    .space-left,
-    .space-right {
-      backdrop-filter: none;
-      background-color: unset !important;
-    }
-
-    .space-left .title {
-      display: none;
-    }
-  }
 }
 
 html.bewly-design.notificationsPage {
@@ -76,7 +48,7 @@ html.bewly-design.notificationsPage {
 
   // Current standalone message centre; embedded views retain their own shell
   // and sizing rules below. Do not recreate its native navigation or feeds.
-  &:not(.bewly-notifications-embedded):not(.drawer) {
+  &:not(.bewly-notifications-embedded) {
     .message-aside,
     .message-main {
       background: var(--bew-content-solid);

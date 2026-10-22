@@ -32,35 +32,6 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
     assert.equal(form.get('add_media_ids'), '3,4')
     assert.equal(form.get('del_media_ids'), '1')
   })
-  check('A02 categories: rendered menu keeps actual unread counts when every total-badge reminder is disabled', async () => {
-    const counts = await import('../src/utils/notificationBadge')
-    const message = { reply: 123, at: 2, like: 8, recv_like: 9, sys_msg: 1, chat: 90 }
-    const dm = { follow_unread: 4, unfollow_unread: 5 }
-    const config = Object.fromEntries(['showReplyNotificationReminder', 'showAtNotificationReminder', 'showLikeNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount'].map(key => [key, false]))
-    const component = await compileComponent('../src/components/TopBar/components/pops/NotificationsPop.vue', {
-      'vue-i18n': { useI18n: () => ({ t: key => key }) },
-      '~/contentScripts/views/Notifications/notificationSections': await import('../src/contentScripts/views/Notifications/notificationSections'),
-      '~/enums/appEnums': await import('../src/enums/appEnums'),
-      '~/logic': { settings: Vue.ref(config) },
-      '~/stores/settingsStore': { useSettingsStore: () => ({ getDockItemIsUseOriginalBiliPage: () => false }) },
-      '~/utils/notificationBadge': counts,
-      '~/utils/notificationRoute': await import('../src/utils/notificationRoute'),
-    })
-    const host = document.body.appendChild(document.createElement('div'))
-    const app = Vue.createApp(component, { unReadMessage: message, unReadDm: dm })
-    app.component('ALink', { setup: (_props, { slots, attrs }) => () => Vue.h('a', attrs, slots.default?.()) })
-    try {
-      app.mount(host)
-      await flush()
-      assert.equal(counts.getNotificationBadgeCounts(config, message, dm).total, 0)
-      const rendered = [...host.querySelectorAll('.notification-pop__badge')].map(el => Number(el.textContent))
-      assert.deepEqual(rendered.sort((a, b) => a - b), [1, 2, 9, 9, 123])
-    }
-    finally {
-      app.unmount()
-      host.remove()
-    }
-  })
   check('A03 envelope: actual guarded channel rejects old documents even with the same WindowProxy and URL', async () => {
     const wire = await import('../src/utils/iframeMessage')
     const href = 'https://www.bilibili.com/video/BV1xx411c7mD'

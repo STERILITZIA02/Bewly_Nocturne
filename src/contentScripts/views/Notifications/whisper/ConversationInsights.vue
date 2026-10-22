@@ -42,7 +42,7 @@ const privateShare = computed(() => {
 </script>
 
 <template>
-  <section class="conversation-insights" data-top-bar-scroll :aria-label="t('notifications.insights.overview')">
+  <section class="conversation-insights" :aria-label="t('notifications.insights.overview')">
     <div class="conversation-insights__grid">
       <article class="conversation-insights__card conversation-insights__hero">
         <header class="conversation-insights__headline">

@@ -94,7 +94,6 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       '~/components/PageAsyncLoading.vue': { default: blank },
       '~/composables/useAppProvider': { useBewlyApp: () => provider },
       '~/composables/useHomeTabState': await import('../src/composables/useHomeTabState'),
-      '~/composables/useSearchFocusEffect': { useSearchFocusEffect: () => ({ darkened: false, blurred: false }) },
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/constants/layout': layout,
       '~/logic': { settings, gridLayout: Vue.ref({ home: 'adaptive' }) },
@@ -263,7 +262,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
     let state
     const app = Vue.createApp({ setup() {
       homeTabs.provideHomeTabCache(() => 'Weekly', () => {}, () => settings.value.useSearchPageModeOnHomePage ? resolveHomeSearchStage(shortViewport.value).height : 0)
-      return () => Vue.h(Weekly, { gridLayout: 'adaptive', topBarVisibility: true, ref: value => state = value?.$?.setupState })
+      return () => Vue.h(Weekly, { gridLayout: 'adaptive', ref: value => state = value?.$?.setupState })
     } })
     const editions = [{ number: 42, name: '42' }, { number: 41, name: '41' }]
     const settleList = async () => {

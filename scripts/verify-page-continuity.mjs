@@ -391,7 +391,6 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
       '~/components/PageAsyncLoading.vue': { default: blank },
       '~/composables/useAppProvider': { useBewlyApp: () => provider },
       '~/composables/useHomeTabState': tabState,
-      '~/composables/useSearchFocusEffect': { useSearchFocusEffect: () => ({ darkened: false, blurred: false }) },
       '~/constants/layout': layout,
       '~/constants/globalEvents': events,
       '~/logic': { settings, gridLayout: Vue.ref({ home: 'adaptive' }) },

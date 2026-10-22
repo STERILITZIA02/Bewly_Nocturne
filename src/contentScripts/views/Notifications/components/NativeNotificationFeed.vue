@@ -411,7 +411,6 @@ defineExpose({ refresh })
   <section
     ref="feedRootRef"
     class="native-notification-feed"
-    data-top-bar-scroll
     :aria-label="feedAriaLabel"
     :aria-busy="accountState === 'profile-pending' || (accountState === 'ready' && (!state.loaded || state.loading || state.loadingMore))"
   >

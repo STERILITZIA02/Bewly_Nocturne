@@ -491,7 +491,6 @@ defineExpose({
       <div
         ref="messageScrollRef"
         class="conversation-view__messages"
-        data-top-bar-scroll
         tabindex="0"
         :aria-label="t('notifications.whisper.messages.timeline_aria', { name: displayName })"
         @keydown="markReadingIntent"

@@ -110,15 +110,3 @@ export function normalizeNotificationRoute(url: string | URL): NormalizedNotific
 export function parseNotificationView(url: string | URL): NotificationView {
   return normalizeNotificationRoute(url).view
 }
-
-export function resolveNotificationNavigationUrl(
-  view: NotificationView,
-  options: {
-    openAsDrawer: boolean
-    useOriginalPage: boolean
-  },
-): string {
-  return options.openAsDrawer || options.useOriginalPage
-    ? buildOriginalNotificationUrl(view)
-    : buildBewlyNotificationUrl(view)
-}

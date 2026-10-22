@@ -10,6 +10,8 @@ import { getTopBarItemLayoutEditableId, vLayoutEditable } from '~/logic/layoutEd
 import { useTopBarStore } from '~/stores/topBarStore'
 import { getUserID, isInIframe, removeHttpFromUrl } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
+import { holdMotion } from '~/utils/motionPriority'
+import { getMotionDuration } from '~/utils/motionTiming'
 import { isComponentVisible, shouldShowBadge, shouldShowDotBadge, shouldShowNumberBadge } from '~/utils/topBarBadge'
 
 import { resetTopBarTransientInteraction, useTopBarInteraction } from '../composables/useTopBarInteraction'
@@ -18,12 +20,9 @@ import FavoritesPop from './pops/FavoritesPop.vue'
 import HistoryPop from './pops/HistoryPop.vue'
 import MomentsPop from './pops/MomentsPop.vue'
 import MorePop from './pops/MorePop.vue'
-import NotificationsPop from './pops/NotificationsPop.vue'
 import UploadPop from './pops/UploadPop.vue'
 import UserPanelPop from './pops/UserPanelPop.vue'
 import WatchLaterPop from './pops/WatchLaterPop.vue'
-
-const emit = defineEmits(['notificationsClick'])
 
 const topBarStore = useTopBarStore()
 const showOpenTabsDialog = ref(false)
@@ -35,17 +34,13 @@ function openTabsDialog() {
 const {
   isLogin,
   userInfo,
-  unReadMessage,
-  unReadDm,
   newMomentsCount,
   watchLaterCount,
-  drawerVisible,
   popupVisible,
-  unReadMessageCount,
   hasBCoinToReceive,
 } = storeToRefs(topBarStore)
 
-const { invalidateUnreadMessageState, syncMomentsState, syncSharedData, syncUnreadMessageState } = topBarStore
+const { syncMomentsState, syncSharedData, syncUnreadMessageState } = topBarStore
 
 function refreshUnreadMessageSharedState() {
   syncUnreadMessageState().catch((error) => {
@@ -59,7 +54,7 @@ const {
   setupTopBarItemHoverEvent,
   setupTopBarItemTransformer,
   shouldOpenConfiguredTopBarItem,
-  forceWhiteIcon,
+  isCurrentTopBarItemPage,
 } = useTopBarInteraction()
 
 const mid = computed(() => userInfo.value.mid || getUserID())
@@ -71,14 +66,13 @@ const favorites = setupTopBarItemHoverEvent('favorites')
 const history = setupTopBarItemHoverEvent('history')
 const watchLater = setupTopBarItemHoverEvent('watchLater')
 const upload = setupTopBarItemHoverEvent('upload')
-const notifications = setupTopBarItemHoverEvent('notifications')
 const more = setupTopBarItemHoverEvent('more')
-const avatar = setupTopBarItemHoverEvent('userPanel')
+// The user panel opens on click; hovering only nudges the avatar circle.
+const avatar = setupTopBarItemHoverEvent('userPanel', { openOnClick: true })
 
 // 将transformer初始化移到onMounted中
 // 声明组件ref
 const avatarPopRef = ref()
-const notificationsPopRef = ref()
 const momentsPopRef = ref()
 const favoritesPopRef = ref()
 const historyPopRef = ref()
@@ -87,42 +81,12 @@ const uploadPopRef = ref()
 const morePopRef = ref()
 
 setupTopBarItemTransformer('userPanel', avatarPopRef)
-setupTopBarItemTransformer('notifications', notificationsPopRef)
 setupTopBarItemTransformer('moments', momentsPopRef)
 setupTopBarItemTransformer('favorites', favoritesPopRef)
 setupTopBarItemTransformer('history', historyPopRef)
 setupTopBarItemTransformer('watchLater', watchLaterPopRef)
 setupTopBarItemTransformer('upload', uploadPopRef)
 setupTopBarItemTransformer('more', morePopRef)
-
-watch(
-  () => popupVisible.value?.notifications ?? false,
-  (newVal, oldVal) => {
-    if (newVal === undefined || oldVal === undefined)
-      return
-
-    if (oldVal !== undefined && MESSAGE_URL.test(location.href))
-      return
-
-    if (newVal === oldVal)
-      return
-
-    if (!newVal)
-      refreshUnreadMessageSharedState()
-  },
-  { immediate: true },
-)
-
-watch(
-  () => drawerVisible.value?.notifications ?? false,
-  (newVal, oldVal) => {
-    if (newVal === oldVal)
-      return
-
-    if (!newVal)
-      refreshUnreadMessageSharedState()
-  },
-)
 
 const focused = useWindowFocus()
 watch(() => focused.value, (newVal, _) => {
@@ -168,24 +132,31 @@ watch(
   },
 )
 
-// 修改通知点击处理
-function handleNotificationsClick(item: { name: string, url: string, unreadCount: number, icon: string }) {
-  invalidateUnreadMessageState().catch((error) => {
-    reportRuntimeFailure('Failed to invalidate unread-message state', error)
-  })
-  emit('notificationsClick', item)
+// The capsule change runs before the incoming page mounts: leaving buttons fade
+// out, slots resize, entering buttons fade in (durations from index.scss).
+function holdItemMotion(element: Element, entering: boolean) {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    return
+  const style = getComputedStyle(element)
+  const fade = getMotionDuration(style, '--top-bar-item-fade', 150)
+  const resize = getMotionDuration(style, '--top-bar-item-resize', 300)
+  holdMotion(entering ? fade * 2 + resize : fade + resize)
+}
+
+// A page's own action is redundant while that page is already open.
+function showPageItem(key: 'moments' | 'favorites' | 'history' | 'watchLater') {
+  return isComponentVisible(key) && !isCurrentTopBarItemPage(key)
 }
 
 // 判断分割线是否应该显示：左右两组至少各有一个可见时才显示
 const shouldShowDivider = computed(() => {
-  const leftSideVisible = isComponentVisible('moments')
-    || isComponentVisible('favorites')
-    || isComponentVisible('history')
-    || isComponentVisible('watchLater')
+  const leftSideVisible = showPageItem('moments')
+    || showPageItem('favorites')
+    || showPageItem('history')
+    || showPageItem('watchLater')
     || isComponentVisible('creatorCenter')
 
   const rightSideVisible = isComponentVisible('upload')
-    || isComponentVisible('notifications')
 
   return leftSideVisible && rightSideVisible
 })
@@ -196,12 +167,7 @@ const shouldShowDivider = computed(() => {
     class="right-side"
     flex="inline xl:1 justify-end items-center"
   >
-    <div
-      class="others"
-      flex="~ items-center gap-1" px-5px
-      text="$bew-text-1"
-      :style="{ height: 'var(--bew-control-height)' }"
-    >
+    <div class="others" text="$bew-text-1">
       <div
         v-if="!isLogin"
         class="right-side-item"
@@ -213,177 +179,183 @@ const shouldShowDivider = computed(() => {
           }}
         </a>
       </div>
-      <template v-if="isLogin">
+      <!-- Everything but the avatar shares one glass capsule, balancing the logo circle. -->
+      <div v-if="isLogin" class="top-bar-tools">
         <div class="hidden lg:flex" gap-1>
           <!-- Moments -->
-          <div
-            v-if="isComponentVisible('moments')"
-            :ref="el => moments = (el as HTMLElement | null)"
-            v-layout-editable="getTopBarItemLayoutEditableId('moments')"
-            class="right-side-item"
-            :data-layout-editable-id="getTopBarItemLayoutEditableId('moments')"
-            :class="{ active: popupVisible?.moments }"
-            @click="(event: MouseEvent) => handleClickTopBarItem(event, 'moments')"
-          >
-            <template v-if="newMomentsCount > 0 && shouldShowBadge('moments')">
-              <CountBadge
-                v-if="shouldShowNumberBadge('moments')"
-                class="unread-num-dot"
-                :count="newMomentsCount"
-              />
-              <div
-                v-else-if="shouldShowDotBadge('moments')"
-                class="unread-dot"
-              />
-            </template>
-            <ALink
-              class="top-bar-trigger"
-              :class="{ 'white-icon': forceWhiteIcon }"
-              :href="getTopBarItemHref('moments', 'https://t.bilibili.com')"
-              :title="$t('topbar.moments')"
-              type="topBar"
-              :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('moments')"
+          <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
+            <div
+              v-if="showPageItem('moments')"
+              :ref="el => moments = (el as HTMLElement | null)"
+              v-layout-editable="getTopBarItemLayoutEditableId('moments')"
+              class="right-side-item"
+              :data-layout-editable-id="getTopBarItemLayoutEditableId('moments')"
+              :class="{ active: popupVisible?.moments }"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'moments')"
             >
-              <div i-tabler:windmill />
-            </ALink>
+              <template v-if="newMomentsCount > 0 && shouldShowBadge('moments')">
+                <CountBadge
+                  v-if="shouldShowNumberBadge('moments')"
+                  class="unread-num-dot"
+                  :count="newMomentsCount"
+                />
+                <div
+                  v-else-if="shouldShowDotBadge('moments')"
+                  class="unread-dot"
+                />
+              </template>
+              <ALink
+                class="top-bar-trigger"
+                :href="getTopBarItemHref('moments', 'https://t.bilibili.com')"
+                :title="$t('topbar.moments')"
+                type="topBar"
+                :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('moments')"
+                @click="(event: MouseEvent) => handleClickTopBarItem(event, 'moments')"
+              >
+                <div i-tabler:windmill />
+              </ALink>
 
-            <Transition name="slide-in">
-              <MomentsPop
-                v-if="popupVisible?.moments"
-                ref="momentsPopRef"
-                class="bew-popover"
-                @click.stop="() => {}"
-              />
-            </Transition>
-          </div>
+              <Transition name="slide-in">
+                <MomentsPop
+                  v-if="popupVisible?.moments"
+                  ref="momentsPopRef"
+                  class="bew-popover"
+                  @click.stop="() => {}"
+                />
+              </Transition>
+            </div>
+          </Transition>
 
           <!-- Favorites -->
-          <div
-            v-if="isComponentVisible('favorites')"
-            :ref="el => favorites = (el as HTMLElement | null)"
-            v-layout-editable="getTopBarItemLayoutEditableId('favorites')"
-            class="right-side-item"
-            :data-layout-editable-id="getTopBarItemLayoutEditableId('favorites')"
-            :class="{ active: popupVisible?.favorites }"
-            @click="(event: MouseEvent) => handleClickTopBarItem(event, 'favorites')"
-          >
-            <ALink
-              class="top-bar-trigger"
-              :class="{ 'white-icon': forceWhiteIcon }"
-              :href="getTopBarItemHref('favorites', `https://space.bilibili.com/${mid}/favlist`)"
-              :title="$t('topbar.favorites')"
-              type="topBar"
-              :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('favorites')"
+          <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
+            <div
+              v-if="showPageItem('favorites')"
+              :ref="el => favorites = (el as HTMLElement | null)"
+              v-layout-editable="getTopBarItemLayoutEditableId('favorites')"
+              class="right-side-item"
+              :data-layout-editable-id="getTopBarItemLayoutEditableId('favorites')"
+              :class="{ active: popupVisible?.favorites }"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'favorites')"
             >
-              <div i-tabler:star />
-            </ALink>
+              <ALink
+                class="top-bar-trigger"
+                :href="getTopBarItemHref('favorites', `https://space.bilibili.com/${mid}/favlist`)"
+                :title="$t('topbar.favorites')"
+                type="topBar"
+                :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('favorites')"
+                @click="(event: MouseEvent) => handleClickTopBarItem(event, 'favorites')"
+              >
+                <div i-tabler:star />
+              </ALink>
 
-            <Transition name="slide-in">
-              <FavoritesPop
-                v-if="popupVisible?.favorites"
-                ref="favoritesPopRef"
-                class="bew-popover"
-                @click.stop="() => {}"
-              />
-            </Transition>
-          </div>
+              <Transition name="slide-in">
+                <FavoritesPop
+                  v-if="popupVisible?.favorites"
+                  ref="favoritesPopRef"
+                  class="bew-popover"
+                  @click.stop="() => {}"
+                />
+              </Transition>
+            </div>
+          </Transition>
 
           <!-- History -->
-          <div
-            v-if="isComponentVisible('history')"
-            :ref="el => history = (el as HTMLElement | null)"
-            v-layout-editable="getTopBarItemLayoutEditableId('history')"
-            class="right-side-item"
-            :data-layout-editable-id="getTopBarItemLayoutEditableId('history')"
-            :class="{ active: popupVisible?.history }"
-            @click="(event: MouseEvent) => handleClickTopBarItem(event, 'history')"
-          >
-            <ALink
-              class="top-bar-trigger"
-              :class="{ 'white-icon': forceWhiteIcon }"
-              :href="getTopBarItemHref('history', 'https://www.bilibili.com/history')"
-              :title="$t('topbar.history')"
-              type="topBar"
-              :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('history')"
+          <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
+            <div
+              v-if="showPageItem('history')"
+              :ref="el => history = (el as HTMLElement | null)"
+              v-layout-editable="getTopBarItemLayoutEditableId('history')"
+              class="right-side-item"
+              :data-layout-editable-id="getTopBarItemLayoutEditableId('history')"
+              :class="{ active: popupVisible?.history }"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'history')"
             >
-              <div i-tabler:clock />
-            </ALink>
+              <ALink
+                class="top-bar-trigger"
+                :href="getTopBarItemHref('history', 'https://www.bilibili.com/history')"
+                :title="$t('topbar.history')"
+                type="topBar"
+                :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('history')"
+                @click="(event: MouseEvent) => handleClickTopBarItem(event, 'history')"
+              >
+                <div i-tabler:clock />
+              </ALink>
 
-            <Transition name="slide-in">
-              <HistoryPop
-                v-if="popupVisible?.history"
-                ref="historyPopRef"
-                class="bew-popover"
-                @click.stop="() => {}"
-              />
-            </Transition>
-          </div>
+              <Transition name="slide-in">
+                <HistoryPop
+                  v-if="popupVisible?.history"
+                  ref="historyPopRef"
+                  class="bew-popover"
+                  @click.stop="() => {}"
+                />
+              </Transition>
+            </div>
+          </Transition>
 
           <!-- Watch later -->
-          <div
-            v-if="isComponentVisible('watchLater')"
-            :ref="el => watchLater = (el as HTMLElement | null)"
-            v-layout-editable="getTopBarItemLayoutEditableId('watchLater')"
-            class="right-side-item"
-            :data-layout-editable-id="getTopBarItemLayoutEditableId('watchLater')"
-            :class="{ active: popupVisible?.watchLater }"
-            @click="(event: MouseEvent) => handleClickTopBarItem(event, 'watchLater')"
-          >
-            <template v-if="watchLaterCount > 0 && shouldShowBadge('watchLater')">
-              <CountBadge
-                v-if="shouldShowNumberBadge('watchLater')"
-                class="unread-num-dot"
-                :count="watchLaterCount"
-              />
-              <div
-                v-else-if="shouldShowDotBadge('watchLater')"
-                class="unread-dot"
-              />
-            </template>
-            <ALink
-              class="top-bar-trigger"
-              :class="{ 'white-icon': forceWhiteIcon }"
-              :href="getTopBarItemHref('watchLater', 'https://www.bilibili.com/watchlater/list')"
-              :title="$t('topbar.watch_later')"
-              type="topBar"
-              :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('watchLater')"
+          <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
+            <div
+              v-if="showPageItem('watchLater')"
+              :ref="el => watchLater = (el as HTMLElement | null)"
+              v-layout-editable="getTopBarItemLayoutEditableId('watchLater')"
+              class="right-side-item"
+              :data-layout-editable-id="getTopBarItemLayoutEditableId('watchLater')"
+              :class="{ active: popupVisible?.watchLater }"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'watchLater')"
             >
-              <div i-tabler:playlist />
-            </ALink>
+              <template v-if="watchLaterCount > 0 && shouldShowBadge('watchLater')">
+                <CountBadge
+                  v-if="shouldShowNumberBadge('watchLater')"
+                  class="unread-num-dot"
+                  :count="watchLaterCount"
+                />
+                <div
+                  v-else-if="shouldShowDotBadge('watchLater')"
+                  class="unread-dot"
+                />
+              </template>
+              <ALink
+                class="top-bar-trigger"
+                :href="getTopBarItemHref('watchLater', 'https://www.bilibili.com/watchlater/list')"
+                :title="$t('topbar.watch_later')"
+                type="topBar"
+                :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('watchLater')"
+                @click="(event: MouseEvent) => handleClickTopBarItem(event, 'watchLater')"
+              >
+                <div i-tabler:playlist />
+              </ALink>
 
-            <Transition name="slide-in">
-              <WatchLaterPop
-                v-if="popupVisible?.watchLater"
-                ref="watchLaterPopRef"
-                class="bew-popover"
-                @add-open-tabs="openTabsDialog"
-                @click.stop="() => {}"
-              />
-            </Transition>
-          </div>
+              <Transition name="slide-in">
+                <WatchLaterPop
+                  v-if="popupVisible?.watchLater"
+                  ref="watchLaterPopRef"
+                  class="bew-popover"
+                  @add-open-tabs="openTabsDialog"
+                  @click.stop="() => {}"
+                />
+              </Transition>
+            </div>
+          </Transition>
 
           <!-- Creative center -->
-          <div
-            v-if="isComponentVisible('creatorCenter')"
-            v-layout-editable="getTopBarItemLayoutEditableId('creatorCenter')"
-            class="right-side-item"
-            :data-layout-editable-id="getTopBarItemLayoutEditableId('creatorCenter')"
-          >
-            <a
-              class="top-bar-trigger"
-              :class="{ 'white-icon': forceWhiteIcon }"
-              href="https://member.bilibili.com/platform/home"
-              target="_blank"
-              :title="$t('topbar.creative_center')"
-              @click="resetTopBarTransientInteraction"
+          <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
+            <div
+              v-if="isComponentVisible('creatorCenter')"
+              v-layout-editable="getTopBarItemLayoutEditableId('creatorCenter')"
+              class="right-side-item"
+              :data-layout-editable-id="getTopBarItemLayoutEditableId('creatorCenter')"
             >
-              <div i-tabler:bulb />
-            </a>
-          </div>
+              <a
+                class="top-bar-trigger"
+                href="https://member.bilibili.com/platform/home"
+                target="_blank"
+                :title="$t('topbar.creative_center')"
+                @click="resetTopBarTransientInteraction"
+              >
+                <div i-tabler:bulb />
+              </a>
+            </div>
+          </Transition>
         </div>
 
         <!-- More -->
@@ -398,7 +370,6 @@ const shouldShowDivider = computed(() => {
           <button
             type="button"
             class="top-bar-icon-button top-bar-trigger"
-            :class="{ 'white-icon': forceWhiteIcon }"
             :title="$t('video_card.operation.more_options')"
             :aria-label="$t('video_card.operation.more_options')"
             :aria-expanded="Boolean(popupVisible?.more)"
@@ -418,95 +389,49 @@ const shouldShowDivider = computed(() => {
 
         <div class="hidden lg:flex" gap-1 items-center>
           <!-- Divider -->
-          <div
-            v-if="shouldShowDivider"
-            :class="{ 'white-icon': forceWhiteIcon }"
-            w-2px h-16px bg="$bew-border-color" mx-1
-            rounded="$bew-radius-sm"
-          />
+          <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
+            <div
+              v-if="shouldShowDivider"
+              w-2px h-16px bg="$bew-border-color" mx-1
+              rounded="$bew-radius-sm"
+            />
+          </Transition>
 
           <!-- Upload -->
-          <div
-            v-if="isComponentVisible('upload')"
-            :ref="el => upload = (el as HTMLElement | null)"
-            v-layout-editable="getTopBarItemLayoutEditableId('upload')"
-            class="right-side-item"
-            :data-layout-editable-id="getTopBarItemLayoutEditableId('upload')"
-            :class="{ active: popupVisible?.upload }"
-            @click="(event: MouseEvent) => handleClickTopBarItem(event, 'upload')"
-          >
-            <a
-              class="upload top-bar-trigger"
-              :class="{ 'white-icon': forceWhiteIcon }"
-              href="https://member.bilibili.com/platform/upload/video/frame"
-              target="_blank"
-              :title="$t('topbar.upload')"
-              @click="resetTopBarTransientInteraction"
+          <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
+            <div
+              v-if="isComponentVisible('upload')"
+              :ref="el => upload = (el as HTMLElement | null)"
+              v-layout-editable="getTopBarItemLayoutEditableId('upload')"
+              class="right-side-item"
+              :data-layout-editable-id="getTopBarItemLayoutEditableId('upload')"
+              :class="{ active: popupVisible?.upload }"
+              @click="(event: MouseEvent) => handleClickTopBarItem(event, 'upload')"
             >
-              <div i-tabler:upload flex-shrink-0 />
-            </a>
+              <a
+                class="upload top-bar-trigger"
+                href="https://member.bilibili.com/platform/upload/video/frame"
+                target="_blank"
+                :title="$t('topbar.upload')"
+                @click="resetTopBarTransientInteraction"
+              >
+                <div i-tabler:upload flex-shrink-0 />
+              </a>
 
-            <Transition name="slide-in">
-              <UploadPop
-                v-show="popupVisible?.upload"
-                ref="uploadPopRef"
-                class="bew-popover"
-                @click.stop="() => {}"
-              />
-            </Transition>
-          </div>
-
-          <!-- Notifications -->
-          <div
-            v-if="isComponentVisible('notifications')"
-            :ref="el => notifications = (el as HTMLElement | null)"
-            v-layout-editable="getTopBarItemLayoutEditableId('notifications')"
-            class="right-side-item"
-            :data-layout-editable-id="getTopBarItemLayoutEditableId('notifications')"
-            :class="{ active: popupVisible?.notifications }"
-            @click="(event: MouseEvent) => handleClickTopBarItem(event, 'notifications')"
-          >
-            <template v-if="unReadMessageCount > 0 && shouldShowBadge('notifications')">
-              <CountBadge
-                v-if="shouldShowNumberBadge('notifications')"
-                class="unread-num-dot"
-                :count="unReadMessageCount"
-              />
-              <div
-                v-else-if="shouldShowDotBadge('notifications')"
-                class="unread-dot"
-              />
-            </template>
-
-            <ALink
-              class="top-bar-trigger"
-              :href="settings.openNotificationsPageAsDrawer ? undefined : 'https://message.bilibili.com'"
-              :class="{ 'white-icon': forceWhiteIcon }"
-              :title="$t('topbar.notifications')"
-              type="topBar"
-              :custom-click-event="settings.openNotificationsPageAsDrawer"
-              @click="drawerVisible && (drawerVisible.notifications = true)"
-            >
-              <div i-tabler:bell />
-            </ALink>
-
-            <Transition name="slide-in">
-              <NotificationsPop
-                v-show="popupVisible?.notifications"
-                ref="notificationsPopRef"
-                class="bew-popover"
-                :un-read-message="unReadMessage"
-                :un-read-dm="unReadDm"
-                @click.stop="() => {}"
-                @item-click="handleNotificationsClick"
-              />
-            </Transition>
-          </div>
+              <Transition name="slide-in">
+                <UploadPop
+                  v-show="popupVisible?.upload"
+                  ref="uploadPopRef"
+                  class="bew-popover"
+                  @click.stop="() => {}"
+                />
+              </Transition>
+            </div>
+          </Transition>
         </div>
-      </template>
+      </div>
 
-      <!-- Avatar -->
-
+      <!-- Avatar: its own glass circle; a click opens the user panel below it. -->
       <div
         v-if="isLogin"
         :ref="el => avatar = (el as HTMLElement | null)"
@@ -514,45 +439,43 @@ const shouldShowDivider = computed(() => {
         class="avatar right-side-item"
         @click="(event: MouseEvent) => handleClickTopBarItem(event, 'userPanel')"
       >
-        <!-- B币领取提醒dot -->
-        <div
-          v-if="hasBCoinToReceive && settings.showBCoinReceiveReminder"
-          class="unread-dot avatar-dot"
-          :class="{ hover: popupVisible?.userPanel }"
-        />
-
-        <ALink
-          :href="`https://space.bilibili.com/${mid}`"
-          type="topBar"
-          class="avatar-img top-bar-trigger"
-          :class="{ hover: popupVisible?.userPanel }"
-          :style="{
-            backgroundImage: `url(${userInfo.face ? removeHttpFromUrl(userInfo.face) : ''})`,
-          }"
-        />
-        <div
-          class="avatar-shadow"
-          :class="{ hover: popupVisible?.userPanel }"
-          :style="{
-            backgroundImage: `url(${userInfo.face ? removeHttpFromUrl(userInfo.face) : ''})`,
-          }"
-        />
-        <svg
-          v-if="userInfo.vip?.status === 1"
-          class="vip-img"
-          :class="{ hover: popupVisible?.userPanel }"
-          :style="{ opacity: popupVisible?.userPanel ? 1 : 0 }"
-          bg="[url(https://i0.hdslb.com/bfs/seed/jinkela/short/user-avatar/big-vip.svg)] contain no-repeat"
-          w="28%" h="28%"
-          pos="absolute bottom-18px right-11px" duration-300
-        />
+        <!-- Glass circle and face move as one: hover nudges them, opening carries
+             them into the panel corner while the circle fades away. -->
+        <div class="avatar-orb" :class="{ open: popupVisible?.userPanel }">
+          <div class="avatar-face">
+            <ALink
+              :href="`https://space.bilibili.com/${mid}`"
+              type="topBar"
+              custom-click-event
+              class="avatar-img top-bar-trigger"
+              :style="{
+                backgroundImage: `url(${userInfo.face ? removeHttpFromUrl(userInfo.face) : ''})`,
+              }"
+            />
+            <div
+              class="avatar-shadow"
+              :style="{
+                backgroundImage: `url(${userInfo.face ? removeHttpFromUrl(userInfo.face) : ''})`,
+              }"
+            />
+            <svg
+              v-if="userInfo.vip?.status === 1"
+              class="vip-img"
+              bg="[url(https://i0.hdslb.com/bfs/seed/jinkela/short/user-avatar/big-vip.svg)] contain no-repeat"
+            />
+            <!-- B币领取提醒dot -->
+            <div
+              v-if="hasBCoinToReceive && settings.showBCoinReceiveReminder"
+              class="unread-dot avatar-dot"
+            />
+          </div>
+        </div>
 
         <Transition name="slide-in">
           <UserPanelPop
             v-if="popupVisible?.userPanel"
             ref="avatarPopRef"
             :user-info="userInfo"
-            after:h="!0"
             class="bew-popover"
             @click.stop="() => {}"
           />

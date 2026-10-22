@@ -5,7 +5,10 @@ import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 
 import {
   ACCOUNT_URL,
+  FAVORITES_URL,
   HEADER_ARTWORK_PAGE_URL,
+  HISTORY_URL,
+  MOMENTS_FEED_URL,
   SEARCH_PAGE_URL,
   SPACE_URL,
 } from '~/components/TopBar/constants/urls'
@@ -17,13 +20,12 @@ import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveConfiguredLinkAction } from '~/utils/configuredLinkNavigation'
-import { isHomePage, isInIframe } from '~/utils/main'
+import { isHomePage, isInIframe, isWatchLaterListPage } from '~/utils/main'
 import { shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { openLinkInBackground } from '~/utils/tabs'
 
 export type TopBarPopupKey
   = | 'userPanel'
-    | 'notifications'
     | 'moments'
     | 'favorites'
     | 'history'
@@ -38,11 +40,20 @@ const BEWLY_PAGE_BY_TOP_BAR_ITEM: Partial<Record<TopBarPopupKey, AppPage>> = {
   watchLater: AppPage.WatchLater,
 }
 
+const NATIVE_PAGE_BY_TOP_BAR_ITEM: Partial<Record<TopBarPopupKey, (url: string) => boolean>> = {
+  moments: url => MOMENTS_FEED_URL.test(url),
+  favorites: url => FAVORITES_URL.test(url),
+  history: url => HISTORY_URL.test(url),
+  watchLater: isWatchLaterListPage,
+}
+
 interface TopBarHoverController {
   triggerHovered: boolean
   popupHovered: boolean
   keyboardOpen: boolean
   instantOpen: boolean
+  /** Opens and closes on click (and outside click / Escape), never on hover. */
+  openOnClick: boolean
   popupElement?: HTMLElement
   enterTimer?: ReturnType<typeof setTimeout>
   leaveTimer?: ReturnType<typeof setTimeout>
@@ -147,13 +158,14 @@ export function useTopBarInteraction() {
   })
 
   // 设置顶栏项悬停事件
-  function setupTopBarItemHoverEvent(key: TopBarPopupKey) {
+  function setupTopBarItemHoverEvent(key: TopBarPopupKey, { openOnClick = false } = {}) {
     const element = ref<MaybeElement>()
     const controller: TopBarHoverController = {
       triggerHovered: false,
       popupHovered: false,
       keyboardOpen: false,
       instantOpen: false,
+      openOnClick,
       enterTimer: undefined,
       leaveTimer: undefined,
     }
@@ -273,7 +285,7 @@ export function useTopBarInteraction() {
       triggerElement?.addEventListener('focusout', handleFocusOut)
       if (!triggerElement)
         topBarStore.popupVisible[key] = false
-      if (triggerElement && !touchOptimized) {
+      if (triggerElement && !touchOptimized && !openOnClick) {
         triggerElement.addEventListener('mouseenter', handleTriggerEnter)
         triggerElement.addEventListener('mouseleave', handleTriggerLeave)
       }
@@ -340,7 +352,7 @@ export function useTopBarInteraction() {
         popupElement.tabIndex = -1
         popupElement.dataset.instant = String(activeController.instantOpen)
       }
-      if (popupElement && !touchOptimized) {
+      if (popupElement && !touchOptimized && !activeController.openOnClick) {
         popupElement.addEventListener('mouseenter', handlePopupEnter)
         popupElement.addEventListener('mouseleave', handlePopupLeave)
       }
@@ -398,6 +410,15 @@ export function useTopBarInteraction() {
     return BEWLY_PAGE_BY_TOP_BAR_ITEM[key]
   }
 
+  /** True while the page this action leads to is already shown (Bewly or native). */
+  function isCurrentTopBarItemPage(key: TopBarPopupKey): boolean {
+    const url = currentLocationHref.value
+    const page = BEWLY_PAGE_BY_TOP_BAR_ITEM[key]
+    if (page && isHomePage(url) && activatedPage?.value === page)
+      return true
+    return NATIVE_PAGE_BY_TOP_BAR_ITEM[key]?.(url) ?? false
+  }
+
   function shouldOpenConfiguredTopBarItem(key: TopBarPopupKey): boolean {
     const page = getConfiguredTopBarPage(key)
     return Boolean(
@@ -421,7 +442,7 @@ export function useTopBarInteraction() {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
       return
 
-    if (settings.value.touchScreenOptimization) {
+    if (settings.value.touchScreenOptimization || hoverControllers.get(key)?.openOnClick) {
       clearOtherHoverTimers()
       handledClickEvents.add(event)
       event.preventDefault()
@@ -447,6 +468,11 @@ export function useTopBarInteraction() {
     openConfiguredPageFromTopBar(page)
   }
 
+  /** A click-opened popup is showing; outside clicks and Escape close it. */
+  function hasOpenClickPopup(): boolean {
+    return [...hoverControllers].some(([key, controller]) => controller.openOnClick && topBarStore.popupVisible[key])
+  }
+
   function handleClickTopBarLogo(event: MouseEvent) {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
       return
@@ -463,14 +489,6 @@ export function useTopBarInteraction() {
     return getDockPageHref(AppPage.Home)
   }
 
-  // 处理通知项点击
-  function handleNotificationsItemClick(item: { name: string, url: string, unreadCount: number, icon: string }) {
-    if (settings.value.openNotificationsPageAsDrawer) {
-      topBarStore.drawerVisible.notifications = true
-      topBarStore.notificationsDrawerUrl = item.url
-    }
-  }
-
   return {
     currentClickedTopBarItem,
     setupTopBarItemHoverEvent,
@@ -478,9 +496,10 @@ export function useTopBarInteraction() {
     handleClickTopBarItem,
     handleClickTopBarLogo,
     getTopBarLogoHref,
-    handleNotificationsItemClick,
     getTopBarItemHref,
     shouldOpenConfiguredTopBarItem,
+    isCurrentTopBarItemPage,
+    hasOpenClickPopup,
     forceWhiteIcon,
     showSearchBar,
   }

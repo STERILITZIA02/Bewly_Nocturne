@@ -253,6 +253,8 @@
   --bew-duration-fast: 150ms;
   --bew-duration-normal: 200ms;
   --bew-duration-moderate: 300ms;
+  // Persistent rail folding into / growing out of the home logo circle.
+  --bew-sidebar-morph-duration: 540ms;
   --bew-page-exit-duration: 90ms;
   --bew-page-enter-duration: 210ms;
   --bew-ease-in: ease-in;
@@ -310,6 +312,21 @@
 
   // Search and logo stay one step larger (still full capsule/circle)
   --bew-top-bar-primary-control-height: 46px;
+  // Home logo circle, on every page where it is on the rail: the icon's left edge
+  // is the rail content line. The closed persistent rail folds into this box.
+  --bew-home-logo-inline-start: calc(
+    var(--bew-sidebar-inline-padding) + var(--bew-sidebar-label-inset) -
+      (var(--bew-top-bar-primary-control-height) - var(--bew-icon-size-lg)) / 2
+  );
+  // Gap between top bar sections; the docked search keeps it from the logo.
+  --bew-top-bar-section-gap: var(--bew-space-4);
+  // Where the home search docks once it scrolls into the top bar: right after the logo.
+  --bew-home-search-dock-start: calc(
+    var(--bew-home-logo-inline-start) + var(--bew-top-bar-primary-control-height) + var(--bew-top-bar-section-gap)
+  );
+  // Further scrolling after the home search sticks that carries it to the dock.
+  --bew-home-search-dock-travel: 160px;
+  --bew-home-logo-block-start: calc((var(--bew-top-bar-height) - var(--bew-top-bar-primary-control-height)) / 2);
   --bew-top-bar-primary-control-radius: var(--bew-radius-full);
   --bew-top-bar-brand-logo-width: 84px;
   --bew-top-bar-brand-logo-height: 28px;
@@ -408,6 +425,8 @@
 
   --bew-theme-color: hsl(195 100% 42%);
   --bew-on-theme-color: white;
+  // Chromatic accent for brand marks; the neutral theme falls back to --bew-bili-pink.
+  --bew-brand-accent: var(--bew-theme-color);
   --bew-accent-solid: var(--bew-theme-color);
   --bew-on-accent-solid: var(--bew-on-theme-color);
   --bew-accent-marker: var(--bew-theme-focus-ring);
@@ -586,6 +605,7 @@
   :host,
   :root {
     --bew-top-bar-inline-padding: var(--bew-space-4);
+    --bew-top-bar-section-gap: var(--bew-space-3);
   }
 }
 
@@ -593,6 +613,7 @@
   :host,
   :root {
     --bew-top-bar-inline-padding: var(--bew-space-2);
+    --bew-top-bar-section-gap: var(--bew-space-2);
     --bew-sidebar-base-width: calc(40vw * 0.9);
     --bew-sidebar-message-width: calc(var(--bew-sidebar-base-width) * 1.2);
     --bew-sidebar-section-gap: var(--bew-space-2);

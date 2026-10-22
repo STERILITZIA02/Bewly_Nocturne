@@ -1,3 +1,5 @@
+@use "../../../styles/sidebarSurface";
+
 .top-bar-enter-active,
 .top-bar-leave-active {
   transition:
@@ -43,65 +45,213 @@
 }
 
 .right-side {
-  .avatar {
-    --uno: "flex justify-center items-center relative z-1";
-    width: var(--bew-control-height);
-    height: var(--bew-control-height);
-    border-radius: var(--bew-control-radius);
+  .others {
+    display: flex;
+    align-items: center;
+    gap: var(--bew-space-2);
+    height: var(--bew-top-bar-primary-control-height);
+  }
 
-    &:hover::after,
-    &.hover::after {
-      --uno: "content-empty absolute right-0 top-20px w-110px h-120px";
-      z-index: 0;
+  // Same height and glass as the logo circle. The glass is a layer behind the
+  // buttons, so their popovers keep sampling the page rather than this capsule.
+  .top-bar-tools {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--bew-space-1);
+    box-sizing: border-box;
+    height: var(--bew-top-bar-primary-control-height);
+    padding-inline: calc((var(--bew-top-bar-primary-control-height) - var(--bew-control-height)) / 2);
+
+    &::before {
+      @include sidebarSurface.floating;
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      content: "";
     }
 
-    // The avatar and its panel share this local stacking context. Keep the
-    // hover bridge below the panel and the enlarged portrait above its glass.
+    // Zero specificity, so the enter/leave states below can collapse the slot.
+    :where(.right-side-item) {
+      width: var(--bew-control-height);
+    }
+
+    .top-bar-item-enter-from,
+    .top-bar-item-leave-to {
+      width: 0;
+      // Cancel the flex gap that would otherwise remain beside an empty slot.
+      margin-inline: 0 calc(-1 * var(--bew-space-1));
+      opacity: 0;
+    }
+  }
+
+  // Buttons entering or leaving the capsule (settings, the current page's own
+  // action, swaps) follow one timeline: leaving buttons fade out, then every
+  // slot resizes together at an even pace (the capsule follows), then entering
+  // buttons fade in. A swap therefore never grows and shrinks at once. Only
+  // these small items lay out during the change.
+  .top-bar-tools {
+    --top-bar-item-fade: var(--bew-duration-fast);
+    --top-bar-item-resize: var(--bew-duration-moderate);
+  }
+
+  .top-bar-item-enter-active,
+  .top-bar-item-leave-active {
+    overflow: clip;
+  }
+
+  .top-bar-item-enter-active {
+    transition:
+      width var(--top-bar-item-resize) var(--bew-ease-in-out) var(--top-bar-item-fade),
+      margin var(--top-bar-item-resize) var(--bew-ease-in-out) var(--top-bar-item-fade),
+      opacity var(--top-bar-item-fade) var(--bew-ease-out) calc(var(--top-bar-item-fade) + var(--top-bar-item-resize));
+  }
+
+  .top-bar-item-leave-active {
+    transition:
+      opacity var(--top-bar-item-fade) var(--bew-ease-out),
+      width var(--top-bar-item-resize) var(--bew-ease-in-out) var(--top-bar-item-fade),
+      margin var(--top-bar-item-resize) var(--bew-ease-in-out) var(--top-bar-item-fade);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .top-bar-item-enter-active,
+    .top-bar-item-leave-active {
+      transition: none;
+    }
+  }
+
+  .avatar {
+    // Shared with UserPanelPop (a descendant): the enlarged face and the
+    // panel corner nested around it.
+    --avatar-panel-scale: 1.75;
+    --avatar-panel-face-radius: calc(var(--bew-control-height) * var(--avatar-panel-scale) / 2);
+    --uno: "flex justify-center items-center relative z-1";
+    width: var(--bew-top-bar-primary-control-height);
+    height: var(--bew-top-bar-primary-control-height);
+
+    // The orb stays above the panel inside this local stacking context.
     > .bew-popover {
       z-index: 1;
     }
+  }
+
+  // Same glass circle as the logo and the tools capsule, with the face centred.
+  // The circle is drawn behind the face so the user panel is not inside its
+  // backdrop root.
+  .avatar-orb {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    transition: transform var(--bew-duration-moderate) var(--bew-ease-standard);
+
+    &::before {
+      @include sidebarSurface.floating;
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      content: "";
+      // Closing: the circle reappears at once at the panel and travels home.
+      transition: opacity var(--bew-duration-fast) var(--bew-ease-out);
+    }
+
+    // The user panel opens below the avatar (8px gap, 16px from the window
+    // edge: computeAnchoredPopoverPosition). Opening carries the orb into the
+    // panel's top-right corner, a space-2 inside it, enlarging the face.
+    &.open {
+      transform: translate(
+          calc(
+            var(--bew-page-inline-inset) + var(--bew-top-bar-primary-control-height) / 2 -
+              16px - var(--bew-space-2) - var(--avatar-panel-face-radius)
+          ),
+          calc(
+            var(--bew-top-bar-primary-control-height) / 2 + 8px + var(--bew-space-2) + var(--avatar-panel-face-radius)
+          )
+        )
+        scale(var(--avatar-panel-scale));
+
+      // Opening: the circle travels toward the panel and fades out as it arrives.
+      &::before {
+        opacity: 0;
+        transition: opacity var(--bew-duration-moderate) var(--bew-ease-in);
+      }
+    }
+  }
+
+  // Hover only nudges the closed circle; a click opens the panel.
+  .avatar:hover .avatar-orb:not(.open) {
+    transform: scale(1.06);
+  }
+
+  .avatar-face {
+    position: relative;
+    width: var(--bew-control-height);
+    height: var(--bew-control-height);
 
     .avatar-img,
     .avatar-shadow {
-      --uno: "shrink-0 duration-300 bg-cover bg-center";
-      // The portrait only moves/fades; inherited scrollbar colours must not animate.
-      transition-property: opacity, transform;
-      width: var(--bew-control-height);
-      height: var(--bew-control-height);
-      border-radius: var(--bew-control-radius);
-
-      &.hover {
-        --uno: "transform scale-195 translate-y-50px translate-x--36px";
-      }
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      corner-shape: var(--bew-corner-shape-round);
+      background-size: cover;
+      background-position: center;
     }
 
     .avatar-img {
-      position: relative;
-      z-index: 2;
+      z-index: 1;
     }
 
     .avatar-shadow {
-      --uno: "opacity-0 absolute top-0 z-0 pointer-events-none blur-sm";
-
-      &.hover {
-        --uno: "opacity-60";
-      }
+      z-index: 0;
+      opacity: 0;
+      filter: blur(4px);
+      pointer-events: none;
+      transition: opacity var(--bew-duration-moderate) var(--bew-ease-standard);
     }
 
     .vip-img {
-      z-index: 3;
-      &.hover {
-        --uno: "transform scale-180 translate-y-86px translate-x--12px";
-      }
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      z-index: 2;
+      width: 40%;
+      height: 40%;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--bew-duration-moderate) var(--bew-ease-standard);
     }
 
     .avatar-dot {
-      --uno: "top-0 right-0";
-      z-index: 4;
+      top: 0;
+      right: 0;
+      z-index: 3;
+    }
+  }
 
-      &.hover {
-        --uno: "transform scale-180 translate-y-35px translate-x--20px";
-      }
+  .avatar-orb.open .avatar-face {
+    .avatar-shadow {
+      opacity: 0.6;
+    }
+
+    .vip-img {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .avatar-orb,
+    .avatar-orb::before,
+    .avatar-orb.open::before {
+      transition: none;
+    }
+
+    .avatar:hover .avatar-orb:not(.open) {
+      transform: none;
     }
   }
 
@@ -123,12 +273,11 @@
     &:not(.avatar) > .top-bar-trigger {
       --uno: "grid place-items-center duration-300 relative z-5";
       // A duration alone defaults to `all`, including non-composited scrollbar-color.
-      transition-property: color, background-color, filter;
+      transition-property: color, background-color;
       width: var(--bew-control-height);
       height: var(--bew-control-height);
       border-radius: var(--bew-control-radius);
       font-size: var(--bew-control-icon-size);
-      filter: drop-shadow(0 0 4px var(--bew-bg));
     }
 
     & > button.top-bar-trigger {
@@ -145,32 +294,12 @@
       --uno: "bg-$bew-fill-2";
     }
 
-    &.active > .top-bar-trigger.white-icon,
-    & > .top-bar-trigger:hover.white-icon,
-    & > .top-bar-trigger:active.white-icon {
-      --uno: "bg-white bg-opacity-20";
-    }
-
     & > a.upload {
       --uno: "bg-$bew-theme-color hover:bg-$bew-theme-color text-$bew-on-theme-color";
     }
 
     &.active > a.upload {
       --uno: "bg-$bew-theme-color";
-    }
-
-    &.active > a.upload.white-icon {
-      --uno: "!bg-white !bg-opacity-40";
-    }
-
-    .white-icon {
-      --uno: "text-white";
-      filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.6)) !important;
-
-      &.upload {
-        --uno: "!bg-white !bg-opacity-20 hover:!bg-white hover:!bg-opacity-40 !filter-none";
-        --uno: "!text-white";
-      }
     }
   }
 

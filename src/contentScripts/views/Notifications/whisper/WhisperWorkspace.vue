@@ -374,7 +374,6 @@ defineExpose({ refresh })
       <aside
         class="whisper-workspace__sessions conversation-list-card"
         :class="{ 'bew-sidebar-hosted': sidebarHost }"
-        data-top-bar-scroll-ignore
         :aria-busy="accountState === 'profile-pending' || (controller.state.loading && !controller.state.loaded)"
       >
         <slot name="navigation" />

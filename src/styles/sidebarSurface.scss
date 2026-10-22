@@ -1,12 +1,33 @@
 // One material for persistent page rails, their placeholders and the hot-search
 // companion card. Layout, clipping and borders remain each host's responsibility.
-@mixin surface {
+@mixin selected-context {
   // Selected segments sit on this material rather than on solid content.
   --bew-segment-item-active-bg: var(--bew-sidebar-selected-bg);
   --bew-segment-secondary-active-bg: var(--bew-sidebar-selected-bg);
+}
+
+// The glass alone, for a layer drawn behind (not around) its content.
+@mixin material {
   background: var(--bew-sidebar-background);
   backdrop-filter: var(--bew-filter-glass-1);
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
+}
+
+@mixin surface {
+  @include selected-context;
+  @include material;
+}
+
+// The rail folded into a floating capsule or circle in the top bar (logo circle,
+// right-hand tools): same glass and border, plus a contact shadow. Draw it on a
+// layer behind the controls so their popovers are not inside its backdrop root.
+@mixin floating {
+  @include material;
+  box-sizing: border-box;
+  border: 1px solid var(--bew-surface-border-color);
+  border-radius: var(--bew-radius-full);
+  corner-shape: var(--bew-corner-shape-round);
+  box-shadow: var(--bew-shadow-1);
 }
 
 @mixin solid {

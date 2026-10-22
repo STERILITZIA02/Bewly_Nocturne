@@ -143,13 +143,6 @@ async function setupStyles(currentUrl: string) {
     if (isEmbeddedNotificationsPage) {
       root.classList.add('bewly-notifications-embedded', 'remove-top-bar-without-placeholder')
     }
-    else if (
-      window.name === 'bewly-notifications-drawer'
-      && isInIframe()
-      && settings.value.openNotificationsPageAsDrawer
-    ) {
-      root.classList.add('drawer')
-    }
   }
 
   // moments page, new articles page 动态页, 新版专栏页

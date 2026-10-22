@@ -9,13 +9,11 @@ const props = withDefaults(defineProps<{
   edge: ProgressiveBlurEdge
   /** CSS length at the strongest point; defaults to the global frosted-glass radius. */
   radius?: string
-  /** Only for a blur that is itself the surface, such as the top bar. */
-  saturate?: boolean
   /** Fades the layers themselves: an ancestor with opacity < 1 would stop the blur. */
   visible?: boolean
 }>(), { visible: true })
 
-const layers = computed(() => createProgressiveBlurLayers(props.edge, props.radius, props.saturate))
+const layers = computed(() => createProgressiveBlurLayers(props.edge, props.radius))
 
 // Check each mount, including re-enabling glass. Walk through Shadow DOM hosts.
 const rootRef = ref<HTMLElement | null>(null)

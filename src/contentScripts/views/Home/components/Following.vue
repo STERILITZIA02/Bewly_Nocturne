@@ -67,7 +67,6 @@ import { useFollowingVideoSearch } from '../following/useFollowingVideoSearch'
 
 interface Props {
   gridLayout?: GridLayoutType
-  topBarVisibility?: boolean
 }
 
 interface VideoElement {
@@ -82,7 +81,6 @@ interface VideoElement {
 
 withDefaults(defineProps<Props>(), {
   gridLayout: 'adaptive',
-  topBarVisibility: true,
 })
 
 const emit = defineEmits<{
