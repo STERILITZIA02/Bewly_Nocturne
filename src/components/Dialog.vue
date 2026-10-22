@@ -188,9 +188,9 @@ const dialogPanelStyle = computed(() => {
 })
 const dialogSurfaceStyle = computed(() => {
   return {
-    backdropFilter: surfaceGlassEnabled.value ? 'var(--bew-filter-glass-2)' : 'none',
-    WebkitBackdropFilter: surfaceGlassEnabled.value ? 'var(--bew-filter-glass-2)' : 'none',
-    backgroundColor: surfaceGlassEnabled.value ? 'var(--bew-elevated-alt)' : 'var(--bew-elevated-alt-solid)',
+    backdropFilter: surfaceGlassEnabled.value ? 'var(--bew-filter-glass-1)' : 'none',
+    WebkitBackdropFilter: surfaceGlassEnabled.value ? 'var(--bew-filter-glass-1)' : 'none',
+    backgroundColor: surfaceGlassEnabled.value ? 'var(--bew-glass-tint)' : 'var(--bew-glass-tint-solid)',
   }
 })
 

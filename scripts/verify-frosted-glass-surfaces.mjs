@@ -94,7 +94,7 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
       assert.deepEqual(backdropDeclarations, ['var(--bew-filter-glass-1)'], 'one host-owned sample; disable-frosted-glass resolves the token to none')
       // JSDOM cannot resolve var() inside border shorthands either.
       const border = [...style.sheet.cssRules].findLast(rule => rule.selectorText && rule.style.getPropertyValue('border') && glass.matches(rule.selectorText))?.style.getPropertyValue('border')
-      assert.equal(border, '1px solid var(--bew-surface-border-color)', 'the frame stays on the surface itself')
+      assert.equal(border, '1px solid var(--bew-glass-border-color)', 'the frame stays on the surface itself')
     }
     finally {
       glass.remove()
@@ -125,14 +125,14 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
       await flush()
       const surfaces = host.querySelectorAll('.dialog__surface')
       assert.equal(surfaces.length, 2)
-      assert.equal(surfaces[0].style.backdropFilter, 'var(--bew-filter-glass-2)')
+      assert.equal(surfaces[0].style.backdropFilter, 'var(--bew-filter-glass-1)')
       assert.equal(surfaces[1].style.backdropFilter, 'none')
-      assert.match(surfaces[1].style.backgroundColor, /bew-elevated-alt-solid/)
+      assert.match(surfaces[1].style.backgroundColor, /bew-glass-tint-solid/)
       assert.equal(host.querySelectorAll('[data-top-blur]').length, 0, 'ordinary and nested dialogs have no top blur')
       settings.value.disableFrostedGlass = true
       await flush()
       assert.equal(surfaces[0].style.backdropFilter, 'none')
-      assert.match(surfaces[0].style.backgroundColor, /bew-elevated-alt-solid/)
+      assert.match(surfaces[0].style.backgroundColor, /bew-glass-tint-solid/)
       assert.deepEqual([...host.querySelectorAll('input')].map(input => input.value), ['outer draft', 'inner draft'])
     }
     finally {

@@ -1062,9 +1062,9 @@ onUnmounted(() => {
 }
 
 .dock-content {
-  // The shell and its floating action buttons paint one shared surface.
-  --dock-surface-background: var(--bew-content-alt);
-  --dock-surface-background-hover: var(--bew-content-alt-hover);
+  // The shell and its floating action buttons paint the shared glass.
+  --dock-surface-background: var(--bew-glass-tint);
+  --dock-surface-background-hover: var(--bew-glass-tint-hover);
   --uno: "absolute flex justify-center items-center scale-$scale";
 
   transition-duration: 0ms;
@@ -1129,7 +1129,7 @@ onUnmounted(() => {
     height: 100%;
     z-index: 0;
     background: var(--dock-surface-background);
-    border: 1px solid var(--bew-surface-border-color);
+    border: 1px solid var(--bew-glass-border-color);
     border-radius: var(--dock-shell-radius);
     corner-shape: var(--bew-corner-shape-round);
     backdrop-filter: var(--bew-filter-glass-1);
@@ -1362,7 +1362,7 @@ onUnmounted(() => {
     --uno: "grid place-items-center";
 
     background: var(--dock-surface-background);
-    border: 1px solid var(--bew-surface-border-color);
+    border: 1px solid var(--bew-glass-border-color);
     backdrop-filter: var(--bew-filter-glass-1);
     box-sizing: border-box;
     transition:
@@ -1386,12 +1386,6 @@ onUnmounted(() => {
   &.bottom .back-to-top-or-refresh-btn {
     --uno: "bottom-unset lg:right--45px right--35px";
   }
-}
-
-// Only the last compound is scoped, so `.dark` matches the themed ancestor.
-.dark .dock-content {
-  --dock-surface-background: var(--bew-elevated);
-  --dock-surface-background-hover: var(--bew-elevated-hover);
 }
 
 .dock-item {

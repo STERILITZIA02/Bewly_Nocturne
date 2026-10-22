@@ -67,7 +67,6 @@ export function setupNecessarySettingsWatchers() {
   onScopeDispose(() => stopNativeKeyboard?.())
 
   const DEFAULT_FROSTED_GLASS_BLUR_PX = originalSettings.frostedGlassBlurIntensity
-  const FROSTED_GLASS_DIALOG_OFFSET_PX = 10
 
   const clampFrostedGlassBlur = (value: number) => {
     if (!Number.isFinite(value))
@@ -87,25 +86,20 @@ export function setupNecessarySettingsWatchers() {
     if (settings.value.disableFrostedGlass) {
       targets.forEach((element) => {
         element.style.removeProperty('--bew-filter-glass-1')
-        element.style.removeProperty('--bew-filter-glass-2')
         element.style.removeProperty('--bew-glass-blur-radius')
       })
       return
     }
 
     const blur1Value = `blur(${clampedValue}px) saturate(180%)`
-    const dialogBlur = clampedValue === 0 ? 0 : clampedValue + FROSTED_GLASS_DIALOG_OFFSET_PX
-    const blur2Value = `blur(${dialogBlur}px) saturate(180%)`
 
     targets.forEach((element) => {
       if (Math.abs(clampedValue - DEFAULT_FROSTED_GLASS_BLUR_PX) < 0.01) {
         element.style.removeProperty('--bew-filter-glass-1')
-        element.style.removeProperty('--bew-filter-glass-2')
         element.style.removeProperty('--bew-glass-blur-radius')
       }
       else {
         element.style.setProperty('--bew-filter-glass-1', blur1Value)
-        element.style.setProperty('--bew-filter-glass-2', blur2Value)
         element.style.setProperty('--bew-glass-blur-radius', `${clampedValue}px`)
       }
     })

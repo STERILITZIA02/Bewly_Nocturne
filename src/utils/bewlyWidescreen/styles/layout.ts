@@ -47,7 +47,7 @@ export function injectLayoutStyle() {
       --bewly-widescreen-controls-block-padding: calc(
         (var(--bewly-widescreen-bottom-controls-height) - var(--bew-control-height, 36px)) / 2
       );
-      --bewly-widescreen-danmaku-bar-bg: var(--bew-elevated-alt);
+      --bewly-widescreen-danmaku-bar-bg: var(--bew-glass-tint);
       --bewly-widescreen-aux-controls-width: calc(var(--bew-control-height, 36px) * 5 + var(--bew-space-2, 8px) * 5);
       ${CARD_LAYOUT_PROPERTIES}
       --bewly-widescreen-controls-glass-inset: 10%;
@@ -202,7 +202,7 @@ export function injectLayoutStyle() {
       --bewly-widescreen-control-bg: var(--bew-fill-1);
       --bewly-widescreen-control-hover-bg: var(--bew-fill-2);
       --bew-comment-expand-all-display: none;
-      --bewly-widescreen-danmaku-bar-bg: var(--bew-elevated-alt);
+      --bewly-widescreen-danmaku-bar-bg: var(--bew-glass-tint);
       --bewly-widescreen-aux-controls-width: calc(var(--bew-control-height, 36px) * 5 + var(--bew-space-2, 8px) * 5);
     }
 
@@ -1014,7 +1014,7 @@ export function injectLayoutStyle() {
       height: var(--bewly-widescreen-controls-glass-height) !important;
       z-index: calc(var(--bew-z-popover) - 1) !important;
       background: var(--bewly-widescreen-danmaku-bar-bg) !important;
-      border: 1px solid var(--bew-surface-border-color) !important;
+      border: 1px solid var(--bew-glass-border-color) !important;
       border-radius: var(--bewly-widescreen-shell-radius) !important;
       corner-shape: var(--bew-corner-shape);
       box-shadow: none !important;

@@ -21,6 +21,8 @@ export async function loadSourceModule(file: string, imports: Record<string, unk
       '~/utils/messaging': { onMessage() {} },
     }), ...imports }
   }
+  if (source.includes('from \'./momentFeedTypes\'') && !('./momentFeedTypes' in imports))
+    imports = { './momentFeedTypes': await import('../src/contentScripts/views/Moments/momentFeedTypes'), ...imports }
   if (source.includes('from \'~/constants/appClient\''))
     imports = { '~/constants/appClient': await import('../src/constants/appClient'), ...imports }
   // Dependency-free helpers; fixtures may still override them. They run in the

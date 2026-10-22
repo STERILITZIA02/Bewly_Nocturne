@@ -232,8 +232,8 @@ function openPlayerFeedback() {
   --b-button-width: var(--bew-floating-control-size);
   --b-button-height: var(--bew-floating-control-size);
   --b-button-border-width: 1px;
-  --b-button-color: var(--bew-elevated);
-  --b-button-color-hover: var(--bew-elevated-hover);
+  --b-button-color: var(--bew-glass-tint);
+  --b-button-color-hover: var(--bew-glass-tint-hover);
   --b-button-shadow: var(--bew-shadow-1);
   --b-button-shadow-hover: var(--bew-shadow-2);
   --b-button-shadow-active: var(--bew-shadow-1);

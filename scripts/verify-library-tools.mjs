@@ -292,7 +292,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     }) })
     app.mount(host)
     try {
-      assert.equal(host.querySelectorAll('[role="tab"]').length, 4)
+      assert.equal(host.querySelectorAll('[role="tab"]').length, 5, 'all, video, text & images, series, articles')
       host.querySelectorAll('[role="tab"]')[1].click()
       await flush()
       assert.equal(selected.value, 'video')
@@ -311,7 +311,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
       await flush()
       assert.equal(host.querySelector('.moments-sidebar__modules'), null)
       assert.ok(host.querySelector('[data-layout-editable-id="moments-sidebar"]'), 'hidden modules retain their layout editing entry')
-      assert.equal(host.querySelectorAll('[role="tab"]').length, 4)
+      assert.equal(host.querySelectorAll('[role="tab"]').length, 5, 'all, video, text & images, series, articles')
       assert.equal(selected.value, 'video')
     }
     finally {

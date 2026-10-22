@@ -25,7 +25,7 @@ withDefaults(defineProps<{
 }>(), { user: null, liveUsers: () => [], liveCount: 0 })
 const emit = defineEmits<{ (event: 'update:modelValue', value: MomentFilter): void }>()
 const { t } = useI18n()
-const options = computed(() => (['all', 'video', 'pgc', 'article'] as const).map(value => ({ value, label: t(`moments.filter_${value}`) })))
+const options = computed(() => (['all', 'video', 'draw', 'pgc', 'article'] as const).map(value => ({ value, label: t(`moments.filter_${value}`) })))
 const stats = [
   { key: 'following', path: 'fans/follow', label: 'moments.following' },
   { key: 'follower', path: 'fans/fans', label: 'moments.followers' },

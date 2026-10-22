@@ -6,7 +6,8 @@
   --bew-segment-secondary-active-bg: var(--bew-sidebar-selected-bg);
 }
 
-// The glass alone, for a layer drawn behind (not around) its content.
+// The glass alone, for a layer drawn behind (not around) its content. It is the
+// shared glass material (--bew-glass-tint), the same as every other glass.
 @mixin material {
   background: var(--bew-sidebar-background);
   backdrop-filter: var(--bew-filter-glass-1);
@@ -23,7 +24,7 @@
 @mixin floating {
   @include material;
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: 1px solid var(--bew-glass-border-color);
   border-radius: var(--bew-radius-full);
   corner-shape: var(--bew-corner-shape-round);
   box-shadow: var(--bew-shadow-1);

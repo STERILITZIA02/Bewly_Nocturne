@@ -2,14 +2,14 @@
 @mixin surface {
   box-sizing: border-box;
   padding: var(--bew-space-3);
-  border: 1px solid var(--bew-surface-border-color);
+  border: 1px solid var(--bew-glass-border-color);
   border-radius: var(--bew-composer-radius);
   corner-shape: var(--bew-corner-shape);
-  background: var(--bew-elevated-solid);
+  background: var(--bew-glass-tint-solid);
   box-shadow: var(--bew-popover-surface-shadow);
 
   @supports (backdrop-filter: blur(1px)) {
-    background: var(--bew-elevated);
+    background: var(--bew-glass-tint);
     backdrop-filter: var(--bew-filter-glass-1);
   }
 

@@ -97,6 +97,10 @@
   --bew-media-radius: var(--bew-radius-lg);
   // Video card covers read as album art: one step rounder than other media.
   --bew-video-cover-radius: var(--bew-radius-xl);
+  // Moment card media share the video card cover radius; the card wraps them
+  // concentrically across its side inset.
+  --bew-moment-media-radius: var(--bew-video-cover-radius);
+  --bew-moment-card-radius: calc(var(--bew-moment-media-radius) + var(--bew-card-inset));
   --bew-panel-radius: var(--bew-radius-lg);
   --bew-modal-radius: var(--bew-radius-2xl);
   --bew-popover-radius: var(--bew-radius-lg);
@@ -141,11 +145,13 @@
   // Controls pinned near a rounded corner stay concentric with it: the parent
   // radius minus the real inset, never below the small radius. Controls whose
   // inset reaches the parent radius use the ordinary interactive radius.
-  --bew-card-media-action-radius: max(var(--bew-radius-sm), calc(var(--bew-card-inset-radius) - var(--bew-space-2)));
+  --bew-card-media-action-radius: max(var(--bew-radius-sm), calc(var(--bew-moment-media-radius) - var(--bew-space-2)));
   --bew-cover-scrim: rgb(0 0 0 / 56%);
   --bew-layout-sidebar-width: 200px;
   --bew-library-filter-padding: var(--bew-space-3);
   --bew-moments-hot-search-width: clamp(240px, 18vw, 300px);
+  // Moments up-list tiles are squares as tall as the smallest video card cover (40:21).
+  --bew-moments-up-tile-size: calc(var(--bew-video-card-min-width) * 21 / 40);
   --bew-moments-hot-search-compact-max-height: 240px;
   --bew-moments-hot-search-max-height: calc(
     100dvh - var(--bew-top-bar-height) - var(--bew-space-4) - var(--bew-space-6)
@@ -352,7 +358,7 @@
   --bew-top-bar-inline-padding: var(--bew-space-12);
   --bew-popover-gap: var(--bew-space-1);
   --bew-popover-max-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
-  --bew-popover-surface-background: var(--bew-elevated);
+  --bew-popover-surface-background: var(--bew-glass-tint);
   --bew-popover-surface-background-solid: var(--bew-elevated-solid);
   --bew-popover-surface-shadow: var(--bew-shadow-3);
   --bew-popover-padding: var(--bew-space-3);
@@ -378,13 +384,11 @@
   --bew-native-comment-tag-radius: 3px;
 
   // #region Filters
-  // Use this in all components (except dialogs) if you want to add a frosted glass effect
+  // The one frosted-glass filter, dialogs included (the blur-strength setting
+  // rewrites it). Pair it with --bew-glass-tint and --bew-glass-border-color.
   --bew-filter-glass-1: blur(20px) saturate(180%);
   // The same radius as a length, for gradient blurs (ProgressiveBlur.vue).
   --bew-glass-blur-radius: 20px;
-
-  // Use this in dialogs if you want to add a frosted glass effect
-  --bew-filter-glass-2: blur(30px) saturate(180%);
 
   // Apply this to the Bilibili icon if it is an image with the brand's original blue or pink color
   // Icon emphasis stays neutral; accent is reserved for the seven semantic uses.
@@ -539,9 +543,17 @@
   --bew-player-canvas: hsl(0 0% 0%);
   --bew-static-white: hsl(0 0% 100%);
   --bew-homepage-bg: var(--bew-neutral-canvas);
-  // Preserve the approved sidebar separation and its single glass layer.
-  --bew-sidebar-background-solid: color-mix(in srgb, var(--bew-neutral-fg) 6%, var(--bew-neutral-canvas));
-  --bew-sidebar-background: rgb(from var(--bew-sidebar-background-solid) r g b / var(--bew-content-opacity));
+  // One frosted-glass material for every glass surface (rail, logo circle,
+  // top-bar capsule, Dock, popovers, menus, dialogs, settings, composer, native
+  // page bars): the same tint, opacity, blur (--bew-filter-glass-1) and edge.
+  // The tint goes solid when frosted glass is off (opacity 1).
+  --bew-glass-tint-solid: var(--bew-neutral-raised);
+  --bew-glass-tint-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-glass-tint-solid));
+  --bew-glass-tint: rgb(from var(--bew-glass-tint-solid) r g b / var(--bew-content-opacity));
+  --bew-glass-tint-hover: rgb(from var(--bew-glass-tint-solid-hover) r g b / var(--bew-content-opacity));
+  --bew-glass-border-color: var(--bew-surface-border-color);
+  --bew-sidebar-background-solid: var(--bew-glass-tint-solid);
+  --bew-sidebar-background: var(--bew-glass-tint);
   --bew-content-opacity: 0.68;
 
   --bew-content-solid: var(--bew-neutral-surface);
@@ -564,7 +576,7 @@
 
   // Small unread numerals need a stronger tint over arbitrary page artwork.
   // The shared opacity still reaches 1 when frosted glass is disabled.
-  --bew-count-badge-bg: rgb(from var(--bew-elevated-solid) r g b / max(0.76, var(--bew-content-opacity)));
+  --bew-count-badge-bg: rgb(from var(--bew-glass-tint-solid) r g b / max(0.76, var(--bew-content-opacity)));
 
   --bew-fill-1: color-mix(in srgb, var(--bew-neutral-fg) 5%, transparent);
   --bew-fill-2: color-mix(in srgb, var(--bew-neutral-fg) 9%, transparent);
@@ -630,9 +642,9 @@
 
   // 深色模式基准颜色（通过 JS 动态设置）
   --bew-dark-base-color: #2b2b2b;
-  // Approximate the former overlapping fills with one neutral sRGB tint;
-  // keep the existing alpha and blur so background detail still shows through.
-  --bew-sidebar-background-solid: color-mix(in srgb, var(--bew-neutral-fg) 16%, var(--bew-neutral-canvas));
+  // Dark glass is tinted below raised surfaces (6% vs 8% foreground) so it
+  // reads dark rather than grey; OLED uses the same recipe over black.
+  --bew-glass-tint-solid: color-mix(in srgb, var(--bew-neutral-fg) 6%, var(--bew-neutral-bg));
   --bew-sidebar-action-hover: color-mix(in srgb, var(--bew-neutral-bg) 18%, transparent);
   // The rail is lighter than solid content here, so a solid selected plate would
   // sink below it; lift the rail instead.
@@ -708,7 +720,7 @@
   --bew-neutral-surface: color-mix(in srgb, var(--bew-neutral-fg) 4%, var(--bew-neutral-bg));
   --bew-neutral-raised: color-mix(in srgb, var(--bew-neutral-fg) 9%, var(--bew-neutral-bg));
   --bew-neutral-inset: color-mix(in srgb, var(--bew-neutral-fg) 2%, var(--bew-neutral-bg));
-  // The inherited neutral sidebar tint stays slightly lifted above the OLED black page.
+  // The shared glass tint stays slightly lifted above the OLED black page.
 }
 
 @media (prefers-contrast: more) {
@@ -728,7 +740,6 @@
   --bew-elevated-alt: var(--bew-elevated-alt-solid);
   --bew-elevated-alt-hover: var(--bew-elevated-alt-solid-hover);
   --bew-filter-glass-1: none;
-  --bew-filter-glass-2: none;
   --bew-glass-blur-radius: 0px;
   --bew-fill-alt: var(--bew-content-solid);
   --bew-popover-surface-background: var(--bew-popover-surface-background-solid);

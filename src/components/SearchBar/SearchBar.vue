@@ -850,7 +850,7 @@ function handleClearKeyword() {
   max-width: var(--b-search-bar-max-width, 550px);
   height: var(--b-search-bar-height, var(--bew-top-bar-primary-control-height, 46px));
 
-  --b-search-bar-normal-color: var(--bew-content);
+  --b-search-bar-normal-color: var(--bew-glass-tint);
 
   --b-search-bar-normal-icon-color: var(--bew-text-1);
   --b-search-bar-hover-icon-color: var(--bew-text-1);

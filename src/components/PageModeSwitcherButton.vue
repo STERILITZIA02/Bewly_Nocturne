@@ -155,13 +155,13 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
     --page-mode-icon-size: var(--bew-floating-control-icon-size);
     width: var(--bew-floating-control-size);
     height: var(--bew-floating-control-size);
-    border: 1px solid var(--bew-surface-border-color);
-    background: var(--bew-elevated);
+    border: 1px solid var(--bew-glass-border-color);
+    background: var(--bew-glass-tint);
     box-shadow: var(--bew-shadow-1);
     backdrop-filter: var(--bew-filter-glass-1);
 
     &:hover:not(:disabled) {
-      background: var(--bew-elevated-hover);
+      background: var(--bew-glass-tint-hover);
       box-shadow: var(--bew-shadow-2);
     }
   }

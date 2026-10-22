@@ -891,8 +891,8 @@ defineExpose({
   left: var(--conversation-composer-start-inset);
   z-index: 4;
   padding: var(--bew-space-2);
-  background: var(--bew-elevated-alt);
-  border: 1px solid var(--bew-surface-border-color);
+  background: var(--bew-glass-tint);
+  border: 1px solid var(--bew-glass-border-color);
   border-radius: var(--bew-modal-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: none;

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 
 import { MOMENTS_SOURCE_FILES } from './refactoredSources'
 import { loadSourceFunctions } from './sourceFunctionHarness'
@@ -167,10 +168,11 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     }
   })
 
-  check('pagination ownership: an unmoved cursor stalls automation without ending the feed; clamps restore, user scrolls and explicit jumps win', async () => {
+  check('pagination ownership: the reader flags a repeated page as a stall while keeping the server has_more; clamps restore, user scrolls and explicit jumps win', async () => {
     const responses = [
-      { code: 0, data: { items: [{ id: 'a' }], offset: 'same', has_more: true } },
-      { code: 0, data: { items: [{ id: 'b' }], offset: 'same', has_more: true } },
+      { code: 0, data: { items: [{ id_str: 'a' }], offset: 'same', has_more: true } },
+      { code: 0, data: { items: [{ id_str: 'b' }], offset: 'same', has_more: true } },
+      { code: 0, data: { items: [{ id_str: 'b' }], offset: 'same', has_more: true } },
       { code: 0, data: { items: [], offset: 'end', has_more: false } },
     ]
     const api = { moment: { getMoments: async () => responses.shift() } }
@@ -183,8 +185,10 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     const request = { reset: true, type: 'all', hostMid: '', offset: '', updateBaseline: '', page: 1, filtered: false }
     const first = await reader.read(request, () => true)
     assert.deepEqual([first.hasMore, first.stalled], [true, false])
+    const fresh = await reader.read({ ...request, reset: false, offset: 'same' }, () => true)
+    assert.deepEqual([fresh.hasMore, fresh.stalled], [true, false], 'unseen posts are progress even when the offset holds (series feeds)')
     const repeated = await reader.read({ ...request, reset: false, offset: 'same' }, () => true)
-    assert.deepEqual([repeated.hasMore, repeated.stalled], [true, true], 'no progress is not the server end')
+    assert.deepEqual([repeated.hasMore, repeated.stalled], [true, true], 'a repeated page is no progress')
     const ended = await reader.read({ ...request, reset: false, offset: 'same' }, () => true)
     assert.deepEqual([ended.hasMore, ended.stalled], [false, false])
 
@@ -221,6 +225,87 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     finally {
       viewport.remove()
     }
+  })
+
+  check('moments uploader and series feeds keep auto-loading: unseen posts count as progress, only empty or repeated pages end the feed', async () => {
+    const page = (ids, offset, more = true) => ({ code: 0, data: { items: ids.map(id => ({ id_str: id, type: 'DYNAMIC_TYPE_DRAW' })), offset, has_more: more } })
+    const responses = [page(['a', 'b'], ''), page(['c'], ''), page(['c'], ''), page([], 'x')]
+    const pages = []
+    const api = {
+      moment: { getMomentsByUp: async (params) => {
+        pages.push(params.page)
+        return responses.shift()
+      } },
+      user: { getRelations: async () => ({ code: 0 }) },
+    }
+    const { createMomentFeedReader } = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {
+      '~/utils/api': { default: api },
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      '~/utils/momentHostFollowState': { resolveMomentHostFollowState: () => 'followed' },
+    })
+    const reader = createMomentFeedReader(item => ({ id: item.id_str }))
+    const request = { reset: true, type: 'all', hostMid: '7', offset: '', updateBaseline: '', page: 1, filtered: false }
+    const first = await reader.read(request, () => true)
+    assert.equal(first.stalled, false, 'an offset the server leaves empty is not a stall')
+    const second = await reader.read({ ...request, reset: false, page: first.nextPage }, () => true)
+    assert.equal(second.stalled, false, 'new posts on the next page number are progress')
+    const repeated = await reader.read({ ...request, reset: false, page: second.nextPage }, () => true)
+    assert.equal(repeated.stalled, true, 'a repeated page stops automation')
+    const empty = await reader.read({ ...request, reset: false, page: repeated.nextPage }, () => true)
+    assert.equal(empty.stalled, true, 'an empty page stops automation')
+    assert.deepEqual(pages, [1, 2, 3, 4])
+
+    // Series (pgc) feeds may also hold an empty offset between pages.
+    const series = [page(['s1'], ''), page(['s2'], '')]
+    const seriesTypes = []
+    api.moment.getMoments = async (params) => {
+      seriesTypes.push(params.type)
+      return series.shift()
+    }
+    const seriesRequest = { ...request, type: 'pgc', hostMid: '' }
+    const seriesFirst = await reader.read(seriesRequest, () => true)
+    const seriesNext = await reader.read({ ...seriesRequest, reset: false }, () => true)
+    assert.deepEqual([seriesFirst.stalled, seriesNext.stalled], [false, false], 'series keep auto-loading')
+    assert.deepEqual(seriesTypes, ['pgc', 'pgc'])
+
+    const moments = await readFile(new URL('../src/contentScripts/views/Moments/Moments.vue', import.meta.url), 'utf8')
+    assert.match(moments, /const ended = !hasMore \|\| response\.stalled\n[\s\S]{0,1600}noMoreContent\.value = ended/, 'a judged stall ends the feed instead of waiting for a button')
+    assert.match(moments, /function requiresManualMomentPaging\(\) \{\s*return feedRequestFailed\.value\s*\}/, 'only failures need a button')
+    assert.match(moments, /<template v-else-if="noMoreContent && !feedRequestFailed">\s*\{\{ t\('moments\.no_more'\) \}\}/, 'the end is a centred hint')
+    assert.match(moments, /<button\s+v-if="feedRequestFailed"\s+:disabled="isLoading"\s+@click="refresh\(\)"/, 'the empty state has no reload button')
+    assert.match(moments, /visibilitychange', \(\) => \{[\s\S]{0,240}maybeLoadMoreNearBottom\(\)/, 'returning to the tab resumes a short list')
+    assert.match(moments, /updateVirtualColumns\(\)\s*\/\/ A restored list may not fill the viewport\.\s*maybeLoadMoreNearBottom\(\)/)
+    assert.match(moments, /momentLayout\.remove\(id\)[\s\S]{0,120}void nextTick\(maybeLoadMoreNearBottom\)/)
+  })
+
+  check('moments text-and-image category: reads the full feed, scans like a filter and keeps only WORD and DRAW posts', async () => {
+    const calls = []
+    const page = (items, offset, more = true) => ({ code: 0, data: { items, offset, has_more: more } })
+    const responses = [
+      page([{ id: 'w', type: 'DYNAMIC_TYPE_WORD' }, { id: 'v', type: 'DYNAMIC_TYPE_AV' }, { id: 'f', type: 'DYNAMIC_TYPE_FORWARD' }], 'p2'),
+      page([{ id: 'd', type: 'DYNAMIC_TYPE_DRAW' }, { id: 'a', type: 'DYNAMIC_TYPE_ARTICLE' }, { id: 'l', type: 'DYNAMIC_TYPE_LIVE_RCMD' }], 'p3'),
+    ]
+    const api = { moment: {
+      getMoments: async (params) => {
+        calls.push(params.type)
+        return responses.shift()
+      },
+    } }
+    const { createMomentFeedReader } = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {
+      '~/utils/api': { default: api },
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      '~/utils/momentHostFollowState': {},
+      './momentFeedTypes': await loadSourceModule('../src/contentScripts/views/Moments/momentFeedTypes.ts'),
+    })
+    const reader = createMomentFeedReader(item => item)
+    const result = await reader.read({ reset: true, type: 'draw', hostMid: '', offset: '', updateBaseline: '', page: 1, filtered: false }, () => true)
+    assert.deepEqual(calls, ['all', 'all'], 'no server type exists, so it scans two full-feed pages')
+    assert.equal(result.normalizedItems.map(item => item.id).join(), 'w,d')
+    assert.equal(result.rawItems.length, 6, 'raw pages still feed uploader video times')
+    assert.equal(result.nextOffset, 'p3')
+    assert.equal(reader.getLoaded('draw', '').map(item => item.id).join(), 'w,d', 'its cache holds only kept posts')
+    const sidebar = await readFile(new URL('../src/contentScripts/views/Moments/MomentsSidebar.vue', import.meta.url), 'utf8')
+    assert.match(sidebar, /\['all', 'video', 'draw', 'pgc', 'article'\]/)
   })
 
   check('viewport geometry: one read per owner and round is shared by every subscriber; hidden pages defer and release stops work', async () => {

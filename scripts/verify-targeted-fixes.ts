@@ -1905,12 +1905,9 @@ async function verifyComponentContracts() {
   assert.match(momentsPage, /bewly-moment-image-viewer-open/)
   assert.match(momentsPage, /moment-image-viewer__nav:focus-visible/)
   assert.match(conversationView, /\benable-image\b/)
-  assert.match(momentsPage, /<span\s+class="moments-up-list__fade moments-up-list__fade--prev"/)
-  assert.match(momentsPage, /\.moments-up-list__track \{[\s\S]{0,180}padding-block: 6px var\(--bew-space-1\)/)
+  // The up-list has no container, edge fade or mask (see verify-sidebar-continuity).
+  assert.doesNotMatch(momentsPage, /moments-up-list__fade|--moments-up-list-base-mask/)
   assert.match(momentsPage, /\.moments-up-list__item:hover:not\(:disabled\)/)
-  assert.match(momentsPage, /@property --moments-up-list-left-clear[\s\S]*@property --moments-up-list-right-clear/)
-  assert.match(momentsPage, /\.moments-up-list__scroller \{[\s\S]*--moments-up-list-base-mask:[\s\S]*-webkit-mask-image:/)
-  assert.match(momentsPage, /\.moments-up-list__fade \{[\s\S]{0,460}background: radial-gradient\([\s\S]{0,260}filter: var\(--bew-filter-glass-1\)/)
   assert.match(momentsPage, /handleReachBottom\.value === handleMomentsReachBottom/)
   assert.match(momentsPage, /handlePageRefresh\.value === refresh/)
   const momentsSidebar = await readFile(`${root}/src/contentScripts/views/Moments/MomentsSidebar.vue`, 'utf8')
@@ -2045,7 +2042,7 @@ async function verifyAuthCloudMomentsContracts() {
   assert.match(moments, /clearMomentPresentationForRefresh\(items\)/)
   assert.match(moments, /isInitialLoading\.value = moments\.value\.length === 0/)
   assert.match(moments, /likingMomentRequests\.get\(moment\.id\)\?\.requestId === requestId/)
-  assert.match(moments, /const cursorAdvanced = nextOffset !== requestOffset/)
+  assert.match(moments, /const ended = !hasMore \|\| response\.stalled/, 'the reader alone judges paging progress')
   assert.match(moments, /if \(!pageApplied && previousPagination\)/)
   assert.match(moments, /const owner = lifetime\.capture\(\)/)
   assert.match(moments, /if \(!owner\.isCurrent\(\)\)/)
@@ -3057,7 +3054,7 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuSurfaceBackgroundStyles, /left: var\(--bewly-widescreen-controls-glass-inset\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /width: auto !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /height: var\(--bewly-widescreen-controls-glass-height\) !important/)
-  assert.match(danmakuSurfaceBackgroundStyles, /border: 1px solid var\(--bew-surface-border-color\) !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /border: 1px solid var\(--bew-glass-border-color\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /border-radius: var\(--bewly-widescreen-shell-radius\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /corner-shape: var\(--bew-corner-shape\)/)
   assert.doesNotMatch(danmakuSurfaceBackgroundStyles, /border-top: 1px solid var\(--bew-border-color\) !important/)
@@ -3159,7 +3156,7 @@ async function verifyP2WidescreenControl() {
   assert.doesNotMatch(widescreen, /body\.\$\{BODY_CLASS\}\.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\} \{/)
   assert.match(widescreen, /opacity var\(--bew-duration-moderate, 300ms\) var\(--bew-ease-standard, ease\)/)
   assert.match(widescreen, /body\.\$\{BODY_CLASS\} \.\$\{DANMAKU_GLASS_CLASS\},[\s\S]{0,140}#\$\{ROOT_ID\} :is\(\.bewly-widescreen-info, \.bewly-widescreen-sidebar, \.bewly-widescreen-panel, \.bewly-widescreen-panel-loading\)/)
-  assert.match(widescreen, /--bewly-widescreen-danmaku-bar-bg: var\(--bew-elevated-alt\)/)
+  assert.match(widescreen, /--bewly-widescreen-danmaku-bar-bg: var\(--bew-glass-tint\)/)
   assert.doesNotMatch(widescreen, /--bewly-widescreen-danmaku-bar-bg: var\(--bew-content-solid/)
   assert.doesNotMatch(widescreen, /html\.dark\.oled-dark #\$\{ROOT_ID\}[\s\S]{0,160}--bewly-widescreen-danmaku-bar-bg/)
   assert.match(cmnCn, /bewly_widescreen: Bewly播放页/)
@@ -3642,7 +3639,7 @@ function verifyUpstreamReliabilityPolicies() {
 
 async function verifyUpstreamReliabilityContracts() {
   const root = process.cwd()
-  const [app, watchLater, input, comments, searchBar, searchNavigation, searchResults, contentScript, momentsPage, momentsPop, favoritesPop, videoCardGrid, videoCard, videoCardCover, videoCardSkeleton, topBarStyles, storage] = await Promise.all([
+  const [app, watchLater, input, comments, searchBar, searchNavigation, searchResults, contentScript, momentsPop, favoritesPop, videoCardGrid, videoCard, videoCardCover, videoCardSkeleton, topBarStyles, storage] = await Promise.all([
     readFile(`${root}/src/contentScripts/views/App.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/WatchLater/WatchLater.vue`, 'utf8'),
     readFile(`${root}/src/components/Input.vue`, 'utf8'),
@@ -3651,7 +3648,6 @@ async function verifyUpstreamReliabilityContracts() {
     readFile(`${root}/src/utils/searchNavigation.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/SearchResults/SearchResults.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
-    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/TopBar/components/pops/MomentsPop.vue`, 'utf8'),
     readFile(`${root}/src/components/TopBar/components/pops/FavoritesPop.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCardGrid.vue`, 'utf8'),
@@ -3747,27 +3743,6 @@ async function verifyUpstreamReliabilityContracts() {
   assert.doesNotMatch(searchBar, /async function navigateToSearchResultPage|window\.open|openLinkInBackground/)
   assert.doesNotMatch(searchNavigation, /dispatchEvent\(new Event\('pushstate'\)\)/)
   assert.match(contentScript, /openSearchResults\(pluginSearchResultsUrl\)/)
-  assert.match(momentsPage, /<span\s+class="moments-up-list__fade moments-up-list__fade--prev"/)
-  assert.doesNotMatch(momentsPage, /v-show="canScrollUpList(?:Left|Right)"\s+class="moments-up-list__fade/)
-  assert.match(momentsPage, /\.moments-up-list__scroller \{[\s\S]{0,2500}scroll-padding-inline: var\(--bew-space-2\);/)
-  assert.match(momentsPage, /\.moments-up-list__track \{[\s\S]{0,180}padding-block: 6px var\(--bew-space-1\);/)
-  const momentsScrollerSection = momentsPage.slice(
-    momentsPage.indexOf('.moments-up-list__scroller {'),
-    momentsPage.indexOf('.moments-up-list__scroller::-webkit-scrollbar'),
-  )
-  assert.doesNotMatch(momentsScrollerSection, /^\s*padding-inline:/m)
-  assert.match(momentsScrollerSection, /--moments-up-list-left-clear-mask:/)
-  assert.match(momentsScrollerSection, /--moments-up-list-right-clear-mask:/)
-  assert.match(momentsScrollerSection, /--moments-up-list-base-mask:/)
-  const momentsFadeSection = momentsPage.slice(
-    momentsPage.indexOf('.moments-up-list__fade {'),
-    momentsPage.indexOf('.moments-up-list__arrow {'),
-  )
-  assert.match(momentsFadeSection, /width: calc\(var\(--bew-space-12\) \+ var\(--bew-space-12\) \+ var\(--bew-space-12\)\)/)
-  assert.match(momentsFadeSection, /background: radial-gradient\([\s\S]{0,260}filter: var\(--bew-filter-glass-1\)/)
-  assert.doesNotMatch(momentsFadeSection, /backdrop-filter:/)
-  assert.match(momentsFadeSection, /left: calc\(0px - var\(--bew-space-12\) - var\(--bew-space-6\)\)/)
-  assert.match(momentsFadeSection, /right: calc\(0px - var\(--bew-space-12\) - var\(--bew-space-6\)\)/)
   assert.match(momentsPop, /:key="moment\.id_str"/)
   assert.doesNotMatch(momentsPop, /:key="index"/)
 
@@ -4141,9 +4116,6 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.doesNotMatch(moments, /showMomentsSidebar|moments-filter-header/)
   assert.match(moments, /grid-template-columns:\s*repeat\(var\(--moments-columns\), minmax\(0, 1fr\)\)/)
   assert.match(moments, /class="moments-up-list__track"/)
-  assert.match(moments, /'can-scroll-left': canScrollUpListLeft[\s\S]*'can-scroll-right': canScrollUpListRight/)
-  assert.match(moments, /transition:\s*opacity 700ms var\(--bew-ease-standard\)/)
-  assert.match(moments, /--moments-up-list-left-clear 700ms var\(--bew-ease-standard\)/)
   assert.match(moments, /@scroll="scheduleUpListStateUpdate"/)
   assert.match(moments, /upListResizeObserver\.observe\(upListTrackRef\.value\)/)
   assert.match(moments, /gridClientWidth = gridRef\.value\?\.clientWidth \|\| mainRailWidth/)

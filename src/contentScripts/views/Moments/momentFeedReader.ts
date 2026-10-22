@@ -5,6 +5,7 @@ import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { resolveMomentHostFollowState } from '~/utils/momentHostFollowState'
 
 import type { MomentFilter } from './momentFeedTypes'
+import { getMomentFeedApiType, isClientFilteredMomentType, keepsMomentItem } from './momentFeedTypes'
 
 interface MomentFeedRead {
   reset: boolean
@@ -24,6 +25,8 @@ export function createMomentFeedReader(
 ) {
   let loadedItems: DisplayMoment[] = []
   let loadedQuery = ''
+  /** Raw post ids the feed has returned for `loadedQuery`. */
+  let seenRawIds = new Set<string>()
   let pendingRead: AbortController | undefined
   const queryKey = (type: MomentFilter, hostMid: string) => `${type}:${hostMid}`
   async function read(request: MomentFeedRead, isRequestCurrent: () => boolean) {
@@ -35,7 +38,27 @@ export function createMomentFeedReader(
     const readOptions = { signal: controller.signal }
     const isCurrent = () => !controller.signal.aborted && isRequestCurrent()
     const requestType = request.type
+    const apiType = getMomentFeedApiType(requestType)
+    // A client-side type drops much of each page, so it scans like other filters.
+    const filtered = request.filtered || isClientFilteredMomentType(requestType)
     const requestHostMid = request.hostMid
+    const key = queryKey(requestType, requestHostMid)
+    const seenIds = new Set(request.reset || loadedQuery !== key ? [] : seenRawIds)
+    /**
+     * Some feeds (uploader, series) leave the offset empty or unchanged, and
+     * uploader feeds also page by number, so a page of unseen posts is
+     * progress; only empty or repeated pages stall.
+     */
+    function pageAdvanced(pageItems: DataItem[], responseOffset: string, previousOffset: string) {
+      let fresh = false
+      for (const item of pageItems) {
+        if (!seenIds.has(item.id_str)) {
+          seenIds.add(item.id_str)
+          fresh = true
+        }
+      }
+      return fresh || (pageItems.length > 0 && responseOffset !== previousOffset)
+    }
     let nextPageNumber = request.page
     let filteredRequestPages = 0
     let rawItems: DataItem[] = []
@@ -70,7 +93,7 @@ export function createMomentFeedReader(
       if (requestHostMid) {
       // 按 UP 主筛选：走 feed/all + host_mid，不写入全局全部动态缓存
         let nextPage = nextPageNumber
-        if (request.filtered) {
+        if (filtered) {
           let scanOffset = request.offset
           let scanUpdateBaseline = request.updateBaseline
           let canContinue = true
@@ -80,7 +103,7 @@ export function createMomentFeedReader(
             filteredRequestPages += 1
             const response = await api.moment.getMomentsByUp({
               host_mid: requestHostMid,
-              type: requestType,
+              type: apiType,
               offset: scanOffset || undefined,
               update_baseline: scanUpdateBaseline || undefined,
               page: nextPage,
@@ -98,7 +121,7 @@ export function createMomentFeedReader(
             const responseOffset = response.data?.offset || ''
             scanUpdateBaseline = response.data?.update_baseline || ''
             hasMore = Boolean(response.data?.has_more)
-            stalled = hasMore && (pageItems.length === 0 || responseOffset === scanOffset)
+            stalled = hasMore && !pageAdvanced(pageItems, responseOffset, scanOffset)
             canContinue = hasMore && !stalled
             scanOffset = responseOffset
             nextPage += 1
@@ -111,7 +134,7 @@ export function createMomentFeedReader(
         else {
           const response = await api.moment.getMomentsByUp({
             host_mid: requestHostMid,
-            type: requestType,
+            type: apiType,
             offset: request.offset || undefined,
             update_baseline: request.updateBaseline || undefined,
             page: nextPage,
@@ -126,13 +149,13 @@ export function createMomentFeedReader(
           rawItems = response.data?.items || []
           nextOffset = response.data?.offset || ''
           hasMore = Boolean(response.data?.has_more)
-          stalled = hasMore && (rawItems.length === 0 || nextOffset === request.offset)
+          stalled = hasMore && !pageAdvanced(rawItems, nextOffset, request.offset)
           nextUpdateBaseline = response.data?.update_baseline || ''
           nextPage += 1
         }
         nextPageNumber = nextPage
       }
-      else if (request.filtered) {
+      else if (filtered) {
       // Filtered batches read at most two pages before yielding to the viewport.
         let scanOffset = request.offset
         let scanUpdateBaseline = request.updateBaseline
@@ -142,7 +165,7 @@ export function createMomentFeedReader(
         while (canContinue && filteredRequestPages < FILTERED_MAX_REQUEST_PAGES) {
           filteredRequestPages += 1
           const response = await api.moment.getMoments({
-            type: requestType,
+            type: apiType,
             offset: scanOffset || undefined,
             update_baseline: scanUpdateBaseline || undefined,
             features: MOMENT_FEED_FEATURES,
@@ -155,7 +178,7 @@ export function createMomentFeedReader(
           const responseOffset = response.data?.offset || ''
           scanUpdateBaseline = response.data?.update_baseline || ''
           hasMore = Boolean(response.data?.has_more)
-          stalled = hasMore && (pageItems.length === 0 || responseOffset === scanOffset)
+          stalled = hasMore && !pageAdvanced(pageItems, responseOffset, scanOffset)
           canContinue = hasMore && !stalled
           scanOffset = responseOffset
         }
@@ -168,7 +191,7 @@ export function createMomentFeedReader(
       }
       else {
         const response = await api.moment.getMoments({
-          type: requestType,
+          type: apiType,
           offset: request.offset || undefined,
           update_baseline: request.updateBaseline || undefined,
           features: MOMENT_FEED_FEATURES,
@@ -178,14 +201,13 @@ export function createMomentFeedReader(
         rawItems = response.data?.items || []
         nextOffset = response.data?.offset || ''
         hasMore = Boolean(response.data?.has_more)
-        stalled = hasMore && (rawItems.length === 0 || nextOffset === request.offset)
+        stalled = hasMore && !pageAdvanced(rawItems, nextOffset, request.offset)
         nextUpdateBaseline = response.data?.update_baseline || ''
       }
 
       if (!isCurrent())
         return
-      const normalizedItems = rawItems.map(mapMoment)
-      const key = queryKey(requestType, requestHostMid)
+      const normalizedItems = rawItems.filter(item => keepsMomentItem(requestType, item)).map(mapMoment)
       const previous = request.reset || loadedQuery !== key ? [] : loadedItems
       const seen = new Set(previous.map(item => item.id))
       loadedItems = [...previous, ...normalizedItems.filter((item) => {
@@ -195,6 +217,7 @@ export function createMomentFeedReader(
         return true
       })]
       loadedQuery = key
+      seenRawIds = seenIds
       return { rawItems, normalizedItems, hasMore, stalled, nextOffset, nextUpdateBaseline, nextPage: nextPageNumber }
     }
     finally {
@@ -225,6 +248,7 @@ export function createMomentFeedReader(
       pendingRead = undefined
       loadedItems = []
       loadedQuery = ''
+      seenRawIds = new Set()
     },
   }
 }

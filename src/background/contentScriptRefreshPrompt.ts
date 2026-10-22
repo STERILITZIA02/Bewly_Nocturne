@@ -280,6 +280,7 @@ function showRefreshPrompt(...args: unknown[]): void {
     '--bew-surface-border-color',
     '--bew-elevated',
     '--bew-elevated-solid',
+    '--bew-glass-tint',
     '--bew-elevated-solid-hover',
     '--bew-fill-1',
     '--bew-fill-2',
@@ -339,6 +340,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       color: var(--bew-text-1, #18191c);
       background: var(--bew-elevated-solid, rgb(255 255 255 / 96%));
       background: color-mix(in oklab, var(--bew-elevated-solid, white) 90%, transparent);
+      background: var(--bew-glass-tint, color-mix(in oklab, var(--bew-elevated-solid, white) 90%, transparent));
       border: 1px solid var(--bew-surface-border-color, rgb(0 0 0 / 12%));
       border-radius: var(--bew-panel-radius, var(--bew-radius, 12px));
       box-shadow: var(--bew-shadow-3, 0 8px 30px rgb(0 0 0 / 18%));

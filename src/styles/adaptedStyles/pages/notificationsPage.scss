@@ -29,12 +29,12 @@ html.bewly-design.notificationsPage {
   }
 
   .space-left {
-    background-color: color-mix(in oklab, var(--bew-content-solid), transparent 40%);
+    background-color: var(--bew-glass-tint);
     backdrop-filter: var(--bew-filter-glass-1);
   }
 
   .space-right {
-    background-color: color-mix(in oklab, var(--bew-content-solid), transparent 60%);
+    background-color: var(--bew-glass-tint);
     backdrop-filter: var(--bew-filter-glass-1);
   }
 
@@ -635,7 +635,7 @@ html.notificationsPage.bewly-notifications-embedded {
 
   .space-left {
     color: var(--bew-text-1);
-    background: var(--bew-content) !important;
+    background: var(--bew-glass-tint) !important;
     backdrop-filter: var(--bew-filter-glass-1);
   }
 
@@ -682,7 +682,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .bili-im .right .dialog > .title,
   .header {
     color: var(--bew-text-1) !important;
-    background: var(--bew-elevated) !important;
+    background: var(--bew-glass-tint) !important;
     backdrop-filter: var(--bew-filter-glass-1);
     border-color: var(--bew-border-color) !important;
   }

@@ -76,8 +76,10 @@ const sidebarHost = useSidebarRail()
 }
 
 .library-workspace__content {
+  // Read by content that bleeds to the window edges (the Moments up-list).
+  --library-content-inline-padding: var(--bew-page-inline-inset);
   min-width: 0;
-  padding: calc(var(--bew-top-bar-height) + var(--bew-space-4)) var(--bew-page-inline-inset) var(--bew-space-6);
+  padding: calc(var(--bew-top-bar-height) + var(--bew-space-4)) var(--library-content-inline-padding) var(--bew-space-6);
 }
 
 // Only empty/error views stretch; populated grids retain their existing layout.
@@ -171,7 +173,7 @@ const sidebarHost = useSidebarRail()
 
 @media (max-width: breakpoints.$mobile-max) {
   .library-workspace__content {
-    padding-inline: var(--bew-space-3);
+    --library-content-inline-padding: var(--bew-space-3);
   }
 }
 </style>

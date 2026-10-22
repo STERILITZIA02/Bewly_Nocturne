@@ -572,8 +572,8 @@ defineExpose({ refresh })
 .whisper-workspace .whisper-workspace__fallback {
   box-sizing: border-box;
   overflow: hidden;
-  background: var(--bew-elevated-alt);
-  border: 1px solid var(--bew-surface-border-color);
+  background: var(--bew-glass-tint);
+  border: 1px solid var(--bew-glass-border-color);
   border-radius: var(--bew-panel-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-shadow-2);
