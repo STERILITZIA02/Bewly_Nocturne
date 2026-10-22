@@ -179,6 +179,10 @@ async function handleMessage(payload: HMRPayload) {
     case 'ping':
       // handle ping payload
       break
+    case 'bundled-dev-update':
+      // Bundled dev output is replaced atomically; the extension reloads it.
+      location.reload()
+      break
     default: {
       const check: never = payload
       return check
@@ -355,7 +359,7 @@ async function fetchUpdate({ path, acceptedPath, timestamp }: Update) {
       try {
         const newMod = await import(
           /* @vite-ignore */
-          normalizeScriptUrl(`${base + path.slice(1)}.js${query ? `_${query}` : ''}`, timestamp)
+          normalizeScriptUrl(`${base + path.slice(1)}.js${query ? `_${query}` : ''}`, timestamp),
         )
         moduleMap.set(dep, newMod)
       }

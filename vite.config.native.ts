@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 
-import { isDev, isSafari, r } from './scripts/utils'
-import { sharedConfig } from './vite.config'
+import { isDev, isSafari, r } from './scripts/utils.ts'
+import { bundlerChecks, sharedConfig } from './vite.config.ts'
 
 export default defineConfig({
   ...sharedConfig,
@@ -18,6 +18,6 @@ export default defineConfig({
       formats: ['iife'],
       cssFileName: 'style',
     },
-    rollupOptions: { output: { entryFileNames: 'index.global.js' } },
+    rolldownOptions: { checks: bundlerChecks, output: { entryFileNames: 'index.global.js' } },
   },
 })

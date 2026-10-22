@@ -13,7 +13,6 @@ const samples = [
   ['专栏封面', 'src/components/ArticleCard/ArticleCard.vue', 'article-cover'],
   ['评论图片', 'src/components/MomentCard/MomentCommentMedia.vue', 'moment-comment-media__item'],
   ['聊天图片', 'src/contentScripts/views/Notifications/whisper/PrivateMessageContent.vue', 'private-message-content__media-button'],
-  ['作者头像', 'src/components/VideoCard/VideoCardAuthor/components/VideoCardAuthorAvatar.vue', 'video-card-author-avatar'],
 ]
 const image = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><rect width="320" height="180" fill="#334955"/><circle cx="235" cy="55" r="25" fill="#e7c887"/><path d="M0 165L100 62L180 140L240 92L320 175V180H0Z" fill="#79917f"/></svg>')}`
 let styles = ''

@@ -8,7 +8,6 @@ import type { CollectedFavoriteSeason, CollectedFavoriteSeasonsResult, FavoriteS
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import type { AccountId } from '~/utils/accountScope'
 import type api from '~/utils/api'
-import { createFavoriteAvatarLoader } from '~/utils/favoriteAvatar'
 import { getFavoriteFolderEditedAttr } from '~/utils/favoriteFolder'
 import { getFavoriteResourceKey, getFavoriteSourceKey } from '~/utils/favoriteResource'
 import {
@@ -20,7 +19,7 @@ import {
 
 import { getFavoriteArticleCover } from './favoriteAdapters'
 import { createFavoriteFolderCoverLoader } from './favoriteFolderCovers'
-import { matchesFavoriteQuery } from './favoriteSearch'
+import { filterFavoriteItems, matchesFavoriteQuery } from './favoriteSearch'
 import type { FavoriteVideoOrder, OtherFavoriteItem, OtherFavoriteKind, OtherFavoriteSearchScope, SubscriptionFilter } from './otherFavorites'
 import { matchesSubscriptionType, OTHER_FAVORITE_PAGE_SIZE, parseOtherFavoritePage } from './otherFavorites'
 import type { FavoriteWrite } from './useFavoriteWrites'
@@ -29,7 +28,6 @@ export type FavoriteView = 'video' | 'season' | 'article'
 
 interface FavoritesDataDependencies {
   api: typeof api.favorite
-  user: Pick<typeof api.user, 'getUserCard'>
   getAccountId: () => AccountId
   haveScrollbar: () => Promise<boolean>
   t: (key: string) => string
@@ -52,13 +50,6 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   const categoryState = reactive({ loading: false, failed: false, loaded: false })
   const subscriptionState = reactive({ loading: false, failed: false, loaded: false, hasMore: true, page: 0 })
   const resourceIndex = new Map<string, number>()
-  const pendingAvatarKeys = new Set<string>()
-  const createAvatars = () => createFavoriteAvatarLoader(async (mid, signal) => {
-    const response = await dependencies.user.getUserCard({ mid: String(mid) }, { signal })
-    const face = response?.data?.card?.face
-    return response?.code === 0 && typeof face === 'string' && face ? face : undefined
-  })
-  let avatars = createAvatars()
   const FAVORITE_ARTICLE_PAGE_SIZE = 20
   const favoriteCategories = reactive<CategoryItem[]>([])
   const collectedFavoriteSeasons = reactive<CollectedFavoriteSeason[]>([])
@@ -102,13 +93,13 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   const articleFavoriteCount = ref<number>()
   const articleFavoriteOffset = ref<string>('')
   const articleIds = new Set<string>()
-  const visibleSubscriptions = computed(() => collectedFavoriteSeasons.filter(item => matchesSubscriptionType(item.type, subscriptionFilter.value) && matchesFavoriteQuery(keyword.value, item.title, item.upper?.name)))
+  const visibleSubscriptions = computed(() => filterFavoriteItems(collectedFavoriteSeasons.filter(item => matchesSubscriptionType(item.type, subscriptionFilter.value)), keyword.value, item => [item.title, item.upper?.name]))
   const selectedSeasonMatches = computed(() => Boolean(selectedSeason.value && matchesFavoriteQuery(keyword.value, selectedSeason.value.title, selectedSeason.value.upper?.name)))
   const visibleResources = computed(() => favoriteView.value !== 'season' || selectedSeasonMatches.value
     ? favoriteResources
-    : favoriteResources.filter(item => matchesFavoriteQuery(keyword.value, item.title, item.upper?.name)))
-  const visibleArticles = computed(() => favoriteArticles.filter(item => matchesFavoriteQuery(keyword.value, otherSearchScope.value === 'detail' ? '' : item.content, otherSearchScope.value === 'title' ? '' : item.author?.name)))
-  const visibleOtherFavorites = computed(() => otherFavoriteItems.filter(item => matchesFavoriteQuery(keyword.value, otherSearchScope.value === 'detail' ? '' : item.title, otherSearchScope.value === 'title' ? '' : item.desc)))
+    : filterFavoriteItems(favoriteResources, keyword.value, item => [item.title, item.upper?.name]))
+  const visibleArticles = computed(() => filterFavoriteItems(favoriteArticles, keyword.value, item => [otherSearchScope.value === 'detail' ? '' : item.content, otherSearchScope.value === 'title' ? '' : item.author?.name]))
+  const visibleOtherFavorites = computed(() => filterFavoriteItems(otherFavoriteItems, keyword.value, item => [otherSearchScope.value === 'detail' ? '' : item.title, otherSearchScope.value === 'title' ? '' : item.desc]))
   const pageVisible = ref(typeof document === 'undefined' || !document.hidden)
   const updateVisibility = () => pageVisible.value = !document.hidden
   if (typeof document !== 'undefined')
@@ -264,8 +255,6 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   }
 
   function resetContentState() {
-    avatars.cancelPending()
-    pendingAvatarKeys.clear()
     contentController.abort()
     contentController = new AbortController()
     stalledMediaStart = undefined
@@ -317,8 +306,6 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       return
     if ((favoriteView.value === 'video' && (!selectedCategory.value || (searchScope.value === 'all' && !keyword.value.trim()))) || (favoriteView.value === 'season' && !selectedSeason.value))
       return loadSelectedContent()
-    avatars.cancelPending()
-    pendingAvatarKeys.clear()
     contentController.abort()
     contentController = new AbortController()
     const version = ++contentVersion.value
@@ -475,34 +462,6 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     stalledContentPage.value = merged.stalled ? input.pn : null
   }
 
-  // Metadata pagination may scan many offscreen videos. Enrich only the grid's
-  // visible/preload window, never every item returned by a search or bulk read.
-  function loadResourceAvatars(items: FavoriteItem[]) {
-    const version = contentVersion.value
-    if (!isRequestCurrent(version))
-      return
-    for (const item of items) {
-      if (item.upper?.face || !item.upper?.mid)
-        continue
-      const mid = item.upper.mid
-      const key = getFavoriteResourceKey(item)
-      if (pendingAvatarKeys.has(key))
-        continue
-      pendingAvatarKeys.add(key)
-      void avatars.load(mid).then((face) => {
-        if (!face || !isRequestCurrent(version))
-          return
-        const index = resourceIndex.get(key)
-        const current = index === undefined ? undefined : favoriteResources[index]
-        if (current?.upper.mid === mid && !current.upper.face)
-          favoriteResources[index!] = { ...current, upper: { ...current.upper, face } }
-      }).finally(() => {
-        if (version === contentVersion.value)
-          pendingAvatarKeys.delete(key)
-      })
-    }
-  }
-
   async function getFavoriteSeasonResources(
     source: FavoriteSource,
     pn: number,
@@ -636,8 +595,6 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     categoriesVersion++
     subscriptionsVersion++
     stalledSubscriptionStart = undefined
-    avatars.dispose()
-    avatars = createAvatars()
     Object.assign(categoryState, { loading: false, failed: false, loaded: false })
     Object.assign(subscriptionState, { loading: false, failed: false, loaded: false, hasMore: true, page: 0 })
     viewAccount = dependencies.getAccountId()
@@ -771,7 +728,6 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     loadSelectedContent,
     refreshSelectedContent,
     loadNextPage,
-    loadResourceAvatars,
     retryFavoriteContent,
     contentVersion,
     capture: lifetime.capture,
@@ -789,8 +745,6 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       stopSearch()
       folderCoverLoader.dispose()
       contentVersion.value++
-      avatars.dispose()
-      pendingAvatarKeys.clear()
       lifetime.dispose()
     },
   }

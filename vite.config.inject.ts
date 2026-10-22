@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite'
 
-import packageJson from './package.json'
-import { isDev, isSafari, r } from './scripts/utils'
-import { sharedConfig } from './vite.config'
+import packageJson from './package.json' with { type: 'json' }
+import { isDev, isSafari, r } from './scripts/utils.ts'
+import { bundlerChecks, sharedConfig } from './vite.config.ts'
 
 // bundling the content script using Vite
 export default defineConfig({
@@ -20,7 +20,8 @@ export default defineConfig({
       name: packageJson.name,
       formats: ['iife'],
     },
-    rollupOptions: {
+    rolldownOptions: {
+      checks: bundlerChecks,
       output: {
         entryFileNames: 'inject.global.js',
         extend: true,

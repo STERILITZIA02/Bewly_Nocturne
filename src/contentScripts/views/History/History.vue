@@ -19,6 +19,8 @@ import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { useLibraryBatchSelection } from '~/composables/useLibraryBatchSelection'
 import { usePageViewState } from '~/composables/usePageViewState'
+import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
+import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
 import SelectionOverlay from '~/contentScripts/views/WatchLater/WatchLaterSelectionOverlay.vue'
 import { settings } from '~/logic'
 import type { List as HistoryItem } from '~/models/history/history'
@@ -44,6 +46,7 @@ import { useHistoryDayMotion } from './useHistoryDayMotion'
 import { useHistoryTimeline } from './useHistoryTimeline'
 
 const { t, locale } = useI18n()
+const { textStyle } = useVideoCardSharedStyles()
 const toast = useToast()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 
@@ -138,12 +141,12 @@ watch(dayMotion.active, (active) => {
 })
 const containerWidth = ref(0)
 const rowGap = ref(8)
-const columns = computed(() => settings.value.historyLayout === 'grid' ? getAdaptiveGridColumnCount(containerWidth.value, settings.value.gridColumns) : 1)
+const columns = computed(() => settings.value.historyLayout === 'grid' ? getAdaptiveGridColumnCount(containerWidth.value, rowGap.value) : 1)
 const windowCells = computed(() => createHistoryWindow(historyGroups.value, columns.value, collapsedDays.value))
 const cellByKey = computed(() => new Map(windowCells.value.map(cell => [cell.key, cell])))
 const windowEnabled = computed(() => historyList.length > CARD_WINDOW_THRESHOLD)
 const estimatedCardHeight = computed(() => settings.value.historyLayout === 'grid'
-  ? Math.max(0, (containerWidth.value - rowGap.value * (columns.value - 1)) / columns.value - 24) * 9 / 16 + 152
+  ? Math.max(0, (containerWidth.value - rowGap.value * (columns.value - 1)) / columns.value - 24) / VIDEO_CARD_COVER_ASPECT_RATIO + 152
   : 140)
 const cardWindow = useCardWindow({
   root: scrollViewportRef,
@@ -367,6 +370,7 @@ function jumpToLoginPage() {
               :data-history-cell="entry.key"
               :aria-label="entry.date"
               class="history-list-card group"
+              :style="textStyle"
               :class="{ 'history-list-card--grid': settings.historyLayout === 'grid' }"
               cursor-pointer
             >
@@ -389,12 +393,13 @@ function jumpToLoginPage() {
                   w-full
                   rounded="$bew-media-radius"
                   overflow-hidden
-                  aspect-video
+                  style="aspect-ratio: var(--bew-video-cover-aspect-ratio)"
                 >
                   <LazyPicture
                     responsive-cover
+                    aspect-ratio="var(--bew-video-cover-aspect-ratio)"
                     w="full"
-                    aspect-video
+                    h-full
                     :src="`${getHistoryItemCover(entry.item)}@480w_270h_1c`"
                     :alt="entry.item.title"
                     object-cover
@@ -458,7 +463,7 @@ function jumpToLoginPage() {
 
                 <!-- Description -->
                 <div flex justify-between w-full h-full>
-                  <div flex="~ col">
+                  <div class="history-list-card__details" flex="~ col">
                     <div
                       :title="entry.item.show_title ? entry.item.show_title : entry.item.title"
                     >
@@ -472,7 +477,7 @@ function jumpToLoginPage() {
                     </div>
                     <a
                       class="history-list-card__action"
-                      un-text="$bew-text-2 sm"
+                      un-text="$bew-text-2"
                       m="t-2 b-2"
                       flex="~ items-center"
                       cursor-pointer
@@ -484,7 +489,7 @@ function jumpToLoginPage() {
                       pr-2
                       :href="entry.item.author_mid ? `https://space.bilibili.com/${entry.item.author_mid}` : entry.item.uri" target="_blank"
                     >
-                      <span class="history-author-avatar bew-shape-circle">
+                      <span v-if="settings.historyLayout !== 'grid'" class="history-author-avatar bew-shape-circle">
                         <LazyPicture
                           :src="removeHttpFromUrl(`${entry.item.author_face || entry.item.cover}@40w_40h_1c`)"
                           aspect-ratio="1 / 1"
@@ -509,9 +514,9 @@ function jumpToLoginPage() {
                       </span>
                     </a>
                     <div
-                      class="flex"
+                      class="flex history-list-card__time"
                       items-center
-                      text="$bew-text-3 sm"
+                      text="$bew-text-3"
                       mt-auto
                     >
                       <span text="$bew-icon-size-sm" mr-2 lh-0>
@@ -699,6 +704,7 @@ function jumpToLoginPage() {
 
 <style lang="scss" scoped>
 @use "../../../styles/videoList";
+@use "../../../styles/contentCard";
 @use "./historyTimeline";
 .history-action--warning {
   --bew-library-action-foreground: var(--bew-warning-foreground);
@@ -760,12 +766,15 @@ function jumpToLoginPage() {
 }
 
 .history-list-card--grid .history-list-card__content {
-  height: 100%;
+  align-content: start;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--bew-space-3);
 }
-.history-list-card--grid .history-list-card__title {
-  min-height: calc(var(--bew-line-height-title) * 2);
+.history-list-card--grid .history-list-card__details {
+  @include contentCard.video-details;
+}
+.history-list-card--grid .history-list-card__action {
+  margin: 0;
 }
 .history-list-card__content > div:last-child > div {
   min-width: 0;
@@ -793,9 +802,7 @@ function jumpToLoginPage() {
 }
 
 .history-list-card__title {
-  font-size: var(--bew-font-size-title);
-  line-height: var(--bew-line-height-title);
-  font-weight: var(--bew-font-weight-medium);
+  @include contentCard.video-title;
 }
 
 .history-list-card__overlay {
@@ -807,8 +814,19 @@ function jumpToLoginPage() {
 }
 
 .history-list-card__action {
+  @include contentCard.video-subtitle;
   position: relative;
   z-index: 2;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--bew-theme-foreground);
+  }
+}
+
+.history-list-card__time {
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
 }
 
 .history-list-card__delete {

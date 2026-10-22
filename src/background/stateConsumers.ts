@@ -22,7 +22,7 @@ interface Consumer {
 }
 
 export interface StateConsumerBrowser {
-  storage?: { session?: Pick<Browser.Storage.StorageAreaWithUsage, 'get' | 'set'> }
+  storage?: { session?: Pick<Browser.Storage.StorageArea, 'get' | 'set'> }
   tabs: Pick<Browser.Tabs.Static, 'sendMessage'> & {
     onRemoved?: Pick<Browser.Tabs.Static['onRemoved'], 'addListener'>
   }

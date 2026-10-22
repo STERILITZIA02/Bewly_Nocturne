@@ -80,6 +80,7 @@ export function registerAdvertisingRuleChecks(check, { Vue, compileComponent, fl
     })
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp(Component, { keyword: 'fixture', filters: {} })
+    app.component('ALink', { props: ['href', 'type'], setup: (props, { slots }) => () => Vue.h('a', { href: props.href }, slots.default?.()) })
     app.component('LazyPicture', { props: ['src', 'alt'], render() {
       return Vue.h('img', { src: this.src, alt: this.alt })
     } })

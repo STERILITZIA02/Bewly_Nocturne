@@ -88,6 +88,7 @@ export function setupNecessarySettingsWatchers() {
       targets.forEach((element) => {
         element.style.removeProperty('--bew-filter-glass-1')
         element.style.removeProperty('--bew-filter-glass-2')
+        element.style.removeProperty('--bew-glass-blur-radius')
       })
       return
     }
@@ -100,10 +101,12 @@ export function setupNecessarySettingsWatchers() {
       if (Math.abs(clampedValue - DEFAULT_FROSTED_GLASS_BLUR_PX) < 0.01) {
         element.style.removeProperty('--bew-filter-glass-1')
         element.style.removeProperty('--bew-filter-glass-2')
+        element.style.removeProperty('--bew-glass-blur-radius')
       }
       else {
         element.style.setProperty('--bew-filter-glass-1', blur1Value)
         element.style.setProperty('--bew-filter-glass-2', blur2Value)
+        element.style.setProperty('--bew-glass-blur-radius', `${clampedValue}px`)
       }
     })
   }

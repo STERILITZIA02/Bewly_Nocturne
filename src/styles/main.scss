@@ -143,12 +143,12 @@ html.dark.bewly-design {
   .bew-section-label {
     color: var(--bew-text-2);
     font-size: var(--bew-font-size-caption);
-    font-weight: var(--bew-label-weight);
+    font-weight: var(--bew-font-weight-medium);
     line-height: var(--bew-line-height-caption);
   }
 
   .bew-ui-label {
-    color: var(--bew-text-2);
+    color: var(--bew-text-1);
     font-size: var(--bew-font-size-ui);
     font-weight: var(--bew-label-weight);
     line-height: var(--bew-line-height-ui);
@@ -156,13 +156,13 @@ html.dark.bewly-design {
 
   .bew-help {
     color: var(--bew-text-3);
-    font-size: var(--bew-font-size-control);
+    font-size: var(--bew-font-size-callout);
     font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-help);
   }
 
-  // Baseline keyboard feedback for legacy/raw controls. Component-specific
-  // focus styles may refine this ring but must not remove it without replacement.
+  // Native browser focus rings are replaced by the (borderless) focus token so
+  // selecting an element never outlines it.
   :where(
     button,
     a,
@@ -335,7 +335,7 @@ html.dark.bewly-design {
   }
 }
 
-// Live and loading feeds share widths; MasonryGrid measures natural heights.
+// Live and loading feeds share widths; the windowed grid measures natural heights.
 .native-notification-grid {
   --bew-masonry-columns: 1;
   display: grid;

@@ -2,6 +2,7 @@
 import AdvertisementCard from '~/components/VideoCard/AdvertisementCard.vue'
 import type { Video, VideoCardState } from '~/components/VideoCard/types'
 import { createVideoCardState } from '~/components/VideoCard/types'
+import type { VideoCardContextMenuExtraOption } from '~/components/VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import type { CardWindowSnapshot } from '~/composables/useCardWindow'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
@@ -10,6 +11,7 @@ import { useHomeTabViewState } from '~/composables/useHomeTabState'
 import { useUserRelations } from '~/composables/useUserRelations'
 import { useVideoCardShadowStyle } from '~/composables/useVideoCardShadowStyle'
 import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
+import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import { originalSettings, settings } from '~/logic'
 import { isLayoutEditing } from '~/logic/layoutEdit'
@@ -71,9 +73,14 @@ interface VideoCardGridProps<T = any> {
   showWatchLater?: boolean
 
   /**
-   * 是否显示更多按钮
+   * 右键是否打开卡片菜单（关闭时保留浏览器原生菜单）
    */
-  moreBtn?: boolean
+  contextMenu?: boolean
+
+  /**
+   * 页面专属的卡片菜单项，追加在通用菜单之后
+   */
+  getMenuExtraGroups?: (item: T) => VideoCardContextMenuExtraOption[][]
 
   /**
    * 是否隐藏作者信息
@@ -190,7 +197,7 @@ const props = withDefaults(defineProps<VideoCardGridProps<T>>(), {
   needToLoginFirst: false,
   showPreview: false,
   showWatchLater: true,
-  moreBtn: true,
+  contextMenu: true,
   initialSkeletonCount: 30,
   disableContentVisibility: false,
   isSkeletonItem: undefined,
@@ -206,7 +213,6 @@ const emit = defineEmits<{
   (e: 'loadMore'): void
   (e: 'refresh'): void
   (e: 'login'): void
-  (e: 'authorItemsVisible', items: T[]): void
 }>()
 
 // Grid 容器 ref
@@ -234,7 +240,7 @@ watch(isLayoutEditing, (editing) => {
 })
 
 // 使用共享的 Grid 布局 composable（CSS 媒体查询驱动，无 JS 计算开销）
-const { gridClass, gridCssVars } = useGridLayout(() => props.gridLayout)
+const { gridClass } = useGridLayout(() => props.gridLayout)
 
 // 获取 shadow 样式变量（避免依赖外部传入）
 const { shadowStyleVars } = useVideoCardShadowStyle()
@@ -696,7 +702,7 @@ function normalizePositiveInt(value: unknown, fallback: number): number {
 
 function getCurrentColumnCount(layout: GridLayoutType, width: number): number {
   if (layout === 'adaptive')
-    return getAdaptiveGridColumnCount(width, settings.value.gridColumns)
+    return getAdaptiveGridColumnCount(width, cardGap.value)
   return getListGridColumnCount(
     layout,
     width,
@@ -885,11 +891,10 @@ const estimatedCardHeight = computed(() => {
   const width = Math.max(1, (gridContainerWidth.value || window.innerWidth) - cardGap.value * (columns - 1)) / columns
   const cover = isHorizontal.value ? width * horizontalCoverLayout.value.ratio / 100 : width
   // Estimates only seed unmeasured rows; one shared measurement index owns actual geometry.
-  return isHorizontal.value ? Math.max(cover * 9 / 16, 130) + 16 : cover * 9 / 16 + 110
+  return isHorizontal.value ? Math.max(cover / VIDEO_CARD_COVER_ASPECT_RATIO, 130) + 16 : cover / VIDEO_CARD_COVER_ASPECT_RATIO + 110
 })
 const gridContainerStyle = computed(() => ({
   ...shadowStyleVars.value,
-  ...gridCssVars.value,
   // Only the content-visibility fallback uses an intrinsic estimate; windowed
   // grids own heights through spacers and the measured row index.
   ...(props.disableContentVisibility || recycleCards.value
@@ -907,11 +912,7 @@ const cardLayoutKey = computed(() => [
   props.gridLayout,
   settings.value.videoCardTitleFontSize,
   settings.value.videoCardAuthorFontSize,
-  settings.value.videoCardMetaFontSize,
-  settings.value.showVideoCardAuthorAvatar,
   settings.value.showVideoCardAuthorName,
-  settings.value.showVideoCardVideoTag,
-  settings.value.showVideoCardRecommendTag,
   settings.value.showVideoCardPublishTime,
   horizontalCoverLayout.value.ratio,
   props.hideAuthor,
@@ -932,14 +933,8 @@ const cardWindow = useCardWindow({
 restoredGrid = undefined
 const gridRelations = useUserRelations()
 watch(() => {
-  if (props.hideAuthor || !settings.value.showVideoCardAuthorAvatar)
-    return []
-  const { start, end } = cardWindow.loadingRange.value
-  return props.items.slice(start, end)
-}, items => emit('authorItemsVisible', items), { flush: 'post' })
-watch(() => {
-  if (!props.moreBtn || props.isFollowingPage
-    || settings.value.videoCardContextMenuConfig?.find(item => item.key === 'followUser')?.visible === false
+  // Relations only feed the "followed" badge; the card menu queries its own author on open.
+  if (props.hideAuthor || props.isFollowingPage || !settings.value.showVideoCardAuthorName
     || bewlyApp?.isHomeTabSwitching.value || (tabState && !tabState.isCurrent())) {
     return []
   }
@@ -979,6 +974,11 @@ const renderItems = computed(() => {
   }
   return result
 })
+
+// One stable function for every card; the menu builds its page groups only while open.
+function getCardMenuExtraGroups(item: unknown): VideoCardContextMenuExtraOption[][] {
+  return props.getMenuExtraGroups?.(item as T) ?? []
+}
 
 function getCardState(key: string | number) {
   let state = cardStates.get(key)
@@ -1163,7 +1163,9 @@ function getUniqueKey(item: T, index: number): string | number {
           :show-preview="showPreview"
           :show-watch-later="showWatchLater"
           :horizontal="isHorizontal"
-          :more-btn="moreBtn"
+          :context-menu="contextMenu"
+          :menu-item="renderItem.card.item"
+          :get-menu-extra-groups="getCardMenuExtraGroups"
           :hide-author="hideAuthor"
           :disable-content-visibility="props.disableContentVisibility || recycleCards"
           :is-following-page="props.isFollowingPage"

@@ -331,14 +331,13 @@ settings:
   group_video_card_content: 卡片內容
   group_video_card_content_desc: 自訂影片卡片上各項資訊與操作的顯示。
   group_video_card_context_menu: 更多選單
-  group_video_card_context_menu_desc: 選擇點擊影片卡片更多按鈕後顯示的選單選項。
+  group_video_card_context_menu_desc: 選擇右鍵選單中直接顯示的選項；關閉的選項收進選單底部的「進階選項」。
   video_card_context_menu_region_recommendation: 推薦
   video_card_context_menu_region_opening: 開啟
   video_card_context_menu_region_copying: 複製
   video_card_context_menu_region_user: 使用者
   video_card_context_menu_follow_user: 追蹤或取消追蹤
   video_card_content_region_stats: 數據
-  video_card_content_region_tags: 標籤
   video_card_content_region_other: 其它
   group_player_components: 播放器組件
   group_player_display_mode: 播放模式
@@ -496,6 +495,7 @@ settings:
 
   # Video Card Grid Settings
   group_video_card_grid: 影片卡片網格
+  group_video_card_grid_desc: 封面至少 320×180，能放下幾欄就放幾欄，視窗變寬時卡片隨之變大。
   auto_switch_list_layout: 根據影片卡片區域寬度自動切換單雙列
   auto_switch_list_layout_desc: 開啟後，雙列模式會在影片卡片區域寬度小於設定寬度時自動切換為單列。
   auto_switch_list_layout_breakpoint: 切換寬度
@@ -503,16 +503,11 @@ settings:
   video_card_cover_ratio_desc: 分別設定單列與雙列橫向影片卡片中封面所占的寬度。
   video_card_cover_ratio_one_column: 單列版型
   video_card_cover_ratio_two_columns: 雙列版型
-  grid_breakpoints: 網格斷點配置
-  grid_breakpoints_desc: 設定不同影片卡片區域寬度下顯示的列數。當區域寬度大於等於設定值時，使用對應的列數。
   grid_columns: 顯示
-  grid_columns_unit: 列
   video_card_title_font_size: 標題字級
   video_card_title_font_size_desc: 控制影片卡片標題的字級。
   video_card_author_font_size: UP 資訊字級
-  video_card_author_font_size_desc: 控制影片卡片上 UP 主名稱的字級。
-  video_card_meta_font_size: 標籤與時間字級
-  video_card_meta_font_size_desc: 控制標題下方標籤與時間資訊的字級。
+  video_card_author_font_size_desc: 控制標題下方 UP 主與發布時間這一行的字級。
   video_card_shadow_curve: 陰影漸層曲線
   video_card_shadow_curve_desc: 自訂影片卡片底部陰影的漸層效果
   video_card_shadow_curve_hint: 拖曳線條建立控制點，右鍵刪除
@@ -563,12 +558,7 @@ settings:
   video_preview_swipe_seek_desc: 在影片預覽上按住並直接左右滑動，在目前播放位置附近倒退或快進。
   hover_video_card_delayed: 將滑鼠懸停在影片卡片上時延遲影片預覽
   only_cover_video_preview: 僅封面影片預覽
-  show_video_card_author_avatar: 顯示使用者頭像
   show_video_card_author_name: 顯示使用者暱稱
-  show_video_card_video_tag: 顯示影片標籤
-  show_video_card_video_tag_desc: 顯示搜尋頁等情境提供的影片分類標籤。
-  show_video_card_recommend_tag: 顯示插件計算的推薦標籤
-  show_video_card_recommend_tag_desc: 顯示插件計算的標籤，如「高讚」、「高互動」、「百萬播放」等
   show_video_card_publish_time: 顯示發布時間
   show_video_card_view_count: 顯示播放量
   show_video_card_danmaku_count: 顯示彈幕數
@@ -1530,9 +1520,8 @@ video_card:
     open_in_background: 背景開啟
     open_in_new_window: 新視窗開啟
     open_in_current_tab: 目前索引標籤開啟
-    open_in_drawer: 抽屜開啟
-    copy_video_link: 複製影片連結
-    copy_clean_video_link: 複製乾淨連結
+    copy_video_link: 複製連結
+    copy_original_link: 複製原始連結
     copy_bv_number: 複製 BV 號
     copy_av_number: 複製 AV 號
     view_the_original_cover: 檢視封面
@@ -1540,8 +1529,7 @@ video_card:
     unfollow_user: 取消關注
     block_user: 拉黑用戶
     more_options: 更多操作
-    scroll_to_top: 捲動到選單頂部
-    scroll_to_bottom: 捲動到選單底部
+    advanced_options: 進階選項
   follow_user_confirm:
     title: 確認關注用戶
     message: 確定要關注 {name} 嗎？
@@ -1555,6 +1543,7 @@ video_card:
     message: 確定要拉黑 {name} 嗎？
     warning: 拉黑後，你將無法看到該用戶發佈的所有內容。
   group_contribution: '{firstAuthor} 等 {num} 人共同創作'
+  followed: 已關注
   video_removed: 影片已移除
   watched: 已觀看
   browsed: 已瀏覽
@@ -1562,11 +1551,6 @@ video_card:
   completed: 已看完
   played_progress: '已看到 {time}'
   visited_recently: 近一個月內瀏覽過
-  highlight_high_like: 高讚
-  highlight_high_engagement: 高互動
-  highlight_million_views: 百萬播放
-  highlight_extra_long: 超長影片
-  highlight_long: 長影片
   watch_later_unavailable: 無法取得此影片的稍後觀看資訊
   watch_later_update_failed: 更新稍後觀看失敗
   feedback_unavailable: 無法取得意見回饋選項
@@ -2042,3 +2026,5 @@ search:
     finished: 已結束
     not_started: 未開始
     in_progress: 進行中
+
+filter_rule_execution_failed: 正則篩選未能完成，請檢查篩選規則後重試。

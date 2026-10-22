@@ -3,6 +3,7 @@ import ALink from '~/components/ALink.vue'
 import Button from '~/components/Button.vue'
 import IconButton from '~/components/IconButton.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
+import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import type { List as VideoItem } from '~/models/video/watchLater'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { removeHttpFromUrl } from '~/utils/main'
@@ -21,6 +22,7 @@ const emit = defineEmits<{
   (event: 'playInWatchLater', item: VideoItem): void
   (event: 'remove', item: VideoItem): void
 }>()
+const { textStyle } = useVideoCardSharedStyles()
 
 const videoUrl = computed(() => getWatchLaterPlaybackUrl(props.item))
 const author = computed(() => getWatchLaterAuthor(props.item))
@@ -34,7 +36,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
 </script>
 
 <template>
-  <article class="watch-later-grid-card bew-shape-smooth-rect">
+  <article class="watch-later-grid-card bew-shape-smooth-rect" :style="textStyle">
     <div class="watch-later-grid-card__media">
       <ALink
         class="watch-later-grid-card__cover-link"
@@ -47,6 +49,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
         <LazyPicture
           v-if="coverUrl"
           responsive-cover
+          aspect-ratio="var(--bew-video-cover-aspect-ratio)"
           class="watch-later-grid-card__cover"
           :src="coverUrl"
           :alt="item.title"
@@ -98,7 +101,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
 
     <div class="watch-later-grid-card__body">
       <ALink
-        class="watch-later-grid-card__title"
+        class="watch-later-grid-card__title keep-two-lines"
         :href="videoUrl"
         :title="item.title"
         type="videoCard"
@@ -111,7 +114,6 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
         target="_blank"
         rel="noopener noreferrer"
       >
-        <img v-if="author.authorFace" :src="removeHttpFromUrl(`${author.authorFace}@40w_40h_1c`)" alt="" loading="lazy" decoding="async">
         <span>{{ author.name }}</span>
       </a>
     </div>
@@ -119,6 +121,8 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/contentCard";
+
 .watch-later-grid-card {
   display: flex;
   min-width: 0;
@@ -140,7 +144,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
 
 .watch-later-grid-card__media {
   position: relative;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: var(--bew-video-cover-aspect-ratio);
   overflow: hidden;
   background: var(--bew-skeleton);
   border-radius: var(--bew-media-radius);
@@ -241,22 +245,11 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
 }
 
 .watch-later-grid-card__body {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--bew-space-2);
+  @include contentCard.video-details;
 }
 
 .watch-later-grid-card__title {
-  display: -webkit-box;
-  min-height: calc(var(--bew-line-height-title) * 2);
-  overflow: hidden;
-  color: var(--bew-text-1);
-  font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-medium);
-  line-height: var(--bew-line-height-title);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  @include contentCard.video-title;
 
   &:hover,
   &:focus-visible {
@@ -271,18 +264,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
   max-width: 100%;
   gap: var(--bew-space-2);
   align-items: center;
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-
-  img {
-    width: var(--bew-space-6);
-    height: var(--bew-space-6);
-    flex: 0 0 auto;
-    object-fit: cover;
-    border-radius: 50%;
-    corner-shape: var(--bew-corner-shape-round);
-  }
+  @include contentCard.video-subtitle;
 
   span {
     overflow: hidden;

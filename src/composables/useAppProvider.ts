@@ -57,6 +57,7 @@ export interface BewlyAppProvider {
   getDockPageHref: (page: AppPage) => string
   navigateToDockPage: (page: AppPage) => void
   openSettingsAt: (target: SettingsNavigationTarget) => void
+  openLayoutEditorSetting: (settingId: string, origin?: DOMRect) => void
 }
 
 export function useBewlyApp(): BewlyAppProvider {

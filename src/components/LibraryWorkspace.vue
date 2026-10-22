@@ -77,7 +77,7 @@ const sidebarHost = useSidebarRail()
 
 .library-workspace__content {
   min-width: 0;
-  padding: calc(var(--bew-top-bar-height) + var(--bew-space-4)) var(--bew-space-6) var(--bew-space-6);
+  padding: calc(var(--bew-top-bar-height) + var(--bew-space-4)) var(--bew-page-inline-inset) var(--bew-space-6);
 }
 
 // Only empty/error views stretch; populated grids retain their existing layout.

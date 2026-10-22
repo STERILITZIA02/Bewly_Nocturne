@@ -8,6 +8,7 @@ import ts from 'typescript'
 import { compileScript, parse } from 'vue/compiler-sfc'
 
 import { loadSourceFunctions } from './sourceFunctionHarness'
+import { loadSourceModule } from './sourceModuleHarness'
 import { registerAccountTransactionChecks } from './verify-account-transactions.mjs'
 import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
 import { registerCommentReadingChecks } from './verify-comment-reading.mjs'
@@ -33,6 +34,7 @@ import { registerMotionContinuityChecks } from './verify-motion-continuity.mjs'
 import { registerNativeAppearanceChecks } from './verify-native-appearance.mjs'
 import { registerNotificationUIChecks } from './verify-notification-ui.mjs'
 import { registerPageContinuityChecks } from './verify-page-continuity.mjs'
+import { registerPerformanceImplementationChecks } from './verify-performance-implementation.mjs'
 import { registerPlatformCompatibilityChecks } from './verify-platform-compatibility.mjs'
 import { registerPlaybackContentChecks } from './verify-playback-content-lifecycle.mjs'
 import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.mjs'
@@ -354,7 +356,7 @@ async function favoriteContext() {
     './otherFavorites': await import('../src/contentScripts/views/Favorites/otherFavorites'),
     './favoriteAdapters': { getFavoriteArticleCover: () => 'cover' },
   })
-  Object.assign(context, module.useFavoritesData({ api: context.api.favorite, user: context.api.user, haveScrollbar: () => context.haveScrollbar(), getAccountId: () => 1, t: key => key }))
+  Object.assign(context, module.useFavoritesData({ api: context.api.favorite, haveScrollbar: () => context.haveScrollbar(), getAccountId: () => 1, t: key => key }))
   context.selectedCategory.value = { id: 1 }
   context.selectedSeason.value = { id: 77, type: 21 }
   return context
@@ -412,23 +414,6 @@ check('P2-04 favorites retains the failed page, retries in place, and serializes
   assert.equal(context.bootstrapFailed.value, true, 'both category API failures reach the bootstrap error state')
 })
 
-check('P2-05 stale favorite-season enrichment cannot replace a newer collection', async () => {
-  const context = await favoriteContext()
-  const enrichment = deferred()
-  context.api.user.getUserCard = () => enrichment.promise
-  context.favoriteView.value = 'season'
-  const pending = context.loadNextPage()
-  await pending
-  assert.equal(context.favoriteResources[0].id, 1, 'the list is readable before optional avatars finish')
-  context.contentVersion.value++
-  context.favoriteResources.splice(0, context.favoriteResources.length, { id: 2, type: 2, upper: { mid: 2, face: 'new-face' } })
-  const current = context.favoriteResources[0]
-  enrichment.resolve({ code: 0, data: { card: { face: 'old-face' } } })
-  await flush()
-  assert.equal(context.favoriteResources[0], current)
-  assert.equal(context.favoriteResources[0].upper.face, 'new-face')
-})
-
 check('P2-07 filtered empty pages pause automation without marking server exhaustion', async () => {
   const requests = []
   const scope = Vue.effectScope()
@@ -467,8 +452,8 @@ check('P2-07 filtered empty pages pause automation without marking server exhaus
 let sharedSkeletonComponent
 let sharedIconButton
 let sharedChevronIcon
-let sharedMasonryGrid
 let sharedAdvertisementCard
+let sharedWindowedMasonryGrid
 let sharedLibraryVideoSkeleton
 let sharedLoadingRing
 async function compileSharedLoadingRing() {
@@ -486,8 +471,8 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     sharedIconButton ??= await compileComponent('../src/components/IconButton.vue')
   if (text.includes('\'~/components/ChevronIcon.vue\''))
     sharedChevronIcon ??= await compileComponent('../src/components/ChevronIcon.vue')
-  if (text.includes('\'~/components/MasonryGrid.vue\''))
-    sharedMasonryGrid ??= await compileComponent('../src/components/MasonryGrid.vue')
+  if (text.includes('\'~/components/WindowedMasonryGrid.vue\''))
+    sharedWindowedMasonryGrid ??= await compileComponent('../src/components/WindowedMasonryGrid.vue')
   if (text.includes('\'~/components/LibraryVideoCardSkeleton.vue\''))
     sharedLibraryVideoSkeleton ??= await compileComponent('../src/components/LibraryVideoCardSkeleton.vue')
   if (text.includes('\'~/components/VideoCard/AdvertisementCard.vue\'')) {
@@ -497,7 +482,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   }
   const { descriptor } = parse(text)
   const source = compileScript(descriptor, { id: file, inlineTemplate: renderTemplate }).content.replaceAll('import.meta.env.DEV', 'true')
-  const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
+  const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: false } }).outputText
   const exports = {}
   const modules = {
     'vue': Vue,
@@ -536,12 +521,16 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/utils/selectionScrollAnchor': await import('../src/utils/selectionScrollAnchor'),
     '~/utils/skeletonVisibility': await import('../src/utils/skeletonVisibility'),
     '~/constants/dock': await import('../src/constants/dock'),
+    '~/constants/layout': await import('../src/constants/layout'),
     '~/constants/library': await import('../src/constants/library'),
     '~/components/SkeletonBlock.vue': { default: sharedSkeletonComponent },
     '~/components/LibraryVideoCardSkeleton.vue': { default: sharedLibraryVideoSkeleton },
     '~/components/IconButton.vue': { default: sharedIconButton },
     '~/components/ChevronIcon.vue': { default: sharedChevronIcon },
-    '~/components/MasonryGrid.vue': { default: sharedMasonryGrid },
+    '~/components/WindowedMasonryGrid.vue': { default: sharedWindowedMasonryGrid },
+    '~/utils/momentColumnIndex': await import('../src/utils/momentColumnIndex'),
+    '~/utils/scrollIntent': await import('../src/utils/scrollIntent'),
+    '~/utils/viewportGeometry': await import('../src/utils/viewportGeometry'),
     './messageInsights': await import('../src/contentScripts/views/Notifications/whisper/messageInsights'),
     './whisper/messageInsights': await import('../src/contentScripts/views/Notifications/whisper/messageInsights'),
     './composables/useMarkAllMessagesRead': await import('../src/contentScripts/views/Notifications/composables/useMarkAllMessagesRead'),
@@ -559,6 +548,12 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     './searchFilters.scss': {},
     '~/composables/useGlassPanelMotion': await import('../src/composables/useGlassPanelMotion'),
     ...mocks,
+  }
+  if (text.includes('\'~/composables/useVideoCardSharedStyles\'') && !modules['~/composables/useVideoCardSharedStyles']) {
+    modules['~/composables/useVideoCardSharedStyles'] = await loadSourceModule('../src/composables/useVideoCardSharedStyles.ts', {
+      'vue': Vue,
+      '~/logic': modules['~/logic'] ?? { settings: Vue.ref({ videoCardTitleFontSize: 'base', videoCardAuthorFontSize: 'sm' }) },
+    })
   }
   if (modules['~/composables/useAppProvider'])
     modules['~/composables/useAppProvider'] = { ...(await import('../src/composables/useAppProvider')), ...modules['~/composables/useAppProvider'] }
@@ -694,6 +689,12 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     modules['~/composables/useLoadingRingPhase'] = await import('../src/composables/useLoadingRingPhase')
   if (text.includes('\'~/components/LoadingRing.vue\'') && !modules['~/components/LoadingRing.vue'])
     modules['~/components/LoadingRing.vue'] = { default: await compileSharedLoadingRing() }
+  if (text.includes('\'~/components/ProgressiveBlur.vue\'') && !modules['~/components/ProgressiveBlur.vue']) {
+    modules['~/components/ProgressiveBlur.vue'] = { default: await compileComponent('../src/components/ProgressiveBlur.vue', {
+      '~/logic': modules['~/logic'] ?? { settings: Vue.ref({ disableFrostedGlass: false }) },
+      '~/utils/progressiveBlur': await import('../src/utils/progressiveBlur'),
+    }) }
+  }
   if (text.includes('\'~/components/LazyPicture.vue\'') && !modules['~/components/LazyPicture.vue'])
     modules['~/components/LazyPicture.vue'] = { default: await compileComponent('../src/components/LazyPicture.vue') }
   vm.runInNewContext(code, {
@@ -1058,6 +1059,7 @@ check('P2-14 custom multipart order excludes collection manuscripts and preserve
 })
 
 registerPlaybackVisualFixChecks(check, { Vue, compileComponent, flush })
+registerPerformanceImplementationChecks(check, { Vue, compileComponent, flush })
 registerGlobalResourceChecks(check, { Vue, flush })
 
 try {

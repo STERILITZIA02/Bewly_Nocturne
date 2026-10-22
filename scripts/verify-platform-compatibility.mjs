@@ -283,6 +283,9 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
     paint.animate = () => {
       throw new TypeError('Animation unavailable')
     }
+    const originalWarn = console.warn
+    const warnings = []
+    console.warn = (...args) => warnings.push(args)
     const scope = Vue.effectScope()
     const motion = scope.run(() => useGlassPanelMotion('.panel', undefined, '.paint'))
     let completed = 0
@@ -291,11 +294,14 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
       await flush()
       assert.equal(completed, 1)
       assert.equal(cancelled, true)
+      assert.equal(warnings.length, 1)
+      assert.match(String(warnings[0][1]), /Animation unavailable/)
     }
     finally {
       scope.stop()
       root.remove()
       window.matchMedia = previous
+      console.warn = originalWarn
     }
   })
 

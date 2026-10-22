@@ -148,7 +148,7 @@ export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent
   check('early boot: document-start guard keeps layout, handles late html, iframe scope and one cleanup handoff', async () => {
     const timers = new Map()
     let nextTimer = 0
-    const doc = new JSDOM('<!doctype html><html><body><div class="bili-header">native</div></body></html>', { url: 'https://www.bilibili.com/?page=Home' })
+    const doc = new JSDOM('<!doctype html><html><body><div class="bili-header">native</div></body></html>', { url: 'https://www.bilibili.com/?page=SearchResults&keyword=cupertino' })
     const module = await loadSourceModule('../src/contentScripts/pageLoadingGuard.ts', {}, {
       MutationObserver: doc.window.MutationObserver,
       setTimeout: (callback) => {
@@ -159,7 +159,12 @@ export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent
     })
     try {
       const guard = module.createPageLoadingGuard(doc.window.document, false)
-      assert.equal(doc.window.getComputedStyle(doc.window.document.body).opacity, '0')
+      const { getProgressiveBlurAncestorIssue } = await loadSourceModule('../src/utils/progressiveBlur.ts', {})
+      assert.equal(getProgressiveBlurAncestorIssue(doc.window.getComputedStyle(doc.window.document.body)), undefined, 'boot must not block progressive blur at Vue mount')
+      const cover = doc.window.document.querySelector('[data-bewly-page-loading-cover]')
+      assert.equal(cover.parentElement, doc.window.document.documentElement, 'the cover is a sibling of body, not an ancestor of glass')
+      assert.equal(doc.window.getComputedStyle(cover).position, 'fixed')
+      assert.equal(cover.getAttribute('aria-hidden'), 'true')
       assert.notEqual(doc.window.getComputedStyle(doc.window.document.body).display, 'none')
       const removals = []
       guard.adoptOverlay(immediate => removals.push(immediate))
@@ -170,15 +175,18 @@ export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent
       assert.deepEqual(removals, [false])
       assert.equal(timers.size, 0)
       assert.equal(doc.window.document.querySelector('[data-bewly-page-loading]'), null)
+      assert.equal(cover.isConnected, false)
       const root = doc.window.document.documentElement
       root.remove()
       const late = module.createPageLoadingGuard(doc.window.document, false)
       doc.window.document.append(root)
       await flush()
       assert.ok(root.querySelector('[data-bewly-page-loading]'))
+      assert.ok(root.querySelector('[data-bewly-page-loading-cover]'))
       ;[...timers.values()][0]()
       late.adoptOverlay(immediate => removals.push(immediate))
       assert.deepEqual(removals, [false, true], 'a late main script cannot re-cover a timed-out document')
+      assert.equal(root.querySelector('[data-bewly-page-loading-cover]'), null)
       const iframe = module.createPageLoadingGuard(doc.window.document, true)
       assert.equal(root.querySelector('[data-bewly-page-loading]'), null, 'native home iframes retain their visible layout')
       iframe.dispose(true)

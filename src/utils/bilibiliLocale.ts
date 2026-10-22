@@ -58,11 +58,6 @@ export function getBilibiliLogicalPathname(value: string | URL = location.href, 
   return splitBilibiliLocalePath(url.hostname, url.pathname).pathname
 }
 
-export function getBilibiliLocale(value: string | URL = location.href): string | null {
-  const url = parseUrl(value)
-  return url ? splitBilibiliLocalePath(url.hostname, url.pathname).locale : null
-}
-
 export function toBilibiliLogicalUrl(value: string): string {
   const url = parseUrl(value)
   if (!url)

@@ -1,44 +1,14 @@
-@use "./breakpoints";
-
-// Shared content-grid geometry. Components provide the CSS column variables
-// through useGridLayout and only own their card-specific presentation.
+// Shared content-grid geometry. Components take the grid class from
+// useGridLayout and only own their card-specific presentation.
 .bew-grid-adaptive {
   display: grid;
   column-gap: var(--bew-layout-content-gap);
   row-gap: var(--bew-card-row-gap);
-  grid-template-columns: repeat(var(--grid-cols-base, 1), minmax(0, 1fr));
+  // As many columns as fit a minimum-width cover; JS mirrors this with
+  // getAdaptiveGridColumnCount for windowing.
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--bew-video-card-min-width)), 1fr));
   contain: layout style;
   align-items: stretch;
-}
-
-@container (min-width: #{breakpoints.$grid-sm}) {
-  .bew-grid-adaptive {
-    grid-template-columns: repeat(var(--grid-cols-sm, 2), minmax(0, 1fr));
-  }
-}
-
-@container (min-width: #{breakpoints.$grid-md}) {
-  .bew-grid-adaptive {
-    grid-template-columns: repeat(var(--grid-cols-md, 3), minmax(0, 1fr));
-  }
-}
-
-@container (min-width: #{breakpoints.$grid-lg}) {
-  .bew-grid-adaptive {
-    grid-template-columns: repeat(var(--grid-cols-lg, 4), minmax(0, 1fr));
-  }
-}
-
-@container (min-width: #{breakpoints.$grid-xl}) {
-  .bew-grid-adaptive {
-    grid-template-columns: repeat(var(--grid-cols-xl, 5), minmax(0, 1fr));
-  }
-}
-
-@container (min-width: #{breakpoints.$grid-xxl}) {
-  .bew-grid-adaptive {
-    grid-template-columns: repeat(var(--grid-cols-xxl, 6), minmax(0, 1fr));
-  }
 }
 
 .bew-grid-two-columns {

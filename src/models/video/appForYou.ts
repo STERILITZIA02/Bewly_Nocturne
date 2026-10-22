@@ -437,5 +437,6 @@ export enum Title {
 export enum Type {
   Dislike = 'dislike',
   Feedback = 'feedback',
+  /** @public */
   WatchLater = 'watch_later',
 }

@@ -259,7 +259,7 @@ export function queryDomUntilFound(
       if (element)
         finish(element)
     }, timeout)
-    deadline = setTimeout(() => finish(null), maxWait)
+    deadline = setTimeout(finish, maxWait, null)
     abort?.signal.addEventListener('abort', handleAbort, { once: true })
     if (abort?.signal.aborted)
       finish(null)

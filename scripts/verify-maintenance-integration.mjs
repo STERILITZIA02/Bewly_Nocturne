@@ -252,7 +252,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     const root = document.body.appendChild(document.createElement('section'))
     root.style.overflowY = 'auto'
     Object.defineProperties(root, { clientWidth: { value: 1200 }, clientHeight: { value: 700 }, scrollHeight: { value: 400000 } })
-    const settings = Vue.ref({ historyLayout: 'list', enableGridLayoutSwitcher: true, gridColumns: { base: 3, sm: 3, md: 3, lg: 3, xl: 3, xxl: 3 } })
+    const settings = Vue.ref({ historyLayout: 'list', enableGridLayoutSwitcher: true })
     const records = Array.from({ length: 1000 }, (_, index) => ({
       kid: index + 1,
       title: `Video ${index + 1}`,
@@ -329,7 +329,8 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
         return box(60 - root.scrollTop, 200000)
       if (this.classList.contains('history-list-card') || this.classList.contains('history-day-heading')) {
         const grid = settings.value.historyLayout === 'grid'
-        const columns = grid ? settings.value.gridColumns.base : 1
+        // Same rule as getAdaptiveGridColumnCount: 320px minimum covers in a 1200px root.
+        const columns = grid ? Math.max(1, Math.floor((1200 + 16) / (320 + 16))) : 1
         const gap = grid ? 16 : 8
         let top = 60 - root.scrollTop
         let column = 0
@@ -389,6 +390,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     const app = Vue.createApp(page)
     app.component('ALink', { props: ['href'], setup: (props, { slots, attrs }) => () => Vue.h('a', { ...attrs, href: props.href }, slots.default?.()) })
     app.component('IconButton', IconButton)
+    app.component('Tooltip', { props: ['content', 'placement'], setup: (_props, { slots }) => () => slots.default?.() })
     app.component('Progress', { props: ['percentage'], setup: props => () => Vue.h('span', { 'data-progress': props.percentage }) })
     app.component('CoverSidebarSurface', { setup: (_props, { slots }) => () => Vue.h('aside', slots.default?.()) })
     app.component('Button', { setup: (_props, { slots }) => () => Vue.h('button', slots.default?.()) })
@@ -440,7 +442,6 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       assert.equal(Array.from(root.querySelectorAll('[data-history-key]')).find(element => element.dataset.historyKey === key), visible)
       assert.equal(document.activeElement, focused)
       assert.ok(root.querySelectorAll('.history-list-card').length < 250)
-      Object.keys(settings.value.gridColumns).forEach(key => settings.value.gridColumns[key] = 2)
       await settle()
       assert.equal(document.activeElement, focused)
       focused.click()

@@ -1,0 +1,64 @@
+{
+  "environment": "Node 26.12.1; warmed median of 7 runs; synthetic data, not browser frame timings",
+  "filter": [
+    {
+      "rules": 20,
+      "items": 1000,
+      "titleBeforeMs": 3.9685,
+      "titleAfterMs": 0.8142,
+      "userBeforeMs": 0.2779,
+      "userAfterMs": 0.2994
+    },
+    {
+      "rules": 200,
+      "items": 1000,
+      "titleBeforeMs": 34.3124,
+      "titleAfterMs": 4.9632,
+      "userBeforeMs": 0.4523,
+      "userAfterMs": 0.2606
+    },
+    {
+      "rules": 2000,
+      "items": 1000,
+      "titleBeforeMs": 335.696,
+      "titleAfterMs": 39.271,
+      "userBeforeMs": 1.8785,
+      "userAfterMs": 0.2808
+    }
+  ],
+  "favorite": {
+    "items": 10000,
+    "cachedQueryMs": 1.1890420000000006,
+    "emptyQueryMs": 0.0005000000000023874,
+    "beforeQueryMs": 7.5573,
+    "notes": "cached queries exclude initial index construction; empty query returns the same input array"
+  },
+  "commentTree": [
+    {
+      "nodes": 240,
+      "beforeMs": 1.4739,
+      "afterMs": 0.1566,
+      "maxDepth": 6
+    },
+    {
+      "nodes": 1000,
+      "beforeMs": 23.9478,
+      "afterMs": 0.5269,
+      "maxDepth": 6
+    },
+    {
+      "nodes": 3000,
+      "beforeMs": 212.8957,
+      "afterMs": 1.7595,
+      "maxDepth": 6
+    }
+  ],
+  "notificationWindow": {
+    "inputItems": 10000,
+    "assertedMountedMaximum": 18,
+    "focusRetention": true,
+    "restoreMeasurementsAndColumns": true,
+    "appendStability": true,
+    "columnReflow": true
+  }
+}

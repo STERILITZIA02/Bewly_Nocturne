@@ -5,6 +5,9 @@
 ## 当前文档
 
 - [开发约定](../../AGENTS.md)：工作方式、设计系统、页面与运行时规则。
+- [工具链与安全升级](2026-10-22-toolchain.md)：Node/pnpm、依赖替换、CI 失败原因与暂存的上游修复补丁。
+- [算法与实现性能审查](2026-10-22-algorithm-audit.md)：关键路径复杂度、合成基准、已确认的重复工作与后续优先级。
+- [性能审查实施](2026-10-22-performance-implementation.md)：Worker 过滤、通知窗口化、增量索引、评论树与冗余收敛。
 - [AGENTS.md 旧版条目存档](2026-10-21-agents-rules-archive.md)：2026-10-21 精简前的完整原文，按日期记录的决定细节。
 - [上游协作](upstream-workflow.md)：远端与分支。
 - [播放页结构](widescreen-native-adaptation.md)：原生节点归属与模块职责。

@@ -1,6 +1,7 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
+    "scripts/client.ts",
     "scripts/manifest.ts",
     "scripts/prepare.ts",
     "scripts/verify-notification-fixtures.ts",
@@ -8,25 +9,22 @@
     "scripts/verify-targeted-fixes.ts",
     "scripts/verify-selected-p2.mjs",
     "scripts/verify-color-policy.ts",
+    "scripts/verify-style-invalidation.ts",
     "scripts/serve-card-window-benchmark.mjs",
     "src/contentScripts/views/Notifications/whisper/experimental/index.ts",
     "src/components/*.vue",
     "src/components/*/*.vue",
     "src/contentScripts/index.ts",
     "src/contentScripts/nativeAppearance.ts",
-    "src/inject/index.ts",
-    "vite.config.content.ts",
-    "vite.config.inject.ts",
-    "vite.config.native.ts"
+    "src/inject/index.ts"
   ],
   "ignoreExportsUsedInFile": true,
   "ignoreDependencies": [
     "uno.css"
   ],
-  "ignoreBinaries": ["gh", "xcrun"],
   "rules": {
-    "types": "warn",
-    "enumMembers": "warn",
-    "exports": "warn"
+    "types": "error",
+    "enumMembers": "error",
+    "exports": "error"
   }
 }

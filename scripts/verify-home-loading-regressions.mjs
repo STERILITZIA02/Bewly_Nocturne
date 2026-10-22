@@ -372,7 +372,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
     media.load = () => {}
     media.pause = () => {}
     media.play = async () => {}
-    const props = Vue.reactive({ skeleton: false, removed: false, isHover: true, shouldHideOverlayElements: false, previewVideoUrl: 'https://example.com/first.mp4', videoElement: null, isInWatchLater: false, showWatchLater: false, coverImageUrl: '' })
+    const props = Vue.reactive({ skeleton: false, removed: false, isHover: true, shouldHideOverlayElements: false, previewVideoUrl: 'https://example.com/first.mp4', videoElement: null, coverImageUrl: '' })
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ render: () => Vue.h(Cover, props) })
     app.config.globalProperties.$t = key => key

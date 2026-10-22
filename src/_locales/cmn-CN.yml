@@ -331,14 +331,13 @@ settings:
   group_video_card_content: 卡片内容
   group_video_card_content_desc: 自定义视频卡片上各项信息与操作的显示。
   group_video_card_context_menu: 更多菜单
-  group_video_card_context_menu_desc: 选择点击视频卡片更多按钮后显示的菜单选项。
+  group_video_card_context_menu_desc: 选择右键菜单中直接显示的选项；关闭的选项收进菜单底部的“高级选项”。
   video_card_context_menu_region_recommendation: 推荐
   video_card_context_menu_region_opening: 打开
   video_card_context_menu_region_copying: 复制
   video_card_context_menu_region_user: 用户
   video_card_context_menu_follow_user: 关注或取消关注
   video_card_content_region_stats: 数据
-  video_card_content_region_tags: 标签
   video_card_content_region_other: 其它
   group_player_components: 播放器组件
   group_player_display_mode: 播放模式
@@ -618,12 +617,7 @@ settings:
   video_preview_swipe_seek_desc: 在视频预览上按住并直接左右滑动，在当前播放位置附近快退或快进。
   hover_video_card_delayed: 将鼠标悬停在视频卡片上时延迟视频预览
   only_cover_video_preview: 仅封面视频预览
-  show_video_card_author_avatar: 显示用户头像
   show_video_card_author_name: 显示用户昵称
-  show_video_card_video_tag: 显示视频标签
-  show_video_card_video_tag_desc: 显示搜索页等场景提供的视频分类标签。
-  show_video_card_recommend_tag: 显示插件计算的推荐标签
-  show_video_card_recommend_tag_desc: 显示插件计算的标签，如"高赞"、"高互动"、"百万播放"等
   show_video_card_publish_time: 显示发布时间
   show_video_card_view_count: 显示播放量
   show_video_card_danmaku_count: 显示弹幕数
@@ -674,6 +668,7 @@ settings:
 
   # Video Card Grid Settings
   group_video_card_grid: 视频卡片网格
+  group_video_card_grid_desc: 封面至少 320×180，能放下几列就放几列，窗口变宽时卡片随之变大。
   auto_switch_list_layout: 根据视频卡片区域宽度自动切换单双列
   auto_switch_list_layout_desc: 开启后，双列模式会在视频卡片区域宽度小于设定宽度时自动切换为单列。
   auto_switch_list_layout_breakpoint: 切换宽度
@@ -681,16 +676,11 @@ settings:
   video_card_cover_ratio_desc: 分别设置单列与双列横向视频卡片中封面所占的宽度。
   video_card_cover_ratio_one_column: 单列布局
   video_card_cover_ratio_two_columns: 双列布局
-  grid_breakpoints: 网格断点配置
-  grid_breakpoints_desc: 设置不同视频卡片区域宽度下显示的列数。当区域宽度大于等于设定值时，使用对应的列数。
   grid_columns: 显示
-  grid_columns_unit: 列
   video_card_title_font_size: 标题字号
   video_card_title_font_size_desc: 控制视频卡片标题的字号。
   video_card_author_font_size: UP 信息字号
-  video_card_author_font_size_desc: 控制视频卡片上 UP 主昵称的字号。
-  video_card_meta_font_size: 标签与时间字号
-  video_card_meta_font_size_desc: 控制标题下方标签与时间信息的字号。
+  video_card_author_font_size_desc: 控制标题下方 UP 主与发布时间这一行的字号。
   video_card_shadow_curve: 阴影渐变曲线
   video_card_shadow_curve_desc: 自定义视频卡片底部阴影的渐变效果
   video_card_shadow_curve_hint: 拖拽线条创建控制点，右键删除
@@ -1529,9 +1519,8 @@ video_card:
     open_in_background: 后台打开
     open_in_new_window: 新窗口打开
     open_in_current_tab: 当前标签页打开
-    open_in_drawer: 抽屉打开
-    copy_video_link: 复制视频链接
-    copy_clean_video_link: 复制干净链接
+    copy_video_link: 复制链接
+    copy_original_link: 复制原始链接
     copy_bv_number: 复制 BV 号
     copy_av_number: 复制 AV 号
     view_the_original_cover: 查看封面
@@ -1539,8 +1528,7 @@ video_card:
     unfollow_user: 取消关注
     block_user: 拉黑用户
     more_options: 更多操作
-    scroll_to_top: 滚动到菜单顶部
-    scroll_to_bottom: 滚动到菜单底部
+    advanced_options: 高级选项
   follow_user_confirm:
     title: 确认关注用户
     message: 确定要关注 {name} 吗？
@@ -1554,6 +1542,7 @@ video_card:
     message: 确定要拉黑 {name} 吗？
     warning: 拉黑后，你将无法看到该用户发布的所有内容。
   group_contribution: '{firstAuthor} 等 {num} 人联合创作'
+  followed: 已关注
   video_removed: 视频已移除
   watched: 已观看
   browsed: 已浏览
@@ -1561,11 +1550,6 @@ video_card:
   completed: 已看完
   played_progress: '已看到 {time}'
   visited_recently: 近一个月内浏览过
-  highlight_high_like: 高赞
-  highlight_high_engagement: 高互动
-  highlight_million_views: 百万播放
-  highlight_extra_long: 超长视频
-  highlight_long: 长视频
   watch_later_unavailable: 无法获取该视频的稍后再看信息
   watch_later_update_failed: 更新稍后再看失败
   feedback_unavailable: 无法获取反馈选项
@@ -2041,3 +2025,5 @@ search:
     finished: 已结束
     not_started: 未开始
     in_progress: 进行中
+
+filter_rule_execution_failed: 正则过滤未能完成，请检查过滤规则后重试。

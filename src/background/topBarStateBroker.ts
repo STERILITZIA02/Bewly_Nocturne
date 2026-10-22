@@ -33,7 +33,7 @@ interface TopBarStateEntry {
 export interface TopBarStateBrokerBrowser extends StateConsumerBrowser {
   extension?: Pick<Browser.Extension.Static, 'inIncognitoContext'>
   storage?: {
-    session?: Pick<Browser.Storage.StorageAreaWithUsage, 'get' | 'set'>
+    session?: Pick<Browser.Storage.StorageArea, 'get' | 'set'>
   }
 }
 

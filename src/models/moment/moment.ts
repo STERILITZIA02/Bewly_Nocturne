@@ -353,10 +353,13 @@ export interface Badge {
 }
 
 export enum BadgeText {
+  /** @public */
   投稿视频 = '投稿视频',
+  /** @public */
   番剧 = '番剧',
   充电专属 = '充电专属',
   动态视频 = '动态视频',
+  /** @public */
   合集 = '合集',
 }
 
@@ -460,6 +463,7 @@ export enum ThreePointItemLabel {
 }
 
 export enum ThreePointItemType {
+  /** @public */
   ThreePointFollowing = 'THREE_POINT_FOLLOWING',
   ThreePointReport = 'THREE_POINT_REPORT',
   ThreePointDelete = 'THREE_POINT_DELETE',

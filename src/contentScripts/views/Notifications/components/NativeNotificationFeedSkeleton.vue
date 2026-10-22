@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import MasonryGrid from '~/components/MasonryGrid.vue'
 import NotificationSkeletonBlock from '~/components/SkeletonBlock.vue'
 
 import type { NativeNotificationSection } from '../notificationSections'
@@ -17,7 +16,7 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <MasonryGrid class="native-notification-feed-skeleton native-notification-grid" :role="announce ? 'status' : undefined" :aria-label="announce ? label : undefined">
+  <div class="native-notification-feed-skeleton native-notification-grid" :role="announce ? 'status' : undefined" :aria-label="announce ? label : undefined">
     <article
       v-for="index in count"
       :key="index"
@@ -83,7 +82,7 @@ withDefaults(defineProps<{
         />
       </div>
     </article>
-  </MasonryGrid>
+  </div>
 </template>
 
 <style scoped lang="scss">

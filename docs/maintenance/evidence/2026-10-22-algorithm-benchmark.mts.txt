@@ -1,0 +1,89 @@
+import assert from 'node:assert/strict'
+import { writeFileSync } from 'node:fs'
+import { performance } from 'node:perf_hooks'
+import { createRequire } from 'node:module'
+import { CardRowMetrics } from '../../../src/utils/cardRowMetrics.ts'
+import { buildCommentTree } from '../../../src/utils/commentTree.ts'
+import { matchesFavoriteQuery } from '../../../src/contentScripts/views/Favorites/favoriteSearch.ts'
+import { loadSourceFunctions } from '../../../scripts/sourceFunctionHarness.ts'
+
+const require = createRequire(new URL('../../../package.json', import.meta.url))
+const { reactive } = require('vue')
+const results: any = { node: process.version, timing: 'median of 7 warmed samples; synthetic inputs, no browser rendering' }
+let sink = 0
+function bench(fn: () => number, repetitions = 1) {
+  for (let i = 0; i < 3; i++) sink += fn()
+  const samples = []
+  for (let round = 0; round < 7; round++) {
+    const start = performance.now()
+    for (let i = 0; i < repetitions; i++) sink += fn()
+    samples.push((performance.now() - start) / repetitions)
+  }
+  return Number(samples.sort((a,b) => a-b)[3].toFixed(4))
+}
+
+results.filter = []
+for (const ruleCount of [20, 200, 2000]) {
+  const rules = Array.from({length: ruleCount}, (_, i) => `MISSING KEYWORD ${i}`)
+  const inputs = Array.from({length: 1000}, (_, i) => ({ title: `An ordinary video title ${i} about programming and music 日常视频`, author: `author${i}` }))
+  const { compareTitle, compareUser } = await loadSourceFunctions('../src/composables/useFilter.ts', ['get','compareTitle','compareUser'], {
+    filterByTitleStringValues: rules, filterByTitleRegExpValues: [], filterByUserStringValues: rules, filterByUserRegExpValues: [],
+  })
+  const users = new Set(rules)
+  const candidateTitle = (item: any) => { const text = String(item.title).toUpperCase(); return !rules.some(rule=>text.includes(rule)) }
+  assert.deepEqual(inputs.map(x=>compareTitle(x,['title'],'')),inputs.map(candidateTitle))
+  assert.deepEqual(inputs.map(x=>compareUser(x,['author'],'')),inputs.map(x=>!users.has(x.author.toUpperCase())))
+  results.filter.push({ruleCount,items:1000,titleCurrentMs:bench(()=>inputs.filter(x=>compareTitle(x,['title'],'')).length),titleNormalizedOnceMs:bench(()=>inputs.filter(candidateTitle).length),userCurrentMs:bench(()=>inputs.filter(x=>compareUser(x,['author'],'')).length),userSetMs:bench(()=>inputs.filter(x=>!users.has(x.author.toUpperCase())).length)})
+}
+
+results.favoriteSearch = []
+for(const n of [1000,10000]) {
+  const items=Array.from({length:n},(_,i)=>({title:`收藏视频 ${i} Programming with Typescript`,author:`Uploader ${i%200}`}))
+  const norm=(s:string)=>s.normalize('NFKC').toLocaleLowerCase().trim()
+  const texts=items.map(x=>`${norm(x.title)} ${norm(x.author)}`)
+  const query='programming typescript'; const terms=norm(query).split(/\s+/).filter(Boolean)
+  assert.equal(items.filter(x=>matchesFavoriteQuery(query,x.title,x.author)).length,texts.filter(x=>terms.every(t=>x.includes(t))).length)
+  results.favoriteSearch.push({items:n,queryCurrentMs:bench(()=>items.filter(x=>matchesFavoriteQuery(query,x.title,x.author)).length),indexedQueryMs:bench(()=>texts.filter(x=>terms.every(t=>x.includes(t))).length),emptyQueryCurrentMs:bench(()=>items.filter(x=>matchesFavoriteQuery('',x.title,x.author)).length)})
+}
+
+results.historySort = []
+for(const n of [200,2000]) {
+  const items=Array.from({length:n},(_,i)=>({key:String(i),message:{timestamp:n-i}}))
+  const state=reactive({results:items.map(x=>({...x,message:{...x.message}}))})
+  const comparator=(a:any,b:any)=>b.message.timestamp-a.message.timestamp||a.key.localeCompare(b.key)
+  results.historySort.push({results:n,alreadySortedRawMs:bench(()=>{items.sort(comparator);return items.length}),alreadySortedReactiveMs:bench(()=>{state.results.sort(comparator);return state.results.length})})
+}
+
+results.commentTree = []
+for(const n of [240,1000,3000]) {
+  const chain=Array.from({length:n},(_,i)=>({id:String(i+1),rootId:'1',parentId:i?String(i):'0',createdAt:i+1,originalOrder:i}))
+  const flat=chain.map(x=>({...x,parentId:x.id==='1'?'0':'1'}))
+  results.commentTree.push({nodes:n,maxDepth:6,chainMs:bench(()=>buildCommentTree(chain,6).length),flatMs:bench(()=>buildCommentTree(flat,6).length)})
+}
+
+results.rowMetrics=[]
+for(const n of [1000,100000]) {
+  const metrics=new CardRowMetrics();metrics.reset(Array(n).fill(220));
+  results.rowMetrics.push({rows:n,queries:20000,queryMs:bench(()=>{let sum=0;for(let i=0;i<20000;i++)sum+=metrics.rowAt((i*997)% (n*220));return sum})})
+}
+
+results.masonry=[]
+for(const n of [100,1000,5000]) {
+  let attributes=0,reads=0
+  class Cell {
+    isConnected=true
+    style:any={}
+    hasAttribute(){attributes++;return false}
+    getBoundingClientRect(){reads++;return {height:180,top:0,left:0,bottom:180}}
+  }
+  const grid={clientWidth:1000,children:Array.from({length:n},()=>new Cell()),getBoundingClientRect:()=>({top:0,left:0})}
+  const globals={root:{value:grid},getComputedStyle:()=>({getPropertyValue:()=> '3',columnGap:'16'}),lastWidth:0,lastColumns:0,lastGap:0,lastChildren:[],cells:new Map(),dirty:new Set(),animations:new Map(),window:{innerHeight:800,matchMedia:()=>({matches:true})},HTMLElement:Cell}
+  const context=await loadSourceFunctions('../src/components/MasonryGrid.vue',['layout'],globals)
+  context.layout(false)
+  grid.children.push(...Array.from({length:20},()=>new Cell()))
+  attributes=0;reads=0;context.layout(false)
+  results.masonry.push({existing:n,appended:20,attributeChecks:attributes,childHeightReads:reads,retainedDOM:grid.children.length})
+}
+writeFileSync('/tmp/bewly-algorithm-audit-results.json',JSON.stringify(results,null,2)+'\n')
+console.log(JSON.stringify(results,null,2))
+console.log('sink',sink)

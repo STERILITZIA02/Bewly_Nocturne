@@ -96,6 +96,17 @@ export function getLayoutEditableDescriptor(id: string) {
   return editableDescriptorMap.get(id)
 }
 
+/** The nearest registered layout region on an event path (innermost first). */
+export function findLayoutEditableTarget(path: EventTarget[]) {
+  for (const node of path) {
+    if (!(node instanceof HTMLElement))
+      continue
+    const descriptor = getLayoutEditableDescriptor(node.dataset.layoutEditableId ?? '')
+    if (descriptor)
+      return { element: node, descriptor }
+  }
+}
+
 export function getLayoutEditableDescriptors(): readonly LayoutEditableDescriptor[] {
   return Array.from(editableDescriptorMap.values())
 }

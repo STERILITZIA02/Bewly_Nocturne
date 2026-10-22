@@ -7,55 +7,34 @@ import { computed } from 'vue'
 
 import { settings } from '~/logic'
 
-// 字体大小映射表（常量，无需重复计算）
-const VIDEO_CARD_FONT_SIZE_MAP = {
-  xs: 'text-xs',
-  sm: 'text-sm',
-  base: 'text-base',
-  lg: 'text-lg',
+// Each size option is a type role, so card text scales with the browser font
+// size like the rest of the UI (no Tailwind rem classes, which ran larger).
+const VIDEO_CARD_TYPE_ROLES = {
+  xs: 'caption',
+  sm: 'control',
+  base: 'title',
+  lg: 'subheading',
 } as const
 
-const VIDEO_CARD_LINE_HEIGHT_MAP = {
-  xs: 'var(--bew-line-height-caption)',
-  sm: 'var(--bew-line-height-control)',
-  base: 'var(--bew-line-height-body)',
-  lg: 'var(--bew-line-height-heading)',
-} as const
+function typeRole(size: keyof typeof VIDEO_CARD_TYPE_ROLES) {
+  const role = VIDEO_CARD_TYPE_ROLES[size] ?? VIDEO_CARD_TYPE_ROLES.base
+  return { size: `var(--bew-font-size-${role})`, lineHeight: `var(--bew-line-height-${role})` }
+}
 
-// These depend only on global settings, so every card can share the same refs.
-const titleFontSizeClass = computed(() =>
-  VIDEO_CARD_FONT_SIZE_MAP[settings.value.videoCardTitleFontSize] ?? VIDEO_CARD_FONT_SIZE_MAP.base,
-)
-
-const titleStyle = computed((): Record<string, string | number> => ({
-  '--bew-title-line-height': settings.value.videoCardTitleFontSize === 'base'
-    ? 'var(--bew-line-height-title)'
-    : VIDEO_CARD_LINE_HEIGHT_MAP[settings.value.videoCardTitleFontSize],
-  'lineHeight': 'var(--bew-title-line-height)',
-  'fontWeight': 'var(--bew-font-weight-semibold)',
-}))
-
-const metaStyle = computed(() => ({
-  '--bew-author-line-height': VIDEO_CARD_LINE_HEIGHT_MAP[settings.value.videoCardAuthorFontSize],
-  '--bew-meta-line-height': VIDEO_CARD_LINE_HEIGHT_MAP[settings.value.videoCardMetaFontSize],
-}))
-
-const authorFontSizeClass = computed(() =>
-  VIDEO_CARD_FONT_SIZE_MAP[settings.value.videoCardAuthorFontSize] ?? VIDEO_CARD_FONT_SIZE_MAP.sm,
-)
-
-const metaFontSizeClass = computed(() =>
-  VIDEO_CARD_FONT_SIZE_MAP[settings.value.videoCardMetaFontSize] ?? VIDEO_CARD_FONT_SIZE_MAP.xs,
-)
+// These depend only on global settings, so every card can share the same ref.
+const textStyle = computed(() => {
+  const title = typeRole(settings.value.videoCardTitleFontSize)
+  const author = typeRole(settings.value.videoCardAuthorFontSize)
+  return {
+    '--video-card-title-size': title.size,
+    '--bew-title-line-height': title.lineHeight,
+    '--video-card-author-size': author.size,
+    '--bew-author-line-height': author.lineHeight,
+  }
+})
 
 export function useVideoCardSharedStyles() {
-  return {
-    titleFontSizeClass,
-    titleStyle,
-    authorFontSizeClass,
-    metaFontSizeClass,
-    metaStyle,
-  }
+  return { textStyle }
 }
 
 const bangumiTitleClass = computed(() => ({ 'bew-title-auto': settings.value.homeAdaptiveTitleAutoSize }))

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import { NEUTRAL_DARK_BASE_COLOR, resolveDarkModeBaseColor } from '../src/utils/darkModeTint'
 import { getThemeColorTokens, relativeContrast } from '../src/utils/themeColor'
@@ -20,6 +21,29 @@ const palettes = [
   { dark: true, surfaces: ['#1b1b1b', '#2e2e2e', '#414141'] },
   { dark: true, surfaces: ['#000000', '#2e2e2e', '#414141'] },
 ]
+
+// Read the actual label opacities so future palette edits keep all reading
+// levels legible on the page, cards and the lifted sidebar.
+const variables = readFileSync(new URL('../src/styles/variables.scss', import.meta.url), 'utf8')
+const secondaryAlpha = Number(variables.match(/--bew-text-2: color-mix\(in srgb, var\(--bew-neutral-fg\) (\d+)%/)![1]) / 100
+const tertiaryAlpha = [...variables.matchAll(/--bew-text-3: color-mix\(in srgb, var\(--bew-neutral-fg\) (\d+)%/g)].map(match => Number(match[1]) / 100)
+for (const [mode, foreground, backgrounds, tertiary] of [
+  ['light', 23, [255, 246, 232], tertiaryAlpha[0]],
+  ['dark', 235, [20, 39, 55], tertiaryAlpha[1]],
+  ['oled', 235, [0, 24, 48], tertiaryAlpha[1]],
+] as const) {
+  for (const background of backgrounds) {
+    const gray = (value: number) => `#${Math.round(value).toString(16).padStart(2, '0').repeat(3)}`
+    let previous = Number.POSITIVE_INFINITY
+    for (const alpha of [1, secondaryAlpha, tertiary]) {
+      const ratio = relativeContrast(gray(foreground * alpha + background * (1 - alpha)), gray(background))
+      assert.ok(ratio >= 4.5, `${mode}: text alpha ${alpha} on ${background} must remain readable`)
+      assert.ok(ratio < previous, `${mode}: primary, secondary and supporting text must have distinct contrast levels`)
+      previous = ratio
+    }
+  }
+}
+
 for (const { dark, surfaces } of palettes) {
   for (const color of [...brightColors, '#00a1d6', '#3b82f6', '#6366f1', '#000000', '#ffffff']) {
     const tokens = getThemeColorTokens(color, dark, surfaces)

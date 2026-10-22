@@ -1,0 +1,16 @@
+diff --git a/lib/codegen/template/element.js b/lib/codegen/template/element.js
+index 77ef8ce8a456ef342ec6065a90b3709381517012..6e5d0c46b86ed193b7fbb8bd48b46d5329853854 100644
+--- a/lib/codegen/template/element.js
++++ b/lib/codegen/template/element.js
+@@ -173,9 +173,8 @@ function* generateComponent(options, ctx, node) {
+     yield `// @ts-ignore${utils_1.newLine}`;
+     yield `const ${functionalVar} = ${options.vueCompilerOptions.checkUnknownProps ? names_1.names.asFunctionalComponent0 : names_1.names.asFunctionalComponent1}(${componentVar}, new ${componentVar}({${utils_1.newLine}`;
+     yield `// @ts-ignore${utils_1.newLine}`;
+-    yield propsStr
+-        .replace(/\/\/(.*)$/gm, (_, body) => `/*${body.replaceAll('*/', '*\\/')} */`)
+-        .replace(/\n/g, ' ');
++    // Preserve strings such as https:// URLs and template literal line breaks.
++    yield propsStr;
+     yield `}))${utils_1.endOfLine}`;
+     yield `const `;
+     const boundary = yield* boundary_1.Boundary.start('template', node.loc.start.offset, node.loc.end.offset, codeFeatures_1.codeFeatures.doNotReportTs6133);

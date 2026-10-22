@@ -71,7 +71,7 @@ export function callAppClient(endpoint: AppClientEndpoint, params: AppClientRequ
       return
     }
     options.signal?.addEventListener('abort', abort, { once: true })
-    timer = setTimeout(() => fail('timeout', 'APP client request timed out'), Math.max(0, deadline - Date.now()))
+    timer = setTimeout(fail, Math.max(0, deadline - Date.now()), 'timeout', 'APP client request timed out')
     try {
       port = browser.runtime.connect({ name: APP_CLIENT_PORT })
       port.onMessage.addListener(receive)

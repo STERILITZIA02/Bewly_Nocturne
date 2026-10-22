@@ -1,5 +1,5 @@
 import type { MaybeRefOrGetter } from 'vue'
-import { computed, reactive, ref, toValue, watch } from 'vue'
+import { computed, ref, shallowReactive, toValue, watch } from 'vue'
 
 import type { NotificationPageParams } from '../notificationFeedParsing'
 import {
@@ -25,7 +25,6 @@ import type {
 export type { NotificationPageParams } from '../notificationFeedParsing'
 export type { RefreshNotificationFeedOptions } from '../notificationFeedPolicy'
 export type {
-  NotificationErrorKind,
   NotificationFailedOperation,
   NotificationFeedState,
   NotificationReadCandidate,
@@ -51,8 +50,9 @@ export function useNotificationFeed(
   const resolvedMid = computed(() => toValue(mid))
   const accountMid = ref(resolvedMid.value)
   const readCandidate = ref<NotificationReadCandidate | null>(null)
-  const state = reactive<NotificationFeedState>({
-    items: [],
+  const itemIds = new Set<string>()
+  const state = shallowReactive<NotificationFeedState>({
+    items: shallowReactive([]),
     cursorId: '',
     cursorTime: 0,
     loading: false,
@@ -81,6 +81,8 @@ export function useNotificationFeed(
     state.generation++
     accountMid.value = nextMid
     state.items.splice(0)
+    state.masonrySnapshot = undefined
+    itemIds.clear()
     state.cursorId = ''
     state.cursorTime = 0
     state.loading = false
@@ -136,7 +138,10 @@ export function useNotificationFeed(
       }
 
       const applied = applyNotificationFirstPage(state, result.page, applyMode)
-      state.items.splice(0, state.items.length, ...applied.items)
+      state.items = shallowReactive(applied.items)
+      itemIds.clear()
+      for (const item of applied.items)
+        itemIds.add(item.id)
       state.cursorId = applied.cursorId
       state.cursorTime = applied.cursorTime
       state.noMore = applied.noMore
@@ -241,11 +246,11 @@ export function useNotificationFeed(
         return
       }
 
-      const existingIds = new Set(state.items.map(item => item.id))
+      const pageIds = new Set<string>()
       const newItems = result.page.items.filter((item) => {
-        if (existingIds.has(item.id))
+        if (itemIds.has(item.id) || pageIds.has(item.id))
           return false
-        existingIds.add(item.id)
+        pageIds.add(item.id)
         return true
       })
       const progress = evaluatePaginationProgress({
@@ -264,6 +269,8 @@ export function useNotificationFeed(
       }
 
       state.items.push(...newItems)
+      for (const item of newItems)
+        itemIds.add(item.id)
       state.cursorId = result.page.cursorId
       state.cursorTime = result.page.cursorTime
       state.errorKind = null

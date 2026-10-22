@@ -54,8 +54,6 @@ export function toCommentComposerReply(value: unknown) {
   }
 }
 
-export type CommentComposerReply = NonNullable<ReturnType<typeof toCommentComposerReply>>
-
 /** `type,oid` exactly as the native list compares its items (`data-params`). */
 export function parseCommentListParams(value: string | null | undefined) {
   const [type, oid] = (value ?? '').split(',')

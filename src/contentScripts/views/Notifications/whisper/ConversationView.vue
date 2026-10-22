@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import ChevronIcon from '~/components/ChevronIcon.vue'
+import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import { useSurfaceMorph } from '~/composables/useSurfaceMorph'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
@@ -569,16 +570,8 @@ defineExpose({
       </div>
     </div>
 
-    <div
-      class="conversation-card__top-edge"
-      :class="{ 'conversation-card__top-edge--visible': conversationExpanded }"
-      aria-hidden="true"
-    />
-    <div
-      class="conversation-card__bottom-edge"
-      :class="{ 'conversation-card__bottom-edge--visible': conversationExpanded }"
-      aria-hidden="true"
-    />
+    <ProgressiveBlur class="conversation-card__top-edge" edge="top" :visible="conversationExpanded" />
+    <ProgressiveBlur class="conversation-card__bottom-edge" edge="bottom" :visible="conversationExpanded" />
 
     <Transition name="conversation-latest">
       <div
@@ -871,50 +864,23 @@ defineExpose({
   corner-shape: var(--bew-corner-shape);
 }
 
+// Scroll-edge gradient blur (ProgressiveBlur); geometry and layering unchanged.
 .conversation-card__top-edge,
 .conversation-card__bottom-edge {
   position: fixed;
   right: 0;
   left: var(--bew-messages-sidebar-width);
   z-index: var(--bew-z-topbar);
+  height: var(--bew-space-12);
   overflow: hidden;
-  pointer-events: none;
-  backdrop-filter: var(--bew-filter-glass-1);
-  opacity: 0;
-  transition:
-    opacity var(--bew-duration-fast) var(--bew-ease-standard),
-    border-radius var(--bew-duration-fast) linear;
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
 .conversation-card__top-edge {
   top: 0;
-  height: var(--bew-space-12);
-  border-radius: 0;
-  mask-image: linear-gradient(to bottom, black, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, black, transparent);
-}
-
-.conversation-card__top-edge--visible {
-  opacity: 1;
 }
 
 .conversation-card__bottom-edge {
   bottom: 0;
-  height: var(--bew-space-12);
-  border-radius: 0;
-  mask-image: linear-gradient(to bottom, transparent, black 70%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, black 70%);
-}
-
-.conversation-card__bottom-edge--visible {
-  opacity: 1;
-}
-
-.conversation-view--solid .conversation-card__top-edge,
-.conversation-view--solid .conversation-card__bottom-edge {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 .conversation-view__floating-composer,
@@ -1179,8 +1145,6 @@ defineExpose({
   .conversation-view,
   .conversation-card,
   .conversation-view__messages,
-  .conversation-card__top-edge,
-  .conversation-card__bottom-edge,
   .conversation-history-enter-active,
   .conversation-history-leave-active {
     transition: none;

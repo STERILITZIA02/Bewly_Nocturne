@@ -331,14 +331,13 @@ settings:
   group_video_card_content: Card Content
   group_video_card_content_desc: Choose which information and actions appear on video cards.
   group_video_card_context_menu: More Menu
-  group_video_card_context_menu_desc: Choose which options appear after clicking a video card's more button.
+  group_video_card_context_menu_desc: 'Choose which options show directly in the right-click menu; switched-off options move into "Advanced" at the bottom.'
   video_card_context_menu_region_recommendation: Recommend
   video_card_context_menu_region_opening: Open
   video_card_context_menu_region_copying: Copy
   video_card_context_menu_region_user: User
   video_card_context_menu_follow_user: Follow or Unfollow
   video_card_content_region_stats: Stats
-  video_card_content_region_tags: Tags
   video_card_content_region_other: Other
   group_player_components: Player Components
   group_player_display_mode: Display Mode
@@ -547,12 +546,7 @@ settings:
   video_preview_swipe_seek_desc: Press and drag horizontally on a video preview to seek backward or forward near the current position.
   hover_video_card_delayed: Delayed video preview on hover over the video card
   only_cover_video_preview: Preview videos only when hovering the cover
-  show_video_card_author_avatar: Show uploader avatar
   show_video_card_author_name: Show uploader name
-  show_video_card_video_tag: Show video tags
-  show_video_card_video_tag_desc: Show video category tags provided on search and other pages.
-  show_video_card_recommend_tag: Show plugin-calculated recommendation tags
-  show_video_card_recommend_tag_desc: Display tags calculated by the plugin, such as "High Engagement", "Popular", etc.
   show_video_card_publish_time: Show publish time
   show_video_card_view_count: Show view count
   show_video_card_danmaku_count: Show danmaku count
@@ -590,6 +584,7 @@ settings:
 
   # Video Card Grid Settings
   group_video_card_grid: Video Card Grid
+  group_video_card_grid_desc: Covers are at least 320×180; as many columns as fit are shown, and cards grow as the window widens.
   auto_switch_list_layout: Automatically switch list columns based on video grid width
   auto_switch_list_layout_desc: When enabled, two-column mode switches to one column when the video grid is narrower than the configured width.
   auto_switch_list_layout_breakpoint: Switch at
@@ -597,16 +592,11 @@ settings:
   video_card_cover_ratio_desc: Set the cover width separately for one-column and two-column horizontal video cards.
   video_card_cover_ratio_one_column: One-column layout
   video_card_cover_ratio_two_columns: Two-column layout
-  grid_breakpoints: Grid Breakpoints
-  grid_breakpoints_desc: Set the number of columns at different video grid widths. The matching column count is used when the grid reaches each breakpoint.
   grid_columns: Show
-  grid_columns_unit: cols
   video_card_title_font_size: Title Font Size
   video_card_title_font_size_desc: Controls the font size of the video card title.
   video_card_author_font_size: UP info font size
-  video_card_author_font_size_desc: Controls the font size for uploader names shown on video cards.
-  video_card_meta_font_size: Tag & timestamp font size
-  video_card_meta_font_size_desc: Controls the font size for tags and timestamps shown below the title.
+  video_card_author_font_size_desc: Controls the font size of the uploader and publish-time line under the title.
   video_card_shadow_curve: Shadow gradient curve
   video_card_shadow_curve_desc: Customize the gradient effect of the bottom shadow on video cards
   video_card_shadow_curve_hint: Drag the line to create control points, right-click to delete
@@ -1572,9 +1562,8 @@ video_card:
     open_in_background: Open In Background
     open_in_new_window: Open in New Window
     open_in_current_tab: Open in Current Tab
-    open_in_drawer: Open in Drawer
-    copy_video_link: Copy Video Link
-    copy_clean_video_link: Copy Clean Video Link
+    copy_video_link: Copy Link
+    copy_original_link: Copy Original Link
     copy_bv_number: Copy BV Number
     copy_av_number: Copy AV Number
     view_the_original_cover: View the Original Cover
@@ -1582,8 +1571,7 @@ video_card:
     unfollow_user: Unfollow User
     block_user: Block User
     more_options: More options
-    scroll_to_top: Scroll to the top of the menu
-    scroll_to_bottom: Scroll to the bottom of the menu
+    advanced_options: Advanced
   follow_user_confirm:
     title: Confirm Follow User
     message: Are you sure you want to follow {name}?
@@ -1597,6 +1585,7 @@ video_card:
     message: Are you sure you want to block {name}?
     warning: After blocking, you will not be able to see any content published by this user.
   group_contribution: '{firstAuthor} and {num} others contributed'
+  followed: Following
   video_removed: Video removed
   watched: Watched
   browsed: Opened
@@ -1604,11 +1593,6 @@ video_card:
   completed: Completed
   played_progress: 'Played to {time}'
   visited_recently: Visited within the past month
-  highlight_high_like: Highly liked
-  highlight_high_engagement: High engagement
-  highlight_million_views: 1M+ views
-  highlight_extra_long: Extra-long video
-  highlight_long: Long video
   watch_later_unavailable: Watch Later information is unavailable for this video
   watch_later_update_failed: Failed to update Watch Later
   feedback_unavailable: Feedback options are unavailable
@@ -2091,3 +2075,5 @@ search:
     finished: Finished
     not_started: Not started
     in_progress: In progress
+
+filter_rule_execution_failed: Regular-expression filtering could not finish. Check your filter rules and try again.

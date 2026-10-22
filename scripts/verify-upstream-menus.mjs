@@ -96,16 +96,19 @@ export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent
     }
   })
 
-  check('video menu: visible Web/App groups have no empty dividers and keep block for followed authors', async () => {
+  check('video menu: Web/App groups have no empty dividers; advanced items fold away and block stays for followed authors', async () => {
     const source = Vue.ref('appRcmd')
-    const settings = Vue.ref({ enableCleanShareLink: true, videoCardContextMenuConfig: [] })
+    const settings = Vue.ref({ videoCardContextMenuAdvanced: [] })
     const blank = { render: () => null }
     const model = await import('../src/models/video/appForYou')
     const Component = await compileComponent('../src/components/VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue', {
       './components/FavoriteVideoDialog.vue': { default: blank },
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       'vue-toastification': { useToast: () => ({ error() {}, success() {} }) },
-      '~/composables/useAppProvider': { useBewlyApp: () => ({ openIframeDrawer() {} }) },
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ openLayoutEditorSetting() {} }) },
+      '~/components/ChevronIcon.vue': { default: blank },
+      '~/composables/useMeasuredDisclosure': { useMeasuredDisclosure: () => ({ height: Vue.ref(0), onTransitionEnd() {} }) },
+      '~/logic/layoutEdit': { enterLayoutEditMode() {} },
       '~/composables/useUserRelations': { useUserRelations: () => ({ batchQueryUserRelations: async () => {} }) },
       '~/logic': { settings },
       '~/models/video/appForYou': model,
@@ -145,10 +148,14 @@ export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent
       assert.equal(host.querySelectorAll('li[role="menuitem"]').length, 0)
       checkDividers()
       source.value = 'rcmd'
-      settings.value.videoCardContextMenuConfig = [{ key: 'notInterested', visible: false }, { key: 'notInterestedUploader', visible: false }, { key: 'viewOriginalCover', visible: false }, { key: 'followUser', visible: false }]
+      settings.value.videoCardContextMenuAdvanced = ['notInterested', 'notInterestedUploader', 'viewOriginalCover', 'followUser']
       await flush()
-      assert.doesNotMatch(host.textContent, /not_interested|unfollow_user/)
-      assert.match(host.textContent, /block_user/)
+      const advanced = host.querySelector('.context-menu-advanced')
+      const direct = [...host.querySelectorAll('[role="menuitem"]')].filter(item => !advanced.contains(item)).map(item => item.textContent).join(' ')
+      assert.doesNotMatch(direct, /not_interested|unfollow_user/)
+      assert.match(direct, /block_user|advanced_options/)
+      assert.match(advanced.textContent, /not_interested/)
+      assert.ok(advanced.inert === true || advanced.hasAttribute('inert'), 'collapsed advanced items are not focusable')
       checkDividers()
     }
     finally {

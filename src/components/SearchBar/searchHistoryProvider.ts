@@ -93,7 +93,7 @@ class BilibiliStorageProvider {
           finish(true)
       }
       handleError = () => finish(false)
-      timer = window.setTimeout(() => finish(false), SEARCH_HISTORY_IFRAME_LOAD_TIMEOUT_MS)
+      timer = window.setTimeout(finish, SEARCH_HISTORY_IFRAME_LOAD_TIMEOUT_MS, false)
       iframe.addEventListener('load', handleLoad)
       iframe.addEventListener('error', handleError)
     })

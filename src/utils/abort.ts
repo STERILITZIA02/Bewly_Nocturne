@@ -41,7 +41,7 @@ export function waitForDelay(delay: number, signal?: AbortSignal): Promise<void>
     function abort() {
       finish(signal?.reason ?? new DOMException('Request aborted', 'AbortError'))
     }
-    timer = setTimeout(() => finish(), delay)
+    timer = setTimeout(finish, delay)
     if (signal?.aborted)
       abort()
     else

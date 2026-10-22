@@ -161,46 +161,18 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
     }
   })
 
-  check('masonry keeps DOM order and existing positions when appending, and reflows to one column', async () => {
-    const Grid = await compileComponent('../src/components/MasonryGrid.vue')
-    const items = Vue.ref([100, 60, 80])
-    const gridRef = Vue.ref()
+  check('notification skeleton uses CSS columns without a layout observer per placeholder', async () => {
+    const path = '../src/contentScripts/views/Notifications/components/NativeNotificationFeedSkeleton.vue'
+    const source = await readFile(new URL(path, import.meta.url), 'utf8')
+    assert.doesNotMatch(source, /MasonryGrid|ResizeObserver|getBoundingClientRect/)
+    const Skeleton = await compileComponent(path)
     const host = document.body.appendChild(document.createElement('div'))
-    const app = Vue.createApp({ render: () => Vue.h(Grid, { ref: gridRef }, () => items.value.map((height, index) => Vue.h('article', { key: index, 'data-height': height }, String(index)))) })
+    const app = Vue.createApp(Skeleton, { label: 'Loading', count: 6 })
     try {
       app.mount(host)
       await flush()
-      const grid = host.firstElementChild
-      Object.defineProperty(grid, 'clientWidth', { value: 612 })
-      grid.style.gridTemplateColumns = '300px 300px'
-      grid.style.setProperty('--bew-masonry-columns', '2')
-      grid.style.columnGap = '12px'
-      let measurements = 0
-      const measure = () => [...grid.children].forEach((el) => {
-        el.getBoundingClientRect = () => {
-          measurements++
-          return { height: Number(el.dataset.height) }
-        }
-      })
-      measure()
-      gridRef.value.layout()
-      assert.deepEqual([...grid.children].map(el => el.style.gridRow), ['1 / span 100', '1 / span 60', '73 / span 80'])
-      measurements = 0
-      const previousMedia = window.matchMedia
-      window.matchMedia = () => ({ matches: true })
-      gridRef.value.layout(false)
-      window.matchMedia = previousMedia
-      assert.equal(measurements, 0, 'unchanged cards reuse cached heights instead of forcing layout')
-      items.value.push(50)
-      await flush()
-      measure()
-      gridRef.value.layout()
-      assert.deepEqual([...grid.children].map(el => el.style.gridRow), ['1 / span 100', '1 / span 60', '73 / span 80', '113 / span 50'])
-      assert.deepEqual([...grid.children].map(el => el.textContent), ['0', '1', '2', '3'])
-      grid.style.gridTemplateColumns = '612px'
-      grid.style.setProperty('--bew-masonry-columns', '1')
-      gridRef.value.layout()
-      assert.deepEqual([...grid.children].map(el => el.style.gridRow), ['1 / span 100', '113 / span 60', '185 / span 80', '277 / span 50'])
+      assert.equal(host.querySelectorAll('.native-notification-feed-skeleton__item').length, 6)
+      assert.ok(host.querySelector('.native-notification-grid[role="status"]'))
     }
     finally {
       app.unmount()
@@ -220,6 +192,7 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
     }
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ render: () => Vue.h(Results, { controller, query: 'needle' }) })
+    app.component('Button', { props: ['type', 'size'], setup: (_props, { slots }) => () => Vue.h('button', slots.default?.()) })
     try {
       app.mount(host)
       await flush()

@@ -92,7 +92,7 @@ const LOCAL_ONLY_RUNTIME_FIELDS = new Set([
 ])
 
 function hasOwn(record: Record<string, unknown>, key: string) {
-  return Object.prototype.hasOwnProperty.call(record, key)
+  return Object.hasOwn(record, key)
 }
 
 export function isSettingsCloudSyncEnabled(value: unknown) {

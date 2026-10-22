@@ -161,7 +161,7 @@ function startTask(task: QueueTask) {
   const timeout = Number.isFinite(task.options.timeout)
     ? Math.max(0, task.options.timeout!)
     : DEFAULT_IMAGE_LOAD_TIMEOUT
-  task.timeoutId = setTimeout(() => cancelTask(task, 'timeout'), timeout)
+  task.timeoutId = setTimeout(cancelTask, timeout, task, 'timeout')
 
   const context: ImageLoadQueueStartContext = {
     isCurrent: () => task.status === 'active' && !task.cancelled,

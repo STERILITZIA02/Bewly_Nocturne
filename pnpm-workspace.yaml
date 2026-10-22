@@ -1,14 +1,29 @@
+minimumReleaseAgeExcludePrune: true
+minimumReleaseAgeExclude:
+  - npm-run-all2@9.0.4
+
+trustPolicy: no-downgrade
+autoInstallPeers: true
+strictPeerDependencies: true
+shamefullyHoist: true
+shellEmulator: true
+
+overrides:
+  basic-ftp@<6.2.1: ^6.2.3
+  katex@<0.18.2: ^0.18.2
+  tinypool@<2.1.2: ^2.2.0
+
+patchedDependencies:
+  '@asamuzakjp/dom-selector@10.0.4': patches/@asamuzakjp__dom-selector@10.0.4.patch
+  '@vue/language-core@3.3.13': patches/@vue__language-core@3.3.13.patch
+
 allowBuilds:
   '@parcel/watcher': true
   esbuild: true
   oxc-resolver: true
   simple-git-hooks: true
   spawn-sync: true
-onlyBuiltDependencies:
-  - '@parcel/watcher'
-  - dtrace-provider
-  - esbuild
-  - oxc-resolver
-  - simple-git-hooks
-  - spawn-sync
-  - vue-demi
+
+permissions:
+  qrcode.vue:
+    skills: false

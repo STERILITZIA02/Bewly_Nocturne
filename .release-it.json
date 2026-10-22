@@ -1,9 +1,5 @@
 {
-  "plugins": {
-    "release-it-pnpm": {
-      "publishCommand": "echo 'skipping publish'"
-    }
-  },
+  "npm": { "publish": false },
   "git": {
     "commitMessage": "chore: 发布 v${version}",
     "tagName": "v${version}"
@@ -15,6 +11,7 @@
       "pnpm test"
     ],
     "after:bump": [
+      "pnpm install --lockfile-only",
       "pnpm run build",
       "pnpm run pack:zip"
     ],

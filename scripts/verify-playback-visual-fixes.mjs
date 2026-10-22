@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 
+import { syncNativeCommentContinuation } from '../src/inject/nativeCommentContinuation'
 import { resolveWidescreenSidebarHydrationPhase } from '../src/utils/bewlyWidescreenPolicy'
 import { patchCommentTransferLifecycle, transferCommentNode } from '../src/utils/commentDomTransfer'
 import { buildCommentTree } from '../src/utils/commentTree'
@@ -38,6 +39,104 @@ function clock() {
 }
 
 export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, flush }) {
+  check('DOM fixture: moved comment feed continues in its panel and releases pagination observers', () => {
+    const originalObserver = globalThis.IntersectionObserver
+    const observers = []
+    globalThis.IntersectionObserver = class {
+      constructor(callback, options) {
+        this.callback = callback
+        this.options = options
+        this.observations = 0
+        observers.push(this)
+      }
+
+      observe(target) {
+        this.target = target
+        this.observations++
+      }
+
+      unobserve() { this.target = null }
+      disconnect() { this.target = null }
+      hit() { this.callback([{ isIntersecting: true }]) }
+    }
+    const root = document.createElement('div')
+    root.id = 'bewly-widescreen-root'
+    const panel = document.createElement('section')
+    panel.className = 'bewly-widescreen-panel-comment'
+    const list = document.createElement('div')
+    const shadow = list.attachShadow({ mode: 'open' })
+    const disposals = []
+    let requests = 0
+    Object.assign(list, {
+      showSpinner: true,
+      showContinuations: false,
+      showEnd: false,
+      paginationStr: 'first',
+      disposables: { add: dispose => disposals.push(dispose) },
+      getList: async () => {
+        requests++
+        list.showContinuations = true
+      },
+    })
+    root.append(panel)
+    panel.append(list)
+    document.body.append(root)
+    try {
+      syncNativeCommentContinuation(list)
+      assert.equal(observers.length, 0, 'wait for the native sentinel to render')
+      shadow.innerHTML = '<div id="continuations"><div class="trigger"></div></div>'
+      syncNativeCommentContinuation(list)
+      const observer = observers[0]
+      assert.equal(observer.options.root, panel, 'observe the actual scrolling panel')
+      observer.hit()
+      assert.equal(requests, 0, 'first-page loading owns its request')
+      list.showSpinner = false
+      syncNativeCommentContinuation(list)
+      const firstObservations = observer.observations
+      observer.hit()
+      observer.hit()
+      assert.equal(requests, 1, 'one request while pagination is pending')
+      list.paginationStr = 'second'
+      syncNativeCommentContinuation(list)
+      assert.equal(observer.observations, firstObservations, 'wait until the page has settled')
+      list.showContinuations = false
+      syncNativeCommentContinuation(list)
+      assert.equal(observer.observations, firstObservations + 1, 'recheck an already visible sentinel')
+      observer.hit()
+      list.showContinuations = false
+      syncNativeCommentContinuation(list)
+      assert.equal(observer.observations, firstObservations + 1, 'no retry loop when the cursor did not advance')
+      panel.hidden = true
+      observer.hit()
+      assert.equal(requests, 2, 'hidden panels do not request pages')
+      panel.hidden = false
+      list.showEnd = true
+      syncNativeCommentContinuation(list)
+      observer.hit()
+      assert.equal(observer.target, null)
+      assert.equal(requests, 2, 'the end of the list stops loading')
+      list.showEnd = false
+      syncNativeCommentContinuation(list)
+      const restarted = observers.at(-1)
+      document.body.append(list)
+      syncNativeCommentContinuation(list)
+      assert.equal(restarted.target, null, 'restoring the original layout disconnects the panel observer')
+      panel.append(list)
+      syncNativeCommentContinuation(list)
+      const removed = observers.at(-1)
+      list.remove()
+      disposals.forEach(dispose => dispose())
+      removed.hit()
+      assert.equal(removed.target, null, 'native teardown releases the observer')
+      assert.equal(requests, 2)
+    }
+    finally {
+      root.remove()
+      list.remove()
+      globalThis.IntersectionObserver = originalObserver
+    }
+  })
+
   check('DOM fixture: extracted loading owner preserves exit, preparation timeout and cleanup', async () => {
     const time = clock()
     const constants = await import('../src/utils/bewlyWidescreen/constants')

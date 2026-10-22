@@ -33,8 +33,7 @@ const page = computed(() => app?.activatedPage.value ?? AppPage.Home)
 const layout = computed(() => props.gridLayout ?? (page.value === AppPage.Home ? savedGridLayout.value.home : 'adaptive'))
 const href = useCurrentLocationHref()
 const view = computed(() => normalizeNotificationRoute(href.value).view)
-const { gridClass, gridCssVars } = useGridLayout(() => 'adaptive')
-const root = ref<HTMLElement>()
+const { gridClass } = useGridLayout(() => 'adaptive')
 const momentContent = ref<HTMLElement>()
 const { width } = useElementSize(momentContent)
 const momentColumns = computed(() => resolveMomentGridColumnCount({
@@ -48,7 +47,7 @@ const historyFilters = createHistoryFilters()
 </script>
 
 <template>
-  <div ref="root" class="bew-page-async-loading" role="status" :aria-label="$t('common.loading')" aria-busy="true">
+  <div class="bew-page-async-loading" role="status" :aria-label="$t('common.loading')" aria-busy="true">
     <NotificationsPageSkeleton v-if="page === AppPage.Notifications" :label="$t('common.loading')" :view="view" :announce="false" />
     <LibraryWorkspace v-else-if="!contentOnly && page === AppPage.Moments" :label="$t('moments.moments')">
       <template #sidebar="{ contentId }">
@@ -158,7 +157,7 @@ const historyFilters = createHistoryFilters()
       <LibraryVideoGridSkeleton v-else-if="page === AppPage.History || page === AppPage.WatchLater" :history="page === AppPage.History" />
       <div v-else-if="page === AppPage.Anime" class="bew-page-async-loading__anime">
         <AnimeTimeTableSkeleton />
-        <div :class="gridClass" :style="gridCssVars">
+        <div :class="gridClass">
           <BangumiCardSkeleton v-for="index in 6" :key="index" />
         </div>
       </div>

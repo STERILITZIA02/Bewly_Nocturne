@@ -5,6 +5,7 @@ import { useToast } from 'vue-toastification'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { DELAYED_MEDIA_PREVIEW_MS } from '~/constants/mediaPreview'
 import { settings } from '~/logic'
+import { findLayoutEditableTarget } from '~/logic/layoutEdit'
 import type { VideoInfo } from '~/models/video/videoInfo'
 import type { VideoPreviewResult } from '~/models/video/videoPreview'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -14,7 +15,6 @@ import api from '~/utils/api'
 import type { AppFeedFeedbackSelection } from '~/utils/appFeedFeedback'
 import { getAppFeedFeedbackTarget, isSameAppFeedFeedbackTarget, submitAppFeedFeedback } from '~/utils/appFeedFeedback'
 import { captureAppAuth, ensureFreshAppAccessToken } from '~/utils/authProvider'
-import { calcCurrentTime, numFormatter, parseStatNumber } from '~/utils/dataFormatter'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
 import { getUserID, removeHttpFromUrl } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
@@ -35,7 +35,6 @@ interface VideoCardProps {
   showWatchLater?: boolean
   horizontal?: boolean
   showPreview?: boolean
-  moreBtn?: boolean
 }
 
 export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps>, savedState?: VideoCardState) {
@@ -61,8 +60,10 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   const videoOptionsFloatingStyles = ref<CSSProperties>({})
   const interactionState = savedState ?? reactive(createVideoCardState())
   const removed = toRef(interactionState, 'removed')
-  const moreBtnRef = ref<HTMLButtonElement | null>(null)
-  const contextMenuRef = ref<HTMLDivElement | null>(null)
+  // Focus returns here when the menu closes (the card link under the pointer or keyboard focus).
+  let contextMenuTrigger: HTMLElement | null = null
+  // The layout region under the pointer, so the menu can offer "edit layout" and its setting.
+  const contextMenuLayoutTarget = shallowRef<ReturnType<typeof findLayoutEditableTarget>>()
   const videoCurrentTime = toRef(interactionState, 'videoCurrentTime')
   const previewMediaIdentity = computed(() => getVideoPreviewIdentity(props.value.video))
   watch(previewMediaIdentity, (identity) => {
@@ -165,32 +166,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     }
   })
 
-  const videoStatNumbers = computed(() => {
-    if (!props.value.video) {
-      return {
-        view: undefined,
-        danmaku: undefined,
-        like: undefined,
-      }
-    }
-
-    const { view, viewStr, danmaku, danmakuStr, like, likeStr } = props.value.video
-
-    return {
-      view: parseStatNumber(view ?? viewStr),
-      danmaku: parseStatNumber(danmaku ?? danmakuStr),
-      like: parseStatNumber(like ?? likeStr),
-    }
-  })
-
-  const shouldHideOverlayElements = computed(() =>
-    props.value.showPreview
-    && settings.value.enableVideoPreview
-    && isHover.value
-    && previewVideoUrl.value
-    && topBarStore.isLogin,
-  )
-
   // Helper function to extract author mids from video
   function getAuthorMids(video?: Video): number[] {
     if (!video?.author)
@@ -203,10 +178,10 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       .filter((mid): mid is number => typeof mid === 'number')
   }
 
-  // Watch
+  // Watch Later membership is only shown in the context menu, so it resolves when the menu opens.
   watch([
     watchLaterMediaIdentity,
-    () => props.value.showWatchLater,
+    () => props.value.showWatchLater && showVideoOptions.value,
     () => topBarStore.userInfo.mid,
   ], async ([identity, showWatchLater], [previousIdentity]) => {
     const video = props.value.video
@@ -349,12 +324,17 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       const result = await updateOwnedWatchLater(video, 'toggle', owner, topBarStore, async target => knownAid ?? resolveWatchLaterAid(target))
       if (!owner.isCurrent())
         return
-      if (result.status === 'unavailable')
+      if (result.status === 'unavailable') {
         toast.error(t('video_card.watch_later_unavailable'))
-      else if (result.status === 'failed')
+      }
+      else if (result.status === 'failed') {
         toast.error(result.message || t('video_card.watch_later_update_failed'))
-      else if (result.status === 'success')
+      }
+      else if (result.status === 'success') {
         resolvedWatchLaterAid.value = result.aid
+        // The menu closes on selection, so the toast is the only confirmation.
+        toast.success(t(result.added ? 'common.added_to_watch_later' : 'common.operation_completed'))
+      }
     }
     catch (error) {
       if (owner.isCurrent() && !isExtensionContextInvalidatedError(error))
@@ -464,11 +444,16 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     }
   }
 
-  function handleMoreBtnClick() {
-    if (!moreBtnRef.value)
-      return
-    const anchor = moreBtnRef.value.getBoundingClientRect()
-    const position = computeFloatingMenuPosition(anchor, window.innerWidth, window.innerHeight)
+  function openContextMenu(event: MouseEvent) {
+    const target = event.target instanceof Element ? event.target : null
+    contextMenuTrigger = target?.closest<HTMLElement>('a[href], button') ?? null
+    contextMenuLayoutTarget.value = findLayoutEditableTarget(event.composedPath())
+    // The keyboard context-menu key reports no pointer position; anchor to the focused element instead.
+    const fromPointer = event.clientX !== 0 || event.clientY !== 0
+    const rect = (contextMenuTrigger ?? target)?.getBoundingClientRect()
+    const x = fromPointer || !rect ? event.clientX : rect.left
+    const y = fromPointer || !rect ? event.clientY : rect.bottom
+    const position = computeFloatingMenuPosition({ top: y, bottom: y, left: x, right: x }, window.innerWidth, window.innerHeight, { gap: 0, align: 'start' })
 
     showVideoOptions.value = false
     videoOptionsFloatingStyles.value = {
@@ -478,9 +463,16 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       left: position.left,
       width: position.width,
       maxHeight: position.maxHeight,
-      transformOrigin: position.direction === 'up' ? 'bottom right' : 'top right',
+      transformOrigin: position.direction === 'up' ? 'bottom left' : 'top left',
     }
     showVideoOptions.value = true
+  }
+
+  function closeContextMenu() {
+    showVideoOptions.value = false
+    const trigger = contextMenuTrigger
+    contextMenuTrigger = null
+    void nextTick(() => trigger?.isConnected && trigger.focus({ preventScroll: true }))
   }
 
   async function handleUndo() {
@@ -533,9 +525,8 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     // Refs
     showVideoOptions,
     videoOptionsFloatingStyles,
+    contextMenuLayoutTarget,
     removed,
-    moreBtnRef,
-    contextMenuRef,
     videoCurrentTime,
     isInWatchLater,
     isHover,
@@ -552,8 +543,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
 
     // Computed
     videoUrl,
-    videoStatNumbers,
-    shouldHideOverlayElements,
 
     // Methods
     clearPreviewVideoUrl,
@@ -563,11 +552,10 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     handelMouseLeave,
     handlePreviewFullscreenChange,
     handleClick,
-    handleMoreBtnClick,
+    openContextMenu,
+    closeContextMenu,
     handleUndo,
     handleRemoved,
     removeHttpFromUrl,
-    calcCurrentTime,
-    numFormatter,
   }
 }

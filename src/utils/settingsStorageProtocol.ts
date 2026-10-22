@@ -40,7 +40,7 @@ export interface SettingsStorageWriteMeta {
 const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
 function hasOwn(record: Record<string, unknown>, key: string) {
-  return Object.prototype.hasOwnProperty.call(record, key)
+  return Object.hasOwn(record, key)
 }
 
 /** Structural equality of JSON settings values, without serializing either side. */

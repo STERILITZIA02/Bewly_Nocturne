@@ -105,7 +105,7 @@ export function isPageBridgeMessage(value: unknown): value is PageBridgeMessage 
   }
 
   return value.type !== PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST && value.type !== PAGE_BRIDGE_MESSAGE.ACCOUNT_CHANGED
-    ? Object.prototype.hasOwnProperty.call(value, 'data')
+    ? Object.hasOwn(value, 'data')
     : value.data === undefined
 }
 

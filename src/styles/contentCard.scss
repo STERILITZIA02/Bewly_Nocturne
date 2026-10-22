@@ -8,6 +8,31 @@
   padding-block-end: $radius;
 }
 
+// Album-style text uses natural title height in every video-card implementation.
+@mixin video-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-1);
+  min-width: 0;
+}
+
+@mixin video-title {
+  min-width: 0;
+  margin: 0;
+  color: var(--bew-text-1);
+  font-size: var(--video-card-title-size);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-title-line-height);
+}
+
+@mixin video-subtitle {
+  color: var(--bew-text-2);
+  font-size: var(--video-card-author-size);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-author-line-height);
+}
+
+// Bare cards stay transparent; hover lifts the whole card above its neighbours.
 @mixin bare {
   box-sizing: border-box;
   padding: var(--bew-card-hover-outset);
@@ -15,18 +40,56 @@
   border-radius: var(--bew-radius-xl);
   corner-shape: var(--bew-corner-shape);
   background: transparent;
-  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
+  transition: transform var(--bew-duration-moderate) var(--bew-ease-emphasized);
 
   @media (hover: hover) and (pointer: fine) {
     &:hover {
-      background: var(--bew-fill-1);
+      z-index: 1;
+      transform: scale(var(--bew-card-hover-scale));
     }
   }
-  &:focus-within {
-    background: var(--bew-fill-1);
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &:hover {
+      transform: none;
+    }
   }
-  &:active {
-    background: var(--bew-fill-2);
+}
+
+// Behind a lifted bare card, neighbours it overlaps blur most at its centre and
+// sharpen outward. The card renders a centred <ProgressiveBlur> only while
+// hovered and styles it with `hover-halo-layer`; paint containment is off while
+// hovered so the halo can extend past the card box.
+@mixin hover-halo {
+  position: relative;
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      content-visibility: visible;
+    }
+  }
+}
+
+@mixin hover-halo-layer {
+  inset: calc(-1 * var(--bew-space-6));
+  z-index: -1;
+}
+
+// Apple Music album-art frame: one bright translucent hairline drawn over the
+// artwork (overlays and previews sit beneath it) and a soft shadow.
+@mixin media-frame {
+  box-shadow: var(--bew-shadow-1);
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    border: var(--bew-media-edge-width) solid var(--bew-media-edge-color);
+    border-radius: inherit;
+    corner-shape: inherit;
+    pointer-events: none;
   }
 }
 

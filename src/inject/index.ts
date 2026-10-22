@@ -12,6 +12,7 @@ import { createCommentReplyReadingController, getCommentReplyGuideCoordinates } 
 import { updateCommentSendButton } from '~/inject/commentSendButton'
 import { sortPlaybackDanmakuListBySender } from '~/inject/danmakuSenderOrder'
 import { EXTERNAL_COMPOSER_COMMENT_BOX_CSS, EXTERNAL_COMPOSER_HEADER_CSS, insertExternalComposerReply, patchExternalComposerReply } from '~/inject/externalCommentComposer'
+import { syncNativeCommentContinuation } from '~/inject/nativeCommentContinuation'
 import { wakeNativeCommentLists } from '~/inject/nativeCommentWake'
 import { patchNativeUserProfile } from '~/inject/nativeUserProfile'
 import { setupVideoMetadataBridge } from '~/inject/videoMetadata'
@@ -1553,7 +1554,7 @@ else if (shouldInitializePageScript) {
     if (depth === 1)
       return COMMENT_REPLY_TREE_INDENT_STEP
 
-    return `calc(${Array.from({ length: depth }, () => COMMENT_REPLY_TREE_INDENT_STEP).join(' + ')})`
+    return `calc(${Array.from({ length: depth }).fill(COMMENT_REPLY_TREE_INDENT_STEP).join(' + ')})`
   }
 
   function getCommentReplyTreeIndentStep(replyContainer: HTMLElement): number {
@@ -3247,7 +3248,10 @@ else if (shouldInitializePageScript) {
               return
 
             ensureCommentShadowStyle(root, shadowStylePatch.id, shadowStylePatch.css)
-            if (name === 'bili-comment-thread-renderer') {
+            if (name === 'bili-comments') {
+              syncNativeCommentContinuation(component)
+            }
+            else if (name === 'bili-comment-thread-renderer') {
               // 删除/屏蔽回复可能让楼层组件整体重绘，之前挂在其 shadow root
               // 内的 SVG 线条会随渲染结果一并被移除；重绘完成后从当前回复容器恢复。
               const repliesRenderer = root.querySelector('bili-comment-replies-renderer') as HTMLElement | null

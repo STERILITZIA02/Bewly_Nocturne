@@ -434,79 +434,24 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     }
   })
 
-  check('Card metadata: whole tags only; equal updates reuse measurements; unified layout preserves time and author toggles', async () => {
-    const frames = []
-    let resized
-    let measured = 0
-    const module = await loadSourceModule('../src/components/VideoCard/directives/wholeMeta.ts', {}, {
-      ResizeObserver: class { constructor(callback) { resized = callback } observe() {} unobserve() {} disconnect() {} },
-      requestAnimationFrame: callback => frames.push(callback),
-      cancelAnimationFrame() {},
-    })
-    const row = document.body.appendChild(document.createElement('div'))
-    const children = ['time', 'tag', 'hint'].map((text) => {
-      const child = row.appendChild(document.createElement('span'))
-      child.textContent = text
-      return child
-    })
-    let width = 70
-    Object.defineProperty(row, 'clientWidth', { get: () => width })
-    children.forEach((child, index) => {
-      Object.defineProperty(child, 'offsetWidth', { get: () => {
-        measured++
-        return 40
-      } })
-      Object.defineProperty(child, 'offsetTop', { get: () => width > 150 ? 0 : index * 24 })
-    })
-    module.vWholeMeta.mounted(row, { value: 'font' })
-    frames.shift()()
-    assert.equal(children[0].style.visibility, '')
-    assert.equal(children[1].style.visibility, 'hidden')
-    const initial = measured
-    for (let index = 0; index < 100; index++) module.vWholeMeta.updated(row, { value: 'font' })
-    assert.equal(frames.length, 0)
-    assert.equal(measured, initial)
-    width = 200
-    resized([{ target: row }])
-    frames.shift()()
-    assert.ok(children.every(child => child.style.visibility === ''))
-    Object.defineProperties(children[1], { scrollWidth: { value: 100 }, clientWidth: { value: 40 } })
-    module.vWholeMeta.updated(row, { value: 'changed font' })
-    frames.shift()()
-    assert.equal(children[1].style.visibility, 'hidden', 'an internally clipped tag is hidden as a whole')
-    module.vWholeMeta.beforeUnmount(row)
-    row.remove()
-
+  check('Card info: no tags, badges or avatars; publish time stays under the title', async () => {
     const blank = { render: () => null }
-    const settings = Vue.ref({ showVideoCardPublishTime: true, showVideoCardVideoTag: true, showVideoCardRecommendTag: true })
-    const Meta = await compileComponent('../src/components/VideoCard/components/VideoCardMeta.vue', {
-      '~/logic': { settings },
-      '~/utils/dataFormatter': { calcTimeSince: () => 'TIME' },
-      '../directives/wholeMeta': { vWholeMeta: {} },
-      '../utils': { getTagSearchUrl: () => '#' },
-    })
+    const settings = Vue.ref({ showVideoCardPublishTime: true, showVideoCardAuthorName: true })
     const Component = await compileComponent('../src/components/VideoCard/components/VideoCardInfo.vue', {
       '~/logic': { settings },
       '~/components/SkeletonBlock.vue': { default: blank },
-      './VideoCardMeta.vue': { default: Meta },
-      '~/utils/dataFormatter': { calcTimeSince: () => 'TIME', numFormatter: String },
-      '../../VideoWatchedTag.vue': { default: blank },
-      '../directives/wholeMeta': { vWholeMeta: {} },
-      '../tagPolicy': await import('../src/components/VideoCard/tagPolicy'),
-      '../utils': { getTagSearchUrl: () => '#' },
-      '../VideoCardAuthor/components/VideoCardAuthorAvatar.vue': { default: blank },
+      '~/utils/dataFormatter': { calcTimeSince: () => 'TIME' },
       '../VideoCardAuthor/components/VideoCardAuthorName.vue': { default: blank },
     })
     for (const horizontal of [false, true]) {
       const host = document.body.appendChild(document.createElement('div'))
-      const app = Vue.createApp(Component, { horizontal, hideAuthor: true, video: { title: 'Title', publishedTimestamp: 1, tag: 'Tag', searchableTags: ['Search', 'Second'], threePointV2: [] }, highlightTags: ['Hint'], moreBtn: false, showVideoOptions: false, titleFontSizeClass: '', titleStyle: {}, authorFontSizeClass: '', metaFontSizeClass: '', metaStyle: {} })
+      const app = Vue.createApp(Component, { horizontal, hideAuthor: true, video: { title: 'Title', publishedTimestamp: 1, tag: 'Tag', searchableTags: ['Search'], threePointV2: [] }, textStyle: {} })
       app.mount(host)
-      assert.equal(host.querySelector('.video-card-meta-row').firstElementChild.textContent.trim(), 'TIME')
-      assert.equal(host.querySelectorAll('.video-card-meta__chip--searchable').length, 1)
+      assert.equal(host.querySelector('.video-card-info__time').textContent.trim(), 'TIME')
+      assert.equal(host.textContent.includes('Search'), false)
       app.unmount()
       host.remove()
     }
-    console.log(`PERF metadata fixture: 100 equal updates = 0 extra measurements; initial ${initial} width reads`)
   })
 
   check('September refresh: startup, finite timeout, same-URL cancellation and stable prompt buttons', async () => {

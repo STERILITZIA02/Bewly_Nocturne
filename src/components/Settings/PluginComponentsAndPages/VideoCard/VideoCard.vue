@@ -7,8 +7,7 @@ import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import Slider from '~/components/Slider.vue'
 import { originalSettings, settings } from '~/logic'
-import type { GridColumnsConfig, VideoCardFontSizeSetting } from '~/logic/storage'
-import { defaultGridColumns, GRID_BREAKPOINTS } from '~/logic/storage'
+import type { VideoCardFontSizeSetting } from '~/logic/storage'
 import {
   MAX_LIST_LAYOUT_BREAKPOINT,
   MIN_LIST_LAYOUT_BREAKPOINT,
@@ -47,24 +46,6 @@ watch(() => settings.value.autoSwitchListLayoutBreakpoint, (value) => {
 function resetShadowSettings() {
   settings.value.videoCardShadowCurve = [...originalSettings.videoCardShadowCurve]
   settings.value.videoCardShadowHeight = originalSettings.videoCardShadowHeight
-}
-
-// Grid columns management - 固定断点，只修改列数
-const breakpointLabels: { key: keyof GridColumnsConfig, label: string }[] = [
-  { key: 'base', label: '< 640px' },
-  { key: 'sm', label: `≥ ${GRID_BREAKPOINTS.sm}px` },
-  { key: 'md', label: `≥ ${GRID_BREAKPOINTS.md}px` },
-  { key: 'lg', label: `≥ ${GRID_BREAKPOINTS.lg}px` },
-  { key: 'xl', label: `≥ ${GRID_BREAKPOINTS.xl}px` },
-  { key: 'xxl', label: `≥ ${GRID_BREAKPOINTS.xxl}px` },
-]
-
-function updateColumns(key: keyof GridColumnsConfig, value: number) {
-  settings.value.gridColumns = { ...settings.value.gridColumns, [key]: value }
-}
-
-function resetColumns() {
-  settings.value.gridColumns = { ...defaultGridColumns }
 }
 
 function updateListLayoutBreakpointDraft(value: string | number | undefined) {
@@ -122,7 +103,7 @@ function cancelListLayoutBreakpointEditing() {
     <!-- 视频卡片网格：打开设置时直接展示断点配置 -->
     <SettingsItemGroup
       :title="$t('settings.group_video_card_grid')"
-      :desc="$t('settings.grid_breakpoints_desc')"
+      :desc="$t('settings.group_video_card_grid_desc')"
     >
       <SettingsItem
         :title="$t('settings.auto_switch_list_layout')"
@@ -178,34 +159,6 @@ function cancelListLayoutBreakpointEditing() {
           </div>
         </template>
       </SettingsItem>
-
-      <SettingsItem :title="$t('settings.grid_breakpoints')" :desc="$t('settings.grid_breakpoints_desc')" right-width="auto">
-        <template #bottom>
-          <div class="grid-breakpoints">
-            <div
-              v-for="bp in breakpointLabels"
-              :key="bp.key"
-              class="grid-breakpoints__item"
-            >
-              <span class="grid-breakpoints__label">{{ bp.label }}</span>
-              <Input
-                :model-value="settings.gridColumns[bp.key]"
-                type="number"
-                :min="1"
-                :max="12"
-                class="grid-breakpoints__input"
-                @update:model-value="(v) => updateColumns(bp.key, Number(v) || 1)"
-              />
-              <span class="grid-breakpoints__unit">{{ $t('settings.grid_columns_unit') }}</span>
-            </div>
-          </div>
-          <div class="grid-breakpoints__actions">
-            <Button type="tertiary" size="small" @click="resetColumns">
-              {{ $t('common.operation.reset') }}
-            </Button>
-          </div>
-        </template>
-      </SettingsItem>
     </SettingsItemGroup>
 
     <SettingsItemGroup
@@ -228,14 +181,6 @@ function cancelListLayoutBreakpointEditing() {
         right-width="auto"
       >
         <Select v-model="settings.videoCardAuthorFontSize" :options="videoCardFontSizeOptions" w="160px" />
-      </SettingsItem>
-
-      <SettingsItem
-        :title="$t('settings.video_card_meta_font_size')"
-        :desc="$t('settings.video_card_meta_font_size_desc')"
-        right-width="auto"
-      >
-        <Select v-model="settings.videoCardMetaFontSize" :options="videoCardFontSizeOptions" w="160px" />
       </SettingsItem>
     </SettingsItemGroup>
 
@@ -290,62 +235,6 @@ function cancelListLayoutBreakpointEditing() {
   display: grid;
   gap: var(--bew-space-4);
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
-}
-
-.grid-breakpoints {
-  display: grid;
-  width: 100%;
-  gap: var(--bew-space-3);
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13.5rem), 1fr));
-
-  &__item {
-    display: grid;
-    align-items: center;
-    grid-template-columns: 5rem 5rem max-content;
-    gap: var(--bew-space-2);
-    min-width: 0;
-  }
-
-  &__label {
-    min-width: 5rem;
-    font-size: var(--bew-font-size-control);
-    line-height: var(--bew-line-height-control);
-    color: var(--bew-text-1);
-    white-space: nowrap;
-  }
-
-  &__input {
-    width: 100%;
-    min-width: 4.5rem;
-    border: 1px solid color-mix(in oklab, var(--bew-border-color), var(--bew-fill-2) 60%);
-
-    // Keep the native number stepper integrated with the input surface. The
-    // pseudo-elements are Chromium/WebKit-specific; all inputs still receive
-    // the same background below.
-    :deep(input[type="number"]) {
-      background-color: var(--bew-fill-1);
-      color-scheme: inherit;
-
-      &::-webkit-inner-spin-button,
-      &::-webkit-outer-spin-button {
-        background-color: var(--bew-fill-1);
-        opacity: 1;
-      }
-    }
-  }
-
-  &__unit {
-    font-size: var(--bew-font-size-control);
-    line-height: var(--bew-line-height-control);
-    color: var(--bew-text-2);
-    white-space: nowrap;
-  }
-
-  &__actions {
-    display: flex;
-    gap: var(--bew-space-2);
-    margin-top: var(--bew-space-3);
-  }
 }
 
 .list-layout-control {

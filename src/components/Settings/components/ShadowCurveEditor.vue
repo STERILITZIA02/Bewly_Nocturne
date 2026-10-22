@@ -200,7 +200,8 @@ function draw() {
 
   // Draw labels
   ctx.fillStyle = textColor
-  ctx.font = `${canvasStyle.getPropertyValue('--bew-font-size-caption').trim() || '12px'} ${canvasStyle.fontFamily}`
+  // The canvas element's own font-size is the caption token, resolved to px.
+  ctx.font = `${canvasStyle.fontSize} ${canvasStyle.fontFamily}`
   ctx.textAlign = 'center'
   ctx.fillText('0%', padding, props.height - 2)
   ctx.fillText('100%', props.width - padding, props.height - 2)
@@ -440,6 +441,7 @@ watch(
 
 .curve-canvas {
   max-width: 100%;
+  font-size: var(--bew-font-size-caption);
   border-radius: var(--bew-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-chart-surface);

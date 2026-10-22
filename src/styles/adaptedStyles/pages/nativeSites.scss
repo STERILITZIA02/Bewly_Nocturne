@@ -3841,9 +3841,7 @@ html.bewly-design[data-bewly-native-site="community"] {
     color-scheme: light;
 
     .act-button-a:focus-visible {
-      outline: var(--bew-space-0-5) solid CanvasText;
-      outline-offset: var(--bew-space-0-5);
-      box-shadow: 0 0 0 var(--bew-space-1) Canvas;
+      outline: var(--bew-focus-ring);
     }
   }
 }

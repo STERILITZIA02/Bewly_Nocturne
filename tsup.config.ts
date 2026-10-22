@@ -11,6 +11,8 @@ export default defineConfig(() => ({
   entry: {
     'background/index': './src/background/index.ts',
     'contentScripts/pageLoading': './src/contentScripts/pageLoading.ts',
+    'regex/host': './src/regex/host.ts',
+    'regex/worker': './src/regex/worker.ts',
     ...(isDev ? { mv3client: './scripts/client.ts' } : {}),
   },
   async onSuccess() {

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import { DOCK_LAYOUT, LAYOUT_EDITOR_LAYOUT } from '~/constants/layout'
 import { settings } from '~/logic'
+import { ownsContextMenu } from '~/logic/elementSettingsMenu'
 import {
   activeLayoutEditPreviewSettingId,
   activeLayoutEditPreviewValue,
@@ -13,6 +14,7 @@ import {
   completeLayoutEditMode,
   enterLayoutEditMode,
   exitLayoutEditMode,
+  findLayoutEditableTarget,
   getLayoutEditableDescriptor,
   getLayoutEditableDescriptors,
   getRegisteredLayoutEditableElement,
@@ -378,11 +380,9 @@ function eventIsTextEditingControl(event: Event) {
 }
 
 function resolveTargetFromEvent(event: Event) {
-  for (const element of composedElements(event)) {
-    const id = element.dataset.layoutEditableId
-    if (id && getLayoutEditableDescriptor(id))
-      return { id, element }
-  }
+  const found = findLayoutEditableTarget(event.composedPath())
+  if (found)
+    return { id: found.descriptor.id, element: found.element }
 
   if (event instanceof MouseEvent) {
     const candidate = pickLayoutEditableAtPoint(
@@ -449,7 +449,8 @@ function blockBusinessPress(event: Event) {
 }
 
 function handleContextMenu(event: MouseEvent) {
-  if (eventIsEditorControl(event) || eventIsTextEditingControl(event)) {
+  if (eventIsEditorControl(event) || eventIsTextEditingControl(event)
+    || (!isLayoutEditing.value && ownsContextMenu(composedElements(event)))) {
     if (!isLayoutEditing.value)
       contextTargetId.value = null
     return
@@ -770,12 +771,12 @@ onBeforeUnmount(() => {
 }
 
 .layout-editor-outline--hovered {
-  border: 1px dashed var(--bew-focus-ring-color);
+  border: 1px dashed var(--bew-layout-editor-outline-color);
   box-shadow: none;
 }
 
 .layout-editor-outline--selected {
-  border: var(--bew-focus-ring);
+  border: 1px solid var(--bew-layout-editor-outline-color);
   box-shadow: none;
 }
 

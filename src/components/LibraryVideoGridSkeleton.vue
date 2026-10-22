@@ -4,7 +4,7 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useGridLayout } from '~/composables/useGridLayout'
 
 withDefaults(defineProps<{ history?: boolean, count?: number }>(), { count: 12 })
-const { gridClass, gridCssVars } = useGridLayout(() => 'adaptive')
+const { gridClass } = useGridLayout(() => 'adaptive')
 </script>
 
 <template>
@@ -12,7 +12,7 @@ const { gridClass, gridCssVars } = useGridLayout(() => 'adaptive')
     <div v-if="history" class="library-video-grid-skeleton__date" data-bew-skeleton-group>
       <SkeletonBlock width="112px" height="var(--bew-line-height-title)" />
     </div>
-    <div :class="gridClass" :style="gridCssVars">
+    <div :class="gridClass">
       <LibraryVideoCardSkeleton v-for="index in count" :key="index" :history="history" />
     </div>
   </div>

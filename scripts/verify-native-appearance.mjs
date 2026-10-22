@@ -1676,7 +1676,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       trigger.focus()
       trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
       await flush()
-      assert.equal(trigger.getAttribute('aria-expanded'), 'true')
+      assert.equal(trigger.getAttribute('aria-expanded'), 'true', dropdown.outerHTML)
       option.focus()
       option.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
       await flush()
@@ -2384,7 +2384,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
           './recommendationFeed': await import('../src/contentScripts/views/Home/recommendationFeed'),
           './recommendationState': await import('../src/contentScripts/views/Home/recommendationState'),
           './useRecommendationHistory': await import('../src/contentScripts/views/Home/useRecommendationHistory'),
-          './useRecommendationFilters': { useRecommendationFilters: () => ({ filterFunc: Vue.ref(() => true), appFilterFunc: Vue.ref(() => true), hasActiveWebRecommendationFilter: Vue.ref(true), hasActiveAppRecommendationFilter: Vue.ref(true), hasActiveRecommendationFilter: Vue.ref(true), requiresManualFilteredPaging: Vue.ref(false), recommendationFilterSettingsSignature: Vue.ref('fixture'), resetFilteredFeedPagingState() {}, recordFilteredFeedBatch() {} }) },
+          './useRecommendationFilters': { useRecommendationFilters: () => ({ filterFunc: Vue.ref(async items => items.map(() => true)), appFilterFunc: Vue.ref(async items => items.map(() => true)), hasActiveWebRecommendationFilter: Vue.ref(true), hasActiveAppRecommendationFilter: Vue.ref(true), hasActiveRecommendationFilter: Vue.ref(true), requiresManualFilteredPaging: Vue.ref(false), recommendationFilterSettingsSignature: Vue.ref('fixture'), resetFilteredFeedPagingState() {}, recordFilteredFeedBatch() {} }) },
           './useWebRecommendationCursor': await loadSourceModule('../src/contentScripts/views/Home/useWebRecommendationCursor.ts', { '~/logic': { settings, noCookieForYouRecommendationState: Vue.ref({ showlistGroups: [], nextFreshIdx: 1 }) } }),
         }, { performance })
         let state

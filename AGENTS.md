@@ -9,6 +9,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 - 读够周边代码就动手，范围限定在任务内。不做仪式性检查：不反复核对 remote、分支或哈希，不重复确认已给的授权。
 - 先看全局再写：搜一遍项目里同类功能的现有实现（见“共享能力速查”）。问题出在共享层就修共享层，让所有调用方一起受益；不在单个页面打补丁，也不复制一份再改。
 - 验证挑与改动最相关的一项：对应的 `pnpm verify:*` 或 `scripts/verify-*.mjs`、`pnpm lint`、`pnpm typecheck`，或在用户运行的 `pnpm dev` 下看页面。小改动不跑全套，不执行 build。verify 脚本多为源码文本回归断言；规则有意变更时直接更新断言。
+- 页面视觉目测由用户完成；Agent 负责源码排查、自动回归检查和提供复现步骤，不自行操作浏览器进行视觉验收。
 - 汇报说清做了什么、跑了哪些检查、哪些没验证。不写安全声明或免责说明。
 
 ## 代码原则
@@ -47,6 +48,8 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 
 ## 命令与开发环境
 
+- Node 版本由 `.node-version` 与 `package.json` 的 `devEngines.runtime` 固定，pnpm 自动下载项目运行时；本地与 CI 使用同一版本，日常命令用 `pnpm`。升级依赖需同步锁文件，保留严格 peer 检查并运行 `pnpm audit`。类型工具暂用 TypeScript 6，原因与依赖补丁见 `docs/maintenance/2026-10-22-toolchain.md`。
+
 - `pnpm dev`：用户自己运行，持续编译到 `extension/`（Chrome/Edge）；Safari 产物在 `extension-safari/`。只包含 prepare、content/inject、background 等真实任务，不恢复 popup/options 入口、`build:web`、`dev:web`。
 - `pnpm lint` / `pnpm lint:fix`、`pnpm typecheck`、`pnpm verify:*`。
 - UnoCSS 的 `content.filesystem` 与 safelist 只在 watcher 启动时读取，Vite 管线不扫描 `.ts`：只出现在 `.ts` 里的图标类要在该文件加 `// @unocss-include`。改 `unocss.config.ts` 后需要重启 `pnpm dev`，结果看 `extension/dist/contentScripts/style.css`。
@@ -78,7 +81,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 | 分段控件与滚筒 | `segmentControl.scss` + `LiquidSegmentIndicator.vue`、`WheelSelector.vue` |
 | 加载反馈 | `SkeletonBlock.vue`、`LoadingRing.vue`、`useLoadingRingPhase` |
 | 输入框 | `composer.scss`、`useComposerPicker`、`MomentReplyComposer.vue`、`sendButton.scss` |
-| 卡片与网格 | `contentCard.scss`、`useCardWindow`、`useGridLayout`、`MasonryGrid.vue`、`cardRowMetrics.ts` |
+| 卡片与网格 | `contentCard.scss`、`useCardWindow`、`useGridLayout`、`WindowedMasonryGrid.vue`、`cardRowMetrics.ts` |
 | 侧栏页面 | `LibraryWorkspace.vue`、`LibrarySearchField.vue`、`LibrarySidebarHeading.vue`、`sidebarAction.scss` |
 | 滚动边缘渐隐 | `scrollEdgeFade.scss` |
 | 按钮与弹窗 | `IconButton`、`CloseButton`、`TagRemoveButton`、`Dialog`、`ConfirmDialog` / `useConfirmDialog`、`ContextMenu` |
@@ -100,10 +103,10 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 
 ### 排版
 
-- 基础文字五个角色：caption `12/16`、control `13/18`、body `15/24`、title `15/22`、heading `20/28`，用 `--bew-font-size-*` / `--bew-line-height-*`。展示文字用 `--bew-font-size-display`，大号数据用 `--bew-font-size-data/data-emphasis`。不新增无语义的 px/rem 字号，需要时先扩 token。
-- 字重只用 400/500/600/700 的 `--bew-font-weight-*`。层级靠黑白程度（text-1/2/3）与缩进表达，不靠加粗：页面 / 区块 / 弹窗标题、设置分组与行标题都是 400（`--bew-heading-weight` 等）；卡片 / 列表标题、人名、控件、徽标、滚筒用 500（滚筒与静态侧栏标题共用 `--bew-wheel-label-weight`）；内联 strong 与关键数字 600；700 只用于品牌字标。
-- 共享文字类：`.bew-page-heading`（页面主标题，不在页面里重组字号字重）、`.bew-subheading`、`.bew-section-label`、`.bew-ui-label`、`.bew-help`（text-3）。标题 text-1，分组与字段 text-2，说明 text-3。设置分组内容按 `--bew-settings-level-indent` 每级内缩 8px。
-- 字体栈 `--bew-fonts-ui`，禁止合成粗体。默认模式下原生页保留原站字体，推荐 / 自定义模式沿用既有覆盖。正文用比例数字，计数、时间、进度、统计用 tabular-nums；中文不加字距。
+- 整个扩展的文字层级、字号与对比度按 macOS 原生应用校准（用户指定）。默认角色为 caption `11/14`、callout `12/15`、control / body / title `13/16`、subheading `15/20`、heading `17/22`、display `22/26`，大号数据用 26px；统一使用 `--bew-font-size-*` / `--bew-line-height-*`。字号与行高都是 `Npx × --bew-font-scale`：启动时 `utils/browserFontScale.ts` 优先取浏览器暴露的 `env(preferred-text-scale)`，没有有效的非默认系统比例时取浏览器默认字号 / 16，不把两者相乘；只在不等于 1 时写到宿主与 html。JS 需要像素值时读元素的计算 `font-size`，不要读 token 字符串。视频卡片字号设置 xs/sm/base/lg 对应 caption/control/title/subheading，不用 Tailwind `text-*`。不新增无语义的 px/rem 字号，需要时先扩 token。
+- 字重只用 400/500/600/700 的 `--bew-font-weight-*`。层级同时靠字号、字重与前景明暗表达：页面 / 区块标题用 600（`--bew-heading-weight` / `--bew-subheading-weight`），分组标签、人名、徽标、滚筒用 500；正文、视频卡片标题与控件文字用 400（`--bew-control-label-weight`）；内联 strong 与关键数字 600，700 留给品牌字标。同组控件选中与未选中字重相同。
+- 共享文字类：`.bew-page-heading`、`.bew-subheading`、`.bew-section-label`、`.bew-ui-label`、`.bew-help`。标题、正文与字段标签用 text-1，分组和次要信息用 text-2，辅助说明用 text-3，禁用与占位用 text-4；辅助说明使用 callout 字号。文字对比从同一中性前景派生，浅色次要 / 辅助为 70% / 64%，深色与 OLED 为 70% / 60%；`prefers-contrast: more` 自动提高到 88% / 76%。设置分组内容按 `--bew-settings-level-indent` 每级内缩 8px。
+- 字体栈 `--bew-fonts-ui` 优先 `system-ui`，启用光学字号，禁止合成粗体或指定 SF 的字体文件名。默认模式下原生页保留原站字体，推荐 / 自定义模式沿用既有覆盖。正文用比例数字，计数、时间、进度、统计用 tabular-nums；中文不加字距。
 - 同组标签选中与未选中字重相同，靠颜色、背景和指示器区分。
 - 圆形或胶囊里的数字（封面排名、`CountBadge`、序号）用 `main.scss` 的 `.bew-centered-numeral`，数字包在 `<span>` 里。
 
@@ -125,7 +128,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 - `--bew-radius-sm/half/md/lg/xl/2xl/full` = 4/6/8/12/16/24/full。优先语义 token：`--bew-card-radius`、`--bew-media-radius`、`--bew-panel-radius`、`--bew-modal-radius`、`--bew-popover-radius`、`--bew-interactive-radius`、`--bew-badge-radius`。卡片 12、内部按钮与菜单项 8、小状态块与骨架条 4–6、头像 50%。
 - 平滑圆角：普通圆角矩形用 `--bew-corner-shape: superellipse(1.7)`（保留 `border-radius` 回退，组件里不写别的数值）；真实圆形与完整胶囊用 `--bew-corner-shape-round`（头像、圆形按钮、关闭按钮、Switch、主 Dock）。
 - 同一容器四角来自同一 token；局部直角只用于明确的拼接结构。子元素共享裁切轮廓时用 `inherit`，不用 `calc(父圆角 - 任意像素)` 猜。
-- 卡片与封面角落里的控件（稍后再看、三点菜单、删除）用平滑圆角矩形：离角内距小于父圆角时取同心值（父圆角减内距，下限 `--bew-radius-sm`，见 `--bew-cover-action-radius` / `--bew-card-media-action-radius`），否则用 `--bew-interactive-radius`。
+- 卡片与封面角落里的控件（动态卡片稍后再看、三点菜单、删除）用平滑圆角矩形：离角内距小于父圆角时取同心值（父圆角减内距，下限 `--bew-radius-sm`，见 `--bew-card-media-action-radius`），否则用 `--bew-interactive-radius`。
 - 胶囊与面板之间做动画时，起点用胶囊的真实几何半径，不从 `--bew-radius-full` 插值。
 - 视频封面由最外层媒体容器唯一裁切，图片、预览、骨架、遮罩继承同一圆角，悬停预览前后不跳角、不露底、无双边框。
 
@@ -146,9 +149,10 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 - 玻璃之上不再叠玻璃：玻璃内的文本、按钮、选项、搜索框、菜单用实色或无滤镜表面，实色背景不加 backdrop-filter，也不用低模糊代替移除。只有延伸到原玻璃边界之外的覆盖层才可有独立玻璃（Teleport 本身不算理由）。嵌套判断用 `useGlassPanelMotion.ts` 的 `GLASS_SURFACE_CONTEXT`。唯一额外例外：`CountBadge.vue` 的未读胶囊可叠在 Dock 与顶栏玻璃上（复用全局滤镜与实色降级）。
 - 普通毛玻璃（`--bew-filter-glass-1` + 边框 + 阴影）用于：Dock、播放页底部控制栏、独立搜索框、顶栏浮层、侧栏按钮、私信导航、设置窗口、外侧纵向导航、普通 Dialog。设置内的输入框、内嵌菜单和嵌套 Dialog 用实色。
 - 液态玻璃已完整移除：没有 SVG 位移 / 色散 / 折射层、`vLiquidGlass`、`LiquidGlassSurface.vue`、“悬浮表面材质”设置或 `@wxperia/liquid-glass-vue`，不恢复。`enableDockLiquidGlass`、`dockLiquidGlass*` 只在退役字段表中。`LiquidSegmentIndicator` 是纯几何滑块（实色选中表面，不采样背景），不受影响。
-- 保留的模糊：顶栏渐进模糊、设置窗口的 `PanelTopBlur.vue`、会话与通知主内容区的滚动边缘模糊，参数与层级不改；独立搜索框与顶栏边缘模糊相交时两者都保留。其他弹窗没有顶部模糊。设置装饰层不绘制背景或边框、不承担裁切，遮罩在边界前衰减，清晰边框在模糊层上方单独绘制。
+- 渐变模糊只用 `ProgressiveBlur.vue`（`utils/progressiveBlur.ts`）：五层 backdrop 模糊半径逐层翻倍、遮罩窗口逐层向强端收缩，强度默认取 `--bew-glass-blur-radius`（随全局模糊强度，关闭毛玻璃时不渲染），淡入淡出用组件的 `visible`（祖先降不透明度会让模糊失效）。它不能放在 backdrop root 里（祖先有 `backdrop-filter` / `filter` / `mask`）：那样各层只看得到祖先自身的绘制、看不到后面的页面，带区会显出矩形；宿主是玻璃时把玻璃移到背景层（如 `.context-menu-container::before`、`.settings-content__surface`），渐变层祖先也不能同时使用平滑圆角与 `overflow: hidden/clip/auto/scroll`：Chromium 会丢弃子层的渐变遮罩，绘成矩形带；让背景、滚动列表与各模糊层各自裁切，保留平滑圆角。开发构建会检查 backdrop root（含透明度、clip-path、混合与 will-change）及这种圆角裁切并在控制台警告；所有调用方都用组件，不直接调用层生成函数或淡化整组祖先。饱和度只在模糊本身就是表面时开（顶栏 `saturate`），叠在玻璃上会给带区染色。禁止单层 `backdrop-filter` 配渐变 / 径向遮罩：那只是清晰图和定强模糊图按比例混合，会留下矩形或椭圆边界。`pnpm verify:style-invalidation` 用 `scripts/maskedBlurPolicy.ts` 扫描所有样式（按元素合并 BEM 修饰类与伪元素）和内联 `backdropFilter` + `maskImage`，只放行该组件的层。
+- 保留的模糊：顶栏渐进模糊、设置窗口的 `PanelTopBlur.vue`、会话与通知主内容区的滚动边缘模糊，位置、尺寸、强度与层级不改，实现统一为 `ProgressiveBlur`；独立搜索框与顶栏边缘模糊相交时两者都保留。其他弹窗没有顶部模糊。设置装饰层不绘制背景或边框、不承担裁切，遮罩在边界前衰减，清晰边框在模糊层上方单独绘制。
 - 卡片与侧栏内的纵向滚动列表用 `styles/scrollEdgeFade.scss` 的 `vertical` mixin（`.bew-scroll-edge-fade`）：只在该方向还有内容时渐隐，由 scroll-driven 动画驱动，不加监听；遮罩只放在不绘制玻璃的滚动元素上。边缘本就是屏幕边缘或底部有固定输入栏时用 `vertical($bottom: false)` / `.bew-scroll-edge-fade--no-bottom`，状态相关时设 `--bew-scroll-edge-bottom-off: 1`。
-- 玻璃内的实色控件可以无边框，但保留 focus-visible 和必要的分隔线。
+- 玻璃内的实色控件可以无边框，保留必要的分隔线。
 
 ### 控件
 
@@ -156,8 +160,8 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 - 滑块指示器只用 `src/components/LiquidSegmentIndicator.vue`（`active-key` 传当前值，必要时 ref 调 `updateIndicator(true)`），不手写 DOM 或直接调 `useLiquidSegmentIndicator`。始终启用，不恢复 `enableLiquidSegmentIndicator` 设置。
 - 有底板的横向选择组必须是轨道滑块 `.bew-segment-control--track`：滑块与轨道四周差 2px（`--bew-space-0-5`，用户指定），未选中项 hover 只把文字提亮到 text-1，只有滑块画底色。适用于首页 Tab / 布局 / 推荐模式 / 频道菜单、设置分段控件、Logo 样式、搜索结果分类与筛选、播放页右栏标签。例外：顶栏置顶频道（快捷链接）与首页频道菜单（单个触发器）；由 `verify:targeted-fixes` 扫描约束。顶栏 Pop 内无轨道的透明滑块保持 4px 内距，静态筛选维持原 hover。
 - 同一行同类控件用一致的表面、高度、padding、gap、圆角、阴影和状态。
-- 紧凑默认规格：外层高 36px、padding 4px、gap 4px、内部项高 28px、文字 13/18 500、图标 16px；文字项水平 padding 12px，页面主标签 `--wide` 16px，纯图标 `--icon`。
-- 覆盖 default / hover / focus-visible / active / disabled。焦点统一中性 1px：`--bew-focus-ring` / `--bew-focus-ring-color` / `--bew-focus-shadow`，`main.scss` 有全局兜底，MAIN world 与原生页注入样式同样遵循；不画主题色粗 outline 或外扩阴影环，不删除焦点反馈。
+- 紧凑默认规格：外层高 36px、padding 4px、gap 4px、内部项高 28px、文字 13/16 400、图标 16px；文字项水平 padding 12px，页面主标签 `--wide` 16px，纯图标 `--icon`。
+- 覆盖 default / hover / focus-visible / active / disabled。选中或聚焦任何元素都不额外加强调边框（用户指定）：`--bew-focus-ring` 为 none、`--bew-focus-shadow` 与 `--bew-selected-ring` 为透明、`--bew-focus-ring-color` 等于普通边框色，状态只靠 `--bew-selected-bg` / hover 底色与文字明暗表达；`main.scss` 全局兜底、MAIN world 与原生页注入样式同样遵循，不写死 outline、描边或外扩阴影环。布局编辑器的目标框是编辑器自身界面，用 `--bew-layout-editor-outline-color`。
 - 点击目标不小于 24×24，普通文字对比度不低于 4.5:1。
 - 侧栏里卡片与分段控件之外的整行图标 + 文字按钮用 `.library-sidebar-action`（`sidebarAction.scss`）：命中区等宽居中、内容靠左，首个图标或文字对齐滚筒标题（侧栏内距 + `--bew-sidebar-label-inset`，比搜索框左缘内收 8px）；常态透明，hover 亮 / 暗色略加深、OLED 略提亮。
 - 滚筒选择器 `WheelSelector.vue`：字号与几何取共享 token，无箭头或选中背景，hover 只提亮文字；鼠标按下不提前移动焦点，单击同时切换分类与页面；方向键预览、Enter / Space 确认；支持连续与反向滚动、惯性尾巴抑制。
@@ -211,6 +215,8 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 
 ### 首页与搜索
 
+- 推荐过滤按批次异步返回结果；普通关键词在页面内处理，正则只在 `src/regex/worker.ts` 执行，复用 `regexBatchRunner` 与扩展同源宿主。保留原 JS 正则语法，宿主预算 250ms，超时/退出终止 Worker；失败不回退到主线程。规则变更和页面退出释放旧任务，游标与列表只能在当前请求过滤成功后提交。
+
 - 首页默认整合搜索页并复用单个 SearchBar：初始位置带聚焦人物，滚到顶栏后原实例吸顶、人物隐藏，不生成第二个搜索框。独立搜索页由单一反向开关控制；关闭时 `AppPage.Search` 归一到首页，Dock 不显示搜索项。两种形态共用同一组搜索设置；搜索框最大宽度 550px。
 - 首页 Tab 切换只替换内容网格：页头、搜索区与人物装饰不重建；未到内容顶部时保持当前滚动，已吸顶时恢复该 Tab 自己的位置（不低于内容顶部）。首页外层 `KeepAlive max=1`，不活跃的网格卸载并释放请求、预览、观察器，靠数据缓存恢复。其他页面只保留按账号隔离的内存视图状态，不缓存私信正文、请求所有者或 DOM。
 - 视频抽屉复用真实历史项，底层逻辑路由保持原页；返回 / 前进不丢查询、不重复压栈。
@@ -218,9 +224,14 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 
 ### 内容卡片
 
-- 视频卡片只有统一布局（旧 `videoCardLayout` 仅在退役字段中）。裸卡 / 表面卡交互复用 `contentCard.scss`，间距与封面控件用 `--bew-card-*` / `--bew-cover-*`；行距由网格管理，卡片不加底部 margin。
+- 视频卡片只有统一布局（旧 `videoCardLayout` 仅在退役字段中）。自适应网格不再按断点设列数：`repeat(auto-fill, minmax(--bew-video-card-min-width, 1fr))`，封面最小 320×168，统一 40:21（同宽时为旧 16:9 高度的 14/15，约 0.933 倍），CSS 用 `--bew-video-cover-aspect-ratio`，JS 估算用 `VIDEO_CARD_COVER_ASPECT_RATIO`，能放几列放几列；JS 窗口化用同一公式 `getAdaptiveGridColumnCount(width, gap)`（`VIDEO_CARD_MIN_WIDTH`）。`gridColumns`、`videoGridColumns` 已退役。首页内容到窗口两侧用 `--bew-page-inline-inset`（24px，与动态页右栏到右缘一致）。封面与信息区不放操作按钮：稍后再看、收藏、不感兴趣等全部在 `VideoCardContextMenu`，由卡片右键（触屏长按、键盘菜单键）打开，Shift + 右键或已选中文字时保留浏览器菜单；页面专属项（如收藏页“取消收藏”）经 `VideoCardGrid` 的 `getMenuExtraGroups` 追加，不回到封面。
+- 卡片菜单（`VideoCardContextMenu`）是独立浮层毛玻璃：`--bew-popover-surface-background` + `--bew-filter-glass-1`（服从全局模糊强度与关闭毛玻璃）+ `--bew-surface-border-color`，入场只缩放不淡化。列表被裁断的上 / 下端用 `ProgressiveBlur`（只在该方向还有内容时显示），不显示箭头；这是“玻璃不叠玻璃”的用户指定例外。右键所在布局区域时追加“编辑此布局 / 打开对应设置”（`findLayoutEditableTarget` + 应用 provider 的 `openLayoutEditorSetting`）。
+- 菜单项不再隐藏：`videoCardContextMenuAdvanced` 列出的项收进底部“高级选项”折叠区（`useMeasuredDisclosure`，收起时 inert），其余直接显示；默认收起复制原始链接、BV 号、AV 号。“复制链接”复制净化后的链接（`cleanBilibiliUrl`，按设置附标题）。没有“抽屉打开”菜单项。
+- 视频卡片不显示标签、徽标（已浏览、推荐 / 视频标签）和作者头像；唯一的标记是作者名右侧的中性“已关注”胶囊。仿 Apple Music 专辑封面排版：封面用 `--bew-video-cover-radius`（xl，比其他媒体大一级），不叠播放量、点赞、弹幕、时长等统计；信息区与封面左缘齐平、无左右内收，封面下 12px 起标题，最多两行、按实际行数自然增高，不给真实标题预留两行高度。标题后 4px 紧跟次要信息“UP 主 [已关注] · 发布时间”（同一字号，取 UP 信息字号设置，时间不换行），单行与双行标题都保持这一间距。标题用 text-1、字重 400，与全局原生文字层级一致；只有骨架保留两行占位。首页、历史网格和稍后再看网格统一复用 `useVideoCardSharedStyles` 与 `contentCard.scss` 的 `video-details / video-title / video-subtitle`，不在独立卡片中另设字号、字重或两行最小高度；网格的用户名不附头像，保持与封面左缘对齐。
+- 裸卡（`contentCard.bare`）常态与 hover 都透明，hover 整卡放大 `--bew-card-hover-scale` 并抬到相邻卡片之上；视频卡片 hover（仅鼠标）时才渲染居中的 `ProgressiveBlur edge="center"`（`hover-halo` / `hover-halo-layer`，强度 `--bew-card-hover-blur-radius`），以卡片中心向外渐变模糊被遮挡的邻卡。减少动态效果时不放大。
+- 视频封面统一用 `contentCard.media-frame`：`--bew-surface-border-color` 1px 内描边 + `--bew-shadow-1`，hover 时 `--bew-shadow-2`。裸卡 / 表面卡交互复用 `contentCard.scss`，间距与封面控件用 `--bew-card-*` / `--bew-cover-*`；行距由网格管理，卡片不加底部 margin。
 - 作者常态中性前景，悬停与键盘聚焦用主题前景；动态内嵌媒体与引用用 8px 语义圆角。
-- 封面下方信息区左右内收到封面圆角的直线切点、底部留同等空白（`contentCard.scss` 的 `under-cover`，内收值直接取对应媒体圆角）；横向图文不套用；可截断文本元素不加底部 padding。
+- 封面下方信息区左右内收到封面圆角的直线切点、底部留同等空白（`contentCard.scss` 的 `under-cover`，内收值直接取对应媒体圆角）；视频卡片例外（与封面左缘齐平，见上）；横向图文不套用；可截断文本元素不加底部 padding。
 
 ### 播放页
 
@@ -245,8 +256,8 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 - 作者与操作分两行。第一行：头像 + 名字 / 发消息 + 单行签名占满剩余宽度（按宽度省略），充电 / 关注贴右缘，名字区窄于约三个头像宽时按钮才换行。第二行：点赞 / 投币 / 收藏 / 分享 / 稍后再看是中性 fill-1 胶囊（36px、interactive 圆角、宽随内容，稍后再看为正方形），hover 换 fill-2 并提亮文字，已操作态用 `--bew-selected-bg`。充电为中性填充，主题色只留在关注（未关注 hover 轻微提亮）。按下缩到 0.97（减少动态效果时不缩）。分享计数取消原生固定宽度与绝对定位。
 - 间距：标题→元信息 8px、元信息→作者 16px、作者→操作 12px、操作→简介 16px。简介与标签上下排列、不加容器；标签是中性 fill-1 胶囊。
 - 元信息行是克隆：在线人数镜像进来并保持在末尾（`syncViewerCount`）；去掉“未经作者授权，禁止转载”（`.copyright`，原生节点不动）；原生没画图标的项补 Tabler `clock` / `info-circle`（sm，`prepareMetadataClone`）；监听原生节点迟到的图标填充并刷新克隆（导航中不刷新）。
-- 选集与推荐同一行规格：120px 缩略图、13/18 两行标题、caption 元信息、同心圆角悬停底；正在播放为 `--bew-selected-bg` 加 `--bew-accent-marker` 圆点；合集后的推荐以“接下来播放”分组。选集面板子元素 border-box，合集框透明、对齐栏宽，订阅合集与收起同为中性描边按钮。
-- 文字层级（含原生评论 Shadow DOM，经 MAIN 既有样式补丁）只用五个角色：heading 20/28 400 只给视频标题；title 15/22 500 给“评论”“接下来播放”、合集标题、作者名；body 15/24 给评论正文（text-1）与简介（text-2）；control 13/18 给标签栏、按钮、操作胶囊、标签、排序、列表标题、评论用户名（500）；caption 12/16 text-3 给元信息、签名、发消息、地区、评论时间与点赞 / 回复、“共 N 条回复”、计数、时长角标、自动连播。评论操作行 hover 提亮，已点赞保留原生色。
+- 选集与推荐同一行规格：120px 缩略图、13/16 两行标题、caption 元信息、同心圆角悬停底；正在播放为 `--bew-selected-bg` 加 `--bew-accent-marker` 圆点；合集后的推荐以“接下来播放”分组。选集面板子元素 border-box，合集框透明、对齐栏宽，订阅合集与收起同为中性描边按钮。
+- 文字层级（含原生评论 Shadow DOM，经 MAIN 既有样式补丁）沿用全局 macOS 角色，不在播放页另设字号：heading `17/22` 给视频标题；title `13/16` 给“评论”“接下来播放”、合集标题、作者名；body `13/16` 给评论正文（text-1）与简介（text-2）；control `13/16` 给标签栏、按钮、操作胶囊、标签、排序、列表标题与评论用户名；caption `11/14` 给元信息、签名、发消息、地区、评论时间与点赞 / 回复、“共 N 条回复”、计数、时长角标、自动连播。评论操作行 hover 提亮，已点赞保留原生色。
 - 缩进统一 52px（40px 头像 + space-3）：作者行、评论与楼中楼都从这里开始；评论头像由原生 48px 以 `scale: 5/6` 自左上角缩到 40px（绝对定位，不改布局）。节奏：组内 4–8px、组间 16px、区块 24px；评论头部 host 改为 block、`#contents` 去顶部内距。
 - 弹幕列表表头在“发送时间”前加“用户”列：按发送者分组（弹幕多的在前、组内按播放时间），再点反转。列表仍是原生实例：MAIN 在一次原生表头点击期间临时替换排序比较器（`sortNativeDanmakuListBySender`，结束即还原 `Array.prototype.sort`），并让该列停在倒序；只用 `uhash`，不显示用户名。弹幕输入框不迁出原生播放器树；历史弹幕按钮只改视觉位置。
 - 播放器弹窗共用 `styles/layout.ts` 的 `PLAYER_POPOVER_SURFACE`（实色 `--bew-elevated-alt-solid`、1px 表面边框、popover 圆角与阴影、无背景采样）：控制栏菜单 / 提示、弹幕模式与设置、播放反馈面板。原生反馈面板（`.b-back-panel`）用同一表面并重排（标题行 + 分隔线、28px 关闭、两列选项、共享输入 token、主操作主题实色），保留原生节点与提交逻辑；只按 B 站自己设色的类名重设颜色，不写以元素类型或 `*` 结尾的选择器。
@@ -271,7 +282,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 - 布局：分类、搜索、筛选与会话列表在持久侧栏（贴齐左、上、下，内部避让顶栏，只采样一次毛玻璃，材质为页面底色亮色混 6% 黑、深色 / OLED 混 16% 白），切换分类不卸载列表；分类用 `WheelSelector.vue`。消息顶栏 absolute，渐变模糊只覆盖侧栏右缘到视口右缘，层级依次为搜索控件、侧栏、模糊、内容，Dock 高于底部模糊。
 - 通知 Feed：四类共用加载、错误、刷新、分页、滚动锚点、账号隔离与 read-commit 生命周期，但 items、cursor、read commit、single-flight、缓存与 scrollTop 各自独立；同一时间只渲染当前一个 Feed DOM，隐藏分类不保留长列表、Observer 或监听，不用 KeepAlive 留多套。自动激活、未读变化与可见性刷新用 `merge-head` 保留历史与锚点，手动刷新用 `replace` 回顶部；分页检查 cursor 或唯一条目是否前进，停滞即停止自动请求；Retry 按 `failedOperation` 精确重试。System 用专用模型与单一 string cursor，只用已验证的 `unified + user` 首屏、legacy cursor 历史与 `update_cursor` 已读，不猜图片、按钮或 module。解析或分页规则变更要同步脱敏 fixture 并通过 `pnpm verify:notifications`。
 - 已读：服务端成功后只经 `topBarStore`（`syncUnreadMessageState()`）同步未读与跨标签 broker，不建第二套 unread Store；System 先成功提交 `update_cursor` 再建 read commit，无逐条证据不推导红点。“全部标为已读”只在用户点击时经 `useMarkAllMessagesRead` 读取其他分类并遍历私信分页，按服务端 seqno 确认，期间新到的保持未读，部分失败可重试。
-- 通知卡片：Reply / At / Love 为头像 + 正文两列、正文下引用区，System 为单色线框图标 + 标题 / 来源 / 正文；可用宽度 ≥880px 时 `MasonryGrid.vue` 按自然高度放入较短列，DOM 保持时间顺序，分页不重排已有卡片。
+- 通知卡片：Reply / At / Love 为头像 + 正文两列、正文下引用区，System 为单色线框图标 + 标题 / 来源 / 正文；可用宽度 ≥880px 时 `WindowedMasonryGrid.vue` 按自然高度放入较短列，DOM 保持时间顺序，分页不重排已有卡片。窗口复用 `momentColumnIndex` / Fenwick 索引，只挂载视口与缓冲区及焦点项；按分类保存列分配与测量值用于滚动恢复。骨架高度一致，使用 CSS 网格，不添加逐项测量器。
 - Insights：可用宽度 ≥720px 等宽两列四卡（未读柱状、活动折线、私信来源比例、四个最近会话），间距 12、内距 16、环图 96，卡片内底透明，窄屏单列。近 7 天折线只统计已载入会话的最近活动日，不伪称完整历史；未知计数用短线，真实零值显示 0。
 - 私信协议：Web IM 走后台 `api.vc.bilibili.com` Web endpoint，复用 WBI 签名，对已确认的 ID / seqno 字段窄范围无损解析；正文与草稿不持久化。历史按 `msg_seqno` 分页、`msg_key` 去重；ACK 只在会话可见且位于最新区域时提交，成功后才清本地未读。会话详情按页面级 LRU 淘汰（当前会话与 ACK 中的不淘汰），每会话消息数受设置上限、只保留最新并保留分页边界；离开 Notifications 释放数组并失效旧请求。
 - 发送：普通用户与 transient recipient 显示文本与图片 Composer，官方助手与不支持会话不开放，只读会话显示禁用 Composer。`send_msg` 的 WBI 只签 `w_sender_uid / w_receiver_id / w_dev_id`，`wts / w_rid` 只进 URL query；每账号一个 UUID v4 `dev_id` 存 extension local storage。Chromium 只对精确的 `web_im/v1/web_im/send_msg` POST 改写消息站 Origin/Referer。API `code=0` 且历史对账确认后才显示成功，已接受未确认的不自动重发；HTTP `412` 归为 `risk-control`。图片选择只生成本地预览，明确发送后才上传；换号、切会话或卸载停止未发出的步骤并释放对象 URL。表情按账号读取原生用户表情目录。文本与图片入口在开发与打包构建中一致，`experimental` 只是目录名，不是运行时门禁。

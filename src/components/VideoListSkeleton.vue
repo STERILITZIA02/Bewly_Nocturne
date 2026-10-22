@@ -93,7 +93,7 @@ withDefaults(defineProps<{
 
 .video-list-skeleton__cover {
   width: 250px !important;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: var(--bew-video-cover-aspect-ratio);
   flex: 0 0 250px;
 }
 
