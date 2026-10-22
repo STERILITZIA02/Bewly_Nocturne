@@ -39,6 +39,16 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
         offenders.push(fileURLToPath(file))
     }
     assert.deepEqual(offenders, [])
+    // LightningCSS merges `backdrop-filter` and `-webkit-backdrop-filter` under
+    // the same property ID; a trailing `-webkit-backdrop-filter` overwrites the
+    // standard declaration in production builds and drops the blur in Chromium.
+    const webkitBackdropOffenders = []
+    for (const file of await listSourceFiles()) {
+      const text = await readFile(file, 'utf8')
+      if (/-webkit-backdrop-filter\s*:/.test(text))
+        webkitBackdropOffenders.push(fileURLToPath(file))
+    }
+    assert.deepEqual(webkitBackdropOffenders, [], 'use standard backdrop-filter in CSS rules so LightningCSS preserves it in production builds')
     const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
     assert.equal(manifest.dependencies?.['@wxperia/liquid-glass-vue'], undefined)
     assert.equal(manifest.devDependencies?.['@wxperia/liquid-glass-vue'], undefined)

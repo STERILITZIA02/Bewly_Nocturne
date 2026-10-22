@@ -19,8 +19,7 @@ const PLAYER_POPOVER_SURFACE = `background: var(--bew-elevated-alt-solid) !impor
       border-radius: var(--bew-popover-radius) !important;
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-popover-surface-shadow) !important;
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;`
+      backdrop-filter: none !important;`
 
 export function injectLayoutStyle() {
   return injectCSS(`
@@ -514,7 +513,6 @@ export function injectLayoutStyle() {
     ) {
       background-image: none !important;
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
     }
 
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
@@ -535,7 +533,6 @@ export function injectLayoutStyle() {
     )::after {
       background-image: none !important;
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
     }
 
     /* Every "-ctrl-" element and popup lives inside a control button, so
@@ -660,7 +657,6 @@ export function injectLayoutStyle() {
       border: 0 !important;
       box-shadow: none !important;
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
     }
 
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-control-wrap .bpx-player-ctrl-setting-menu :is(
@@ -986,7 +982,6 @@ export function injectLayoutStyle() {
       border: 0 !important;
       box-shadow: none !important;
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
       isolation: auto !important;
       --bpx-dmsend-switch-icon: var(--bew-text-1);
       opacity: var(--bewly-widescreen-controls-opacity, 0) !important;
@@ -1024,7 +1019,6 @@ export function injectLayoutStyle() {
       corner-shape: var(--bew-corner-shape);
       box-shadow: none !important;
       backdrop-filter: var(--bew-filter-glass-1) !important;
-      -webkit-backdrop-filter: var(--bew-filter-glass-1) !important;
       background-clip: padding-box !important;
       opacity: var(--bewly-widescreen-controls-opacity, 0) !important;
       transform: none !important;
@@ -1102,7 +1096,6 @@ export function injectLayoutStyle() {
       border-radius: 0 !important;
       box-shadow: none !important;
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
     }
 
     body.${BODY_CLASS} .bpx-player-tooltip-title {
@@ -1139,7 +1132,6 @@ export function injectLayoutStyle() {
       transform: none !important;
       box-shadow: none !important;
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
       overflow: visible !important;
       z-index: auto !important;
     }
@@ -1163,7 +1155,6 @@ export function injectLayoutStyle() {
       border: 1px solid var(--bew-surface-border-color) !important;
       box-shadow: var(--bew-popover-surface-shadow) !important;
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
       background-clip: padding-box !important;
     }
 
@@ -1182,7 +1173,6 @@ export function injectLayoutStyle() {
       corner-shape: var(--bew-corner-shape-round);
       box-shadow: none !important;
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
       font-size: var(--bew-font-size-caption, 12px) !important;
       line-height: var(--bew-line-height-caption, 16px) !important;
       white-space: nowrap;
@@ -1279,7 +1269,6 @@ export function injectLayoutStyle() {
     /* Keep the settings popover outside the button's backdrop root. */
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting {
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting::before {
@@ -1291,7 +1280,6 @@ export function injectLayoutStyle() {
       corner-shape: var(--bew-corner-shape-round);
       background: transparent !important;
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
       pointer-events: none;
     }
 
@@ -1391,7 +1379,6 @@ export function injectLayoutStyle() {
       color: var(--bew-text-1) !important;
       background: transparent !important;
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
       border-radius: var(--bew-radius-full) !important;
       corner-shape: var(--bew-corner-shape-round);
       overflow: visible !important;
@@ -1455,7 +1442,6 @@ export function injectLayoutStyle() {
       corner-shape: inherit;
       background: var(--bew-elevated-alt-solid) !important;
       backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
       background-clip: padding-box !important;
       pointer-events: none !important;
     }
@@ -3342,7 +3328,6 @@ export function injectLayoutStyle() {
       corner-shape: var(--bew-corner-shape);
       box-shadow: none;
       backdrop-filter: none;
-      -webkit-backdrop-filter: none;
       cursor: pointer;
       font-family: var(--bew-font-family);
       font-size: var(--bew-font-size-control, 13px);

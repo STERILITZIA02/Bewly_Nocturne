@@ -628,7 +628,6 @@ const unfollowUser = () => writeRelation(2)
     corner-shape: inherit;
     background: var(--bew-popover-surface-background);
     backdrop-filter: var(--bew-filter-glass-1);
-    -webkit-backdrop-filter: var(--bew-filter-glass-1);
   }
 }
 

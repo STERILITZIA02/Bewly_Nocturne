@@ -7,7 +7,6 @@
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-popover-surface-shadow);
   backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 // These fixed TopBar panels extend beyond the header's glass boundary.
@@ -15,7 +14,6 @@
 .bew-popover.bew-popover-surface {
   background: var(--bew-popover-surface-background);
   backdrop-filter: var(--bew-filter-glass-1);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
 .bew-popover-surface--clip {

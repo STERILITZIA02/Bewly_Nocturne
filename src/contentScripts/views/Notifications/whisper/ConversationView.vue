@@ -897,7 +897,6 @@ defineExpose({
   corner-shape: var(--bew-corner-shape);
   box-shadow: none;
   backdrop-filter: var(--bew-filter-glass-1);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
   background-clip: padding-box;
   transition:
     translate var(--bew-duration-moderate) var(--bew-ease-standard),
@@ -947,7 +946,6 @@ defineExpose({
 .conversation-view--solid .conversation-view__new-messages {
   background: var(--bew-elevated-alt-solid);
   backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 .conversation-view--solid .conversation-view__floating-composer {
   background: var(--bew-elevated-solid);
