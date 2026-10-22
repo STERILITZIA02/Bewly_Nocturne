@@ -84,6 +84,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 | 卡片与网格 | `contentCard.scss`、`useCardWindow`、`useGridLayout`、`WindowedMasonryGrid.vue`、`cardRowMetrics.ts` |
 | 侧栏页面 | `LibraryWorkspace.vue`、`LibrarySearchField.vue`、`LibrarySidebarHeading.vue`、`sidebarAction.scss` |
 | 滚动边缘渐隐 | `scrollEdgeFade.scss` |
+| 横向滚动的滚轮接管与两端弹性 | `utils/elasticScroll.ts` |
 | 按钮与弹窗 | `IconButton`、`CloseButton`、`TagRemoveButton`、`Dialog`、`ConfirmDialog` / `useConfirmDialog`、`ContextMenu` |
 | 列表视图状态 | `useHomeTabState`、`usePageViewState` |
 | 图片 | `imageLoadQueue.ts`、`LazyPicture.vue` |
@@ -149,7 +150,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 
 - 毛玻璃默认开启，服从全局模糊强度。`disableFrostedGlass` 是唯一开关，开启后同时关闭毛玻璃与普通顶栏渐变并改用实色 token；不恢复 `enableFrostedGlass`、`enableTopBarGradient`、`alwaysUseTransparentTopBar` 等旧状态。
 - 玻璃之上不再叠玻璃：玻璃内的文本、按钮、选项、搜索框、菜单用实色或无滤镜表面，实色背景不加 backdrop-filter，也不用低模糊代替移除。只有延伸到原玻璃边界之外的覆盖层才可有独立玻璃（Teleport 本身不算理由）。嵌套判断用 `useGlassPanelMotion.ts` 的 `GLASS_SURFACE_CONTEXT`。唯一额外例外：`CountBadge.vue` 的未读胶囊可叠在 Dock 与顶栏玻璃上（复用全局滤镜与实色降级）。
-- 普通毛玻璃（`--bew-filter-glass-1` + 边框 + 阴影）用于：Dock、播放页底部控制栏、独立搜索框、顶栏浮层、侧栏按钮、私信导航、设置窗口、外侧纵向导航、普通 Dialog。设置内的输入框、内嵌菜单和嵌套 Dialog 用实色。
+- 所有毛玻璃只有一种材质（用户指定）：色调 `--bew-glass-tint`（实色降级 `--bew-glass-tint-solid`，悬停 `-hover`）、不透明度 `--bew-content-opacity`、模糊 `--bew-filter-glass-1`（Dialog 也用它，`--bew-filter-glass-2` 已删除）、边框 `--bew-glass-border-color`，阴影按层级。浅色色调为 raised 白，深色 / OLED 为前景 6% 混底色（低于 raised 的 8%，让暗色玻璃更暗）。侧栏、小电视圆、顶栏胶囊（`--bew-sidebar-background*` 是别名）、浮层（`--bew-popover-surface-background`）、Dock、搜索框、侧栏按钮、设置、Dialog、Composer、私信、播放页控制栏、原生页适配的玻璃栏、刷新提示都用它，不在组件里另配玻璃色调；图片查看器等媒体遮罩是深色遮罩，不算玻璃色调。普通毛玻璃用于：Dock、播放页底部控制栏、独立搜索框、顶栏浮层、侧栏按钮、私信导航、设置窗口、外侧纵向导航、普通 Dialog。设置内的输入框、内嵌菜单和嵌套 Dialog 用实色。
 - 液态玻璃已完整移除：没有 SVG 位移 / 色散 / 折射层、`vLiquidGlass`、`LiquidGlassSurface.vue`、“悬浮表面材质”设置或 `@wxperia/liquid-glass-vue`，不恢复。`enableDockLiquidGlass`、`dockLiquidGlass*` 只在退役字段表中。`LiquidSegmentIndicator` 是纯几何滑块（实色选中表面，不采样背景），不受影响。
 - 渐变模糊只用 `ProgressiveBlur.vue`（`utils/progressiveBlur.ts`）：五层 backdrop 模糊半径逐层翻倍、遮罩窗口逐层向强端收缩，强度默认取 `--bew-glass-blur-radius`（随全局模糊强度，关闭毛玻璃时不渲染），淡入淡出用组件的 `visible`（祖先降不透明度会让模糊失效）。它不能放在 backdrop root 里（祖先有 `backdrop-filter` / `filter` / `mask`）：那样各层只看得到祖先自身的绘制、看不到后面的页面，带区会显出矩形；宿主是玻璃时把玻璃移到背景层（如 `.context-menu-container::before`、`.settings-content__surface`），渐变层祖先也不能同时使用平滑圆角与 `overflow: hidden/clip/auto/scroll`：Chromium 会丢弃子层的渐变遮罩，绘成矩形带；让背景、滚动列表与各模糊层各自裁切，保留平滑圆角。开发构建会检查 backdrop root（含透明度、clip-path、混合与 will-change）及这种圆角裁切并在控制台警告；所有调用方都用组件，不直接调用层生成函数或淡化整组祖先。不给渐变模糊加饱和度，叠在玻璃上会给带区染色。禁止单层 `backdrop-filter` 配渐变 / 径向遮罩：那只是清晰图和定强模糊图按比例混合，会留下矩形或椭圆边界。`pnpm verify:style-invalidation` 用 `scripts/maskedBlurPolicy.ts` 扫描所有样式（按元素合并 BEM 修饰类与伪元素）和内联 `backdropFilter` + `maskImage`，只放行该组件的层。
 - 保留的模糊：设置窗口的 `PanelTopBlur.vue`、会话与通知主内容区的滚动边缘模糊，位置、尺寸、强度与层级不改，实现统一为 `ProgressiveBlur`。顶栏没有渐进模糊或雾色层（用户要求移除，不恢复）。其他弹窗没有顶部模糊。设置装饰层不绘制背景或边框、不承担裁切，遮罩在边界前衰减，清晰边框在模糊层上方单独绘制。
@@ -166,7 +167,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 - 覆盖 default / hover / focus-visible / active / disabled。选中或聚焦任何元素都不额外加强调边框（用户指定）：`--bew-focus-ring` 为 none、`--bew-focus-shadow` 与 `--bew-selected-ring` 为透明、`--bew-focus-ring-color` 等于普通边框色，状态只靠 `--bew-selected-bg` / hover 底色与文字明暗表达；`main.scss` 全局兜底、MAIN world 与原生页注入样式同样遵循，不写死 outline、描边或外扩阴影环。布局编辑器的目标框是编辑器自身界面，用 `--bew-layout-editor-outline-color`。
 - 点击目标不小于 24×24，普通文字对比度不低于 4.5:1。
 - 侧栏里卡片与分段控件之外的整行图标 + 文字按钮用 `.library-sidebar-action`（`sidebarAction.scss`）：命中区等宽居中、内容靠左，首个图标或文字对齐滚筒标题（侧栏内距 + `--bew-sidebar-label-inset`，比搜索框左缘内收 8px）；常态透明，hover 亮 / 暗色略加深、OLED 略提亮。
-- 滚筒选择器 `WheelSelector.vue`：字号与几何取共享 token，无箭头或选中背景，hover 只提亮文字；鼠标按下不提前移动焦点，单击同时切换分类与页面；方向键预览、Enter / Space 确认；支持连续与反向滚动、惯性尾巴抑制。
+- 滚筒选择器 `WheelSelector.vue`：字号与几何取共享 token，无箭头或选中背景，hover 只提亮文字；鼠标按下不提前移动焦点，单击同时切换分类与页面；方向键预览、Enter / Space 确认；支持连续与反向滚动、惯性尾巴抑制。选项首尾相接成环：首项上方显示尾项，在首项上滑（滚轮或 ↑）到尾项、在尾项下滑到首项，弹簧沿同一方向转过去（游标不设边界，显示项取模）；Home / End 仍跳到首 / 尾。
 - 圆形操作用 `IconButton.vue`，关闭浮层用 `CloseButton.vue`（surface 变体用 elevated solid），删除标签或搜索历史用 `TagRemoveButton.vue`，不在页面里复制。
 
 ### 浮层与弹窗
@@ -212,7 +213,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 - 收起模式 `button / hidden / automatic`：按钮模式在设置按钮后显示收起入口；隐藏模式不提供收起；自动模式指针离开后收起、悬停圆球立即展开。圆球保持展开 Dock 的几何中心；同一玻璃外壳先沿主轴变化尺寸，再让按钮组进出，收起时顺序相反。不用 Teleport、第二套状态或两个表面交叉淡入。
 - 三档页面模式（Bilibili / Bewly / 自定义）及其持久化、与 Dock 内容设置的同步保持一体。顶栏模式只作为 `DockAndSidebar.vue`“Dock 内容调整”里的特殊配置项：不是导航项、不参与拖拽、没有“新标签页”选项。全 Bewly 用 Bewly 顶栏，全原版用原生 `.bili-header`，自定义按配置选择。
 - 不适配第三方顶栏（Bilibili Evolved 已移除），不恢复 `BewlyOrBiliTopBarSwitcher.vue` 等旧切换入口。上游新的顶栏视觉或交互改动，移植前先取得用户同意。
-- 顶栏铺满窗口：左侧内距是小电视的位置，搜索框紧跟小电视（不再居中，最宽 550px），置顶频道在搜索框之后；有侧栏的页面搜索框紧跟侧栏右缘（顶栏左内距为侧栏宽度，小电视占位隐藏）。TopBar 的 DOM Ref 注册表不用深层 `reactive`（会自动解包）。
+- 顶栏铺满窗口：左侧内距是小电视的位置，搜索框紧跟小电视（不再居中，最宽 550px），置顶频道在搜索框之后；有侧栏的页面搜索框（与置顶频道）紧跟侧栏右缘：由侧栏的目标状态 `railOpen` 驱动、按侧栏收展时长平移（translate，不改布局），与侧栏形变同步。首页搜索框与顶栏搜索框是两个实例，切页时经 `utils/searchHandoff.ts` 交接：离开的一方记录位置（首页的一方立即隐藏），出现的一方从该位置滑入（`composite: 'add'`，登记动效优先级），任何经 Dock 的切换都不让搜索框跳变。TopBar 的 DOM Ref 注册表不用深层 `reactive`（会自动解包）。
 - 顶栏右侧没有消息按钮（连同消息弹层、消息抽屉与“以抽屉打开通知页”设置一并移除，不恢复；未读数只在 Dock 显示）。除头像外的右侧按钮放在一个玻璃胶囊 `.top-bar-tools` 里，与小电视的圆共用 `sidebarSurface.floating`（侧栏材质、边框与 `--bew-shadow-1`），高度同小电视；玻璃画在按钮后面的 `::before` 层，弹层不落进它的 backdrop root。胶囊内图标不再走头图页白色强制。顶栏左内距是小电视位置（`--bew-home-logo-inline-start`），右内距是页面内容内距 `--bew-page-inline-inset`（与动态页右栏到右缘一致）。头像在同材质的玻璃圆正中，圆与头像是一个整体 `.avatar-orb`：悬停只把它放大一点（1.06），点击才打开用户面板（`setupTopBarItemHoverEvent('userPanel', { openOnClick: true })`，再点、点外部或 Esc 关闭；头像本身不再跳转，个人空间从面板里的名字进入）。面板在头像下方打开（默认锚定位置与 `slide-in`），不盖住胶囊按钮；打开时整个圆带着头像移入面板右上角并放大，圆在途中淡出，收回时圆在面板处先淡入再随头像回到原位。面板材质同为 `sidebarSurface.floating`，右上角圆角与放大后的头像同心（`--avatar-panel-face-radius` + space-2，round）；位移按 `computeAnchoredPopoverPosition` 的 8px 间距与 16px 边距推算，身份信息为头像留出空间。
 - 顶栏始终显示：没有滚动自动隐藏、个人空间强制隐藏或视频页显示方式（`autoHideTopBar`、`videoPageTopBarConfig` 已退役，原版顶栏也不再被隐藏），不恢复。只在 Bewly 宽屏播放页与原页面固定页头（含个人空间吸顶导航）出现时让位，避免两层页头重叠。
 - 胶囊内按钮（含分隔线）增减或轮换时统一用 `top-bar-item` 过渡，三段时间线：离开的按钮先淡出（fast），然后所有槽位一起以匀速曲线 `--bew-ease-in-out` 收起 / 展开（moderate，胶囊随之伸缩），最后进入的按钮淡入；轮换时胶囊不会先长后缩；只有这些小按钮在变化期间布局（宽度动画的用户指定例外），首屏不播放，减少动态效果时直接切换。
@@ -237,7 +238,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 - 视频卡片不显示标签、徽标（已浏览、推荐 / 视频标签）和作者头像；唯一的标记是作者名右侧的中性“已关注”胶囊。仿 Apple Music 专辑封面排版：封面用 `--bew-video-cover-radius`（xl，比其他媒体大一级），不叠播放量、点赞、弹幕、时长等统计；信息区与封面左缘齐平、无左右内收，封面下 12px 起标题，最多两行、按实际行数自然增高，不给真实标题预留两行高度。标题后 4px 紧跟次要信息“UP 主 [已关注] · 发布时间”（同一字号，取 UP 信息字号设置，时间不换行），单行与双行标题都保持这一间距。标题用 text-1、字重 400，与全局原生文字层级一致；只有骨架保留两行占位。首页、历史网格和稍后再看网格统一复用 `useVideoCardSharedStyles` 与 `contentCard.scss` 的 `video-details / video-title / video-subtitle`，不在独立卡片中另设字号、字重或两行最小高度；网格的用户名不附头像，保持与封面左缘对齐。
 - 裸卡（`contentCard.bare`）常态与 hover 都透明，hover 整卡放大 `--bew-card-hover-scale` 并抬到相邻卡片之上；视频卡片 hover（仅鼠标）时才渲染居中的 `ProgressiveBlur edge="center"`（`hover-halo` / `hover-halo-layer`，强度 `--bew-card-hover-blur-radius`），以卡片中心向外渐变模糊被遮挡的邻卡。减少动态效果时不放大。
 - 视频封面统一用 `contentCard.media-frame`：`--bew-surface-border-color` 1px 内描边 + `--bew-shadow-1`，hover 时 `--bew-shadow-2`。裸卡 / 表面卡交互复用 `contentCard.scss`，间距与封面控件用 `--bew-card-*` / `--bew-cover-*`；行距由网格管理，卡片不加底部 margin。
-- 作者常态中性前景，悬停与键盘聚焦用主题前景；动态内嵌媒体与引用用 8px 语义圆角。
+- 作者常态中性前景，悬停与键盘聚焦用主题前景；动态卡片自身的封面 / 视频预览与图片组圆角同视频卡片封面（`--bew-moment-media-radius` = `--bew-video-cover-radius`），卡片圆角与之同心（`--bew-moment-card-radius` = 媒体圆角 + `--bew-card-inset`，主体左右内距即该 inset），封面角落按钮随之同心；转发 / 引用块内的媒体仍用 8px 语义圆角。
 - 封面下方信息区左右内收到封面圆角的直线切点、底部留同等空白（`contentCard.scss` 的 `under-cover`，内收值直接取对应媒体圆角）；视频卡片例外（与封面左缘齐平，见上）；横向图文不套用；可截断文本元素不加底部 padding。
 
 ### 播放页
@@ -286,7 +287,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 消息页与稍后再看页的外观已由用户冻结：可复用它们的组件与 token，但不借重构改变已确认的外观。下列为行为与结构要点，视觉细节以源码为准（历史细节见存档与 `docs/notifications/`）。
 
 - 结构：Notifications 是 Native Message Center。`reply / at / love / system` 是 Vue Native Feed；`whisper` 是支持会话管理、文本与图片发送、历史搜索的 hybrid workspace。普通用户、官方助手、未关注和拦截的一对一会话都在 Bewly 内读取；粉丝团和不支持的会话进 Native fallback 详情，只有用户点“打开原版私信列表”才离开。不隐式挂载原版私信或 System iframe（原版 System URL 保留为显式失败入口）。未选会话时显示 `ConversationInsights.vue` 与“全部标为已读”。
-- 布局：分类、搜索、筛选与会话列表在持久侧栏（贴齐左、上、下，内部避让顶栏，只采样一次毛玻璃，材质为页面底色亮色混 6% 黑、深色 / OLED 混 16% 白），切换分类不卸载列表；分类用 `WheelSelector.vue`。消息顶栏 absolute，层级依次为搜索控件、侧栏、内容，Dock 高于底部模糊。
+- 布局：分类、搜索、筛选与会话列表在持久侧栏（贴齐左、上、下，内部避让顶栏，只采样一次毛玻璃，材质为共享玻璃 `--bew-glass-tint`），切换分类不卸载列表；分类用 `WheelSelector.vue`。消息顶栏 absolute，层级依次为搜索控件、侧栏、内容，Dock 高于底部模糊。
 - 通知 Feed：四类共用加载、错误、刷新、分页、滚动锚点、账号隔离与 read-commit 生命周期，但 items、cursor、read commit、single-flight、缓存与 scrollTop 各自独立；同一时间只渲染当前一个 Feed DOM，隐藏分类不保留长列表、Observer 或监听，不用 KeepAlive 留多套。自动激活、未读变化与可见性刷新用 `merge-head` 保留历史与锚点，手动刷新用 `replace` 回顶部；分页检查 cursor 或唯一条目是否前进，停滞即停止自动请求；Retry 按 `failedOperation` 精确重试。System 用专用模型与单一 string cursor，只用已验证的 `unified + user` 首屏、legacy cursor 历史与 `update_cursor` 已读，不猜图片、按钮或 module。解析或分页规则变更要同步脱敏 fixture 并通过 `pnpm verify:notifications`。
 - 已读：服务端成功后只经 `topBarStore`（`syncUnreadMessageState()`）同步未读与跨标签 broker，不建第二套 unread Store；System 先成功提交 `update_cursor` 再建 read commit，无逐条证据不推导红点。“全部标为已读”只在用户点击时经 `useMarkAllMessagesRead` 读取其他分类并遍历私信分页，按服务端 seqno 确认，期间新到的保持未读，部分失败可重试。
 - 通知卡片：Reply / At / Love 为头像 + 正文两列、正文下引用区，System 为单色线框图标 + 标题 / 来源 / 正文；可用宽度 ≥880px 时 `WindowedMasonryGrid.vue` 按自然高度放入较短列，DOM 保持时间顺序，分页不重排已有卡片。窗口复用 `momentColumnIndex` / Fenwick 索引，只挂载视口与缓冲区及焦点项；按分类保存列分配与测量值用于滚动恢复。骨架高度一致，使用 CSS 网格，不添加逐项测量器。
@@ -301,14 +302,16 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 
 ### 资料库（收藏 / 稍后再看 / 观看历史）
 
-- 三页复用 `LibraryWorkspace.vue` 的贴边持久左栏（宽度与消息页一致，单层毛玻璃与实色降级复用消息页色调），保持页面级主滚动与原有分页 / 虚拟列表。标题用 `LibrarySidebarHeading.vue`（WheelSelector），搜索用 `LibrarySearchField.vue`（全圆角、常驻细边框、单一清除按钮；保留 IME 与空查询门禁）。不再用视频封面作左栏背景；首屏骨架用同一左栏布局。层级：顶栏搜索与菜单 > 侧栏。收藏侧栏不在滚筒上方重复显示标题。
+- 三页复用 `LibraryWorkspace.vue` 的贴边持久左栏（宽度与消息页一致，单层共享玻璃与实色降级），保持页面级主滚动与原有分页 / 虚拟列表。标题用 `LibrarySidebarHeading.vue`（WheelSelector），搜索用 `LibrarySearchField.vue`（全圆角、常驻细边框、单一清除按钮；保留 IME 与空查询门禁）。不再用视频封面作左栏背景；首屏骨架用同一左栏布局。层级：顶栏搜索与菜单 > 侧栏。收藏侧栏不在滚筒上方重复显示标题。
 - 收藏目录展开 / 选中项与历史、稍后再看的高级筛选同用 `--bew-message-pinned-background` 底板。高级筛选各组默认收起，展开状态按组存在当前标签页 sessionStorage。收藏视频排序（最近收藏 / 最多播放 / 最新投稿）与历史、稍后再看的布局切换同用 `SettingsSegmentedControl` + `.library-rail-segments`，旁边的管理按钮与历史排序按钮同为 36px。收藏筛选用 `FavoriteFilterPanel`（搜索范围即时生效，UP 主 / 分区 / 关键词需“应用”，分区在分组首次展开后才请求）；订阅与其他收藏用搜索框右端的原生筛选。管理菜单保留 hover / focus / touch 入口。
 - 稍后再看以 `topBarStore` 的完整 `aid` 集合为唯一成员状态，其他组件不各自维护真值；修改后经专用失效消息跨标签重新获取。
 
 ### 动态页
 
-- 四类筛选、个人资料、发布入口、直播列表整合在 `LibraryWorkspace` 侧栏，分类用滚筒；三个模块受原设置控制，但窄窗口或关闭模块不隐藏分类导航。右侧是关注用户栏与动态流，按实际内容宽度算列数。
-- 热搜复用 `searchExperience` 的请求、缓存与可见性生命周期，不另建轮询：宽窗口停靠在顶栏下方（卡片标题固定、内部列表滚动），过窄时改为顶部紧凑区域；关注用户栏与动态卡片共用中间列，不伸进热搜列。
+- 五类筛选（全部 / 视频投稿 / 图文动态 / 追番追剧 / 专栏）、个人资料、发布入口、直播列表整合在 `LibraryWorkspace` 侧栏，分类用滚筒；三个模块受原设置控制，但窄窗口或关闭模块不隐藏分类导航。右侧是关注用户栏与动态流，按实际内容宽度算列数。
+- 热搜复用 `searchExperience` 的请求、缓存与可见性生命周期，不另建轮询：宽窗口位于关注用户栏下方，随页面滚到距顶栏 space-4 时吸顶（卡片标题固定、内部列表滚动），过窄时改为动态流上方的紧凑区域。
+- “图文动态”没有服务端类型：`momentFeedTypes.ts` 让它请求 `type=all`，按筛选批次扫描（每批两页），在 `momentFeedReader` 里只保留 `DYNAMIC_TYPE_WORD`（纯文字）与 `DYNAMIC_TYPE_DRAW`（图片，可带文字）；转发、视频、直播、合集、专栏都不显示，原始页仍用于记录 UP 主最新视频时间。按 UP 主筛选时同样适用。
+- 关注用户栏（含“全部动态”）没有容器、边缘按钮或渐变模糊，放在 `MomentsContentLayout` 之前（热搜随之在它下方，也不在容器查询的层叠上下文里）：头像是与视频卡片最小封面等高的正方形（`--bew-moments-up-tile-size`，`--bew-video-cover-radius` + `contentCard.media-frame`），用户名与头像左对齐，hover 用视频卡片同款放大（`contentCard.bare`），首块对齐内容线；滚动层向左伸到窗口左缘（`--library-content-inline-padding` 与侧栏宽度推算），往左滑时从侧栏毛玻璃下方经过、被它遮蔽（留在页面层，不设 z-index），向右伸出内容边界，末端停在右上角头像右缘（右内距 = 内容内距）。滚轮与触控板由 `utils/elasticScroll.ts` 接管（纵向滚轮也横滑），两端橡皮筋拉伸、停顿后回弹（登记动效优先级，减少动态效果时直接复位）；触摸与键盘仍是原生滚动。左右滚动按钮的代码保留但不渲染（`SHOW_UP_LIST_ARROWS`），等新外观。
 - 评论 / 转发展开共用 `useMeasuredDisclosure` 与 `momentDisclosure.scss`：内层保持自然布局，只有外层裁切高度按 200ms 标准曲线变化（不用过冲曲线、0fr 挤压或磨砂祖先淡入）；内容迟到时平滑重定目标，缓存的初始展开不重播。展开期间用既有交互保活保留卡片，瀑布流跳过中间高度的虚拟窗口提交，结束后提交最终高度。
 
 ### 设置页
@@ -321,7 +324,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 ## 运行时与数据
 
 - 几何：同一滚动所有者每帧测一次并合并分发；滚动帧只读 IntersectionObserver 预载状态，提交、恢复和尺寸变化后补查一次。
-- 分页：只在成功响应后推进，异步响应按局部 generation 隔离；尾页先消费数据再结束；游标未推进是 `paginationStalled`（停止自动请求），不是“没有更多”。恢复位置用 `scrollIntent` 的位置声明，显式跳转与用户滚动优先。
+- 分页：只在成功响应后推进，异步响应按局部 generation 隔离；尾页先消费数据再结束；游标未推进是 `paginationStalled`（停止自动请求），不是“没有更多”。动态页例外：进度只由 `momentFeedReader` 按原始页判断（页面不再用筛选后的卡片复判，否则被筛掉的整页会被误当停滞），出现未见过的动态即算推进（全站、UP 主、追番追剧、图文都一样；UP 主与追番的 offset 可能为空或不变，UP 主还按页码翻页），空页或重复页即判定为已全部加载，与服务端 `has_more=false` 同样结束：动态流底部正中显示“没有更多动态了”（`moments.no_more`，无动态时显示空状态文字），不出现“加载更多”或“重新加载”按钮；只有请求失败才有重试按钮。动态一律自动加载，标签页重新可见、恢复的列表与删除卡片后都会补查一次是否需要继续加载。恢复位置用 `scrollIntent` 的位置声明，显式跳转与用户滚动优先。
 - 列表数据：推荐与动态的已接受列表是唯一可写真值（`useHomeTabState` / `usePageViewState` 的 `shallowRef`，替换根的不可变更新；首页各标签与搜索结果同此）。收藏内容与观看历史长列表用 `shallowReactive`、行对象整体替换；收藏夹目录因原位编辑保持深响应式。去重索引与广告可见投影由 `recommendationFeed.ts` 按批维护；行高与列总高经 `CardRowMetrics.append/truncate`、`momentColumnIndex` 增量维护。停放缓存按条目估算预算，先收缩可重建字段再整体淘汰，列表、游标与锚点成对保留。
 - 媒体：图片队列按几何版本复用优先级并为可见图片留槽位；HLS `recoverMediaError` 每实例有界，稳定播放后恢复预算；全屏监听经 `fullscreenChange.ts` 由实际持有媒体元素的预览订阅。评论树分 topology / content / geometry 更新，深链只协调目标线程。原生工具栏与播放页会话先有界发现，再只观察已挂载宿主与浅层祖先。
 - 账号隔离：推荐、动态、关注等的缓存、分页与本地状态按 MID 隔离（未登录单独一份），换号后旧请求失效、旧响应不写入。

@@ -1260,7 +1260,7 @@ onBeforeUnmount(() => {
   break-inside: avoid;
   position: relative;
   margin: 0;
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-moment-card-radius);
   corner-shape: var(--bew-corner-shape);
   background-color: transparent;
   cursor: pointer;
@@ -1821,7 +1821,8 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__main {
-  padding: 0 var(--bew-space-4) var(--bew-space-3);
+  // The side inset is what --bew-moment-card-radius nests across.
+  padding: 0 var(--bew-card-inset) var(--bew-space-3);
 }
 
 .moment-card__main--has-media {
@@ -1855,7 +1856,7 @@ onBeforeUnmount(() => {
 .moment-card__media {
   min-width: 0;
   overflow: hidden;
-  border-radius: var(--bew-card-inset-radius);
+  border-radius: var(--bew-moment-media-radius);
 }
 
 .moment-card__cover--media {
@@ -1870,7 +1871,7 @@ onBeforeUnmount(() => {
   gap: var(--bew-space-1);
   margin-top: var(--bew-space-3);
   overflow: hidden;
-  border-radius: var(--bew-card-inset-radius);
+  border-radius: var(--bew-moment-media-radius);
   aspect-ratio: 1;
   background: var(--bew-fill-1);
 }
@@ -2012,7 +2013,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
 }
 .moment-card__main--has-media:not(.moment-card__main--live) .moment-card__body {
-  @include contentCard.under-cover(var(--bew-card-inset-radius));
+  @include contentCard.under-cover(var(--bew-moment-media-radius));
 }
 
 .moment-card__main--video:not(.moment-card__main--live) .moment-card__media {
@@ -2544,7 +2545,7 @@ onBeforeUnmount(() => {
 
 @container (max-width: 359px) {
   .moment-card__main--has-media.moment-card__main--live .moment-card__body {
-    @include contentCard.under-cover(var(--bew-card-inset-radius));
+    @include contentCard.under-cover(var(--bew-moment-media-radius));
   }
   .moment-card__main--has-media {
     display: flex;

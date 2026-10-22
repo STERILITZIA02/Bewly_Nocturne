@@ -6,7 +6,7 @@
   // 对齐 1.6.8：原版顶栏 slide-down / mini-header 用毛玻璃 elevated，避免 solid 发黑发闷
   // 自定义首页首屏白底由 removeTopBar.scss 的 #fff / rgb(36 38 40) 覆盖
   .bili-header > .bili-header__bar:is(.slide-down, .mini-header) {
-    background-color: var(--bew-elevated) !important;
+    background-color: var(--bew-glass-tint) !important;
     backdrop-filter: var(--bew-filter-glass-1);
   }
 

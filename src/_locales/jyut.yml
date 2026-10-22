@@ -1294,6 +1294,7 @@ moments:
   retry: 再試
   filter_all: 全部動態
   filter_video: 影片投稿
+  filter_draw: 圖文動態
   filter_pgc: 追番追劇
   filter_article: 專欄
   emoji: 表情
@@ -1352,10 +1353,8 @@ moments:
   initial_loading: 準備緊動態同圖片…
   empty: 暫時冇動態可以顯示
   loading: 載入緊…
-  load_more: 載入更多
-  reload: 重新載入
   loading_more: 載入同準備緊更多動態…
-  no_more: 已經到底喇
+  no_more: 冇更多動態喇
   live_room: 直播間
   video_playback: 影片播放
   detail: 動態詳情

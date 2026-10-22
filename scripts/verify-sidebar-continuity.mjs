@@ -282,7 +282,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.doesNotMatch(header, /ProgressiveBlur|translateX|ResizeObserver/, 'no top bar edge blur and no centring offset')
     assert.match(header, /padding-inline: var\(--bew-home-logo-inline-start\)/)
     assert.match(header, /grid-template-columns: auto minmax\(0, var\(--b-search-bar-max-width, 550px\)\)/, 'search column follows the logo')
-    assert.match(app, /:deep\(\.top-bar-header\) \{\s*padding-inline-start: var\(--bew-messages-sidebar-width\);/, 'on rail pages the search follows the rail')
+    assert.match(header, /\.top-bar-header--rail \{[\s\S]*?translate: calc\(var\(--bew-messages-sidebar-width\)/, 'on rail pages the search follows the rail')
     // The dock follows the scroll: sticky first, then the next stretch of scrolling
     // carries it to the logo, on the page scroller's named timeline.
     assert.match(app, /scroll-timeline: --bew-page-scroll block;/)
@@ -464,5 +464,202 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     // Glass and the concentric top-right corner.
     assert.match(panel, /\.userPanel-pop\.bew-popover-surface \{\s*@include sidebarSurface\.floating;\s*border-radius: var\(--bew-popover-radius\) calc\(var\(--avatar-panel-face-radius\) \+ var\(--bew-space-2\)\)/)
     assert.match(panel, /corner-shape: var\(--bew-corner-shape\) round var\(--bew-corner-shape\) var\(--bew-corner-shape\);/)
+  })
+  check('top bar search never jumps between pages: rail shift glides, home and top bar boxes hand off', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const [header, app, search, home] = await Promise.all([
+      read('components/TopBar/components/TopBarHeader.vue'),
+      read('contentScripts/views/App.vue'),
+      read('components/TopBar/components/TopBarSearch.vue'),
+      read('contentScripts/views/Home/Home.vue'),
+    ])
+    assert.match(header, /'top-bar-header--rail': sidebarHost\?\.railOpen\.value/, 'driven by the destination rail state')
+    assert.match(header, /transition: translate var\(--bew-sidebar-morph-duration\)/)
+    assert.match(header, /\.top-bar-header--rail \{[\s\S]*?translate: calc\(var\(--bew-messages-sidebar-width\) - var\(--bew-home-logo-inline-start\) - var\(--top-bar-logo-slot\)\) 0;/)
+    assert.doesNotMatch(app, /:deep\(\.top-bar-header\) \{\s*padding-inline-start/, 'no instant padding switch at page swap')
+    assert.match(search, /@before-leave="departSearchFrom" @enter="\(element: Element\) => arriveSearchAt\(element as HTMLElement\)"/)
+    assert.match(home, /previous !== AppPage\.Home \|\| page === AppPage\.Home[\s\S]{0,120}departSearchFrom\(searchDock\.value\)/)
+    assert.match(home, /onActivated\(\(\) => \{\s*arriveHomeSearch\(\)/)
+
+    const handoff = await import('../src/utils/searchHandoff')
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = () => ({ matches: false })
+    try {
+      const rect = (left, top) => ({ getBoundingClientRect: () => ({ left, top }) })
+      const runs = []
+      const target = Object.assign(document.createElement('div'), { animate: (frames, options) => {
+        const animation = { frames, options, finished: new Promise(() => {}), currentTime: 0, playbackRate: 1, effect: { getComputedTiming: () => ({ endTime: options.duration }) } }
+        runs.push(animation)
+        return animation
+      } })
+      target.getBoundingClientRect = () => ({ left: 70, top: 9 })
+      handoff.departSearchFrom(rect(400, 180))
+      handoff.arriveSearchAt(target)
+      assert.equal(runs.length, 1)
+      assert.equal(runs[0].frames[0].translate, '330px 171px', 'starts where the other box was')
+      assert.equal(runs[0].options.composite, 'add', 'composes with the home dock\'s own translate')
+      handoff.arriveSearchAt(target)
+      assert.equal(runs.length, 1, 'a departure is consumed once')
+    }
+    finally {
+      window.matchMedia = originalMatchMedia
+    }
+  })
+  check('moment cards: media match the video cover radius and the card nests around them', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const [variables, card, skeleton] = await Promise.all([
+      read('styles/variables.scss'),
+      read('components/MomentCard/MomentCard.vue'),
+      read('components/MomentCard/MomentCardSkeleton.vue'),
+    ])
+    assert.match(variables, /--bew-moment-media-radius: var\(--bew-video-cover-radius\);/)
+    assert.match(variables, /--bew-moment-card-radius: calc\(var\(--bew-moment-media-radius\) \+ var\(--bew-card-inset\)\);/)
+    assert.match(variables, /--bew-card-media-action-radius: max\(var\(--bew-radius-sm\), calc\(var\(--bew-moment-media-radius\) - var\(--bew-space-2\)\)\);/)
+    assert.match(card, /\.moment-card \{[^}]*border-radius: var\(--bew-moment-card-radius\);/)
+    assert.match(card, /\.moment-card__main \{[^}]*padding: 0 var\(--bew-card-inset\)/, 'the inset the card radius nests across')
+    for (const selector of ['moment-card__media', 'moment-card__gallery'])
+      assert.match(card, new RegExp(`\\.${selector} \\{[^}]*border-radius: var\\(--bew-moment-media-radius\\);`), selector)
+    assert.match(skeleton, /border-radius: var\(--bew-moment-card-radius\);/)
+    assert.match(skeleton, /\.moment-card-skeleton__media\.moment-card-skeleton__media \{[^}]*border-radius: var\(--bew-moment-media-radius\);/)
+  })
+  check('glass: one material (tint, opacity, blur, edge) for every glass surface; dark glass is tinted lower', async () => {
+    const { execFileSync, spawnSync } = await import('node:child_process')
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const variables = await read('styles/variables.scss')
+    assert.match(variables, /--bew-glass-tint-solid: var\(--bew-neutral-raised\);/)
+    assert.match(variables, /--bew-glass-tint: rgb\(from var\(--bew-glass-tint-solid\) r g b \/ var\(--bew-content-opacity\)\);/)
+    assert.match(variables, /:root\.dark \{[\s\S]*?--bew-glass-tint-solid: color-mix\(in srgb, var\(--bew-neutral-fg\) 6%, var\(--bew-neutral-bg\)\);/, 'dark glass sits below raised surfaces (8%)')
+    for (const alias of ['--bew-sidebar-background: var(--bew-glass-tint);', '--bew-popover-surface-background: var(--bew-glass-tint);'])
+      assert.ok(variables.includes(alias), alias)
+    const src = fileURLToPath(new URL('../src', import.meta.url))
+    assert.equal(spawnSync('grep', ['-rl', 'filter-glass-2', src]).stdout.toString(), '', 'dialogs use the same blur')
+    // Every glass sample pairs the shared filter with the shared tint (media scrims excepted).
+    const files = execFileSync('grep', ['-rl', 'filter-glass-1', src]).toString().trim().split('\n').filter(file => !/variables\.scss|necessarySettingsWatchers|contentScriptRefreshPrompt|verticalVideoZoom|Moments\.vue|opusDetailDrawerLayout/.test(file))
+    const tint = /glass-tint|sidebar-background|popover-surface-background|count-badge-bg|dock-surface-background|b-search-bar-normal-color|danmaku-bar-bg|b-button-color/
+    for (const file of files) {
+      const lines = (await readFile(file, 'utf8')).split('\n')
+      lines.forEach((line, index) => {
+        if (!line.includes('filter-glass-1') || /removeProperty|setProperty|@supports|: none|var\(--bew-filter-glass-1, blur/.test(line))
+          return
+        const near = lines.slice(Math.max(0, index - 9), index + 4).join('\n')
+        assert.match(near, tint, `${file}:${index + 1} uses the shared glass tint`)
+      })
+    }
+  })
+  check('rail wheel selector is a ring: past the first comes the last and past the last the first', async () => {
+    const Wheel = await compileComponent('../src/components/WheelSelector.vue', { vue: Vue })
+    const value = Vue.ref('a')
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ render: () => Vue.h(Wheel, {
+      modelValue: value.value,
+      label: 'Category',
+      panelId: 'panel',
+      items: ['a', 'b', 'c'].map(value => ({ value, label: value, ariaLabel: value })),
+      'onUpdate:modelValue': next => value.value = next,
+    }) })
+    try {
+      app.mount(host)
+      await flush()
+      const tabs = [...host.querySelectorAll('[role="tab"]')]
+      const translate = tab => tab.style.transform.match(/translateY\(calc\(([-\d.e]+) \*/)[1]
+      assert.ok(Number(translate(tabs[2])) < 0, 'the last item waits above the first')
+      assert.equal(tabs[2].style.pointerEvents, '', 'and can be clicked there')
+      const wheel = async (deltaY, timeStamp) => {
+        const event = new window.WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true })
+        Object.defineProperty(event, 'timeStamp', { value: timeStamp })
+        host.querySelector('.wheel-selector').dispatchEvent(event)
+        await flush()
+        return event
+      }
+      assert.ok((await wheel(-60, 1000)).defaultPrevented, 'the first item still takes an upward wheel')
+      assert.equal(value.value, 'c')
+      assert.equal(tabs[2].tabIndex, 0)
+      await wheel(60, 2000)
+      assert.equal(value.value, 'a', 'down from the last returns to the first')
+      tabs[0].focus()
+      tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))
+      await flush()
+      assert.equal(document.activeElement, tabs[2], 'arrow keys wrap the same way')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+  check('moments up-list: no container, cover-height square tiles, scrolls under the rail glass and stops elastically at the avatar edge', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const [variables, moments, workspace, layout] = await Promise.all([
+      read('styles/variables.scss'),
+      read('contentScripts/views/Moments/Moments.vue'),
+      read('components/LibraryWorkspace.vue'),
+      read('contentScripts/views/Moments/MomentsContentLayout.vue'),
+    ])
+    assert.match(variables, /--bew-moments-up-tile-size: calc\(var\(--bew-video-card-min-width\) \* 21 \/ 40\);/)
+    // Above the content layout, so hot search sits below it.
+    assert.ok(moments.indexOf('class="moments-up-list"') < moments.indexOf('<MomentsContentLayout'))
+    assert.doesNotMatch(layout, /moments-up-list/)
+    assert.doesNotMatch(moments, /moments-up-list__fade|moments-up-list__start|-mask-image/)
+    assert.match(moments, /const SHOW_UP_LIST_ARROWS = false/)
+    assert.match(moments, /<template v-if="SHOW_UP_LIST_ARROWS">/)
+    assert.match(moments, /function scrollUpListBy/, 'arrow code is kept for the redesign')
+    // "All moments" scrolls with the others.
+    assert.match(moments, /class="moments-up-list__track">\s*<button[\s\S]{0,400}handleUpFilterChange\(''\)/)
+    const section = moments.slice(moments.indexOf('.moments-up-list {'), moments.indexOf('.moments-page__initial-loading {'))
+    assert.doesNotMatch(section, /\.moments-up-list \{[^}]*(?:z-index|position):/, 'stays in the page layer, under the fixed rail glass')
+    assert.doesNotMatch(section, /\.moments-up-list \{[^}]*(?:border:|background:|padding:)/, 'no container')
+    assert.match(section, /--moments-up-list-bleed-start: calc\(var\(--bew-messages-sidebar-width\) \+ var\(--library-content-inline-padding\)\);/)
+    assert.match(section, /margin-inline: calc\(-1 \* var\(--moments-up-list-bleed-start\)\) calc\(-1 \* var\(--library-content-inline-padding\)\);/)
+    assert.match(section, /\.moments-up-list__item \{\s*@include contentCard\.bare;[^}]*align-items: flex-start;/, 'video card hover scale; names start at the tile edge')
+    assert.match(section, /\.moments-up-list__name \{[^}]*align-self: stretch;[^}]*text-align: start;/)
+    assert.match(section, /\.moments-up-list__avatar \{\s*@include contentCard\.media-frame;[^}]*width: var\(--bew-moments-up-tile-size\);[^}]*height: var\(--bew-moments-up-tile-size\);[^}]*border-radius: var\(--bew-video-cover-radius\);/)
+    assert.match(workspace, /--library-content-inline-padding: var\(--bew-page-inline-inset\);/)
+    assert.match(moments, /upListElastic = createElasticWheelScroll\(scroller, upListTrackRef\.value\)/)
+
+    const { createElasticWheelScroll, rubberBand } = await import('../src/utils/elasticScroll')
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = () => ({ matches: false })
+    try {
+      const scroller = document.createElement('div')
+      Object.defineProperties(scroller, { scrollWidth: { value: 1000 }, clientWidth: { value: 400 } })
+      scroller.scrollLeft = 0
+      const track = document.createElement('div')
+      const runs = []
+      track.animate = (frames, options) => {
+        const animation = { frames, options, playState: 'running', cancel() {}, finished: new Promise(() => {}), currentTime: 0, playbackRate: 1, effect: { getComputedTiming: () => ({ endTime: 300 }) } }
+        runs.push(animation)
+        return animation
+      }
+      const elastic = createElasticWheelScroll(scroller, track)
+      const wheel = (deltaX, deltaY = 0) => {
+        const event = { deltaX, deltaY, deltaMode: 0, defaultPrevented: false }
+        event.preventDefault = () => {
+          event.defaultPrevented = true
+        }
+        elastic.handleWheel(event)
+        return event
+      }
+      assert.ok(wheel(0, 250).defaultPrevented, 'vertical wheels scroll the row')
+      assert.equal(scroller.scrollLeft, 250)
+      wheel(450)
+      assert.equal(scroller.scrollLeft, 600, 'stops at the end')
+      assert.equal(track.style.translate, `${-rubberBand(100)}px 0`, 'the rest stretches with resistance')
+      assert.ok(rubberBand(100) < 100 && rubberBand(10000) < 160)
+      wheel(-60)
+      assert.equal(scroller.scrollLeft, 600, 'moving back undoes the stretch first')
+      assert.equal(track.style.translate, `${-rubberBand(40)}px 0`)
+      await new Promise(resolve => setTimeout(resolve, 140))
+      assert.equal(track.style.translate, '', 'springs back once the input pauses')
+      assert.equal(runs.length, 1)
+      assert.equal(runs[0].frames[0].translate, `${-rubberBand(40)}px 0`)
+      assert.equal(runs[0].frames[1].translate, '0 0')
+      wheel(-700)
+      assert.equal(scroller.scrollLeft, 0)
+      assert.equal(track.style.translate, `${rubberBand(100)}px 0`, 'stretches past the start too')
+      elastic.dispose()
+      assert.equal(track.style.translate, '')
+    }
+    finally {
+      window.matchMedia = originalMatchMedia
+    }
   })
 }

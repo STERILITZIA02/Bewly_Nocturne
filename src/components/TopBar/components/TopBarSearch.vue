@@ -4,6 +4,7 @@ import { computed } from 'vue'
 
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { arriveSearchAt, departSearchFrom } from '~/utils/searchHandoff'
 
 import { useTopBarInteraction } from '../composables/useTopBarInteraction'
 
@@ -20,7 +21,9 @@ const useLightText = computed(() => forceWhiteIcon.value && !settings.value.disa
 
 <template>
   <div flex="inline 1 md:justify-center items-center" w="full" data-top-bar-search>
-    <Transition name="slide-out">
+    <!-- Leaving for Home hands its position to the home search, and arriving from
+         Home starts where the home search was. -->
+    <Transition name="slide-out" @before-leave="departSearchFrom" @enter="(element: Element) => arriveSearchAt(element as HTMLElement)">
       <SearchBar
         v-if="showSearchBar"
         v-model="searchKeyword"

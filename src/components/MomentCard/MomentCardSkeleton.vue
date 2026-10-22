@@ -36,7 +36,7 @@ withDefaults(defineProps<{ media?: boolean }>(), { media: true })
   box-sizing: border-box;
   overflow: hidden;
   border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-moment-card-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-elevated);
 }
@@ -56,11 +56,12 @@ withDefaults(defineProps<{ media?: boolean }>(), { media: true })
   display: flex;
   flex-direction: column;
   gap: var(--bew-space-3);
-  padding: 0 var(--bew-space-4) var(--bew-space-3);
+  padding: 0 var(--bew-card-inset) var(--bew-space-3);
 }
-.moment-card-skeleton__media {
+.moment-card-skeleton__media.moment-card-skeleton__media {
   width: 100%;
   aspect-ratio: 16 / 9;
+  border-radius: var(--bew-moment-media-radius);
 }
 .moment-card-skeleton__body {
   display: grid;
@@ -80,7 +81,7 @@ withDefaults(defineProps<{ media?: boolean }>(), { media: true })
   border-top: 1px solid var(--bew-border-color);
 }
 .moment-card-skeleton--media .moment-card-skeleton__body {
-  @include contentCard.under-cover(var(--bew-card-inset-radius));
+  @include contentCard.under-cover(var(--bew-moment-media-radius));
 }
 
 @container (min-width: #{breakpoints.$moment-card-wide}) {

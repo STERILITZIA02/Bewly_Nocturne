@@ -27,6 +27,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import type { AccountId } from '~/utils/accountScope'
 import { isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
+import { createElasticWheelScroll } from '~/utils/elasticScroll'
 import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/utils/messaging'
 import { createMomentCommentSessionCache, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
 import { resolveHorizontalScrollState } from '~/utils/momentsLayout'
@@ -144,6 +145,9 @@ const canScrollUpListLeft = ref(false)
 const canScrollUpListRight = ref(false)
 let upListResizeObserver: ResizeObserver | undefined
 let upListStateFrame: number | undefined
+let upListElastic: ReturnType<typeof createElasticWheelScroll> | undefined
+/** The scroll buttons are kept for a coming redesign and hidden until then. */
+const SHOW_UP_LIST_ARROWS = false
 
 const forwardCountOverrides = new Map<string, number>()
 
@@ -153,7 +157,6 @@ const isLoading = ref(false)
 const isInitialLoading = ref(!viewState.restored)
 const feedRequestFailed = ref(false)
 /** The server reports more but a page made no progress: pause automation, not "no more". */
-const paginationStalled = ref(false)
 const noMoreContent = viewState.ref('noMoreContent', false)
 const offset = viewState.ref('offset', '')
 const updateBaseline = viewState.ref('updateBaseline', '')
@@ -301,17 +304,7 @@ function handleUpFilterChange(mid = '') {
 }
 
 function handleUpListWheel(event: WheelEvent) {
-  const scroller = event.currentTarget as HTMLElement | null
-  if (!scroller || scroller.scrollWidth <= scroller.clientWidth)
-    return
-
-  // 将纵向滚轮转为横向滚动，贴近 B 站经常访问列表交互
-  if (Math.abs(event.deltaY) <= Math.abs(event.deltaX))
-    return
-
-  scroller.scrollLeft += event.deltaY
-  event.preventDefault()
-  scheduleUpListStateUpdate()
+  upListElastic?.handleWheel(event)
 }
 
 function updateUpListScrollState() {
@@ -352,9 +345,15 @@ function scrollUpListBy(direction: -1 | 1) {
 function setupUpListScrollerObserver() {
   upListResizeObserver?.disconnect()
   upListResizeObserver = undefined
+  upListElastic?.dispose()
+  upListElastic = undefined
   const scroller = upListScrollerRef.value
   if (!scroller)
     return
+
+  // Wheel and trackpad scroll the row (vertical wheels too) and stretch past its ends.
+  if (upListTrackRef.value)
+    upListElastic = createElasticWheelScroll(scroller, upListTrackRef.value)
 
   upListResizeObserver = new ResizeObserver(scheduleUpListStateUpdate)
   upListResizeObserver.observe(scroller)
@@ -375,7 +374,7 @@ function isFeedRequestCurrent(
     && requestHostMid === selectedHostMid.value
 }
 
-function loadMoreFilteredMoments() {
+function retryMomentsPage() {
   void loadMoments(false, 0, true)
 }
 
@@ -399,7 +398,7 @@ function hasActiveMomentFilters() {
 }
 
 function requiresManualMomentPaging() {
-  return feedRequestFailed.value || paginationStalled.value
+  return feedRequestFailed.value
 }
 
 function passesMomentSettings(moment: DisplayMoment) {
@@ -481,6 +480,7 @@ function removeMomentFromViews(id: string) {
   momentLayout.remove(id)
   if (selectedMoment.value?.id === id)
     closeMomentDetail()
+  void nextTick(maybeLoadMoreNearBottom)
 }
 
 async function requestMomentDelete(moment: DisplayMoment) {
@@ -558,8 +558,12 @@ function releaseVisibilityWaiters() {
 }
 
 useEventListener(document, 'visibilitychange', () => {
-  if (!document.hidden)
-    releaseVisibilityWaiters()
+  if (document.hidden)
+    return
+  releaseVisibilityWaiters()
+  // Loads skip a hidden page; a list too short to scroll would otherwise stay
+  // stuck until the user scrolled.
+  maybeLoadMoreNearBottom()
 })
 
 /**
@@ -625,8 +629,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   const requestToken = feedRequestToken
   const requestType = activeMomentFilter.value
   const requestHostMid = selectedHostMid.value
-  const requestOffset = offset.value
-  const requestUpdateBaseline = updateBaseline.value
   let pageApplied = false
   let pageCommit = 0
   let paginationClaim: ScrollPositionClaim | undefined
@@ -636,7 +638,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
         updateBaseline: updateBaseline.value,
         page: momentsFeedPage.value,
         noMoreContent: noMoreContent.value,
-        stalled: paginationStalled.value,
       }
     : null
   isLoading.value = true
@@ -646,7 +647,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     updateBaseline.value = ''
     momentsFeedPage.value = 1
     noMoreContent.value = false
-    paginationStalled.value = false
   }
 
   try {
@@ -668,12 +668,10 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     const { rawItems, normalizedItems, nextOffset, nextUpdateBaseline, hasMore } = response
     momentsFeedPage.value = response.nextPage
 
-    const existingMomentIds = getMomentPositions()
-    const hasUniqueResponseItem = normalizedItems.some(moment => !existingMomentIds.has(moment.id))
-    const cursorAdvanced = nextOffset !== requestOffset
-      || nextUpdateBaseline !== requestUpdateBaseline
-    // A repeated page or an unmoved cursor only stops automation; the server end is separate.
-    const stalled = hasMore && (response.stalled || (!reset && !hasUniqueResponseItem && !cursorAdvanced))
+    // The reader judges progress from the raw pages, before any filter drops
+    // posts. An empty or repeated page means the feed has nothing further, so
+    // it ends like the server's own end instead of waiting for a button.
+    const ended = !hasMore || response.stalled
 
     void recordUploaderLatestVideoTimes(
       [
@@ -701,8 +699,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
 
     offset.value = nextOffset
     updateBaseline.value = nextUpdateBaseline
-    noMoreContent.value = !hasMore
-    paginationStalled.value = stalled
+    noMoreContent.value = ended
     feedRequestFailed.value = false
     pageApplied = true
   }
@@ -724,7 +721,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
         updateBaseline.value = previousPagination.updateBaseline
         momentsFeedPage.value = previousPagination.page
         noMoreContent.value = previousPagination.noMoreContent
-        paginationStalled.value = previousPagination.stalled
       }
       reportRuntimeFailure('Failed to load Moments feed', error)
       toast.error(t('common.load_failed'))
@@ -847,7 +843,6 @@ function resetMomentsAccountState() {
   updateBaseline.value = ''
   momentsFeedPage.value = 1
   noMoreContent.value = false
-  paginationStalled.value = false
   feedRequestFailed.value = false
   isLoading.value = false
   isInitialLoading.value = true
@@ -889,6 +884,8 @@ onMounted(() => {
       void nextTick(() => {
         updateGridColumnCount()
         updateVirtualColumns()
+        // A restored list may not fill the viewport.
+        maybeLoadMoreNearBottom()
       })
     }
   })
@@ -922,6 +919,8 @@ onBeforeUnmount(() => {
   portalRequestController = undefined
   upListResizeObserver?.disconnect()
   upListResizeObserver = undefined
+  upListElastic?.dispose()
+  upListElastic = undefined
   if (upListStateFrame !== undefined) {
     cancelAnimationFrame(upListStateFrame)
     upListStateFrame = undefined
@@ -998,128 +997,113 @@ function appendMoments(items: DisplayMoment[]) {
         />
       </template>
 
+      <!-- Above the content layout, so the hot-search card starts below it. -->
+      <section
+        v-if="showMomentsUpList"
+        v-layout-editable="'moments-up-list'"
+        class="moments-up-list"
+        data-layout-editable-id="moments-up-list"
+        :aria-label="t('moments.feed_bar')"
+      >
+        <template v-if="SHOW_UP_LIST_ARROWS">
+          <IconButton
+            v-show="canScrollUpListLeft"
+            class="moments-up-list__arrow moments-up-list__arrow--prev"
+            :label="t('moments.scroll_frequent_left')"
+            :title="t('moments.scroll_left')"
+            @click="scrollUpListBy(-1)"
+          >
+            <span i-tabler-chevron-left aria-hidden="true" />
+          </IconButton>
+          <IconButton
+            v-show="canScrollUpListRight"
+            class="moments-up-list__arrow moments-up-list__arrow--next"
+            :label="t('moments.scroll_frequent_right')"
+            :title="t('moments.scroll_right')"
+            @click="scrollUpListBy(1)"
+          >
+            <span i-tabler-chevron-right aria-hidden="true" />
+          </IconButton>
+        </template>
+
+        <div
+          ref="upListScrollerRef"
+          class="moments-up-list__scroller"
+          role="group"
+          :aria-label="t('moments.frequent_uploaders')"
+          @scroll="scheduleUpListStateUpdate"
+          @wheel="handleUpListWheel"
+        >
+          <div ref="upListTrackRef" class="moments-up-list__track">
+            <button
+              type="button"
+              class="moments-up-list__item"
+              :class="{ 'moments-up-list__item--active': !selectedHostMid }"
+              :aria-pressed="!selectedHostMid"
+              :title="t('moments.all_moments')"
+              @click="handleUpFilterChange('')"
+            >
+              <span class="moments-up-list__avatar moments-up-list__avatar--all" aria-hidden="true">
+                <span
+                  class="moments-up-list__all-icon"
+                  :class="!selectedHostMid ? 'i-tabler-windmill-filled' : 'i-tabler-windmill'"
+                />
+              </span>
+              <span class="moments-up-list__name">{{ t('moments.all_moments') }}</span>
+            </button>
+            <template v-if="isPortalLoading && !portalUpList.length">
+              <div
+                v-for="index in 8"
+                :key="index"
+                class="moments-up-list__item moments-up-list__item--skeleton"
+                data-bew-skeleton-group
+                aria-hidden="true"
+              >
+                <SkeletonBlock
+                  class="moments-up-list__skeleton-tile"
+                  width="var(--bew-moments-up-tile-size)"
+                  height="var(--bew-moments-up-tile-size)"
+                  radius="media"
+                />
+                <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-font-size-caption)" />
+              </div>
+            </template>
+            <template v-else>
+              <button
+                v-for="up in portalUpList"
+                :key="up.mid"
+                type="button"
+                class="moments-up-list__item"
+                :class="{ 'moments-up-list__item--active': selectedHostMid === up.mid }"
+                :aria-pressed="selectedHostMid === up.mid"
+                :title="up.uname"
+                @click="handleUpFilterChange(up.mid)"
+              >
+                <span class="moments-up-list__avatar">
+                  <img
+                    :src="getSidebarAvatarUrl(up.face, 336)"
+                    :alt="up.uname"
+                    loading="lazy"
+                    decoding="async"
+                  >
+                  <span
+                    v-if="up.has_update"
+                    class="moments-up-list__dot"
+                    :aria-label="t('moments.has_update')"
+                  />
+                </span>
+                <span class="moments-up-list__name">{{ up.uname }}</span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </section>
+
       <MomentsContentLayout :sidebar-label="t('moments.hot_search_title')">
         <template #sidebar>
           <MomentsHotSearch />
         </template>
         <main :ref="el => momentsContentRef = (el as HTMLElement | null)" class="moments-content">
-          <section
-            v-if="showMomentsUpList"
-            v-layout-editable="'moments-up-list'"
-            class="moments-up-list"
-            data-layout-editable-id="moments-up-list"
-            :aria-label="t('moments.feed_bar')"
-          >
-            <div class="moments-up-list__start" role="group" :aria-label="t('moments.feed_groups')">
-              <button
-                type="button"
-                class="moments-up-list__item"
-                :class="{ 'moments-up-list__item--active': !selectedHostMid }"
-                :aria-pressed="!selectedHostMid"
-                :title="t('moments.all_moments')"
-                @click="handleUpFilterChange('')"
-              >
-                <span class="moments-up-list__avatar moments-up-list__avatar--all" aria-hidden="true">
-                  <span
-                    class="moments-up-list__all-icon"
-                    :class="!selectedHostMid ? 'i-tabler-windmill-filled' : 'i-tabler-windmill'"
-                  />
-                </span>
-                <span class="moments-up-list__name">{{ t('moments.all_moments') }}</span>
-              </button>
-            </div>
-
-            <div class="moments-up-list__main">
-              <span
-                class="moments-up-list__fade moments-up-list__fade--prev"
-                :class="{ 'is-visible': canScrollUpListLeft }"
-                aria-hidden="true"
-              />
-              <span
-                class="moments-up-list__fade moments-up-list__fade--next"
-                :class="{ 'is-visible': canScrollUpListRight }"
-                aria-hidden="true"
-              />
-              <IconButton
-                v-show="canScrollUpListLeft"
-                class="moments-up-list__arrow moments-up-list__arrow--prev"
-                :label="t('moments.scroll_frequent_left')"
-                :title="t('moments.scroll_left')"
-                @click="scrollUpListBy(-1)"
-              >
-                <span i-tabler-chevron-left aria-hidden="true" />
-              </IconButton>
-              <IconButton
-                v-show="canScrollUpListRight"
-                class="moments-up-list__arrow moments-up-list__arrow--next"
-                :label="t('moments.scroll_frequent_right')"
-                :title="t('moments.scroll_right')"
-                @click="scrollUpListBy(1)"
-              >
-                <span i-tabler-chevron-right aria-hidden="true" />
-              </IconButton>
-
-              <div
-                v-if="isPortalLoading && !portalUpList.length"
-                ref="upListScrollerRef"
-                class="moments-up-list__scroller"
-                aria-hidden="true"
-              >
-                <div ref="upListTrackRef" class="moments-up-list__track">
-                  <div
-                    v-for="index in 8"
-                    :key="index"
-                    class="moments-up-list__item moments-up-list__item--skeleton"
-                    data-bew-skeleton-group
-                  >
-                    <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-space-12)" radius="circle" />
-                    <SkeletonBlock width="var(--bew-space-10)" height="var(--bew-font-size-caption)" />
-                  </div>
-                </div>
-              </div>
-              <div
-                v-else
-                ref="upListScrollerRef"
-                class="moments-up-list__scroller"
-                :class="{
-                  'can-scroll-left': canScrollUpListLeft,
-                  'can-scroll-right': canScrollUpListRight,
-                }"
-                role="group"
-                :aria-label="t('moments.frequent_uploaders')"
-                @scroll="scheduleUpListStateUpdate"
-                @wheel="handleUpListWheel"
-              >
-                <div ref="upListTrackRef" class="moments-up-list__track">
-                  <button
-                    v-for="up in portalUpList"
-                    :key="up.mid"
-                    type="button"
-                    class="moments-up-list__item"
-                    :class="{ 'moments-up-list__item--active': selectedHostMid === up.mid }"
-                    :aria-pressed="selectedHostMid === up.mid"
-                    :title="up.uname"
-                    @click="handleUpFilterChange(up.mid)"
-                  >
-                    <span class="moments-up-list__avatar">
-                      <img
-                        :src="getSidebarAvatarUrl(up.face, 96)"
-                        :alt="up.uname"
-                        loading="lazy"
-                        decoding="async"
-                      >
-                      <span
-                        v-if="up.has_update"
-                        class="moments-up-list__dot"
-                        :aria-label="t('moments.has_update')"
-                      />
-                    </span>
-                    <span class="moments-up-list__name">{{ up.uname }}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
           <div v-if="isInitialLoading" class="moments-page__initial-loading">
             <div
               v-layout-editable="'moments-grid'"
@@ -1194,34 +1178,39 @@ function appendMoments(items: DisplayMoment[]) {
               <div v-if="column.bottomPad" class="moments-grid__spacer" :style="{ height: `${column.bottomPad}px` }" />
             </div>
           </div>
+          <!-- An ended feed only says so; buttons are for failures. -->
           <div v-else-if="!isInitialLoading && !isLoading && (noMoreContent || feedRequestFailed)" class="moments-page__empty bew-empty--fill" role="status">
             <p>{{ feedRequestFailed ? t('common.load_failed') : t('moments.empty') }}</p>
             <button
+              v-if="feedRequestFailed"
               :disabled="isLoading"
               @click="refresh()"
             >
-              {{ feedRequestFailed ? t('moments.retry') : t('moments.reload') }}
+              {{ t('moments.retry') }}
             </button>
           </div>
           <button
-            v-if="requiresManualMomentPaging() && !isLoading && !noMoreContent && (!feedRequestFailed || moments.length)"
+            v-if="feedRequestFailed && !isLoading && moments.length"
             type="button"
             class="moments-load-more"
-            @click="loadMoreFilteredMoments()"
+            @click="retryMomentsPage()"
           >
             <span i-tabler-arrow-down />
-            {{ feedRequestFailed ? t('moments.retry') : t('moments.load_more') }}
+            {{ t('moments.retry') }}
           </button>
           <p
             v-if="!isInitialLoading && (moments.length || isLoading)"
             class="moments-page__loading"
-            :class="{ 'is-visible': isLoading }"
-            :aria-hidden="!isLoading"
+            :class="{ 'is-visible': isLoading || (noMoreContent && !feedRequestFailed) }"
+            :aria-hidden="!isLoading && !noMoreContent"
             aria-live="polite"
           >
             <template v-if="isLoading">
               <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
               {{ t('moments.loading_more') }}
+            </template>
+            <template v-else-if="noMoreContent && !feedRequestFailed">
+              {{ t('moments.no_more') }}
             </template>
           </p>
         </main>
@@ -1384,18 +1373,7 @@ function appendMoments(items: DisplayMoment[]) {
 
 <style scoped lang="scss">
 @use "../../../styles/breakpoints";
-
-@property --moments-up-list-left-clear {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 1;
-}
-
-@property --moments-up-list-right-clear {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 1;
-}
+@use "../../../styles/contentCard";
 
 .moments-page {
   min-width: 0;
@@ -1404,115 +1382,32 @@ function appendMoments(items: DisplayMoment[]) {
   width: 100%;
   min-width: 0;
 }
+// No container: the row starts on the content line, scrolls left under the
+// rail's glass out to the window edge, and its last tile stops under the
+// top-bar avatar's right edge. It stays in the page layer, below the fixed rail.
 .moments-up-list {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  margin-bottom: var(--bew-space-4);
-  padding: var(--bew-space-3) var(--bew-space-2) var(--bew-space-2);
-  box-sizing: border-box;
-  overflow: hidden;
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-card-radius);
-  background: var(--bew-elevated);
-  box-shadow: none;
-}
-.moments-up-list__main {
-  position: relative;
-  min-width: 0;
-  flex: 1 1 0;
-}
-.moments-up-list__start {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: var(--bew-space-1);
-  margin-right: var(--bew-space-2);
+  --moments-up-list-bleed-start: calc(var(--bew-messages-sidebar-width) + var(--library-content-inline-padding));
+  margin-bottom: var(--bew-space-6);
 }
 .moments-up-list__scroller {
-  --moments-up-list-left-clear: 1;
-  --moments-up-list-right-clear: 1;
-  --moments-up-list-left-clear-mask: linear-gradient(
-    90deg,
-    rgb(0 0 0 / var(--moments-up-list-left-clear)) 0,
-    transparent calc(var(--bew-space-12) + var(--bew-space-10))
-  );
-  --moments-up-list-right-clear-mask: linear-gradient(
-    270deg,
-    rgb(0 0 0 / var(--moments-up-list-right-clear)) 0,
-    transparent calc(var(--bew-space-12) + var(--bew-space-10))
-  );
-  --moments-up-list-base-mask: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgb(0 0 0 / 16%) var(--bew-space-4),
-    rgb(0 0 0 / 48%) var(--bew-space-10),
-    rgb(0 0 0 / 78%) calc(var(--bew-space-12) + var(--bew-space-4)),
-    #000 calc(var(--bew-space-12) + var(--bew-space-10)),
-    #000 calc(100% - var(--bew-space-12) - var(--bew-space-10)),
-    rgb(0 0 0 / 78%) calc(100% - var(--bew-space-12) - var(--bew-space-4)),
-    rgb(0 0 0 / 48%) calc(100% - var(--bew-space-10)),
-    rgb(0 0 0 / 16%) calc(100% - var(--bew-space-4)),
-    transparent 100%
-  );
+  margin-inline: calc(-1 * var(--moments-up-list-bleed-start)) calc(-1 * var(--library-content-inline-padding));
+  // Room for the hover scale and cover shadow, which the scroller would clip.
+  margin-block: calc(-1 * var(--bew-space-4));
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
-  scroll-padding-inline: var(--bew-space-2);
   scrollbar-width: none;
-  -webkit-mask-image:
-    var(--moments-up-list-left-clear-mask), var(--moments-up-list-right-clear-mask), var(--moments-up-list-base-mask);
-  mask-image:
-    var(--moments-up-list-left-clear-mask), var(--moments-up-list-right-clear-mask), var(--moments-up-list-base-mask);
-  mask-repeat: no-repeat;
-  transition:
-    --moments-up-list-left-clear 700ms var(--bew-ease-standard),
-    --moments-up-list-right-clear 700ms var(--bew-ease-standard);
-}
-.moments-up-list__scroller.can-scroll-left {
-  --moments-up-list-left-clear: 0;
-}
-.moments-up-list__scroller.can-scroll-right {
-  --moments-up-list-right-clear: 0;
 }
 .moments-up-list__scroller::-webkit-scrollbar {
   display: none;
 }
 .moments-up-list__track {
   display: flex;
-  align-items: center;
-  gap: var(--bew-space-1);
   width: max-content;
-  min-width: 100%;
-  padding-block: 6px var(--bew-space-1);
-  box-sizing: border-box;
-}
-.moments-up-list__fade {
-  position: absolute;
-  top: 50%;
-  z-index: 1;
-  width: calc(var(--bew-space-12) + var(--bew-space-12) + var(--bew-space-12));
-  height: calc(100% + var(--bew-space-12));
-  opacity: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse at center,
-    color-mix(in oklab, var(--bew-elevated-solid) 24%, transparent) 0%,
-    color-mix(in oklab, var(--bew-elevated-solid) 10%, transparent) 38%,
-    transparent 74%
-  );
-  filter: var(--bew-filter-glass-1);
-  transform: translateY(-50%);
-  transition: opacity 700ms var(--bew-ease-standard);
-}
-.moments-up-list__fade.is-visible {
-  opacity: 0.72;
-}
-.moments-up-list__fade--prev {
-  left: calc(0px - var(--bew-space-12) - var(--bew-space-6));
-}
-.moments-up-list__fade--next {
-  right: calc(0px - var(--bew-space-12) - var(--bew-space-6));
+  gap: var(--bew-space-4);
+  box-sizing: content-box;
+  padding-block: var(--bew-space-4);
+  padding-inline: var(--moments-up-list-bleed-start) var(--library-content-inline-padding);
 }
 .moments-up-list__arrow {
   position: absolute;
@@ -1553,32 +1448,25 @@ function appendMoments(items: DisplayMoment[]) {
   opacity: 1;
   pointer-events: auto;
 }
+// Same hover scale as video cards (contentCard.bare).
 .moments-up-list__item {
+  @include contentCard.bare;
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  align-items: center;
-  gap: var(--bew-space-1);
-  width: 64px;
-  min-width: 64px;
-  padding: var(--bew-space-1);
+  align-items: flex-start;
+  gap: var(--bew-space-2);
+  box-sizing: content-box;
+  width: var(--bew-moments-up-tile-size);
   border: 0;
-  border-radius: var(--bew-interactive-radius);
-  background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
+  text-align: start;
   text-decoration: none;
-  transition:
-    color var(--bew-duration-fast) var(--bew-ease-standard),
-    transform var(--bew-duration-fast) var(--bew-ease-emphasized);
 }
 .moments-up-list__item:hover:not(:disabled) {
   color: var(--bew-text-1);
-  transform: translateY(-2px);
-}
-.moments-up-list__item:active:not(:disabled) {
-  transform: translateY(0) scale(0.98);
 }
 .moments-up-list__item:focus-visible {
   outline: var(--bew-focus-ring, 1px solid CanvasText);
@@ -1587,43 +1475,44 @@ function appendMoments(items: DisplayMoment[]) {
 .moments-up-list__item--active .moments-up-list__name {
   color: var(--bew-text-1);
 }
-.moments-up-list__item--active .moments-up-list__avatar > img,
-.moments-up-list__item--active .moments-up-list__avatar--all {
-  box-shadow: var(--bew-focus-shadow);
-}
 .moments-up-list__item--skeleton {
   pointer-events: none;
 }
+// Square tiles as tall as a video card cover, framed like one.
 .moments-up-list__avatar {
+  @include contentCard.media-frame;
   position: relative;
-  width: 48px;
-  height: 48px;
+  display: block;
+  width: var(--bew-moments-up-tile-size);
+  height: var(--bew-moments-up-tile-size);
   flex: 0 0 auto;
+  border-radius: var(--bew-video-cover-radius);
+  corner-shape: var(--bew-corner-shape);
+  background: var(--bew-fill-1);
+  transition: box-shadow var(--bew-duration-moderate) var(--bew-ease-standard);
+}
+.moments-up-list__item:hover:not(:disabled) .moments-up-list__avatar {
+  box-shadow: var(--bew-shadow-2);
 }
 .moments-up-list__avatar > img {
   display: block;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  corner-shape: inherit;
   object-fit: cover;
-  background: var(--bew-fill-1);
 }
 .moments-up-list__avatar--all {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  box-sizing: border-box;
-  border: 0;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface-hover);
+  color: var(--bew-text-2);
 }
 .moments-up-list__item--active .moments-up-list__avatar--all {
   color: var(--bew-text-1);
   background: var(--bew-selected-bg);
+}
+.moments-up-list__skeleton-tile {
+  border-radius: var(--bew-video-cover-radius);
 }
 .moments-up-list__item:disabled {
   opacity: 0.45;
@@ -1631,17 +1520,18 @@ function appendMoments(items: DisplayMoment[]) {
 }
 .moments-up-list__all-icon {
   display: block;
-  width: 22px;
-  height: 22px;
+  width: var(--bew-icon-size-xl);
+  height: var(--bew-icon-size-xl);
   line-height: 1;
 }
 .moments-up-list__dot {
   position: absolute;
-  top: 0;
-  right: 0;
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--bew-elevated);
+  top: var(--bew-space-2);
+  right: var(--bew-space-2);
+  z-index: 5;
+  width: var(--bew-space-3);
+  height: var(--bew-space-3);
+  border: 2px solid var(--bew-bg);
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
   background: var(--bew-bili-pink);
@@ -1649,13 +1539,14 @@ function appendMoments(items: DisplayMoment[]) {
 }
 .moments-up-list__name {
   display: block;
+  align-self: stretch;
   max-width: 100%;
   overflow: hidden;
   color: var(--bew-text-2);
-  font-size: var(--bew-font-size-caption);
+  font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
-  line-height: var(--bew-line-height-caption);
-  text-align: center;
+  line-height: var(--bew-line-height-control);
+  text-align: start;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1848,12 +1739,6 @@ function appendMoments(items: DisplayMoment[]) {
   opacity: 1;
   transition: opacity 0.18s ease;
 }
-@media (prefers-reduced-motion: reduce) {
-  .moments-up-list__fade,
-  .moments-up-list__scroller {
-    transition-duration: 0ms;
-  }
-}
 .moment-detail-frame:not(.is-loading) .moment-detail-frame__loading {
   opacity: 0;
   pointer-events: none;
@@ -2041,8 +1926,6 @@ function appendMoments(items: DisplayMoment[]) {
   background: rgb(255 255 255 / 24%);
 }
 
-.moments-up-list,
-.moments-up-list__item,
 .moments-page__empty button:not(.b-button),
 .moments-load-more,
 .moment-detail-frame,

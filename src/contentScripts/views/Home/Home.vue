@@ -10,6 +10,7 @@ import { usePageScrollPositions } from '~/composables/usePageViewState'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
 import { resolveHomeSearchStage } from '~/constants/layout'
+import { AppPage } from '~/enums/appEnums'
 import { gridLayout, settings } from '~/logic'
 import { isLayoutEditing, useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
 import { useForYouStore } from '~/stores/forYouStore'
@@ -23,6 +24,7 @@ import { normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import emitter from '~/utils/mitt'
 import { retiringTransition } from '~/utils/motionPresence'
 import { scrollToPosition } from '~/utils/scrollIntent'
+import { arriveSearchAt, departSearchFrom } from '~/utils/searchHandoff'
 import { subscribeViewportFrame } from '~/utils/viewportGeometry'
 
 import HomeChannelsMenu from './components/HomeChannelsMenu.vue'
@@ -42,6 +44,7 @@ const {
   navigateToHomeTab,
   isHomeTabSwitching,
   scrollViewportRef,
+  activatedPage: appActivatedPage,
 } = useBewlyApp()
 
 // Updated every scroll frame without reactivity; only crossing the sticky
@@ -72,6 +75,22 @@ let homeEventsAttached = false
 // centre to just after the logo (a scroll-driven CSS animation). The centred
 // position only changes with layout, so it is measured on layout frames.
 const searchDock = useTemplateRef<HTMLElement>('searchDock')
+// Leaving Home: the top bar search takes over from this box's position, so this
+// one hides at once instead of fading out beside it.
+const searchDeparted = ref(false)
+watch(() => appActivatedPage?.value, (page, previous) => {
+  if (previous !== AppPage.Home || page === AppPage.Home || !searchDock.value)
+    return
+  departSearchFrom(searchDock.value)
+  searchDeparted.value = true
+}, { flush: 'sync' })
+function arriveHomeSearch() {
+  searchDeparted.value = false
+  void nextTick(() => {
+    if (searchDock.value)
+      arriveSearchAt(searchDock.value)
+  })
+}
 function measureSearchDock() {
   const dock = searchDock.value
   const stage = dock?.parentElement
@@ -327,6 +346,7 @@ function syncCurrentTabs() {
 }
 
 onMounted(() => {
+  arriveHomeSearch()
   // ✅ 性能优化：订阅滚动事件以缓存 scrollTop，避免后续 DOM 读取
   subscribeHomeEvents()
 
@@ -339,6 +359,7 @@ onMounted(() => {
 })
 
 onActivated(() => {
+  arriveHomeSearch()
   homeActive.value = true
   subscribeHomeEvents()
   setCachedScrollTop(scrollViewportRef.value?.scrollTop ?? cachedScrollTop)
@@ -422,7 +443,7 @@ watch(tabContentLoading, (loading) => {
             <div
               ref="searchDock"
               class="home-search-stage__dock"
-              :class="{ 'home-search-stage__dock--brand-logo': settings.topBarLogoStyle === 'brand' }"
+              :class="{ 'home-search-stage__dock--brand-logo': settings.topBarLogoStyle === 'brand', 'home-search-stage__dock--departed': searchDeparted }"
             >
               <SearchBar
                 :focused-character="showHomeSearchCharacter ? settings.searchPageSearchBarFocusCharacter : undefined"
@@ -623,6 +644,10 @@ watch(tabContentLoading, (loading) => {
   to {
     translate: calc(var(--bew-home-search-dock-start) - var(--bew-home-search-left, 0px)) 0;
   }
+}
+
+.home-search-stage__dock--departed {
+  visibility: hidden;
 }
 
 .home-search-stage__dock--brand-logo {

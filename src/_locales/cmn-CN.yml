@@ -1293,6 +1293,7 @@ moments:
   retry: 重试
   filter_all: 全部动态
   filter_video: 视频投稿
+  filter_draw: 图文动态
   filter_pgc: 追番追剧
   filter_article: 专栏
   emoji: 表情
@@ -1351,10 +1352,8 @@ moments:
   initial_loading: 正在准备动态和图片…
   empty: 暂时没有可展示的动态
   loading: 正在加载…
-  load_more: 加载更多
-  reload: 重新加载
   loading_more: 正在加载并准备更多动态…
-  no_more: 已经到底啦
+  no_more: 没有更多动态了
   live_room: 直播间
   video_playback: 视频播放
   detail: 动态详情

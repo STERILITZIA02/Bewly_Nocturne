@@ -630,7 +630,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer {
   display: none !important;
   overflow: hidden !important;
   background: rgba(18, 18, 18, 0.72) !important;
-  backdrop-filter: blur(14px) !important;
+  backdrop-filter: var(--bew-filter-glass-1, blur(20px)) !important;
   color: #fff !important;
   touch-action: none !important;
 }

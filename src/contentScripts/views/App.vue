@@ -1085,15 +1085,6 @@ onBeforeUnmount(stopUrlCleaner)
     position: absolute;
   }
 
-  // The logo sits on the rail; the search starts right after the rail.
-  :deep(.top-bar-header) {
-    padding-inline-start: var(--bew-messages-sidebar-width);
-  }
-
-  :deep(.top-bar-header__side--left) {
-    display: none;
-  }
-
   :deep(.top-bar-header__side),
   :deep(.top-bar-header__search) {
     position: relative;

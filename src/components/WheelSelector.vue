@@ -20,7 +20,13 @@ const emit = defineEmits<{
 const id = useId()
 const root = ref<HTMLElement | null>(null)
 const selectedIndex = computed(() => Math.max(0, props.items.findIndex(item => item.value === props.modelValue)))
+/**
+ * The wheel is a ring: the cursor counts steps without bounds so stepping past
+ * the last item keeps moving forward onto the first (and back), and the item
+ * shown is the cursor modulo the item count.
+ */
 const cursor = ref(selectedIndex.value)
+const cursorIndex = computed(() => wrapIndex(cursor.value))
 const position = useSpringValue(() => cursor.value, () => {
   const duration = root.value ? getMotionDuration(getComputedStyle(root.value), '--bew-duration-normal') : 200
   // Read when the target changes: multi-step jumps (Home/End, external
@@ -30,29 +36,52 @@ const position = useSpringValue(() => cursor.value, () => {
 const wheelStepper = createWheelStepper()
 let interactionGeneration = 0
 
-watch(selectedIndex, index => cursor.value = index)
+watch(selectedIndex, index => moveCursorTo(index))
 watch(() => props.scope, () => {
   interactionGeneration++
-  cursor.value = selectedIndex.value
+  moveCursorTo(selectedIndex.value)
   wheelStepper.reset()
 }, { flush: 'sync' })
 
+function wrapIndex(step: number) {
+  const count = props.items.length || 1
+  return ((step % count) + count) % count
+}
+
+/** Signed distance from `from` to item `index` the short way around the ring. */
+function ringDistance(index: number, from: number) {
+  const count = props.items.length || 1
+  const distance = index - from
+  return distance - count * Math.round(distance / count)
+}
+
+function moveCursorTo(index: number) {
+  cursor.value += ringDistance(index, cursor.value)
+}
+
 function itemStyle(index: number) {
-  const distance = index - position.value
+  const distance = ringDistance(index, position.value)
   // A short arc keeps adjacent labels readable without a second render tree.
   const angle = Math.max(-90, Math.min(90, distance * 24))
   return {
     transform: `translateY(calc(${Math.sin(angle * Math.PI / 180)} * var(--bew-wheel-radius))) rotateX(${-angle}deg) scale(${1 - (1 - 13 / 24) * Math.min(1, Math.abs(distance))})`,
     opacity: Math.max(0, Math.min(1, 2 - Math.abs(distance))),
-    pointerEvents: Math.abs(index - cursor.value) > 1 ? 'none' as const : undefined,
+    pointerEvents: Math.abs(ringDistance(index, cursor.value)) > 1 ? 'none' as const : undefined,
   }
 }
 
-function select(index: number) {
+function select(index: number, step?: -1 | 1) {
   const item = props.items[index]
   if (!item)
     return
-  cursor.value = index
+  if (step) {
+    // Arrive from the neighbour the wheel left, so the ring turns the same way
+    // across the ends.
+    cursor.value += ringDistance(wrapIndex(index - step), cursor.value) + step
+  }
+  else {
+    moveCursorTo(index)
+  }
   if (item.value !== props.modelValue)
     emit('update:modelValue', item.value)
   if (root.value?.querySelector('[role="tab"]:focus')) {
@@ -67,18 +96,21 @@ function select(index: number) {
 async function handleKeydown(event: KeyboardEvent) {
   if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
     return
-  const index = cursor.value
-  const next = event.key === 'ArrowDown'
-    ? Math.min(props.items.length - 1, index + 1)
-    : event.key === 'ArrowUp'
-      ? Math.max(0, index - 1)
-      : event.key === 'Home' ? 0 : event.key === 'End' ? props.items.length - 1 : -1
+  const index = cursorIndex.value
+  // Arrow keys step around the ring; Home/End jump to the first/last item.
+  const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
+  const next = step
+    ? wrapIndex(index + step)
+    : event.key === 'Home' ? 0 : event.key === 'End' ? props.items.length - 1 : -1
   if (next < 0 || next === index)
     return
   event.preventDefault()
   // Focus previews a category; Enter/Space commits it, so browsing the wheel
   // with a keyboard does not fetch or mark every intermediate feed as read.
-  cursor.value = next
+  if (step)
+    cursor.value += step
+  else
+    moveCursorTo(next)
   const generation = interactionGeneration
   await nextTick()
   if (generation === interactionGeneration)
@@ -88,19 +120,19 @@ async function handleKeydown(event: KeyboardEvent) {
 function handleWheel(event: WheelEvent) {
   if (event.ctrlKey || Math.abs(event.deltaX) > Math.abs(event.deltaY) || !event.deltaY)
     return
-  const direction = Math.sign(event.deltaY)
-  const next = selectedIndex.value + direction
-  if (next < 0 || next >= props.items.length)
+  if (props.items.length < 2)
     return
   event.preventDefault()
-  // The spring retains its position and velocity across consecutive commits.
-  if (wheelStepper.step(event.deltaY, event.deltaMode, event.timeStamp))
-    select(next)
+  // The spring retains its position and velocity across consecutive commits;
+  // past either end the wheel carries on around to the other.
+  const direction = wheelStepper.step(event.deltaY, event.deltaMode, event.timeStamp)
+  if (direction)
+    select(wrapIndex(selectedIndex.value + direction), direction)
 }
 
 function resetPreview(event: FocusEvent) {
   if (!(event.relatedTarget instanceof Node) || !root.value?.contains(event.relatedTarget))
-    cursor.value = selectedIndex.value
+    moveCursorTo(selectedIndex.value)
 }
 </script>
 
@@ -119,7 +151,7 @@ function resetPreview(event: FocusEvent) {
         :aria-selected="modelValue === item.value"
         :aria-controls="modelValue === item.value ? panelId : undefined"
         :aria-label="item.ariaLabel"
-        :tabindex="cursor === index ? 0 : -1"
+        :tabindex="cursorIndex === index ? 0 : -1"
         :style="itemStyle(index)"
         @keydown="handleKeydown"
         @click="select(index)"

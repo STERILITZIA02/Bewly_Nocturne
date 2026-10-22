@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
+import { useSidebarHost } from '~/composables/useSidebarHost'
 import { settings } from '~/logic'
 import { vLayoutEditable } from '~/logic/layoutEdit'
 
@@ -18,6 +19,8 @@ withDefaults(defineProps<{
 
 const { forceWhiteIcon, showSearchBar } = useTopBarInteraction()
 const topBarSearchFocused = ref(false)
+// The rail's destination state, flipped as navigation starts (with its fold).
+const sidebarHost = useSidebarHost()
 </script>
 
 <template>
@@ -26,6 +29,8 @@ const topBarSearchFocused = ref(false)
     :class="{
       'top-bar-header--solid': settings.disableFrostedGlass,
       'top-bar-header--solid-force-white': settings.disableFrostedGlass && forceWhiteIcon,
+      'top-bar-header--rail': sidebarHost?.railOpen.value,
+      'top-bar-header--brand-logo': settings.topBarLogoStyle === 'brand',
     }"
     h="$bew-top-bar-height"
   >
@@ -118,6 +123,36 @@ const topBarSearchFocused = ref(false)
   grid-column: 2;
   display: flex;
   min-width: 0;
+}
+
+// With the rail open the search (and the channels after it) start right after
+// the rail instead of after the logo. Shifted, not re-laid out, so it glides with
+// the rail's fold; the rail width itself transitions between page kinds.
+.top-bar-header {
+  --top-bar-logo-slot: var(--bew-top-bar-primary-control-height);
+}
+
+.top-bar-header--brand-logo {
+  --top-bar-logo-slot: calc(var(--bew-top-bar-brand-logo-width) + var(--bew-space-2) * 2);
+}
+
+.top-bar-header__search,
+.top-bar-header__side--channels {
+  transition: translate var(--bew-sidebar-morph-duration) var(--bew-ease-standard);
+}
+
+.top-bar-header--rail {
+  .top-bar-header__search,
+  .top-bar-header__side--channels {
+    translate: calc(var(--bew-messages-sidebar-width) - var(--bew-home-logo-inline-start) - var(--top-bar-logo-slot)) 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-bar-header__search,
+  .top-bar-header__side--channels {
+    transition: none;
+  }
 }
 
 .top-bar-header__search--focused {

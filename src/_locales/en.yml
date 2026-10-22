@@ -1336,6 +1336,7 @@ moments:
   retry: Retry
   filter_all: All posts
   filter_video: Videos
+  filter_draw: Text & images
   filter_pgc: Series
   filter_article: Articles
   emoji: Emoji
@@ -1394,10 +1395,8 @@ moments:
   initial_loading: Preparing posts and images…
   empty: No posts to show
   loading: Loading…
-  load_more: Load more
-  reload: Reload
   loading_more: Loading and preparing more posts…
-  no_more: You have reached the end
+  no_more: No more posts
   live_room: Live room
   video_playback: Video playback
   detail: Post details

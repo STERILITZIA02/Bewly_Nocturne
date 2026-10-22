@@ -639,7 +639,7 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
       assert.ok(host.textContent.includes('settings.authorize_app_desc'))
       assert.ok(host.querySelector('[data-qr]'))
       assert.equal(host.querySelector('.bew-panel-top-blur'), null)
-      assert.equal(host.querySelector('.dialog__surface').style.backdropFilter, 'var(--bew-filter-glass-2)')
+      assert.equal(host.querySelector('.dialog__surface').style.backdropFilter, 'var(--bew-filter-glass-1)')
       assert.equal(polls.size, 1)
     }
     finally {

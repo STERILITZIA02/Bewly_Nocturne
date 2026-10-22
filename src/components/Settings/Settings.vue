@@ -805,7 +805,7 @@ function changeMenuItem(menuItem: MenuType) {
 
 .settings-primary-navigation__surface,
 .settings-content__surface {
-  background: var(--bew-elevated-alt);
+  background: var(--bew-glass-tint);
   backdrop-filter: var(--bew-filter-glass-1);
 }
 
