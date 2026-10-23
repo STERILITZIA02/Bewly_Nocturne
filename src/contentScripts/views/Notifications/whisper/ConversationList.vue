@@ -454,8 +454,8 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
 }
 
 .conversation-list__filters {
-  --bew-control-radius: var(--bew-radius-full);
-  --bew-control-item-radius: var(--bew-radius-full);
+  --bew-control-radius: var(--bew-pill-radius);
+  --bew-control-item-radius: var(--bew-pill-radius);
   width: 100%;
 }
 

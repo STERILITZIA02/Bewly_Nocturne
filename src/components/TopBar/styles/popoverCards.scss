@@ -1,7 +1,7 @@
 .popover-card {
   position: relative;
   padding: var(--bew-popover-card-padding);
-  border-radius: var(--bew-popover-card-radius);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
 }
@@ -62,7 +62,7 @@
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  border-radius: var(--bew-popover-media-radius);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-skeleton);
 }

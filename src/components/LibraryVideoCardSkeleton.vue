@@ -32,7 +32,7 @@ const { textStyle } = useVideoCardSharedStyles()
   padding: var(--bew-space-2);
   flex-direction: column;
   gap: var(--bew-space-3);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 .library-video-skeleton__cover {

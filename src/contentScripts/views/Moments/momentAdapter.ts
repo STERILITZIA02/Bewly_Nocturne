@@ -50,7 +50,9 @@ export function createMomentAdapter(
   function extractImageRatio(image: any): number | null {
     if (!image || typeof image !== 'object')
       return null
-    const dimension = image.dimension || image.size || image
+    // Draw and opus pictures carry width/height directly; their `size` is the
+    // file size in KB, not a dimensions object.
+    const dimension = image.dimension || (image.size && typeof image.size === 'object' ? image.size : image)
     let width = Number(dimension.width || dimension.w || image.img_width || 0)
     let height = Number(dimension.height || dimension.h || image.img_height || 0)
     const rotation = Math.abs(Number(dimension.rotate || image.rotate || 0)) % 180
@@ -542,6 +544,8 @@ export function createMomentAdapter(
             imageRatios: !content.isVideo && !content.isLive && !content.isChargeExclusive
               ? content.imageRatios
               : [],
+            // 转发的直播间封面同样只放在嵌套卡片里。
+            liveCover: content.isLive ? content.images[0] : undefined,
             video: forwardedArchive && forwardedVideoContent
               ? {
                   title: pickText(forwardedArchive.title, forwardedVideoContent.title),

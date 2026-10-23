@@ -35,7 +35,7 @@ const state = computed<VideoWatchState | undefined>((previous) => {
   margin-right: var(--bew-space-1);
   padding: 0 var(--bew-space-1);
   border: 1px solid var(--bew-text-3);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-2);
   background: var(--bew-fill-2);

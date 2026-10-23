@@ -1,3 +1,5 @@
+import type { MomentFilter } from '~/contentScripts/views/Moments/momentFeedTypes'
+
 import type { DisplayMoment, WatchLaterTarget } from './types'
 
 function httpsUrl(url = '') {
@@ -118,4 +120,23 @@ export function getWatchLaterStateKey(target: WatchLaterTarget) {
   if (target.bvid)
     return `bvid:${target.bvid}`
   return target.epid ? `epid:${target.epid}` : ''
+}
+
+/** video: 16:9 cover; image: one picture; gallery: picture and thumbnail strip; text: no picture. */
+export type MomentCardSkeletonVariant = 'video' | 'image' | 'gallery' | 'text'
+
+// Skeleton cards follow each filter's usual mix: covers for videos and series,
+// pictures (some with the thumbnail strip) and plain text for posts, a picture
+// for articles.
+const SKELETON_MIX: Record<MomentFilter, MomentCardSkeletonVariant[]> = {
+  all: ['video', 'gallery', 'text', 'image'],
+  video: ['video'],
+  pgc: ['video'],
+  draw: ['gallery', 'text', 'image', 'text'],
+  article: ['image'],
+}
+
+export function getMomentSkeletonVariant(filter: MomentFilter, index: number) {
+  const mix = SKELETON_MIX[filter]
+  return mix[index % mix.length]
 }

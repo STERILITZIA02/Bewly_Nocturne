@@ -14,7 +14,7 @@ const count = computed(() => Number.isFinite(props.count) ? Math.max(0, Math.flo
   min-width: var(--bew-space-5);
   height: var(--bew-space-5);
   padding-inline: var(--bew-space-1);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   // Solid fallback for browsers without backdrop filtering.
   background: var(--bew-elevated-solid);

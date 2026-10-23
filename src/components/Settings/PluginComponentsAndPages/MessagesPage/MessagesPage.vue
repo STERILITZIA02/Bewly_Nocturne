@@ -316,7 +316,7 @@ onScopeDispose(serverSettings.dispose)
   padding: 0 var(--bew-space-1) 0 var(--bew-space-2);
   color: var(--bew-text-2);
   background: var(--bew-fill-1);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
 }
 

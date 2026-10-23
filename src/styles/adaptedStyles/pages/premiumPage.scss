@@ -11,7 +11,7 @@
     .vip-info-inner-wrapper {
       background: var(--bew-glass-tint);
       backdrop-filter: var(--bew-filter-glass-1);
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -44,7 +44,7 @@
     }
 
     .inner-content-wrapper .season-cover.b-img {
-      border-radius: var(--bew-media-radius);
+      border-radius: var(--bew-thumb-radius);
       corner-shape: var(--bew-corner-shape);
     }
 

@@ -50,7 +50,7 @@ const { t } = useI18n()
     min-height: var(--bew-control-height);
     padding: var(--bew-space-1) var(--bew-space-3);
     border: 0;
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
     background: var(--bew-fill-1);
     color: var(--bew-text-2);
     font-size: var(--bew-font-size-control);
@@ -96,7 +96,7 @@ const { t } = useI18n()
     flex: none;
     width: var(--bew-space-8);
     height: var(--bew-space-8);
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
     object-fit: cover;
   }
   > span {

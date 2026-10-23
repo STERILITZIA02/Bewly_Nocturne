@@ -2048,8 +2048,8 @@ async function verifyAuthCloudMomentsContracts() {
   assert.match(moments, /if \(!owner\.isCurrent\(\)\)/)
   assert.match(moments, /shouldContinueIframeFocusRetry/)
   assert.doesNotMatch(moments, /setInterval/)
-  assert.match(momentCard, /role="button"[\s\S]{0,180}@click="handleForwardOriginClick"/)
-  assert.match(momentCard, /@click\.stop="handleImagePreview/)
+  assert.match(momentCard, /:role="moment\.forward\.video \? undefined : 'button'"[\s\S]{0,400}@click="!moment\.forward\.video && handleForwardOriginClick\(\$event\)"/)
+  assert.match(momentCard, /@preview="\(index, trigger\) => emit\('openImagePreview', moment\.images, index, trigger\)"/)
   assert.match(momentCard, /moment-card__additional-vote-icon/)
   assert.match(momentCard, /const primaryActionLabel/)
   assert.match(momentCard, /i-tabler-repeat/)
@@ -2862,7 +2862,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /> \.tag-link > svg:last-child:not\(:first-child\) \{\s*display: none !important;/)
   assert.doesNotMatch(widescreen, /\.tag-link:is\(:hover, :focus-visible\) \{\s*background: var\(--bew-theme-surface-hover\)/)
   assert.match(widescreen, /--bewly-widescreen-row-thumb-width: calc\(var\(--bew-space-10\) \* 3\);/)
-  assert.match(widescreen, /:is\(\.normal-base-item, \.simple-base-item, \.video-page-card-small \.card-box\) \{[\s\S]{0,200}margin: 0 calc\(var\(--bew-space-1\) \* -1\) !important;\s*padding: var\(--bew-space-1\) !important;[\s\S]{0,80}border-radius: calc\(var\(--bew-media-radius\) \+ var\(--bew-space-1\)\) !important;/)
+  assert.match(widescreen, /:is\(\.normal-base-item, \.simple-base-item, \.video-page-card-small \.card-box\) \{[\s\S]{0,200}margin: 0 calc\(var\(--bew-space-1\) \* -1\) !important;\s*padding: var\(--bew-space-1\) !important;[\s\S]{0,80}border-radius: calc\(var\(--bew-thumb-radius\) \+ var\(--bew-space-1\)\) !important;/)
   assert.match(widescreen, /:is\(\.normal-base-item, \.simple-base-item\)\.active \{\s*background: var\(--bew-selected-bg\) !important;/)
   assert.match(widescreen, /\.active \.title::before \{[\s\S]{0,260}background: var\(--bew-accent-marker\);/)
   assert.match(widescreen, /\.video-pod__body \{\s*box-sizing: border-box !important;\s*width: calc\(100% \+ var\(--bew-space-1\) \* 2\) !important;\s*margin-inline: calc\(var\(--bew-space-1\) \* -1\) !important;/)
@@ -2952,9 +2952,9 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /\.bewly-widescreen-player-toolbar \{\s*position: absolute;\s*top: var\(--bewly-widescreen-card-inset\);\s*left: var\(--bewly-widescreen-card-inset\);[\s\S]{0,200}width: calc\(var\(--bew-control-height\) \* 4 \+ var\(--bew-space-2\) \* 3\);\s*height: var\(--bew-control-height\);\s*pointer-events: none;/)
   assert.match(widescreen, /:is\(\[data-display-mode="fill"\], \[data-zooming="true"\]\) \.bewly-widescreen-player-toolbar \{\s*visibility: hidden;/)
   // Every player popover shares one surface constant, the feedback panel included.
-  assert.match(widescreen, /const PLAYER_POPOVER_SURFACE = `background: var\(--bew-elevated-alt-solid\) !important;\s*border: 1px solid var\(--bew-surface-border-color\) !important;\s*border-radius: var\(--bew-popover-radius\) !important;/)
+  assert.match(widescreen, /const PLAYER_POPOVER_SURFACE = `background: var\(--bew-elevated-alt-solid\) !important;\s*border: 1px solid var\(--bew-surface-border-color\) !important;\s*border-radius: var\(--bew-surface-radius\) !important;/)
   assert.equal((widescreen.match(/\$\{PLAYER_POPOVER_SURFACE\}/g) ?? []).length, 6)
-  assert.equal((widescreen.match(/border-radius: var\(--bew-popover-radius\) !important;\s*corner-shape: var\(--bew-corner-shape\);\s*box-shadow: var\(--bew-popover-surface-shadow\) !important;/g) ?? []).length, 1, 'the popover surface is declared once')
+  assert.equal((widescreen.match(/border-radius: var\(--bew-surface-radius\) !important;\s*corner-shape: var\(--bew-corner-shape\);\s*box-shadow: var\(--bew-popover-surface-shadow\) !important;/g) ?? []).length, 1, 'the popover surface is declared once')
   const feedbackStyles = widescreen.slice(widescreen.indexOf('/* Player feedback, opened by the docked help button.'), widescreen.indexOf('/* 弹幕设置/弹幕样式弹窗文字颜色适配浅色模式'))
   assert.match(feedbackStyles, /\.b-back-panel \{\s*\$\{PLAYER_POPOVER_SURFACE\}/)
   assert.match(feedbackStyles, /\.b-back-tabmenu-list\.b-back-show::before \{\s*border-color: var\(--bew-text-1\) !important;/)
@@ -3219,7 +3219,7 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-video-info`),
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-root`),
   )
-  assert.match(danmakuViewerInfoStyles, /border-radius: var\(--bew-badge-radius\)/)
+  assert.match(danmakuViewerInfoStyles, /border-radius: var\(--bew-pill-radius\)/)
   assert.match(danmakuViewerInfoStyles, /corner-shape: var\(--bew-corner-shape-round\)/)
   assert.match(danmakuViewerInfoStyles, /color: var\(--bew-on-overlay-color\) !important/)
   assert.match(danmakuViewerInfoStyles, /background: var\(--bew-overlay-background\) !important/)
@@ -3306,7 +3306,7 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-video-inputbar {`),
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-video-inputbar:focus-within`),
   )
-  assert.match(danmakuInputbarStyles, /border-radius: var\(--bew-radius-full\) !important/)
+  assert.match(danmakuInputbarStyles, /border-radius: var\(--bew-pill-radius\) !important/)
   assert.match(danmakuInputbarStyles, /corner-shape: var\(--bew-corner-shape-round\)/)
   assert.match(danmakuInputbarStyles, /height: var\(--bewly-widescreen-inputbar-height, 44px\) !important/)
   assert.match(danmakuInputbarStyles, /padding-inline: var\(--bew-space-1, 4px\) !important/)
@@ -3928,8 +3928,11 @@ async function verifyIncrementalInteractionContracts() {
   assert.match(contextMenu, /window\.removeEventListener\('resize', handleViewportResize\)/)
   assert.match(contextMenu, /observedVisualViewport\?\.addEventListener\('resize', handleViewportResize\)/)
   assert.match(contextMenu, /observedVisualViewport\?\.removeEventListener\('resize', handleViewportResize\)/)
-  // The card menu opens at the pointer, so it grows from its left corner.
-  assert.match(videoCardLogic, /bottom: position\.bottom[\s\S]{0,160}bottom left' : 'top left'/)
+  // The card menu opens at the pointer, so it grows from its left corner. Video
+  // cards and moment covers share the placement.
+  const floatingMenu = await readFile(`${root}/src/utils/floatingMenu.ts`, 'utf8')
+  assert.match(floatingMenu, /bottom: position\.bottom[\s\S]{0,160}bottom left' : 'top left'/)
+  assert.match(videoCardLogic, /getContextMenuPlacement\(event\)/)
   assert.match(momentCard, /bottom: position\.bottom[\s\S]{0,160}bottom right' : 'top right'/)
 
   assert.match(topBarInteraction, /export function resetTopBarTransientInteraction\(\)/)
@@ -4136,7 +4139,8 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.match(moments, /detailIframeRef\.value = null[\s\S]{0,120}detailFrameGeneration \+= 1/)
   assert.match(moments, /iframe !== detailIframeRef\.value[\s\S]{0,160}detailIframeGenerations\.get\(iframe\) !== detailFrameGeneration/)
   assert.match(momentCard, /moment-card--supports-wide-layout/)
-  assert.match(momentCard, /moment-card--wide-single-image \.moment-card__gallery--1/)
+  // A wide single-image card puts its top image down the left, as covers do.
+  assert.match(momentCard, /moment-card--top-cover\.moment-card--supports-wide-layout \.moment-card__top-media \{/)
   assert.match(momentCard, /@container \(min-width: #\{breakpoints\.\$moment-card-wide\}\)/)
   assert.match(await readFile(`${root}/src/styles/_breakpoints.scss`, 'utf8'), /\$moment-card-wide: 880px/)
   assert.doesNotMatch(widescreen, /explicit priority ownership—not defaultPrevented alone|escapeArbitrationTimer/)
@@ -4400,7 +4404,7 @@ async function verifySemanticPortContracts() {
   assert.match(momentCard, /const descriptionCanToggle = ref\(false\)/)
   assert.match(momentCard, /new ResizeObserver\(scheduleDescriptionOverflowMeasure\)/)
   assert.match(momentCard, /:aria-controls="descriptionId"/)
-  assert.match(momentCard, /:aria-expanded="descriptionExpanded"/)
+  assert.match(momentCard, /:aria-expanded="descriptionOpen"/)
   assert.match(momentCard, /@click\.stop="toggleDescription"/)
   assert.match(momentCard, /moment-card__desc--inherited/)
   assert.match(momentCard, /data-description-expanded/)

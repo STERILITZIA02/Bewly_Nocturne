@@ -40,7 +40,7 @@ function handleClick(evt: MouseEvent) {
     :style="{
       'backgroundColor': color,
       'color': textColor,
-      '--b-button-radius': round ? 'var(--bew-badge-radius)' : '',
+      '--b-button-radius': round ? 'var(--bew-pill-radius)' : '',
       'width': block ? '100%' : 'var(--b-button-width)',
       'justifyContent': center ? 'center' : '',
     }"

@@ -202,7 +202,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             :aria-label="`${$t('settings.theme_color')}: ${$t('settings.theme_color_opt.neutral')}`"
             :title="$t('settings.theme_color_opt.neutral')"
             :aria-pressed="isNeutralThemeColor"
-            w-20px h-20px p-0 appearance-none rounded-8
+            w-20px h-20px p-0 appearance-none rounded="$bew-pill-radius"
             cursor-pointer transition duration-300 box-border
             :style="{
               transform: isNeutralThemeColor ? 'scale(1.3)' : 'scale(1)',
@@ -217,7 +217,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             class="color-option color-option--preset"
             :aria-label="`${$t('settings.theme_color')}: ${color}`"
             :aria-pressed="color === settings.themeColor"
-            w-20px h-20px p-0 appearance-none rounded-8
+            w-20px h-20px p-0 appearance-none rounded="$bew-pill-radius"
             cursor-pointer transition duration-300 box-border
             :style="{
               background: color,
@@ -229,7 +229,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
           />
           <div
             class="color-option"
-            w-20px h-20px rounded-8 overflow-hidden
+            w-20px h-20px rounded="$bew-pill-radius" overflow-hidden
             cursor-pointer transition duration-300
             flex="~ items-center justify-center"
             :style="{
@@ -247,7 +247,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
               type="color"
               :aria-label="$t('settings.theme_color')"
               w-30px h-30px p-0 m-0 block
-              shrink-0 rounded-8 border-none cursor-pointer
+              shrink-0 rounded="$bew-pill-radius" border-none cursor-pointer
               @input="(e) => changeThemeColorThrottle((e.target as HTMLInputElement)?.value)"
             >
           </div>
@@ -269,7 +269,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             class="color-option color-option--preset"
             :aria-label="`${$t('settings.dark_mode_base_color')}: ${color}`"
             :aria-pressed="color === settings.darkModeBaseColor"
-            w-20px h-20px p-0 appearance-none rounded-8
+            w-20px h-20px p-0 appearance-none rounded="$bew-pill-radius"
             cursor-pointer transition duration-300 box-border
             :style="{
               background: color,
@@ -281,7 +281,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
           />
           <div
             class="color-option"
-            w-20px h-20px rounded-8 overflow-hidden
+            w-20px h-20px rounded="$bew-pill-radius" overflow-hidden
             cursor-pointer transition duration-300
             flex="~ items-center justify-center"
             :style="{
@@ -299,7 +299,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
               type="color"
               :aria-label="$t('settings.dark_mode_base_color')"
               w-30px h-30px p-0 m-0 block
-              shrink-0 rounded-8 border-none cursor-pointer
+              shrink-0 rounded="$bew-pill-radius" border-none cursor-pointer
               @input="(e) => changeDarkModeBaseColorThrottle((e.target as HTMLInputElement)?.value)"
             >
           </div>

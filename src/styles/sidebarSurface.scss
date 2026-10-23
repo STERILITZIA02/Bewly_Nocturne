@@ -25,7 +25,7 @@
   @include material;
   box-sizing: border-box;
   border: 1px solid var(--bew-glass-border-color);
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   box-shadow: var(--bew-shadow-1);
 }

@@ -240,7 +240,8 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: var(--bew-space-1);
+  // 8px items across the popover inset sit concentric with its 16px corner.
+  padding: var(--bew-popover-padding);
 }
 
 .context-menu-item {

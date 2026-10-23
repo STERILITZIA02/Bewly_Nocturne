@@ -57,7 +57,7 @@ label {
   flex: 0 0 auto;
   background: var(--bew-fill-1);
   border: var(--b-switch-border-width) solid var(--bew-surface-border-color);
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: round;
   overflow: hidden;
 

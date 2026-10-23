@@ -1,13 +1,13 @@
 // Music uses CSS Modules. Match the observed semantic stems, not build hashes.
 html.bewly-design:not(.bewly-video-dark-only).musicPage {
   [class^="_nav_"] > [class^="_item_"] {
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   [class^="_newMusic_"] a > [class^="_inlineVideoSquare_"],
   [class^="_newMusic_"] a > [class^="_imgContainer_"] {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 

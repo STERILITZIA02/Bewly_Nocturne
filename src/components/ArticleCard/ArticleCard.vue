@@ -59,7 +59,7 @@ function formatDate(timestamp: number | string | undefined) {
     class="article-card bew-surface-border"
     flex gap-4 p-4
     bg="$bew-elevated"
-    rounded="$bew-card-radius"
+    rounded="$bew-surface-radius"
     cursor-pointer
   >
     <!-- 左侧内容 -->
@@ -119,7 +119,7 @@ function formatDate(timestamp: number | string | undefined) {
           text="xs $bew-on-theme-surface"
           bg="$bew-theme-surface"
           px-2 h-6 inline-flex items-center font-medium
-          rounded-full
+          rounded="$bew-pill-radius"
         >
           {{ tag.name }}
         </span>
@@ -130,7 +130,7 @@ function formatDate(timestamp: number | string | undefined) {
     <div
       v-if="cover"
       class="article-cover"
-      rounded="$bew-card-inset-radius"
+      rounded="$bew-interactive-radius"
       overflow-hidden
       flex-shrink-0
       bg="$bew-fill-1"

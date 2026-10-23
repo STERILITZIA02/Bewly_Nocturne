@@ -131,3 +131,31 @@ export function computeFloatingMenuPosition(
     direction: openUp ? 'up' : 'down',
   }
 }
+
+/**
+ * Places a right-click menu at the pointer. The keyboard menu key reports no
+ * pointer position, so it anchors under the focused element instead. `trigger`
+ * is the link or button that gets focus back when the menu closes.
+ */
+export function getContextMenuPlacement(event: MouseEvent) {
+  const target = event.target instanceof Element ? event.target : null
+  const trigger = target?.closest<HTMLElement>('a[href], button') ?? null
+  const fromPointer = event.clientX !== 0 || event.clientY !== 0
+  const rect = (trigger ?? target)?.getBoundingClientRect()
+  const x = fromPointer || !rect ? event.clientX : rect.left
+  const y = fromPointer || !rect ? event.clientY : rect.bottom
+  const position = computeFloatingMenuPosition({ top: y, bottom: y, left: x, right: x }, window.innerWidth, window.innerHeight, { gap: 0, align: 'start' })
+  return {
+    trigger,
+    anchor: { x, y },
+    styles: {
+      position: 'fixed' as const,
+      top: position.top,
+      bottom: position.bottom,
+      left: position.left,
+      width: position.width,
+      maxHeight: position.maxHeight,
+      transformOrigin: position.direction === 'up' ? 'bottom left' : 'top left',
+    },
+  }
+}

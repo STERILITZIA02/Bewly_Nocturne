@@ -141,6 +141,7 @@ provide('getVideoType', () => props.type!)
     :ref="(el) => logic.cardRootRef.value = el as HTMLElement"
     class="video-card-container"
     :data-bew-skeleton-group="skeleton ? '' : undefined"
+    :data-bewly-portrait="video?.portrait ? '' : undefined"
     :class="[
       skeleton ? 'video-card-container--skeleton' : 'video-card-container--interactive',
       disableContentVisibility ? 'video-card-container--layout-stable' : '',

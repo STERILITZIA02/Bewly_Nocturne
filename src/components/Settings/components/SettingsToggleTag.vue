@@ -45,7 +45,7 @@ function toggle() {
   padding: var(--bew-control-padding) var(--bew-control-item-padding-x);
   box-sizing: border-box;
   border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-3);
   background: var(--bew-fill-1);

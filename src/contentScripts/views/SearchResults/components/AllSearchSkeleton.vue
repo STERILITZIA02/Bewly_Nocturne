@@ -83,7 +83,7 @@ function getSkeletonItemKey() {
   box-sizing: border-box;
   padding: var(--bew-space-4);
   border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-elevated);
 }

@@ -59,7 +59,7 @@ async function clearSearchHistory() {
               :aria-label="$t('settings.no_search_character')"
               :aria-pressed="settings.searchPageSearchBarFocusCharacter === ''"
               class="bew-settings-option--lift"
-              aspect-square bg="$bew-fill-1" rounded="$bew-radius" overflow-hidden
+              aspect-square bg="$bew-fill-1" rounded="$bew-thumb-radius" overflow-hidden
               un-border="4 transparent" cursor-pointer
               grid place-items-center
               :class="{ 'selected-character': settings.searchPageSearchBarFocusCharacter === '' }"
@@ -73,7 +73,7 @@ async function clearSearchHistory() {
                 :aria-label="item.name"
                 :aria-pressed="settings.searchPageSearchBarFocusCharacter === item.url"
                 class="bew-settings-option--lift"
-                aspect-square bg="$bew-fill-1" rounded="$bew-radius" overflow-hidden
+                aspect-square bg="$bew-fill-1" rounded="$bew-thumb-radius" overflow-hidden
                 un-border="4 transparent" w-full
                 :class="{ 'selected-character': settings.searchPageSearchBarFocusCharacter === item.url }"
                 @click="changeSearchBarFocusCharacter(item.url)"

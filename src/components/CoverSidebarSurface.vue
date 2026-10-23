@@ -28,7 +28,7 @@ function markCoverFailed(event: Event) {
   overflow: hidden;
   color: var(--bew-sidebar-text);
   background: var(--bew-content-solid);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   scrollbar-color: var(--bew-sidebar-scrollbar) transparent;
 }

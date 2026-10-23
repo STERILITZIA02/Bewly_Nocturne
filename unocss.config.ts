@@ -18,7 +18,7 @@ const spacingTokens: Record<number, string> = {
 const radiusPropertyRE = /^border(?:-.+)?-radius$/
 const zeroRadiusRE = /^0(?:px|rem|em|%)?$/
 const circleRadiusRE = /^50%$/
-const fullRadiusRE = /^(?:9999px|var\(--bew-(?:radius-full|badge-radius|control-radius|control-item-radius|liquid-indicator-radius|top-bar-primary-control-radius)\))$/
+const fullRadiusRE = /^(?:9999px|var\(--bew-(?:radius-full|pill-radius|control-radius|control-item-radius|liquid-indicator-radius)\))$/
 
 export default defineConfig({
   content: {

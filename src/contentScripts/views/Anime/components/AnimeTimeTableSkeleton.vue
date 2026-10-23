@@ -90,6 +90,6 @@ withDefaults(defineProps<{ todayIndex?: number }>(), { todayIndex: -1 })
   align-self: flex-start;
   padding: var(--bew-space-1) var(--bew-space-2);
   color: transparent;
-  border-radius: var(--bew-radius-half);
+  border-radius: var(--bew-interactive-radius);
 }
 </style>

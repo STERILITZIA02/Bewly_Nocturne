@@ -389,7 +389,6 @@ watch(accountId, (nextAccountId, previousAccountId) => {
 @use "../../styles/composer";
 .moment-forward-composer {
   padding: var(--bew-space-4);
-  border-top: 1px solid var(--bew-border-color);
   background: transparent;
 }
 .moment-forward-composer__surface {
@@ -414,7 +413,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   gap: var(--bew-space-1);
   margin-top: var(--bew-space-2);
   padding-left: var(--bew-space-2);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   color: var(--bew-on-theme-surface);
   background: var(--bew-theme-surface);
   font-size: var(--bew-font-size-caption);

@@ -136,7 +136,7 @@ function save() {
   aspect-ratio: 8 / 5;
   max-height: 200px;
   overflow: hidden;
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   background: var(--bew-fill-2);
   cursor: pointer;
   &:focus-within {

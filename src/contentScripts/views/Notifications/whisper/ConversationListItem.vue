@@ -146,7 +146,7 @@ watch(() => props.session.avatar, () => {
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   transition:
     color var(--bew-duration-fast) var(--bew-ease-standard),

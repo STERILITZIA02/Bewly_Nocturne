@@ -46,11 +46,11 @@ export function mountBewlyBootOverlay(doc: Document): BewlyBootOverlayController
       width: min(100%, 300px);
       height: var(--bew-control-height, 36px);
       margin-bottom: var(--bew-space-6, 24px);
-      border-radius: var(--bew-radius-md, 8px);
+      border-radius: var(--bew-interactive-radius, 8px);
     }
     #${BOOT_OVERLAY_ID} .bew-grid-adaptive { gap: var(--bew-layout-content-gap, 20px); }
-    #${BOOT_OVERLAY_ID} .bewly-boot-overlay__cover { aspect-ratio: 16 / 9; border-radius: var(--bew-media-radius, 12px); }
-    #${BOOT_OVERLAY_ID} .bewly-boot-overlay__line { height: var(--bew-line-height-control, 18px); margin-top: var(--bew-space-2, 8px); border-radius: var(--bew-radius-sm, 4px); }
+    #${BOOT_OVERLAY_ID} .bewly-boot-overlay__cover { aspect-ratio: 16 / 9; border-radius: var(--bew-thumb-radius, 12px); }
+    #${BOOT_OVERLAY_ID} .bewly-boot-overlay__line { height: var(--bew-line-height-control, 18px); margin-top: var(--bew-space-2, 8px); border-radius: var(--bew-radius-tiny, 4px); }
     #${BOOT_OVERLAY_ID} .bewly-boot-overlay__line:last-child { width: 72%; }
     @media (prefers-color-scheme: dark) {
       #${BOOT_OVERLAY_ID} { background: var(--bew-bg, #050607); }

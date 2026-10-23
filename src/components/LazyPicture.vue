@@ -3,12 +3,9 @@ import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 import type { ImageLoadQueueHandle } from '~/utils/imageLoadQueue'
 import { enqueueImageLoad, subscribeImageLoadRoot } from '~/utils/imageLoadQueue'
+import { forgetLoadedPicture, hasLoadedPicture, rememberLoadedPicture } from '~/utils/pictureRevealMemory'
 import { getResponsiveCoverSrcset, observeCoverWidth } from '~/utils/responsiveImage'
 import { observeSkeletonGroup } from '~/utils/skeletonVisibility'
-
-// 仅记录“曾经加载过”的 URL，避免重复淡入；不持有 ImageBitmap。
-const MAX_REMEMBERED_PICTURES = 240
-const loadedPictureSources = new Set<string>()
 
 type SharedIntersectionCallback = (entry: IntersectionObserverEntry) => void
 
@@ -118,37 +115,6 @@ function cancelImageRelease(element: Element | undefined) {
     releaseSweepTimer = null
     releaseSweepDeadline = Number.POSITIVE_INFINITY
   }
-}
-
-function hasLoadedPicture(src: string): boolean {
-  if (!src || !loadedPictureSources.has(src))
-    return false
-
-  // 刷新插入顺序，使最近重新使用的封面更晚被淘汰。
-  loadedPictureSources.delete(src)
-  loadedPictureSources.add(src)
-  return true
-}
-
-function rememberLoadedPicture(src: string) {
-  if (!src)
-    return
-
-  loadedPictureSources.delete(src)
-  loadedPictureSources.add(src)
-
-  while (loadedPictureSources.size > MAX_REMEMBERED_PICTURES) {
-    const oldestSource = loadedPictureSources.values().next().value
-    if (!oldestSource)
-      break
-    loadedPictureSources.delete(oldestSource)
-  }
-}
-
-function forgetLoadedPicture(src: string) {
-  if (!src)
-    return
-  loadedPictureSources.delete(src)
 }
 </script>
 

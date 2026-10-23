@@ -55,7 +55,7 @@ defineEmits<{ (event: 'toggle', trigger: MouseEvent): void }>()
   height: var(--bew-history-timeline-node);
   box-sizing: border-box;
   border: 1px solid currentColor;
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   background: currentColor;
   transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
 }

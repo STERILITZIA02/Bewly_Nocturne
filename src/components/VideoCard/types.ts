@@ -62,6 +62,8 @@ export interface Video {
   tag?: string | string[]
   rank?: number
   type?: 'horizontal' | 'vertical' | 'bangumi' | 'ketang'
+  /** At least as tall as wide (≥ 1:1), where the source says so; see utils/portraitMedia. */
+  portrait?: boolean
   threePointV2: ThreePointV2[]
 
   badge?: {

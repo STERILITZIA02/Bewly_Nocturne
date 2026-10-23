@@ -203,9 +203,9 @@ html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .opus-toc {
   opacity: 0 !important;
   pointer-events: none !important;
 }
-.bewly-opus-iframe-loading__media { border-radius: var(--bew-media-radius, 12px); }
+.bewly-opus-iframe-loading__media { border-radius: var(--bew-thumb-radius, 12px); }
 .bewly-opus-iframe-loading__copy { display: grid; align-content: start; gap: var(--bew-space-4, 16px); }
-.bewly-opus-iframe-loading__copy > span { height: var(--bew-line-height-body, 24px); border-radius: var(--bew-radius-sm, 4px); }
+.bewly-opus-iframe-loading__copy > span { height: var(--bew-line-height-body, 24px); border-radius: var(--bew-radius-tiny, 4px); }
 .bewly-opus-iframe-loading__copy > span:first-child { height: var(--bew-space-12, 48px); }
 `
 
@@ -340,7 +340,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-g
   left: 2px !important;
   width: 7px !important;
   min-height: 36px !important;
-  border-radius: 999px !important;
+  border-radius: var(--bew-pill-radius, 9999px) !important;
   /* 黑色舞台上的原生感浅色滑块 */
   background: rgba(255, 255, 255, 0.34) !important;
   border: 0 !important;
@@ -474,7 +474,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-g
   width: 36px !important;
   height: 36px !important;
   border: 0 !important;
-  border-radius: 999px !important;
+  border-radius: var(--bew-pill-radius, 9999px) !important;
   background: rgba(0, 0, 0, 0.45) !important;
   color: #fff !important;
   display: inline-flex !important;
@@ -570,7 +570,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-g
 }
 html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-gallery__thumbs::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.35) !important;
-  border-radius: 999px !important;
+  border-radius: var(--bew-pill-radius, 9999px) !important;
 }
 html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-gallery__counter {
   position: absolute !important;
@@ -578,7 +578,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-g
   bottom: 12px !important;
   margin: 0 !important;
   padding: 4px 8px !important;
-  border-radius: 999px !important;
+  border-radius: var(--bew-pill-radius, 9999px) !important;
   color: #fff !important;
   background: rgba(0, 0, 0, 0.42) !important;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25) !important;
@@ -594,7 +594,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-g
   height: 44px !important;
   padding: 0 !important;
   border: 1px solid rgba(255, 255, 255, 0.55) !important;
-  border-radius: 8px !important;
+  border-radius: var(--bew-interactive-radius, 8px) !important;
   overflow: hidden !important;
   background: rgba(0, 0, 0, 0.25) !important;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28) !important;
@@ -735,7 +735,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer__toolbar {
   align-items: center !important;
   gap: 6px !important;
   padding: 8px 12px !important;
-  border-radius: 999px !important;
+  border-radius: var(--bew-pill-radius, 9999px) !important;
   corner-shape: round !important;
   background: rgba(0, 0, 0, 0.55) !important;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28) !important;

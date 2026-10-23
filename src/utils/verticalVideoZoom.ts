@@ -67,7 +67,7 @@ function injectStyle() {
       min-width: var(--bew-space-12, 48px) !important;
       padding: 0 var(--bew-space-3, 12px) !important;
       border: 0 !important;
-      border-radius: var(--bew-radius-full) !important;
+      border-radius: var(--bew-pill-radius) !important;
       corner-shape: var(--bew-corner-shape-round);
       color: #fff !important;
       background: rgb(0 0 0 / 48%) !important;
@@ -99,7 +99,7 @@ function injectStyle() {
       height: var(--bewly-vertical-video-map-height, ${MAP_HEIGHT}px) !important;
       padding: 0 !important;
       border: 0 !important;
-      border-radius: var(--bew-radius-sm) !important;
+      border-radius: var(--bew-radius-tiny) !important;
       background: transparent !important;
       backdrop-filter: none !important;
       box-shadow: var(--bew-shadow-2) !important;

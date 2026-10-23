@@ -13,7 +13,7 @@ const props = withDefaults(defineProps<Props>(), {
 <template>
   <div
     h="6px"
-    rounded="$bew-radius-full"
+    rounded="$bew-pill-radius"
     :style="{
       width: `${percentage}%`,
       backgroundColor: props.color,

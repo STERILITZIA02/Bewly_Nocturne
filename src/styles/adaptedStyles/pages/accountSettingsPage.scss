@@ -8,7 +8,7 @@
 
   .top-img,
   .top_bg > .top {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -19,18 +19,18 @@
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .security-left {
     background: var(--bew-content-alt-solid);
-    border-radius: var(--bew-panel-radius) 0 0 var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius) 0 0 var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .security-right {
-    border-radius: 0 var(--bew-panel-radius) var(--bew-panel-radius) 0;
+    border-radius: 0 var(--bew-surface-radius) var(--bew-surface-radius) 0;
   }
 
   .security-title,
@@ -148,7 +148,7 @@
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-popover-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -189,7 +189,7 @@
   .home-user-spec {
     background: var(--bew-theme-surface);
     color: var(--bew-on-theme-surface);
-    border-radius: var(--bew-badge-radius);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -299,7 +299,7 @@
     min-height: var(--bew-control-height);
     color: var(--bew-text-2);
     background: var(--bew-content-alt-solid);
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
 
     > a {
@@ -325,7 +325,7 @@
   #mp-mine-header {
     // The native image only draws the empty grid/frame behind these real nodes.
     background: var(--bew-content-alt-solid);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     .mp-mine-takedown {
@@ -356,7 +356,7 @@
   .mp-img,
   #face-g-list .mp-block .mp-img {
     border: 0;
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -386,7 +386,7 @@
   .pendant-list > li {
     background: var(--bew-content-alt-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     &:hover {
@@ -459,7 +459,7 @@
 
   .record-content .table-wrapper {
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -476,7 +476,7 @@
   .points-box {
     background-color: var(--bew-content-alt-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -496,7 +496,7 @@
     height: auto;
     padding: var(--bew-space-6);
     background: var(--bew-content-alt-solid);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     > span {
@@ -537,7 +537,7 @@
   .points-pendant-item {
     background: var(--bew-content-alt-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     &:hover {
@@ -682,7 +682,7 @@
       box-sizing: border-box;
       max-width: 100%;
       background: var(--bew-content-solid);
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
       // This public reading/link panel has no disabled state. Its native
       // whole-panel fade also fades the small description below the link.
@@ -701,7 +701,7 @@
       // The separate glyph and text remain native; these images only paint
       // the yellow/blue card texture and lightning watermark underneath them.
       background: var(--bew-content-solid) !important;
-      border-radius: var(--bew-card-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
 
       &:hover {
@@ -756,7 +756,7 @@
   .notice-item .el-switch__core {
     background: var(--bew-fill-3);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
 
     &::after {
@@ -805,14 +805,14 @@
   .coupon-wrapper {
     // Repeated pale logos are only decoration; each voucher has its own image.
     background: none;
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .coupon-content {
     background: var(--bew-content-alt-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -859,7 +859,7 @@
 
   .coin-content .table-wrapper {
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     overflow: hidden;
   }
@@ -898,7 +898,7 @@
 
   .coin-i {
     background: var(--bew-text-1);
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
   }
 

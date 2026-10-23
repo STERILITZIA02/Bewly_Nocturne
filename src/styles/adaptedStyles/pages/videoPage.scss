@@ -104,13 +104,13 @@
       }
     }
     .content .group-list li input[type="checkbox"] + i {
-      border-radius: var(--bew-radius-sm);
+      border-radius: var(--bew-radius-tiny);
       corner-shape: var(--bew-corner-shape);
       border: 1px solid var(--bew-border-color);
     }
 
     .coin-operated-m-exp .like-checkbox input[type="checkbox"]:checked + i {
-      border-radius: var(--bew-radius-sm);
+      border-radius: var(--bew-radius-tiny);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -340,7 +340,7 @@
               input {
                 flex: 1;
                 height: var(--bew-control-height-sm);
-                border-radius: var(--bew-radius-half);
+                border-radius: var(--bew-interactive-radius);
                 border: 1px solid var(--bew-border-color);
                 padding: 0 var(--bew-space-3);
                 background: var(--bew-bg);
@@ -357,7 +357,7 @@
               .submit {
                 width: calc(var(--bew-control-height-lg) + var(--bew-space-5));
                 height: var(--bew-control-height-sm);
-                border-radius: var(--bew-radius-half);
+                border-radius: var(--bew-interactive-radius);
                 background-color: var(--bew-theme-color);
                 color: var(--bew-on-theme-color);
                 cursor: pointer;
@@ -384,7 +384,7 @@
                 background: var(--bew-selected-bg);
                 color: var(--bew-text-1);
                 padding: var(--bew-space-1) var(--bew-space-3);
-                border-radius: var(--bew-radius-sm);
+                border-radius: var(--bew-radius-tiny);
                 font-size: var(--bew-font-size-caption);
                 line-height: var(--bew-line-height-caption);
 
@@ -869,7 +869,7 @@
   color: var(--bew-text-1) !important;
   background: var(--bew-elevated-alt-solid) !important;
   border: 1px solid var(--bew-surface-border-color) !important;
-  border-radius: var(--bew-popover-radius) !important;
+  border-radius: var(--bew-surface-radius) !important;
   corner-shape: var(--bew-corner-shape);
   font-size: var(--bew-font-size-control) !important;
   line-height: var(--bew-line-height-control) !important;

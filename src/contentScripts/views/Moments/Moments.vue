@@ -13,6 +13,7 @@ import { createMomentDisclosureCache, MOMENT_DISCLOSURES, normalizeForwardCount 
 import { createMomentForwardTransactions, MOMENT_FORWARD_TRANSACTIONS } from '~/components/MomentCard/momentForwardTransactions'
 import MomentReportDialog from '~/components/MomentCard/MomentReportDialog.vue'
 import type { DisplayMoment } from '~/components/MomentCard/types'
+import { getMomentSkeletonVariant } from '~/components/MomentCard/utils'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { usePageViewState } from '~/composables/usePageViewState'
@@ -1119,7 +1120,7 @@ function appendMoments(items: DisplayMoment[]) {
                 <MomentCardSkeleton
                   v-for="itemIndex in 4"
                   :key="itemIndex"
-                  :media="activeMomentFilter !== 'article'"
+                  :variant="getMomentSkeletonVariant(activeMomentFilter, columnIndex + itemIndex)"
                 />
               </div>
             </div>
@@ -1486,7 +1487,7 @@ function appendMoments(items: DisplayMoment[]) {
   width: var(--bew-moments-up-tile-size);
   height: var(--bew-moments-up-tile-size);
   flex: 0 0 auto;
-  border-radius: var(--bew-video-cover-radius);
+  border-radius: var(--bew-media-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-fill-1);
   transition: box-shadow var(--bew-duration-moderate) var(--bew-ease-standard);
@@ -1512,7 +1513,7 @@ function appendMoments(items: DisplayMoment[]) {
   background: var(--bew-selected-bg);
 }
 .moments-up-list__skeleton-tile {
-  border-radius: var(--bew-video-cover-radius);
+  border-radius: var(--bew-media-radius);
 }
 .moments-up-list__item:disabled {
   opacity: 0.45;
@@ -1660,7 +1661,7 @@ function appendMoments(items: DisplayMoment[]) {
   margin: var(--bew-space-5) auto 0;
   padding: 0 var(--bew-space-4);
   border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-1);
   background: var(--bew-elevated);
@@ -1713,7 +1714,7 @@ function appendMoments(items: DisplayMoment[]) {
   min-height: 0;
   box-sizing: border-box;
   border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   overflow: hidden;
   background: var(--bew-bg);
 }
@@ -1763,7 +1764,7 @@ function appendMoments(items: DisplayMoment[]) {
   min-height: var(--bew-control-height);
   padding: 0 var(--bew-space-3);
   border: 0;
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-1);
   background: var(--bew-elevated-solid);
@@ -1875,7 +1876,7 @@ function appendMoments(items: DisplayMoment[]) {
   z-index: 4;
   width: 44px;
   height: 56px;
-  border-radius: var(--bew-radius-md);
+  border-radius: var(--bew-interactive-radius);
   transform: translateY(-50%);
   font-size: var(--bew-icon-size-xl);
   line-height: 1;
@@ -1896,7 +1897,7 @@ function appendMoments(items: DisplayMoment[]) {
   gap: var(--bew-space-2);
   padding: var(--bew-space-2) var(--bew-space-3);
   border: 0;
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   background: rgb(0 0 0 / 58%);
   box-shadow: 0 8px 30px rgb(0 0 0 / 28%);

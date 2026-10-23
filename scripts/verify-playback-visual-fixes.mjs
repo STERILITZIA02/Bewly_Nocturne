@@ -603,7 +603,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
       app.mount(host)
       const svg = host.querySelector('svg')
       const thread = svg.parentElement
-      thread.style.setProperty('--bew-radius-lg', '12px')
+      thread.style.setProperty('--bew-thumb-radius', '12px')
       Object.defineProperties(svg, { clientWidth: { value: 400 }, clientHeight: { value: 400 } })
       svg.getBoundingClientRect = () => rect(0, 0, 400, 400)
       const avatars = [...host.querySelectorAll('img')]

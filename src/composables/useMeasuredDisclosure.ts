@@ -3,6 +3,7 @@ import type { Ref } from 'vue'
 import { nextTick, onScopeDispose, ref, watch } from 'vue'
 
 import { getMotionDuration } from '~/utils/motionTiming'
+import { getLayoutHeight } from '~/utils/viewportGeometry'
 
 /** Animate a clipped outer height while keeping the scroll/content layout natural. */
 export function useMeasuredDisclosure(
@@ -38,13 +39,13 @@ export function useMeasuredDisclosure(
     const body = content.value
     if (disposed || !shell || !body)
       return
-    const target = open.value ? body.getBoundingClientRect().height : 0
+    const target = open.value ? getLayoutHeight(body) : 0
     if (height.value === target) {
       if (!target && !moving.value)
         finish()
       return
     }
-    const current = shell.getBoundingClientRect().height
+    const current = getLayoutHeight(shell)
     const version = ++revision
     clearTimeout(settleTimer)
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -76,7 +77,7 @@ export function useMeasuredDisclosure(
     if (!shell || event.target !== shell || event.propertyName !== 'height' || event.type !== 'transitionend')
       return
     // Ignore a queued end from an animation that has already been redirected.
-    if (Math.abs(shell.getBoundingClientRect().height - (height.value ?? 0)) < 1)
+    if (Math.abs(getLayoutHeight(shell) - (height.value ?? 0)) < 1)
       finish()
   }
 

@@ -269,7 +269,7 @@ function cancelListLayoutBreakpointEditing() {
     var(--bew-fill-2) var(--shadow-height-progress),
     var(--bew-fill-2) 100%
   );
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: round;
   cursor: pointer;
   accent-color: var(--bew-theme-color);

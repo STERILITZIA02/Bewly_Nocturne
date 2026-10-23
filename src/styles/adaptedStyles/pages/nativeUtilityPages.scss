@@ -114,7 +114,7 @@ html.bewly-design[data-bewly-native-site="downloads"] {
 
   .main-wrap > .container {
     background: var(--bew-content-solid);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -177,7 +177,7 @@ html.bewly-design[data-bewly-native-site="premium-info"] {
 
   .explain-item-content {
     background: var(--bew-content-solid);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -211,12 +211,12 @@ html.bewly-design[data-bewly-native-site="merchandise-catalog"] {
   .goods-container {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .goods-container .normal-img-container {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
 
     > img {
@@ -263,7 +263,7 @@ html.bewly-design[data-bewly-native-site="merchandise-catalog"] {
   .bottom-cart-count {
     background: var(--bew-selected-bg);
     color: var(--bew-text-1);
-    border-radius: var(--bew-badge-radius);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
   }
 }
@@ -276,7 +276,7 @@ html.bewly-design[data-bewly-native-site="live"] {
     :is(.tabs-content, .tags-content, .list-content) {
       background-color: var(--bew-content-solid);
       color: var(--bew-text-1);
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -304,7 +304,7 @@ html.bewly-design[data-bewly-native-site="live"] {
   [class*="index_flip-view-titles_"] {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     [class*="index_text-wrapper_"] {
@@ -319,7 +319,7 @@ html.bewly-design[data-bewly-native-site="live"] {
   }
 
   [class*="index_flip-view-image-ctnr_"] {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -345,12 +345,12 @@ html.bewly-design[data-bewly-native-site="live"] {
     }
 
     :is(.el-card, .business-item) {
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
     .login-card {
-      border-radius: var(--bew-panel-radius) !important;
+      border-radius: var(--bew-surface-radius) !important;
     }
 
     :is(.login-card__title, .more-title, .business-item h3) {
@@ -373,7 +373,7 @@ html.bewly-design[data-bewly-native-site="live"] {
       background: var(--bew-elevated-solid);
       color: var(--bew-text-1);
       border-color: var(--bew-border-color);
-      border-radius: var(--bew-popover-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
 
       a,
@@ -497,7 +497,7 @@ html.bewly-design[data-bewly-native-site="live-center"] #app-ctnr:has(.linkdown-
   }
 
   :is(.platform-item, .card-item) {
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -537,7 +537,7 @@ html.bewly-design[data-bewly-native-site="live-center"] #app-ctnr:has(.linkdown-
     padding: var(--bew-space-6);
     background: var(--bew-content-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -611,7 +611,7 @@ html.bewly-design[data-bewly-native-site="manga"] .app-download {
   // The native movie/illustration is the product hero, not a page decoration.
   .download-widgets {
     background: var(--bew-content-solid);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -628,7 +628,7 @@ html.bewly-design[data-bewly-native-site="manga"] .app-download {
 
   .qr-code {
     background-color: white;
-    border-radius: var(--bew-radius-md);
+    border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
 }
@@ -654,7 +654,7 @@ html.bewly-design[data-bewly-native-site="game"] {
   [class*="user-basic-nav_"] {
     color: var(--bew-text-1);
     background: var(--bew-content-solid);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -665,7 +665,7 @@ html.bewly-design[data-bewly-native-site="game"] {
   [class*="card-title_"] > [class*="card-num_"] {
     color: var(--bew-text-2);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-radius-sm);
+    border-radius: var(--bew-radius-tiny);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -716,7 +716,7 @@ html.bewly-design[data-bewly-native-site="game"] {
     [class*="infoBox_"] {
       background: var(--bew-content-solid);
       border-color: var(--bew-border-color);
-      border-radius: var(--bew-card-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -743,7 +743,7 @@ html.bewly-design[data-bewly-native-site="game"] {
   }
 
   :is([class*="gameSns-content_"], [class*="comment-item-wrap_"], [class*="steam-role-card_"]) {
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -752,7 +752,7 @@ html.bewly-design[data-bewly-native-site="game"] {
   }
 
   [class*="comment-item-game_"] {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -795,7 +795,7 @@ html.bewly-design[data-bewly-native-site="game"] {
     color: var(--bew-text-1);
     background: var(--bew-content-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -832,7 +832,7 @@ html.bewly-design[data-bewly-native-site="game"] {
       color: var(--bew-text-1) !important;
       background: var(--bew-content-alt-solid) !important;
       border-color: var(--bew-border-color) !important;
-      border-radius: var(--bew-radius-full) !important;
+      border-radius: var(--bew-pill-radius) !important;
       corner-shape: var(--bew-corner-shape-round);
       font-size: var(--bew-font-size-control);
       line-height: var(--bew-line-height-control);
@@ -893,7 +893,7 @@ html.bewly-design[data-bewly-native-site="game"] {
 
     .game-contact-service-btn {
       color: var(--bew-text-1) !important;
-      border-radius: var(--bew-radius-full) !important;
+      border-radius: var(--bew-pill-radius) !important;
       corner-shape: var(--bew-corner-shape-round);
     }
 
@@ -909,7 +909,7 @@ html.bewly-design[data-bewly-native-site="game"] {
 
       .game-area {
         background: var(--bew-content-alt-solid) !important;
-        border-radius: var(--bew-card-radius);
+        border-radius: var(--bew-surface-radius);
         corner-shape: var(--bew-corner-shape);
       }
 
@@ -986,7 +986,7 @@ html.bewly-design[data-bewly-native-site="game"] {
       width: 100%;
       background: var(--bew-content-solid);
       border-color: var(--bew-border-color);
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
       padding: var(--bew-space-8);
     }
@@ -1088,14 +1088,14 @@ html.bewly-design[data-bewly-native-site="login"] {
   :is(.security-top-header, .security-home-content) {
     color: var(--bew-text-1);
     background: var(--bew-content-solid);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .home-card-wp {
     background: var(--bew-content-alt-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 

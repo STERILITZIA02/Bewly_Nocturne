@@ -162,7 +162,7 @@ defineExpose({ refreshAnimeTimeTable })
               w-full
               h-4px
               :bg="item.is_today ? '$bew-text-1' : '$bew-fill-3'"
-              rounded-full
+              rounded="$bew-pill-radius"
             />
             <ul
               grid
@@ -177,7 +177,7 @@ defineExpose({ refreshAnimeTimeTable })
                   p="x-2 y-1"
                   w="[fit-content]"
                   mb-2
-                  rounded="$bew-radius-half"
+                  rounded="$bew-interactive-radius"
                   :color="item.is_today ? '$bew-on-theme-surface' : '$bew-text-3'"
                   :bg="item.is_today ? '$bew-theme-surface' : '$bew-fill-1'"
                   relative
@@ -189,7 +189,7 @@ defineExpose({ refreshAnimeTimeTable })
                     pos="absolute left--3"
                     w-2
                     h-2
-                    rounded-full
+                    rounded="$bew-pill-radius"
                     :bg="item.is_today ? '$bew-accent-marker' : '$bew-fill-3'"
                     transform="~ translate-x-[calc(-0.25rem-1px)]"
                   />
@@ -209,7 +209,7 @@ defineExpose({ refreshAnimeTimeTable })
                       :alt="episode.title"
                       w-18
                       aspect="square"
-                      rounded="$bew-radius-half"
+                      rounded="$bew-interactive-radius"
                     >
                   </a>
                   <div flex="~ col">

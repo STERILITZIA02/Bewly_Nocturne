@@ -262,7 +262,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
                   m="1"
                   p="x-2 y-1"
                   text="white xs"
-                  border="rounded-full"
+                  border="rounded-$bew-pill-radius"
                 >
                   <!--  When progress = -1 means that the user watched the full video -->
                   {{

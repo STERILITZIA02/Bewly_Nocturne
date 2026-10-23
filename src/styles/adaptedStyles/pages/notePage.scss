@@ -1,13 +1,13 @@
 .bewly-design.notePage {
   .note-header,
   .note-tabs {
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .note-item__cover {
     // Native scoped list rules otherwise restore their fixed 4px contour.
-    border-radius: var(--bew-media-radius) !important;
+    border-radius: var(--bew-thumb-radius) !important;
     corner-shape: var(--bew-corner-shape);
   }
 

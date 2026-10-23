@@ -6,6 +6,7 @@ import BangumiCardSkeleton from '~/components/BangumiCard/BangumiCardSkeleton.vu
 import LibraryVideoGridSkeleton from '~/components/LibraryVideoGridSkeleton.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import MomentCardSkeleton from '~/components/MomentCard/MomentCardSkeleton.vue'
+import { getMomentSkeletonVariant } from '~/components/MomentCard/utils'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
@@ -65,7 +66,7 @@ const historyFilters = createHistoryFilters()
             </div>
           </div>
           <div class="bew-page-async-loading__moments" :style="{ gridTemplateColumns: `repeat(${momentColumns}, minmax(0, 1fr))` }">
-            <MomentCardSkeleton v-for="index in momentColumns * 2" :key="index" />
+            <MomentCardSkeleton v-for="index in momentColumns * 2" :key="index" :variant="getMomentSkeletonVariant('all', index)" />
           </div>
         </div>
       </MomentsContentLayout>
@@ -163,7 +164,7 @@ const historyFilters = createHistoryFilters()
       </div>
       <div v-else-if="page === AppPage.Moments" ref="momentContent" class="bew-page-async-loading__moment-layout">
         <div class="bew-page-async-loading__moments" :style="{ gridTemplateColumns: `repeat(${momentColumns}, minmax(0, 1fr))` }">
-          <MomentCardSkeleton v-for="index in momentColumns * 2" :key="index" />
+          <MomentCardSkeleton v-for="index in momentColumns * 2" :key="index" :variant="getMomentSkeletonVariant('all', index)" />
         </div>
       </div>
       <VideoCardGrid
@@ -306,7 +307,7 @@ const historyFilters = createHistoryFilters()
   gap: var(--bew-space-4);
   padding: var(--bew-space-3);
   overflow: hidden;
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   border: 1px solid var(--bew-surface-border-color);
   > div {
     display: grid;

@@ -98,7 +98,7 @@ onBeforeUnmount(() => clearTimeout(enterTimer))
 }
 
 .b-tooltip {
-  --uno: "absolute px-2 rounded-$bew-radius-half pointer-events-none opacity-0 shadow-$bew-shadow-2 whitespace-nowrap";
+  --uno: "absolute px-2 rounded-$bew-interactive-radius pointer-events-none opacity-0 shadow-$bew-shadow-2 whitespace-nowrap";
   transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
 
   &.is-instant {

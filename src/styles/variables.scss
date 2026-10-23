@@ -80,32 +80,33 @@
   --bew-icon-size-xl: 32px;
 
   // #region Radius
-  // Primitive radius scale. Use the semantic aliases below for components so
-  // cards, media and popovers can evolve without page-level overrides.
-  --bew-radius-sm: 4px;
-  --bew-radius-half: 6px;
-  --bew-radius-md: 8px;
-  --bew-radius-lg: 12px;
-  --bew-radius-xl: 16px;
-  --bew-radius-2xl: 24px;
-  --bew-radius-3xl: 32px;
+  // Anchored on the video cover (16px, --bew-media-radius): six steps plus full.
+  // Components use the role tokens below, never a step or a literal value; any
+  // other corner comes from a concentric formula (child radius + uniform inset).
+  // scripts/radiusPolicy.ts enforces this.
+  --bew-radius-xs: 4px;
+  --bew-radius-sm: 8px;
+  --bew-radius-md: 12px;
+  --bew-radius-lg: 16px;
+  --bew-radius-xl: 24px;
+  --bew-radius-2xl: 32px;
   --bew-radius-full: 9999px;
   --bew-corner-shape: superellipse(1.7);
   --bew-corner-shape-round: round;
-  --bew-radius: var(--bew-radius-lg);
-  --bew-card-radius: var(--bew-radius-lg);
+  // Skeleton text bars, text tags and small state blocks.
+  --bew-radius-tiny: var(--bew-radius-xs);
+  // Buttons, menu items, list rows, inputs and small images inside popovers.
+  --bew-interactive-radius: var(--bew-radius-sm);
+  // Medium thumbnails (about 80–240px wide) and comment tree curves.
+  --bew-thumb-radius: var(--bew-radius-md);
+  // Large media: video covers (the anchor), moment images and videos.
   --bew-media-radius: var(--bew-radius-lg);
-  // Video card covers read as album art: one step rounder than other media.
-  --bew-video-cover-radius: var(--bew-radius-xl);
-  // Moment card media share the video card cover radius; the card wraps them
-  // concentrically across its side inset.
-  --bew-moment-media-radius: var(--bew-video-cover-radius);
-  --bew-moment-card-radius: calc(var(--bew-moment-media-radius) + var(--bew-card-inset));
-  --bew-panel-radius: var(--bew-radius-lg);
-  --bew-modal-radius: var(--bew-radius-2xl);
-  --bew-popover-radius: var(--bew-radius-lg);
-  --bew-interactive-radius: var(--bew-radius-md);
-  --bew-badge-radius: var(--bew-radius-full);
+  // Cards, panels and popovers. Popovers hold 8px items across an 8px inset.
+  --bew-surface-radius: var(--bew-radius-lg);
+  --bew-modal-radius: var(--bew-radius-xl);
+  // Large shells such as the composer.
+  --bew-shell-radius: var(--bew-radius-2xl);
+  --bew-pill-radius: var(--bew-radius-full);
   // #endregion
 
   // #region Spacing
@@ -135,20 +136,16 @@
   --bew-card-stack-gap: var(--bew-space-3);
   --bew-card-hover-outset: var(--bew-space-2);
   --bew-card-hover-scale: 1.07;
+  // Moment cards are far larger than video cards; the same scale looks too big.
+  --bew-moment-card-hover-scale: 1.05;
   --bew-card-hover-blur-radius: 6px;
   --bew-card-row-gap: var(--bew-space-8);
-  --bew-card-inset-radius: var(--bew-radius-md);
   --bew-card-avatar-size: var(--bew-space-8);
   --bew-card-sample-min-width: calc(var(--bew-space-10) * 4);
   --bew-cover-overlay-inset: var(--bew-space-2);
-  --bew-cover-action-size: var(--bew-icon-button-size-md);
-  // Controls pinned near a rounded corner stay concentric with it: the parent
-  // radius minus the real inset, never below the small radius. Controls whose
-  // inset reaches the parent radius use the ordinary interactive radius.
-  --bew-card-media-action-radius: max(var(--bew-radius-sm), calc(var(--bew-moment-media-radius) - var(--bew-space-2)));
   --bew-cover-scrim: rgb(0 0 0 / 56%);
   --bew-layout-sidebar-width: 200px;
-  --bew-library-filter-padding: var(--bew-space-3);
+  --bew-library-filter-padding: var(--bew-space-2);
   --bew-moments-hot-search-width: clamp(240px, 18vw, 300px);
   // Moments up-list tiles are squares as tall as the smallest video card cover (40:21).
   --bew-moments-up-tile-size: calc(var(--bew-video-card-min-width) * 21 / 40);
@@ -213,7 +210,6 @@
   --bew-comment-state-min-height: 88px;
   --bew-moment-forward-picker-width: 320px;
   --bew-moment-reply-image-size: 64px;
-  --bew-composer-radius: var(--bew-radius-3xl);
   --bew-moment-forward-picker-max-height: 320px;
   --bew-moment-forward-picker-state-min-height: 112px;
   --bew-widescreen-episode-max-height: 560px;
@@ -282,13 +278,14 @@
   --bew-control-padding: var(--bew-space-1);
   --bew-control-gap: var(--bew-space-1);
   --bew-control-border-width: 0px;
-  --bew-control-radius: var(--bew-radius-full);
+  // Segment control parameters (pill by default; variants override them).
+  --bew-control-radius: var(--bew-pill-radius);
   --bew-control-item-height: calc(
     var(--bew-control-height) - (var(--bew-control-border-width) + var(--bew-control-padding)) * 2
   );
   --bew-control-item-padding-x: var(--bew-space-3);
   --bew-control-item-padding-x-wide: var(--bew-space-4);
-  --bew-control-item-radius: var(--bew-radius-full);
+  --bew-control-item-radius: var(--bew-pill-radius);
   --bew-control-icon-size: 16px;
   --bew-control-label-size: var(--bew-font-size-control);
   --bew-control-label-line-height: var(--bew-line-height-control);
@@ -333,7 +330,6 @@
   // Further scrolling after the home search sticks that carries it to the dock.
   --bew-home-search-dock-travel: 160px;
   --bew-home-logo-block-start: calc((var(--bew-top-bar-height) - var(--bew-top-bar-primary-control-height)) / 2);
-  --bew-top-bar-primary-control-radius: var(--bew-radius-full);
   --bew-top-bar-brand-logo-width: 84px;
   --bew-top-bar-brand-logo-height: 28px;
   --bew-top-bar-brand-logo-compact-size: 24px;
@@ -361,15 +357,12 @@
   --bew-popover-surface-background: var(--bew-glass-tint);
   --bew-popover-surface-background-solid: var(--bew-elevated-solid);
   --bew-popover-surface-shadow: var(--bew-shadow-3);
-  --bew-popover-padding: var(--bew-space-3);
+  --bew-popover-padding: var(--bew-space-2);
   --bew-popover-header-min-height: 52px;
   --bew-popover-header-padding-block: var(--bew-space-3);
   --bew-popover-header-padding-inline: var(--bew-space-5);
-  --bew-popover-body-padding-inline: var(--bew-space-3);
-  --bew-popover-body-padding-bottom: var(--bew-space-3);
-  --bew-popover-inner-radius: var(--bew-radius-md);
-  --bew-popover-card-radius: var(--bew-radius-md);
-  --bew-popover-media-radius: var(--bew-radius-half);
+  --bew-popover-body-padding-inline: var(--bew-space-2);
+  --bew-popover-body-padding-bottom: var(--bew-space-2);
   --bew-popover-media-width: 144px;
   --bew-popover-card-padding: var(--bew-space-2);
   --bew-popover-card-gap: var(--bew-space-4);
@@ -381,7 +374,6 @@
   --bew-native-comment-tag-font-size: 11px;
   --bew-native-comment-tag-line-height: 1.4;
   --bew-native-comment-tag-padding-block: 1px;
-  --bew-native-comment-tag-radius: 3px;
 
   // #region Filters
   // The one frosted-glass filter, dialogs included (the blur-strength setting
@@ -570,6 +562,13 @@
   --bew-elevated-alt-solid: var(--bew-neutral-raised);
   --bew-elevated-alt-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-elevated-alt-solid));
   --bew-elevated: rgb(from var(--bew-elevated-solid) r g b / var(--bew-content-opacity));
+  // What --bew-elevated looks like over the page, as an opaque colour: for
+  // surfaces that can overlap one another (a hovered moment card).
+  --bew-elevated-over-page: color-mix(
+    in srgb,
+    var(--bew-elevated-solid) calc(var(--bew-content-opacity) * 100%),
+    var(--bew-homepage-bg)
+  );
   --bew-elevated-hover: rgb(from var(--bew-elevated-solid-hover) r g b / var(--bew-content-opacity));
   --bew-elevated-alt: rgb(from var(--bew-elevated-alt-solid) r g b / var(--bew-content-opacity));
   --bew-elevated-alt-hover: rgb(from var(--bew-elevated-alt-solid-hover) r g b / var(--bew-content-opacity));

@@ -574,7 +574,7 @@ defineExpose({ refresh })
   overflow: hidden;
   background: var(--bew-glass-tint);
   border: 1px solid var(--bew-glass-border-color);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-shadow-2);
   backdrop-filter: var(--bew-filter-glass-1);
@@ -619,7 +619,7 @@ defineExpose({ refresh })
 .whisper-workspace__detail:focus-visible {
   outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: calc(-1 * var(--bew-space-0-5));
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
 }
 
 // Feed padding belongs inside the scrolling viewport, so cards travel all the

@@ -300,7 +300,7 @@ function markAvatarFailed(index: number) {
   color: var(--bew-text-1);
   font-size: var(--bew-icon-size-lg);
   background: var(--bew-content-solid);
-  border-radius: var(--bew-radius-sm);
+  border-radius: var(--bew-radius-tiny);
   corner-shape: var(--bew-corner-shape);
 }
 

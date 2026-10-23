@@ -116,7 +116,7 @@ const sidebarHost = useSidebarRail()
   min-width: 0;
 }
 .library-rail-content .b-button {
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
 }
 .library-rail-actions {
@@ -125,8 +125,8 @@ const sidebarHost = useSidebarRail()
   min-width: 0;
 }
 .library-rail-content .library-rail-segments {
-  --bew-control-radius: var(--bew-radius-full);
-  --bew-control-item-radius: var(--bew-radius-full);
+  --bew-control-radius: var(--bew-pill-radius);
+  --bew-control-item-radius: var(--bew-pill-radius);
   --bew-liquid-indicator-bg: var(--bew-segment-item-active-bg);
   --bew-liquid-indicator-shadow: var(--bew-segment-item-active-shadow);
   --bew-liquid-indicator-radius: var(--bew-control-item-radius);
@@ -164,7 +164,7 @@ const sidebarHost = useSidebarRail()
   height: var(--bew-control-height);
   padding: 0 var(--bew-space-3);
   border: 0;
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   color: var(--bew-text-1);
   background: var(--bew-fill-1);
   font: inherit;

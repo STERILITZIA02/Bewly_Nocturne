@@ -161,7 +161,7 @@ async function handleFollowClick(e: Event) {
       gap-3
       p-4
       bg="$bew-elevated"
-      rounded="$bew-card-radius"
+      rounded="$bew-surface-radius"
       cursor="pointer"
     >
       <ALink
@@ -181,7 +181,7 @@ async function handleFollowClick(e: Event) {
             :alt="name"
             class="avatar bew-shape-circle"
             w-24 h-24
-            rounded-full object-cover
+            rounded="$bew-pill-radius" object-cover
           >
           <!-- 官方认证角标 -->
           <span
@@ -280,7 +280,7 @@ async function handleFollowClick(e: Event) {
       gap-3
       p-4
       bg="$bew-elevated"
-      rounded="$bew-card-radius"
+      rounded="$bew-surface-radius"
       cursor="pointer"
     >
       <a
@@ -300,7 +300,7 @@ async function handleFollowClick(e: Event) {
           :alt="name"
           class="avatar bew-shape-circle"
           :class="horizontal ? 'w-12 h-12' : 'w-16 h-16'"
-          rounded-full object-cover
+          rounded="$bew-pill-radius" object-cover
         >
       </UserAvatarLink>
 
@@ -317,7 +317,7 @@ async function handleFollowClick(e: Event) {
             flex items-center gap-1
             text="xs $bew-on-theme-surface"
             bg="$bew-theme-surface"
-            px-2 py-0.5 rounded-full
+            px-2 py-0.5 rounded="$bew-pill-radius"
           >
             <div i-tabler:rosette-discount-check />
             <span>{{ verifyInfo }}</span>
@@ -523,7 +523,7 @@ async function handleFollowClick(e: Event) {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  border-radius: var(--bew-card-inset-radius);
+  border-radius: var(--bew-interactive-radius);
   overflow: hidden;
   background: var(--bew-skeleton);
 
@@ -543,7 +543,7 @@ async function handleFollowClick(e: Event) {
   bottom: var(--bew-space-2);
   right: var(--bew-space-2);
   padding: var(--bew-space-1) var(--bew-space-2);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   font-size: var(--bew-font-size-control);
   background: rgba(0, 0, 0, 0.65);
   color: #fff;
@@ -557,7 +557,7 @@ async function handleFollowClick(e: Event) {
   align-items: center;
   gap: var(--bew-space-1);
   padding: var(--bew-space-1) var(--bew-space-2);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   font-size: var(--bew-font-size-control);
   color: #fff;
   background: rgba(0, 0, 0, 0.5);
@@ -568,8 +568,8 @@ async function handleFollowClick(e: Event) {
 }
 
 .sample-title {
-  margin-inline: var(--bew-card-inset-radius);
-  margin-block-end: var(--bew-card-inset-radius);
+  margin-inline: var(--bew-interactive-radius);
+  margin-block-end: var(--bew-interactive-radius);
   font-size: var(--bew-font-size-control);
   color: var(--bew-text-1);
   line-height: var(--bew-line-height-control);

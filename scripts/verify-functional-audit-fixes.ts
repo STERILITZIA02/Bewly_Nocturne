@@ -5,6 +5,7 @@ import * as sass from 'sass'
 import { computed, effectScope, nextTick, ref, watch } from 'vue'
 
 import { decodeHtmlEntities } from '../src/utils/htmlDecode'
+import { isPortraitDimension } from '../src/utils/portraitMedia'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
@@ -199,7 +200,7 @@ async function verifyVideoIdentityReuse() {
           '~/utils/uriParse': await import('../src/utils/uriParse'),
           './appRecommendationItem': await import('../src/contentScripts/views/Home/adapters/appRecommendationItem'),
         })
-      : await loadSourceFunctions(`../src/contentScripts/views/Home/components/${file}.vue`, [name], { decodeHtmlEntities })
+      : await loadSourceFunctions(`../src/contentScripts/views/Home/components/${file}.vue`, [name], { decodeHtmlEntities, isPortraitDimension })
     const video = context[name](file === 'Trending' ? { item: fixture } : fixture, 1)
     assert.equal(await resolver.resolveWatchLaterAid(video), 123, `${file} preserves the authoritative aid`)
   }

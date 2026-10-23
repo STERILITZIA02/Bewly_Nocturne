@@ -83,7 +83,7 @@ const items = computed(() => props.options.map(item => ({ ...item, ariaLabel: it
   padding-inline: var(--bew-space-2);
   color: var(--bew-text-auto);
   background: var(--bew-wheel-text-active);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);

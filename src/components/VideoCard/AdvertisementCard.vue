@@ -34,7 +34,7 @@ const { t } = useI18n()
   gap: var(--bew-space-2);
   color: inherit;
   text-decoration: none;
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 .bew-promotion-card__cover {
@@ -42,7 +42,7 @@ const { t } = useI18n()
   aspect-ratio: var(--bew-video-cover-aspect-ratio);
   overflow: hidden;
   background: var(--bew-content-solid);
-  border-radius: var(--bew-video-cover-radius);
+  border-radius: var(--bew-media-radius);
   corner-shape: var(--bew-corner-shape);
   @include contentCard.media-frame;
 

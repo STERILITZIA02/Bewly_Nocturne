@@ -372,7 +372,7 @@ onBeforeUnmount(() => {
   <div
     class="video-card-cover group/cover bew-shape-smooth-rect"
     shrink-0
-    relative bg="$bew-skeleton" rounded="$bew-video-cover-radius"
+    relative bg="$bew-skeleton" rounded="$bew-media-radius"
     overflow-hidden
     cursor-pointer
     group-hover:z-2
@@ -580,7 +580,7 @@ onBeforeUnmount(() => {
   z-index: 3;
   height: 0.25rem;
   overflow: hidden;
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: round;
   background: rgb(255 255 255 / 35%);
   pointer-events: none;

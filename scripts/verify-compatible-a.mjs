@@ -66,6 +66,8 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       'vue': Vue,
       '@vueuse/core': { useResizeObserver: (_target, callback) => resized = callback },
       '~/utils/motionTiming': await import('../src/utils/motionTiming'),
+      // The fake elements report their layout height through the rect.
+      '~/utils/viewportGeometry': { getLayoutHeight: element => element.getBoundingClientRect().height },
     }, {
       requestAnimationFrame: (callback) => {
         frames.set(++sequence, callback)

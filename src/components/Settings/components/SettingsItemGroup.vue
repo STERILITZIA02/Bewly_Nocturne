@@ -72,7 +72,7 @@ const collapsed = ref(props.defaultCollapsed)
   padding-inline: var(--bew-space-4);
   padding-inline-start: calc(var(--bew-space-4) + var(--bew-settings-level-indent));
   background: var(--bew-content-solid);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 

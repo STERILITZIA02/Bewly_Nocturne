@@ -35,7 +35,7 @@ html.bewly-design:not(.bewly-video-dark-only) {
     .video-page-card-small .pic,
     .history-list .cover-contain
   ) {
-    border-radius: var(--bew-media-radius) !important;
+    border-radius: var(--bew-thumb-radius) !important;
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -49,7 +49,7 @@ html.bewly-design:not(.bewly-video-dark-only) {
     background-color: var(--bew-elevated-solid);
     backdrop-filter: none;
     color: var(--bew-text-1);
-    border-radius: var(--bew-popover-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -106,40 +106,40 @@ html.bewly-design:not(.bewly-video-dark-only) {
       .topic-panel,
       .opus-detail
     ) {
-      border-radius: var(--bew-card-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
     // Native video tiles already own clipping. Preserve the adjoining cover /
     // metadata structure while using one semantic contour for the whole tile.
     .bili-dyn-card-video {
-      border-radius: var(--bew-card-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
     .bili-dyn-card-video__cover,
     .bili-dyn-card-video__cover__mask {
-      border-radius: var(--bew-card-radius) 0 0 var(--bew-card-radius);
+      border-radius: var(--bew-surface-radius) 0 0 var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
     .bili-dyn-card-video__body {
-      border-radius: 0 var(--bew-card-radius) var(--bew-card-radius) 0;
+      border-radius: 0 var(--bew-surface-radius) var(--bew-surface-radius) 0;
       corner-shape: var(--bew-corner-shape);
     }
 
     .bili-dyn-card-video__cover-shadow {
-      border-radius: 0 0 0 var(--bew-card-radius);
+      border-radius: 0 0 0 var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
     .side-toolbar__box {
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
     .bili-album__preview__picture {
-      border-radius: var(--bew-media-radius);
+      border-radius: var(--bew-thumb-radius);
       corner-shape: var(--bew-corner-shape);
     }
   }
@@ -156,19 +156,19 @@ html.bewly-design:not(.bewly-video-dark-only) {
       #page-dynamic .col-2 .section,
       .home-aside-section > div
     ) {
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
   }
 
   &.articlesPage {
     :is(.article-holder, .article-list-holder, .right-side-bar, .article-item .cover, .article-item .cover-img) {
-      border-radius: var(--bew-card-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
     .article-item__cover {
-      border-radius: var(--bew-media-radius);
+      border-radius: var(--bew-thumb-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -184,7 +184,7 @@ html.bewly-design:not(.bewly-video-dark-only) {
     background: var(--bew-bg);
 
     .cover-wrapper {
-      border-radius: var(--bew-media-radius);
+      border-radius: var(--bew-thumb-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -242,7 +242,7 @@ html.bewly-design:not(.bewly-video-dark-only) {
 
   &.topicPage {
     :is(.active-card, .topic-detail__content, .topic-detail__sidebar) {
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
   }

@@ -612,7 +612,8 @@ const unfollowUser = () => writeRelation(2)
   max-height: min(406px, calc(100vh - var(--bew-space-4)));
   display: flex;
   flex-direction: column;
-  padding: var(--bew-space-1);
+  // 8px items across the popover inset sit concentric with its 16px corner.
+  padding: var(--bew-popover-padding);
   // A superellipse overflow clip on an ancestor makes Chromium drop the edge
   // layers' gradient masks. The surface, list and blur layers clip themselves.
   z-index: var(--bew-z-popover);

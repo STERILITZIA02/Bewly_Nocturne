@@ -84,7 +84,7 @@ function handleOpenImage(index: number, event: MouseEvent) {
   padding: 0;
   overflow: hidden;
   border: 0;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-thumb-radius);
   background: var(--bew-fill-1);
   cursor: pointer;
   corner-shape: var(--bew-corner-shape);

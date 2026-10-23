@@ -70,7 +70,7 @@
   }
 
   .large-item .cover {
-    border-radius: 4px;
+    border-radius: var(--bew-radius-tiny);
   }
 
   .comment-bilibili-mask {
@@ -359,7 +359,7 @@
     .content .group-list li input[type="checkbox"] + i {
       background: none;
       border-width: 1px;
-      border-radius: var(--bew-radius-sm);
+      border-radius: var(--bew-radius-tiny);
       corner-shape: var(--bew-corner-shape);
       border-color: var(--bew-border-color);
     }

@@ -494,7 +494,7 @@ defineExpose({
                     m="1"
                     p="x-2 y-1"
                     text="white xs"
-                    rounded-full
+                    rounded="$bew-pill-radius"
                   >
                     {{ calcCurrentTime(item.duration) }}
                   </div>

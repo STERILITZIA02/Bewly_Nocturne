@@ -39,7 +39,6 @@ withDefaults(defineProps<{ count?: number }>(), { count: 3 })
 
   + .moment-comment-skeleton__row {
     padding-top: var(--bew-space-3);
-    border-top: 1px solid var(--bew-border-color);
   }
 }
 
