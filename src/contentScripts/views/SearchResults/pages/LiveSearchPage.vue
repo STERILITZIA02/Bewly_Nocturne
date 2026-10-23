@@ -424,7 +424,7 @@ defineExpose({
             <button
               type="button"
               class="view-more-btn"
-              px-6 py-2 rounded="$bew-radius-half"
+              px-6 py-2 rounded="$bew-interactive-radius"
               bg="$bew-fill-1 hover:$bew-fill-2"
               text="sm $bew-text-1"
               transition-colors duration-200

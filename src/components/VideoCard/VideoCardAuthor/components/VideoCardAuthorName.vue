@@ -49,7 +49,7 @@ defineProps<{
 .video-card-author__followed {
   flex: none;
   padding-inline: var(--bew-space-2);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-2);
   background: var(--bew-fill-1);

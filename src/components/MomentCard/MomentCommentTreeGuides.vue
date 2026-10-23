@@ -34,7 +34,7 @@ function updateGuides() {
       bottom: (avatar.bottom - rect.top) * scaleY,
     })
   })
-  const radius = Number.parseFloat(getComputedStyle(thread).getPropertyValue('--bew-radius-lg'))
+  const radius = Number.parseFloat(getComputedStyle(thread).getPropertyValue('--bew-thumb-radius'))
   const children = new Map<string, CommentTreeAnchor[]>()
   props.nodes.forEach((node) => {
     const anchor = anchors.get(node.id)

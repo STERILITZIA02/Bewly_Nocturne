@@ -231,7 +231,7 @@ function handleContributorImageError() {
           v-if="hasNewVersion"
           :href="releasesUrl" target="_blank"
           pos="absolute bottom-0 right-0" transform="translate-x-50%" un-text="xs $bew-text-1" p="y-1 x-2" bg="$bew-fill-1"
-          rounded="$bew-radius"
+          rounded="$bew-interactive-radius"
         >
           {{ $t('settings.new_version_badge') }}
         </a>
@@ -434,7 +434,7 @@ function handleContributorImageError() {
   margin: var(--bew-space-6) calc(var(--bew-space-4) * -1) 0;
   padding: var(--bew-space-4);
   background: var(--bew-fill-alt);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-shadow-1);
 }
@@ -469,12 +469,12 @@ function handleContributorImageError() {
   color: var(--bew-error-color);
   text-align: center;
   background: var(--bew-fill-1);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
 .link-card {
-  --uno: "w-full h-48px px-4 py-2 flex items-center rounded-$bew-radius";
+  --uno: "w-full h-48px px-4 py-2 flex items-center rounded-$bew-interactive-radius";
   --uno: "duration-300";
 
   > div {

@@ -159,7 +159,7 @@ const otherLinks = computed(() => {
 
 .icon {
   --uno: "w-2em h-2em mr-3 bg-$bew-content-solid vertical-bottom fill-current overflow-hidden";
-  --uno: "text-1.25em grid place-items-center rounded-1/2 shrink-0";
+  --uno: "text-1.25em grid place-items-center rounded-$bew-pill-radius shrink-0";
   --uno: "border-1 border-$bew-border-color";
 
   svg {

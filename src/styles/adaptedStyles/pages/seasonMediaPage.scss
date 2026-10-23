@@ -19,7 +19,7 @@ html.bewly-design[data-bewly-native-site="season-media"] {
 
   .media-preview {
     border-color: var(--bew-surface-border-color) !important;
-    border-radius: var(--bew-media-radius) !important;
+    border-radius: var(--bew-thumb-radius) !important;
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -56,7 +56,7 @@ html.bewly-design[data-bewly-native-site="season-media"] {
   .media-info-card {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -113,7 +113,7 @@ html.bewly-design[data-bewly-native-site="season-media"] {
   .weixin-share-modal {
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
-    border-radius: var(--bew-popover-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 }

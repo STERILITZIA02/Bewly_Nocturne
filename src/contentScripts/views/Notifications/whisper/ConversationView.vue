@@ -699,7 +699,7 @@ defineExpose({
   overflow: hidden;
   background: transparent;
   border: 0;
-  border-radius: var(--conversation-radius, var(--bew-panel-radius));
+  border-radius: var(--conversation-radius, var(--bew-surface-radius));
   corner-shape: var(--bew-corner-shape);
   transform: translateY(var(--conversation-top-lift, 0px));
 }

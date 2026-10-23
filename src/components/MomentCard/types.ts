@@ -139,6 +139,8 @@ export interface DisplayMoment {
     /** 转发原动态的图片，用于在嵌套卡片中保持原卡片形态 */
     images?: string[]
     imageRatios?: Array<number | null>
+    /** 转发的直播间封面（直播间信息沿用外层的 isLive / roomId） */
+    liveCover?: string
     video?: DisplayForwardVideo
   }
 }

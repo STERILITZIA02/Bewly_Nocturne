@@ -620,7 +620,7 @@ function changeMenuItem(menuItem: MenuType) {
                   text="xs"
                   bg="orange-500/20"
                   px-2 py-0.5
-                  rounded-full
+                  rounded="$bew-pill-radius"
                   text-orange-500
                   fw-500
                 >
@@ -859,7 +859,7 @@ function changeMenuItem(menuItem: MenuType) {
   }
 
   .settings-primary-navigation__item {
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -969,7 +969,7 @@ function changeMenuItem(menuItem: MenuType) {
 
   &:focus-within {
     border-color: var(--bew-focus-ring-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
   }
@@ -1081,7 +1081,7 @@ function changeMenuItem(menuItem: MenuType) {
   position: relative;
   z-index: 2;
   isolation: isolate;
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -1095,7 +1095,7 @@ function changeMenuItem(menuItem: MenuType) {
   inset: 0 -12px;
   z-index: 0;
   background: var(--bew-selected-bg);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: inherit;
   content: "";
   opacity: 0;
@@ -1111,7 +1111,7 @@ function changeMenuItem(menuItem: MenuType) {
   padding: var(--bew-space-1) var(--bew-space-2);
   color: var(--bew-text-1);
   background: var(--bew-selected-bg);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   box-shadow: var(--bew-shadow-2);
   content: attr(data-settings-search-highlight);

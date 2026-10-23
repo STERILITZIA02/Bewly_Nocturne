@@ -9,8 +9,9 @@ import { useLayoutEditSettingValue } from '~/logic/layoutEdit'
 import { shouldUseWideMomentCardLayout, supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { createMomentColumnIndex } from '~/utils/momentColumnIndex'
 import { MOMENT_GRID_DIMENSIONS, resolveMomentCardWidth, resolveMomentGridColumnCount } from '~/utils/momentsLayout'
+import { isPortraitRatio, PORTRAIT_MAX_CLEAR_HEIGHT } from '~/utils/portraitMedia'
 import type { ViewportFrameReason, ViewportGeometry } from '~/utils/viewportGeometry'
-import { getRemainingScroll, invalidateViewportGeometry, readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
+import { getLayoutHeight, getRemainingScroll, invalidateViewportGeometry, readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
 
 interface LayoutHooks {
   onNearBottom: () => void
@@ -113,41 +114,23 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
       )))
       return 118 + lineCount * 21 + additionalHeight + interactionHeight
     }
-    if (moment.forward?.images?.length) {
+    const forward = moment.forward
+    if (forward && (forward.video || forward.liveCover || forward.images?.length)) {
+      // The quote spans the card inside its 16px insets: its media on top
+      // (16:9 covers; images as at the card top, with the 48px strip and its
+      // 8px gap when there are several), then the source row and two lines.
       const introLines = Math.min(7, Math.max(1, Math.ceil((moment.text || '').length / 28)))
-      const firstImageRatio = moment.forward.imageRatios?.[0]
-      const singleImageRatio = typeof firstImageRatio === 'number' && Number.isFinite(firstImageRatio) && firstImageRatio > 0
-        ? Math.min(2, Math.max(0.5, firstImageRatio))
-        : 1
-      const galleryRatio = moment.forward.images.length === 1
-        ? singleImageRatio
-        : moment.forward.images.length <= 3
-          ? moment.forward.images.length
-          : moment.forward.images.length <= 4
-            ? 1
-            : moment.forward.images.length <= 6
-              ? 3 / 2
-              : 1
-      // Forward galleries sit inside the bordered card with 12px side/bottom
-      // insets; subtract the 16px main inset and the 2px card border as well.
-      const galleryWidth = Math.max(1, columnWidth - 58)
-      return 190 + introLines * 21 + Math.round(galleryWidth / galleryRatio) + additionalHeight + interactionHeight
-    }
-    if (moment.forward?.video) {
-      const introLines = Math.min(7, Math.max(1, Math.ceil((moment.text || '').length / 28)))
-      // Match the 12px reference inset, 24px source row and 40% media column.
-      const innerWidth = Math.max(1, columnWidth - 32 - 24)
-      const forwardMediaWidth = innerWidth * 0.4
-      const infoWidth = Math.max(1, innerWidth * 0.6 - 24)
-      const titleLines = Math.min(3, Math.max(1, Math.ceil(moment.forward.video.title.length / Math.max(1, infoWidth / 15))))
-      const descriptionLines = moment.forward.video.desc
-        ? Math.min(2, Math.ceil(moment.forward.video.desc.length / Math.max(1, infoWidth / 12)))
-        : 0
-      const infoHeight = titleLines * 22 + descriptionLines * 16 + 16 + 16 + (descriptionLines ? 8 : 0)
-      const quoteHeight = moment.forward.text && moment.forward.text !== moment.forward.video.desc
-        ? Math.min(2, Math.ceil(moment.forward.text.length / Math.max(1, innerWidth / 12))) * 16 + 12
-        : 0
-      return 117 + 24 + 24 + 12 + quoteHeight + Math.round(Math.max(forwardMediaWidth * 9 / 16, infoHeight)) + introLines * 21 + additionalHeight + interactionHeight
+      const quoteWidth = Math.max(1, columnWidth - 32)
+      const images = forward.video || forward.liveCover ? [] : forward.images ?? []
+      const firstRatio = forward.imageRatios?.[0]
+      const ratio = isUsableImageRatio(firstRatio) ? firstRatio : 1
+      const mediaHeight = !images.length
+        ? quoteWidth * 9 / 16
+        : isPortraitRatio(firstRatio)
+          ? quoteWidth / Math.max(1 / PORTRAIT_MAX_CLEAR_HEIGHT, ratio) + 48
+          : quoteWidth / Math.min(2, ratio)
+      const textLines = forward.video?.desc || forward.text ? 2 : 1
+      return 117 + introLines * 21 + 12 + Math.round(mediaHeight) + (images.length > 1 ? 56 : 0) + 8 + 24 + 22 + textLines * 16 + 12 + additionalHeight + interactionHeight
     }
     if (moment.isChargeExclusive && !moment.isVideo)
       return 230 + scaledTextBodyExtra + additionalHeight + interactionHeight
@@ -155,8 +138,10 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
       if (moment.isLive)
         return Math.round(columnWidth * 9 / 16) + 210 + additionalHeight + interactionHeight
     }
+    // Video and live covers fill the card's full width; coverless ones sit inside the inset.
+    const coverWidth = moment.images.length ? columnWidth : columnWidth - 32
     if (moment.isLive)
-      return Math.round((columnWidth - 32) * 9 / 16) + 190 + additionalHeight + interactionHeight
+      return Math.round(coverWidth * 9 / 16) + 190 + additionalHeight + interactionHeight
     if (moment.isVideo) {
       const contentWidth = Math.max(1, columnWidth - 32)
       const charsPerLine = Math.max(12, Math.floor(contentWidth / 15))
@@ -165,19 +150,17 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
       const descriptionMaxLines = moment.descInherited ? 2 : 3
       const descriptionLines = description ? Math.min(descriptionMaxLines, Math.max(1, Math.ceil(description.length / charsPerLine))) : 0
       const bodyHeight = titleLines * 22 + descriptionLines * 24 + (titleLines && descriptionLines ? 8 : 0)
-      return Math.round(contentWidth * 9 / 16) + 116 + bodyHeight + additionalHeight + interactionHeight
+      return Math.round(coverWidth * 9 / 16) + 116 + bodyHeight + additionalHeight + interactionHeight
     }
     if (moment.images.length && !moment.isVideo && !moment.isLive) {
-      const galleryRatio = moment.images.length === 1
-        ? getMomentImageRatio(moment)
-        : moment.images.length <= 3
-          ? moment.images.length
-          : moment.images.length <= 4
-            ? 1
-            : moment.images.length <= 6
-              ? 3 / 2
-              : 1
-      return Math.round((columnWidth - 32) / galleryRatio) + 220 + additionalHeight + interactionHeight
+      // One full-width image on top (ratio capped at 2:1 landscape; a portrait
+      // one shows up to 1.2 widths, then a 48px fade), then the 48px thumbnail
+      // strip with its 8px gap when there are several.
+      const ratio = getMomentImageRatio(moment)
+      const imageHeight = isPortraitRatio(moment.imageRatios?.[0])
+        ? Math.round(columnWidth / Math.max(1 / PORTRAIT_MAX_CLEAR_HEIGHT, ratio)) + 48
+        : Math.round(columnWidth / Math.min(2, ratio))
+      return imageHeight + (moment.images.length > 1 ? 56 : 0) + 208 + additionalHeight + interactionHeight
     }
     const charsPerLine = Math.max(12, Math.floor((columnWidth - 32) / 14))
     const textLineCount = Math.min(12, Math.max(1, (moment.text || '').split('\n').reduce(
@@ -609,7 +592,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
         return undefined
       const titleStyle = title ? getComputedStyle(title) : undefined
       const occupiedHeight = title
-        ? title.getBoundingClientRect().height
+        ? getLayoutHeight(title)
         + Number.parseFloat(titleStyle?.marginTop || '0')
         + Number.parseFloat(titleStyle?.marginBottom || '0')
         : 0
@@ -631,7 +614,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     // 4. One layout for the whole batch, then merge the final heights.
     let changed = false
     for (const { id, card, force } of batch) {
-      const measured = Math.round(card.getBoundingClientRect().height)
+      const measured = Math.round(getLayoutHeight(card))
       if (measured > 0) {
         changed = commitCardHeight(id, measured, force ? { force: true } : undefined) || changed
         if (!readyCardIds.has(id))
@@ -980,7 +963,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     if (!movingDisclosureIds.delete(id) || !active)
       return
     const card = cardElements.get(id)
-    if (card && commitCardHeight(id, Math.round(card.getBoundingClientRect().height), { force: true }))
+    if (card && commitCardHeight(id, Math.round(getLayoutHeight(card)), { force: true }))
       scheduleVirtualUpdate()
   }
   return { layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad, append, remove, reset, clearColumns, updateMoment, setInteractionHeld, setDisclosureMotion, suspendRebalance(duration: number) {

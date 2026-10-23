@@ -829,7 +829,7 @@ defineExpose({
   gap: 1rem;
   padding: 1rem;
   background: var(--bew-elevated);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   border: 1px solid var(--bew-surface-border-color);
   text-decoration: none;
   color: inherit;
@@ -839,7 +839,7 @@ defineExpose({
   width: 120px;
   min-width: 120px;
   aspect-ratio: 4 / 3;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-thumb-radius);
   border: 0;
   overflow: hidden;
   background: var(--bew-skeleton);
@@ -881,7 +881,7 @@ defineExpose({
 .activity-badge {
   align-self: flex-start;
   padding: 0.25rem 0.5rem;
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   background: var(--bew-theme-surface-hover);
   color: var(--bew-on-theme-surface);
   font-size: var(--bew-font-size-control);
@@ -906,7 +906,7 @@ defineExpose({
 .user-highlight-card {
   box-sizing: border-box;
   background: var(--bew-elevated);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   border: 1px solid var(--bew-surface-border-color);
   padding: 1rem;
   display: flex;
@@ -926,7 +926,7 @@ defineExpose({
 .user-highlight-verify {
   margin-left: 0.5rem;
   padding: 0.1rem 0.5rem;
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   background: var(--bew-theme-surface-hover);
   color: var(--bew-on-theme-surface);
   font-size: var(--bew-font-size-control);

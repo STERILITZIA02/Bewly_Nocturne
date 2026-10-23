@@ -1,7 +1,7 @@
 // Shared card responses. No extra compositing layers or runtime observers.
 // Keep content beneath a cover inside its straight edge between corner tangents.
 // The bottom uses the same inset; horizontal compositions retain their own spacing.
-@mixin under-cover($radius: var(--bew-media-radius)) {
+@mixin under-cover($radius: var(--bew-thumb-radius)) {
   box-sizing: border-box;
   min-width: 0;
   padding-inline: $radius;
@@ -32,29 +32,43 @@
   line-height: var(--bew-author-line-height);
 }
 
-// Bare cards stay transparent; hover lifts the whole card above its neighbours.
-@mixin bare {
-  box-sizing: border-box;
-  padding: var(--bew-card-hover-outset);
-  margin: calc(-1 * var(--bew-card-hover-outset));
-  border-radius: var(--bew-radius-xl);
-  corner-shape: var(--bew-corner-shape);
-  background: transparent;
-  transition: transform var(--bew-duration-moderate) var(--bew-ease-emphasized);
+// The video card hover: a mouse over the card scales all of it and raises it
+// above its neighbours. Nothing scales under reduced motion. `$held` names a
+// state that keeps the scale after the pointer leaves (see useHoverLiftHold).
+@mixin hover-lift($scale: var(--bew-card-hover-scale), $held: ":hover") {
+  // Leaving hover, the card stays raised until it has shrunk back, so it never
+  // slips under a neighbour mid-transition. Entering raises it at once.
+  transition:
+    transform var(--bew-duration-moderate) var(--bew-ease-emphasized),
+    z-index 0s linear var(--bew-duration-moderate);
 
   @media (hover: hover) and (pointer: fine) {
-    &:hover {
+    &:hover,
+    &#{$held} {
       z-index: 1;
-      transform: scale(var(--bew-card-hover-scale));
+      transform: scale($scale);
+      transition: transform var(--bew-duration-moderate) var(--bew-ease-emphasized);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
     transition: none;
-    &:hover {
+    &:hover,
+    &#{$held} {
       transform: none;
     }
   }
+}
+
+// Bare cards stay transparent; hover lifts the whole card above its neighbours.
+@mixin bare {
+  box-sizing: border-box;
+  padding: var(--bew-card-hover-outset);
+  margin: calc(-1 * var(--bew-card-hover-outset));
+  border-radius: var(--bew-surface-radius);
+  corner-shape: var(--bew-corner-shape);
+  background: transparent;
+  @include hover-lift;
 }
 
 // Behind a lifted bare card, neighbours it overlaps blur most at its centre and

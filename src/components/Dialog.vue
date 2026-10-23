@@ -398,7 +398,7 @@ async function handleConfirm() {
                   {{ $t('common.operation.cancel') }}
                   <span
                     v-show="showShortcut"
-                    text="xs $bew-text-2 lh-0" p="x-1" rounded="$bew-radius-sm" bg="$bew-fill-1"
+                    text="xs $bew-text-2 lh-0" p="x-1" rounded="$bew-radius-tiny" bg="$bew-fill-1"
                     border="1 $bew-border-color"
                     mix-blend-color-dodge
                   >
@@ -414,7 +414,7 @@ async function handleConfirm() {
                   {{ $t('common.operation.confirm') }}
                   <span
                     v-show="showShortcut"
-                    text="xs $bew-text-2 lh-0" p="x-1" rounded="$bew-radius-sm" bg="$bew-fill-1"
+                    text="xs $bew-text-2 lh-0" p="x-1" rounded="$bew-radius-tiny" bg="$bew-fill-1"
                     border="1 $bew-border-color"
                     mix-blend-color-dodge
                   >

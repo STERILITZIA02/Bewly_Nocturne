@@ -104,7 +104,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
   place-items: center;
   aspect-ratio: 1;
   padding: 0;
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   appearance: none;
   color: var(--bew-text-1);

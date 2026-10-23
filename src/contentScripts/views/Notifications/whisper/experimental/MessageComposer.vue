@@ -329,7 +329,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   min-width: 0;
   padding: var(--bew-space-2);
   background: var(--bew-fill-1);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -337,7 +337,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   width: var(--bew-control-height-lg);
   height: var(--bew-control-height-lg);
   object-fit: cover;
-  border-radius: var(--bew-radius-sm);
+  border-radius: var(--bew-radius-tiny);
   corner-shape: var(--bew-corner-shape);
 }
 

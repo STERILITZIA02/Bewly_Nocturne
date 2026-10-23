@@ -106,7 +106,7 @@ function failCover(pic: string) {
   overflow: hidden;
   border: 0;
   // The 12px cover radius + 8px inset follows the filter card's 20px contour.
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   color: var(--bew-text-1);
   background: var(--bew-content-solid);

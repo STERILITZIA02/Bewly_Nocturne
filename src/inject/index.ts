@@ -525,7 +525,7 @@ else if (shouldInitializePageScript) {
         }
 
         :host([data-bewly-comment-reply-tree]) {
-          --bew-comment-reply-branch-radius: var(--bew-radius-lg, 12px);
+          --bew-comment-reply-branch-radius: var(--bew-thumb-radius, 12px);
           --bew-comment-reply-indent-step: var(--bew-space-8, 32px);
         }
 
@@ -2132,7 +2132,7 @@ else if (shouldInitializePageScript) {
       componentStyle.getPropertyValue('--bew-comment-reply-branch-radius'),
     ) || 12
     const toggleHitRadius = Number.parseFloat(componentStyle.getPropertyValue('--bew-space-3')) || 12
-    const toggleNodeRadius = Number.parseFloat(componentStyle.getPropertyValue('--bew-radius-half')) || 6
+    const toggleNodeRadius = Number.parseFloat(componentStyle.getPropertyValue('--bew-interactive-radius')) || 8
     const branches: CommentReplyTreeBranch[] = []
     const tails: CommentReplyTreeTailCollapse[] = []
 
@@ -3050,12 +3050,12 @@ else if (shouldInitializePageScript) {
     }
     // 如果是IP地理位置元素，使用Tag样式显示
     else if (id === 'location') {
-      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); color: var(--bew-ip-tag-text); background-color: var(--bew-ip-tag-bg); border-radius: var(--bew-native-comment-tag-radius, 3px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
+      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); color: var(--bew-ip-tag-text); background-color: var(--bew-ip-tag-bg); border-radius: var(--bew-radius-tiny, 4px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
       element.textContent = String(text)
     }
     // 楼主标签使用主题色，明暗模式由主题变量自动适配
     else if (id === 'host-tag') {
-      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); font-weight: var(--bew-font-weight-medium, 500); color: var(--bew-on-theme-surface); background-color: var(--bew-theme-surface); border-radius: var(--bew-native-comment-tag-radius, 3px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
+      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); font-weight: var(--bew-font-weight-medium, 500); color: var(--bew-on-theme-surface); background-color: var(--bew-theme-surface); border-radius: var(--bew-radius-tiny, 4px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
       element.textContent = String(text)
     }
     else {

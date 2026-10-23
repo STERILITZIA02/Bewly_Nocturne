@@ -462,7 +462,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(orb, /\.avatar:hover \.avatar-orb:not\(\.open\) \{\s*transform: scale\(1\.06\);/)
     assert.match(styles, /prefers-reduced-motion: reduce\)[\s\S]*?\.avatar-orb,\s*\.avatar-orb::before,/)
     // Glass and the concentric top-right corner.
-    assert.match(panel, /\.userPanel-pop\.bew-popover-surface \{\s*@include sidebarSurface\.floating;\s*border-radius: var\(--bew-popover-radius\) calc\(var\(--avatar-panel-face-radius\) \+ var\(--bew-space-2\)\)/)
+    assert.match(panel, /\.userPanel-pop\.bew-popover-surface \{\s*@include sidebarSurface\.floating;\s*border-radius: var\(--bew-surface-radius\) calc\(var\(--avatar-panel-face-radius\) \+ var\(--bew-space-2\)\)/)
     assert.match(panel, /corner-shape: var\(--bew-corner-shape\) round var\(--bew-corner-shape\) var\(--bew-corner-shape\);/)
   })
   check('top bar search never jumps between pages: rail shift glides, home and top bar boxes hand off', async () => {
@@ -505,22 +505,436 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
       window.matchMedia = originalMatchMedia
     }
   })
-  check('moment cards: media match the video cover radius and the card nests around them', async () => {
+  check('moment cards: video cover corner and frame; video and live covers fill the top and fade into the card', async () => {
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
-    const [variables, card, skeleton] = await Promise.all([
+    const [variables, card, mediaStage, skeleton, layout] = await Promise.all([
       read('styles/variables.scss'),
       read('components/MomentCard/MomentCard.vue'),
+      read('components/MomentCard/MomentMediaStage.vue'),
+      read('components/MomentCard/MomentCardSkeleton.vue'),
+      read('contentScripts/views/Moments/useMomentLayout.ts'),
+    ])
+    assert.doesNotMatch(variables, /--bew-moment-card-radius/, 'the card uses the cover radius itself')
+    assert.doesNotMatch(variables, /--bew-card-media-action-radius|--bew-cover-action-size/, 'the cover watch-later button and its tokens are gone')
+    // Corner and frame: the video cover's radius, hairline and shadows.
+    assert.match(card, /\.moment-card \{[^}]*border-radius: var\(--bew-media-radius\);/)
+    assert.match(card, /\.moment-card__surface \{\s*\/\/[^\n]*\n\s*@include contentCard\.media-frame;/)
+    assert.doesNotMatch(card.slice(card.indexOf('.moment-card__surface {'), card.indexOf('}', card.indexOf('.moment-card__surface {'))), /border: 1px/)
+    assert.match(card, /\.moment-card:hover \.moment-card__surface \{\s*box-shadow: var\(--bew-shadow-2\);/)
+    for (const selector of ['moment-card__media'])
+      assert.match(card, new RegExp(`\\.${selector} \\{[^}]*border-radius: var\\(--bew-media-radius\\);`), selector)
+    // The cover sits above the header, full-bleed, with the bottom blur and fade.
+    const template = card.slice(card.indexOf('<template>'), card.indexOf('<style'))
+    assert.ok(template.indexOf('class="moment-card__top-media"') < template.indexOf('<header class="moment-card__header">'))
+    assert.match(template, /<MomentMediaStage\s*v-if="hasTopCover"\s*class="moment-card__top-media"[\s\S]*?:previewing="previewActive"\s*:blur="ready && !entering"[\s\S]*?<\/MomentMediaStage>\s*<header/)
+    assert.match(mediaStage, /<ProgressiveBlur v-if="blur" edge="bottom" class="moment-media__blur" :visible="!previewing" \/>\s*<\/div>/)
+    assert.match(card, /const hasTopCover = computed\(\(\) => moment\.images\.length > 0\)/)
+    assert.match(template, /v-if="!hasTopCover && !moment\.isForward && \(moment\.isVideo \|\| moment\.isLive\)/, 'coverless video and live keep the inset text cover')
+    assert.match(mediaStage, /\.moment-media__cover \{[^}]*border-radius: var\(--moment-media-corners, var\(--bew-media-radius\) var\(--bew-media-radius\) 0 0\);/)
+    // The blur may not sit under a smooth-cornered overflow clip.
+    assert.match(card, /\.moment-card--top-cover \.moment-card__surface,\s*\.moment-card--quote-media \.moment-card__surface \{\s*overflow: visible;/)
+    assert.match(mediaStage, /\.moment-media__stage::after \{[^}]*background: linear-gradient\(to bottom, transparent, var\(--moment-media-base, var\(--bew-elevated-over-page\)\)\);/)
+    // The surface is opaque (the colour it shows over the page), so a hovered
+    // card overlapping a neighbour never shows it through; the fade ends on it.
+    assert.match(variables, /--bew-elevated-over-page: color-mix\(\s*in srgb,\s*var\(--bew-elevated-solid\) calc\(var\(--bew-content-opacity\) \* 100%\),\s*var\(--bew-homepage-bg\)\s*\);/)
+    assert.match(card, /\.moment-card__surface \{[^}]*background: var\(--bew-elevated-over-page\);/)
+    assert.match(skeleton, /background: var\(--bew-elevated-over-page\);/)
+    assert.match(card, /\.moment-card--top-cover\.moment-card--supports-wide-layout \.moment-card__top-media \{\s*--moment-media-corners: var\(--bew-media-radius\) 0 0 0;\s*grid-column: 1;\s*grid-row: 1 \/ span 2;/)
+    assert.match(layout, /const coverWidth = moment\.images\.length \? columnWidth : columnWidth - 32/)
+    // The skeleton mirrors it.
+    // Skeleton variants mirror the cards: the picture first, edge to edge,
+    // fading into the card colour; a thumbnail strip for several pictures.
+    assert.match(skeleton, /<article[\s\S]*?>\s*<!--[\s\S]*?-->\s*<div v-if="variant !== 'text'" class="moment-card-skeleton__stage">/)
+    assert.match(skeleton, /\.moment-card-skeleton__stage::after \{[^}]*background: linear-gradient\(to bottom, transparent, var\(--bew-elevated-over-page\)\);/)
+    assert.match(skeleton, /<div v-if="variant === 'gallery'" class="moment-card-skeleton__thumbs">/)
+    assert.match(skeleton, /\.moment-card-skeleton__thumb \+ \.moment-card-skeleton__thumb \{\s*border-inline-start: 1px solid var\(--bew-surface-border-color\);/)
+    const [utils, moments, asyncLoading] = await Promise.all([
+      read('components/MomentCard/utils.ts'),
+      read('contentScripts/views/Moments/Moments.vue'),
+      read('components/PageAsyncLoading.vue'),
+    ])
+    assert.match(utils, /all: \['video', 'gallery', 'text', 'image'\]/)
+    assert.match(moments, /:variant="getMomentSkeletonVariant\(activeMomentFilter, columnIndex \+ itemIndex\)"/)
+    assert.match(asyncLoading, /:variant="getMomentSkeletonVariant\('all', index\)"/)
+    assert.match(skeleton, /\.moment-card-skeleton \{\s*\/\/[^\n]*\n\s*@include contentCard\.media-frame;[^}]*border-radius: var\(--bew-media-radius\);/)
+  })
+  check('moment cards: no dividers, video-card hover scale, preview clears the cover fade, cover right-click menu, no cover stats', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const [card, mediaStage, contentCard, preview, moreMenu, videoLogic, floatingMenu, ...parts] = await Promise.all([
+      read('components/MomentCard/MomentCard.vue'),
+      read('components/MomentCard/MomentMediaStage.vue'),
+      read('styles/contentCard.scss'),
+      read('components/MomentCard/MomentVideoPreview.vue'),
+      read('components/MomentCard/MomentMoreMenu.vue'),
+      read('components/VideoCard/composables/useVideoCardLogic.ts'),
+      read('utils/floatingMenu.ts'),
+      read('components/MomentCard/MomentCommentSection.vue'),
+      read('components/MomentCard/MomentCommentSkeleton.vue'),
+      read('components/MomentCard/MomentForwardComposer.vue'),
       read('components/MomentCard/MomentCardSkeleton.vue'),
     ])
-    assert.match(variables, /--bew-moment-media-radius: var\(--bew-video-cover-radius\);/)
-    assert.match(variables, /--bew-moment-card-radius: calc\(var\(--bew-moment-media-radius\) \+ var\(--bew-card-inset\)\);/)
-    assert.match(variables, /--bew-card-media-action-radius: max\(var\(--bew-radius-sm\), calc\(var\(--bew-moment-media-radius\) - var\(--bew-space-2\)\)\);/)
-    assert.match(card, /\.moment-card \{[^}]*border-radius: var\(--bew-moment-card-radius\);/)
-    assert.match(card, /\.moment-card__main \{[^}]*padding: 0 var\(--bew-card-inset\)/, 'the inset the card radius nests across')
-    for (const selector of ['moment-card__media', 'moment-card__gallery'])
-      assert.match(card, new RegExp(`\\.${selector} \\{[^}]*border-radius: var\\(--bew-moment-media-radius\\);`), selector)
-    assert.match(skeleton, /border-radius: var\(--bew-moment-card-radius\);/)
-    assert.match(skeleton, /\.moment-card-skeleton__media\.moment-card-skeleton__media \{[^}]*border-radius: var\(--bew-moment-media-radius\);/)
+    // Spacing alone separates footer, comments, threads and the forward composer.
+    for (const source of [card, ...parts])
+      assert.doesNotMatch(source, /border-(?:top|bottom): 1px solid var\(--bew-border-color\)/)
+    // The video card hover, shared through one mixin.
+    assert.match(contentCard, /@mixin hover-lift\(\$scale: var\(--bew-card-hover-scale\), \$held: ":hover"\) \{[\s\S]*?&:hover,\s*&#\{\$held\} \{\s*z-index: 1;\s*transform: scale\(\$scale\);/)
+    assert.match(contentCard, /@mixin bare \{[^}]*@include hover-lift;/)
+    // Moment cards scale a little less, also with comments or forwarding open,
+    // and stay scaled while a menu or picker they opened under the pointer is open.
+    assert.match(card, /\.moment-card \{[^}]*@include contentCard\.hover-lift\(var\(--bew-moment-card-hover-scale\), "\.moment-card--lift-held"\);/)
+    assert.doesNotMatch(card, /moment-card--(?:comments|forward)-expanded:hover/)
+    // A hovered card covers its neighbours: each card isolates its inner
+    // z-indexes, and a card leaving hover stays raised until it has shrunk.
+    assert.match(card, /\.moment-card \{[^}]*isolation: isolate;/)
+    assert.match(contentCard, /@mixin hover-lift[^{]*\{\s*\/\/[^\n]*\n[^\n]*\n\s*transition:\s*transform var\(--bew-duration-moderate\) var\(--bew-ease-emphasized\),\s*z-index 0s linear var\(--bew-duration-moderate\);/)
+    assert.match(card, /watch\(showVideoOptions, open => lift\.hold\(open\)\)/)
+    assert.match(card, /'moment-card--lift-held': liftHeld/)
+    const [variables, picker, liftHold, layout, disclosure] = await Promise.all([
+      read('styles/variables.scss'),
+      read('composables/useComposerPicker.ts'),
+      read('composables/useHoverLiftHold.ts'),
+      read('contentScripts/views/Moments/useMomentLayout.ts'),
+      read('composables/useMeasuredDisclosure.ts'),
+    ])
+    assert.match(variables, /--bew-card-hover-scale: 1\.07;[\s\S]{0,160}--bew-moment-card-hover-scale: 1\.05;/)
+    assert.match(picker, /holdLift\?\.\(true\)[\s\S]*?holdLift\?\.\(false\)/)
+    assert.match(liftHold, /held\.value = card\(\)\?\.matches\(':hover'\)/)
+    // Layout reads ignore the hover scale; a rect would record a scaled height.
+    for (const source of [layout, disclosure])
+      assert.doesNotMatch(source, /getBoundingClientRect\(\)\.height/)
+    assert.match(layout, /Math\.round\(getLayoutHeight\(card\)\)/)
+    assert.doesNotMatch(card, /contentCard\.surface|primary-action:active/)
+    // The blur and the colour fade leave while the preview shows frames.
+    // From the moment a preview starts (loading ring included), gently (300ms).
+    assert.doesNotMatch(preview, /frameReady'/)
+    assert.match(mediaStage, /class="moment-media__stage" :class="\{ 'is-previewing': previewing \}"/)
+    assert.match(mediaStage, /\.moment-media__stage\.is-previewing::after \{\s*opacity: 0;/)
+    assert.match(mediaStage, /--bew-progressive-blur-fade: var\(--bew-duration-moderate\);/)
+    assert.match(mediaStage, /\.moment-media__stage::after \{[^}]*transition: opacity var\(--bew-progressive-blur-fade\)/)
+    const blur = await read('components/ProgressiveBlur.vue')
+    assert.match(blur, /transition: opacity var\(--bew-progressive-blur-fade, var\(--bew-duration-fast\)\)/)
+    // No seam under the cover's bottom edge on a scaled card: no dark backing,
+    // and the fade's solid end reaches one pixel past the edge.
+    assert.doesNotMatch(mediaStage.slice(mediaStage.indexOf('<style')), /\.moment-media__(?:cover|image)[^{]*\{[^}]*background: (?!none|var\(--bew-fill-1\))/)
+    assert.match(mediaStage, /\.moment-media__stage::after \{[^}]*inset: auto 0 -1px;[^}]*height: calc\(var\(--moment-media-fade\) \+ 1px\);/)
+    // Right-click on every video or live cover opens the shared video card menu.
+    const template = card.slice(card.indexOf('<template>'), card.indexOf('<style'))
+    assert.equal(template.match(/@contextmenu="openCoverMenu"/g)?.length, 1, 'coverless text cover')
+    assert.equal(template.match(/@cover-menu="openCoverMenu"/g)?.length, 2, 'top cover and quoted video or live cover')
+    assert.match(mediaStage, /@contextmenu="emit\('coverMenu', \$event\)"/)
+    assert.match(card, /function openCoverMenu\(event: MouseEvent\) \{[\s\S]*?event\.shiftKey \|\| document\.getSelection\(\)\?\.toString\(\)[\s\S]*?getContextMenuPlacement\(event\)/)
+    assert.match(floatingMenu, /export function getContextMenuPlacement\(event: MouseEvent\)/)
+    assert.match(videoLogic, /const placement = getContextMenuPlacement\(event\)/)
+    assert.match(moreMenu, /provide\('getVideoType', \(\) => props\.video\?\.roomid \? 'live' : 'common'\)/)
+    assert.match(moreMenu, /:watch-later="watchLater"\s*:layout-target="layoutTarget"/)
+    // Covers carry no stats, duration, watch-later button or charge badge; LIVE stays.
+    assert.doesNotMatch(card, /moment-card__watch-later|moment-card__video-stats|moment-card__video-stat-group/)
+    assert.doesNotMatch(mediaStage, /charge-badge|videoPlay|videoDanmaku|i-tabler-player-play/)
+    assert.match(mediaStage, /<span v-if="live" class="moment-media__live-mark">/)
+  })
+  check('moment cards: image posts crossfade one top image with a thumbnail strip; long text animates; portrait media is marked', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const [card, layout, portrait, videoCard, recommendation] = await Promise.all([
+      read('components/MomentCard/MomentCard.vue'),
+      read('contentScripts/views/Moments/useMomentLayout.ts'),
+      read('utils/portraitMedia.ts'),
+      read('components/VideoCard/VideoCard.vue'),
+      read('contentScripts/views/Home/adapters/recommendationVideo.ts'),
+    ])
+    const template = card.slice(card.indexOf('<template>'), card.indexOf('<style'))
+    const [mediaStage, toneComposable, adapterSource] = await Promise.all([
+      read('components/MomentCard/MomentMediaStage.vue'),
+      read('composables/useImageTone.ts'),
+      read('contentScripts/views/Moments/momentAdapter.ts'),
+    ])
+    // Image posts reuse the cover stage (blur + fade); the inline gallery is gone.
+    assert.match(card, /const hasTopImages = computed\(\(\) => hasTopCover\.value && !moment\.isVideo && !moment\.isLive\)/)
+    assert.match(template, /<MomentMediaStage\s*v-if="hasTopCover"\s*class="moment-card__top-media"\s*:gallery="hasTopImages"/)
+    assert.doesNotMatch(card, /class="moment-card__gallery"|\.moment-card__gallery \{|wide-single-image|moment-card__gallery-item/)
+    // One image at a time: the new one fades in over the old once loaded
+    // (every branch of the stacked crossfade is run in the motion check below).
+    assert.match(mediaStage, /\.moment-media__image \{[^}]*opacity: 0;/)
+    assert.match(mediaStage, /\.moment-media__image\.is-layer \{\s*opacity: 1;/)
+    assert.match(mediaStage, /:class="\{ 'is-layer': imageLayers\.includes\(imageIndex\) \}"\s*:style="\{ zIndex: imageLayers\.indexOf\(imageIndex\) \+ 1 \}"/)
+    assert.doesNotMatch(card + mediaStage, /is-fading-in|is-previous|moment-card-image-in|previousImage|imageSwitched/)
+    assert.match(mediaStage, /function requestImage\(index: number\)[\s\S]*?imageElements\[next\]\?\.complete[\s\S]*?showImage\(next\)/)
+    // Sideways trackpad swipes step once per gesture; vertical wheels pass on.
+    assert.match(mediaStage, /createWheelStepper\(\{ oncePerGesture: true \}\)/)
+    assert.match(mediaStage, /function handleImageWheel\(event: WheelEvent\) \{\s*if \(images\.length < 2 \|\| Math\.abs\(event\.deltaX\) <= Math\.abs\(event\.deltaY\)\)/)
+    // The thumbnail strip: hairlines between thumbnails, a nested smaller
+    // corner, shared elastic sideways scrolling.
+    assert.match(mediaStage, /v-if="gallery && images\.length > 1"\s*ref="thumbScrollerRef"\s*class="moment-media__thumbs"/)
+    assert.match(mediaStage, /\.moment-media__thumb \+ \.moment-media__thumb \{\s*border-inline-start: 1px solid var\(--bew-surface-border-color\);/)
+    assert.match(mediaStage, /\.moment-media__thumbs \{[^}]*border-radius: var\(--moment-media-strip-radius, var\(--bew-interactive-radius\)\);/)
+    assert.match(mediaStage, /createElasticWheelScroll\(scroller, track\)/)
+    assert.match(layout, /Math\.round\(columnWidth \/ Math\.min\(2, ratio\)\)/)
+    // A portrait top picture: clear upper part up to 1.2 widths, a longer fade
+    // below it, then the card in the picture's colour with black or white text.
+    assert.match(layout, /Math\.round\(columnWidth \/ Math\.max\(1 \/ PORTRAIT_MAX_CLEAR_HEIGHT, ratio\)\) \+ 48/)
+    assert.match(portrait, /export const PORTRAIT_MAX_CLEAR_HEIGHT = 1\.2/)
+    assert.match(mediaStage, /\? Math\.max\(1 \/ PORTRAIT_MAX_CLEAR_HEIGHT, ratio\)/)
+    assert.match(mediaStage, /\.moment-media--portrait \.moment-media__cover--images \{\s*box-sizing: content-box;\s*padding-bottom: var\(--moment-media-fade\);/)
+    assert.match(toneComposable, /const band = \[getMomentThumbnailUrl\(image, 64\), Math\.max\(0, shown - 0\.15\), shown\] as const/)
+    assert.match(card, /@mixin toned-surface \{[\s\S]*?--bew-elevated-over-page: var\(--moment-tone\);[\s\S]*?--bew-text-1: var\(--moment-tone-fg\);[\s\S]*?color: var\(--bew-text-1\);/)
+    assert.match(card, /\.moment-card--portrait-top \.moment-card__surface \{\s*@include toned-surface;/)
+    // Quoted videos, live rooms and image posts use the same media (cover,
+    // blur and fade into the quote's colour, single image with thumbnails,
+    // portrait colour) with corners nested inside the card's (user request).
+    assert.match(template, /<MomentMediaStage\s*v-if="quoteCover"/)
+    assert.match(template, /<MomentMediaStage\s*v-else-if="quoteImages\.length"\s*gallery/)
+    assert.match(card, /\.moment-card__quote-surface \{\s*--moment-media-corners: var\(--bew-interactive-radius\) var\(--bew-interactive-radius\) 0 0;\s*--moment-media-inset: var\(--bew-space-3\);\s*--moment-media-strip-radius: var\(--bew-radius-tiny\);\s*--moment-media-base: var\(--moment-quote-bg\);[^}]*border-radius: var\(--bew-interactive-radius\);/)
+    assert.match(card, /\.moment-card__quote--portrait \.moment-card__quote-surface \{\s*@include toned-surface;\s*--moment-quote-bg: var\(--moment-tone\);/)
+    assert.doesNotMatch(card, /moment-card__forward-(?:reference|video|gallery|copy)|forward-video-stats/)
+    assert.match(adapterSource, /liveCover: content\.isLive \? content\.images\[0\] : undefined,/)
+    assert.match(layout, /if \(forward && \(forward\.video \|\| forward\.liveCover \|\| forward\.images\?\.length\)\) \{/)
+    // Draw / opus pictures give width and height directly; `size` is KB.
+    assert.match(adapterSource, /image\.dimension \|\| \(image\.size && typeof image\.size === 'object' \? image\.size : image\)/)
+    const tone = await read('utils/imageTone.ts')
+    assert.match(tone, /image\.crossOrigin = 'anonymous'/)
+    assert.match(tone, /foreground: getContrastingForeground\(color\)/)
+    // Long text opens and closes with a height animation the masonry waits for.
+    assert.match(card, /async function toggleDescription\(\)[\s\S]*?element\.animate\([\s\S]*?holdAnimation\(animation\)/)
+    assert.match(card, /watch\(\(\) => disclosureMoving\.value \|\| descriptionMoving\.value, moving => emit\('disclosureMotion', moving\)/)
+    // Portrait (≥ 1:1) media carry one marker, reserved for an upcoming design.
+    assert.match(portrait, /ratio > 0 && ratio <= 1/)
+    assert.match(card, /:data-bewly-portrait="isTopMediaPortrait \? '' : undefined"/)
+    assert.match(videoCard, /:data-bewly-portrait="video\?\.portrait \? '' : undefined"/)
+    assert.match(recommendation, /portrait: type === 'vertical'/)
+  })
+  check('moment cards: every new state change animates, each branch run (crossfade layers, picture reveal, tone, blur mount)', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const [card, stage, reveal, toneComposable, lazyPicture] = await Promise.all([
+      read('components/MomentCard/MomentCard.vue'),
+      read('components/MomentCard/MomentMediaStage.vue'),
+      read('composables/usePictureReveal.ts'),
+      read('composables/useImageTone.ts'),
+      read('components/LazyPicture.vue'),
+    ])
+    const { getCrossfadeDuration, showCrossfadeLayer } = await import('../src/utils/crossfadeLayers.ts')
+    const { getMotionDuration } = await import('../src/utils/motionTiming.ts')
+    const { loadSourceFunctions } = await import('./sourceFunctionHarness.ts')
+
+    // Pure stacking: every branch of showCrossfadeLayer and the duration.
+    assert.deepEqual(showCrossfadeLayer([], 0, 0), { layers: [0], fades: [{ index: 0, to: 1 }] }, 'first image: nothing drawn yet, fade it in')
+    assert.equal(showCrossfadeLayer([0], 0, 0), null, 'already shown: no fade')
+    assert.deepEqual(showCrossfadeLayer([0], 0, 1), { layers: [0, 1], fades: [{ index: 1, to: 1 }] }, 'new image goes on top')
+    assert.deepEqual(showCrossfadeLayer([0, 1, 2], 2, 0), { layers: [0, 1, 2], fades: [{ index: 0, to: 1 }, { index: 1, to: 0 }, { index: 2, to: 0 }] }, 'back to a drawn image: everything above fades out')
+    assert.deepEqual(showCrossfadeLayer([0, 1], 0, 1), { layers: [0, 1], fades: [{ index: 1, to: 1 }] }, 'top layer fading out turns around')
+    assert.equal(getCrossfadeDuration(300, 0, 1), 300)
+    assert.equal(getCrossfadeDuration(300, 0.6, 0), 180, 'only the opacity still to travel')
+    assert.equal(getCrossfadeDuration(300, 1, 1), 0, 'already there: instant')
+    assert.equal(getCrossfadeDuration(300, -1, 1), 300, 'never longer than a full fade')
+
+    // The card's own fade and settle functions, with a scripted animation clock.
+    const animations = []
+    const held = []
+    let reduced = false
+    const element = index => ({
+      drawn: 0,
+      animate(keyframes, options) {
+        let resolve
+        let reject
+        const animation = {
+          index,
+          keyframes,
+          options,
+          playState: 'running',
+          finished: new Promise((res, rej) => {
+            resolve = res
+            reject = rej
+          }),
+          finish() {
+            this.playState = 'finished'
+            resolve(this)
+          },
+          cancel() {
+            if (this.playState === 'running')
+              reject(new Error('cancelled'))
+            this.playState = 'idle'
+          },
+        }
+        animation.finished.catch(() => {})
+        animations.push(animation)
+        return animation
+      },
+    })
+    const buttons = [0, 1, 2, 3].map(element)
+    const ticks = () => new Promise(resolve => setTimeout(resolve, 0))
+    const context = await loadSourceFunctions('../src/components/MomentCard/MomentMediaStage.vue', ['showImage', 'fadeImageLayer', 'settleImageLayers'], {
+      imageLayers: { value: [] },
+      shownImage: { value: 0 },
+      imageFades: new Map(),
+      imageButtons: buttons,
+      showCrossfadeLayer,
+      getCrossfadeDuration,
+      getMotionDuration,
+      holdAnimation: animation => held.push(animation),
+      nextTick: () => Promise.resolve(),
+      window: { matchMedia: () => ({ matches: reduced }) },
+      getComputedStyle: target => ({
+        opacity: String(target.drawn),
+        getPropertyValue: name => ({ '--bew-duration-moderate': '300ms', '--bew-ease-standard': 'cubic-bezier(0.2, 0, 0, 1)' })[name] ?? '',
+      }),
+    })
+    const plain = value => JSON.parse(JSON.stringify(value)) // vm objects come from another realm
+    const last = index => animations.findLast(animation => animation.index === index)
+    const settle = async (...indexes) => {
+      indexes.forEach(index => last(index).finish())
+      await ticks()
+    }
+    // First load: image 0 fades in from 0 over the full time, registered.
+    context.showImage(0)
+    assert.deepEqual(plain(context.imageLayers.value), [0])
+    assert.deepEqual(plain(last(0).keyframes), [{ opacity: 0 }, { opacity: 1 }])
+    assert.equal(last(0).options.duration, 300)
+    assert.equal(last(0).options.easing, 'cubic-bezier(0.2, 0, 0, 1)')
+    assert.equal(last(0).options.fill, 'forwards')
+    assert.equal(held.at(-1), last(0), 'fades are registered with motion priority')
+    context.showImage(0)
+    assert.equal(animations.length, 1, 'showing the shown image again starts nothing')
+    await settle(0)
+    assert.deepEqual(plain(context.imageLayers.value), [0])
+    assert.equal(last(0).playState, 'idle', 'fills drop once the classes hold the end state')
+    buttons[0].drawn = 1
+    // Quick forward switches: each new image fades over the one still fading.
+    context.showImage(1)
+    buttons[1].drawn = 0.4
+    context.showImage(2)
+    assert.deepEqual(plain(context.imageLayers.value), [0, 1, 2])
+    assert.equal(last(1).playState, 'running', 'the image beneath keeps fading in, no jump')
+    await settle(1)
+    assert.deepEqual(plain(context.imageLayers.value), [0, 1, 2], 'nothing settles while a fade runs')
+    await settle(2)
+    assert.deepEqual(plain(context.imageLayers.value), [2])
+    assert.equal(context.shownImage.value, 2)
+    Object.assign(buttons[0], { drawn: 0 })
+    Object.assign(buttons[1], { drawn: 0 })
+    buttons[2].drawn = 1
+    // Switching back mid-fade: the top image fades out from where it is drawn.
+    context.showImage(3)
+    const fadingIn = last(3)
+    buttons[3].drawn = 0.6
+    context.showImage(2)
+    assert.equal(fadingIn.playState, 'idle', 'the interrupted fade is replaced')
+    assert.deepEqual(plain(last(3).keyframes), [{ opacity: 0.6 }, { opacity: 0 }])
+    assert.equal(last(3).options.duration, 180)
+    assert.equal(last(2).options.duration, 0, 'the image beneath is already opaque')
+    assert.deepEqual(plain(context.imageLayers.value), [2, 3], 'the leaving image stays drawn until it is gone')
+    // And forward again before it has gone: it turns around once more.
+    buttons[3].drawn = 0.3
+    context.showImage(3)
+    assert.deepEqual(plain(last(3).keyframes), [{ opacity: 0.3 }, { opacity: 1 }])
+    assert.equal(last(3).options.duration, 210)
+    await settle(2, 3)
+    assert.deepEqual(plain(context.imageLayers.value), [3])
+    // Reduced motion: the same path, at once.
+    reduced = true
+    buttons[3].drawn = 1
+    context.showImage(0)
+    assert.equal(last(0).options.duration, 0)
+    await settle(0)
+    assert.deepEqual(plain(context.imageLayers.value), [0])
+    assert.match(stage, /function fadeImageLayer\(index: number, to: 0 \| 1\) \{[\s\S]*?const from = Number\(style\.opacity\)[\s\S]*?animation\.finished\.then\(settleImageLayers, \(\) => \{\}\)/)
+    // A card remounted or reused for another moment starts settled: a first
+    // image seen before is drawn at once, without a fade.
+    assert.match(stage, /const imageLayers = shallowRef<number\[\]>\(firstImageSeen\(\) \? \[0\] : \[\]\)/)
+    assert.match(stage, /watch\(\(\) => images\.join\('\\n'\), \(\) => \{\s*imageFades\.forEach\(animation => animation\.cancel\(\)\)[\s\S]*?imageLayers\.value = firstImageSeen\(\) \? \[0\] : \[\]/)
+
+    // Pictures fade in as they load (cover, thumbnails, first top image), and
+    // appear at once when loaded before; LazyPicture shares the same memory.
+    const memory = await import('../src/utils/pictureRevealMemory.ts')
+    assert.equal(memory.hasLoadedPicture(''), false)
+    assert.equal(memory.hasLoadedPicture('a'), false)
+    memory.rememberLoadedPicture('')
+    memory.rememberLoadedPicture('a')
+    assert.equal(memory.hasLoadedPicture('a'), true)
+    for (let index = 0; index < 240; index++)
+      memory.rememberLoadedPicture(`fill-${index}`)
+    assert.equal(memory.hasLoadedPicture('a'), false, 'the oldest is forgotten past the limit')
+    memory.rememberLoadedPicture('b')
+    memory.forgetLoadedPicture('')
+    memory.forgetLoadedPicture('b')
+    assert.equal(memory.hasLoadedPicture('b'), false)
+    assert.match(lazyPicture, /import \{ forgetLoadedPicture, hasLoadedPicture, rememberLoadedPicture \} from '~\/utils\/pictureRevealMemory'/)
+    assert.doesNotMatch(lazyPicture, /const loadedPictureSources/)
+    assert.match(reveal, /isRevealed: \(src: string\) => loaded\.has\(src\) \|\| hasLoadedPicture\(src\)/)
+    assert.match(stage, /:class="\{ 'is-ready': isRevealed\(cover\) \}"[\s\S]*?@load="handleCoverLoad"/)
+    assert.match(stage, /:class="\{ 'is-ready': isRevealed\(getMomentThumbnailUrl\(image, 96\)\) \}"\s*@load="reveal\(getMomentThumbnailUrl\(image, 96\)\)"/)
+    assert.match(stage, /\.moment-media__cover--video > img \{[^}]*opacity: 0;[^}]*transition: opacity var\(--bew-duration-fast\) var\(--bew-ease-standard\);/)
+    assert.match(stage, /\.moment-media__cover--video > img\.is-ready \{\s*opacity: 1;/)
+    assert.match(stage, /\.moment-media__thumb > img \{[^}]*opacity: 0;\s*transition: opacity var\(--bew-duration-fast\)/)
+    assert.match(stage, /\.moment-media__thumb > img\.is-ready \{\s*opacity: 1;/)
+    // Thumbnail selection and hover ease on the button; the picture's own
+    // opacity is only its arrival.
+    assert.match(stage, /\.moment-media__thumb \{[^}]*background: var\(--bew-fill-1\);\s*opacity: 0\.5;[^}]*transition: opacity var\(--bew-duration-fast\) var\(--bew-ease-standard\);/)
+    assert.match(stage, /\.moment-media__thumb\.is-active \{\s*opacity: 1;/)
+    assert.match(stage, /scroller\.scrollTo\(\{ left, behavior: window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches \? 'auto' : 'smooth' \}\)/)
+    assert.match(stage, /@media \(prefers-reduced-motion: reduce\) \{\s*\.moment-media__stage::after,\s*\.moment-media__cover--video > img,\s*\.moment-media__thumb,\s*\.moment-media__thumb > img \{\s*transition: none;/)
+
+    // The blur fades in when it mounts after the card has entered.
+    assert.match(stage, /@starting-style \{\s*\.moment-media__blur :deep\(\.bew-progressive-blur__layer\) \{\s*opacity: 0;/)
+
+    // Portrait colour: registered colours ease every derived colour (gradient
+    // included) on arrival and on switching images; a colour read before is
+    // used from the first render, so a remounted card does not ease again.
+    assert.match(card, /\.moment-card--portrait-top \{\s*--moment-tone: var\(--bew-elevated-over-page\);\s*--moment-tone-fg: var\(--bew-neutral-fg\);/)
+    assert.match(card, /\$tone-transition:\s*--moment-tone var\(--bew-duration-moderate\) var\(--bew-ease-standard\),\s*--moment-tone-fg var\(--bew-duration-moderate\) var\(--bew-ease-standard\);/)
+    assert.match(card, /\.moment-card--portrait-top \.moment-card__surface \{\s*@include toned-surface;\s*transition:\s*box-shadow var\(--bew-duration-moderate\) var\(--bew-ease-standard\),\s*\$tone-transition;\s*@media \(prefers-reduced-motion: reduce\) \{\s*transition: box-shadow/)
+    // A quote's colour eases the same way, from the quote's own colour.
+    assert.match(card, /\.moment-card__quote--portrait \{\s*--moment-tone: var\(--moment-quote-bg\);\s*--moment-tone-fg: var\(--bew-neutral-fg\);/)
+    assert.match(card, /\.moment-card__quote--portrait \.moment-card__quote-surface \{[^}]*transition: \$tone-transition;\s*@media \(prefers-reduced-motion: reduce\) \{\s*transition: none;/)
+    assert.doesNotMatch(card, /moment-card--toned|background-color var\(--bew-duration-moderate\)/)
+    assert.match(toneComposable, /const known = peekImageBandTone\(\.\.\.band\)\s*if \(known\) \{\s*tone\.value = known\s*return\s*\}/)
+    // The quote's author link eases its hover colour.
+    assert.match(card, /\.moment-card__quote-source \{[\s\S]*?transition: color var\(--bew-duration-fast\) var\(--bew-ease-standard\);/)
+    const tone = await import('../src/utils/imageTone.ts')
+    assert.equal(tone.peekImageBandTone('u', 0.85, 1), undefined, 'not read yet')
+    assert.equal(await tone.readImageBandTone('u', 0.85, 1), null, 'no image in this runtime: no tone')
+    assert.equal(tone.peekImageBandTone('u', 0.85, 1), null, 'settled reads are known at once')
+    for (let index = 0; index < 200; index++)
+      await tone.readImageBandTone(`fill-${index}`, 0, 1)
+    assert.equal(tone.peekImageBandTone('u', 0.85, 1), undefined, 'evicted with its promise')
+    const previousCss = globalThis.CSS
+    try {
+      tone.registerToneProperties()
+      const registered = []
+      globalThis.CSS = { registerProperty() {
+        throw new TypeError('bad')
+      } }
+      assert.throws(() => tone.registerToneProperties(), TypeError, 'unexpected errors surface')
+      globalThis.CSS = { registerProperty(definition) {
+        registered.push(definition)
+        throw new DOMException('exists', 'InvalidModificationError')
+      } }
+      tone.registerToneProperties()
+      assert.deepEqual(registered.map(({ name, syntax, inherits }) => [name, syntax, inherits]), [['--moment-tone', '<color>', true], ['--moment-tone-fg', '<color>', true]], 'already registered by a previous script: fine')
+      tone.registerToneProperties()
+      assert.equal(registered.length, 2, 'once per document')
+    }
+    finally {
+      globalThis.CSS = previousCss
+    }
+  })
+  check('radius: one 16px-anchored scale; components use role tokens, never steps, retired names or literals', async () => {
+    const { spawnSync } = await import('node:child_process')
+    const { findRadiusViolations } = await import('./radiusPolicy')
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const variables = await read('styles/variables.scss')
+    const tokens = Object.fromEntries([...variables.matchAll(/^ {2}(--bew-[\w-]*radius[\w-]*): ([^;]+);/gm)].map(match => [match[1], match[2]]))
+    assert.equal(tokens['--bew-media-radius'], 'var(--bew-radius-lg)', 'the video cover anchor')
+    assert.equal(tokens['--bew-radius-lg'], '16px')
+    assert.equal(tokens['--bew-surface-radius'], 'var(--bew-radius-lg)', 'cards, panels and popovers')
+    assert.deepEqual(['xs', 'sm', 'md', 'lg', 'xl', '2xl'].map(step => tokens[`--bew-radius-${step}`]), ['4px', '8px', '12px', '16px', '24px', '32px'])
+    assert.match(variables, /--bew-popover-padding: var\(--bew-space-2\);/, '8px items + 8px inset = 16px popover corner')
+    assert.match(variables, /--bew-library-filter-padding: var\(--bew-space-2\);/)
+    const files = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', 'src'], { cwd: fileURLToPath(new URL('..', import.meta.url)) })
+      .stdout
+      .toString()
+      .trim()
+      .split('\n')
+      .filter(file => /\.(?:vue|scss|css|ts)$/.test(file))
+      .map(file => fileURLToPath(new URL(`../${file}`, import.meta.url)))
+    assert.deepEqual(await findRadiusViolations(files), [])
   })
   check('glass: one material (tint, opacity, blur, edge) for every glass surface; dark glass is tinted lower', async () => {
     const { execFileSync, spawnSync } = await import('node:child_process')
@@ -611,7 +1025,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(section, /margin-inline: calc\(-1 \* var\(--moments-up-list-bleed-start\)\) calc\(-1 \* var\(--library-content-inline-padding\)\);/)
     assert.match(section, /\.moments-up-list__item \{\s*@include contentCard\.bare;[^}]*align-items: flex-start;/, 'video card hover scale; names start at the tile edge')
     assert.match(section, /\.moments-up-list__name \{[^}]*align-self: stretch;[^}]*text-align: start;/)
-    assert.match(section, /\.moments-up-list__avatar \{\s*@include contentCard\.media-frame;[^}]*width: var\(--bew-moments-up-tile-size\);[^}]*height: var\(--bew-moments-up-tile-size\);[^}]*border-radius: var\(--bew-video-cover-radius\);/)
+    assert.match(section, /\.moments-up-list__avatar \{\s*@include contentCard\.media-frame;[^}]*width: var\(--bew-moments-up-tile-size\);[^}]*height: var\(--bew-moments-up-tile-size\);[^}]*border-radius: var\(--bew-media-radius\);/)
     assert.match(workspace, /--library-content-inline-padding: var\(--bew-page-inline-inset\);/)
     assert.match(moments, /upListElastic = createElasticWheelScroll\(scroller, upListTrackRef\.value\)/)
 

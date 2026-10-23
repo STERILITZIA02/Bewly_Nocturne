@@ -289,7 +289,7 @@ function handleClickChannel() {
             <div
               pos="absolute top-0 left-0" h-2px
               h="2px"
-              rounded="$bew-radius-full"
+              rounded="$bew-pill-radius"
               bg="$bew-warning-color"
               :style="{ width: levelProgressBarWidth }"
             />
@@ -453,8 +453,8 @@ function handleClickChannel() {
 // space-2 inside it (--avatar-panel-face-radius comes from the .avatar host).
 .userPanel-pop.bew-popover-surface {
   @include sidebarSurface.floating;
-  border-radius: var(--bew-popover-radius) calc(var(--avatar-panel-face-radius) + var(--bew-space-2))
-    var(--bew-popover-radius) var(--bew-popover-radius);
+  border-radius: var(--bew-surface-radius) calc(var(--avatar-panel-face-radius) + var(--bew-space-2))
+    var(--bew-surface-radius) var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape) round var(--bew-corner-shape) var(--bew-corner-shape);
 }
 
@@ -470,7 +470,7 @@ function handleClickChannel() {
 .user-panel-section {
   padding: var(--bew-space-2);
   background: var(--bew-fill-alt);
-  border-radius: var(--bew-popover-inner-radius);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-shadow-1);
 }
@@ -507,7 +507,7 @@ function handleClickChannel() {
 
 .lv6-entry--card {
   --uno: "w-full p-2 bg-$bew-fill-alt hover:bg-$bew-fill-2";
-  border-radius: var(--bew-popover-inner-radius);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-shadow-1);
 }
@@ -525,7 +525,7 @@ function handleClickChannel() {
   --uno: "p-2 m-0 text-sm flex flex-col items-center transition-colors duration-200";
   --uno: "bg-$bew-fill-alt hover:bg-$bew-fill-2";
   --uno: "shadow-[var(--bew-shadow-1)]";
-  border-radius: var(--bew-popover-inner-radius);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
 
   > * {

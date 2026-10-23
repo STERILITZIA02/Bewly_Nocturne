@@ -287,7 +287,7 @@ watch(() => props.content, () => {
   line-height: var(--bew-line-height-body);
   background: var(--bew-elevated-solid);
   border: 1px solid var(--bew-message-card-border);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -341,7 +341,7 @@ watch(() => props.content, () => {
   cursor: zoom-in;
   background: var(--bew-elevated-solid);
   border: 0;
-  border-radius: var(--bew-radius-xl);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -361,7 +361,7 @@ watch(() => props.content, () => {
   cursor: pointer;
   background: var(--bew-fill-1);
   border: 1px solid var(--bew-message-card-border);
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-thumb-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -386,7 +386,7 @@ watch(() => props.content, () => {
   max-height: calc(var(--bew-space-12) * 8);
   object-fit: contain;
   background: var(--bew-fill-1);
-  border-radius: var(--bew-radius-md);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: inherit;
 }
 
@@ -422,7 +422,7 @@ watch(() => props.content, () => {
   line-height: var(--bew-line-height-control);
   background: var(--bew-elevated-solid);
   border: 1px solid var(--bew-message-card-border);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -445,7 +445,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
   height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
-  border-radius: var(--bew-radius-md);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -454,7 +454,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
   width: calc(var(--bew-message-share-width) + var(--bew-space-4));
   gap: var(--bew-space-2);
   padding: var(--bew-space-2);
-  border-radius: var(--bew-radius-xl);
+  border-radius: var(--bew-surface-radius);
 
   .private-message-content__card-copy {
     padding: var(--bew-space-1) var(--bew-space-2) var(--bew-space-2);
@@ -550,7 +550,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
   overflow: hidden;
   background: var(--bew-elevated-solid);
   border: 0;
-  border-radius: var(--bew-radius-xl);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -560,7 +560,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
   max-width: 100%;
   max-height: calc(var(--bew-space-12) * 8);
   object-fit: contain;
-  border-radius: var(--bew-radius-md);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -596,7 +596,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
   height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
-  border-radius: var(--bew-radius-sm);
+  border-radius: var(--bew-radius-tiny);
   corner-shape: var(--bew-corner-shape);
 }
 

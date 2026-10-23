@@ -98,7 +98,7 @@ const iframeContainerClasses = computed(() => {
     const topPosition = headerShow.value ? 'top-$bew-top-bar-height' : 'top-0'
     // 修正高度：使用 calc(100% - top位置) 确保容器不会超出可视区域
     const height = headerShow.value ? 'h-[calc(100%-var(--bew-top-bar-height))]' : 'h-full'
-    return `pos-absolute ${topPosition} left-0 of-hidden bg-$bew-bg rounded-t-$bew-radius w-full ${height}`
+    return `pos-absolute ${topPosition} left-0 of-hidden bg-$bew-bg rounded-t-$bew-surface-radius w-full ${height}`
   }
 })
 

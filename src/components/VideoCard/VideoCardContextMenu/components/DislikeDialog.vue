@@ -149,7 +149,7 @@ onKeyStroke((e: KeyboardEvent) => {
         v-for="(reason, index) in dislikeReasons"
         :key="reason.id"
         :class="{ 'activated-dislike-reason': isSelected(ThreePointV2Type.Dislike, reason) }"
-        p="x-6 y-4" rounded="$bew-radius" cursor-pointer bg="$bew-fill-1 hover:$bew-fill-2"
+        p="x-6 y-4" rounded="$bew-interactive-radius" cursor-pointer bg="$bew-fill-1 hover:$bew-fill-2"
         flex="~ gap-2 items-center justify-between"
         @click="selectOption(ThreePointV2Type.Dislike, reason)"
       >
@@ -175,7 +175,7 @@ onKeyStroke((e: KeyboardEvent) => {
           v-for="(reason, index) in feedbackReasons"
           :key="reason.id"
           :class="{ 'activated-dislike-reason': isSelected(ThreePointV2Type.Feedback, reason) }"
-          p="x-6 y-4" rounded="$bew-radius" cursor-pointer bg="$bew-fill-1 hover:$bew-fill-2"
+          p="x-6 y-4" rounded="$bew-interactive-radius" cursor-pointer bg="$bew-fill-1 hover:$bew-fill-2"
           flex="~ gap-2 items-center justify-between"
           @click="selectOption(ThreePointV2Type.Feedback, reason)"
         >

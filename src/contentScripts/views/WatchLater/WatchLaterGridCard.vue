@@ -129,7 +129,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
   padding: var(--bew-space-2);
   flex-direction: column;
   gap: var(--bew-space-3);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   content-visibility: auto;
   contain: layout style;
   transition:
@@ -147,7 +147,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
   aspect-ratio: var(--bew-video-cover-aspect-ratio);
   overflow: hidden;
   background: var(--bew-skeleton);
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-thumb-radius);
   corner-shape: var(--bew-corner-shape);
 }
 

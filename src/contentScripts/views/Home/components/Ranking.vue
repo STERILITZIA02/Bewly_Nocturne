@@ -13,6 +13,7 @@ import api from '~/utils/api'
 import { getListGridColumnCount } from '~/utils/gridLayout'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { reportRuntimeFailure } from '~/utils/messaging'
+import { isPortraitDimension } from '~/utils/portraitMedia'
 
 import type { RankingType } from '../types'
 
@@ -156,6 +157,7 @@ function transformRankingVideo(item: RankingVideoItem, rank: number): Video {
     bvid: item.bvid,
     rank,
     cid: item.cid,
+    portrait: isPortraitDimension(item.dimension),
     threePointV2: [],
   }
 }
@@ -293,7 +295,7 @@ defineExpose({ initData })
               :class="{ active: activatedRankingType.id === rankingType.id }"
               px-4 lh-36px h-36px hover:bg="$bew-fill-2" w-full
               text-left
-              block rounded="$bew-radius" cursor-pointer transition="background-color duration-200, color duration-200, box-shadow duration-200, transform duration-200"
+              block rounded="$bew-interactive-radius" cursor-pointer transition="background-color duration-200, color duration-200, box-shadow duration-200, transform duration-200"
               un-text="$bew-text-1"
               @click="activatedRankingType = rankingType"
             >

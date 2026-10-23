@@ -606,7 +606,7 @@ function handleClearKeyword() {
         v-if="isFocus && keyword"
         type="button"
         :aria-label="$t('search_bar.clear_keyword')"
-        pos="absolute right-12" bg="$bew-fill-1 hover:$bew-fill-2" text="xs" rounded="$bew-radius-half"
+        pos="absolute right-12" bg="$bew-fill-1 hover:$bew-fill-2" text="xs" rounded="$bew-interactive-radius"
         p-1
         flex="~ items-center justify-between"
         @click="handleClearKeyword"
@@ -619,7 +619,7 @@ function handleClearKeyword() {
         class="search-submit-btn bew-shape-circle"
         :aria-label="$t('search_bar.submit')"
         p-2
-        rounded-full
+        rounded="$bew-pill-radius"
         text="lg leading-0"
         border-none
         outline-none
@@ -701,7 +701,7 @@ function handleClearKeyword() {
             <div class="title p-2 pb-0 flex justify-between">
               <span>{{ $t('search_bar.history_title') }}</span>
               <button
-                type="button" class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-text-1" text="base $bew-text-2" :disabled="historyChanging || historyLoading"
+                type="button" class="rounded-$bew-interactive-radius duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-text-1" text="base $bew-text-2" :disabled="historyChanging || historyLoading"
                 @click="handleClearSearchHistory"
               >
                 {{ $t('search_bar.clear_history') }}
@@ -955,7 +955,7 @@ function handleClearKeyword() {
   }
 
   @mixin search-content-item {
-    --uno: "px-4 py-2 w-full rounded-$bew-radius duration-300 cursor-pointer not-first:mt-1 tracking-wider hover:bg-$bew-fill-2";
+    --uno: "px-4 py-2 w-full rounded-$bew-interactive-radius duration-300 cursor-pointer not-first:mt-1 tracking-wider hover:bg-$bew-fill-2";
   }
 
   .search-dropdown {
@@ -1033,7 +1033,7 @@ function handleClearKeyword() {
       .history-item-container {
         .history-item {
           --uno: "relative cursor-pointer duration-300";
-          --uno: "py-2 px-6 bg-$bew-fill-1 hover:bg-$bew-theme-surface hover:text-$bew-theme-foreground rounded-$bew-radius-half";
+          --uno: "py-2 px-6 bg-$bew-fill-1 hover:bg-$bew-theme-surface hover:text-$bew-theme-foreground rounded-$bew-interactive-radius";
 
           .history-item__link {
             min-width: 0;

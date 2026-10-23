@@ -747,7 +747,7 @@ onBeforeUnmount(() => {
     padding: var(--bew-space-2) var(--bew-space-4);
     color: var(--bew-text-1);
     background: var(--bew-selected-bg);
-    border-radius: var(--bew-badge-radius);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
     box-shadow: var(--bew-shadow-2);
     font-size: var(--bew-font-size-control);
@@ -759,7 +759,7 @@ onBeforeUnmount(() => {
 .layout-editor-outline {
   position: fixed;
   box-sizing: border-box;
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   pointer-events: none;
   transition:
@@ -790,7 +790,7 @@ onBeforeUnmount(() => {
   color: var(--bew-text-1);
   background: var(--bew-elevated-alt-solid);
   border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-popover-radius);
+  border-radius: var(--bew-surface-radius);
   box-shadow: var(--bew-shadow-4);
   pointer-events: auto;
 }

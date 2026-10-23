@@ -237,7 +237,7 @@ watch(() => props.item.id, () => {
   width: calc(var(--bew-space-10) * 2);
   height: var(--bew-space-12);
   object-fit: cover;
-  border-radius: var(--bew-radius-sm);
+  border-radius: var(--bew-radius-tiny);
   corner-shape: var(--bew-corner-shape);
 }
 

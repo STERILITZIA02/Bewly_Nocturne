@@ -194,7 +194,7 @@ onBeforeUnmount(() => {
   inset: auto var(--bew-space-2) var(--bew-space-2);
   height: var(--bew-space-1);
   overflow: hidden;
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   background: rgb(255 255 255 / 35%);
   pointer-events: none;
 

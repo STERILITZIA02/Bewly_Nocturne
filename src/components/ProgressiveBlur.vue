@@ -9,7 +9,7 @@ const props = withDefaults(defineProps<{
   edge: ProgressiveBlurEdge
   /** CSS length at the strongest point; defaults to the global frosted-glass radius. */
   radius?: string
-  /** Fades the layers themselves: an ancestor with opacity < 1 would stop the blur. */
+  /** Fades the layers themselves (over `--bew-progressive-blur-fade`, default fast): an ancestor with opacity < 1 would stop the blur. */
   visible?: boolean
 }>(), { visible: true })
 
@@ -56,7 +56,7 @@ if (import.meta.env.DEV) {
   inset: 0;
   border-radius: inherit;
   corner-shape: inherit;
-  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+  transition: opacity var(--bew-progressive-blur-fade, var(--bew-duration-fast)) var(--bew-ease-standard);
 }
 
 .bew-progressive-blur__layer.is-hidden {

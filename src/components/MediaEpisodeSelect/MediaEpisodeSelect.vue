@@ -262,7 +262,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
   .episode-badge {
     flex-shrink: 0;
     padding: var(--bew-space-0-5) var(--bew-space-2);
-    border-radius: var(--bew-badge-radius);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
     background: var(--bew-theme-surface-hover);
     color: var(--bew-on-theme-surface);

@@ -152,7 +152,7 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
           <div
             class="bew-settings-option--lift"
             data-setting-id="navigation.topBar.mode"
-            flex="~ gap-2 justify-between items-center wrap" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-radius"
+            flex="~ gap-2 justify-between items-center wrap" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-interactive-radius"
             mb-2
           >
             <div flex="~ gap-2 items-center">
@@ -182,7 +182,7 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
             <template #item="{ element }">
               <div
                 class="bew-settings-option--lift"
-                flex="~ gap-2 justify-between items-center wrap" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-radius" cursor-all-scroll
+                flex="~ gap-2 justify-between items-center wrap" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-interactive-radius" cursor-all-scroll
                 duration-300
                 :style="{
                   background: element.visible ? 'var(--bew-theme-surface)' : 'var(--bew-fill-1)',

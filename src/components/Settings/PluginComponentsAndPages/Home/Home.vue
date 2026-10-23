@@ -444,7 +444,7 @@ function handleToggleHomeTab(tab: any) {
                 :title="$t('settings.reorder_keyboard_hint')"
                 aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
                 class="bew-settings-option--lift"
-                flex="~ gap-2 items-center" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-radius" cursor-all-scroll
+                flex="~ gap-2 items-center" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-interactive-radius" cursor-all-scroll
                 duration-300
                 :style="{
                   background: element.visible ? 'var(--bew-theme-surface)' : 'var(--bew-fill-1)',

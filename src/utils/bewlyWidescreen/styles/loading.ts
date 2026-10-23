@@ -113,7 +113,7 @@ export function injectLoadingStyle() {
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-progress {
       width: 100%;
       height: var(--bew-space-1, 4px);
-      border-radius: var(--bew-radius-full);
+      border-radius: var(--bew-pill-radius);
       corner-shape: var(--bew-corner-shape-round, round);
     }
 
@@ -145,7 +145,7 @@ export function injectLoadingStyle() {
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-time {
       width: calc(var(--bew-space-12, 48px) + var(--bew-space-3, 12px));
       height: var(--bew-space-3, 12px);
-      border-radius: var(--bew-radius-sm, 4px);
+      border-radius: var(--bew-radius-tiny, 4px);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -157,7 +157,7 @@ export function injectLoadingStyle() {
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-control-label {
       width: var(--bew-space-10, 40px);
       height: var(--bew-space-3, 12px);
-      border-radius: var(--bew-radius-sm, 4px);
+      border-radius: var(--bew-radius-tiny, 4px);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -165,14 +165,14 @@ export function injectLoadingStyle() {
       min-width: var(--bew-space-12, 48px);
       height: var(--bew-control-height, 36px);
       flex: 1 1 auto;
-      border-radius: var(--bew-radius-full);
+      border-radius: var(--bew-pill-radius);
       corner-shape: var(--bew-corner-shape-round, round);
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-send {
       width: var(--bew-space-12, 48px);
       height: var(--bew-control-height, 36px);
-      border-radius: var(--bew-radius-full);
+      border-radius: var(--bew-pill-radius);
       corner-shape: var(--bew-corner-shape-round, round);
     }
 
@@ -225,7 +225,7 @@ export function injectLoadingStyle() {
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-line {
       width: 100%;
       height: var(--bew-space-3, 12px);
-      border-radius: var(--bew-radius-sm, 4px);
+      border-radius: var(--bew-radius-tiny, 4px);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -328,7 +328,7 @@ export function injectLoadingStyle() {
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-tab {
       height: var(--bew-space-3, 12px);
-      border-radius: var(--bew-radius-sm, 4px);
+      border-radius: var(--bew-radius-tiny, 4px);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -352,7 +352,7 @@ export function injectLoadingStyle() {
         var(--bew-line-height-body, 24px) * 2 + var(--bew-space-1, 4px) * 2 + var(--bew-space-2, 8px)
         + var(--bew-control-height-sm, 28px) + var(--bew-space-3, 12px) * 2 + 2px
       );
-      border-radius: var(--bew-composer-radius, 32px);
+      border-radius: var(--bew-shell-radius, 32px);
       corner-shape: var(--bew-corner-shape);
     }
 

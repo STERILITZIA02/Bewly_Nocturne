@@ -73,7 +73,7 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
   overflow: hidden;
   padding: var(--bew-space-4);
   border: 1px solid var(--bew-message-card-border);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   color: var(--bew-text-1);
 }

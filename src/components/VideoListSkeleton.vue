@@ -87,7 +87,7 @@ withDefaults(defineProps<{
   align-items: flex-start;
   width: 100%;
   min-width: 0;
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 

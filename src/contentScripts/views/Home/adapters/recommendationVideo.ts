@@ -77,6 +77,7 @@ export function transformAppVideo(item: AppVideoItem): VideoCardDisplayData {
     danmakuStr: item.cover_left_text_2,
     cid: item?.player_args?.cid,
     goto: item.card_goto,
+    portrait: type === 'vertical',
     param: item?.param,
     trackId: item?.track_id,
     url: item.card_goto === 'bangumi' ? getAppBangumiUrl(item.uri) : '',

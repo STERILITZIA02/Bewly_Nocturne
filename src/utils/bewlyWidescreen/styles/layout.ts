@@ -16,7 +16,7 @@ import { PHOTO_VIEWER_SELECTOR } from '~/utils/photoViewer'
  */
 const PLAYER_POPOVER_SURFACE = `background: var(--bew-elevated-alt-solid) !important;
       border: 1px solid var(--bew-surface-border-color) !important;
-      border-radius: var(--bew-popover-radius) !important;
+      border-radius: var(--bew-surface-radius) !important;
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-popover-surface-shadow) !important;
       backdrop-filter: none !important;`
@@ -1169,7 +1169,7 @@ export function injectLayoutStyle() {
       color: var(--bew-on-overlay-color) !important;
       background: var(--bew-overlay-background) !important;
       border: 0 !important;
-      border-radius: var(--bew-badge-radius) !important;
+      border-radius: var(--bew-pill-radius) !important;
       corner-shape: var(--bew-corner-shape-round);
       box-shadow: none !important;
       backdrop-filter: none !important;
@@ -1379,7 +1379,7 @@ export function injectLayoutStyle() {
       color: var(--bew-text-1) !important;
       background: transparent !important;
       backdrop-filter: none !important;
-      border-radius: var(--bew-radius-full) !important;
+      border-radius: var(--bew-pill-radius) !important;
       corner-shape: var(--bew-corner-shape-round);
       overflow: visible !important;
       transition:
@@ -1516,7 +1516,7 @@ export function injectLayoutStyle() {
       display: none !important;
       z-index: var(--bew-z-popover) !important;
       background: transparent !important;
-      border-radius: var(--bew-popover-radius) !important;
+      border-radius: var(--bew-surface-radius) !important;
       corner-shape: var(--bew-corner-shape);
       box-shadow: none !important;
     }
@@ -1973,7 +1973,7 @@ export function injectLayoutStyle() {
       height: auto !important;
       aspect-ratio: 3 / 4;
       margin: 0 !important;
-      border-radius: var(--bew-media-radius) !important;
+      border-radius: var(--bew-thumb-radius) !important;
       corner-shape: var(--bew-corner-shape);
       overflow: hidden;
     }
@@ -2033,7 +2033,7 @@ export function injectLayoutStyle() {
     #${ROOT_ID}[data-page-kind="pgc"] :is([class*="follow_followOptions"], [class*="share_shareMenu"]) {
       color: var(--bew-text-1) !important;
       background: var(--bew-elevated-solid) !important;
-      border-radius: var(--bew-popover-radius) !important;
+      border-radius: var(--bew-surface-radius) !important;
       backdrop-filter: none !important;
       z-index: 2;
     }
@@ -2283,7 +2283,7 @@ export function injectLayoutStyle() {
       color: var(--bew-text-2) !important;
       background: var(--bew-fill-1) !important;
       border: 0 !important;
-      border-radius: var(--bew-badge-radius) !important;
+      border-radius: var(--bew-pill-radius) !important;
       corner-shape: var(--bew-corner-shape-round);
       font-size: var(--bew-font-size-control) !important;
       font-weight: var(--bew-font-weight-regular) !important;
@@ -2323,7 +2323,7 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-tags-slot .tag-link:focus-visible {
       outline: var(--bew-focus-ring, 1px solid CanvasText);
       outline-offset: 2px;
-      border-radius: var(--bew-badge-radius);
+      border-radius: var(--bew-pill-radius);
     }
 
     #${ROOT_ID} .bewly-widescreen-description-slot.is-empty {
@@ -2418,7 +2418,7 @@ export function injectLayoutStyle() {
       padding: 0 var(--bew-space-3);
       color: var(--bewly-widescreen-text-secondary);
       background: var(--bewly-widescreen-control-bg);
-      border-radius: var(--bew-badge-radius);
+      border-radius: var(--bew-pill-radius);
       corner-shape: var(--bew-corner-shape-round);
       font-size: var(--bew-font-size-caption);
       font-weight: var(--bew-font-weight-medium);
@@ -3176,7 +3176,7 @@ export function injectLayoutStyle() {
       overflow-y: auto;
       overscroll-behavior: contain;
       background: var(--bew-elevated-solid) !important;
-      border-radius: var(--bew-popover-radius);
+      border-radius: var(--bew-surface-radius);
       color: var(--bew-text-1);
     }
 
@@ -3234,7 +3234,7 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__block {
       display: block;
       height: var(--bew-space-3, 12px);
-      border-radius: var(--bew-radius-sm);
+      border-radius: var(--bew-radius-tiny);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -3521,7 +3521,7 @@ export function injectLayoutStyle() {
       margin: 0 calc(var(--bew-space-1) * -1) !important;
       padding: var(--bew-space-1) !important;
       background: transparent !important;
-      border-radius: calc(var(--bew-media-radius) + var(--bew-space-1)) !important;
+      border-radius: calc(var(--bew-thumb-radius) + var(--bew-space-1)) !important;
       corner-shape: var(--bew-corner-shape);
       transition: background-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
     }
@@ -3541,7 +3541,7 @@ export function injectLayoutStyle() {
       height: auto !important;
       aspect-ratio: 16 / 9;
       margin: 0 !important;
-      border-radius: var(--bew-media-radius) !important;
+      border-radius: var(--bew-thumb-radius) !important;
       corner-shape: var(--bew-corner-shape);
       overflow: hidden !important;
     }
@@ -3754,16 +3754,16 @@ export function injectLayoutStyle() {
       width: var(--bew-space-8);
       height: var(--bew-space-8);
       flex: none;
-      border-radius: var(--bew-radius-full);
+      border-radius: var(--bew-pill-radius);
     }
     #${ROOT_ID} .bewly-widescreen-panel-skeleton__content {
       flex: 1;
       min-width: 0;
       height: var(--bew-space-12);
-      border-radius: var(--bew-radius-sm);
+      border-radius: var(--bew-radius-tiny);
     }
     #${ROOT_ID} [data-kind="playlist"] .bewly-widescreen-panel-skeleton__leading {
-      border-radius: var(--bew-radius-sm);
+      border-radius: var(--bew-radius-tiny);
     }
 
     #${ROOT_ID} .bewly-widescreen-empty {

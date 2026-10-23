@@ -163,7 +163,7 @@ const privateShare = computed(() => {
   min-height: var(--bew-control-height);
   padding: var(--bew-space-2) var(--bew-space-3);
   border: 0;
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   background: var(--bew-fill-1);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-control);
@@ -222,7 +222,7 @@ const privateShare = computed(() => {
   color: var(--bew-text-1);
   background: transparent;
   border: 1px solid var(--bew-message-card-border);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 
   h2 {
@@ -415,7 +415,7 @@ const privateShare = computed(() => {
   content: "";
   width: var(--bew-space-2);
   height: var(--bew-space-2);
-  border-radius: var(--bew-radius-sm);
+  border-radius: var(--bew-radius-tiny);
   background: var(--bew-chart-primary);
 }
 .conversation-insights__key--secondary::before {
@@ -457,7 +457,7 @@ const privateShare = computed(() => {
   padding: 0 var(--bew-space-2);
   color: var(--bew-text-1);
   background: var(--bew-selected-bg);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
 }

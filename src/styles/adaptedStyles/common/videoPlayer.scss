@@ -104,7 +104,7 @@
     max-width: min(240px, calc(100vw - var(--bew-space-4)));
     overflow: hidden;
     padding: var(--bew-space-1) var(--bew-space-2);
-    border-radius: var(--bew-radius-sm);
+    border-radius: var(--bew-radius-tiny);
     color: #fff;
     background: rgb(0 0 0 / 80%);
     box-shadow: var(--bew-shadow-1);
@@ -246,7 +246,7 @@
   padding: var(--bew-space-2) var(--bew-space-3);
   background: rgb(8 8 8 / 75%);
   color: white;
-  border-radius: var(--bew-radius-sm);
+  border-radius: var(--bew-radius-tiny);
   corner-shape: var(--bew-corner-shape);
   font-size: var(--bew-font-size-heading);
   line-height: var(--bew-line-height-heading);

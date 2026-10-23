@@ -87,7 +87,7 @@ defineExpose({ focus })
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
   border: 1px solid var(--bew-input-border-color);
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   background: var(--bew-content-solid);
 }
@@ -120,7 +120,7 @@ defineExpose({ focus })
   height: var(--bew-control-item-height);
   padding: 0;
   border: 0;
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   color: var(--bew-text-2);
   background: transparent;
   transition: color var(--bew-duration-normal) var(--bew-ease-standard);

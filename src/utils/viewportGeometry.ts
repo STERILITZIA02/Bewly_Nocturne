@@ -136,3 +136,16 @@ export function invalidateViewportGeometry(element: HTMLElement | null | undefin
 export function getRemainingScroll(geometry: ViewportGeometry) {
   return geometry.scrollHeight - geometry.clientHeight - geometry.scrollTop
 }
+
+/**
+ * Border-box height from layout. Unlike a rect it ignores transforms on the
+ * element and its ancestors, so a card's hover scale never inflates it.
+ */
+export function getLayoutHeight(element: HTMLElement) {
+  const style = getComputedStyle(element)
+  const height = Number.parseFloat(style.height) || 0
+  if (style.boxSizing === 'border-box')
+    return height
+  return height + [style.paddingTop, style.paddingBottom, style.borderTopWidth, style.borderBottomWidth]
+    .reduce((total, value) => total + (Number.parseFloat(value) || 0), 0)
+}

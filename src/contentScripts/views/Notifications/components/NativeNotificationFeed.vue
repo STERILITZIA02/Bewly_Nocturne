@@ -547,7 +547,7 @@ defineExpose({ refresh })
   text-decoration: none;
   background: var(--bew-content-solid);
   border: 0;
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
 }
 

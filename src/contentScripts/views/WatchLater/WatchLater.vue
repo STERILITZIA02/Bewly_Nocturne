@@ -726,7 +726,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                 <section
                   :inert="batch.managing.value ? true : undefined"
                   class="watch-later-list-card__content"
-                  rounded="$bew-radius"
+                  rounded="$bew-thumb-radius"
                   flex="~ gap-6 col md:col lg:row items-start"
                   relative
                   group-hover:bg="$bew-fill-2"
@@ -740,7 +740,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                     bg="$bew-skeleton"
                     w="full md:full lg:250px"
                     flex="shrink-0"
-                    rounded="$bew-radius"
+                    rounded="$bew-thumb-radius"
                     overflow-hidden
                     style="aspect-ratio: var(--bew-video-cover-aspect-ratio)"
                   >
@@ -761,7 +761,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                   m="2"
                   p="x-2 y-1"
                   text="white xs"
-                  rounded="$bew-radius-half"
+                  rounded="$bew-interactive-radius"
                 >
                   {{ calcCurrentTime(item.duration) }}
                 </div> -->
@@ -772,7 +772,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                       m="2"
                       p="x-2 y-1"
                       text="white xs"
-                      rounded="$bew-radius-half"
+                      rounded="$bew-interactive-radius"
                     >
                       <!--  When progress = -1 means that the user watched the full video -->
                       {{
@@ -813,7 +813,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                         items-center
                         cursor-pointer
                         w-fit
-                        rounded="$bew-radius"
+                        rounded="$bew-interactive-radius"
                         hover:color="$bew-theme-foreground"
                         hover:bg="$bew-theme-surface"
                         duration-300

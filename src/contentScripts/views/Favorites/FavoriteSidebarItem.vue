@@ -95,7 +95,7 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
 .favorite-sidebar-item {
   flex: none;
   min-width: 0;
-  border-radius: var(--bew-radius-xl);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   color: var(--bew-sidebar-secondary);
   transition:
@@ -140,7 +140,7 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
   height: var(--bew-space-12);
   overflow: hidden;
   // The 8px inset and 8px cover radius nest inside the 16px row radius.
-  border-radius: var(--bew-radius-md);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   color: var(--bew-text-2);
   background: var(--bew-content-alt-solid);

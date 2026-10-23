@@ -44,7 +44,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
 
 .bangumi-card-skeleton__media {
   width: 100% !important;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-thumb-radius);
   overflow: hidden;
 }
 

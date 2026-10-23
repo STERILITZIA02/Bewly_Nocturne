@@ -15,7 +15,7 @@ import api from '~/utils/api'
 import type { AppFeedFeedbackSelection } from '~/utils/appFeedFeedback'
 import { getAppFeedFeedbackTarget, isSameAppFeedFeedbackTarget, submitAppFeedFeedback } from '~/utils/appFeedFeedback'
 import { captureAppAuth, ensureFreshAppAccessToken } from '~/utils/authProvider'
-import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
+import { getContextMenuPlacement } from '~/utils/floatingMenu'
 import { getUserID, removeHttpFromUrl } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { openLinkInBackground } from '~/utils/tabs'
@@ -445,26 +445,11 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   }
 
   function openContextMenu(event: MouseEvent) {
-    const target = event.target instanceof Element ? event.target : null
-    contextMenuTrigger = target?.closest<HTMLElement>('a[href], button') ?? null
+    const placement = getContextMenuPlacement(event)
+    contextMenuTrigger = placement.trigger
     contextMenuLayoutTarget.value = findLayoutEditableTarget(event.composedPath())
-    // The keyboard context-menu key reports no pointer position; anchor to the focused element instead.
-    const fromPointer = event.clientX !== 0 || event.clientY !== 0
-    const rect = (contextMenuTrigger ?? target)?.getBoundingClientRect()
-    const x = fromPointer || !rect ? event.clientX : rect.left
-    const y = fromPointer || !rect ? event.clientY : rect.bottom
-    const position = computeFloatingMenuPosition({ top: y, bottom: y, left: x, right: x }, window.innerWidth, window.innerHeight, { gap: 0, align: 'start' })
-
     showVideoOptions.value = false
-    videoOptionsFloatingStyles.value = {
-      position: 'fixed',
-      top: position.top,
-      bottom: position.bottom,
-      left: position.left,
-      width: position.width,
-      maxHeight: position.maxHeight,
-      transformOrigin: position.direction === 'up' ? 'bottom left' : 'top left',
-    }
+    videoOptionsFloatingStyles.value = placement.styles
     showVideoOptions.value = true
   }
 

@@ -115,7 +115,7 @@ function acknowledgeCurrentVersion() {
   color: var(--bew-on-theme-color);
   background: var(--bew-theme-color);
   border: 1px solid var(--bew-theme-color);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: round;
   box-shadow: var(--bew-shadow-2);
   cursor: pointer;
@@ -198,7 +198,7 @@ function acknowledgeCurrentVersion() {
   background: var(--bew-fill-1);
   box-sizing: border-box;
   border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   transition:
     color 160ms ease,

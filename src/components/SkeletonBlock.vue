@@ -50,11 +50,11 @@ onBeforeUnmount(() => releaseVisibility?.())
 }
 
 .bew-skeleton-block--sm {
-  border-radius: var(--bew-radius-sm);
+  border-radius: var(--bew-radius-tiny);
   corner-shape: var(--bew-corner-shape);
 }
 .bew-skeleton-block--half {
-  border-radius: var(--bew-radius-half);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -69,22 +69,22 @@ onBeforeUnmount(() => releaseVisibility?.())
 }
 
 .bew-skeleton-block--media {
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-thumb-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
 .bew-skeleton-block--card {
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
 .bew-skeleton-block--panel {
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
 .bew-skeleton-block--full {
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
 }
 

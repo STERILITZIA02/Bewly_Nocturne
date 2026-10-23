@@ -156,7 +156,7 @@ function select(value: string) {
     height: var(--bew-space-12);
     flex: none;
     object-fit: cover;
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
   }
   &:hover strong {
@@ -186,7 +186,7 @@ function select(value: string) {
   em,
   i {
     padding: var(--bew-space-0-5) var(--bew-space-1);
-    border-radius: var(--bew-radius-sm);
+    border-radius: var(--bew-radius-tiny);
     font-size: var(--bew-font-size-caption);
     font-weight: var(--bew-font-weight-medium);
     font-style: normal;

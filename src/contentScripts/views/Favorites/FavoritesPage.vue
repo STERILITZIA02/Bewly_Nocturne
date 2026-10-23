@@ -1106,7 +1106,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   width: 100%;
   min-height: calc(var(--bew-space-12) + var(--bew-space-4));
   border: 0;
-  border-radius: var(--bew-radius-xl);
+  border-radius: var(--bew-surface-radius);
   color: var(--bew-sidebar-text);
   background: var(--bew-sidebar-control);
   cursor: pointer;
@@ -1143,7 +1143,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   min-height: var(--bew-control-item-height);
   padding: 0 var(--bew-space-3);
   border: 0;
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-1);
   background: var(--bew-hover-bg);
@@ -1193,7 +1193,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   padding: 0;
   color: var(--bew-sidebar-text);
   border: 0;
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   background: var(--bew-sidebar-control);
   cursor: pointer;
   transition:
@@ -1473,7 +1473,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
   &::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.35);
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
   }
 
   &::-webkit-scrollbar-corner {

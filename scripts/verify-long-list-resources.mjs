@@ -61,6 +61,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       'vue-toastification': { useToast: () => ({ error: noop }) },
       '~/components/MomentCard/momentForwardContent': { createMomentDisclosureCache: () => ({ clear: noop }), MOMENT_DISCLOSURES: Symbol('disclosures') },
       '~/components/MomentCard/momentForwardTransactions': { createMomentForwardTransactions: () => ({ dispose: noop, invalidate: noop }), MOMENT_FORWARD_TRANSACTIONS: Symbol('transactions') },
+      '~/components/MomentCard/utils': { getMomentSkeletonVariant: () => 'text' },
       '~/composables/useAppProvider': { useBewlyApp: () => appState },
       '~/constants/layout': {},
       '~/logic': { settings: Vue.ref({}) },

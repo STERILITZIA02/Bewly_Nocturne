@@ -52,14 +52,14 @@ html.bewly-design.notificationsPage {
     .message-aside,
     .message-main {
       background: var(--bew-content-solid);
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
     .message-main .message-header {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
       box-shadow: none;
     }
@@ -769,7 +769,7 @@ html.notificationsPage.bewly-notifications-embedded {
     color: var(--bew-text-1) !important;
     background: var(--bew-elevated-solid) !important;
     border: 0;
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     box-shadow: none;
   }
@@ -779,7 +779,7 @@ html.notificationsPage.bewly-notifications-embedded {
     color: var(--bew-text-1) !important;
     background-color: var(--bew-selected-bg) !important;
     border: 0;
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     box-shadow: none;
   }
@@ -871,7 +871,7 @@ html.notificationsPage.bewly-notifications-embedded {
     color: var(--bew-text-1) !important;
     background: var(--bew-elevated-solid) !important;
     border: 1px solid var(--bew-surface-border-color) !important;
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     box-shadow: var(--bew-shadow-3);
   }
@@ -890,7 +890,7 @@ html.notificationsPage.bewly-notifications-embedded {
     color: var(--bew-text-1) !important;
     background: var(--bew-elevated-solid) !important;
     border-color: var(--bew-surface-border-color) !important;
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     box-shadow: none !important;
   }
@@ -900,7 +900,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .share-card img,
   .share-card .cover,
   .notify-push img {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -928,7 +928,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .medal-master {
     color: var(--bew-text-1) !important;
     background: var(--bew-selected-bg) !important;
-    border-radius: var(--bew-badge-radius);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -944,7 +944,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .list-container::-webkit-scrollbar-thumb,
   .context-menu::-webkit-scrollbar-thumb {
     background: var(--bew-fill-2);
-    border-radius: var(--bew-badge-radius);
+    border-radius: var(--bew-pill-radius);
   }
 
   &.disable-frosted-glass {

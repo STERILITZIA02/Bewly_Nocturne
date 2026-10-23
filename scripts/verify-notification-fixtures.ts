@@ -219,7 +219,7 @@ verify('all Native Feed items share a themed reading surface without per-row gla
     assert.match(source, /native-notification-surface bew-shape-smooth-rect/)
   }
   assert.match(mainStyles, /\.native-notification-surface \{[\s\S]{0,420}background: var\(--bew-notifications-card-background\)/)
-  assert.match(mainStyles, /border-radius: var\(--bew-card-radius\)/)
+  assert.match(mainStyles, /border-radius: var\(--bew-surface-radius\)/)
   const surface = mainStyles.slice(mainStyles.indexOf('.native-notification-surface {'), mainStyles.indexOf('// Interaction content'))
   assert.doesNotMatch(surface, /backdrop-filter/)
   assert.match(surface, /box-shadow: none/)

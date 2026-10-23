@@ -893,7 +893,6 @@ onBeforeUnmount(() => {
 }
 .moment-comments {
   padding: 0 var(--bew-space-4) var(--bew-space-4);
-  border-top: 1px solid var(--bew-border-color);
   color: var(--bew-text-1);
   background: transparent;
 }
@@ -996,9 +995,9 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: var(--bew-space-2);
 }
+// Threads are set apart by spacing alone; the Moments page draws no dividers.
 .moment-comments__thread + .moment-comments__thread {
   padding-top: var(--bew-space-3);
-  border-top: 1px solid var(--bew-border-color);
 }
 .moment-comments__item {
   position: relative;
@@ -1110,10 +1109,9 @@ onBeforeUnmount(() => {
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
 }
-// Appended rows continue the thread separators of the loaded list.
+// Appended rows keep the thread spacing of the loaded list.
 .moment-comments__loading-more {
   flex: none;
   padding-top: var(--bew-space-3);
-  border-top: 1px solid var(--bew-border-color);
 }
 </style>

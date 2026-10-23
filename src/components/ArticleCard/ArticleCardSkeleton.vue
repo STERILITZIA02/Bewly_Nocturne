@@ -25,7 +25,7 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
   --uno: "gap-4 p-4";
   display: flex;
   box-sizing: border-box;
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-elevated);
 }

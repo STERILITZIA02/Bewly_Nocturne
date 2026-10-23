@@ -147,7 +147,7 @@ watch(() => [props.accountId, props.business], () => {
   margin-top: var(--bew-space-3);
   overflow: hidden;
   border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-popover-radius);
+  border-radius: var(--bew-surface-radius);
   background: var(--bew-popover-surface-background-solid);
   box-shadow: var(--bew-popover-surface-shadow);
   corner-shape: var(--bew-corner-shape);

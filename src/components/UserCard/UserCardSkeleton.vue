@@ -26,7 +26,7 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
   min-width: 0;
   min-height: 128px;
   padding: var(--bew-card-inset);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-elevated);
 }

@@ -160,7 +160,7 @@ function toggleAll() {
   &__track {
     height: var(--bew-space-2);
     background: var(--bew-fill-2);
-    border-radius: var(--bew-badge-radius);
+    border-radius: var(--bew-pill-radius);
     overflow: hidden;
   }
   &__items {
@@ -171,7 +171,7 @@ function toggleAll() {
     overflow: auto;
     overscroll-behavior: contain;
     background: var(--bew-content-solid);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
   }
   li {
     display: flex;

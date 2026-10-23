@@ -123,7 +123,7 @@ html.bewly-design[data-bewly-native-site="game-wiki"] {
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-popover-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     a {
@@ -186,7 +186,7 @@ html.bewly-design[data-bewly-native-site="game-wiki"] {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -213,7 +213,7 @@ html.bewly-design[data-bewly-native-site="game-wiki"] {
   }
 
   :is(.bwiki-swiper:not(.bwiki-swiper-thumbs), .banner-b, .game-pic) {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -423,7 +423,7 @@ html.bewly-design[data-bewly-native-site="game-gifts"] {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     &:hover {
@@ -454,7 +454,7 @@ html.bewly-design[data-bewly-native-site="game-gifts"] {
 
     > .img {
       background-color: var(--bew-content-alt-solid);
-      border-radius: var(--bew-media-radius);
+      border-radius: var(--bew-thumb-radius);
       corner-shape: var(--bew-corner-shape);
 
       > img {
@@ -481,19 +481,19 @@ html.bewly-design[data-bewly-native-site="game-gifts"] {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
       border-color: var(--bew-border-color);
-      border-radius: var(--bew-radius-full);
+      border-radius: var(--bew-pill-radius);
       corner-shape: var(--bew-corner-shape-round);
     }
   }
 
   .bui-container .gift-recommend .gift-box > .img {
-    border-radius: var(--bew-media-radius) var(--bew-media-radius) 0 0;
+    border-radius: var(--bew-thumb-radius) var(--bew-thumb-radius) 0 0;
   }
 
   .pop-nav {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -514,7 +514,7 @@ html.bewly-design[data-bewly-native-site="game-gifts"] {
   }
 
   .g-list .gift-box > .img {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -555,7 +555,7 @@ html.bewly-design[data-bewly-native-site="game-gifts"] {
     .awards li .img {
       background-color: var(--bew-content-alt-solid);
       border: 0;
-      border-radius: var(--bew-media-radius);
+      border-radius: var(--bew-thumb-radius);
       corner-shape: var(--bew-corner-shape);
     }
   }
@@ -596,7 +596,7 @@ html.bewly-design[data-bewly-native-site="game-payment"] {
       gap: var(--bew-space-2);
       background: var(--bew-content-solid);
       color: var(--bew-text-1);
-      border-radius: var(--bew-card-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
 
       &:hover {
@@ -606,7 +606,7 @@ html.bewly-design[data-bewly-native-site="game-payment"] {
       .icon {
         flex-shrink: 0;
         margin: 0;
-        border-radius: var(--bew-media-radius);
+        border-radius: var(--bew-thumb-radius);
         corner-shape: var(--bew-corner-shape);
       }
 

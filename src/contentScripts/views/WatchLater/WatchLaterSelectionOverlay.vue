@@ -17,7 +17,7 @@ defineEmits<{ (event: 'toggle'): void }>()
   position: absolute;
   inset: 0;
   z-index: 3;
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
 .watch-later-selection input {

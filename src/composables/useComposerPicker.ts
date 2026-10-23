@@ -1,9 +1,10 @@
 import type { Ref } from 'vue'
-import { watch } from 'vue'
+import { inject, watch } from 'vue'
 
 import { computeAnchoredFloatingMenuPosition, computeAnchoredPopoverPosition } from '~/utils/floatingMenu'
 
 import { useAnchoredPopoverPosition } from './useAnchoredPopoverPosition'
+import { HOVER_LIFT_HOLD } from './useHoverLiftHold'
 
 /** Auxiliary editors escape the card without resizing its scrollable content. */
 export function useComposerPicker(
@@ -12,6 +13,7 @@ export function useComposerPicker(
   visible: Readonly<Ref<boolean>>,
   dismiss: () => void,
 ) {
+  const holdLift = inject(HOVER_LIFT_HOLD, undefined)
   useAnchoredPopoverPosition(panel, popup, visible, (bounds, size, width, height) => {
     const maximumHeight = Number.parseFloat(getComputedStyle(panel.value!).getPropertyValue('--bew-moment-forward-picker-max-height')) || size.height
     const position = computeAnchoredFloatingMenuPosition(bounds, maximumHeight, width, height, maximumHeight)
@@ -25,12 +27,16 @@ export function useComposerPicker(
   watch(visible, (open, _previous, onCleanup) => {
     if (!open)
       return
+    holdLift?.(true)
     const dismissOutside = (event: PointerEvent) => {
       const path = event.composedPath()
       if (!path.includes(panel.value!) && !path.includes(popup.value!))
         dismiss()
     }
     document.addEventListener('pointerdown', dismissOutside, true)
-    onCleanup(() => document.removeEventListener('pointerdown', dismissOutside, true))
+    onCleanup(() => {
+      document.removeEventListener('pointerdown', dismissOutside, true)
+      holdLift?.(false)
+    })
   }, { immediate: true })
 }

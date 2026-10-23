@@ -1096,7 +1096,7 @@ onUnmounted(() => {
   }
 
   .divider {
-    --uno: "my-1 mx-3 h-3px bg-$bew-border-color rounded-full";
+    --uno: "my-1 mx-3 h-3px bg-$bew-border-color rounded-$bew-pill-radius";
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -1187,7 +1187,7 @@ onUnmounted(() => {
     width: var(--dock-collapsed-width);
     height: var(--dock-collapsed-height);
     min-height: calc(var(--bew-space-6) / var(--scale, 1));
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
     background: transparent;
     color: var(--bew-text-1);
     visibility: hidden;
@@ -1257,7 +1257,7 @@ onUnmounted(() => {
   .dock-collapsed-mark__dot {
     height: 100%;
     background: currentColor;
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
   }
 
   .dock-collapsed-mark__line {
@@ -1396,7 +1396,7 @@ onUnmounted(() => {
   --uno: "p-0 flex items-center justify-center";
   --uno: "aspect-square relative";
   --uno: "leading-0";
-  --uno: "rounded-full antialiased";
+  --uno: "rounded-$bew-pill-radius antialiased";
   --uno: "bg-$bew-fill-alt hover:bg-$bew-fill-2 cursor-pointer";
   --uno: "dark:bg-$bew-fill-1 dark-hover:bg-$bew-fill-4";
   corner-shape: var(--bew-corner-shape-round);

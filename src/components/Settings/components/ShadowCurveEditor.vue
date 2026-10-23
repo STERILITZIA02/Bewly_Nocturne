@@ -442,7 +442,7 @@ watch(
 .curve-canvas {
   max-width: 100%;
   font-size: var(--bew-font-size-caption);
-  border-radius: var(--bew-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-chart-surface);
 }

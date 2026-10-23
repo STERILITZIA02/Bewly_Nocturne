@@ -316,9 +316,14 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       '~/utils/momentCardLayout': await import('../src/utils/momentCardLayout'),
       '~/utils/momentColumnIndex': await import('../src/utils/momentColumnIndex'),
       '~/utils/momentsLayout': await import('../src/utils/momentsLayout'),
+      '~/utils/portraitMedia': await import('../src/utils/portraitMedia'),
       // The shared viewport frame runs on the same fixture clock; its own size
       // observer is not one of the layout observers indexed below.
-      '~/utils/viewportGeometry': await loadSourceModule('../src/utils/viewportGeometry.ts', {}, { ...time, window: { innerHeight: 700, requestAnimationFrame: time.requestAnimationFrame, addEventListener() {}, removeEventListener() {} }, ResizeObserver: class { observe() {} disconnect() {} } }),
+      // Fake cards report their layout height through the rect.
+      '~/utils/viewportGeometry': {
+        ...await loadSourceModule('../src/utils/viewportGeometry.ts', {}, { ...time, window: { innerHeight: 700, requestAnimationFrame: time.requestAnimationFrame, addEventListener() {}, removeEventListener() {} }, ResizeObserver: class { observe() {} disconnect() {} } }),
+        getLayoutHeight: element => element.getBoundingClientRect().height,
+      },
     }, { ...time, window: { innerWidth: 1100, innerHeight: 700, requestAnimationFrame: time.requestAnimationFrame }, ResizeObserver: Observer, IntersectionObserver: Observer })
     const items = Vue.ref(Array.from({ length: 3000 }, (_, index) => ({ id: String(index), text: 'post', images: [], title: '', isVideo: false, isForward: false })))
     const heights = new Map()

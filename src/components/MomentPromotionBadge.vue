@@ -21,7 +21,7 @@ const { t } = useI18n()
   flex: none;
   gap: var(--bew-space-1);
   padding: var(--bew-space-1) var(--bew-space-2);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   background: var(--bew-fill-1);
   color: var(--bew-warning-foreground);
   font-size: var(--bew-font-size-caption);

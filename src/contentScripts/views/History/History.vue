@@ -391,7 +391,7 @@ function jumpToLoginPage() {
                   pos="relative"
                   bg="$bew-skeleton"
                   w-full
-                  rounded="$bew-media-radius"
+                  rounded="$bew-thumb-radius"
                   overflow-hidden
                   style="aspect-ratio: var(--bew-video-cover-aspect-ratio)"
                 >
@@ -412,7 +412,7 @@ function jumpToLoginPage() {
                     text="xs $bew-text-1"
                     p="x-2 y-1"
                     m-1
-                    rounded="$bew-radius-half"
+                    rounded="$bew-interactive-radius"
                   >
                     <template
                       v-if="entry.item.history.business === HistoryBusiness.LIVE"
@@ -436,7 +436,7 @@ function jumpToLoginPage() {
                     m="2"
                     p="x-2 y-1"
                     text="white xs"
-                    rounded="$bew-radius-half"
+                    rounded="$bew-interactive-radius"
                   >
                     <!--  When progress = -1 means that the user watched the full video -->
                     {{
@@ -482,7 +482,7 @@ function jumpToLoginPage() {
                       flex="~ items-center"
                       cursor-pointer
                       w-fit
-                      rounded="$bew-radius"
+                      rounded="$bew-interactive-radius"
                       hover:color="$bew-theme-foreground"
                       hover:bg="$bew-theme-surface"
                       duration-300
@@ -789,7 +789,7 @@ function jumpToLoginPage() {
 }
 .history-list-card {
   position: relative;
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 
   &:is(:hover, :focus-within) .history-list-card__content {

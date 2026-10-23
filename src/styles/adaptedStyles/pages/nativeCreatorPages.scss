@@ -12,7 +12,7 @@ html.bewly-design[data-bewly-native-site="academy"] {
 
   :is(.bca-v-hul-box, .overview-block, .bca-c-series-card-box) {
     background: var(--bew-content-solid);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -90,7 +90,7 @@ html.bewly-design[data-bewly-native-site="academy"] {
   .bca-v-hs-box > :is(.left-button, .right-button) {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -102,7 +102,7 @@ html.bewly-design[data-bewly-native-site="academy"] {
   }
 
   :is(.bca-csc-left, .bca-cac-img, .bca-v-hb-box, .bca-vhb-pic-li) {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -225,7 +225,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
     }
 
     :is(.video-card-wrapper, .image-card-wrapper, .up-card-wrapper, .right-card-wrapper) {
-      border-radius: var(--bew-card-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -250,13 +250,13 @@ html.bewly-design[data-bewly-native-site="materials"] {
 
     .image-card-wrapper .cover {
       // Preserve the light preview mat for transparent sticker artwork.
-      border-radius: var(--bew-media-radius);
+      border-radius: var(--bew-thumb-radius);
       corner-shape: var(--bew-corner-shape);
       overflow: hidden;
     }
 
     .up-card-wrapper .material .list .item {
-      border-radius: var(--bew-media-radius);
+      border-radius: var(--bew-thumb-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -332,7 +332,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
 
     .banner-wrapper .mission-wrapper {
       background: var(--bew-content-solid);
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
 
       > .bg {
@@ -345,11 +345,11 @@ html.bewly-design[data-bewly-native-site="materials"] {
 
       .task-card-wrapper {
         background: var(--bew-content-alt-solid);
-        border-radius: var(--bew-card-radius);
+        border-radius: var(--bew-surface-radius);
         corner-shape: var(--bew-corner-shape);
 
         .header {
-          border-radius: var(--bew-media-radius);
+          border-radius: var(--bew-thumb-radius);
           corner-shape: var(--bew-corner-shape);
         }
 
@@ -361,7 +361,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
           color: var(--bew-on-theme-surface);
           background: var(--bew-theme-surface);
           border-color: var(--bew-border-color);
-          border-radius: var(--bew-badge-radius);
+          border-radius: var(--bew-pill-radius);
           corner-shape: var(--bew-corner-shape-round);
         }
       }
@@ -399,7 +399,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
   }
 
   :is(.manage-nav, .bmc-manage-wrapper-main, .card-group-item) {
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -408,7 +408,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
   }
 
   :is(.base-video-card, .base-video-card-player, .base-video-card .lazy-img) {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -494,7 +494,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
 
     .bmc-virtual-idol-audit-card {
       background: var(--bew-content-alt-solid);
-      border-radius: var(--bew-card-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
 
       :is(.title, .num) {
@@ -627,7 +627,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
   .bmc-sticker-card .sticker-preview {
     // Keep the native preview mat for transparent sticker artwork, including
     // black outlines. Only its existing clipping contour follows the theme.
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -636,7 +636,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
       border-color: var(--bew-border-color);
-      border-radius: var(--bew-card-radius);
+      border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -672,7 +672,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
 
     .card-item-avatar {
       background: var(--bew-content-solid);
-      border-radius: var(--bew-radius-full);
+      border-radius: var(--bew-pill-radius);
       corner-shape: var(--bew-corner-shape-round);
     }
 
@@ -715,7 +715,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
           width: 100%;
           height: auto;
           aspect-ratio: 1280 / 396; // Preserve the native central hero crop.
-          border-radius: var(--bew-media-radius);
+          border-radius: var(--bew-thumb-radius);
           corner-shape: var(--bew-corner-shape);
         }
 
@@ -824,7 +824,7 @@ html.bewly-design[data-bewly-native-site="music-portal"] {
   [class*="_section_"] [class*="_linkBtn_"] {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -872,14 +872,14 @@ html.bewly-design[data-bewly-native-site="music-portal"] {
   .help-center > .container {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .NotJoin {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     > .text-base {
@@ -910,7 +910,7 @@ html.bewly-design[data-bewly-native-site="music-portal"] {
 
   [class*="_secCards_"] [class*="_card_"] {
     background: var(--bew-content-solid);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     [class*="_title_"] {
@@ -926,7 +926,7 @@ html.bewly-design[data-bewly-native-site="music-portal"] {
     // All three observed role illustrations have a fixed light-blue reading
     // area. Dark ink keeps their original image colors readable in every theme.
     color: black;
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
 
     :is([class*="_title_"], p, [class*="_detail_"], mark) {
@@ -1006,7 +1006,7 @@ html.bewly-design[data-bewly-native-site="music-rank"] {
   }
 
   [class*="_PcRankPeriodPop_"] {
-    border-radius: var(--bew-popover-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1045,7 +1045,7 @@ html.bewly-design[data-bewly-native-site="music-rank"] {
   [class*="_card_"] {
     background: var(--bew-content-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1054,7 +1054,7 @@ html.bewly-design[data-bewly-native-site="music-rank"] {
   }
 
   :is([class*="_cover_"], [class*="_coverImg_"]) {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1115,7 +1115,7 @@ html.bewly-design[data-bewly-native-site="creator-data"] {
 
   :is(.core-data, .income, .header-nav) {
     background: var(--bew-content-solid);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1180,7 +1180,7 @@ html.bewly-design[data-bewly-native-site="creator-data"] {
 
   .income .subblock {
     background: var(--bew-content-alt-solid);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     // The native canvas owns its axis/data colours. Keep a neutral chart paper
@@ -1188,7 +1188,7 @@ html.bewly-design[data-bewly-native-site="creator-data"] {
     > .wrapper {
       background: white;
       max-width: 100%;
-      border-radius: var(--bew-media-radius);
+      border-radius: var(--bew-thumb-radius);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -1203,7 +1203,7 @@ html.bewly-design[data-bewly-native-site="creator-data"] {
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-popover-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 }
@@ -1219,7 +1219,7 @@ html.bewly-design[data-bewly-native-site="creator-charge"] {
     background: var(--bew-content-solid) !important;
     box-sizing: border-box;
     max-width: calc(100% - var(--bew-space-8));
-    border-radius: var(--bew-panel-radius) !important;
+    border-radius: var(--bew-surface-radius) !important;
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1236,7 +1236,7 @@ html.bewly-design[data-bewly-native-site="creator-charge"] {
 
   .benefit-item {
     background-color: var(--bew-content-alt-solid);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1289,7 +1289,7 @@ html.bewly-design[data-bewly-native-site="creator-quests"] {
     // Title PNGs, the benefits illustration and product/creator pictures remain.
     background: var(--bew-content-solid) !important;
     flex-shrink: 0;
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1303,7 +1303,7 @@ html.bewly-design[data-bewly-native-site="creator-quests"] {
 
   :is(.contion-detail, .ups-item) {
     background: var(--bew-content-alt-solid) !important;
-    border-radius: var(--bew-card-radius) !important;
+    border-radius: var(--bew-surface-radius) !important;
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1318,13 +1318,13 @@ html.bewly-design[data-bewly-native-site="creator-quests"] {
   .ups-tag {
     background: var(--bew-theme-surface);
     color: var(--bew-on-theme-surface);
-    border-radius: var(--bew-badge-radius);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
   }
 
   .question-item {
     background: var(--bew-content-alt-solid) !important;
-    border-radius: var(--bew-badge-radius);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -1364,7 +1364,7 @@ html.bewly-design[data-bewly-native-site="creator-quests"] {
   }
 
   .shop-ways-block .button-item {
-    border-radius: var(--bew-badge-radius) !important;
+    border-radius: var(--bew-pill-radius) !important;
     corner-shape: var(--bew-corner-shape-round);
 
     .button-name {
@@ -1470,7 +1470,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1489,7 +1489,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1551,7 +1551,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
     background: var(--bew-content-solid) !important;
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     .pay-btn {
@@ -1602,7 +1602,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
     background: var(--bew-content-solid) !important;
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1684,7 +1684,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-popover-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1710,13 +1710,13 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   }
 
   .mine .course-info-wrap .cover {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .qualification-entry-btn,
   .mine .go-btn {
-    border-radius: var(--bew-badge-radius);
+    border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -1805,7 +1805,7 @@ html.bewly-design[data-bewly-native-site="creator-cooperation"] {
   }
 
   .upper-settle-layout-header {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1813,7 +1813,7 @@ html.bewly-design[data-bewly-native-site="creator-cooperation"] {
     background-color: var(--bew-content-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -1854,7 +1854,7 @@ html.bewly-design[data-bewly-native-site="creator-cooperation"] {
   .ivu-checkbox-inner {
     background: var(--bew-content-alt-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-radius-sm);
+    border-radius: var(--bew-radius-tiny);
     corner-shape: var(--bew-corner-shape);
   }
 

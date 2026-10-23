@@ -78,7 +78,7 @@ html.bewly-design[data-bewly-native-site="public-document"] {
     background-image: none !important;
     background-color: var(--bew-content-solid);
     border: 1px solid var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -106,7 +106,7 @@ html.bewly-design[data-bewly-native-site="public-help"] {
     color: var(--bew-text-1);
     background: var(--bew-content-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -117,7 +117,7 @@ html.bewly-design[data-bewly-native-site="public-help"] {
   }
 
   :is(.MenuBox, .el-collapse-item) {
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -206,14 +206,14 @@ html.bewly-design[data-bewly-native-site="public-contact"] {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .inner-box-title {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-radius: var(--bew-panel-radius) var(--bew-panel-radius) 0 0;
+    border-radius: var(--bew-surface-radius) var(--bew-surface-radius) 0 0;
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -307,7 +307,7 @@ html.bewly-design[data-bewly-native-site="public-contact"] {
     color: var(--bew-text-1);
     background: var(--bew-elevated-solid);
     border: 1px solid var(--bew-border-color);
-    border-radius: var(--bew-popover-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     list-style: none;
 
@@ -363,7 +363,7 @@ html.bewly-design[data-bewly-native-site="public-about"] {
     height: auto !important;
     aspect-ratio: 1286 / 92;
     background-size: contain;
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 }
@@ -384,7 +384,7 @@ html.bewly-design[data-bewly-native-site="customer-service"] {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-panel-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -429,7 +429,7 @@ html.bewly-design[data-bewly-native-site="copyright-intro"] {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     &:hover {
@@ -465,7 +465,7 @@ html.bewly-design[data-bewly-native-site="copyright-intro"] {
     color: var(--bew-text-1);
     background: var(--bew-elevated-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-popover-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
     .el-dropdown-menu__item {
@@ -517,12 +517,12 @@ html.bewly-design[data-bewly-native-site="topics"] {
     padding: var(--bew-space-4);
     background: var(--bew-content-solid);
     border-color: var(--bew-border-color);
-    border-radius: var(--bew-card-radius);
+    border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .act-list > ul > li > a > img {
-    border-radius: var(--bew-media-radius);
+    border-radius: var(--bew-thumb-radius);
     corner-shape: var(--bew-corner-shape);
   }
 

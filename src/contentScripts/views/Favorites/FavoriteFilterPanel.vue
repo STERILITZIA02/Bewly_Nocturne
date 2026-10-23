@@ -251,7 +251,7 @@ function clear() {
   min-height: var(--bew-control-item-height);
   padding: 0 var(--bew-space-3);
   border: 0;
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-2);
   background: transparent;
@@ -304,7 +304,7 @@ function clear() {
   min-height: var(--bew-control-item-height);
   padding: 0 var(--bew-space-3);
   border: 1px solid var(--bew-border-color);
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-1);
   background: transparent;
@@ -343,7 +343,7 @@ function clear() {
   min-height: var(--bew-control-item-height);
   padding: 0 var(--bew-space-3);
   border: 0;
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-2);
   background: var(--bew-hover-bg);

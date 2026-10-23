@@ -86,7 +86,7 @@ if (sidebarHost) {
   height: var(--bew-top-bar-primary-control-height);
   padding: 0;
   border: 0;
-  border-radius: var(--bew-top-bar-primary-control-radius);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-round);
   transition:
     color var(--bew-duration-moderate) var(--bew-ease-standard),

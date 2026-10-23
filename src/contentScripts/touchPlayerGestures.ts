@@ -174,7 +174,7 @@ function ensureStyles() {
       white-space: nowrap;
       pointer-events: none;
       background: rgb(0 0 0 / 68%);
-      border-radius: 8px;
+      border-radius: var(--bew-interactive-radius, 8px);
       opacity: 0;
       transform: translate(-50%, -50%) scale(0.96);
       transition: opacity 120ms ease, transform 120ms ease;

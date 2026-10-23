@@ -1,23 +1,30 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance, CSSProperties } from 'vue'
-import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import LoadingRing from '~/components/LoadingRing.vue'
 import MomentPromotionBadge from '~/components/MomentPromotionBadge.vue'
 import VideoWatchedTag from '~/components/VideoWatchedTag.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useHoverLiftHold } from '~/composables/useHoverLiftHold'
+import { useImageTone } from '~/composables/useImageTone'
 import { useMeasuredDisclosure } from '~/composables/useMeasuredDisclosure'
 import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } from '~/constants/globalEvents'
 import { settings } from '~/logic'
+import { findLayoutEditableTarget } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { getDeepActiveElement } from '~/utils/dialogFocus'
-import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
+import { computeFloatingMenuPosition, getContextMenuPlacement } from '~/utils/floatingMenu'
 import { createPointerNavigationGuard, hasNavigationModifier } from '~/utils/linkNavigation'
 import { releaseElementImages } from '~/utils/mediaResources'
 import { supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { isMomentDescriptionOverflowing } from '~/utils/momentDescription'
 import { isMomentVideoUrl } from '~/utils/momentUrl'
+import { holdAnimation } from '~/utils/motionPriority'
+import { getMotionDuration } from '~/utils/motionTiming'
+import { isPortraitRatio } from '~/utils/portraitMedia'
+import { getLayoutHeight } from '~/utils/viewportGeometry'
 
 import type { Author, Video } from '../VideoCard/types'
 import MomentCommentSection from './MomentCommentSection.vue'
@@ -29,6 +36,7 @@ import {
   normalizeForwardCount,
   toggleMomentDisclosure,
 } from './momentForwardContent'
+import MomentMediaStage from './MomentMediaStage.vue'
 import MomentMoreMenu from './MomentMoreMenu.vue'
 import MomentVideoPreview from './MomentVideoPreview.vue'
 import MomentVote from './MomentVote.vue'
@@ -37,7 +45,6 @@ import {
   formatCount,
   getAvatarThumbnailUrl,
   getCardPreviewText,
-  getMomentThumbnailSrcset,
   getMomentThumbnailUrl,
   getWatchLaterStateKey,
   isCompactPlainTextMoment,
@@ -103,6 +110,9 @@ const addedCommentCount = ref(0)
 watch(() => [moment.id, moment.commentCount, topBarStore.userInfo.mid], () => addedCommentCount.value = 0)
 let cardElement: HTMLElement | null = null
 const navigationGuard = createPointerNavigationGuard(() => cardElement)
+// Its menu and composer pickers keep the hover scale while they are open.
+const lift = useHoverLiftHold(() => cardElement)
+const liftHeld = lift.held
 
 const cardLayoutStyles = computed<CSSProperties>(() => {
   const scale = Math.max(1, cardWidth / 520)
@@ -157,7 +167,20 @@ const menuVideo = computed<Video | null>(() => {
       ? { mid: Number(forwarded.author.mid), name: forwarded.author.name, authorFace: getAvatarThumbnailUrl(forwarded.author.face) }
       : undefined })
   }
-  if (!moment.isVideo || moment.isLive)
+  if (moment.isLive) {
+    return moment.roomId
+      ? {
+        id: moment.roomId,
+        roomid: moment.roomId,
+        title: moment.title || t('moment_card.live_moment'),
+        cover: moment.images[0] || '',
+        url: `https://live.bilibili.com/${moment.roomId}`,
+        author: { name: moment.author.name, authorFace: getAvatarThumbnailUrl(moment.author.face), mid: Number(moment.author.mid) || undefined },
+        threePointV2: [],
+      } satisfies Video
+      : null
+  }
+  if (!moment.isVideo)
     return null
 
   return getMenuVideo({
@@ -179,8 +202,18 @@ const menuVideo = computed<Video | null>(() => {
 
 const menuButtonLabel = computed(() => t('video_card.operation.more_options'))
 const menuAnchor = ref({ x: 0, y: 0 })
+const menuLayoutTarget = shallowRef<ReturnType<typeof findLayoutEditableTarget>>()
+let menuTrigger: HTMLElement | null = null
+// Covers carry no watch-later button; the menu holds it, as on video cards.
+const menuWatchLater = computed(() => {
+  const target = moment.forward?.video ?? (moment.isVideo && !moment.isLive ? moment : undefined)
+  if (!target || !getWatchLaterStateKey(target))
+    return undefined
+  return { added: isWatchLaterAdded(target), toggle: () => toggleCardWatchLater(target) }
+})
 
 const showVideoOptions = ref(false)
+watch(showVideoOptions, open => lift.hold(open))
 const videoOptionsFloatingStyles = ref<CSSProperties>({})
 const moreBtnRef = ref<HTMLButtonElement | null>(null)
 const authorAvatarLinkRef = ref<HTMLAnchorElement | null>(null)
@@ -198,7 +231,7 @@ const { height: disclosureHeight, moving: disclosureMoving, onTransitionEnd: han
     if (disclosure.value === 'none')
       displayedDisclosure.value = 'none'
   },
-  moving => emit('disclosureMotion', moving),
+  () => {},
 )
 const forwardComposerMounted = ref(disclosure.value === 'forward')
 const forwardFocusRequested = ref(false)
@@ -208,6 +241,7 @@ const commentExpanded = computed(() => disclosure.value === 'comments')
 const forwardExpanded = computed(() => disclosure.value === 'forward')
 const cardFocused = ref(false)
 const previewInteracting = ref(false)
+const descriptionMoving = ref(false)
 watch(() => {
   const media = moment.forward?.video ?? moment
   return `${media.bvid}:${media.cid}:${moment.forward?.video?.url ?? moment.videoUrl}`
@@ -217,15 +251,21 @@ watch(() => {
 })
 const commentWriting = ref(false)
 const interactionHeld = computed(() => cardFocused.value || showVideoOptions.value || forwardInteracting.value
-  || disclosureMoving.value || previewInteracting.value || commentWriting.value || isForwardLoading || isLikeLoading || isReservationLoading
+  || disclosureMoving.value || descriptionMoving.value || previewInteracting.value || commentWriting.value || isForwardLoading || isLikeLoading || isReservationLoading
   || isWatchLaterLoading(moment) || (!!moment.forward?.video && isWatchLaterLoading(moment.forward.video)))
 watch(interactionHeld, held => emit('interactionChange', held), { immediate: true, flush: 'sync' })
 const canExpandComments = computed(() => Boolean(moment.id && !moment.isLive))
 const commentSectionId = computed(() => `moment-comment-section-${moment.id}`)
 const forwardSectionId = computed(() => `moment-forward-section-${moment.id}`)
 const descriptionRef = ref<HTMLElement | null>(null)
+// `descriptionOpen` is the toggle's target; `descriptionExpanded` drops the
+// line clamp, so a collapse keeps it until the height animation has finished.
+const descriptionOpen = ref(false)
 const descriptionExpanded = ref(false)
 const descriptionCanToggle = ref(false)
+let descriptionAnimation: Animation | undefined
+// The masonry holds its geometry while the comment area or the text animates.
+watch(() => disclosureMoving.value || descriptionMoving.value, moving => emit('disclosureMotion', moving), { flush: 'sync' })
 const descriptionId = computed(() => `moment-description-${moment.id}`)
 const descriptionPreviewText = computed(() => getCardPreviewText(moment))
 const hasUserDescription = computed(() => Boolean(
@@ -239,24 +279,74 @@ const primaryActionLabel = computed(() => moment.isVideo && !moment.isLive
   ? t('moment_card.open_new_tab')
   : t('moment_card.open_detail', { author: moment.author.name }))
 
+const primaryHref = computed(() => moment.isVideo && !moment.isForward
+  ? moment.videoUrl || (moment.bvid ? `https://www.bilibili.com/video/${moment.bvid}` : moment.url)
+  : moment.isLive && moment.roomId ? `https://live.bilibili.com/${moment.roomId}` : moment.url)
 const isReservationAdditional = computed(() => Boolean(
   moment.additional?.reservationId
   && (moment.additional.isVideoReservation || moment.additional.isLiveReservation),
 ))
 const supportsWideCardLayout = computed(() => supportsWideMomentCardLayout(moment))
+// Media with a picture fills the top of the card: a video or live cover, or
+// an image post's images.
+const hasTopCover = computed(() => moment.images.length > 0)
+const hasTopImages = computed(() => hasTopCover.value && !moment.isVideo && !moment.isLive)
+const isTopMediaPortrait = computed(() => hasTopImages.value && isPortraitRatio(moment.imageRatios?.[0]))
+
+// Image posts show one image at a time with a thumbnail strip; a portrait
+// picture shows its upper part and the card below takes its colour
+// (MomentMediaStage, useImageTone).
+const shownTopImage = ref(0)
+const topToneStyles = useImageTone(() => ({
+  portrait: isTopMediaPortrait.value,
+  image: moment.images[shownTopImage.value],
+  ratio: moment.imageRatios?.[shownTopImage.value],
+}))
+
+// A quoted moment is a smaller card inside this one with the same top media
+// (video or live cover, or images) and author row; its corners nest inside
+// the card's.
+const quoteImages = computed(() => moment.forward?.video || moment.forward?.liveCover ? [] : moment.forward?.images ?? [])
+const quoteCover = computed(() => {
+  const forward = moment.forward
+  if (forward?.video) {
+    return {
+      cover: forward.video.cover,
+      alt: forward.video.title,
+      href: forward.video.url,
+      label: t('moment_card.open_original_video', { title: forward.video.title }),
+      live: false,
+    }
+  }
+  if (forward?.liveCover)
+    return { cover: forward.liveCover, alt: moment.title, href: primaryHref.value, label: primaryActionLabel.value, live: true }
+  return null
+})
+const hasQuoteMedia = computed(() => Boolean(quoteCover.value || quoteImages.value.length))
+const quoteImageRatio = computed(() => {
+  const ratio = moment.forward?.imageRatios?.[0]
+  return typeof ratio === 'number' && Number.isFinite(ratio) && ratio > 0 ? ratio : 1
+})
+const isQuotePortrait = computed(() => quoteImages.value.length > 0 && isPortraitRatio(moment.forward?.imageRatios?.[0]))
+const quoteTitle = computed(() => moment.forward?.video?.title || moment.forward?.title || '')
+const quoteText = computed(() => {
+  const forward = moment.forward
+  if (!forward)
+    return ''
+  if (forward.video)
+    return forward.text || forward.video.desc || ''
+  return forward.text || (forward.title ? '' : forward.fallback)
+})
+const shownQuoteImage = ref(0)
+const quoteToneStyles = useImageTone(() => ({
+  portrait: isQuotePortrait.value,
+  image: quoteImages.value[shownQuoteImage.value],
+  ratio: moment.forward?.imageRatios?.[shownQuoteImage.value],
+}))
 
 const reservationActionLabel = computed(() => moment.additional?.isReserved
   ? t('moment_card.cancel_reservation')
   : t('moment_card.reserve'))
-const forwardSingleImageStyle = computed<CSSProperties | undefined>(() => {
-  if (moment.forward?.images?.length !== 1)
-    return undefined
-  const ratio = moment.forward.imageRatios?.[0]
-  const normalizedRatio = typeof ratio === 'number' && Number.isFinite(ratio) && ratio > 0
-    ? Math.min(2, Math.max(0.5, ratio))
-    : 1
-  return { '--moment-forward-single-image-ratio': normalizedRatio } as CSSProperties
-})
 
 // VideoCard positions its menu from the trigger and teleports the shared menu
 // into the app root. Keep the same positioning behavior for MomentCard.
@@ -268,6 +358,8 @@ function handleMoreBtnClick(event: Event) {
     return
 
   const anchor = moreBtnRef.value.getBoundingClientRect()
+  menuTrigger = moreBtnRef.value
+  menuLayoutTarget.value = undefined
   menuAnchor.value = { x: anchor.right, y: anchor.bottom }
   const position = computeFloatingMenuPosition(anchor, window.innerWidth, window.innerHeight)
   showVideoOptions.value = false
@@ -283,11 +375,29 @@ function handleMoreBtnClick(event: Event) {
   showVideoOptions.value = true
 }
 
+// Right-clicking a video or live cover opens the shared video card menu at the
+// pointer (touch long-press and the menu key arrive as the same event).
+function openCoverMenu(event: MouseEvent) {
+  // Shift keeps the browser menu, and a text selection keeps native copy.
+  if (!menuVideo.value || event.shiftKey || document.getSelection()?.toString())
+    return
+  event.preventDefault()
+  const placement = getContextMenuPlacement(event)
+  menuTrigger = placement.trigger
+  menuAnchor.value = placement.anchor
+  menuLayoutTarget.value = findLayoutEditableTarget(event.composedPath())
+  showVideoOptions.value = false
+  videoOptionsFloatingStyles.value = placement.styles
+  showVideoOptions.value = true
+}
+
 function closeVideoOptions() {
   if (!showVideoOptions.value)
     return
   showVideoOptions.value = false
-  void nextTick(() => moreBtnRef.value?.focus({ preventScroll: true }))
+  const trigger = menuTrigger
+  menuTrigger = null
+  void nextTick(() => trigger?.isConnected && trigger.focus({ preventScroll: true }))
 }
 
 function requestMomentOperation(kind: 'delete' | 'report') {
@@ -402,6 +512,7 @@ function measureDescriptionOverflow() {
   const element = descriptionRef.value
   if (!element || !hasUserDescription.value) {
     const wasExpanded = descriptionExpanded.value
+    descriptionOpen.value = false
     descriptionExpanded.value = false
     descriptionCanToggle.value = false
     if (wasExpanded)
@@ -416,13 +527,14 @@ function measureDescriptionOverflow() {
 
   descriptionCanToggle.value = canToggle
   if (!canToggle && descriptionExpanded.value) {
+    descriptionOpen.value = false
     descriptionExpanded.value = false
     emit('interactiveResize')
   }
 }
 
 function scheduleDescriptionOverflowMeasure() {
-  if (descriptionMeasureFrame)
+  if (descriptionMeasureFrame || descriptionMoving.value)
     return
   descriptionMeasureFrame = window.requestAnimationFrame(() => {
     descriptionMeasureFrame = 0
@@ -445,12 +557,60 @@ function bindDescription(element: Element | ComponentPublicInstance | null) {
   scheduleDescriptionOverflowMeasure()
 }
 
-function toggleDescription() {
-  if (!descriptionCanToggle.value)
+// Long text opens and closes by animating its height between the clamped and
+// full sizes (same timing as the comment area). Clicking again mid-way turns
+// it around from the height drawn at that moment.
+async function toggleDescription() {
+  const element = descriptionRef.value
+  if (!descriptionCanToggle.value || !element)
     return
-  descriptionExpanded.value = !descriptionExpanded.value
+  const opening = !descriptionOpen.value
+  descriptionOpen.value = opening
+  const style = getComputedStyle(element)
+  const duration = getMotionDuration(style, '--bew-duration-normal')
+  if (duration <= 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    descriptionAnimation?.cancel()
+    descriptionExpanded.value = opening
+    emit('interactiveResize')
+    void nextTick(scheduleDescriptionOverflowMeasure)
+    return
+  }
+  const from = getLayoutHeight(element)
+  descriptionAnimation?.cancel()
+  let to: number
+  if (opening) {
+    descriptionExpanded.value = true
+    await nextTick()
+    to = getLayoutHeight(element)
+  }
+  else {
+    element.dataset.descriptionMeasureCollapsed = ''
+    to = getLayoutHeight(element)
+    delete element.dataset.descriptionMeasureCollapsed
+  }
+  descriptionMoving.value = true
   emit('interactiveResize')
-  void nextTick(scheduleDescriptionOverflowMeasure)
+  const animation = element.animate(
+    [{ height: `${from}px`, overflow: 'clip' }, { height: `${to}px`, overflow: 'clip' }],
+    { duration, easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease', fill: 'forwards' },
+  )
+  descriptionAnimation = animation
+  holdAnimation(animation)
+  try {
+    await animation.finished
+  }
+  catch {
+    return // A newer toggle took over.
+  }
+  if (descriptionAnimation !== animation)
+    return
+  descriptionExpanded.value = descriptionOpen.value
+  await nextTick()
+  animation.cancel()
+  descriptionAnimation = undefined
+  descriptionMoving.value = false
+  emit('interactiveResize')
+  scheduleDescriptionOverflowMeasure()
 }
 
 function syncDisplayedDisclosure(value: MomentDisclosure) {
@@ -481,18 +641,16 @@ watch(
 watch(
   () => moment.id,
   () => {
+    descriptionAnimation?.cancel()
+    descriptionAnimation = undefined
+    descriptionMoving.value = false
+    descriptionOpen.value = false
     descriptionExpanded.value = false
     descriptionCanToggle.value = false
     void nextTick(scheduleDescriptionOverflowMeasure)
   },
 )
 
-// VideoCardContextMenu uses this injection to select its common option set.
-provide('getVideoType', () => 'common')
-
-const primaryHref = computed(() => moment.isVideo && !moment.isForward
-  ? moment.videoUrl || (moment.bvid ? `https://www.bilibili.com/video/${moment.bvid}` : moment.url)
-  : moment.isLive && moment.roomId ? `https://live.bilibili.com/${moment.roomId}` : moment.url)
 function guardLinkClick(event: MouseEvent) {
   if ((event.target as Element)?.closest('a, .moment-card__primary-action'))
     navigationGuard.prevent(event)
@@ -541,7 +699,15 @@ function activateForwardPreviewLink(event: MouseEvent) {
   event.stopPropagation()
   // Reuse the existing link's navigation and visit tracking exactly once.
   const surface = event.currentTarget as HTMLElement
-  surface.parentElement?.querySelector<HTMLAnchorElement>('.moment-card__forward-video-cover-link')?.click()
+  surface.parentElement?.querySelector<HTMLAnchorElement>('.moment-media__link')?.click()
+}
+
+// The quoted cover opens the video, or the live room through its link; never
+// the quoted moment around it.
+function handleQuoteCoverClick(event: MouseEvent) {
+  event.stopPropagation()
+  if (moment.forward?.video)
+    handleForwardVideoClick(event)
 }
 
 function handleForwardVideoClick(event: MouseEvent) {
@@ -558,18 +724,8 @@ function handleRichLinkClick(event: MouseEvent, url: string) {
   emit('openVideoLink', url)
 }
 
-function handleImagePreview(images: string[], index: number, event: MouseEvent) {
-  if (!(event.currentTarget instanceof HTMLElement))
-    return
-  emit('openImagePreview', images, index, event.currentTarget)
-}
-
 function handleCommentImagePreview(images: string[], index: number, trigger: HTMLElement) {
   emit('openImagePreview', images, index, trigger)
-}
-
-function getImagePreviewLabel(author: string, index: number) {
-  return t('moment_card.preview_image', { author, index: index + 1 })
 }
 
 function requestNativeUserProfile(event: MouseEvent) {
@@ -604,20 +760,24 @@ onBeforeUnmount(() => {
     :ref="handleCardRef"
     class="moment-card"
     :class="{
-      'moment-card--text': !moment.images.length && !moment.isVideo && !moment.isLive && !moment.isChargeExclusive && !moment.forward?.video,
+      'moment-card--text': !moment.images.length && !moment.isVideo && !moment.isLive && !moment.isChargeExclusive && !hasQuoteMedia,
       'moment-card--compact-text': isCompactPlainTextMoment(moment),
       'moment-card--forward-video': !!moment.forward?.video,
       'moment-card--forward-draw': Boolean(moment.forward?.images?.length),
       'moment-card--charge': moment.isChargeExclusive,
+      'moment-card--top-cover': hasTopCover,
+      'moment-card--quote-media': hasQuoteMedia,
+      'moment-card--portrait-top': isTopMediaPortrait,
       'moment-card--supports-wide-layout': supportsWideCardLayout,
-      'moment-card--wide-single-image': supportsWideCardLayout && !moment.isVideo && !moment.isLive,
       'moment-card--comments-expanded': commentExpanded,
       'moment-card--forward-expanded': forwardExpanded,
       'moment-card--preparing': !ready,
       'moment-card--entering': entering,
+      'moment-card--lift-held': liftHeld,
     }"
-    :style="cardLayoutStyles"
+    :style="[cardLayoutStyles, topToneStyles]"
     :data-description-expanded="descriptionExpanded ? 'true' : undefined"
+    :data-bewly-portrait="isTopMediaPortrait ? '' : undefined"
     @focusin="cardFocused = true"
     @focusout="onCardFocusOut"
     @mouseenter="!moment.isLive && !settings.momentsOnlyCoverVideoPreview && emit('mediaEnter', moment, $event)"
@@ -637,6 +797,44 @@ onBeforeUnmount(() => {
       @click="openPrimaryDetail"
     />
     <div class="moment-card__surface" @click="handleSurfaceClick">
+      <!-- Video and live covers, and an image post's images, fill the top of the
+           card edge to edge; the bottom blends into the card through a short
+           blur and colour fade. -->
+      <MomentMediaStage
+        v-if="hasTopCover"
+        class="moment-card__top-media"
+        :gallery="hasTopImages"
+        :images="moment.images"
+        :image-ratios="moment.imageRatios"
+        :ratio="imageRatio"
+        :author-name="moment.author.name"
+        :cover="moment.images[0]"
+        :cover-alt="moment.title"
+        :href="primaryHref"
+        :href-label="primaryActionLabel"
+        :live="moment.isLive"
+        :portrait="isTopMediaPortrait"
+        :previewing="previewActive"
+        :blur="ready && !entering"
+        @shown="shownTopImage = $event"
+        @first-load="handleCoverLoad"
+        @preview="(index, trigger) => emit('openImagePreview', moment.images, index, trigger)"
+        @cover-click="openPrimaryDetail"
+        @cover-enter="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && emit('mediaEnter', moment, $event)"
+        @cover-leave="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && onMediaLeave()"
+        @cover-menu="openCoverMenu"
+      >
+        <MomentVideoPreview
+          v-if="previewActive"
+          :url="previewUrl"
+          :loading="previewLoading"
+          :generation="previewGeneration"
+          :live="moment.isLive"
+          @video="handlePreviewVideo"
+          @interaction-change="previewInteracting = $event"
+          @leave="onMediaLeave"
+        />
+      </MomentMediaStage>
       <header class="moment-card__header">
         <a
           ref="authorAvatarLinkRef"
@@ -678,80 +876,15 @@ onBeforeUnmount(() => {
       <div
         class="moment-card__main"
         :class="{
-          'moment-card__main--has-media': (!moment.isChargeExclusive || moment.isVideo) && (
-            (moment.images.length > 0 && (moment.isVideo || moment.isLive))
-            || (!moment.images.length && (moment.isVideo || moment.isLive))
-          ),
-          'moment-card__main--video': moment.isVideo || (!moment.isChargeExclusive && moment.isLive),
-          'moment-card__main--live': !moment.isChargeExclusive && moment.isLive,
+          'moment-card__main--has-media': !hasTopCover && !moment.isForward && (!moment.isChargeExclusive || moment.isVideo) && (moment.isVideo || moment.isLive),
+          'moment-card__main--video': !moment.isForward && (moment.isVideo || (!moment.isChargeExclusive && moment.isLive)),
+          'moment-card__main--live': !moment.isForward && !moment.isChargeExclusive && moment.isLive,
         }"
       >
         <div
-          v-if="moment.images.length && (moment.isVideo || moment.isLive)"
-          class="moment-card__media moment-card__cover moment-card__cover--media"
-          @mouseenter="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && emit('mediaEnter', moment, $event)"
-          @mouseleave="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && onMediaLeave()"
-        >
-          <a
-            :href="primaryHref" class="moment-card__cover-link" target="_blank" rel="noopener noreferrer" draggable="false"
-            :aria-label="primaryActionLabel" @click="openPrimaryDetail"
-          />
-          <img
-            :src="getMomentThumbnailUrl(moment.images[0])"
-            :alt="moment.title"
-            :class="{ 'is-ready': ready }"
-            loading="lazy"
-            decoding="async"
-            @load="handleCoverLoad"
-          >
-          <MomentVideoPreview
-            v-if="previewActive"
-            :url="previewUrl"
-            :loading="previewLoading"
-            :generation="previewGeneration"
-            :live="moment.isLive"
-            @video="handlePreviewVideo"
-            @interaction-change="previewInteracting = $event"
-            @leave="onMediaLeave"
-          />
-          <span
-            v-if="moment.isVideo && settings.showVideoCardViewCount && moment.videoPlay"
-            class="moment-card__video-stats"
-          >
-            <span class="moment-card__video-stat-group">
-              <span>
-                <span i-tabler-player-play aria-hidden="true" />
-                {{ moment.videoPlay }}
-              </span>
-            </span>
-          </span>
-          <span v-if="moment.isLive" class="moment-card__live-mark">
-            LIVE
-            <span i-svg-spinners:pulse-3 aria-hidden="true" />
-          </span>
-          <span v-if="moment.isChargeExclusive" class="moment-card__charge-badge">
-            {{ moment.chargeBadge || t('moment_card.charge_exclusive') }}
-          </span>
-          <button
-            v-if="settings.showVideoCardWatchLater && moment.isVideo && !moment.isLive"
-            type="button"
-            class="moment-card__watch-later"
-            :class="{ 'is-added': isWatchLaterAdded(moment) }"
-            :disabled="isWatchLaterLoading(moment)"
-            :aria-label="isWatchLaterAdded(moment) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
-            :aria-pressed="isWatchLaterAdded(moment)"
-            :title="isWatchLaterAdded(moment) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
-            @click.stop="toggleCardWatchLater(moment)"
-          >
-            <LoadingRing :loading="isWatchLaterLoading(moment)">
-              <span v-if="isWatchLaterAdded(moment)" i-tabler:check aria-hidden="true" />
-              <span v-else i-tabler:playlist aria-hidden="true" />
-            </LoadingRing>
-          </button>
-        </div>
-        <div
-          v-else-if="(moment.isVideo || moment.isLive) && (!moment.isChargeExclusive || moment.isVideo)"
+          v-if="!hasTopCover && !moment.isForward && (moment.isVideo || moment.isLive) && (!moment.isChargeExclusive || moment.isVideo)"
           class="moment-card__media moment-card__cover moment-card__text-cover moment-card__text-cover--video"
+          @contextmenu="openCoverMenu"
         >
           <a
             :href="primaryHref" class="moment-card__cover-link" target="_blank" rel="noopener noreferrer" draggable="false"
@@ -760,26 +893,10 @@ onBeforeUnmount(() => {
           <span v-if="moment.isLive" i-tabler-live-photo class="moment-card__text-cover-icon" />
           <span v-else i-tabler-player-play-filled class="moment-card__text-cover-icon" />
           <span>{{ moment.isLive ? t('moment_card.live_moment') : t('moment_card.video_moment') }}</span>
-          <button
-            v-if="settings.showVideoCardWatchLater && moment.isVideo && !moment.isLive"
-            type="button"
-            class="moment-card__watch-later"
-            :class="{ 'is-added': isWatchLaterAdded(moment) }"
-            :disabled="isWatchLaterLoading(moment)"
-            :aria-label="isWatchLaterAdded(moment) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
-            :aria-pressed="isWatchLaterAdded(moment)"
-            :title="isWatchLaterAdded(moment) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
-            @click.stop="toggleCardWatchLater(moment)"
-          >
-            <LoadingRing :loading="isWatchLaterLoading(moment)">
-              <span v-if="isWatchLaterAdded(moment)" i-tabler:check aria-hidden="true" />
-              <span v-else i-tabler:playlist aria-hidden="true" />
-            </LoadingRing>
-          </button>
         </div>
 
         <div class="moment-card__body">
-          <p v-if="moment.title && !moment.forward?.video" class="moment-card__title">
+          <p v-if="moment.title && !moment.isForward" class="moment-card__title">
             <VideoWatchedTag
               v-if="moment.isVideo"
               :aid="moment.aid"
@@ -844,189 +961,104 @@ onBeforeUnmount(() => {
               type="button"
               class="moment-card__description-toggle"
               :aria-controls="descriptionId"
-              :aria-expanded="descriptionExpanded"
+              :aria-expanded="descriptionOpen"
               @click.stop="toggleDescription"
             >
-              {{ t(descriptionExpanded ? 'moment_card.collapse_text' : 'moment_card.expand_text') }}
+              {{ t(descriptionOpen ? 'moment_card.collapse_text' : 'moment_card.expand_text') }}
             </button>
           </div>
+          <!-- A quoted moment: a smaller card with the same top media and
+               author row, its corners nested inside this card's. -->
           <div
-            v-if="moment.forward?.video"
-            class="moment-card__forward-reference"
+            v-if="moment.forward"
+            class="moment-card__quote"
+            :class="{ 'moment-card__quote--portrait': isQuotePortrait }"
+            :style="quoteToneStyles"
           >
-            <div class="moment-card__forward-source">
-              <component
-                :is="moment.forward.authorMid ? 'a' : 'span'"
-                :href="moment.forward.authorMid ? `https://space.bilibili.com/${moment.forward.authorMid}` : undefined"
-                target="_blank"
-                rel="noopener noreferrer"
-                @click.stop
+            <div
+              class="moment-card__quote-surface"
+              :class="{ 'moment-card__quote-surface--media': hasQuoteMedia, 'moment-card__quote-surface--origin': !moment.forward.video }"
+              :role="moment.forward.video ? undefined : 'button'"
+              :tabindex="moment.forward.video ? undefined : 0"
+              :aria-label="moment.forward.video ? undefined : t('moment_card.open_origin_moment', { name: moment.forward.author })"
+              @click="!moment.forward.video && handleForwardOriginClick($event)"
+              @keydown="!moment.forward.video && handleForwardOriginKeydown($event)"
+            >
+              <MomentMediaStage
+                v-if="quoteCover"
+                :cover="quoteCover.cover"
+                :cover-alt="quoteCover.alt"
+                :href="quoteCover.href"
+                :href-label="quoteCover.label"
+                :live="quoteCover.live"
+                :previewing="previewActive"
+                :blur="ready && !entering"
+                @cover-click="handleQuoteCoverClick"
+                @cover-enter="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && emit('mediaEnter', moment, $event)"
+                @cover-leave="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && onMediaLeave()"
+                @cover-menu="openCoverMenu"
               >
-                <img v-if="moment.forward.authorFace" :src="getAvatarThumbnailUrl(moment.forward.authorFace)" alt="" loading="lazy" decoding="async">
-                <span>{{ moment.forward.author }}</span>
-              </component>
-              <span>{{ moment.forward.authorAction || t('moment_card.video_post') }}</span>
-            </div>
-            <p v-if="moment.forward.text && moment.forward.text !== moment.forward.video.desc" class="moment-card__forward-source-text">
-              {{ moment.forward.text }}
-            </p>
-            <div class="moment-card__forward-video">
-              <span
-                class="moment-card__forward-video-cover"
-                @mouseenter="settings.momentsOnlyCoverVideoPreview && emit('mediaEnter', moment, $event)"
-                @mouseleave="settings.momentsOnlyCoverVideoPreview && onMediaLeave()"
-              >
-                <a
-                  :href="moment.forward.video.url || undefined"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="moment-card__forward-video-cover-link"
-                  :aria-label="t('moment_card.open_original_video', { title: moment.forward.video.title })"
-                  @click.stop="handleForwardVideoClick"
-                >
-                  <img
-                    :src="getMomentThumbnailUrl(moment.forward.video.cover)"
-                    :alt="moment.forward.video.title"
-                    loading="lazy"
-                    decoding="async"
-                  >
-                  <span
-                    v-if="settings.showVideoCardDuration && moment.forward.video.duration"
-                    class="moment-card__video-stats"
-                  >
-                    <span class="moment-card__video-stat-group">
-                      <span>
-                        {{ moment.forward.video.duration }}
-                      </span>
-                    </span>
-                  </span>
-                </a>
                 <MomentVideoPreview
                   v-if="previewActive"
                   :url="previewUrl"
                   :loading="previewLoading"
                   :generation="previewGeneration"
+                  :live="moment.isLive"
                   @video="handlePreviewVideo"
                   @interaction-change="previewInteracting = $event"
                   @leave="onMediaLeave"
                   @activate="activateForwardPreviewLink"
                 />
-                <button
-                  v-if="settings.showVideoCardWatchLater && getWatchLaterStateKey(moment.forward.video)"
-                  type="button"
-                  class="moment-card__watch-later"
-                  :class="{
-                    'is-added': isWatchLaterAdded(moment.forward.video),
-                    'is-disabled': isWatchLaterLoading(moment.forward.video),
-                  }"
-                  :disabled="isWatchLaterLoading(moment.forward.video)"
-                  :aria-disabled="isWatchLaterLoading(moment.forward.video)"
-                  :aria-label="isWatchLaterAdded(moment.forward.video) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment.forward.video) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
-                  :aria-pressed="isWatchLaterAdded(moment.forward.video)"
-                  :title="isWatchLaterAdded(moment.forward.video) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment.forward.video) ? t('moment_card.added') : t('moment_card.watch_later')"
-                  @click.stop.prevent="toggleCardWatchLater(moment.forward.video)"
+              </MomentMediaStage>
+              <MomentMediaStage
+                v-else-if="quoteImages.length"
+                gallery
+                :images="quoteImages"
+                :image-ratios="moment.forward.imageRatios"
+                :ratio="quoteImageRatio"
+                :author-name="moment.forward.author"
+                :portrait="isQuotePortrait"
+                :blur="ready && !entering"
+                @shown="shownQuoteImage = $event"
+                @preview="(index, trigger) => emit('openImagePreview', quoteImages, index, trigger)"
+              />
+              <div class="moment-card__quote-body">
+                <div class="moment-card__quote-source">
+                  <component
+                    :is="moment.forward.authorMid ? 'a' : 'span'"
+                    :href="moment.forward.authorMid ? `https://space.bilibili.com/${moment.forward.authorMid}` : undefined"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    @click.stop
+                  >
+                    <img v-if="moment.forward.authorFace" :src="getAvatarThumbnailUrl(moment.forward.authorFace)" alt="" loading="lazy" decoding="async">
+                    <span>{{ moment.forward.author }}</span>
+                  </component>
+                  <span>{{ moment.forward.authorAction || (moment.forward.video ? t('moment_card.video_post') : '') }}</span>
+                </div>
+                <a
+                  v-if="moment.forward.video"
+                  :href="moment.forward.video.url || undefined"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="moment-card__quote-title"
+                  @click.stop="handleForwardVideoClick"
                 >
-                  <LoadingRing :loading="isWatchLaterLoading(moment.forward.video)">
-                    <span v-if="isWatchLaterAdded(moment.forward.video)" i-tabler:check aria-hidden="true" />
-                    <span v-else i-tabler:playlist aria-hidden="true" />
-                  </LoadingRing>
-                </button>
-              </span>
-              <a
-                :href="moment.forward.video.url || undefined"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="moment-card__forward-video-info"
-                :aria-label="t('moment_card.open_original_video', { title: moment.forward.video.title })"
-                @click.stop="handleForwardVideoClick"
-              >
-                <strong>
-                  <VideoWatchedTag
-                    :aid="moment.forward.video.aid"
-                    :bvid="moment.forward.video.bvid"
-                  />
-                  {{ moment.forward.video.title || moment.forward.fallback }}
-                </strong>
-                <p v-if="moment.forward.video.desc">{{ moment.forward.video.desc }}</p>
-                <small v-if="moment.forward.video.author && moment.forward.video.author.mid !== moment.forward.authorMid">
+                  <VideoWatchedTag :aid="moment.forward.video.aid" :bvid="moment.forward.video.bvid" />
+                  {{ quoteTitle || moment.forward.fallback }}
+                </a>
+                <p v-else-if="quoteTitle" class="moment-card__quote-title">
+                  {{ quoteTitle }}
+                </p>
+                <p v-if="quoteText" class="moment-card__quote-text">
+                  {{ quoteText }}
+                </p>
+                <small v-if="moment.forward.video?.author && moment.forward.video.author.mid !== moment.forward.authorMid" class="moment-card__quote-meta">
                   <span i-tabler-user aria-hidden="true" />{{ moment.forward.video.author.name }}
                 </small>
-                <small class="moment-card__forward-video-stats">
-                  <span v-if="settings.showVideoCardViewCount && moment.forward.video.play"><span i-tabler-player-play aria-hidden="true" />{{ moment.forward.video.play }}</span>
-                  <span v-if="settings.showVideoCardDanmakuCount && moment.forward.video.danmaku"><span i-tabler:message aria-hidden="true" />{{ moment.forward.video.danmaku }}</span>
-                </small>
-              </a>
+              </div>
             </div>
           </div>
-          <div
-            v-else-if="moment.forward"
-            class="moment-card__forward"
-            :class="{ 'moment-card__forward--draw': Boolean(moment.forward.images?.length) }"
-            role="button"
-            tabindex="0"
-            :aria-label="t('moment_card.open_origin_moment', { name: moment.forward.author })"
-            @click="handleForwardOriginClick"
-            @keydown="handleForwardOriginKeydown"
-          >
-            <div class="moment-card__forward-copy">
-              <strong>@{{ moment.forward.author }}</strong>
-              <p>{{ moment.forward.title || moment.forward.text || moment.forward.fallback }}</p>
-            </div>
-            <div
-              v-if="moment.forward.images?.length"
-              class="moment-card__forward-gallery"
-              :class="`moment-card__forward-gallery--${Math.min(moment.forward.images.length, 9)}`"
-              :style="forwardSingleImageStyle"
-            >
-              <button
-                v-for="(image, imageIndex) in moment.forward.images.slice(0, 9)"
-                :key="image"
-                type="button"
-                class="moment-card__gallery-item"
-                :aria-label="getImagePreviewLabel(moment.forward.author, imageIndex)"
-                @click.stop="handleImagePreview(moment.forward.images || [], imageIndex, $event)"
-              >
-                <img
-                  :src="getMomentThumbnailUrl(image)"
-                  :srcset="getMomentThumbnailSrcset(image)"
-                  sizes="auto"
-                  :alt="t('moment_card.moment_image_alt', { author: moment.forward.author, index: imageIndex + 1 })"
-                  loading="lazy"
-                  decoding="async"
-                >
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div
-          v-if="moment.images.length && !moment.isVideo && !moment.isLive"
-          class="moment-card__gallery"
-          :class="`moment-card__gallery--${Math.min(moment.images.length, 9)}`"
-          :style="moment.images.length === 1 ? { '--moment-single-image-ratio': imageRatio } : undefined"
-        >
-          <button
-            v-for="(image, imageIndex) in moment.images.slice(0, 9)"
-            :key="image"
-            type="button"
-            class="moment-card__gallery-item"
-            :aria-label="getImagePreviewLabel(moment.author.name, imageIndex)"
-            @click.stop="handleImagePreview(moment.images, imageIndex, $event)"
-          >
-            <img
-              :src="getMomentThumbnailUrl(image)"
-              :srcset="getMomentThumbnailSrcset(image)"
-              sizes="auto"
-              :alt="t('moment_card.moment_image_alt', { author: moment.author.name, index: imageIndex + 1 })"
-              loading="lazy"
-              decoding="async"
-              @load="handleCoverLoad($event, imageIndex)"
-            >
-          </button>
-          <span v-if="moment.images.length > 9" class="moment-card__image-count">+{{ moment.images.length - 9 }}</span>
-          <span v-if="moment.isChargeExclusive" class="moment-card__charge-badge">
-            {{ moment.chargeBadge || t('moment_card.charge_exclusive') }}
-          </span>
         </div>
       </div>
 
@@ -1040,7 +1072,9 @@ onBeforeUnmount(() => {
           :href="primaryHref"
           :menu-styles="videoOptionsFloatingStyles"
           :anchor="menuAnchor"
-          :trigger="moreBtnRef"
+          :trigger="menuTrigger"
+          :watch-later="menuWatchLater"
+          :layout-target="menuLayoutTarget"
           @close="closeVideoOptions"
           @request-delete="requestMomentOperation('delete')"
           @request-report="requestMomentOperation('report')"
@@ -1260,28 +1294,109 @@ onBeforeUnmount(() => {
   break-inside: avoid;
   position: relative;
   margin: 0;
-  border-radius: var(--bew-moment-card-radius);
+  // The card wears the video cover's corner and frame (user request).
+  border-radius: var(--bew-media-radius);
   corner-shape: var(--bew-corner-shape);
   background-color: transparent;
   cursor: pointer;
-  box-shadow: none;
-  @include contentCard.surface(false);
-}
-
-.moment-card:is(.moment-card--comments-expanded, .moment-card--forward-expanded):focus-within {
-  transform: none;
+  // Its own stacking context: the surface's z-index stays inside the card, so
+  // a hovered card (z-index 1) is drawn over every neighbour, not under the
+  // later ones.
+  isolation: isolate;
+  // Same hover as video cards: the whole card scales above its neighbours,
+  // a little less since the card is much larger. Open comments and forwarding
+  // scale too; layout reads ignore the scale (getLayoutHeight).
+  @include contentCard.hover-lift(var(--bew-moment-card-hover-scale), ".moment-card--lift-held");
 }
 
 .moment-card__surface {
+  // Video cover frame: the hairline drawn over the content, then the shadow.
+  @include contentCard.media-frame;
   position: relative;
   z-index: 1;
   box-sizing: border-box;
   overflow: hidden;
-  border: 1px solid var(--bew-surface-border-color);
   border-radius: inherit;
   corner-shape: inherit;
-  background: var(--bew-elevated);
+  // Opaque, though it looks the same as the translucent surface over the page:
+  // a hovered card overlapping its neighbours must not show them through.
+  background: var(--bew-elevated-over-page);
   pointer-events: auto;
+  transition: box-shadow var(--bew-duration-moderate) var(--bew-ease-standard);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .moment-card:hover .moment-card__surface {
+    box-shadow: var(--bew-shadow-2);
+  }
+}
+
+.moment-card:focus-within .moment-card__surface {
+  box-shadow: var(--bew-shadow-2);
+}
+
+// Covers fill the top of the card, and a quote's media the top of its quote
+// (MomentMediaStage). The surface does not clip: an ancestor that pairs a
+// smooth corner with an overflow clip makes Chromium drop the blur's masks.
+.moment-card--top-cover .moment-card__surface,
+.moment-card--quote-media .moment-card__surface {
+  overflow: visible;
+}
+
+// Below a portrait picture a surface takes the picture's colour where it is
+// cut (useImageTone): the card under its top image, or a quote under its own.
+// All text turns black or white for that colour; fills, borders, hovers and
+// the composer glass derive from the same foreground. Until the colour is read
+// the surface keeps its own; the two colours are registered, so reading one,
+// or switching to an image with another, eases every derived colour, the
+// fade's gradient included. The fallbacks sit on the host and the overrides on
+// the surface: on one element they would refer to each other.
+$tone-transition:
+  --moment-tone var(--bew-duration-moderate) var(--bew-ease-standard),
+  --moment-tone-fg var(--bew-duration-moderate) var(--bew-ease-standard);
+
+@mixin toned-surface {
+  --bew-elevated-over-page: var(--moment-tone);
+  --bew-elevated-solid: color-mix(in srgb, var(--moment-tone-fg) 8%, var(--moment-tone));
+  --bew-neutral-fg: var(--moment-tone-fg);
+  --bew-text-1: var(--moment-tone-fg);
+  --bew-text-2: color-mix(in srgb, var(--moment-tone-fg) 80%, transparent);
+  --bew-text-3: color-mix(in srgb, var(--moment-tone-fg) 70%, transparent);
+  --bew-text-4: color-mix(in srgb, var(--moment-tone-fg) 50%, transparent);
+  --bew-fill-1: color-mix(in srgb, var(--moment-tone-fg) 6%, transparent);
+  --bew-fill-2: color-mix(in srgb, var(--moment-tone-fg) 10%, transparent);
+  --bew-fill-3: color-mix(in srgb, var(--moment-tone-fg) 15%, transparent);
+  --bew-fill-4: color-mix(in srgb, var(--moment-tone-fg) 22%, transparent);
+  --bew-border-color: color-mix(in srgb, var(--moment-tone-fg) 16%, transparent);
+  --bew-surface-border-color: color-mix(in srgb, var(--moment-tone-fg) 18%, transparent);
+  --bew-hover-bg: color-mix(in srgb, var(--moment-tone-fg) 8%, transparent);
+  --bew-selected-bg: color-mix(in srgb, var(--moment-tone-fg) 12%, transparent);
+  --bew-theme-foreground: var(--moment-tone-fg);
+  --bew-glass-tint: color-mix(in srgb, var(--moment-tone-fg) 10%, var(--moment-tone));
+  --bew-glass-tint-solid: var(--bew-glass-tint);
+  --bew-glass-border-color: var(--bew-surface-border-color);
+  color: var(--bew-text-1);
+  color-scheme: var(--moment-tone-scheme);
+}
+
+.moment-card--portrait-top {
+  --moment-tone: var(--bew-elevated-over-page);
+  --moment-tone-fg: var(--bew-neutral-fg);
+}
+
+.moment-card--portrait-top .moment-card__surface {
+  @include toned-surface;
+  transition:
+    box-shadow var(--bew-duration-moderate) var(--bew-ease-standard),
+    $tone-transition;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: box-shadow var(--bew-duration-moderate) var(--bew-ease-standard);
+  }
+}
+
+.moment-card--top-cover .moment-card__header {
+  padding-top: var(--bew-card-stack-gap);
 }
 
 .moment-card__cover-link {
@@ -1293,7 +1408,6 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__surface :is(a, button, [role="button"]),
-.moment-card__cover--media,
 .moment-card__text-cover--video {
   pointer-events: auto;
 }
@@ -1316,26 +1430,7 @@ onBeforeUnmount(() => {
   outline-offset: 4px;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .moment-card--comments-expanded:hover,
-  .moment-card--forward-expanded:hover {
-    transform: none;
-  }
-}
-
-.moment-card:has(.moment-card__primary-action:active) {
-  transform: translateY(0) scale(0.99);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .moment-card {
-    transition: none;
-  }
-
-  .moment-card:has(.moment-card__primary-action:active) {
-    transform: none;
-  }
-
   .moment-card--entering {
     animation: none;
   }
@@ -1346,144 +1441,6 @@ onBeforeUnmount(() => {
   width: 100%;
   overflow: hidden;
   background: var(--bew-fill-1);
-}
-
-.moment-card__cover > img {
-  display: block;
-  width: 100%;
-  height: auto;
-  opacity: 0;
-  object-fit: cover;
-  object-position: center top;
-  background: var(--bew-fill-1);
-  transition: opacity 0.12s ease;
-}
-
-.moment-card__cover > img.is-ready {
-  opacity: 1;
-}
-
-.moment-card__cover--media {
-  aspect-ratio: 16 / 9;
-  background: #111;
-}
-
-.moment-card__cover--media > img,
-.moment-card__cover--media > video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.moment-card__cover--media > video {
-  z-index: 1;
-}
-
-.moment-card__watch-later {
-  position: absolute;
-  top: var(--bew-space-2);
-  right: var(--bew-space-2);
-  z-index: 3;
-  display: grid;
-  width: var(--bew-cover-action-size);
-  height: var(--bew-cover-action-size);
-  padding: 0;
-  border: 0;
-  border-radius: var(--bew-card-media-action-radius);
-  corner-shape: var(--bew-corner-shape);
-  place-items: center;
-  color: #fff;
-  background: var(--bew-cover-scrim);
-  cursor: pointer;
-  font-size: var(--bew-icon-size-md);
-  opacity: 0;
-  transform: scale(0.78);
-  transition:
-    opacity var(--bew-duration-normal) var(--bew-ease-standard),
-    transform var(--bew-duration-normal) var(--bew-ease-standard),
-    background-color var(--bew-duration-normal) var(--bew-ease-standard);
-}
-
-.moment-card__cover:hover .moment-card__watch-later,
-.moment-card__forward-video-cover:hover .moment-card__watch-later,
-.moment-card__forward-video-cover:focus-within .moment-card__watch-later,
-.moment-card__watch-later:focus-visible,
-.moment-card__watch-later.is-added {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.moment-card__watch-later:hover {
-  background: var(--bew-selected-bg);
-  color: var(--bew-text-1);
-}
-
-.moment-card__watch-later:focus-visible {
-  outline: var(--bew-focus-ring);
-  outline-offset: 2px;
-}
-
-.moment-card__watch-later:disabled,
-.moment-card__watch-later.is-disabled {
-  cursor: wait;
-  opacity: 0.72;
-}
-
-.moment-card__image-count,
-.moment-card__video-mark,
-.moment-card__live-mark {
-  position: absolute;
-  bottom: var(--bew-space-2);
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-1);
-  padding: var(--bew-space-1) var(--bew-space-2);
-  border-radius: var(--bew-radius-full);
-  corner-shape: var(--bew-corner-shape-round);
-  color: #fff;
-  background: rgb(0 0 0 / 58%);
-  font-size: var(--bew-font-size-control);
-}
-
-.moment-card__image-count {
-  right: var(--bew-space-2);
-}
-
-.moment-card__video-mark {
-  left: var(--bew-space-2);
-}
-
-.moment-card__live-mark {
-  top: var(--bew-cover-overlay-inset);
-  left: var(--bew-cover-overlay-inset);
-  bottom: auto;
-  z-index: 2;
-  border-radius: var(--bew-badge-radius);
-  color: var(--bew-text-1);
-  background: var(--bew-selected-bg);
-  font-weight: var(--bew-font-weight-semibold);
-  letter-spacing: 0.02em;
-}
-
-.moment-card__charge-badge {
-  position: absolute;
-  top: var(--bew-space-2);
-  left: var(--bew-space-2);
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--bew-space-1);
-  padding: var(--bew-space-1) var(--bew-space-2);
-  border-radius: var(--bew-radius-full);
-  corner-shape: var(--bew-corner-shape-round);
-  color: #fff;
-  background: linear-gradient(135deg, #ff8eb4, #fb7299);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
-  line-height: var(--bew-line-height-control);
-  box-shadow: 0 2px 8px rgb(251 114 153 / 35%);
 }
 
 .moment-card__text-cover {
@@ -1563,51 +1520,6 @@ onBeforeUnmount(() => {
   font-size: var(--bew-font-size-control);
 }
 
-.moment-card__forward {
-  display: flex;
-  flex-direction: column;
-  margin-top: var(--bew-space-3);
-  overflow: hidden;
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-card-inset-radius);
-  color: var(--bew-text-2);
-  background: transparent;
-  cursor: pointer;
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-  pointer-events: auto;
-  transition:
-    border-color var(--bew-duration-normal) var(--bew-ease-standard),
-    background-color var(--bew-duration-normal) var(--bew-ease-standard);
-}
-
-.moment-card__forward:hover,
-.moment-card__forward:focus-visible {
-  border-color: var(--bew-focus-ring-color);
-  background: var(--bew-theme-surface);
-  outline: none;
-}
-
-.moment-card__forward:focus-visible {
-  box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
-}
-
-.moment-card__forward-copy {
-  padding: var(--bew-space-3);
-}
-
-.moment-card__forward strong {
-  color: var(--bew-text-1);
-}
-
-.moment-card__forward p {
-  display: -webkit-box;
-  margin: var(--bew-space-1) 0 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
 .moment-card__additional {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1644,7 +1556,7 @@ onBeforeUnmount(() => {
 .moment-card__additional-main img {
   width: 40px;
   height: 40px;
-  border-radius: var(--bew-radius-md);
+  border-radius: var(--bew-interactive-radius);
   object-fit: cover;
 }
 
@@ -1729,7 +1641,7 @@ onBeforeUnmount(() => {
   margin-left: auto;
   padding: var(--bew-space-1) var(--bew-space-2);
   border: 0;
-  border-radius: var(--bew-radius-md);
+  border-radius: var(--bew-interactive-radius);
   color: var(--bew-text-2);
   background: transparent;
   cursor: pointer;
@@ -1821,7 +1733,8 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__main {
-  // The side inset is what --bew-moment-card-radius nests across.
+  // The side inset equals the card radius, so media inside keep the full media
+  // radius instead of a concentric one (inset >= outer radius).
   padding: 0 var(--bew-card-inset) var(--bew-space-3);
 }
 
@@ -1849,88 +1762,10 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.moment-card__main--live .moment-card__cover--media {
-  aspect-ratio: 16 / 9;
-}
-
 .moment-card__media {
   min-width: 0;
   overflow: hidden;
-  border-radius: var(--bew-moment-media-radius);
-}
-
-.moment-card__cover--media {
-  aspect-ratio: 16 / 9;
-}
-
-.moment-card__gallery {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: 1fr;
-  gap: var(--bew-space-1);
-  margin-top: var(--bew-space-3);
-  overflow: hidden;
-  border-radius: var(--bew-moment-media-radius);
-  aspect-ratio: 1;
-  background: var(--bew-fill-1);
-}
-
-.moment-card__gallery--1 {
-  grid-template-columns: 1fr;
-  aspect-ratio: var(--moment-single-image-ratio, 1);
-}
-
-.moment-card__gallery--2,
-.moment-card__gallery--4 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.moment-card__gallery--2 {
-  aspect-ratio: 2 / 1;
-}
-
-.moment-card__gallery--3 {
-  aspect-ratio: 3 / 1;
-}
-
-.moment-card__gallery--5,
-.moment-card__gallery--6 {
-  aspect-ratio: 3 / 2;
-}
-
-.moment-card__gallery-item {
-  display: block;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  padding: 0;
-  overflow: hidden;
-  border: 0;
-  color: inherit;
-  background: var(--bew-fill-1);
-  cursor: zoom-in;
-}
-
-.moment-card__gallery-item:focus-visible {
-  position: relative;
-  z-index: 1;
-  outline: var(--bew-focus-ring, 1px solid CanvasText);
-  outline-offset: -2px;
-}
-
-.moment-card__gallery-item > img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center top;
-  background: var(--bew-fill-1);
-}
-
-.moment-card__gallery .moment-card__image-count {
-  right: 8px;
-  bottom: 8px;
+  border-radius: var(--bew-media-radius);
 }
 
 .moment-card__text-cover {
@@ -2013,7 +1848,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
 }
 .moment-card__main--has-media:not(.moment-card__main--live) .moment-card__body {
-  @include contentCard.under-cover(var(--bew-moment-media-radius));
+  @include contentCard.under-cover(var(--bew-media-radius));
 }
 
 .moment-card__main--video:not(.moment-card__main--live) .moment-card__media {
@@ -2145,25 +1980,86 @@ onBeforeUnmount(() => {
   text-decoration: underline;
 }
 
-.moment-card__forward-reference {
-  display: flex;
-  flex-direction: column;
-  gap: var(--bew-space-3);
-  margin-top: var(--bew-space-3);
-  padding: var(--bew-space-3);
-  background: var(--bew-fill-1);
-  border-radius: var(--bew-card-inset-radius);
+.moment-card__more,
+.moment-card__reserve-mark,
+.moment-card__media-meta--live,
+.moment-card__additional,
+.moment-card__additional img,
+.moment-card__likes,
+.moment-card__media {
   corner-shape: var(--bew-corner-shape);
 }
 
-.moment-card__forward-source {
+// A quoted moment: a smaller card inside this one. Its media (MomentMediaStage)
+// fills its top and fades into its colour, then the author row and two lines.
+// The card's inset (16) equals its corner, so the quote takes the smaller
+// interactive corner and its thumbnail strip, inset by more than that, the
+// tiny one: each corner nests inside the one around it (user request). The
+// quote does not clip either (the blur's masks).
+.moment-card__quote {
+  --moment-quote-bg: color-mix(in srgb, var(--bew-neutral-fg) 5%, var(--bew-elevated-over-page));
+  margin-top: var(--bew-space-3);
+}
+
+.moment-card__quote--portrait {
+  --moment-tone: var(--moment-quote-bg);
+  --moment-tone-fg: var(--bew-neutral-fg);
+}
+
+.moment-card__quote-surface {
+  --moment-media-corners: var(--bew-interactive-radius) var(--bew-interactive-radius) 0 0;
+  --moment-media-inset: var(--bew-space-3);
+  --moment-media-strip-radius: var(--bew-radius-tiny);
+  --moment-media-base: var(--moment-quote-bg);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
+  color: var(--bew-text-2);
+  background: var(--moment-quote-bg);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  pointer-events: auto;
+}
+
+.moment-card__quote-surface--origin {
+  cursor: pointer;
+}
+
+.moment-card__quote-surface:focus-visible {
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
+  outline-offset: 2px;
+}
+
+.moment-card__quote--portrait .moment-card__quote-surface {
+  @include toned-surface;
+  --moment-quote-bg: var(--moment-tone);
+  transition: $tone-transition;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.moment-card__quote-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-1);
+  min-width: 0;
+  padding: var(--bew-space-3);
+}
+
+.moment-card__quote-surface--media .moment-card__quote-body {
+  padding-top: var(--bew-space-2);
+}
+
+.moment-card__quote-source {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--bew-space-1) var(--bew-space-2);
+  margin-bottom: var(--bew-space-1);
   color: var(--bew-text-2);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
 
   > :first-child {
     display: inline-flex;
@@ -2172,6 +2068,8 @@ onBeforeUnmount(() => {
     min-width: 0;
     color: var(--bew-text-1);
     font-weight: var(--bew-font-weight-medium);
+    text-decoration: none;
+    transition: color var(--bew-duration-fast) var(--bew-ease-standard);
   }
 
   a:hover {
@@ -2188,208 +2086,27 @@ onBeforeUnmount(() => {
   }
 }
 
-.moment-card__forward-video {
-  display: grid;
-  grid-template-columns: minmax(0, 40%) minmax(0, 1fr);
-  margin-top: 0;
-  overflow: hidden;
-  border: 1px solid transparent;
-  border-radius: var(--bew-card-inset-radius);
-  color: inherit;
-  background: var(--bew-content-solid);
-  box-sizing: border-box;
-  text-decoration: none;
-  transition:
-    border-color 0.16s ease,
-    background-color 0.16s ease;
-}
-
-.moment-card__forward-video:hover,
-.moment-card__forward-video:focus-within {
-  border-color: var(--bew-focus-ring-color);
-  background: var(--bew-content-solid);
-}
-
-.moment-card__forward-video-cover {
-  position: relative;
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  aspect-ratio: 16 / 9;
-  background: var(--bew-player-canvas);
-}
-
-.moment-card__forward-video-cover-link {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.moment-card__forward-video-cover-link > img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.moment-card__forward-gallery {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: 1fr;
-  gap: var(--bew-space-1);
-  margin: 0 var(--bew-space-3) var(--bew-space-3);
-  overflow: hidden;
-  border-radius: var(--bew-card-inset-radius);
-  aspect-ratio: 1;
-  background: var(--bew-fill-1);
-}
-
-.moment-card__more,
-.moment-card__video-mark,
-.moment-card__live-mark,
-.moment-card__reserve-mark,
-.moment-card__media-meta--live,
-.moment-card__image-count,
-.moment-card__charge-badge,
-.moment-card__watch-later,
-.moment-card__forward,
-.moment-card__additional,
-.moment-card__additional img,
-.moment-card__likes,
-.moment-card__media,
-.moment-card__gallery,
-.moment-card__forward-video,
-.moment-card__forward-gallery {
-  corner-shape: var(--bew-corner-shape);
-}
-
-.moment-card__forward-gallery--1 {
-  grid-template-columns: 1fr;
-  aspect-ratio: var(--moment-forward-single-image-ratio, 1);
-}
-
-.moment-card__forward-gallery--2,
-.moment-card__forward-gallery--4 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.moment-card__forward-gallery--2 {
-  aspect-ratio: 2 / 1;
-}
-
-.moment-card__forward-gallery--3 {
-  aspect-ratio: 3 / 1;
-}
-
-.moment-card__forward-gallery--5,
-.moment-card__forward-gallery--6 {
-  aspect-ratio: 3 / 2;
-}
-
-.moment-card__forward-gallery .moment-card__gallery-item > img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  object-fit: cover;
-  object-position: center top;
-  background: var(--bew-fill-1);
-}
-
-.moment-card__image-count,
-.moment-card__charge-badge {
-  pointer-events: none;
-}
-
-.moment-card__video-stats {
-  position: absolute;
-  inset: auto 0 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--bew-space-2);
-  min-height: 28px;
-  padding: var(--bew-cover-overlay-inset);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--bew-font-weight-medium);
-  color: #fff;
-  background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 72%));
-  box-sizing: border-box;
-  font-size: var(--bew-font-size-caption);
-  line-height: var(--bew-line-height-caption);
-  text-shadow: 0 1px 2px rgb(0 0 0 / 65%);
-}
-
-.moment-card__video-stat-group,
-.moment-card__video-stat-group > span {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-}
-
-.moment-card__video-stat-group {
-  gap: var(--bew-space-2);
-}
-
-.moment-card__video-stat-group > span {
-  gap: var(--bew-space-1);
-}
-
-.moment-card__video-stat-group svg {
-  width: var(--bew-icon-size-xs);
-  height: var(--bew-icon-size-xs);
-}
-.moment-card__video-stats > span {
-  font-weight: var(--bew-font-weight-medium);
-}
-
-.moment-card__forward-video-info {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--bew-space-2);
-  padding: var(--bew-space-2) var(--bew-space-3);
-}
-
-.moment-card__forward-video-info strong {
+.moment-card__quote-title {
   display: -webkit-box;
-  min-width: 0;
-  flex: 1 1 auto;
+  margin: 0;
   overflow: hidden;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-.moment-card__forward-video-info > p,
-.moment-card__forward-source-text {
-  display: -webkit-box;
-  overflow: hidden;
-  margin: 0;
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-caption);
-  line-height: var(--bew-line-height-caption);
+  text-decoration: none;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
-.moment-card__forward-video-stats {
-  flex-wrap: wrap;
-  gap: var(--bew-space-1) var(--bew-space-3);
-
-  > span {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--bew-space-1);
-  }
+.moment-card__quote-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.moment-card__forward-video-info small {
+.moment-card__quote-meta {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -2399,6 +2116,12 @@ onBeforeUnmount(() => {
   font-size: var(--bew-font-size-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moment-card__quote-source > :first-child {
+    transition: none;
+  }
 }
 
 .moment-card__additional--footer {
@@ -2416,7 +2139,7 @@ onBeforeUnmount(() => {
   padding: var(--bew-space-2) var(--bew-space-3);
   overflow: hidden;
   border: 0;
-  border-radius: var(--bew-card-inset-radius);
+  border-radius: var(--bew-interactive-radius);
   color: var(--bew-text-2);
   background: var(--bew-fill-1);
   box-sizing: border-box;
@@ -2471,7 +2194,6 @@ onBeforeUnmount(() => {
   padding: 0 var(--bew-space-2);
   box-sizing: border-box;
   margin: 0;
-  border-top: 1px solid var(--bew-border-color);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
 }
@@ -2488,7 +2210,7 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 0 var(--bew-space-2);
   border: 0;
-  border-radius: var(--bew-card-inset-radius);
+  border-radius: var(--bew-interactive-radius);
   color: inherit;
   background: transparent;
   box-sizing: border-box;
@@ -2536,16 +2258,9 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .moment-card__watch-later {
-    transform: none;
-    transition-property: opacity, color, background-color;
-  }
-}
-
 @container (max-width: 359px) {
   .moment-card__main--has-media.moment-card__main--live .moment-card__body {
-    @include contentCard.under-cover(var(--bew-moment-media-radius));
+    @include contentCard.under-cover(var(--bew-media-radius));
   }
   .moment-card__main--has-media {
     display: flex;
@@ -2605,12 +2320,19 @@ onBeforeUnmount(() => {
     overflow: hidden;
   }
 
-  .moment-card--wide-single-image .moment-card__gallery--1 {
+  // A wide card puts its top cover down the left, flush with the top and left
+  // edges, beside the header and body.
+  .moment-card--top-cover.moment-card--supports-wide-layout .moment-card__top-media {
+    --moment-media-corners: var(--bew-media-radius) 0 0 0;
     grid-column: 1;
-    grid-row: 2;
+    grid-row: 1 / span 2;
     align-self: start;
-    width: auto;
-    margin: 0 0 var(--bew-space-3) var(--bew-space-4);
+  }
+
+  .moment-card--top-cover.moment-card--supports-wide-layout .moment-card__header {
+    grid-column: 2;
+    grid-row: 1;
+    padding-top: var(--bew-card-inset);
   }
 
   .moment-card--supports-wide-layout .moment-card__additional {

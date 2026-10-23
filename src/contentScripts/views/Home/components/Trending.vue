@@ -8,6 +8,7 @@ import type { List as VideoItem, TrendingResult } from '~/models/video/trending'
 import api from '~/utils/api'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { reportRuntimeFailure } from '~/utils/messaging'
+import { isPortraitDimension } from '~/utils/portraitMedia'
 
 interface VideoElement {
   uniqueId: string
@@ -82,6 +83,7 @@ function transformTrendingVideo(item: VideoElement): Video | undefined {
     bvid: videoItem.bvid,
     displayTags: [decodeHtmlEntities(videoItem.rcmd_reason.content)].filter(Boolean),
     cid: videoItem.cid,
+    portrait: isPortraitDimension(videoItem.dimension),
     threePointV2: [],
   }
 }

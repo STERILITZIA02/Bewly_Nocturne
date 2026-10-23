@@ -689,6 +689,10 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   }
   if (text.includes('\'~/utils/responsiveImage\'') && !modules['~/utils/responsiveImage'])
     modules['~/utils/responsiveImage'] = await import('../src/utils/responsiveImage')
+  if (text.includes('\'~/utils/pictureRevealMemory\'') && !modules['~/utils/pictureRevealMemory'])
+    modules['~/utils/pictureRevealMemory'] = await import('../src/utils/pictureRevealMemory')
+  if (text.includes('\'~/utils/crossfadeLayers\'') && !modules['~/utils/crossfadeLayers'])
+    modules['~/utils/crossfadeLayers'] = await import('../src/utils/crossfadeLayers')
   if (text.includes('\'~/composables/useLoadingRingPhase\'') && !modules['~/composables/useLoadingRingPhase'])
     modules['~/composables/useLoadingRingPhase'] = await import('../src/composables/useLoadingRingPhase')
   if (text.includes('\'~/components/LoadingRing.vue\'') && !modules['~/components/LoadingRing.vue'])

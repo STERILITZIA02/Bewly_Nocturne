@@ -34,7 +34,7 @@
       transition:
         box-shadow 0.3s ease-in-out,
         background 0.3s ease-in-out;
-      border-radius: var(--bew-radius-half);
+      border-radius: var(--bew-interactive-radius);
     }
 
     .bili-video-card:hover .bili-video-card__wrap {

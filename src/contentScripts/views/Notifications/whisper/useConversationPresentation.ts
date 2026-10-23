@@ -38,7 +38,7 @@ export function useConversationPresentation(view: Ref<HTMLElement | null>, activ
       '--conversation-top-expansion': `${top}px`,
       '--conversation-bottom-expansion': `${Math.max(0, geometry.extraHeight - top)}px`,
       '--conversation-top-lift': `${geometry.topLift}px`,
-      '--conversation-radius': conversationExpanded.value && !isMobileLayout.value ? '0px' : 'var(--bew-panel-radius)',
+      '--conversation-radius': conversationExpanded.value && !isMobileLayout.value ? '0px' : 'var(--bew-surface-radius)',
     }
   })
   function clearTransition() {

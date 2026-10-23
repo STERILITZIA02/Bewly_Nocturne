@@ -393,7 +393,7 @@ const shouldShowDivider = computed(() => {
             <div
               v-if="shouldShowDivider"
               w-2px h-16px bg="$bew-border-color" mx-1
-              rounded="$bew-radius-sm"
+              rounded="$bew-radius-tiny"
             />
           </Transition>
 

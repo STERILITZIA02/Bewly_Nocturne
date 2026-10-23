@@ -263,7 +263,7 @@
   }
 
   .unread-dot {
-    --uno: "w-8px h-8px bg-$bew-theme-color rounded-8px absolute right-2px top-2px";
+    --uno: "w-8px h-8px bg-$bew-theme-color rounded-$bew-pill-radius absolute right-2px top-2px";
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -305,7 +305,7 @@
 
   .right-side-item .login {
     --uno: "!w-auto !flex items-center bg-$bew-theme-color";
-    --uno: "rounded-full important:text-$bew-on-theme-color important:px-4 hover:important-bg-$bew-theme-color hover:important-text-$bew-on-theme-color important:text-base";
+    --uno: "rounded-$bew-pill-radius important:text-$bew-on-theme-color important:px-4 hover:important-bg-$bew-theme-color hover:important-text-$bew-on-theme-color important:text-base";
     box-sizing: border-box;
     height: var(--bew-control-height);
   }

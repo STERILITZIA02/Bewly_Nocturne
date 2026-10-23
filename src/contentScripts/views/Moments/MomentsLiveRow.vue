@@ -109,7 +109,7 @@ onBeforeUnmount(leave)
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: var(--bew-radius-full);
+    border-radius: var(--bew-pill-radius);
   }
 }
 .moments-live-row__badge {
@@ -118,7 +118,7 @@ onBeforeUnmount(leave)
   place-items: center;
   width: var(--bew-space-6);
   height: var(--bew-space-6);
-  border-radius: var(--bew-radius-full);
+  border-radius: var(--bew-pill-radius);
   color: var(--bew-text-1);
   background: var(--bew-selected-bg);
   i {
@@ -167,7 +167,7 @@ onBeforeUnmount(leave)
   aspect-ratio: 16 / 9;
   width: 100%;
   overflow: hidden;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-thumb-radius);
   background: var(--bew-content-solid);
   border: 0;
   box-sizing: border-box;
@@ -200,7 +200,7 @@ onBeforeUnmount(leave)
     min-height: var(--bew-control-item-height);
     padding-inline: var(--bew-space-3);
     border: 0;
-    border-radius: var(--bew-badge-radius);
+    border-radius: var(--bew-pill-radius);
     background: var(--bew-fill-1);
     color: var(--bew-text-1);
     font: inherit;

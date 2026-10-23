@@ -459,7 +459,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-thumb-radius);
 }
 .moment-reply__pictures button {
   position: absolute;

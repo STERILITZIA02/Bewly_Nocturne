@@ -285,8 +285,7 @@ function showRefreshPrompt(...args: unknown[]): void {
     '--bew-fill-1',
     '--bew-fill-2',
     '--bew-filter-glass-1',
-    '--bew-radius',
-    '--bew-panel-radius',
+    '--bew-surface-radius',
     '--bew-interactive-radius',
     // Size tokens are calc() over the browser font scale, so copy the scale too.
     '--bew-font-scale',
@@ -342,7 +341,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       background: color-mix(in oklab, var(--bew-elevated-solid, white) 90%, transparent);
       background: var(--bew-glass-tint, color-mix(in oklab, var(--bew-elevated-solid, white) 90%, transparent));
       border: 1px solid var(--bew-surface-border-color, rgb(0 0 0 / 12%));
-      border-radius: var(--bew-panel-radius, var(--bew-radius, 12px));
+      border-radius: var(--bew-surface-radius, 16px);
       box-shadow: var(--bew-shadow-3, 0 8px 30px rgb(0 0 0 / 18%));
       backdrop-filter: var(--bew-filter-glass-1, blur(12px));
       animation: prompt-in var(--bew-duration-moderate, 300ms) var(--bew-ease-emphasized, ease) both;

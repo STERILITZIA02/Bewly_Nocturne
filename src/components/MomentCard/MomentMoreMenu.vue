@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
@@ -8,6 +8,7 @@ import type { ContextMenuOption } from '~/components/ContextMenu.vue'
 import ContextMenu from '~/components/ContextMenu.vue'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useUserRelations } from '~/composables/useUserRelations'
+import type { findLayoutEditableTarget } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { getUserID, openLinkToNewTab } from '~/utils/main'
@@ -25,12 +26,19 @@ const props = defineProps<{
   menuStyles: CSSProperties
   anchor: { x: number, y: number }
   trigger: HTMLElement | null
+  /** Watch-later lives in the menu, as on video cards. */
+  watchLater?: { added: boolean | undefined, toggle: () => void }
+  /** Layout region under a right-click; adds "edit layout" and "open setting". */
+  layoutTarget?: ReturnType<typeof findLayoutEditableTarget>
 }>()
 const emit = defineEmits<{
   close: []
   requestDelete: [moment: DisplayMoment]
   requestReport: [moment: DisplayMoment]
 }>()
+
+// A live room gets the menu's live item set (no favourite, BV or AV items).
+provide('getVideoType', () => props.video?.roomid ? 'live' : 'common')
 
 const { t } = useI18n()
 const toast = useToast()
@@ -135,6 +143,8 @@ onMounted(() => {
     v-if="menuVideo"
     :video="menuVideo"
     :context-menu-styles="menuStyles"
+    :watch-later="watchLater"
+    :layout-target="layoutTarget"
     :extra-groups="momentGroups"
     @close="emit('close')"
     @removed="emit('close')"

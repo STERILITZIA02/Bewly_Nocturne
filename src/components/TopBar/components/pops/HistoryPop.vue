@@ -357,7 +357,7 @@ defineExpose({
                     m="1"
                     p="x-2 y-1"
                     text="white xs"
-                    border="rounded-full"
+                    border="rounded-$bew-pill-radius"
                   >
                     <!--  When progress = -1 means that the user watched the full video -->
                     {{
@@ -397,7 +397,7 @@ defineExpose({
                     text="xs $bew-text-1"
                     p="x-2 y-1"
                     m="1"
-                    rounded-full
+                    rounded="$bew-pill-radius"
                     font="semibold"
                   >
                     LIVE
@@ -410,7 +410,7 @@ defineExpose({
                     text="xs white"
                     p="x-2 y-1"
                     m="1"
-                    rounded="full"
+                    rounded="$bew-pill-radius"
                   >
                     OFFLINE
                   </div>

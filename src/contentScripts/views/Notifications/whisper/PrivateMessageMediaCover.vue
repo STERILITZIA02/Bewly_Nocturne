@@ -76,7 +76,7 @@ onBeforeUnmount(leave)
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: var(--bew-radius-md);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
 }
 .private-message-media-cover__link,

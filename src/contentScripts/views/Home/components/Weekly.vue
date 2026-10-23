@@ -279,7 +279,7 @@ defineExpose({ initData })
         w-full
         p="x-4 y-2"
         bg="$bew-fill-1"
-        rounded="$bew-radius"
+        rounded="$bew-interactive-radius"
         text="$bew-text-1"
         cursor="pointer"
         flex="~"
@@ -350,7 +350,7 @@ defineExpose({ initData })
                 :class="{ active: activatedSeries?.number === item.number }"
                 class="series-item"
                 p="x-2 y-2"
-                rounded="$bew-radius"
+                rounded="$bew-interactive-radius"
                 cursor-pointer text-left shrink-0
                 transition="background-color duration-200, color duration-200, border-color duration-200, box-shadow duration-200"
                 bg="hover:$bew-fill-2"

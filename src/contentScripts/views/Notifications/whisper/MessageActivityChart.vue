@@ -83,7 +83,7 @@ const dayLabel = (day: MessageActivityDay) => `${dateFormat.value.format(day.tim
 .message-activity-chart__dot {
   width: var(--bew-space-2);
   height: var(--bew-space-2);
-  border-radius: var(--bew-badge-radius);
+  border-radius: var(--bew-pill-radius);
   background: var(--bew-chart-primary);
 }
 .message-activity-chart__dot--secondary {

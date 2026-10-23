@@ -186,7 +186,7 @@ defineExpose({
           <div
             v-if="topBarStore.isNewMoment(index) && selectedMomentTab.type === 'video'"
             class="bew-shape-circle"
-            rounded="full"
+            rounded="$bew-pill-radius"
             w="8px"
             h="8px"
             m="-2"

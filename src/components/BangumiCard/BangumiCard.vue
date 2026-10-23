@@ -63,7 +63,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
       <div
         tabindex="-1" block
         class="bangumi-card__cover"
-        rounded="$bew-media-radius" w-full bg="$bew-skeleton" relative shrink-0
+        rounded="$bew-thumb-radius" w-full bg="$bew-skeleton" relative shrink-0
         overflow-hidden
       >
         <div aspect="12/16" rounded-inherit>
@@ -73,7 +73,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
             class="bangumi-card__badge"
             :style="badgeStyle"
             pos="absolute top-0 right-0"
-            p="x-2 y-1" m="$bew-cover-overlay-inset" rounded="$bew-badge-radius"
+            p="x-2 y-1" m="$bew-cover-overlay-inset" rounded="$bew-pill-radius"
             text="sm" z-1
           >
             {{ bangumi.badge.text }}
@@ -126,7 +126,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
                     text="white sm"
                     leading-none
                     p="x-2 y-1"
-                    rounded="$bew-badge-radius"
+                    rounded="$bew-pill-radius"
                     shrink-0
                   >{{ tag }}
                   </span>
