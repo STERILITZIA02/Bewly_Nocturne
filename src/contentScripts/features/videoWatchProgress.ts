@@ -1,9 +1,11 @@
 import { watch } from 'vue'
 
 import { onRouteChange } from '~/composables/useRouteState'
+import { IFRAME_ACTIVITY_CHANGE } from '~/constants/immersive'
 import { settings } from '~/logic'
 import { waitWithSignal } from '~/utils/abort'
 import api from '~/utils/api'
+import { isIframeDocumentActive } from '~/utils/iframeActivity'
 import { resolvePgcEpisodeVideoIds } from '~/utils/pgcEpisode'
 import { getPlaybackNavigationKey, parsePlaybackTabUrl } from '~/utils/playbackTab'
 import { getVideoElement, isPlayerAdvertisement } from '~/utils/playerMedia'
@@ -23,7 +25,7 @@ export function setupVideoWatchProgress() {
     media: () => media,
     navigation: () => navigation,
     epoch: () => videoVisitHistoryEpoch.value,
-    eligible: () => settings.value.showVideoWatchedBadge && Boolean(navigation),
+    eligible: () => isIframeDocumentActive() && settings.value.showVideoWatchedBadge && Boolean(navigation),
     advertisement: () => isPlayerAdvertisement(media),
     async identity(video, signal) {
       if (isNativeVideoComponentReady(video) === false)
@@ -82,7 +84,7 @@ export function setupVideoWatchProgress() {
     }
     detach?.()
     detach = undefined
-    if (!navigation || !settings.value.showVideoWatchedBadge)
+    if (!navigation || !settings.value.showVideoWatchedBadge || !isIframeDocumentActive())
       return
     const stopObserver = observePlayerDom((records) => {
       if (hasPlayerMediaMutation(records))
@@ -104,6 +106,14 @@ export function setupVideoWatchProgress() {
     syncRoute()
   }, { immediate: true, flush: 'sync' })
   const flush = () => tracker.flush()
+  const activityChanged = () => {
+    tracker.invalidate()
+    identity = undefined
+    syncRoute()
+    if (isIframeDocumentActive())
+      recordVideoVisitFromUrl(location.href)
+  }
+  window.addEventListener(IFRAME_ACTIVITY_CHANGE, activityChanged)
   document.addEventListener('visibilitychange', flush)
   window.addEventListener('pagehide', flush)
   return () => {
@@ -113,6 +123,7 @@ export function setupVideoWatchProgress() {
     tracker.dispose()
     document.removeEventListener('visibilitychange', flush)
     window.removeEventListener('pagehide', flush)
+    window.removeEventListener(IFRAME_ACTIVITY_CHANGE, activityChanged)
     media = null
   }
 }

@@ -11,9 +11,9 @@ defineProps<{
 <template>
   <span class="video-card-author">
     <a
-      class="channel-name"
+      class="channel-name keep-one-line"
       un-text="$bew-text-2 hover:$bew-theme-foreground"
-      cursor-pointer truncate font-normal
+      cursor-pointer font-normal
       :href="getAuthorJumpUrl(Array.isArray(author) ? author[0] : author)"
       target="_blank"
       @click.stop=""

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
+import Button from '~/components/Button.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { usePageScrollPositions } from '~/composables/usePageViewState'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'

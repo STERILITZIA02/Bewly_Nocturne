@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
+import Button from '~/components/Button.vue'
 import MasonryGrid from '~/components/WindowedMasonryGrid.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'

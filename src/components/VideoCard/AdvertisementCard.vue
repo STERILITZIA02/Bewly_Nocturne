@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import LazyPicture from '~/components/LazyPicture.vue'
+
 import type { Video } from './types'
 
 defineProps<{ video: Video, horizontal?: boolean }>()

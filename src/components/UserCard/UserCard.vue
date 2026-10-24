@@ -200,7 +200,7 @@ async function handleFollowClick(e: Event) {
           <!-- 用户名 + 等级 + 性别 -->
           <div flex items-center gap-2>
             <div
-              class="username" text="base $bew-text-1" font-medium truncate
+              class="username keep-one-line" text="base $bew-text-1" font-medium
             >
               {{ name }}
             </div>
@@ -219,9 +219,8 @@ async function handleFollowClick(e: Event) {
 
           <!-- 简介（单行） -->
           <div
-            class="sign-compact-single"
+            class="sign-compact-single keep-one-line"
             text="sm $bew-text-2"
-            truncate
           >
             {{ sign || $t('search.user.no_signature') }}
           </div>
@@ -308,7 +307,7 @@ async function handleFollowClick(e: Event) {
       <div class="user-info" flex-1 min-w-0>
         <!-- 用户名和认证 -->
         <div flex items-center gap-2 mb-1>
-          <div class="username" text="base $bew-text-1" font-medium truncate>
+          <div class="username keep-one-line" text="base $bew-text-1" font-medium>
             {{ name }}
           </div>
           <div
@@ -327,9 +326,8 @@ async function handleFollowClick(e: Event) {
         <!-- 签名 -->
         <div
           v-if="sign"
-          class="sign"
+          class="sign keep-one-line"
           text="sm $bew-text-2"
-          line-clamp-1
         >
           {{ sign }}
         </div>
@@ -382,6 +380,7 @@ async function handleFollowClick(e: Event) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/truncateFade";
 @use "../../styles/contentCard";
 .user-card {
   text-decoration: none;
@@ -417,11 +416,8 @@ async function handleFollowClick(e: Event) {
 }
 
 .sign-compact {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
   word-break: break-word;
+  @include truncateFade.lines(2);
 }
 
 .user-level-icon {
@@ -454,9 +450,7 @@ async function handleFollowClick(e: Event) {
 
 .verify-compact {
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .follow-button {
@@ -573,11 +567,8 @@ async function handleFollowClick(e: Event) {
   font-size: var(--bew-font-size-control);
   color: var(--bew-text-1);
   line-height: var(--bew-line-height-control);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
   overflow-wrap: anywhere;
+  @include truncateFade.lines(2);
 }
 
 .avatar-wrapper-compact {

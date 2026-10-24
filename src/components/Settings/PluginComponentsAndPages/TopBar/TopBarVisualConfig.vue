@@ -175,11 +175,11 @@ function toggleChannel(value: string) {
 <template>
   <div class="topbar-settings-groups" :data-settings-title="$t('settings.group_topbar')">
     <SettingsItemGroup
-      :title="$t('settings.topbar_display_settings')"
+      data-setting-id="settings.topbar_display_settings" :title="$t('settings.topbar_display_settings')"
       :desc="$t('settings.topbar_display_settings_desc')"
     >
       <SettingsItem
-        v-if="!settings.touchScreenOptimization"
+        v-if="!settings.touchScreenOptimization" setting-id="settings.open_top_bar_items_in_bewly"
         :title="$t('settings.open_top_bar_items_in_bewly')"
         :desc="$t('settings.open_top_bar_items_in_bewly_desc')"
         right-width="auto"
@@ -189,7 +189,7 @@ function toggleChannel(value: string) {
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      :title="$t('settings.topbar_logo_and_channels')"
+      data-setting-id="settings.topbar_logo_and_channels" :title="$t('settings.topbar_logo_and_channels')"
       :desc="$t('settings.topbar_logo_and_channels_desc')"
     >
       <SettingsItem
@@ -247,7 +247,7 @@ function toggleChannel(value: string) {
       collapsible
       default-collapsed
     >
-      <SettingsItem :title="$t('settings.topbar_pinned_channels_title')">
+      <SettingsItem setting-id="settings.topbar_pinned_channels_title" :title="$t('settings.topbar_pinned_channels_title')">
         <template #title>
           <div class="topbar-item-title-with-action">
             <span>{{ $t('settings.topbar_pinned_channels_title') }}</span>
@@ -306,6 +306,7 @@ function toggleChannel(value: string) {
         v-for="component in topBarComponents"
         :key="component.key"
         :title="$t(component.i18nKey)"
+        :setting-id="component.i18nKey"
         right-width="auto"
       >
         <template #title>
@@ -337,13 +338,13 @@ function toggleChannel(value: string) {
         </div>
       </SettingsItem>
 
-      <SettingsItemSubgroup :title="$t('settings.notification_badge_categories')" :desc="$t('settings.notification_badge_categories_desc')">
-        <SettingsItem v-for="[key, label] in notificationCategories" :key="key" :title="$t(label)" right-width="auto">
+      <SettingsItemSubgroup data-setting-id="settings.notification_badge_categories" :title="$t('settings.notification_badge_categories')" :desc="$t('settings.notification_badge_categories_desc')">
+        <SettingsItem v-for="[key, label] in notificationCategories" :key="key" :title="$t(label)" :setting-id="label" right-width="auto">
           <Radio v-model="settings[key]" />
         </SettingsItem>
       </SettingsItemSubgroup>
       <SettingsItem
-        :title="$t('settings.filter_articles_in_moments')"
+        setting-id="settings.filter_articles_in_moments" :title="$t('settings.filter_articles_in_moments')"
         :desc="$t('settings.filter_articles_in_moments_desc')"
         right-width="auto"
       >
@@ -360,9 +361,9 @@ function toggleChannel(value: string) {
       </div>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.topbar_user_menu')">
+    <SettingsItemGroup data-setting-id="settings.topbar_user_menu" :title="$t('settings.topbar_user_menu')">
       <SettingsItem
-        :title="$t('settings.hide_lv6_last_login_location_in_top_bar_user_pop')"
+        setting-id="settings.hide_lv6_last_login_location_in_top_bar_user_pop" :title="$t('settings.hide_lv6_last_login_location_in_top_bar_user_pop')"
         :desc="$t('settings.hide_lv6_last_login_location_in_top_bar_user_pop_desc')"
         right-width="auto"
       >
@@ -373,6 +374,7 @@ function toggleChannel(value: string) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../../../styles/truncateFade";
 @use "../../../../styles/breakpoints";
 
 .topbar-settings-groups {
@@ -532,12 +534,10 @@ function toggleChannel(value: string) {
 .channel-grid__label {
   min-width: 0;
   flex: 1;
-  overflow: hidden;
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .channel-grid__overlay {

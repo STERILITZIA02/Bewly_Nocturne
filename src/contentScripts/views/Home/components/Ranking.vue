@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import BangumiCard from '~/components/BangumiCard/BangumiCard.vue'
+import BangumiCardSkeleton from '~/components/BangumiCard/BangumiCardSkeleton.vue'
+import Button from '~/components/Button.vue'
+import Empty from '~/components/Empty.vue'
 import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'

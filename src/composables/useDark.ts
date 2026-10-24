@@ -161,9 +161,15 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
       : resolveDarkModeBaseColor(settings.value) }
   }
   window.addEventListener('message', handleIframeThemeMessage)
+  const resumeDocument = (event: PageTransitionEvent) => {
+    if (event.persisted)
+      iframeDocument.reconnect()
+  }
+  window.addEventListener('pageshow', resumeDocument)
   watch(currentUrl, () => iframeDocument.report(), { immediate: true })
   onScopeDispose(() => {
     window.removeEventListener('message', handleIframeThemeMessage)
+    window.removeEventListener('pageshow', resumeDocument)
     iframeDocument.dispose()
   })
 

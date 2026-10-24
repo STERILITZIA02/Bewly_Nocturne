@@ -10,12 +10,11 @@ import { transformAppVideo, transformWebVideo } from '~/contentScripts/views/Hom
 import { LanguageType } from '~/enums/appEnums'
 import { appAuthTokens, settings } from '~/logic'
 import {
-  appAuthorizationSuccessVersion,
   reportAppAuthorizationInvalid,
   requestAppAuthorization,
 } from '~/logic/appAuthorizationCoordinator'
-import { getAppAuthIdentity } from '~/logic/appAuthStorage'
 import { parseDedeUserID } from '~/logic/loginStatus'
+import { getRecommendationRequestIdentity } from '~/logic/recommendationMode'
 import type { AppForYouResult, Item as AppVideoItem } from '~/models/video/appForYou'
 import type { forYouResult, Item as VideoItem } from '~/models/video/forYou'
 import type { AppVideoElement, VideoElement } from '~/stores/forYouStore'
@@ -29,6 +28,7 @@ import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
 import { debugLog } from '~/utils/debug'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 
+import type { NormalizedAppVideoItem } from './adapters/appRecommendationItem'
 import { createForYouInitialDataCoordinator } from './forYouInitialData'
 import { createRecommendationFeed } from './recommendationFeed'
 import type { RecommendationDataState } from './recommendationState'
@@ -46,6 +46,8 @@ export function useForYouRecommendations(emit: {
   const toast = useToast()
   const { t } = useI18n()
   const tabState = useHomeTabState()
+  const requestIdentity = getRecommendationRequestIdentity()
+  const requestColumn = settings.value.appRecommendationColumn
   const recommendationHistory = useRecommendationHistory(tabState)
 
   const { handleReachBottom, handlePageRefresh, haveScrollbar, undoForwardState, handleUndoRefresh, handleForwardRefresh, handleBackToTop } = useBewlyApp()
@@ -59,7 +61,7 @@ export function useForYouRecommendations(emit: {
   const APP_RECENT_SHOWN_MAX_KEYS = 600
 
   const isWebRecommendationMode = computed(() => settings.value.recommendationMode !== 'app')
-  const { refreshIdx, webFetchRow, webShowlistGroups, buildLastShowlistGroup, getLastShowlistFromGroups, getNoCookieStoredLastShowlist, getNoCookieNextFreshIdx, saveNoCookieRecommendationState, resetWebRecommendState } = useWebRecommendationCursor(tabState)
+  const { refreshIdx, webFetchRow, webShowlistGroups, buildLastShowlistGroup, getLastShowlistFromGroups, getNoCookieStoredLastShowlist, getNoCookieNextFreshIdx, saveNoCookieRecommendationState } = useWebRecommendationCursor(tabState)
   const { filterFunc, appFilterFunc, hasActiveWebRecommendationFilter, hasActiveAppRecommendationFilter, hasActiveRecommendationFilter, requiresManualFilteredPaging, recommendationFilterSettingsSignature, resetFilteredFeedPagingState, recordFilteredFeedBatch } = useRecommendationFilters(tabState, isWebRecommendationMode)
   let requestVersion = 0
   let loadedAccountId: AccountId = getCurrentAccountId()
@@ -246,22 +248,9 @@ export function useForYouRecommendations(emit: {
         hasInitializedData.value = true
       if (recommendationDataState.value === 'loading')
         recommendationDataState.value = currentVideoList.value.length ? 'success' : 'idle'
-      if (settings.value.recommendationMode === 'app' && tabState.read('appAuthIdentity', '') !== getAppAuthIdentity())
-        hasInitializedData.value = false
     }
     initPageAction()
     void initialDataCoordinator.ensure()
-  })
-  tabState.capture('appAuthIdentity', () => getAppAuthIdentity())
-
-  watch(appAuthorizationSuccessVersion, () => {
-    appAuthorizationRequired.value = false
-    if (settings.value.recommendationMode !== 'app')
-      return
-
-    if (isComponentActive && tabState.isCurrent()) {
-      void initData()
-    }
   })
 
   onBeforeUnmount(() => {
@@ -336,39 +325,16 @@ export function useForYouRecommendations(emit: {
       && isComponentActive
       && version === requestVersion
       && recommendationMode === settings.value.recommendationMode
+      && requestIdentity === getRecommendationRequestIdentity()
       && isSameAccount(accountId, loadedAccountId)
       && isSameAccount(accountId, getCurrentAccountId())
   }
 
-  watch(() => settings.value.recommendationMode, (mode) => {
-    if (!tabState.isCurrent())
-      return
-    recommendationHistory.reset()
+  // Home remounts the owner for this key. Invalidate synchronously before its
+  // transition so an old response cannot publish during the retiring frame.
+  watch(getRecommendationRequestIdentity, () => {
     requestVersion++
-    if (mode !== 'app') {
-      appAuthorizationRequired.value = false
-    }
-    recommendationDataState.value = 'idle'
-    noMoreContent.value = false
-    hasInitializedData.value = false
-    resetWebRiskCooldown()
-    resetWebRecommendState()
-    resetFilteredFeedPagingState()
-    consecutiveEmptyLoads.value = 0 // 重置空加载计数器
-    appConsecutiveEmptyLoads.value = 0 // 重置APP模式空加载计数器
-
-    videoList.value = []
-    appVideoList.value = []
-    appFeedIdx.value = 0
-
-    // 重置前进后退状态
-    undoForwardState.value = UndoForwardState.Hidden
-
-    // 重置store状态
-
-    if (isComponentActive)
-      void initData()
-  })
+  }, { flush: 'sync' })
 
   async function initData() {
     if (isWebRecommendationMode.value && isWebRiskCooldownActive()) {
@@ -515,7 +481,8 @@ export function useForYouRecommendations(emit: {
       videoList: videoList.value,
       appVideoList: appVideoList.value,
       appFeedIdx: appFeedIdx.value,
-      appAuthIdentity: getAppAuthIdentity(),
+      requestIdentity,
+      appRecentShownKeys: appRecentShownKeys.value,
       refreshIdx: refreshIdx.value,
       webFetchRow: webFetchRow.value,
       webShowlistGroups: webShowlistGroups.value,
@@ -529,9 +496,7 @@ export function useForYouRecommendations(emit: {
       : recommendationHistory.canRedo.value ? UndoForwardState.ShowForward : UndoForwardState.Hidden
   }
   function restoreRecommendationSnapshot(snapshot: RecommendationSnapshot | null) {
-    if (!snapshot || !tabState.isCurrent())
-      return false
-    if (settings.value.recommendationMode === 'app' && snapshot.appAuthIdentity !== getAppAuthIdentity())
+    if (!snapshot || !tabState.isCurrent() || snapshot.requestIdentity !== getRecommendationRequestIdentity())
       return false
     requestVersion++
     isLoading.value = false
@@ -539,6 +504,7 @@ export function useForYouRecommendations(emit: {
     videoList.value = snapshot.videoList
     appVideoList.value = snapshot.appVideoList
     appFeedIdx.value = snapshot.appFeedIdx
+    appRecentShownKeys.value = snapshot.appRecentShownKeys
     refreshIdx.value = snapshot.refreshIdx
     webFetchRow.value = snapshot.webFetchRow
     webShowlistGroups.value = snapshot.webShowlistGroups
@@ -887,7 +853,8 @@ export function useForYouRecommendations(emit: {
         try {
           const requestAppRecommendations = () => requestAppClient<AppForYouResult>('feedIndex', {
             ...APP_CLIENT_FEED_PARAMS,
-            access_key: appAuthTokens.value.accessToken,
+            column: requestColumn,
+            access_key: auth!.accessToken,
             c_locale: locale,
             s_locale: locale,
             idx,
@@ -952,7 +919,7 @@ export function useForYouRecommendations(emit: {
               }
               return
             }
-            const item = normalizedItems[index]
+            const item = normalizedItems[index] as NormalizedAppVideoItem
             if (!representable[index])
               return
 
@@ -971,7 +938,7 @@ export function useForYouRecommendations(emit: {
             accepted.push({
               uniqueId: videoKeys[0],
               item,
-              displayData: transformAppVideo(item),
+              displayData: { ...transformAppVideo(item), recommendationRequestIdentity: requestIdentity },
               isAdvertisement: false,
             })
           })

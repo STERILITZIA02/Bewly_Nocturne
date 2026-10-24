@@ -161,6 +161,8 @@ async function performApiRequest(message: Message, api: API, signal?: AbortSigna
     const targetParams: Record<string, unknown> = { ...params }
     const targetBody: Record<string, unknown> = { ...body }
     Object.keys(rest).forEach((key) => {
+      if (rest[key] === undefined)
+        return
       if (body && body[key] !== undefined)
         targetBody[key] = rest[key]
       if (Object.hasOwn(params, key) || ((!body || body[key] === undefined) && !_fetch.strictParams))

@@ -15,8 +15,6 @@ export interface HotSearchItem {
   icon: string
 }
 
-export type { SearchRecommendationItem } from '~/models/search/defaultRecommendation'
-
 interface SearchExperienceInterest {
   hotSearch: MaybeRefOrGetter<boolean>
   recommendation: MaybeRefOrGetter<boolean>

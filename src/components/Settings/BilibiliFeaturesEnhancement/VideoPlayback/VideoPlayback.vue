@@ -2,14 +2,11 @@
 import { useI18n } from 'vue-i18n'
 
 import Button from '~/components/Button.vue'
-import Input from '~/components/Input.vue'
 import LocalLoudnessPreferences from '~/components/LocalLoudnessPreferences.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import { settings } from '~/logic'
 import type { PlayerDefaultState } from '~/logic/storage'
-import { isValidPlaybackRate, MAX_PLAYBACK_RATE, MIN_PLAYBACK_RATE } from '~/utils/playbackRate'
-import { applyActivePlaybackRate } from '~/utils/playbackRateCommand'
 import { DEFAULT_SCREENSHOT_SHORTCUT, isValidScreenshotShortcut, screenshotKey } from '~/utils/videoScreenshotShortcut'
 
 import SettingsItem from '../../components/SettingsItem.vue'
@@ -19,21 +16,6 @@ import SettingsToggleTag from '../../components/SettingsToggleTag.vue'
 
 const { t } = useI18n()
 const shortcutError = ref(false)
-const customRate = ref<string | number>(settings.value.savedPlaybackRate)
-const applyingRate = ref(false)
-const rateUnavailable = ref(false)
-const validRate = computed(() => String(customRate.value).trim() !== '' && isValidPlaybackRate(Number(customRate.value)))
-async function applyRate() {
-  if (!validRate.value || applyingRate.value)
-    return
-  applyingRate.value = true
-  rateUnavailable.value = false
-  try {
-    rateUnavailable.value = !await applyActivePlaybackRate(Number(customRate.value))
-  }
-  catch { rateUnavailable.value = true }
-  finally { applyingRate.value = false }
-}
 function recordScreenshotKey(event: KeyboardEvent) {
   if (event.isComposing || event.repeat || ['Tab', 'Escape', 'Shift', 'Control', 'Alt', 'Meta'].includes(event.key))
     return
@@ -52,15 +34,15 @@ type ToggleSetting
 
 interface ToggleTagOption {
   setting: ToggleSetting
-  label: string
+  labelKey: string
   description?: string
   icon: string
 }
 
 const playbackMemoryOptions = computed<ToggleTagOption[]>(() => [
-  { setting: 'rememberPlaybackRate', label: t('settings.remember_playback_rate'), icon: 'i-tabler-gauge' },
-  { setting: 'rememberVideoAspectRatio', label: t('settings.remember_video_aspect_ratio'), icon: 'i-tabler-aspect-ratio' },
-  { setting: 'rememberVideoQuality', label: t('settings.remember_video_quality'), description: t('settings.remember_video_quality_desc'), icon: 'i-tabler-badge-hd' },
+  { setting: 'rememberPlaybackRate', labelKey: 'settings.remember_playback_rate', icon: 'i-tabler-gauge' },
+  { setting: 'rememberVideoAspectRatio', labelKey: 'settings.remember_video_aspect_ratio', icon: 'i-tabler-aspect-ratio' },
+  { setting: 'rememberVideoQuality', labelKey: 'settings.remember_video_quality', description: t('settings.remember_video_quality_desc'), icon: 'i-tabler-badge-hd' },
 ])
 
 const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefaultState }[]>(() => [
@@ -73,12 +55,12 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 
 <template>
   <div>
-    <SettingsItemGroup :title="t('local_loudness.title')">
+    <SettingsItemGroup data-setting-id="local_loudness.title" :title="t('local_loudness.title')">
       <LocalLoudnessPreferences />
     </SettingsItemGroup>
-    <SettingsItemGroup :title="t('settings.group_player_components')">
+    <SettingsItemGroup data-setting-id="settings.group_player_components" :title="t('settings.group_player_components')">
       <SettingsItem
-        :title="t('settings.video_danmaku_default_state')"
+        setting-id="settings.video_danmaku_default_state" :title="t('settings.video_danmaku_default_state')"
         right-width="auto"
       >
         <Select
@@ -89,7 +71,7 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
       </SettingsItem>
 
       <SettingsItem
-        :title="t('settings.video_caption_default_state')"
+        setting-id="settings.video_caption_default_state" :title="t('settings.video_caption_default_state')"
         right-width="auto"
       >
         <Select
@@ -100,7 +82,7 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
       </SettingsItem>
 
       <SettingsItemSubgroup
-        :title="t('settings.group_playback_memory')"
+        data-setting-id="settings.group_playback_memory" :title="t('settings.group_playback_memory')"
         :desc="t('settings.group_playback_memory_desc')"
       >
         <div class="video-setting-tags" role="group" :aria-label="t('settings.group_playback_memory')">
@@ -108,7 +90,8 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
             v-for="option in playbackMemoryOptions"
             :key="option.setting"
             v-model="settings[option.setting]"
-            :label="option.label"
+            :label="$t(option.labelKey)"
+            :data-setting-id="option.labelKey"
             :description="option.description"
             :icon="option.icon"
             :show-state-icon="false"
@@ -116,25 +99,12 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
         </div>
       </SettingsItemSubgroup>
 
-      <SettingsItem :title="t('settings.custom_playback_rate')" right-width="auto">
-        <div class="custom-playback-rate">
-          <Input
-            v-model="customRate" type="number" :min="MIN_PLAYBACK_RATE" :max="MAX_PLAYBACK_RATE" step="any"
-            @enter="applyRate"
-          />
-          <Button :disabled="!validRate || applyingRate" @click="applyRate">
-            {{ t('settings.apply_playback_rate') }}
-          </Button>
-          <span v-if="rateUnavailable" role="status">{{ t('settings.playback_rate_unavailable') }}</span>
-        </div>
-      </SettingsItem>
-
       <SettingsItemSubgroup
-        :title="t('settings.group_video_page_actions')"
+        data-setting-id="settings.group_video_page_actions" :title="t('settings.group_video_page_actions')"
         :desc="t('settings.group_video_page_actions_desc')"
       >
         <SettingsItem
-          :title="t('settings.enlarge_favorite_dialog')"
+          setting-id="settings.enlarge_favorite_dialog" :title="t('settings.enlarge_favorite_dialog')"
           :desc="t('settings.enlarge_favorite_dialog_desc')"
           right-width="auto"
         >
@@ -142,7 +112,7 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
         </SettingsItem>
 
         <SettingsItem
-          :title="t('settings.external_watch_later_button')"
+          setting-id="settings.external_watch_later_button" :title="t('settings.external_watch_later_button')"
           :desc="t('settings.external_watch_later_button_desc')"
           right-width="auto"
         >
@@ -150,7 +120,7 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
         </SettingsItem>
 
         <SettingsItem
-          :title="t('settings.show_vertical_video_zoom_button')"
+          setting-id="settings.show_vertical_video_zoom_button" :title="t('settings.show_vertical_video_zoom_button')"
           :desc="t('settings.show_vertical_video_zoom_button_desc')"
           right-width="auto"
         >
@@ -158,13 +128,13 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
         </SettingsItem>
 
         <SettingsItem
-          :title="t('settings.show_video_screenshot_button')"
+          setting-id="settings.show_video_screenshot_button" :title="t('settings.show_video_screenshot_button')"
           :desc="`${t('settings.show_video_screenshot_button_desc')} ${t('settings.player_extra_controls_hint')}`"
           right-width="auto"
         >
           <Radio v-model="settings.showVideoScreenshotButton" />
         </SettingsItem>
-        <SettingsItem :title="t('settings.video_screenshot_shortcut')" :desc="t('settings.video_screenshot_shortcut_desc')" right-width="auto">
+        <SettingsItem setting-id="settings.video_screenshot_shortcut" :title="t('settings.video_screenshot_shortcut')" :desc="t('settings.video_screenshot_shortcut_desc')" right-width="auto">
           <div class="screenshot-shortcut">
             <input :value="settings.videoScreenshotShortcut" :aria-label="t('settings.video_screenshot_shortcut')" readonly @keydown="recordScreenshotKey">
             <Button type="tertiary" @click="settings.videoScreenshotShortcut = DEFAULT_SCREENSHOT_SHORTCUT; shortcutError = false">
@@ -179,19 +149,6 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 </template>
 
 <style lang="scss" scoped>
-.custom-playback-rate {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--bew-space-2);
-  .b-input {
-    width: calc(var(--bew-space-12) * 2);
-  }
-  [role="status"] {
-    color: var(--bew-text-2);
-    font-size: var(--bew-font-size-control);
-  }
-}
 .screenshot-shortcut {
   display: flex;
   flex-wrap: wrap;

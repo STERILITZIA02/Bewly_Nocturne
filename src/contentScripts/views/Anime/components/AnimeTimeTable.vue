@@ -2,7 +2,10 @@
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
+import Button from '~/components/Button.vue'
+import Empty from '~/components/Empty.vue'
 import HorizontalScrollView from '~/components/HorizontalScrollView.vue'
+import IconButton from '~/components/IconButton.vue'
 import type { Result as TimetableItem, TimetableResult } from '~/models/anime/timeTable'
 import api from '~/utils/api'
 import { removeHttpFromUrl } from '~/utils/main'

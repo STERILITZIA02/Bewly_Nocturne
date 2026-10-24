@@ -175,6 +175,7 @@ async function verifyVideoIdentityReuse() {
     findWatchLaterEntry: () => undefined,
   })
   const fixture = {
+    card_goto: 'av',
     aid: 123,
     bvid: 'BV-fixture',
     cid: 456,
@@ -201,7 +202,10 @@ async function verifyVideoIdentityReuse() {
           './appRecommendationItem': await import('../src/contentScripts/views/Home/adapters/appRecommendationItem'),
         })
       : await loadSourceFunctions(`../src/contentScripts/views/Home/components/${file}.vue`, [name], { decodeHtmlEntities, isPortraitDimension })
-    const video = context[name](file === 'Trending' ? { item: fixture } : fixture, 1)
+    const appItem = file === 'ForYou'
+      ? await loadSourceModule('../src/contentScripts/views/Home/adapters/appRecommendationItem.ts', { '~/utils/bvid': await import('../src/utils/bvid') })
+      : null
+    const video = context[name](file === 'Trending' ? { item: fixture } : appItem ? appItem.normalizeAppVideoItem(fixture) : fixture, 1)
     assert.equal(await resolver.resolveWatchLaterAid(video), 123, `${file} preserves the authoritative aid`)
   }
   assert.equal(detailRequests, 0, 'known video IDs require no per-card detail API calls')

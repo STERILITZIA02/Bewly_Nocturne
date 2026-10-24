@@ -18,7 +18,7 @@ const layoutOptions = computed<{ label: string, value: WatchLaterLayoutMode }[]>
 <template>
   <div>
     <SettingsItemGroup
-      :title="$t('settings.group_watch_later_layout')"
+      data-setting-id="settings.group_watch_later_layout" :title="$t('settings.group_watch_later_layout')"
       :desc="$t('settings.group_watch_later_layout_desc')"
     >
       <SettingsItem

@@ -100,7 +100,10 @@ export function registerLibraryMemoryChecks(check, { Vue, compileComponent, flus
     app.config.warnHandler = message => messages.push(message)
     try {
       app.mount(host)
-      host.querySelector('button').focus()
+      const button = host.querySelector('button')
+      const matches = button.matches.bind(button)
+      button.matches = selector => selector === ':focus-visible' || matches(selector)
+      button.focus()
       await flush()
       assert.equal(host.querySelector('[role="tooltip"]').getAttribute('aria-hidden'), 'false')
       assert.deepEqual(messages, [])
@@ -268,7 +271,7 @@ export function registerLibraryMemoryChecks(check, { Vue, compileComponent, flus
 
   check('memory: native header-sync transport is excluded while actual message and drawer pages remain targets', async () => {
     const { CONTENT_SCRIPT_EXCLUDE_MATCHES, isContentScriptTargetUrl } = await import('../src/constants/contentScript')
-    assert.ok(CONTENT_SCRIPT_EXCLUDE_MATCHES.includes('*://message.bilibili.com/pages/nav/header_sync*'))
+    assert.ok(CONTENT_SCRIPT_EXCLUDE_MATCHES.includes('*://message.bilibili.com/pages/nav/*'))
     assert.equal(isContentScriptTargetUrl('https://message.bilibili.com/pages/nav/header_sync'), false)
     assert.equal(isContentScriptTargetUrl('https://message.bilibili.com/#/whisper'), true)
     assert.equal(isContentScriptTargetUrl('https://www.bilibili.com/video/BV1xx411c7mD'), true)

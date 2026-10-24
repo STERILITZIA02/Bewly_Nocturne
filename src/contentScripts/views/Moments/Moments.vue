@@ -7,6 +7,7 @@ import CloseButton from '~/components/CloseButton.vue'
 import Dialog from '~/components/Dialog.vue'
 import IconButton from '~/components/IconButton.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
+import Loading from '~/components/Loading.vue'
 import MomentCard from '~/components/MomentCard/MomentCard.vue'
 import MomentCardSkeleton from '~/components/MomentCard/MomentCardSkeleton.vue'
 import { createMomentDisclosureCache, MOMENT_DISCLOSURES, normalizeForwardCount } from '~/components/MomentCard/momentForwardContent'
@@ -14,6 +15,7 @@ import { createMomentForwardTransactions, MOMENT_FORWARD_TRANSACTIONS } from '~/
 import MomentReportDialog from '~/components/MomentCard/MomentReportDialog.vue'
 import type { DisplayMoment } from '~/components/MomentCard/types'
 import { getMomentSkeletonVariant } from '~/components/MomentCard/utils'
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { usePageViewState } from '~/composables/usePageViewState'
@@ -141,6 +143,9 @@ const portalLoaded = viewState.ref('portalLoaded', false)
 const selectedHostMid = viewState.ref('hostMid', '')
 const isPortalLoading = ref(!viewState.restored)
 const upListScrollerRef = ref<HTMLElement | null>(null)
+// The bar keeps its sideways position across visits (user request).
+const upListScrollLeft = viewState.ref('upListScrollLeft', 0)
+let upListRestorePending = false
 const upListTrackRef = ref<HTMLElement | null>(null)
 const canScrollUpListLeft = ref(false)
 const canScrollUpListRight = ref(false)
@@ -323,6 +328,17 @@ function updateUpListScrollState() {
   })
   canScrollUpListLeft.value = state.canScrollLeft
   canScrollUpListRight.value = state.canScrollRight
+  if (!upListRestorePending) {
+    upListScrollLeft.value = scroller.scrollLeft
+    return
+  }
+  // A remounted bar returns to where it was once its row is long enough (or
+  // has finished loading, when it is shorter now).
+  const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth
+  if (maxScrollLeft < upListScrollLeft.value && isPortalLoading.value)
+    return
+  upListRestorePending = false
+  scroller.scrollLeft = Math.min(upListScrollLeft.value, maxScrollLeft)
 }
 
 function scheduleUpListStateUpdate() {
@@ -356,6 +372,7 @@ function setupUpListScrollerObserver() {
   if (upListTrackRef.value)
     upListElastic = createElasticWheelScroll(scroller, upListTrackRef.value)
 
+  upListRestorePending = true
   upListResizeObserver = new ResizeObserver(scheduleUpListStateUpdate)
   upListResizeObserver.observe(scroller)
   if (upListTrackRef.value)
@@ -1373,6 +1390,7 @@ function appendMoments(items: DisplayMoment[]) {
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/truncateFade";
 @use "../../../styles/breakpoints";
 @use "../../../styles/contentCard";
 
@@ -1388,7 +1406,39 @@ function appendMoments(items: DisplayMoment[]) {
 // top-bar avatar's right edge. It stays in the page layer, below the fixed rail.
 .moments-up-list {
   --moments-up-list-bleed-start: calc(var(--bew-messages-sidebar-width) + var(--library-content-inline-padding));
-  margin-bottom: var(--bew-space-6);
+  // Tile, gap and one name line (the track's padding and the scroller's
+  // negative margin cancel out).
+  --moments-up-list-height: calc(var(--bew-moments-up-tile-size) + var(--bew-space-2) + var(--bew-line-height-control));
+  // The feed starts this far below the names: room for a hovered tile's scale
+  // and shadow, which the feed would otherwise cover.
+  --moments-up-list-gap: var(--bew-space-8);
+  // Its own formatting context: the scroller's negative top margin must not
+  // collapse through and lift the box, or sticky would push it back down onto
+  // the feed.
+  display: flow-root;
+  // The bar stays where it is while the page scrolls (user request): pinned at
+  // its own place, the content's top padding. The feed after it, a stacking
+  // context of its own (container query), slides up over it.
+  position: sticky;
+  top: calc(var(--bew-top-bar-height) + var(--bew-space-4));
+  height: var(--moments-up-list-height);
+  margin-bottom: var(--moments-up-list-gap);
+}
+// It fades from when the first cards reach its bottom edge (scrolled by the
+// gap) until they reach its top edge, then stops taking input.
+// Without scroll timelines the cards simply cover it.
+@supports (animation-timeline: scroll()) {
+  .moments-up-list {
+    animation: moments-up-list-cover linear both;
+    animation-timeline: --bew-page-scroll;
+    animation-range: var(--moments-up-list-gap) calc(var(--moments-up-list-gap) + var(--moments-up-list-height));
+  }
+}
+@keyframes moments-up-list-cover {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 .moments-up-list__scroller {
   margin-inline: calc(-1 * var(--moments-up-list-bleed-start)) calc(-1 * var(--library-content-inline-padding));
@@ -1542,14 +1592,12 @@ function appendMoments(items: DisplayMoment[]) {
   display: block;
   align-self: stretch;
   max-width: 100%;
-  overflow: hidden;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   text-align: start;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 .moments-page__initial-loading {
   position: relative;

@@ -45,11 +45,11 @@ export function useFollowingDirectory(state: HomeTabState, getAccountId: () => A
     }
   }
 
-  function sortedUploaders(items: FollowingUploader[], excludeMid = context.selected()) {
+  function sortedUploaders(items: FollowingUploader[], excludeMid = context.selected(), blocked?: Set<number>) {
     if (excludeMid !== null)
       return items
-    const blocked = context.blocked()
-    const next = [...items].sort((a, b) => Number(blocked.has(a.mid)) - Number(blocked.has(b.mid)) || b.lastUpdateTime - a.lastUpdateTime)
+    const blockedIds = blocked ?? context.blocked()
+    const next = [...items].sort((a, b) => Number(blockedIds.has(a.mid)) - Number(blockedIds.has(b.mid)) || b.lastUpdateTime - a.lastUpdateTime)
     return next.some((item, index) => item !== items[index]) ? next : items
   }
   function sort(excludeMid = context.selected()) {
@@ -64,21 +64,25 @@ export function useFollowingDirectory(state: HomeTabState, getAccountId: () => A
     return hasUpdate === uploader.hasUpdate ? uploader : { ...uploader, hasUpdate }
   }
 
-  function updateStatus() {
-    const viewed = context.viewed()
+  function updateStatus(viewed = context.viewed(), blocked = context.blocked()) {
     const now = Date.now()
-    const next = sortedUploaders(uploaders.value.map(uploader => withUpdateStatus(uploader, viewed, now)))
+    const next = sortedUploaders(uploaders.value.map(uploader => withUpdateStatus(uploader, viewed, now)), context.selected(), blocked)
     if (next.some((user, index) => user !== uploaders.value[index]))
       uploaders.value = next
   }
 
-  function notePublication(mid: number, time: number) {
-    const index = uploaders.value.findIndex(user => user.mid === mid)
-    const previous = uploaders.value[index]
-    if (!previous || (previous.hasPostTime && previous.lastUpdateTime >= time))
-      return false
-    uploaders.value[index] = { ...previous, lastUpdateTime: time, hasPostTime: true }
-    return true
+  function notePublications(times: ReadonlyMap<number, number>) {
+    let changed = false
+    const next = uploaders.value.map((previous) => {
+      const time = times.get(previous.mid)
+      if (time === undefined || (previous.hasPostTime && previous.lastUpdateTime >= time))
+        return previous
+      changed = true
+      return { ...previous, lastUpdateTime: time, hasPostTime: true }
+    })
+    if (changed)
+      uploaders.value = next
+    return changed
   }
   function markViewed(mid: number) {
     const index = uploaders.value.findIndex(user => user.mid === mid)
@@ -327,7 +331,7 @@ export function useFollowingDirectory(state: HomeTabState, getAccountId: () => A
     lifetime.dispose()
     stopChanges()
   })
-  return { uploaders: computed(() => uploaders.value), groups: computed(() => groups.value), loaded: computed(() => loaded.value), loading, failed, groupsLoading, groupsFailed, load, loadGroups, reset, updateStatus, sort, notePublication, markViewed, applyMembership, removeGroup, acknowledgeRevision, refreshMember }
+  return { uploaders: computed(() => uploaders.value), groups: computed(() => groups.value), loaded: computed(() => loaded.value), loading, failed, groupsLoading, groupsFailed, load, loadGroups, reset, updateStatus, sort, notePublications, markViewed, applyMembership, removeGroup, acknowledgeRevision, refreshMember }
 }
 
 export type FollowingDirectory = ReturnType<typeof useFollowingDirectory>

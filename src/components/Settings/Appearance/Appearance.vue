@@ -2,13 +2,17 @@
 import { useThrottleFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
+import Input from '~/components/Input.vue'
+import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
+import Slider from '~/components/Slider.vue'
 import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, settings } from '~/logic'
 import { clampThemeColor, DEFAULT_THEME_COLOR, NEUTRAL_THEME_COLOR } from '~/utils/themeColor'
 
 import SettingsItem from '../components/SettingsItem.vue'
 import SettingsItemGroup from '../components/SettingsItemGroup.vue'
 import SettingsSectionHeading from '../components/SettingsSectionHeading.vue'
+import SettingsSegmentedControl from '../components/SettingsSegmentedControl.vue'
 
 const { t } = useI18n()
 
@@ -126,21 +130,21 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
 <template>
   <div>
     <SettingsSectionHeading
-      :title="$t('settings.menu_appearance')"
+      data-setting-id="settings.menu_appearance" :title="$t('settings.menu_appearance')"
       :desc="$t('settings.category_appearance_desc')"
       icon="i-tabler:brush"
     />
 
-    <SettingsItemGroup :title="$t('settings.group_visual_effects')">
+    <SettingsItemGroup data-setting-id="settings.group_visual_effects" :title="$t('settings.group_visual_effects')">
       <SettingsItem
-        :title="$t('settings.disable_frosted_glass_and_top_bar_gradient')"
+        setting-id="settings.disable_frosted_glass_and_top_bar_gradient" :title="$t('settings.disable_frosted_glass_and_top_bar_gradient')"
         :desc="$t('settings.disable_frosted_glass_and_top_bar_gradient_desc')"
         right-width="auto"
       >
         <Radio v-model="settings.disableFrostedGlass" />
       </SettingsItem>
       <SettingsItem
-        v-if="!settings.disableFrostedGlass"
+        v-if="!settings.disableFrostedGlass" setting-id="settings.frosted_glass_blur_intensity"
         :title="$t('settings.frosted_glass_blur_intensity')"
         right-width="auto"
       >
@@ -153,17 +157,14 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
           />
         </div>
       </SettingsItem>
-      <SettingsItem :title="$t('settings.disable_shadow')" right-width="auto">
+      <SettingsItem setting-id="settings.disable_shadow" :title="$t('settings.disable_shadow')" right-width="auto">
         <Radio v-model="settings.disableShadow" />
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.group_page_style')">
-      <SettingsItem :title="$t('settings.enable_sidebar_cover_blur')" :desc="$t('settings.enable_sidebar_cover_blur_desc')" right-width="auto">
-        <Radio v-model="settings.enableSidebarCoverBlur" />
-      </SettingsItem>
+    <SettingsItemGroup data-setting-id="settings.group_page_style" :title="$t('settings.group_page_style')">
       <SettingsItem
-        :title="$t('settings.adapt_to_other_page_styles')"
+        setting-id="settings.adapt_to_other_page_styles" :title="$t('settings.adapt_to_other_page_styles')"
         :desc="$t('settings.adapt_to_other_page_styles_desc')"
         right-width="auto"
       >
@@ -171,12 +172,12 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.group_color')">
+    <SettingsItemGroup data-setting-id="settings.group_color" :title="$t('settings.group_color')">
       <SettingsItem setting-id="appearance.theme" :title="$t('settings.theme')" right-width="auto">
         <Select v-model="settings.theme" w="160px" :options="themeOptions" />
       </SettingsItem>
       <SettingsItem
-        v-if="settings.theme === 'scheduled'"
+        v-if="settings.theme === 'scheduled'" setting-id="settings.theme_schedule"
         :title="$t('settings.theme_schedule')"
         :desc="$t('settings.theme_schedule_desc')"
         right-width="auto"
@@ -187,14 +188,14 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
           <input v-model="themeScheduleEnd" type="time" @blur="saveThemeSchedule">
         </div>
       </SettingsItem>
-      <SettingsItem :title="$t('settings.video_page_dark_mode')" right-width="auto">
+      <SettingsItem setting-id="settings.video_page_dark_mode" :title="$t('settings.video_page_dark_mode')" right-width="auto">
         <template #desc>
           {{ $t('settings.video_page_dark_mode_desc') }}
         </template>
 
         <Radio v-model="settings.videoPageDarkMode" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.theme_color')" :desc="$t('settings.theme_color_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.theme_color" :title="$t('settings.theme_color')" :desc="$t('settings.theme_color_desc')" right-width="auto">
         <div class="theme-color-options" flex="~ gap-2 wrap" justify-end>
           <button
             type="button"
@@ -255,13 +256,13 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
       </SettingsItem>
 
       <SettingsItem
-        :title="$t('settings.enable_dark_mode_tint')"
+        setting-id="settings.enable_dark_mode_tint" :title="$t('settings.enable_dark_mode_tint')"
         :desc="$t('settings.enable_dark_mode_tint_desc')"
         right-width="auto"
       >
         <Radio v-model="settings.enableDarkModeTint" />
       </SettingsItem>
-      <SettingsItem v-if="settings.enableDarkModeTint" :title="$t('settings.dark_mode_base_color')" right-width="auto">
+      <SettingsItem v-if="settings.enableDarkModeTint" setting-id="settings.dark_mode_base_color" :title="$t('settings.dark_mode_base_color')" right-width="auto">
         <div class="dark-mode-base-color-options" flex="~ gap-2 wrap" justify-end>
           <button
             v-for="color in darkModeBaseColorOptions" :key="color"
@@ -306,7 +307,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
         </div>
       </SettingsItem>
       <SettingsItem
-        :title="$t('settings.enable_oled_dark_mode')"
+        setting-id="settings.enable_oled_dark_mode" :title="$t('settings.enable_oled_dark_mode')"
         :desc="$t('settings.enable_oled_dark_mode_desc')"
         right-width="auto"
       >
@@ -314,7 +315,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
       </SettingsItem>
 
       <SettingsItem
-        :title="$t('settings.gradient_theme_color_background')"
+        setting-id="settings.gradient_theme_color_background" :title="$t('settings.gradient_theme_color_background')"
         :desc="$t('settings.gradient_theme_color_background_desc')"
         right-width="auto"
       >
@@ -322,8 +323,18 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.group_fonts')">
-      <SettingsItem :title="$t('settings.customize_font')" right-width="auto">
+    <SettingsItemGroup data-setting-id="settings.group_fonts" :title="$t('settings.group_fonts')">
+      <SettingsItem setting-id="settings.enable_text_autospace" :title="$t('settings.enable_text_autospace')" :desc="$t('settings.enable_text_autospace_desc')" right-width="auto">
+        <SettingsSegmentedControl
+          v-model="settings.textAutospaceMode" :label="$t('settings.enable_text_autospace')"
+          :options="[
+            { value: 'default', label: $t('settings.text_autospace_default') },
+            { value: 'on', label: $t('settings.text_autospace_on') },
+            { value: 'off', label: $t('settings.text_autospace_off') },
+          ]"
+        />
+      </SettingsItem>
+      <SettingsItem setting-id="settings.customize_font" :title="$t('settings.customize_font')" right-width="auto">
         <Select
           v-model="settings.customizeFont"
           :options="fontPreferenceOptions"
@@ -341,10 +352,10 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
           </i18n-t>
         </template>
       </SettingsItem>
-      <SettingsItem :title="$t('settings.remove_the_indent_from_chinese_punctuation')" :desc="$t('settings.remove_the_indent_from_chinese_punctuation_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.remove_the_indent_from_chinese_punctuation" :title="$t('settings.remove_the_indent_from_chinese_punctuation')" :desc="$t('settings.remove_the_indent_from_chinese_punctuation_desc')" right-width="auto">
         <Radio v-model="settings.removeTheIndentFromChinesePunctuation" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.override_danmaku_font')" :desc="$t('settings.override_danmaku_font_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.override_danmaku_font" :title="$t('settings.override_danmaku_font')" :desc="$t('settings.override_danmaku_font_desc')" right-width="auto">
         <Radio v-model="settings.overrideDanmakuFont" />
       </SettingsItem>
     </SettingsItemGroup>

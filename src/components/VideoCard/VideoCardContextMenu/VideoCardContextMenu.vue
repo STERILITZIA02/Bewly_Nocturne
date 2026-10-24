@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import ChevronIcon from '~/components/ChevronIcon.vue'
+import PipWindow from '~/components/PipWindow.vue'
 import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useMeasuredDisclosure } from '~/composables/useMeasuredDisclosure'
@@ -16,12 +17,15 @@ import { Type as ThreePointV2Type } from '~/models/video/appForYou'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
+import type { AppFeedFeedbackSelection } from '~/utils/appFeedFeedback'
+import { getAppFeedFeedbackTarget } from '~/utils/appFeedFeedback'
 import { cleanBilibiliUrl, getCSRF, getUserID, openLinkToNewTab } from '~/utils/main'
 import { openLinkInBackground } from '~/utils/tabs'
 import { changeUserRelation } from '~/utils/userRelation'
 import { canFavoriteVideo } from '~/utils/videoFavoriteSelection'
 
 import type { Video } from '../types'
+import { isBangumiVideo } from '../utils'
 import BlockUserConfirmDialog from './components/BlockUserConfirmDialog.vue'
 import DislikeDialog from './components/DislikeDialog.vue'
 import FavoriteVideoDialog from './components/FavoriteVideoDialog.vue'
@@ -50,7 +54,7 @@ const props = withDefaults(defineProps<{
   extraGroups: () => [],
 })
 const emit = defineEmits<{
-  (event: 'removed', selectedOpt?: { reasonId?: number, feedbackId?: number }): void
+  (event: 'removed', selectedOpt?: AppFeedFeedbackSelection): void
   (event: 'close'): void
 }>()
 const menuListRef = ref<HTMLElement | null>(null)
@@ -156,17 +160,17 @@ function getAuthorFollowed() {
 }
 
 // Every configurable item, grouped in display order. The settings list decides
-// which ones fold under “高级选项”; nothing is hidden outright.
+// which ones fold under “更多操作”; nothing is hidden outright.
 const configurableGroups = computed((): ConfigurableItem[][] => {
   const video = props.video
   const type = getVideoType()
-  const isMedia = type === 'bangumi' || type === 'live'
+  const isMedia = type === 'bangumi' || type === 'live' || isBangumiVideo(video)
   const authorMid = getAuthorMid()
-  const recommendation: ConfigurableItem[] = type === 'appRcmd'
-    ? (video.threePointV2 ?? []).some(option => option.type === ThreePointV2Type.Dislike)
-        ? [{ key: 'notInterested', name: t('video_card.operation.not_interested'), icon: 'i-tabler:mood-sad', run: openAppDislikeDialog }]
-        : []
-    : type === 'rcmd'
+  const recommendation: ConfigurableItem[] = video.recommendationSource === 'app'
+    ? getAppFeedFeedbackTarget(video) && (video.threePointV2 ?? []).some(option => (option.type === ThreePointV2Type.Dislike || option.type === ThreePointV2Type.Feedback) && option.reasons?.length)
+      ? [{ key: 'notInterested', name: t('video_card.operation.not_interested'), icon: 'i-tabler:mood-sad', run: openAppDislikeDialog }]
+      : []
+    : video.recommendationSource === 'web'
       ? [
           { key: 'notInterested', name: t('video_card.operation.not_interested'), icon: 'i-tabler:mood-sad', run: () => handleWebDislike(1) },
           { key: 'notInterestedUploader', name: t('video_card.operation.not_interested_uploader'), icon: 'i-tabler:mood-sad', run: () => handleWebDislike(2) },
@@ -190,7 +194,7 @@ const configurableGroups = computed((): ConfigurableItem[][] => {
       ? [
           { key: 'openInNewTab', name: t('video_card.operation.open_in_new_tab'), icon: 'i-tabler:layout-bottombar', run: closeThen(() => openLinkToNewTab(video.url!)) },
           { key: 'openInBackground', name: t('video_card.operation.open_in_background'), icon: 'i-tabler:layout-bottombar', run: closeThen(() => openLinkInBackground(video.url!)) },
-          { key: 'openInNewWindow', name: t('video_card.operation.open_in_new_window'), icon: 'i-tabler:maximize', run: () => showPipWindow.value = true },
+          { key: 'openInNewWindow', name: t('documentPictureInPicture' in window ? 'video_card.operation.open_in_pip_window' : 'video_card.operation.open_in_new_window'), icon: 'i-tabler:maximize', run: () => showPipWindow.value = true },
           { key: 'openInCurrentTab', name: t('video_card.operation.open_in_current_tab'), icon: 'i-tabler:layout-bottombar', run: closeThen(() => window.open(video.url, '_self')) },
         ]
       : [],
@@ -394,7 +398,7 @@ function handleReopen() {
   handleClose()
 }
 
-function handleRemoved(selectedOpt?: { reasonId?: number, feedbackId?: number }) {
+function handleRemoved(selectedOpt?: AppFeedFeedbackSelection) {
   emit('removed', selectedOpt)
   handleClose()
 }
@@ -553,7 +557,7 @@ const unfollowUser = () => writeRelation(2)
     />
 
     <PipWindow
-      v-if="showPipWindow"
+      v-if="showPipWindow && video.url"
       :url="video.url"
       @close="handleClose"
     />

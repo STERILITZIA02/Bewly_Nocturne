@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import Button from '~/components/Button.vue'
 import type { ContextMenuOption } from '~/components/ContextMenu.vue'
 import ContextMenu from '~/components/ContextMenu.vue'
 import Dialog from '~/components/Dialog.vue'

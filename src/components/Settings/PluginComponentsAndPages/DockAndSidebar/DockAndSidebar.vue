@@ -5,19 +5,35 @@ import draggable from 'vuedraggable'
 import Button from '~/components/Button.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
+import { useBewlyApp } from '~/composables/useAppProvider'
+import { pageModeChangePending, selectPageMode } from '~/composables/usePageModeSwitcher'
 import type { DockCollapseMode } from '~/constants/dock'
 import { DOCK_POSITIONS } from '~/constants/dock'
 import { settings } from '~/logic'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
+import type { PageMode } from '~/utils/pageMode'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
+import SettingsSegmentedControl from '../../components/SettingsSegmentedControl.vue'
 
 const { t } = useI18n()
 const mainStore = useMainStore()
 const settingsStore = useSettingsStore()
+const { activatedPage } = useBewlyApp()
+const pageMode = computed({
+  get: () => settings.value.pageMode,
+  set: (mode: PageMode) => {
+    void selectPageMode(mode, activatedPage.value)
+  },
+})
+const pageModeOptions = computed(() => [
+  { label: t('dock.page_mode_original'), value: 'original' },
+  { label: t('dock.page_mode_bewly'), value: 'bewly' },
+  { label: t('dock.page_mode_custom'), value: 'custom' },
+])
 
 const dockPositions = computed(() => DOCK_POSITIONS.map(value => ({ label: t(`common.position.${value}`), value })))
 
@@ -108,9 +124,15 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
 
 <template>
   <div>
-    <SettingsItemGroup data-setting-id="navigation.pageMode" :title="$t('settings.group_dock')">
-      <SettingsItem :title="$t('settings.always_use_dock')" :desc="$t('settings.always_use_dock_desc')" right-width="auto">
+    <SettingsItemGroup data-setting-id="settings.group_dock" :title="$t('settings.group_dock')">
+      <SettingsItem setting-id="navigation.pageMode" :title="$t('settings.page_mode')" :desc="$t('settings.page_mode_desc')" right-width="auto">
+        <SettingsSegmentedControl v-model="pageMode" :disabled="pageModeChangePending" :label="$t('settings.page_mode')" :options="pageModeOptions" />
+      </SettingsItem>
+      <SettingsItem setting-id="settings.always_use_dock" :title="$t('settings.always_use_dock')" :desc="$t('settings.always_use_dock_desc')" right-width="auto">
         <Radio v-model="settings.alwaysUseDock" />
+      </SettingsItem>
+      <SettingsItem setting-id="settings.show_dock_back_to_top" :title="$t('settings.show_dock_back_to_top')" :desc="$t('settings.show_dock_back_to_top_desc')" right-width="auto">
+        <Radio v-model="settings.showDockBackToTop" />
       </SettingsItem>
       <SettingsItem
         setting-id="navigation.dock.collapseMode"
@@ -157,7 +179,7 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
           >
             <div flex="~ gap-2 items-center">
               <div i-tabler:layout-navbar />
-              <div w-80px text-ellipsis>
+              <div class="keep-one-line" w-80px>
                 {{ $t('settings.topbar_mode') }}
               </div>
             </div>
@@ -202,7 +224,7 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
                   @keydown.alt.down.prevent="moveDockItem(element, 1)"
                 >
                   <div :class="pageOptions.find((page:any) => (page.value === element.page))?.icon as string" />
-                  <div w-80px text-ellipsis>
+                  <div class="keep-one-line" w-80px>
                     {{ pageOptions.find(option => option.value === element.page)?.label }}
                   </div>
                 </button>
@@ -232,7 +254,7 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
         </template>
       </SettingsItem>
       <SettingsItem
-        :title="$t('settings.show_bewly_or_bili_page_switcher')"
+        setting-id="settings.show_bewly_or_bili_page_switcher" :title="$t('settings.show_bewly_or_bili_page_switcher')"
         :desc="$t('settings.show_bewly_or_bili_page_switcher_desc')"
         right-width="auto"
       >
@@ -249,7 +271,7 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.group_sidebar')" :desc="$t('settings.group_sidebar_desc')">
+    <SettingsItemGroup data-setting-id="settings.group_sidebar" :title="$t('settings.group_sidebar')" :desc="$t('settings.group_sidebar_desc')">
       <SettingsItem setting-id="navigation.sidebar.position" :title="$t('settings.sidebar_position')" right-width="auto">
         <Select v-model="settings.sidebarPosition" :options="sidebarPositions" w="160px" />
       </SettingsItem>

@@ -430,7 +430,6 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
       'vue': Vue,
       'webextension-polyfill': { default: { storage: { onChanged: changes } } },
       '~/utils/abort': abort.module,
-      '~/utils/sidebarCoverSettings': await import('../src/utils/sidebarCoverSettings'),
       '~/utils/settingsStorageProtocol': protocol,
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false, sendMessage: (type, body) => {
         if (type === protocol.SETTINGS_STORAGE_READ_MESSAGE)
@@ -478,7 +477,6 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
       'vue': Vue,
       'webextension-polyfill': { default: { storage: { onChanged: listeners, local: { get: async () => ({ settings: JSON.stringify({ mode: 9 }), [protocol.SETTINGS_STORAGE_META_KEY]: { epoch: 'e1', revision: 3 } }) } } } },
       '~/utils/abort': abort.module,
-      '~/utils/sidebarCoverSettings': await import('../src/utils/sidebarCoverSettings'),
       '~/utils/settingsStorageProtocol': protocol,
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false, sendMessage: (type, body) => {
         if (type === protocol.SETTINGS_STORAGE_READ_MESSAGE)
@@ -571,7 +569,6 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
         'vue': Vue,
         'webextension-polyfill': { default: extension },
         '~/utils/abort': { ...(await import('../src/utils/abort')), waitForDelay: async () => {} },
-        '~/utils/sidebarCoverSettings': await import('../src/utils/sidebarCoverSettings'),
         '~/utils/settingsStorageProtocol': protocol,
         '~/utils/messaging': { isExtensionContextInvalidatedError: () => false, sendMessage: async (type, value) => {
           if (type === protocol.SETTINGS_STORAGE_IMPORT_MESSAGE)
@@ -648,7 +645,6 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
         'vue': Vue,
         'webextension-polyfill': { default: { storage: { onChanged: changes } } },
         '~/utils/abort': await import('../src/utils/abort'),
-        '~/utils/sidebarCoverSettings': await import('../src/utils/sidebarCoverSettings'),
         '~/utils/settingsStorageProtocol': protocol,
         '~/utils/messaging': {
           isExtensionContextInvalidatedError: error => String(error).includes('Extension context invalidated'),

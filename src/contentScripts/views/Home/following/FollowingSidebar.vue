@@ -193,6 +193,7 @@ onMounted(() => emit('scrollElement', scroller.value))
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/truncateFade";
 @use "../../../../styles/scrollEdgeFade";
 
 .following-sidebar {
@@ -305,9 +306,7 @@ onMounted(() => emit('scrollElement', scroller.value))
   flex-direction: column;
   justify-content: center;
   > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @include truncateFade.line;
   }
   small {
     color: var(--bew-text-2);
@@ -324,9 +323,7 @@ onMounted(() => emit('scrollElement', scroller.value))
 .following-sidebar__group-name {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 .following-sidebar__status {
   margin-block: var(--bew-space-2);

@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { compileStyleAsync, parse } from 'vue/compiler-sfc'
+
+async function listStylePolicyFiles() {
+  const root = fileURLToPath(new URL('../src/', import.meta.url))
+  return (await readdir(root, { recursive: true }))
+    .filter(file => /\.(?:vue|scss|css|ts)$/.test(file))
+    .map(file => join(root, file))
+}
 
 export function registerSidebarContinuityChecks(check, { Vue, compileComponent, flush }) {
   check('sidebar material: actual late scoped message/skeleton CSS cannot repaint a hosted rail', async () => {
@@ -677,6 +685,15 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(toneComposable, /const band = \[getMomentThumbnailUrl\(image, 64\), Math\.max\(0, shown - 0\.15\), shown\] as const/)
     assert.match(card, /@mixin toned-surface \{[\s\S]*?--bew-elevated-over-page: var\(--moment-tone\);[\s\S]*?--bew-text-1: var\(--moment-tone-fg\);[\s\S]*?color: var\(--bew-text-1\);/)
     assert.match(card, /\.moment-card--portrait-top \.moment-card__surface \{\s*@include toned-surface;/)
+    // A toned card's composer stays frosted: the glass tint keeps the global
+    // glass opacity instead of the opaque tone.
+    const tonedMixin = card.slice(card.indexOf('@mixin toned-surface {'), card.indexOf('}', card.indexOf('@mixin toned-surface {')))
+    assert.match(tonedMixin, /--bew-glass-tint-solid: color-mix\(in srgb, var\(--moment-tone-fg\) 10%, var\(--moment-tone\)\);/)
+    assert.match(tonedMixin, /--bew-glass-tint: rgb\(from var\(--bew-glass-tint-solid\) r g b \/ var\(--bew-content-opacity\)\);/)
+    assert.match(tonedMixin, /--bew-glass-tint-hover: rgb\(from var\(--bew-glass-tint-solid-hover\) r g b \/ var\(--bew-content-opacity\)\);/)
+    assert.doesNotMatch(tonedMixin, /--bew-glass-tint-solid: var\(--bew-glass-tint\)/)
+    const composerStyles = await read('styles/composer.scss')
+    assert.match(composerStyles, /background: var\(--bew-glass-tint-solid\);[\s\S]*?background: var\(--bew-glass-tint\);\s*backdrop-filter: var\(--bew-filter-glass-1\);/)
     // Quoted videos, live rooms and image posts use the same media (cover,
     // blur and fade into the quote's colour, single image with thumbnails,
     // portrait colour) with corners nested inside the card's (user request).
@@ -699,7 +716,8 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(portrait, /ratio > 0 && ratio <= 1/)
     assert.match(card, /:data-bewly-portrait="isTopMediaPortrait \? '' : undefined"/)
     assert.match(videoCard, /:data-bewly-portrait="video\?\.portrait \? '' : undefined"/)
-    assert.match(recommendation, /portrait: type === 'vertical'/)
+    assert.match(recommendation, /const \{[^}]*portrait[^}]*\} = item\.normalized/)
+    assert.match(recommendation, /\n {4}portrait,/)
   })
   check('moment cards: every new state change animates, each branch run (crossfade layers, picture reveal, tone, blur mount)', async () => {
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
@@ -916,7 +934,6 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     }
   })
   check('radius: one 16px-anchored scale; components use role tokens, never steps, retired names or literals', async () => {
-    const { spawnSync } = await import('node:child_process')
     const { findRadiusViolations } = await import('./radiusPolicy')
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
     const variables = await read('styles/variables.scss')
@@ -927,14 +944,24 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.deepEqual(['xs', 'sm', 'md', 'lg', 'xl', '2xl'].map(step => tokens[`--bew-radius-${step}`]), ['4px', '8px', '12px', '16px', '24px', '32px'])
     assert.match(variables, /--bew-popover-padding: var\(--bew-space-2\);/, '8px items + 8px inset = 16px popover corner')
     assert.match(variables, /--bew-library-filter-padding: var\(--bew-space-2\);/)
-    const files = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', 'src'], { cwd: fileURLToPath(new URL('..', import.meta.url)) })
-      .stdout
-      .toString()
-      .trim()
-      .split('\n')
-      .filter(file => /\.(?:vue|scss|css|ts)$/.test(file))
-      .map(file => fileURLToPath(new URL(`../${file}`, import.meta.url)))
+    const files = await listStylePolicyFiles()
     assert.deepEqual(await findRadiusViolations(files), [])
+  })
+  check('truncated text: the end fades right to left (scroll-driven, only while overflowing); no ellipsis or line clamp', async () => {
+    const { findTruncationViolations } = await import('./truncationPolicy')
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const fade = await read('styles/truncateFade.scss')
+    assert.match(fade, /animation-timeline: scroll\(self #\{\$axis\}\);/, 'own overflow drives the fade, no observer')
+    assert.match(fade, /@mixin line \{[\s\S]*?_mask\(inline\)/)
+    assert.match(fade, /@mixin lines\(\$count\) \{[\s\S]*?max-height: calc\(var\(--bew-truncate-lines\) \* 1lh\);[\s\S]*?_mask\(block\)/)
+    assert.match(fade, /@mixin reveal\(\$width\) \{\n {2}--bew-truncate-fade-end: #\{\$width\};\n {2}--bew-truncate-fade-cover: 1;/, 'hover controls over the end move the fade left')
+    assert.match(fade, /@property --bew-truncate-fade-on \{\n {4}syntax: "<number>";\n {4}inherits: false;/)
+    const main = await read('styles/main.scss')
+    assert.match(main, /@include truncateFade\.global;/)
+    assert.match(main, /\.keep-one-line \{[^}]*@include truncateFade\.line;/)
+    assert.match(main, /\.keep-two-lines \{[^}]*@include truncateFade\.lines\(2\);/)
+    const files = await listStylePolicyFiles()
+    assert.deepEqual(await findTruncationViolations(files), [])
   })
   check('glass: one material (tint, opacity, blur, edge) for every glass surface; dark glass is tinted lower', async () => {
     const { execFileSync, spawnSync } = await import('node:child_process')
@@ -1019,7 +1046,66 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     // "All moments" scrolls with the others.
     assert.match(moments, /class="moments-up-list__track">\s*<button[\s\S]{0,400}handleUpFilterChange\(''\)/)
     const section = moments.slice(moments.indexOf('.moments-up-list {'), moments.indexOf('.moments-page__initial-loading {'))
-    assert.doesNotMatch(section, /\.moments-up-list \{[^}]*(?:z-index|position):/, 'stays in the page layer, under the fixed rail glass')
+    assert.doesNotMatch(section, /\.moments-up-list \{[^}]*z-index:/, 'stays in the page layer, under the fixed rail glass')
+    // Scrolling down, the bar stays put: pinned at its own place (the content's
+    // top padding), the feed (its own stacking context, later in the tree)
+    // slides over it, and it fades from the cards touching its bottom edge to
+    // them reaching its top edge, then stops taking input (user request).
+    assert.match(workspace, /\.library-workspace__content \{[^}]*padding: calc\(var\(--bew-top-bar-height\) \+ var\(--bew-space-4\)\)/)
+    assert.match(section, /\.moments-up-list \{[^}]*--moments-up-list-height: calc\(var\(--bew-moments-up-tile-size\) \+ var\(--bew-space-2\) \+ var\(--bew-line-height-control\)\);[^}]*position: sticky;\s*top: calc\(var\(--bew-top-bar-height\) \+ var\(--bew-space-4\)\);\s*height: var\(--moments-up-list-height\);\s*margin-bottom: var\(--moments-up-list-gap\);/)
+    // At rest the names and a hovered tile's scale and shadow stay clear of the
+    // feed: a 32px gap, and no margin collapsing through the box (the
+    // scroller's -16px top margin would lift it and sticky push it back down
+    // 16px onto the feed).
+    assert.match(section, /\.moments-up-list \{[^}]*--moments-up-list-gap: var\(--bew-space-8\);[^}]*display: flow-root;/)
+    assert.match(section, /\.moments-up-list__scroller \{[^}]*margin-block: calc\(-1 \* var\(--bew-space-4\)\);/)
+    assert.match(section, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.moments-up-list \{\s*animation: moments-up-list-cover linear both;\s*animation-timeline: --bew-page-scroll;\s*animation-range: var\(--moments-up-list-gap\) calc\(var\(--moments-up-list-gap\) \+ var\(--moments-up-list-height\)\);/)
+    // The page-level loading skeleton places the bar and the feed the same way.
+    const asyncLoading = await read('components/PageAsyncLoading.vue')
+    assert.ok(asyncLoading.indexOf('class="bew-page-async-loading__moments-users"') < asyncLoading.indexOf('<MomentsContentLayout'))
+    assert.match(asyncLoading, /\.bew-page-async-loading__moments-users \{[^}]*height: calc\(var\(--bew-moments-up-tile-size\) \+ var\(--bew-space-2\) \+ var\(--bew-line-height-control\)\);\s*margin-bottom: var\(--bew-space-8\);/)
+    assert.match(asyncLoading, /<SkeletonBlock width="var\(--bew-moments-up-tile-size\)" height="var\(--bew-moments-up-tile-size\)" radius="media" \/>/)
+    assert.match(section, /@keyframes moments-up-list-cover \{\s*to \{\s*opacity: 0;\s*visibility: hidden;/)
+    assert.match(section, /\.moments-up-list__item \{[^}]*gap: var\(--bew-space-2\);/, 'the gap in the height formula')
+    assert.match(section, /\.moments-up-list__name \{[^}]*line-height: var\(--bew-line-height-control\);[^}]*@include truncateFade\.line;/, 'one name line')
+    assert.match(layout, /\.moments-content-layout \{[^}]*container-type: inline-size;/, 'the feed paints over the pinned bar')
+
+    // Its sideways position is remembered: every branch of the save / restore.
+    const { loadSourceFunctions } = await import('./sourceFunctionHarness.ts')
+    const memory = await loadSourceFunctions('../src/contentScripts/views/Moments/Moments.vue', ['updateUpListScrollState'], {
+      upListScrollerRef: { value: null },
+      canScrollUpListLeft: { value: true },
+      canScrollUpListRight: { value: true },
+      upListScrollLeft: { value: 0 },
+      upListRestorePending: false,
+      isPortalLoading: { value: false },
+      resolveHorizontalScrollState: ({ scrollLeft, scrollWidth, clientWidth }) => ({ canScrollLeft: scrollLeft > 0, canScrollRight: scrollLeft < scrollWidth - clientWidth }),
+    })
+    memory.updateUpListScrollState()
+    assert.equal(memory.canScrollUpListLeft.value, false, 'no bar: nothing to scroll')
+    const bar = { scrollLeft: 120, scrollWidth: 1000, clientWidth: 400 }
+    memory.upListScrollerRef.value = bar
+    memory.updateUpListScrollState()
+    assert.equal(memory.upListScrollLeft.value, 120, 'scrolling saves the position')
+    memory.upListScrollLeft.value = 900
+    memory.upListRestorePending = true
+    memory.isPortalLoading.value = true
+    bar.scrollLeft = 0
+    memory.updateUpListScrollState()
+    assert.equal(bar.scrollLeft, 0, 'a row still loading and too short waits')
+    assert.equal(memory.upListRestorePending, true)
+    memory.isPortalLoading.value = false
+    memory.updateUpListScrollState()
+    assert.equal(bar.scrollLeft, 600, 'a shorter row ends at its end')
+    assert.equal(memory.upListRestorePending, false)
+    memory.upListScrollLeft.value = 300
+    memory.upListRestorePending = true
+    memory.isPortalLoading.value = true
+    memory.updateUpListScrollState()
+    assert.equal(bar.scrollLeft, 300, 'a long enough row returns at once, even while loading')
+    assert.equal(memory.upListScrollLeft.value, 300, 'restoring does not overwrite the memory')
+    assert.match(moments, /const upListScrollLeft = viewState\.ref\('upListScrollLeft', 0\)/)
+    assert.match(moments, /upListRestorePending = true\s*upListResizeObserver = new ResizeObserver\(scheduleUpListStateUpdate\)/)
     assert.doesNotMatch(section, /\.moments-up-list \{[^}]*(?:border:|background:|padding:)/, 'no container')
     assert.match(section, /--moments-up-list-bleed-start: calc\(var\(--bew-messages-sidebar-width\) \+ var\(--library-content-inline-padding\)\);/)
     assert.match(section, /margin-inline: calc\(-1 \* var\(--moments-up-list-bleed-start\)\) calc\(-1 \* var\(--library-content-inline-padding\)\);/)

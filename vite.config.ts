@@ -47,10 +47,11 @@ for (const plugin of localePlugins) {
 export const sharedConfig: UserConfig = {
   root: r('src'),
   resolve: {
-    alias: {
-      '~/': `${r('src')}/`,
-      '~': r('src'),
-    },
+    alias: [
+      { find: '~', replacement: r('src') },
+      // Dependencies with CommonJS entries must use the same runtime as SFCs.
+      { find: /^vue$/, replacement: r('node_modules/vue/dist/vue.runtime.esm-bundler.js') },
+    ],
   },
   plugins: [
     Vue(),

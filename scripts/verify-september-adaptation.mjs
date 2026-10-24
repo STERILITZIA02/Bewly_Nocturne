@@ -77,7 +77,6 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       '~/utils/abort': await import('../src/utils/abort'),
       'vue': Vue,
       'webextension-polyfill': { default: { storage: { onChanged: { addListener: fn => listeners.add(fn), removeListener: fn => listeners.delete(fn) } } } },
-      '~/utils/sidebarCoverSettings': await import('../src/utils/sidebarCoverSettings'),
       '~/utils/settingsStorageProtocol': protocol,
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false, sendMessage: (name, body) => {
         if (name === protocol.SETTINGS_STORAGE_READ_MESSAGE)
@@ -939,7 +938,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
   check('September WatchLater: dedicated cards stay bounded and retain focused/pending items', async () => {
     const root = document.body.appendChild(document.createElement('section'))
     Object.defineProperties(root, { clientHeight: { value: 700 }, scrollHeight: { value: 100000 } })
-    const settings = Vue.ref({ watchLaterLayoutMode: 'list', videoCardLinkOpenMode: 'drawer', enableSidebarCoverBlur: false, enableGridLayoutSwitcher: true })
+    const settings = Vue.ref({ watchLaterLayoutMode: 'list', videoCardLinkOpenMode: 'drawer', enableGridLayoutSwitcher: true })
     const pending = deferred()
     const raw = Array.from({ length: 500 }, (_, index) => ({ aid: index + 1, bvid: 'BV1ab411c7mD', title: `Video ${index + 1}`, duration: 1, add_at: 1 }))
     let writeRequests = 0
@@ -1015,7 +1014,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     app.config.warnHandler = message => warnings.push(message)
     const pass = { setup: (_props, { slots }) => () => Vue.h('div', slots.default?.()) }
     app.component('ALink', { setup: (_props, { attrs, slots }) => () => Vue.h('a', { href: attrs.href }, slots.default?.()) })
-    for (const name of ['Tooltip', 'CoverSidebarSurface']) app.component(name, pass)
+    app.component('Tooltip', pass)
     app.component('Button', { setup: (_props, { slots }) => () => Vue.h('button', slots.default?.()) })
     for (const name of ['Progress', 'Checkbox', 'Select', 'LiquidSegmentIndicator']) app.component(name, blank)
     app.component('Empty', await compileComponent('../src/components/Empty.vue', { '~/utils/messaging': { getExtensionAssetUrl: () => '' } }))

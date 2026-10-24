@@ -1,23 +1,10 @@
 /**
  * Private-message optimistic write transactions shared by the packaged Composer and fixture verification.
  */
-import type { PrivateMessage } from '~/background/privateMessage/types'
 import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 
 import type { DisplayPrivateMessage as ServerPrivateMessage } from '../privateMessage'
-import { classifyPrivateMessageSource, comparePrivateMessageSeqno } from '../privateMessage'
-import {
-  collectPrivateMessageEmotions,
-  parsePrivateMessageContent,
-} from '../privateMessageRenderers'
-
-export {
-  collectPrivateMessageEmotions,
-  type ParsedPrivateMessageContent,
-  parsePrivateMessageContent,
-  PRIVATE_MESSAGE_RENDERERS,
-  type PrivateMessageTextSegment,
-} from '../privateMessageRenderers'
+import { comparePrivateMessageSeqno } from '../privateMessage'
 
 export interface DisplayPrivateMessage extends Omit<ServerPrivateMessage, 'msgStatus' | 'msgSource'> {
   localId?: string
@@ -58,29 +45,6 @@ export interface PrivateMessageReconcileResult {
 }
 
 const PRIVATE_MESSAGE_RECONCILE_WINDOW_SECONDS = 30
-
-export function transformPrivateMessages(
-  messages: PrivateMessage[],
-  eInfos: unknown[],
-  currentMid: string,
-): DisplayPrivateMessage[] {
-  const emotions = collectPrivateMessageEmotions(eInfos)
-  return messages.map((message) => {
-    const isSelf = message.sender_uid === currentMid
-    return {
-      msgKey: message.msg_key,
-      seqno: message.msg_seqno,
-      senderId: message.sender_uid,
-      receiverId: message.receiver_id,
-      msgType: message.msg_type,
-      timestamp: message.timestamp,
-      isSelf,
-      source: classifyPrivateMessageSource(message.msg_source),
-      content: parsePrivateMessageContent(message, emotions),
-      sendState: isSelf ? 'sent' as const : undefined,
-    }
-  }).sort(compareDisplayPrivateMessages)
-}
 
 export function mergePrivateMessages(
   current: DisplayPrivateMessage[],
@@ -198,12 +162,4 @@ export function reconcileOptimisticPrivateMessages(
     items: deduped.filter(item => item.localId !== localId),
     reconciled: true,
   }
-}
-
-export function getOldestPrivateMessageSeqno(items: DisplayPrivateMessage[]): string {
-  return items.find(item => item.seqno)?.seqno ?? ''
-}
-
-export function getLatestPrivateMessageSeqno(items: DisplayPrivateMessage[]): string {
-  return items.findLast(item => item.seqno)?.seqno ?? ''
 }

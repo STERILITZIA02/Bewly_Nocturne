@@ -4,6 +4,7 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, 
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import IconButton from '~/components/IconButton.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 import { confirmDialogKey } from '~/composables/useConfirmDialog'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -880,6 +881,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
+@use "../../styles/truncateFade";
 @use "../../styles/scrollEdgeFade";
 
 .moment-comments__skeleton {
@@ -1033,12 +1035,10 @@ onBeforeUnmount(() => {
   gap: var(--bew-space-2);
 }
 .moment-comments__author {
-  overflow: hidden;
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 .moment-comments__time {
   flex: 0 0 auto;

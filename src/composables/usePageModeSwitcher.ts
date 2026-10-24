@@ -22,8 +22,6 @@ export interface PageModeSwitcherState {
   /** Mode shown at rest; the component owns how each mode is drawn. */
   currentMode: ComputedRef<PageMode>
   disabled: ComputedRef<boolean>
-  /** Mode previewed on hover or focus. */
-  previewMode: ComputedRef<PageMode>
   tooltip: ComputedRef<string>
   cyclePageMode: () => Promise<void>
 }
@@ -34,11 +32,39 @@ const PAGE_MODE_LABEL_KEYS: Readonly<Record<PageMode, string>> = {
   custom: 'dock.page_mode_custom',
 }
 
+export const pageModeChangePending = ref(false)
+
+export async function selectPageMode(selectedPageMode: PageMode, activatedPage: AppPage) {
+  if (pageModeChangePending.value || selectedPageMode === settings.value.pageMode)
+    return
+  const currentHref = window.location.href
+  const target = resolvePageModeTarget(currentHref, activatedPage)
+  const previousPageMode = settings.value.pageMode
+  settings.value = { ...settings.value, pageMode: selectedPageMode }
+  if (!target)
+    return
+  const navigationUrl = resolvePageModeNavigationUrl(currentHref, target, useSettingsStore().getDockItemIsUseOriginalBiliPage(target.preferencePage))
+  if (!navigationUrl || navigationUrl === currentHref)
+    return
+  pageModeChangePending.value = true
+  try {
+    await settings.flush()
+    if (settings.value.pageMode === selectedPageMode)
+      window.location.assign(navigationUrl)
+  }
+  catch {
+    if (settings.value.pageMode === selectedPageMode)
+      settings.value = { ...settings.value, pageMode: previousPageMode }
+  }
+  finally {
+    pageModeChangePending.value = false
+  }
+}
+
 export function usePageModeSwitcher(
   activatedPage: MaybeRefOrGetter<AppPage>,
 ): PageModeSwitcherState {
   const { t } = useI18n()
-  const settingsStore = useSettingsStore()
   const currentLocationHref = useCurrentLocationHref()
   const switchingPageMode = ref(false)
   const widescreenEngaged = ref(false)
@@ -60,14 +86,11 @@ export function usePageModeSwitcher(
     return resolvePageModeTarget(currentLocationHref.value, toValue(activatedPage))
   })
   const unavailable = computed(() => target.value === null)
-  const disabled = computed(() => switchingPageMode.value || (!videoPlaybackPage.value && unavailable.value))
+  const disabled = computed(() => pageModeChangePending.value || switchingPageMode.value || (!videoPlaybackPage.value && unavailable.value))
   const nextMode = computed(() => getNextPageMode(settings.value.pageMode))
   const currentMode = computed<PageMode>(() => videoPlaybackPage.value
     ? (widescreenEngaged.value ? 'bewly' : 'original')
     : settings.value.pageMode)
-  const previewMode = computed<PageMode>(() => videoPlaybackPage.value
-    ? (widescreenEngaged.value ? 'original' : 'bewly')
-    : nextMode.value)
   const tooltip = computed(() => {
     if (videoPlaybackPage.value)
       return t(widescreenEngaged.value ? 'widescreen.exit' : 'widescreen.enter')
@@ -101,51 +124,13 @@ export function usePageModeSwitcher(
       return
     }
 
-    const currentHref = currentLocationHref.value
-    const currentTarget = resolvePageModeTarget(currentHref, toValue(activatedPage))
-    if (!currentTarget)
-      return
-
-    const previousPageMode = settings.value.pageMode
-    const selectedPageMode = nextMode.value
-    settings.value = {
-      ...settings.value,
-      pageMode: selectedPageMode,
-    }
-
-    const useOriginalBiliPage = settingsStore.getDockItemIsUseOriginalBiliPage(
-      currentTarget.preferencePage,
-    )
-    const navigationUrl = resolvePageModeNavigationUrl(
-      currentHref,
-      currentTarget,
-      useOriginalBiliPage,
-    )
-
-    const shouldNavigate = navigationUrl && navigationUrl !== currentHref
-    if (shouldNavigate) {
-      switchingPageMode.value = true
-      try {
-        await settings.flush()
-      }
-      catch {
-        settings.value = {
-          ...settings.value,
-          pageMode: previousPageMode,
-        }
-        switchingPageMode.value = false
-        return
-      }
-    }
-
-    if (navigationUrl && navigationUrl !== currentHref)
-      window.location.assign(navigationUrl)
+    if (!unavailable.value)
+      await selectPageMode(nextMode.value, toValue(activatedPage))
   }
 
   return {
     currentMode,
     disabled,
-    previewMode,
     tooltip,
     cyclePageMode,
   }

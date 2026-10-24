@@ -2,9 +2,13 @@
 import { useI18n } from 'vue-i18n'
 
 import type { MessageServerSettingField } from '~/background/messageServerSettings/types'
+import Button from '~/components/Button.vue'
+import Input from '~/components/Input.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import TagRemoveButton from '~/components/TagRemoveButton.vue'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
@@ -123,7 +127,7 @@ onScopeDispose(serverSettings.dispose)
 
 <template>
   <div>
-    <SettingsItemGroup :title="$t('settings.messages_reading_behavior')">
+    <SettingsItemGroup data-setting-id="settings.messages_reading_behavior" :title="$t('settings.messages_reading_behavior')">
       <SettingsItem setting-id="messages.autoMarkRead" :title="$t('settings.messages_auto_mark_read')" :desc="$t('settings.messages_auto_mark_read_desc')" right-width="auto">
         <Radio v-model="settings.autoMarkPrivateMessagesRead" />
       </SettingsItem>
@@ -135,7 +139,7 @@ onScopeDispose(serverSettings.dispose)
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.messages_conversation_list')">
+    <SettingsItemGroup data-setting-id="settings.messages_conversation_list" :title="$t('settings.messages_conversation_list')">
       <SettingsItem setting-id="messages.showOfficialAssistants" :title="$t('settings.messages_show_official_assistants')" right-width="auto">
         <Radio v-model="settings.showOfficialPrivateAssistants" />
       </SettingsItem>
@@ -144,7 +148,7 @@ onScopeDispose(serverSettings.dispose)
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.messages_memory')">
+    <SettingsItemGroup data-setting-id="settings.messages_memory" :title="$t('settings.messages_memory')">
       <SettingsItem setting-id="messages.maxCachedConversations" :title="$t('settings.messages_max_cached_conversations')" right-width="auto">
         <Select v-model="settings.maxCachedPrivateConversations" :options="cachedConversationOptions" w="160px" />
       </SettingsItem>
@@ -153,15 +157,15 @@ onScopeDispose(serverSettings.dispose)
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.messages_mobile')">
+    <SettingsItemGroup data-setting-id="settings.messages_mobile" :title="$t('settings.messages_mobile')">
       <SettingsItem setting-id="messages.mobileOpenMode" :title="$t('settings.messages_mobile_open_mode')" right-width="auto">
         <Select v-model="settings.privateMessageMobileOpenMode" :options="mobileOpenOptions" w="180px" />
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.messages_server_settings')">
+    <SettingsItemGroup data-setting-id="settings.messages_server_settings" :title="$t('settings.messages_server_settings')">
       <SettingsItem
-        :title="$t('settings.messages_server_refresh')"
+        setting-id="settings.messages_server_refresh" :title="$t('settings.messages_server_refresh')"
         :desc="serverSettings.state.errorKind ? $t(`settings.messages_server_errors.${serverSettings.state.errorKind}`) : ''"
         right-width="auto"
       >

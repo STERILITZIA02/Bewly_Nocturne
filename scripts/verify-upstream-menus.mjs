@@ -12,7 +12,7 @@ export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent
       '~/enums/appEnums': enums,
       '~/logic/storage': { settings, gridLayout: Vue.ref({ home: 'adaptive' }) },
       './layoutEditPreview': await import('../src/logic/layoutEditPreview'),
-      './recommendationMode': { selectRecommendationMode() {} },
+      './recommendationMode': { getRecommendationModeOption: () => 'web', selectRecommendationMode() {} },
     })
     const menu = await loadSourceModule('../src/logic/elementSettingsMenu.ts', {
       '~/enums/appEnums': enums,
@@ -113,6 +113,8 @@ export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent
       '~/stores/topBarStore': { useTopBarStore: () => ({ isLogin: true, userInfo: { mid: 1 } }) },
       '~/utils/accountScope': await import('../src/utils/accountScope'),
       '~/utils/api': { default: {} },
+      '~/utils/appFeedFeedback': await loadSourceModule('../src/utils/appFeedFeedback.ts', { './appClient': {}, './authProvider': {} }),
+      '../utils': await import('../src/components/VideoCard/utils'),
       '~/utils/main': { getUserID: () => '1', getCSRF: () => 'csrf' },
       '~/utils/tabs': {},
       '~/utils/userRelation': {},
@@ -121,7 +123,7 @@ export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent
       './components/FollowUserConfirmDialog.vue': { default: blank },
       './components/UnfollowUserConfirmDialog.vue': { default: blank },
     }, { globals: { ResizeObserver: class { observe() {} disconnect() {} } } })
-    const video = { url: 'https://www.bilibili.com/video/BVfixture', bvid: 'BVfixture', id: 123, cover: 'cover.jpg', author: { mid: 10, name: 'UP', followed: true }, threePointV2: [{ type: model.Type.Dislike }, { type: model.Type.WatchLater }, { type: model.Type.Dislike }] }
+    const video = Vue.reactive({ recommendationSource: 'app', goto: 'av', param: '123', url: 'https://www.bilibili.com/video/BVfixture', bvid: 'BVfixture', id: 123, cover: 'cover.jpg', author: { mid: 10, name: 'UP', followed: true }, threePointV2: [{ type: model.Type.Dislike, reasons: [{ id: 4 }] }, { type: model.Type.WatchLater }, { type: model.Type.Dislike }] })
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp(Component, { video, contextMenuStyles: {} })
     app.component('PipWindow', blank)
@@ -146,6 +148,7 @@ export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent
       assert.equal(host.querySelectorAll('li[role="menuitem"]').length, 0)
       checkDividers()
       source.value = 'rcmd'
+      video.recommendationSource = 'web'
       settings.value.videoCardContextMenuAdvanced = ['notInterested', 'notInterestedUploader', 'viewOriginalCover', 'followUser']
       await flush()
       const advanced = host.querySelector('.context-menu-advanced')

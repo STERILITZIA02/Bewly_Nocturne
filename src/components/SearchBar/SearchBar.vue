@@ -3,6 +3,8 @@ import { onClickOutside, useDebounceFn, useDocumentVisibility, useElementBoundin
 import type { CSSProperties } from 'vue'
 import { computed, getCurrentInstance, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 
+import ALink from '~/components/ALink.vue'
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
 import { useIframePageActive } from '~/logic/iframePageState'
@@ -673,7 +675,7 @@ function handleClearKeyword() {
                 >
                   {{ index + 1 }}
                 </span>
-                <span class="keyword" text="base $bew-text-1" truncate flex-1>{{ item.show_name }}</span>
+                <span class="keyword keep-one-line" text="base $bew-text-1" flex-1>{{ item.show_name }}</span>
                 <img
                   v-if="item.icon && !item.icon.includes('.gif')"
                   :src="item.icon"
@@ -1014,7 +1016,7 @@ function handleClearKeyword() {
           }
 
           .keyword {
-            --uno: "text-base truncate flex-1";
+            --uno: "text-base flex-1";
           }
 
           &:hover,

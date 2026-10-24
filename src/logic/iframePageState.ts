@@ -2,6 +2,7 @@ import { computed, readonly, ref, shallowRef } from 'vue'
 
 import { IFRAME_PLAYER_CONTEXT } from '~/constants/globalEvents'
 import type { DefaultVideoPlayerMode } from '~/logic/storage'
+import { isImmersiveFrame } from '~/utils/iframeActivity'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 
 const iframePageActive = ref(false)
@@ -14,6 +15,8 @@ export function useIframePlaybackContext() {
 }
 
 export function reportIframePlayerMode(mode: DefaultVideoPlayerMode) {
+  if (isImmersiveFrame())
+    window.dispatchEvent(new Event(IFRAME_PLAYER_CONTEXT))
   const binding = playerBinding.value
   if (binding?.href === location.href)
     postMessageToParent({ type: IFRAME_PLAYER_CONTEXT, phase: 'mode', ...binding, mode })

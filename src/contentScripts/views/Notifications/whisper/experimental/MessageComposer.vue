@@ -2,6 +2,9 @@
 import { onClickOutside } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
+import Button from '~/components/Button.vue'
+import IconButton from '~/components/IconButton.vue'
+import Tooltip from '~/components/Tooltip.vue'
 import { PRIVATE_MESSAGE_IMAGE_ACCEPT, validatePrivateMessageImage } from '~/utils/privateMessageImage'
 
 import PrivateEmotePicker from '../PrivateEmotePicker.vue'
@@ -301,6 +304,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 </template>
 
 <style scoped lang="scss">
+@use "../../../../../styles/truncateFade";
 @use "../../../../../styles/composer";
 
 .message-composer {
@@ -349,9 +353,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 .message-composer__image-copy strong,
 .message-composer__image-copy span,
 .message-composer__image-copy small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .message-composer__image-copy strong {

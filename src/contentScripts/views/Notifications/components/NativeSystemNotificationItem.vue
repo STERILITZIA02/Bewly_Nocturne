@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
 import { normalizeIntlLocale } from '~/utils/locale'
 
 import type { SystemNotification } from '../notification'

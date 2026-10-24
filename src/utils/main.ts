@@ -217,55 +217,6 @@ export function isUserSpacePage(url: string = location.href): boolean {
   return false
 }
 
-export function queryDomUntilFound(
-  selector: string,
-  timeout = 500,
-  abort?: AbortController,
-  maxWait = 10_000,
-  query: (selector: string) => HTMLElement | null = selector => document.querySelector<HTMLElement>(selector),
-): Promise<HTMLElement | null> {
-  return new Promise((resolve) => {
-    if (abort?.signal.aborted) {
-      resolve(null)
-      return
-    }
-
-    const existingElement = query(selector)
-    if (existingElement) {
-      resolve(existingElement)
-      return
-    }
-
-    let settled = false
-    let interval: ReturnType<typeof setInterval> | undefined
-    let deadline: ReturnType<typeof setTimeout> | undefined
-    let handleAbort: (() => void) | undefined
-    const finish = (element: HTMLElement | null) => {
-      if (settled)
-        return
-      settled = true
-      if (interval !== undefined)
-        clearInterval(interval)
-      if (deadline !== undefined)
-        clearTimeout(deadline)
-      if (handleAbort)
-        abort?.signal.removeEventListener('abort', handleAbort)
-      resolve(element)
-    }
-    handleAbort = () => finish(null)
-
-    interval = setInterval(() => {
-      const element = query(selector)
-      if (element)
-        finish(element)
-    }, timeout)
-    deadline = setTimeout(finish, maxWait, null)
-    abort?.signal.addEventListener('abort', handleAbort, { once: true })
-    if (abort?.signal.aborted)
-      finish(null)
-  })
-}
-
 /**
  * Check if the current page is in an iframe
  * @returns true if the current page is in an iframe

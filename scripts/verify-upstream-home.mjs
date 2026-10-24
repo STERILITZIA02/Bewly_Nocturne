@@ -195,13 +195,14 @@ export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent
     finally { doc.window.close() }
   })
 
-  check('recommendation capsule: actual component uses one setting, requests existing App authorization and retains page mode', async () => {
-    const settings = Vue.ref({ recommendationMode: 'web', pageMode: 'custom' })
+  check('recommendation capsule: actual component commits a complete request configuration, requests existing App authorization and retains page mode', async () => {
+    const settings = Vue.ref({ recommendationMode: 'web', appRecommendationColumn: 2, recommendationModeSwitcherOptions: ['web', 'webNoCookie', 'appSingle', 'appDouble'], pageMode: 'custom' })
     const requests = []
     const module = await loadSourceModule('../src/logic/recommendationMode.ts', {
       '~/logic/storage': { settings, appAuthTokens: Vue.ref({ accessToken: '' }) },
       '~/utils/authProvider': { hasValidAppAuthTokens: () => false },
       './appAuthorizationCoordinator': { requestAppAuthorization: token => requests.push(token) },
+      './appAuthStorage': { getAppAuthIdentity: () => '' },
     })
     const Component = await compileComponent('../src/contentScripts/views/Home/components/RecommendationModeSwitcher.vue', {
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
@@ -220,10 +221,11 @@ export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent
       await flush()
       assert.equal(settings.value.recommendationMode, 'webNoCookie')
       assert.equal(buttons[1].getAttribute('aria-pressed'), 'true')
-      buttons[2].click()
+      buttons[3].click()
       await flush()
       assert.deepEqual(requests, [''])
       assert.equal(settings.value.recommendationMode, 'app')
+      assert.equal(settings.value.appRecommendationColumn, 2)
       buttons[0].click()
       await flush()
       assert.equal(settings.value.pageMode, 'custom')

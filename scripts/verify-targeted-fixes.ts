@@ -36,7 +36,6 @@ import { isAccountRequestCurrent } from '../src/utils/accountScope'
 import { createBooleanSingleFlight, resolveAppAccessTokenFreshness, resolveAppAuthorizationState } from '../src/utils/appAuthTokenPolicy'
 import { canCommitWidescreenLayout, interpolateWidescreenZoomFrame, isWidescreenBottomControlHoverRegion, isWidescreenPlayerControlHoverRegion, resolveWidescreenContentWidth, resolveWidescreenControlSurfaceState, resolveWidescreenEngagedState, resolveWidescreenSidebarHydrationPhase, resolveWidescreenZoomFrame, resolveWidescreenZoomVisual, shortenCommentDateText, shouldScheduleWidescreenRefresh, shouldSuppressWidescreenAutoEntry, WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY, WIDESCREEN_IDENTITY_ZOOM_FRAME } from '../src/utils/bewlyWidescreenPolicy'
 import { isBilibiliRiskControl } from '../src/utils/bilibiliApiError'
-import { resolveCanvasCssColor } from '../src/utils/canvasTheme'
 import { parseCommentListParams, toCommentComposerReply } from '../src/utils/commentComposerBridge'
 import { buildMomentCommentPermalink } from '../src/utils/commentPermalink'
 import { buildCommentTree } from '../src/utils/commentTree'
@@ -45,7 +44,7 @@ import { resolveActiveDockItemPage } from '../src/utils/dockActiveItem'
 import { isEligibleDrawerEscape, resolveDrawerEscapeBehavior, resolveIframeEscapeAction, shouldHandleDrawerEscape } from '../src/utils/drawerEscape'
 import type { EffectiveTopBarSource } from '../src/utils/effectiveTopBarSource'
 import { resolveEffectiveTopBarSource } from '../src/utils/effectiveTopBarSource'
-import { getFavoriteFolderEditedAttr, getFavoriteFolderPrivacy, isFavoriteFolderPrivate } from '../src/utils/favoriteFolder'
+import { getFavoriteFolderEditedAttr, isFavoriteFolderPrivate } from '../src/utils/favoriteFolder'
 import { compileFilterRules, normalizeImportedFilterRules } from '../src/utils/filterRules'
 import { computeFloatingMenuPosition } from '../src/utils/floatingMenu'
 import { isIframeDrawerHost } from '../src/utils/iframeDrawerHost'
@@ -53,7 +52,7 @@ import { shouldContinueIframeFocusRetry } from '../src/utils/iframeFocusRetryPol
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '../src/utils/iframeMessage'
 import { resolveInterfaceLanguage } from '../src/utils/interfaceLanguagePolicy'
 import { isSentinelWithinLoadThreshold } from '../src/utils/loadMoreSentinel'
-import { isTopicPage, queryDomUntilFound } from '../src/utils/main'
+import { isTopicPage } from '../src/utils/main'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '../src/utils/momentAdditionalPolicy'
 import { shouldUseWideMomentCardLayout, supportsWideMomentCardLayout } from '../src/utils/momentCardLayout'
 import { createMomentCommentThreadController } from '../src/utils/momentCommentThread'
@@ -312,8 +311,6 @@ function verifyIncrementalCorrectnessPolicies() {
 
   assert.equal(isFavoriteFolderPrivate({ attr: 1 }), true)
   assert.equal(isFavoriteFolderPrivate({ attr: 2 }), false)
-  assert.equal(getFavoriteFolderPrivacy(true), 0)
-  assert.equal(getFavoriteFolderPrivacy(false), 1)
   assert.equal(getFavoriteFolderEditedAttr(3, true), 2)
   assert.equal(getFavoriteFolderEditedAttr(2, false), 3)
 
@@ -731,15 +728,6 @@ function verifyMomentAdditionalAndFocusPolicies() {
   assert.equal(shouldContinueIframeFocusRetry({ ...focusState, elapsedMs: 721 }), false)
 }
 
-function verifyCanvasThemeResolution() {
-  const style = {
-    getPropertyValue: (name: string) => name === '--bew-theme-color' ? '  rgb(1, 2, 3)  ' : '',
-  }
-  assert.equal(resolveCanvasCssColor(style, '--bew-theme-color', '#00a1d6'), 'rgb(1, 2, 3)')
-  assert.equal(resolveCanvasCssColor(style, '--missing', '#fallback'), '#fallback')
-  assert.equal(resolveCanvasCssColor({ getPropertyValue: () => 'var(--other)' }, '--theme', '#fallback'), '#fallback')
-}
-
 function verifyFilterRuleImport() {
   const result = normalizeImportedFilterRules([
     { keyword: '  Hello  ', remark: '  title  ' },
@@ -819,21 +807,6 @@ function verifySelectOptionKeys() {
   assert.equal(new Set(keys).size, keys.length)
   assert.notEqual(createSelectOptionKey(1, 0), createSelectOptionKey('1', 0))
   assert.notEqual(createSelectOptionKey(true, 0), createSelectOptionKey('true', 0))
-}
-
-async function verifyImmediateDomQuery() {
-  const existingElement = {} as HTMLElement
-  let queryCount = 0
-  assert.equal(await queryDomUntilFound('.existing', 500, undefined, 10_000, () => {
-    queryCount++
-    return existingElement
-  }), existingElement)
-  assert.equal(queryCount, 1)
-
-  const abort = new AbortController()
-  const pending = queryDomUntilFound('.missing', 500, abort, 10_000, () => null)
-  abort.abort()
-  assert.equal(await pending, null)
 }
 
 async function verifyStorageScopeLifecycle() {
@@ -1752,7 +1725,7 @@ async function verifyComponentContracts() {
     readFile(`${root}/src/contentScripts/bewlyBootOverlay.ts`, 'utf8'),
     readFile(`${root}/src/components/SkeletonBlock.vue`, 'utf8'),
     readFile(`${root}/src/logic/layoutEdit.ts`, 'utf8'),
-    readFile(`${root}/src/components/Settings/PluginComponentsAndPages/General/General.vue`, 'utf8'),
+    readFile(`${root}/src/components/Settings/PluginComponentsAndPages/General/Preferences.vue`, 'utf8'),
     readFile(`${root}/src/components/Settings/Settings.vue`, 'utf8'),
     readFile(`${root}/src/components/Settings/PluginComponentsAndPages/DockAndSidebar/DockAndSidebar.vue`, 'utf8'),
     readFile(`${root}/src/logic/storage.ts`, 'utf8'),
@@ -1977,7 +1950,7 @@ async function verifyAuthCloudMomentsContracts() {
     readFile(`${root}/src/utils/settingsCloudSyncProtocol.ts`, 'utf8'),
     readFile(`${root}/src/background/settingsCloudSync.ts`, 'utf8'),
     readFile(`${root}/src/background/settingsStorageCoordinator.ts`, 'utf8'),
-    readFile(`${root}/src/components/Settings/About/About.vue`, 'utf8'),
+    readFile(`${root}/src/components/Settings/PluginComponentsAndPages/General/SettingsData.vue`, 'utf8'),
     readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/features/opusDetailDrawerLayout.ts`, 'utf8'),
@@ -1988,7 +1961,8 @@ async function verifyAuthCloudMomentsContracts() {
   assert.doesNotMatch(settingsHome, /<AppAuthorizationDialog\b|<QRCodeVue\b|authorizationTimer/)
   assert.doesNotMatch(forYou, /<AppAuthorizationDialog\b/)
   assert.match(forYou, /function requireAppAuthorization\(\)[\s\S]{0,220}reportAppAuthorizationInvalid/)
-  assert.match(forYou, /watch\(appAuthorizationSuccessVersion,[\s\S]{0,360}void initData\(\)/)
+  assert.match(forYou, /const requestIdentity = getRecommendationRequestIdentity\(\)/)
+  assert.match(forYou, /watch\(getRecommendationRequestIdentity,[\s\S]{0,120}requestVersion\+\+[\s\S]{0,60}flush: 'sync'/)
   assert.match(forYou, /noMoreContent\.value = recommendationDataState\.value === 'empty'/)
   assert.match(forYou, /else if \(response\.code === 62011\)[\s\S]{0,220}requireAppAuthorization\(\)/)
   assert.match(appAuthorizationDialog, /AUTHORIZATION_DEADLINE/)
@@ -2121,7 +2095,6 @@ async function verifyP1Contracts() {
     forYou,
     dislikeDialog,
     videoCardLogic,
-    shadowCurve,
     homeSettings,
     searchExperience,
   ] = await Promise.all([
@@ -2135,7 +2108,6 @@ async function verifyP1Contracts() {
     readSourceFiles(FOR_YOU_SOURCE_FILES),
     readFile(`${root}/src/components/VideoCard/VideoCardContextMenu/components/DislikeDialog.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/composables/useVideoCardLogic.ts`, 'utf8'),
-    readFile(`${root}/src/components/Settings/components/ShadowCurveEditor.vue`, 'utf8'),
     readFile(`${root}/src/components/Settings/PluginComponentsAndPages/Home/Home.vue`, 'utf8'),
     readFile(`${root}/src/logic/searchExperience.ts`, 'utf8'),
   ])
@@ -2158,7 +2130,8 @@ async function verifyP1Contracts() {
   assert.match(randomPlay, /function resetRandomPlayInitialization[\s\S]{0,240}stopRandomPlayVideoMonitoring\(\)/)
   assert.match(randomPlay, /function resetRandomPlayInitialization[\s\S]{0,420}clearCustomEpisodeVisualOrder\(\)/)
   assert.match(randomPlay, /if \(video && video !== listenerVideo\) \{\s*videoListenerRetryCount = 0/)
-  assert.match(player, /AUTO_EXIT_FULLSCREEN_RETRY_MAX = 20/)
+  assert.match(player, /hasPlayerMediaMutation\(mutations\)/)
+  assert.doesNotMatch(player, /autoExitFullscreenRetryTimer/)
   assert.match(player, /export function cancelPlayerRetryTasks/)
   assert.match(player, /private timer: ReturnType<typeof setTimeout> \| null = null/)
   assert.match(player, /generation !== autoExitFullscreenGeneration/)
@@ -2183,10 +2156,6 @@ async function verifyP1Contracts() {
   assert.match(forYou, /refreshInvalidAppAccessToken/)
   assert.match(await readFile(`${process.cwd()}/src/utils/appFeedFeedback.ts`, 'utf8'), /refreshInvalidAppAccessToken/)
 
-  assert.doesNotMatch(shadowCurve, /document\.addEventListener\('keydown'/)
-  assert.match(shadowCurve, /@keydown="handleKeyDown"/)
-  assert.match(shadowCurve, /tabindex="0"/)
-  assert.match(shadowCurve, /resolveCanvasCssColor/)
   assert.match(homeSettings, /normalizeImportedFilterRules/)
   assert.match(homeSettings, /filter_import_result/)
 
@@ -3894,8 +3863,8 @@ async function verifyIncrementalInteractionContracts() {
   assert.doesNotMatch(injectScript, /container\.insertBefore\(renderer/)
   assert.doesNotMatch(injectScript, /function reorderCommentReplyRenderers/)
   assert.match(injectScript, /display: flex;[\s\S]{0,80}flex-direction: column;/)
-  assert.match(injectScript, /order: var\(--bew-comment-reply-order, 0\)/)
-  assert.match(injectScript, /--bew-comment-reply-order', String\(visualOrder\)/)
+  assert.match(injectScript, /moveCommentReplyParts\(replyContainer, replyRenderers/)
+  assert.match(injectScript, /restoreCommentReplyNativeOrder\(component\)/)
   // Pagination budgets, cancellation and confirmed native writes are exercised
   // against the actual renderer adapter in verify-comment-reading.mjs.
   assert.doesNotMatch(injectScript, /bewly-comment-replies-skeleton|bew-comment-replies-mask-bg|bew-comment-replies-loading-animation/)
@@ -4110,7 +4079,7 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.match(contentScript, /resolveIframeEscapeAction\([\s\S]*BEWLY_DRAWER_ESCAPE_HANDLED[\s\S]*BEWLY_DRAWER_CLOSE_REQUEST/)
   assert.match(photoViewer, /\.pswp\.pswp--open[\s\S]*\.photo-imager-container/)
   assert.match(photoViewerDetector, /cleanupIframePhotoViewerDetector\(\)[\s\S]*IFRAME_PHOTO_VIEWER_STATE[\s\S]*isOpen: false/)
-  assert.match(app, /configuredUrl !== expectedUrl/)
+  assert.match(app, /url === iframePageURL\.value[\s\S]*hideUIForIframePhotoViewer\.value = open/)
   assert.match(app, /watch\(iframePageURL,[\s\S]*hideUIForIframePhotoViewer\.value = false/)
   assert.match(randomPlay, /event\.preventDefault\(\)[\s\S]*event\.stopPropagation\(\)[\s\S]*stopNativePlaylistEditing\(\)/)
   assert.doesNotMatch(moments, /momentsContentStyle/)
@@ -4299,7 +4268,7 @@ async function verifyP4CleanupContracts() {
     readFile(`${root}/src/components/PipWindow.vue`, 'utf8'),
     readFile(`${root}/src/components/IframeDrawer.vue`, 'utf8'),
     readFile(`${root}/src/utils/lazyLoad.ts`, 'utf8'),
-    readFile(`${root}/knip.json`, 'utf8'),
+    import('../knip'),
     readFile(`${root}/package.json`, 'utf8'),
     readFile(`${root}/scripts/prepare.ts`, 'utf8'),
   ])
@@ -4342,11 +4311,7 @@ async function verifyP4CleanupContracts() {
   assert.doesNotMatch(iframeDrawer, /TODO: support shortcuts|Ctrl\+Alt\+T/)
   assert.doesNotMatch(lazyLoad, /TODO: handle error|copy with vscode/)
 
-  const knip = JSON.parse(knipConfig) as {
-    entry?: string[]
-    ignoreExportsUsedInFile?: boolean
-    rules?: Record<string, string>
-  }
+  const knip = knipConfig.default
   assert.equal(knip.entry?.includes('.github/scripts/pr-policy-check.mjs'), false)
   assert.equal(knip.ignoreExportsUsedInFile, true)
   assert.notEqual(knip.rules?.exports, 'off')
@@ -4408,7 +4373,7 @@ async function verifySemanticPortContracts() {
   assert.match(momentCard, /@click\.stop="toggleDescription"/)
   assert.match(momentCard, /moment-card__desc--inherited/)
   assert.match(momentCard, /data-description-expanded/)
-  assert.match(momentCard, /-webkit-line-clamp: unset/)
+  assert.match(momentCard, /\.moment-card__desc\.is-expanded:not\(\[data-description-measure-collapsed\]\) \{\n {2}@include truncateFade\.release;/)
   assert.match(momentCard, /emit\('interactiveResize'/)
 
   for (const locale of [cmnCn, cmnTw, jyut, en]) {
@@ -4523,13 +4488,11 @@ async function verify() {
   verifyAppAuthorizationStateMachine()
   verifySettingsCloudSyncConflictPolicy()
   verifyMomentAdditionalAndFocusPolicies()
-  verifyCanvasThemeResolution()
   verifyFilterRuleImport()
   verifySliderProgress()
   verifyDialogKeyboardPolicy()
   verifySettingsBootPolicy()
   verifySelectOptionKeys()
-  await verifyImmediateDomQuery()
   await verifyStorageScopeLifecycle()
   await verifyStorageDegradedRecoveryState()
   await verifyStorageSuppressionRecovery()

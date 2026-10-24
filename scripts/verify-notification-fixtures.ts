@@ -40,7 +40,7 @@ import {
 import { reconcileNotificationBadge } from '../src/contentScripts/views/Notifications/notificationReadReconciliation'
 import type { NativeNotificationSection } from '../src/contentScripts/views/Notifications/notificationSections'
 import { createSystemNotificationPageFetcher } from '../src/contentScripts/views/Notifications/systemNotificationFeed'
-import { normalizeNotificationRoute, parseNotificationView } from '../src/utils/notificationRoute'
+import { normalizeNotificationRoute } from '../src/utils/notificationRoute'
 import { FOR_YOU_SOURCE_FILES, readSourceFiles } from './refactoredSources'
 
 type FixtureName
@@ -1073,12 +1073,12 @@ verify('MID change clears all states and rejects old account responses', async (
 
 verify('invalid notificationView values safely fall back to whisper', () => {
   for (const value of ['', 'unknown', 'settings', 'toString', 'constructor', '__proto__', '**proto**', 'valueOf']) {
-    assert.equal(parseNotificationView(`https://www.bilibili.com/?notificationView=${encodeURIComponent(value)}`), 'whisper')
+    assert.equal(normalizeNotificationRoute(`https://www.bilibili.com/?notificationView=${encodeURIComponent(value)}`).view, 'whisper')
   }
   for (const value of ['whisper', 'reply', 'at', 'love', 'system']) {
-    assert.equal(parseNotificationView(`https://www.bilibili.com/?notificationView=${value}`), value)
+    assert.equal(normalizeNotificationRoute(`https://www.bilibili.com/?notificationView=${value}`).view, value)
   }
-  assert.equal(parseNotificationView('not a valid absolute URL'), 'whisper')
+  assert.equal(normalizeNotificationRoute('not a valid absolute URL').view, 'whisper')
 })
 
 verify('legacy message settings routes normalize before the notification outlet renders', () => {

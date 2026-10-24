@@ -1,7 +1,11 @@
 <script setup lang="ts" generic="T = any">
+import Button from '~/components/Button.vue'
+import Empty from '~/components/Empty.vue'
 import AdvertisementCard from '~/components/VideoCard/AdvertisementCard.vue'
 import type { Video, VideoCardState } from '~/components/VideoCard/types'
 import { createVideoCardState } from '~/components/VideoCard/types'
+import { isBangumiVideo } from '~/components/VideoCard/utils'
+import VideoCard from '~/components/VideoCard/VideoCard.vue'
 import type { VideoCardContextMenuExtraOption } from '~/components/VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import type { CardWindowSnapshot } from '~/composables/useCardWindow'
@@ -9,7 +13,6 @@ import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindo
 import { useGridLayout } from '~/composables/useGridLayout'
 import { useHomeTabViewState } from '~/composables/useHomeTabState'
 import { useUserRelations } from '~/composables/useUserRelations'
-import { useVideoCardShadowStyle } from '~/composables/useVideoCardShadowStyle'
 import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
 import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
@@ -241,9 +244,6 @@ watch(isLayoutEditing, (editing) => {
 
 // 使用共享的 Grid 布局 composable（CSS 媒体查询驱动，无 JS 计算开销）
 const { gridClass } = useGridLayout(() => props.gridLayout)
-
-// 获取 shadow 样式变量（避免依赖外部传入）
-const { shadowStyleVars } = useVideoCardShadowStyle()
 
 // 首屏骨架数量固定为目标数量，避免 ref 挂载后重新计算列数导致骨架数量变化。
 const dynamicSkeletonCount = computed(() => {
@@ -818,7 +818,7 @@ interface VideoCardRenderItem {
 function inferVideoTypeFromVideo(video: Video | undefined): 'rcmd' | 'appRcmd' | 'bangumi' | 'common' {
   if (!video)
     return props.videoType || 'common'
-  if (video.epid || video.goto === 'bangumi' || video.type === 'bangumi')
+  if (isBangumiVideo(video))
     return 'bangumi'
   if (props.videoType === 'rcmd' || props.videoType === 'appRcmd')
     return props.videoType
@@ -894,7 +894,6 @@ const estimatedCardHeight = computed(() => {
   return isHorizontal.value ? Math.max(cover / VIDEO_CARD_COVER_ASPECT_RATIO, 130) + 16 : cover / VIDEO_CARD_COVER_ASPECT_RATIO + 110
 })
 const gridContainerStyle = computed(() => ({
-  ...shadowStyleVars.value,
   // Only the content-visibility fallback uses an intrinsic estimate; windowed
   // grids own heights through spacers and the measured row index.
   ...(props.disableContentVisibility || recycleCards.value
@@ -943,7 +942,7 @@ watch(() => {
   for (let index = start; index < end; index++) {
     const card = createRenderItem(displayItems.value[index], index)
     const author = Array.isArray(card.video?.author) ? card.video.author[0] : card.video?.author
-    if (!card.skeleton && !card.video?.isAdvertisement && card.type !== 'bangumi' && author?.mid && author.followed === undefined)
+    if (!card.skeleton && !card.video?.isAdvertisement && card.video?.recommendationSource !== 'app' && card.type !== 'bangumi' && author?.mid && author.followed === undefined)
       mids.add(author.mid)
   }
   return [...mids]

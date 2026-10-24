@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import PrivateMessageMediaCover from './PrivateMessageMediaCover.vue'
@@ -472,7 +473,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
 .private-message-content__card-copy span,
 .private-message-content__card-copy small {
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .private-message-content__card-copy strong {

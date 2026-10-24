@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useEventListener } from '@vueuse/core'
 
+import Button from '~/components/Button.vue'
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
 import { usePanelTrigger } from '~/composables/usePanelOrigin'
@@ -116,7 +117,7 @@ const iframeStyles = computed(() => {
 
 disposers.push(useEventListener(window, 'popstate', updateIframeUrl))
 
-const { currentHref: reportedHref } = useIframeDocumentHost(iframeRef, () => show.value && !closing && !disposed, () => show.value && activeDrawer.value === DrawerType.IframeDrawer && !closing && !disposed)
+const { currentHref: reportedHref } = useIframeDocumentHost(iframeRef, () => show.value && !closing && !disposed)
 const externalHref = computed(() => resolveIframeExternalUrl(iframeRef.value, reportedHref.value, props.url))
 
 function syncExternalHref(event: Event) {

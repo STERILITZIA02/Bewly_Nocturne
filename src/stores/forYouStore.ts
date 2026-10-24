@@ -27,6 +27,7 @@ export interface AppVideoElement {
 export interface ForYouState {
   accountId: AccountId
   recommendationMode: RecommendationMode
+  requestIdentity: string
   scrollTop: number
   snapshot: HomeTabSnapshot
 }
@@ -37,8 +38,8 @@ export const useForYouStore = defineStore('forYou', () => {
   const saveCompleteState = (newState: ForYouState) => {
     state.value = newState
   }
-  const takeCompleteState = (accountId: AccountId, mode: RecommendationMode) => {
-    if (state.value?.accountId !== accountId || state.value.recommendationMode !== mode)
+  const takeCompleteState = (accountId: AccountId, mode: RecommendationMode, requestIdentity = mode as string) => {
+    if (state.value?.accountId !== accountId || state.value.recommendationMode !== mode || state.value.requestIdentity !== requestIdentity)
       return null
     const saved = state.value
     state.value = null

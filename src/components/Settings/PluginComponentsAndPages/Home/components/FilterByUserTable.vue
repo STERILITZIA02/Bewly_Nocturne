@@ -3,6 +3,10 @@ import { onKeyStroke } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import Button from '~/components/Button.vue'
+import Input from '~/components/Input.vue'
+import List from '~/components/List/List.vue'
+import ListItem from '~/components/List/ListItem.vue'
 import { settings } from '~/logic'
 
 const { t } = useI18n()

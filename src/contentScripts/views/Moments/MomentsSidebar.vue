@@ -109,6 +109,7 @@ function select(value: string) {
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/truncateFade";
 @use "../../../styles/scrollEdgeFade";
 
 .moments-sidebar {
@@ -170,13 +171,11 @@ function select(value: string) {
   flex-direction: column;
   gap: var(--bew-space-1);
   > strong {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     font-size: var(--bew-font-size-title);
     line-height: var(--bew-line-height-title);
     font-weight: var(--bew-font-weight-medium);
     transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+    @include truncateFade.line;
   }
 }
 .moments-user-card__badges {
@@ -220,12 +219,11 @@ function select(value: string) {
   transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
   strong {
     max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
     font-size: var(--bew-font-size-heading);
     line-height: var(--bew-line-height-heading);
     font-weight: var(--bew-font-weight-semibold);
     font-variant-numeric: tabular-nums;
+    @include truncateFade.line;
   }
   small {
     color: var(--bew-text-2);
@@ -303,9 +301,7 @@ function select(value: string) {
   gap: var(--bew-space-1);
   strong,
   small {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    @include truncateFade.line;
   }
   strong {
     font-size: var(--bew-font-size-control);

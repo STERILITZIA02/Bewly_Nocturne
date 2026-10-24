@@ -4,6 +4,8 @@ import type { Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import ALink from '~/components/ALink.vue'
+import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import Tooltip from '~/components/Tooltip.vue'
@@ -429,7 +431,7 @@ defineExpose({
               :aria-pressed="activatedMediaId === item.id"
               @click="changeCategory(item)"
             >
-              {{ item.title }}
+              <span>{{ item.title }}</span>
             </button>
           </li>
         </ul>
@@ -542,6 +544,7 @@ defineExpose({
 </template>
 
 <style lang="scss" scoped>
+@use "../../../../styles/truncateFade";
 @use "../../styles/popoverCards";
 
 .favorites-pop {
@@ -581,17 +584,20 @@ defineExpose({
   text-align: left;
   min-height: var(--bew-control-height);
   padding: var(--bew-space-2) var(--bew-space-3);
-  overflow: hidden;
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   cursor: pointer;
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-  text-overflow: ellipsis;
-  white-space: nowrap;
   transition:
     color var(--bew-duration-fast) var(--bew-ease-standard),
     background-color var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+// The fade masks the label only, not the button's hover and selected plate.
+.favorites-pop__category > span {
+  display: block;
+  @include truncateFade.line;
 }
 
 .favorites-pop__category:hover {

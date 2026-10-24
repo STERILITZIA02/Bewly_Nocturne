@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import ChevronIcon from '~/components/ChevronIcon.vue'
+import Empty from '~/components/Empty.vue'
 import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import { useSurfaceMorph } from '~/composables/useSurfaceMorph'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'

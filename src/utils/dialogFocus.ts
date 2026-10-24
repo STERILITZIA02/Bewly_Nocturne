@@ -1,7 +1,8 @@
 import { tabbable } from 'tabbable'
-import type { InjectionKey } from 'vue'
+import type { InjectionKey, Ref } from 'vue'
 
 export const DIALOG_FOCUS_OWNER: InjectionKey<string> = Symbol('dialog-focus-owner')
+export const DIALOG_TELEPORT_TARGET: InjectionKey<Ref<HTMLElement | null>> = Symbol('dialog-teleport-target')
 
 export function getDeepActiveElement(root: Document | ShadowRoot): Element | null {
   let active = root.activeElement

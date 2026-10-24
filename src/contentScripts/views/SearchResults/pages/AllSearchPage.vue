@@ -7,6 +7,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import ALink from '~/components/ALink.vue'
 import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
 import BangumiEpisodeList from '~/components/BangumiEpisodeList/BangumiEpisodeList.vue'
 import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSelect.vue'
@@ -816,6 +817,7 @@ defineExpose({
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/truncateFade";
 @use "../../../../styles/breakpoints";
 
 .all-search-page {
@@ -871,11 +873,7 @@ defineExpose({
   font-size: var(--bew-font-size-body);
   color: var(--bew-text-2);
   line-height: var(--bew-line-height-body);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  @include truncateFade.lines(3);
 }
 
 .activity-badge {

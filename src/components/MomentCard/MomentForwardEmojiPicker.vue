@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
+
 import type { MomentForwardEmote } from './momentForwardContent'
 import { loadMomentForwardEmotes } from './useMomentForwardComposer'
 

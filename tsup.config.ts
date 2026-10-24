@@ -1,28 +1,21 @@
-// import path from 'node:path'
-
-// import fs from 'fs-extra'
 import { defineConfig } from 'tsup'
 
+import { getBackgroundEntries } from './scripts/buildEntries.ts'
+import { licenseBuildEntries, tsupLicenses } from './scripts/bundleLicenses'
 import { buildCommit, isDev, isSafari } from './scripts/utils'
 
 const outDir = isSafari ? 'extension-safari/dist' : 'extension/dist'
+const licenses = tsupLicenses(licenseBuildEntries(isDev))
 
 export default defineConfig(() => ({
-  entry: {
-    'background/index': './src/background/index.ts',
-    'contentScripts/pageLoading': './src/contentScripts/pageLoading.ts',
-    'regex/host': './src/regex/host.ts',
-    'regex/worker': './src/regex/worker.ts',
-    ...(isDev ? { mv3client: './scripts/client.ts' } : {}),
-  },
-  async onSuccess() {
-    // fs.copySync(path.resolve(__dirname, './src/inject/index.js'), path.resolve(__dirname, `./${outDir}/inject/index.js`))
-  },
+  entry: getBackgroundEntries(isDev),
   outDir,
   format: ['esm'],
   target: 'esnext',
   ignoreWatch: ['**/extension/**', '**/extension-safari/**'],
   splitting: false,
+  esbuildPlugins: [licenses.esbuildPlugin],
+  plugins: [licenses.plugin],
   noExternal: ['md5'],
   sourcemap: false, // https://github.com/vitejs/vite-plugin-vue/issues/35
   define: {

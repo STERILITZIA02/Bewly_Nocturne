@@ -167,6 +167,7 @@ function resetPreview(event: FocusEvent) {
 </template>
 
 <style scoped lang="scss">
+@use "../styles/truncateFade";
 .wheel-selector {
   display: block;
   min-width: 0;
@@ -233,9 +234,7 @@ function resetPreview(event: FocusEvent) {
 
 .wheel-selector__label {
   line-height: var(--bew-wheel-label-line-height);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .wheel-selector__badge {

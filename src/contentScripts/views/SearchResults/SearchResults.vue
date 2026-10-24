@@ -5,6 +5,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { addSearchHistory } from '~/components/SearchBar/searchHistoryProvider'
+import Select from '~/components/Select.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { usePageViewState } from '~/composables/usePageViewState'
@@ -127,6 +128,13 @@ const searchTransportScope = computed(() => {
     ? (topBarStore.isLogin ? 'profile-unavailable' : 'logged-out')
     : `account:${accountId}`
 })
+function resetSearchIdentityPage() {
+  urlRestoreGeneration++
+  restoringFromUrl = false
+  currentPage.value = 1
+  updateUrlParams({ pn: 1 })
+}
+watch(() => settings.value.depersonalizeSearchResults, resetSearchIdentityPage, { flush: 'sync' })
 
 const videoOrderOptions = computed(() => [
   { value: '', label: t('search.filters.order_relevance') },
@@ -347,6 +355,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="search-results-container" :class="{ 'search-results-container--media': currentCategory === 'bangumi' || currentCategory === 'media_ft' }">
+    <div v-if="settings.showSearchIdentitySwitcher" class="search-identity-switcher">
+      <Select
+        v-model="settings.depersonalizeSearchResults"
+        :accessible-label="$t('settings.search_identity')" size="compact"
+        :options="[
+          { value: false, label: $t('settings.search_identity_account') },
+          { value: true, label: $t('settings.search_identity_guest') },
+        ]"
+      />
+    </div>
     <SearchCategoryTabs
       :categories="categories"
       :current-category="currentCategory"
@@ -395,6 +413,11 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .search-results-container {
   padding: 0;
+}
+.search-identity-switcher {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: var(--bew-space-2);
 }
 .search-results-container--media {
   width: min(100%, var(--bew-media-search-max-width));

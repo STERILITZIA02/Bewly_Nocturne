@@ -15,7 +15,6 @@ const virtual = {
   '/__baseline.vue': baseline,
   '/__settings.js': `import {ref} from 'vue'; export const settings=ref({autoSwitchListLayout:false,videoCardCoverRatioOneColumn:40,videoCardCoverRatioTwoColumns:50}); export const originalSettings=settings.value;`,
   '/__editing.js': `import {ref} from 'vue'; export const isLayoutEditing=ref(false);`,
-  '/__shadow.js': `import {ref} from 'vue'; export const useVideoCardShadowStyle=()=>({shadowStyleVars:ref({})});`,
   '/__emitter.js': `export default {on(){},off(){}};`,
   '/__loading.vue': `<template><div /></template>`,
   '/__benchmark.js': `
@@ -64,7 +63,6 @@ app.mount('#app');
 const aliases = {
   '~/logic': '/__settings.js',
   '~/logic/layoutEdit': '/__editing.js',
-  '~/composables/useVideoCardShadowStyle': '/__shadow.js',
   '~/utils/mitt': '/__emitter.js',
   './SmoothLoading.vue': '/__loading.vue',
 }

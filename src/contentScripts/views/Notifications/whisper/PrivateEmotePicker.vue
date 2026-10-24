@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import Button from '~/components/Button.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 
 import type { PrivateEmote, PrivateEmotePackage } from './privateMessageRenderers'
@@ -171,6 +172,7 @@ watch(() => activePackage.value ? getPackageKey(activePackage.value) : '', () =>
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/truncateFade";
 .private-emote-picker {
   position: absolute;
   bottom: calc(100% + var(--bew-space-2));
@@ -292,12 +294,10 @@ watch(() => activePackage.value ? getPackageKey(activePackage.value) : '', () =>
 }
 
 .private-emote-picker__fallback {
-  overflow: hidden;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .private-emote-picker__empty {

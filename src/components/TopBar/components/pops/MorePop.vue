@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
 import { settings } from '~/logic'
 import { getUserID } from '~/utils/main'
 

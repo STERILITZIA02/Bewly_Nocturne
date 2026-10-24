@@ -2,6 +2,8 @@
 import { useResizeObserver } from '@vueuse/core'
 import { computed, ref } from 'vue'
 
+import ALink from '~/components/ALink.vue'
+
 interface Episode {
   id: string
   title: string

@@ -85,6 +85,7 @@ onBeforeUnmount(leave)
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/truncateFade";
 .moments-live-row {
   min-width: 0;
   border-radius: var(--bew-interactive-radius);
@@ -134,9 +135,7 @@ onBeforeUnmount(leave)
   gap: var(--bew-space-1);
   strong,
   small {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    @include truncateFade.line;
   }
   strong {
     font-size: var(--bew-font-size-control);

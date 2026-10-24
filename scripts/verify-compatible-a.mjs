@@ -129,15 +129,13 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
     scope.stop()
     assert.equal(frames.size, 0, 'teardown releases scheduled measurements')
   })
-  check('A10 custom rate: explicit application survives native ratechange and respects memory and active media', async () => {
+  check('A10 native rate memory: explicit native changes persist only while enabled', async () => {
     const rates = await import('../src/utils/playbackRate')
     const video = document.body.appendChild(document.createElement('video'))
     const unrelated = document.body.appendChild(document.createElement('video'))
-    let ad = false
     const settings = { value: { rememberPlaybackRate: true, savedPlaybackRate: 1 } }
     const controllers = new Map()
     const context = await loadSourceFunctions('../src/utils/player.ts', [
-      'applyExplicitPlaybackRate',
       'markPlaybackRateUserIntent',
       'consumePlaybackRateUserIntent',
       'monitorPlaybackRateVideo',
@@ -149,7 +147,6 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       playbackRateLifecycleActive: true,
       isVideoPage: () => true,
       getVideoElement: () => video,
-      isPlayerAdvertisement: () => ad,
       isNativeVideoComponentReady: () => true,
       playbackRateListenerControllers: controllers,
       applyingPlaybackRateVideos: new WeakSet(),
@@ -163,23 +160,19 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       HTMLMediaElement: window.HTMLMediaElement,
     })
     try {
-      assert.equal(context.applyExplicitPlaybackRate(1.75), true)
+      context.monitorPlaybackRateVideo(video)
+      context.markPlaybackRateUserIntent(video)
+      video.playbackRate = 1.75
       video.dispatchEvent(new Event('ratechange'))
       assert.equal(video.playbackRate, 1.75)
       assert.equal(settings.value.savedPlaybackRate, 1.75)
       settings.value.rememberPlaybackRate = false
-      assert.equal(context.applyExplicitPlaybackRate(2.25), true)
+      context.markPlaybackRateUserIntent(video)
+      video.playbackRate = 2.25
       video.dispatchEvent(new Event('ratechange'))
       assert.equal(video.playbackRate, 2.25)
       assert.equal(settings.value.savedPlaybackRate, 1.75)
-      for (const invalid of [Number.NaN, Infinity, 0, 5.01])
-        assert.equal(context.applyExplicitPlaybackRate(invalid), false)
-      ad = true
-      assert.equal(context.applyExplicitPlaybackRate(3), false)
       assert.equal(unrelated.playbackRate, 1)
-      video.remove()
-      ad = false
-      assert.equal(context.applyExplicitPlaybackRate(3), false)
     }
     finally {
       controllers.forEach(controller => controller.abort())
@@ -537,7 +530,6 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
     let receive
     const navigations = []
     const commands = []
-    const playbackCommands = await import('../src/utils/playbackRateCommand')
     let active = true
     const scope = Vue.effectScope()
     const host = await loadSourceModule('../src/composables/useIframeDocumentHost.ts', {
@@ -550,28 +542,15 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       }, matches: data => data.documentId === 'current' }) },
       '~/utils/iframeMessage': { getIframeMessageData: event => event.data },
       '~/utils/iframeSearch': search,
-      '~/utils/playbackRateCommand': playbackCommands,
       '~/utils/searchNavigation': { resolveSearchNavigationTarget: keyword => `https://www.bilibili.com/?page=SearchResults&keyword=${keyword}`, openSearchResultsInCurrentTab: target => navigations.push(target) },
     }, { window: { addEventListener: (_type, callback) => receive = callback, removeEventListener: () => receive = undefined } })
-    scope.run(() => host.useIframeDocumentHost(Vue.ref(document.createElement('iframe')), () => active, () => active))
+    scope.run(() => host.useIframeDocumentHost(Vue.ref(document.createElement('iframe')), () => active))
     const data = { type: search.IFRAME_SEARCH_REQUEST, documentId: 'current', keyword: 'test', category: 'user', intent: 'currentTab', requestId: 1 }
     receive({ data })
     receive({ data })
     receive({ data: { ...data, documentId: 'old', requestId: 2 } })
     assert.equal(navigations.length, 1)
     assert.equal(new URL(navigations[0]).searchParams.get('category'), 'user')
-    let settled = false
-    const rate = playbackCommands.applyActivePlaybackRate(1.75).then((result) => {
-      settled = true
-      return result
-    })
-    const request = commands.at(-1)
-    assert.equal(request.rate, 1.75)
-    receive({ data: { type: playbackCommands.IFRAME_PLAYBACK_RATE, documentId: 'old', phase: 'result', requestId: request.requestId, applied: true } })
-    await flush()
-    assert.equal(settled, false)
-    receive({ data: { type: playbackCommands.IFRAME_PLAYBACK_RATE, documentId: 'current', phase: 'result', requestId: request.requestId, applied: true } })
-    assert.equal(await rate, true)
     active = false
     receive({ data: { ...data, requestId: 3 } })
     assert.equal(navigations.length, 1)

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
+import Button from '~/components/Button.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 
 import type {
@@ -175,6 +177,7 @@ const deliveryLabel = computed(() => {
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/truncateFade";
 .private-message-item {
   display: flex;
   justify-content: flex-start;
@@ -300,13 +303,11 @@ const deliveryLabel = computed(() => {
 
 .private-message-item__sender {
   max-width: 100%;
-  overflow: hidden;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .private-message-item__content {

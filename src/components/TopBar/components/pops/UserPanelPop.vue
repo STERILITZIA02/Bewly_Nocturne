@@ -3,6 +3,8 @@ import DOMPurify from 'dompurify'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
+import Button from '~/components/Button.vue'
 import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'

@@ -66,19 +66,19 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
 
 <template>
   <SettingsItemGroup
-    :title="t('settings.group_player_display_mode')"
+    data-setting-id="settings.group_player_display_mode" :title="t('settings.group_player_display_mode')"
     :desc="t('settings.group_player_display_mode_desc')"
   >
-    <SettingsItem :title="t('settings.video_default_player_mode')" right-width="auto">
+    <SettingsItem setting-id="settings.video_default_player_mode" :title="t('settings.video_default_player_mode')" right-width="auto">
       <Select v-model="settings.defaultVideoPlayerMode" :options="videoPlayerModeOptions" w="160px" />
     </SettingsItem>
 
-    <SettingsItemSubgroup :title="t('settings.video_player_mode.bewly_widescreen')">
-      <SettingsItem :title="t('settings.show_widescreen_idle_progress')" :desc="t('settings.show_widescreen_idle_progress_desc')" right-width="auto">
+    <SettingsItemSubgroup data-setting-id="settings.video_player_mode.bewly_widescreen" :title="t('settings.video_player_mode.bewly_widescreen')">
+      <SettingsItem setting-id="settings.show_widescreen_idle_progress" :title="t('settings.show_widescreen_idle_progress')" :desc="t('settings.show_widescreen_idle_progress_desc')" right-width="auto">
         <Radio v-model="settings.showWidescreenIdleProgress" />
       </SettingsItem>
       <SettingsItem
-        :title="t('settings.video_player_mode.bewly_widescreen_sidebar_position')"
+        setting-id="settings.video_player_mode.bewly_widescreen_sidebar_position" :title="t('settings.video_player_mode.bewly_widescreen_sidebar_position')"
         :desc="t('settings.video_player_mode.bewly_widescreen_sidebar_position_desc')"
         right-width="auto"
       >
@@ -86,15 +86,15 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
       </SettingsItem>
     </SettingsItemSubgroup>
 
-    <SettingsItem :title="t('settings.video_player_scroll')" right-width="auto">
+    <SettingsItem setting-id="settings.video_player_scroll" :title="t('settings.video_player_scroll')" right-width="auto">
       <Radio v-model="settings.videoPlayerScroll" />
     </SettingsItem>
-    <SettingsItem v-if="settings.videoPlayerScroll" :title="t('settings.video_player_scroll_position')" right-width="auto">
+    <SettingsItem v-if="settings.videoPlayerScroll" setting-id="settings.video_player_scroll_position" :title="t('settings.video_player_scroll_position')" right-width="auto">
       <Select v-model="settings.videoPlayerScrollMode" :options="videoPlayerScrollOptions" w="160px" />
     </SettingsItem>
 
     <SettingsItem
-      :title="t('settings.auto_exit_fullscreen_on_end')"
+      setting-id="settings.auto_exit_fullscreen_on_end" :title="t('settings.auto_exit_fullscreen_on_end')"
       :desc="t('settings.auto_exit_fullscreen_on_end_desc')"
       right-width="auto"
     >
@@ -102,7 +102,7 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
     </SettingsItem>
 
     <SettingsItem
-      :title="t('settings.video_player_mode.enable_overrides')"
+      setting-id="settings.video_player_mode.enable_overrides" :title="t('settings.video_player_mode.enable_overrides')"
       :desc="t('settings.video_player_mode.enable_overrides_desc')"
       right-width="auto"
     >
@@ -110,7 +110,7 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
     </SettingsItem>
 
     <SettingsItemSubgroup
-      v-if="settings.enableVideoPlayerModeOverrides"
+      v-if="settings.enableVideoPlayerModeOverrides" data-setting-id="settings.video_player_mode.overrides"
       :title="t('settings.video_player_mode.overrides')"
       :desc="t('settings.video_player_mode.overrides_desc')"
     >

@@ -491,7 +491,6 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       '~/composables/useCardWindow': cardWindow,
       '~/composables/useGridLayout': gridLayout,
       '~/composables/useHomeTabState': tabState,
-      '~/composables/useVideoCardShadowStyle': { useVideoCardShadowStyle: () => ({ shadowStyleVars: Vue.ref({}) }) },
       '~/constants/globalEvents': events,
       '~/logic': { settings, originalSettings: settings.value },
       '~/logic/layoutEdit': { isLayoutEditing: editing },

@@ -3,6 +3,7 @@ import { onClickOutside } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 import { MEDIA_EPISODE_MENU_MAX_HEIGHT } from '~/constants/layout'
@@ -138,7 +139,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
       w="full"
       @click.stop="toggleDropdown"
     >
-      <span truncate>{{ t('search.media.select_episode') }}</span>
+      <span class="keep-one-line">{{ t('search.media.select_episode') }}</span>
 
       <!-- arrow -->
       <i i-tabler:chevron-down class="select-arrow" aria-hidden="true" />
@@ -209,6 +210,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
 </template>
 
 <style scoped lang="scss">
+@use "../../styles/truncateFade";
 .media-episode-select {
   display: inline-block;
   width: min(100%, var(--bew-media-episode-control-width));
@@ -254,9 +256,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
 
   .episode-title {
     flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @include truncateFade.line;
   }
 
   .episode-badge {

@@ -85,10 +85,5 @@ export function useWebRecommendationCursor(tabState: HomeTabState) {
     }
   }
 
-  function resetWebRecommendState() {
-    refreshIdx.value = 1
-    webFetchRow.value = 1
-    webShowlistGroups.value = []
-  }
-  return { refreshIdx, webFetchRow, webShowlistGroups, buildLastShowlistGroup, getLastShowlistFromGroups, getNoCookieStoredLastShowlist, getNoCookieNextFreshIdx, saveNoCookieRecommendationState, resetWebRecommendState }
+  return { refreshIdx, webFetchRow, webShowlistGroups, buildLastShowlistGroup, getLastShowlistFromGroups, getNoCookieStoredLastShowlist, getNoCookieNextFreshIdx, saveNoCookieRecommendationState }
 }

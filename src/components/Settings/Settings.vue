@@ -11,9 +11,10 @@ import { GLASS_SURFACE_CONTEXT } from '~/composables/useGlassPanelMotion'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { settings } from '~/logic'
 import type { SettingDescriptor } from '~/logic/layoutEdit'
-import { enterLayoutEditMode, subscribeSettingNavigation } from '~/logic/layoutEdit'
+import { enterLayoutEditMode, getSettingDescriptors, subscribeSettingNavigation } from '~/logic/layoutEdit'
 import { createAsyncPageRegistry } from '~/utils/asyncPage'
 import { getTopDialog } from '~/utils/dialogFocus'
+import { subscribeViewportFrame } from '~/utils/viewportGeometry'
 
 import { navigateToSetting } from './navigateToSetting'
 import type { SettingsSearchEntry } from './searchCatalog'
@@ -32,12 +33,14 @@ const reducedMotion = usePreferredReducedMotion()
 provide(GLASS_SURFACE_CONTEXT, computed(() => !settings.value.disableFrostedGlass))
 const breadcrumbDetail = ref<string>()
 const searchQuery = ref('')
+const isSearchFocused = ref(false)
 const settingsContentKey = ref(0)
+const descriptorTargetIds = new Map(getSettingDescriptors().map(descriptor => [descriptor.titleKey, descriptor.id]))
 const settingsContentReady = ref(false)
 const settingsLayerRef = ref<HTMLElement | null>(null)
 let settingNavigationController: AbortController | undefined
 let quickLayoutEditFrame: number | undefined
-let settingsModalActive = false
+const settingsModalActive = ref(false)
 let previouslyFocusedElement: HTMLElement | null = null
 const inertSiblingStates = new Map<HTMLElement, boolean>()
 
@@ -56,9 +59,9 @@ function getSettingsActiveElement() {
 }
 
 function activateSettingsModal() {
-  if (settingsModalActive || !settingsLayerRef.value)
+  if (settingsModalActive.value || !settingsLayerRef.value)
     return
-  settingsModalActive = true
+  settingsModalActive.value = true
   const activeElement = getSettingsActiveElement()
   previouslyFocusedElement = activeElement instanceof HTMLElement ? activeElement : null
 
@@ -77,9 +80,10 @@ function activateSettingsModal() {
 
 function deactivateSettingsModal() {
   cancelSettingNavigation()
-  if (!settingsModalActive)
+  if (!settingsModalActive.value)
     return
-  settingsModalActive = false
+  settingsModalActive.value = false
+  isSearchFocused.value = false
   inertSiblingStates.forEach((inert, sibling) => {
     if (sibling.isConnected)
       sibling.inert = inert
@@ -91,7 +95,7 @@ function deactivateSettingsModal() {
 }
 
 function trapSettingsFocus(event: KeyboardEvent) {
-  if (!settingsModalActive || event.key !== 'Tab' || !settingsLayerRef.value)
+  if (!settingsModalActive.value || event.key !== 'Tab' || !settingsLayerRef.value)
     return
   // A child Dialog owns Tab while open, including its teleported controls.
   if (getTopDialog(settingsLayerRef.value.getRootNode() as ParentNode))
@@ -118,7 +122,7 @@ onMounted(() => {
 })
 onActivated(activateSettingsModal)
 onDeactivated(deactivateSettingsModal)
-useEventListener(window, 'keydown', trapSettingsFocus, { capture: true })
+useEventListener(() => settingsModalActive.value ? window : undefined, 'keydown', trapSettingsFocus, { capture: true })
 
 provide('setSettingsBreadcrumb', (detail?: string) => {
   breadcrumbDetail.value = detail
@@ -200,7 +204,6 @@ const isPrimaryNavigationExpanded = ref(false)
 const settingsSearchRef = ref<HTMLElement>()
 const searchInputRef = ref<HTMLInputElement>()
 const searchPopoverStyle = ref<CSSProperties>({})
-const isSearchFocused = ref(false)
 const { mainAppRef } = useBewlyApp()
 
 function handleSearchBlur() {
@@ -212,6 +215,8 @@ function handleSearchFocus() {
 }
 
 function updateSearchPopoverBounds() {
+  if (!settingsModalActive.value || !isSearchFocused.value)
+    return
   const searchElement = settingsSearchRef.value
   const contentElement = searchElement?.closest<HTMLElement>('.settings-content')
   if (!searchElement || !contentElement)
@@ -244,11 +249,16 @@ function focusSettingsSearch(event: MouseEvent) {
   nextTick(updateSearchPopoverBounds)
 }
 
-useEventListener(window, 'resize', () => {
-  nextTick(updateSearchPopoverBounds)
-})
-
 const scrollViewportRef = ref<HTMLElement>()
+watch([settingsModalActive, isSearchFocused, scrollViewportRef], ([active, focused, viewport], _previous, onCleanup) => {
+  if (!active || !focused || !viewport)
+    return
+  updateSearchPopoverBounds()
+  onCleanup(subscribeViewportFrame(viewport, (_geometry, reason) => {
+    if (reason === 'layout')
+      updateSearchPopoverBounds()
+  }))
+}, { flush: 'post' })
 
 // 滚动时关闭搜索弹窗（保留搜索词）
 useEventListener(() => scrollViewportRef.value, 'scroll', () => {
@@ -350,7 +360,7 @@ function getTranslatedSearchTerms(key: string): string[] {
 
 function getSearchEntryText(entry: SettingsSearchEntry) {
   const inferredKeywordKeys = entry.titleKey
-    ? [`${entry.titleKey}_desc`, `${entry.titleKey}_opt`, `${entry.titleKey}_option`]
+    ? [`${entry.titleKey}_desc`, `${entry.titleKey}_opt`, `${entry.titleKey}_option`, ...(entry.titleKey.endsWith('.title') ? [entry.titleKey.slice(0, -6)] : [])]
     : []
   const translatedKeywords = [...inferredKeywordKeys, ...(entry.keywordKeys ?? [])]
     .flatMap(getTranslatedSearchTerms)
@@ -363,18 +373,24 @@ function getSearchEntryText(entry: SettingsSearchEntry) {
   ].join(' ').toLocaleLowerCase()
 }
 
+const searchIndex = computed(() => settingsSearchEntries.filter(entry => !entry.developmentOnly || __DEV__).map(entry => ({
+  entry,
+  title: getSearchEntryTitle(entry).toLocaleLowerCase(),
+  text: getSearchEntryText(entry),
+})))
 const searchResults = computed(() => {
   const query = searchQuery.value.trim().toLocaleLowerCase()
   if (!query)
     return []
-
-  const queryParts = query.split(/\s+/).filter(Boolean)
-  return settingsSearchEntries
-    .filter((entry) => {
-      const searchableText = getSearchEntryText(entry)
-      return queryParts.every(part => searchableText.includes(part))
-    })
-    .slice(0, 12)
+  const parts = query.split(/\s+/)
+  return searchIndex.value
+    .filter(item => parts.every(part => item.text.includes(part)))
+    .map(item => ({
+      entry: item.entry,
+      rank: item.title === query ? 0 : item.title.startsWith(query) ? 1 : item.title.includes(query) ? 2 : parts.every(part => item.title.includes(part)) ? 3 : 4,
+    }))
+    .sort((a, b) => a.rank - b.rank)
+    .map(item => item.entry)
 })
 
 const activeSearchResultIndex = ref(-1)
@@ -446,14 +462,14 @@ function clearSearchTargetHighlight() {
   searchTargetHighlightTimer = undefined
 }
 
-function highlightSearchTarget(target: HTMLElement) {
+function highlightSearchTarget(target: HTMLElement, hint?: string) {
   clearSearchTargetHighlight()
   const visualTarget = target.matches('.b-settings-item-group')
     ? target.querySelector<HTMLElement>(':scope > .group-heading') ?? target
     : target
 
   highlightedSearchTarget = visualTarget
-  visualTarget.dataset.settingsSearchHighlight = t('settings.search.located')
+  visualTarget.dataset.settingsSearchHighlight = hint ?? t('settings.search.located')
   visualTarget.classList.add('settings-search-target')
   searchTargetHighlightTimer = window.setTimeout(clearSearchTargetHighlight, 2400)
 }
@@ -466,24 +482,37 @@ function cancelSettingNavigation() {
   return searchNavigationId
 }
 
-async function locateSetting(find: () => HTMLElement | undefined, navigationId: number, keyboard = false) {
-  if (!settingsModalActive || navigationId !== searchNavigationId || !settingsWindow.value || !scrollViewportRef.value)
+async function locateSetting(find: () => HTMLElement | undefined, navigationId: number, keyboard = false, hint?: (target: HTMLElement) => string | undefined) {
+  if (!settingsModalActive.value || navigationId !== searchNavigationId || !settingsWindow.value || !scrollViewportRef.value)
     return
   const owner = new AbortController()
   settingNavigationController = owner
   const target = await navigateToSetting({ root: settingsWindow.value, viewport: scrollViewportRef.value, find, signal: owner.signal, behavior: keyboard || reducedMotion.value === 'reduce' ? 'auto' : 'smooth' })
-  if (target && !owner.signal.aborted && settingsModalActive && navigationId === searchNavigationId) {
-    highlightSearchTarget(target)
-    if (keyboard)
-      target.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled])')?.focus({ preventScroll: true })
+  if (target && !owner.signal.aborted && settingsModalActive.value && navigationId === searchNavigationId) {
+    highlightSearchTarget(target, hint?.(target))
+    if (keyboard) {
+      const selector = 'button:not([disabled]), input:not([disabled]), select:not([disabled])'
+      const control = target.matches(selector) ? target : target.querySelector<HTMLElement>(selector)
+      control?.focus({ preventScroll: true })
+    }
   }
   if (settingNavigationController === owner)
     settingNavigationController = undefined
 }
 
-function scrollToSearchTarget(expectedTitle: string | undefined, navigationId: number, keyboard = false) {
-  if (expectedTitle)
-    void locateSetting(() => Array.from(settingsWindow.value?.querySelectorAll<HTMLElement>('[data-settings-title]') ?? []).find(element => element.dataset.settingsTitle === expectedTitle && !element.closest('.page-fade-leave-active')), navigationId, keyboard)
+function scrollToSearchTarget(entry: SettingsSearchEntry, navigationId: number, keyboard = false) {
+  const ids = [entry.targetId!, ...(entry.fallbackIds ?? [])].map(id => descriptorTargetIds.get(id) ?? id)
+  const find = () => {
+    for (const id of ids) {
+      const target = Array.from(settingsWindow.value?.querySelectorAll<HTMLElement>(`[data-setting-id="${CSS.escape(id)}"]`) ?? [])
+        .find(element => !element.closest('.page-fade-leave-active'))
+      if (target)
+        return target
+    }
+  }
+  void locateSetting(find, navigationId, keyboard, target => target.dataset.settingId === ids[0]
+    ? undefined
+    : t('settings.search.parent_control_hint', { setting: entry.conditionTitleKey ? t(entry.conditionTitleKey) : target.dataset.settingsTitle ?? getSearchEntryTitle(entry) }))
 }
 
 function navigateToSearchResult(entry: SettingsSearchEntry, keyboard = false) {
@@ -494,10 +523,7 @@ function navigateToSearchResult(entry: SettingsSearchEntry, keyboard = false) {
   activatedMenuItem.value = entry.menu
   if (entry.storageValues?.length)
     settingsContentKey.value++
-  const targetTitle = entry.targetTitleKey
-    ? t(entry.targetTitleKey)
-    : entry.targetTitle ?? getSearchEntryTitle(entry)
-  nextTick(() => scrollToSearchTarget(targetTitle, navigationId, keyboard))
+  nextTick(() => scrollToSearchTarget(entry, navigationId, keyboard))
 }
 
 function scrollToSettingId(settingId: string, navigationId: number) {
@@ -764,6 +790,7 @@ function changeMenuItem(menuItem: MenuType) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/truncateFade";
 .menu-item-activated {
   color: var(--bew-text-1);
   background: var(--bew-selected-bg);
@@ -926,13 +953,11 @@ function changeMenuItem(menuItem: MenuType) {
   strong {
     min-width: 0;
     flex: 0 1 auto;
-    overflow: hidden;
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-heading);
     font-weight: var(--bew-heading-weight);
     line-height: var(--bew-line-height-heading);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @include truncateFade.line;
   }
 
   strong:last-child {
@@ -1031,13 +1056,11 @@ function changeMenuItem(menuItem: MenuType) {
 
   strong {
     min-width: 0;
-    overflow: hidden;
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-body);
     font-weight: var(--bew-font-weight-medium);
     line-height: var(--bew-line-height-body);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @include truncateFade.line;
   }
 
   span,
@@ -1049,9 +1072,7 @@ function changeMenuItem(menuItem: MenuType) {
 
   span {
     flex: 0 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @include truncateFade.line;
   }
 
   p {

@@ -3,6 +3,9 @@ import { useResizeObserver } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import ALink from '~/components/ALink.vue'
+import Button from '~/components/Button.vue'
+import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
@@ -10,8 +13,10 @@ import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryVideoCardSkeleton from '~/components/LibraryVideoCardSkeleton.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
+import Progress from '~/components/Progress.vue'
 import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import Tooltip from '~/components/Tooltip.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
@@ -469,8 +474,6 @@ function jumpToLoginPage() {
                     >
                       <h3
                         class="keep-two-lines history-list-card__title"
-                        overflow="hidden"
-                        text="overflow-ellipsis"
                       >
                         {{ entry.item.show_title ? entry.item.show_title : entry.item.title }}
                       </h3>

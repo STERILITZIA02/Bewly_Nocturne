@@ -2,8 +2,11 @@
 import { useMediaQuery } from '@vueuse/core'
 import type { AsyncComponentLoader } from 'vue'
 
+import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
+import Logo from '~/components/Logo.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
+import SearchBar from '~/components/SearchBar/SearchBar.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { provideHomeTabCache } from '~/composables/useHomeTabState'
 import { usePageScrollPositions } from '~/composables/usePageViewState'
@@ -13,6 +16,7 @@ import { resolveHomeSearchStage } from '~/constants/layout'
 import { AppPage } from '~/enums/appEnums'
 import { gridLayout, settings } from '~/logic'
 import { isLayoutEditing, useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
+import { getRecommendationRequestIdentity } from '~/logic/recommendationMode'
 import { useForYouStore } from '~/stores/forYouStore'
 import type { HomeTab } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
@@ -142,7 +146,6 @@ function defineHomePageComponent(loader: AsyncComponentLoader) {
 // Reuse loaded component modules while inactive views keep data only.
 const forYouPage = defineHomePageComponent(() => import('./components/ForYou.vue'))
 const followingPage = defineHomePageComponent(() => import('./components/Following.vue'))
-const followingOldPage = defineHomePageComponent(() => import('./components/FollowingOld.vue'))
 const subscribedSeriesPage = defineHomePageComponent(() => import('./components/SubscribedSeries.vue'))
 const trendingPage = defineHomePageComponent(() => import('./components/Trending.vue'))
 const rankingPage = defineHomePageComponent(() => import('./components/Ranking.vue'))
@@ -151,9 +154,7 @@ const weeklyPage = defineHomePageComponent(() => import('./components/Weekly.vue
 const livePage = defineHomePageComponent(() => import('./components/Live.vue'))
 const pages = computed(() => ({
   [HomeSubPage.ForYou]: forYouPage,
-  [HomeSubPage.Following]: settings.value.useFollowingNewLayout
-    ? followingPage
-    : followingOldPage,
+  [HomeSubPage.Following]: followingPage,
   [HomeSubPage.SubscribedSeries]: subscribedSeriesPage,
   [HomeSubPage.Trending]: trendingPage,
   [HomeSubPage.Ranking]: rankingPage,
@@ -165,7 +166,7 @@ const tabTransition = useReadyPageTransition(() => pages.value[activatedPage.val
   onSwap: restoreTabScrollPosition,
   rise: () => false,
 })
-const activatedPageCacheKey = computed(() => homeTabStateKey(activatedPage.value, settings.value.recommendationMode, settings.value.useFollowingNewLayout))
+const activatedPageCacheKey = computed(() => homeTabStateKey(activatedPage.value, getRecommendationRequestIdentity()))
 const homeAccountId = computed(() => resolveAuthenticatedAccountId(
   topBarStore.isLogin,
   topBarStore.userInfo.mid,
@@ -184,10 +185,10 @@ function restorePreservedForYou(restorePosition = true) {
     forYouStore.resetState()
     return
   }
-  const saved = forYouStore.takeCompleteState(homeAccountId.value, settings.value.recommendationMode)
+  const saved = forYouStore.takeCompleteState(homeAccountId.value, settings.value.recommendationMode, getRecommendationRequestIdentity())
   if (!saved)
     return
-  const key = `${HomeSubPage.ForYou}:${saved.recommendationMode}`
+  const key = `${HomeSubPage.ForYou}:${saved.requestIdentity}`
   tabCache.save(key, saved.snapshot, tabCache.generation)
   tabScrollPositions.set(key, saved.scrollTop)
   if (restorePosition && activatedPage.value === HomeSubPage.ForYou)
@@ -197,6 +198,10 @@ restorePreservedForYou()
 const tabContentLoading = ref<boolean>(false)
 const currentTabs = ref<HomeTab[]>([])
 const tabContentRef = ref<HTMLElement>()
+const recommendationPageRef = ref<{ startImmersive?: (trigger: HTMLElement) => void }>()
+function enterImmersive(event: MouseEvent) {
+  recommendationPageRef.value?.startImmersive?.(event.currentTarget as HTMLElement)
+}
 const tabContentMinHeight = ref<number>()
 const shouldShowHomeTabs = computed(() => currentTabs.value.length > 1)
 const recommendationSwitcherEnabled = useLayoutEditSettingValue('page.home.recommendationSwitcher', () => settings.value.showRecommendationModeSwitcher)
@@ -379,12 +384,14 @@ onDeactivated(() => {
 
 onUnmounted(() => {
   const mode = settings.value.recommendationMode
-  const key = `${HomeSubPage.ForYou}:${mode}`
+  const requestIdentity = getRecommendationRequestIdentity()
+  const key = `${HomeSubPage.ForYou}:${requestIdentity}`
   const snapshot = tabCache.take(key)
   if (settings.value.preserveForYouState && snapshot) {
     forYouStore.saveCompleteState({
       accountId: homeAccountId.value,
       recommendationMode: mode,
+      requestIdentity,
       scrollTop: activatedPage.value === HomeSubPage.ForYou ? cachedScrollTop : tabScrollPositions.get(key) ?? getInitialTabScrollTop(),
       snapshot,
     })
@@ -498,6 +505,16 @@ watch(tabContentLoading, (loading) => {
         </div>
 
         <div class="home-header-actions">
+          <IconButton
+            v-if="activatedPage === HomeSubPage.ForYou && settings.showImmersiveModeEntry"
+            class="bew-icon-button--control"
+            :label="$t('settings.immersive_mode')"
+            :title="$t('settings.immersive_mode')"
+            :disabled="tabContentLoading"
+            @click="enterImmersive"
+          >
+            <span class="i-tabler:player-play" aria-hidden="true" />
+          </IconButton>
           <RecommendationModeSwitcher
             v-if="reserveRecommendationModeSwitcher"
             class="home-control-surface"
@@ -558,7 +575,8 @@ watch(tabContentLoading, (loading) => {
           />
           <Component
             :is="pages[activatedPage]"
-            v-else :key="`${activatedPageCacheKey}:${homeAccountGeneration}`"
+            v-else
+            ref="recommendationPageRef" :key="`${activatedPageCacheKey}:${homeAccountGeneration}`"
             :grid-layout="homeGridLayout"
             @before-loading="toggleTabContentLoading(true)"
             @after-loading="toggleTabContentLoading(false)"

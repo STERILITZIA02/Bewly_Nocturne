@@ -36,6 +36,7 @@ const PAGE_STYLE_CLASSES = [
 ] as const
 
 const MOMENTS_ROUTE_CLASSES = [
+  'moments-native-feed',
   'moments-original-components-ready',
   'moments-hide-original-user-card',
   'moments-hide-original-live-list',
@@ -156,7 +157,8 @@ async function setupStyles(currentUrl: string) {
     if (!activatePage(css, 'momentsPage'))
       return
 
-    const isOriginalMomentsFeed = /https?:\/\/t\.bilibili\.com\/?(?:[?#].*)?$/.test(routeUrl)
+    const isOriginalMomentsFeed = /^https?:\/\/t\.bilibili\.com\/?(?:[?#].*)?$/.test(routeUrl)
+    root.classList.toggle('moments-native-feed', isOriginalMomentsFeed)
     let initialVisibilityGuard: HTMLStyleElement | undefined
     if (isOriginalMomentsFeed) {
       // storage 是异步读取的。先让可选区域不可见，等真实设置和正式样式同时就绪后再显示，

@@ -4,6 +4,7 @@ import '../components/mediaResults.scss'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
 import BangumiEpisodeList from '~/components/BangumiEpisodeList/BangumiEpisodeList.vue'
 import Empty from '~/components/Empty.vue'
 import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSelect.vue'

@@ -15,13 +15,15 @@ import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/ef
 import { postMessageToIframe } from '~/utils/iframeMessage'
 import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { cleanBilibiliShareText, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
+import { getTextAutospaceCss, SUPPORTS_TEXT_AUTOSPACE } from '~/utils/textAutospace'
 import { applyThemeColorTokens, getThemeColorTokens, readThemeContrastSurfaces, syncNativeNeutralRgb } from '~/utils/themeColor'
+import { invalidateViewportGeometry } from '~/utils/viewportGeometry'
 
 function isFestivalPage(): boolean {
   return /https?:\/\/(?:www\.)?bilibili\.com\/festival\/.*/.test(location.href)
 }
 
-export function setupNecessarySettingsWatchers() {
+export function setupNecessarySettingsWatchers(scrollViewportRef: Ref<HTMLElement | null>) {
   const settingsStore = useSettingsStore()
   const currentLocationHref = useCurrentLocationHref()
   const iframePageActive = useIframePageActive()
@@ -65,6 +67,23 @@ export function setupNecessarySettingsWatchers() {
       stopNativeKeyboard = setupNativePageKeyboard(root, page)
   }, { immediate: true })
   onScopeDispose(() => stopNativeKeyboard?.())
+
+  watch(() => settings.value.textAutospaceMode, async (mode, _, onCleanup) => {
+    if (mode === 'default' || !SUPPORTS_TEXT_AUTOSPACE)
+      return
+    const css = getTextAutospaceCss(mode)
+    const nativeStyle = injectCSS(css)
+    const shadowStyle = document.createElement('style')
+    shadowStyle.textContent = css
+    document.getElementById('bewly')?.shadowRoot?.appendChild(shadowStyle)
+    onCleanup(() => {
+      nativeStyle.remove()
+      shadowStyle.remove()
+      void nextTick(() => invalidateViewportGeometry(scrollViewportRef.value))
+    })
+    await nextTick()
+    invalidateViewportGeometry(scrollViewportRef.value)
+  }, { immediate: true })
 
   const DEFAULT_FROSTED_GLASS_BLUR_PX = originalSettings.frostedGlassBlurIntensity
 

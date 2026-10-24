@@ -93,7 +93,7 @@
 // Apple Music album-art frame: one bright translucent hairline drawn over the
 // artwork (overlays and previews sit beneath it) and a soft shadow.
 @mixin media-frame {
-  box-shadow: var(--bew-shadow-1);
+  box-shadow: var(--bew-media-shadow);
 
   &::after {
     content: "";

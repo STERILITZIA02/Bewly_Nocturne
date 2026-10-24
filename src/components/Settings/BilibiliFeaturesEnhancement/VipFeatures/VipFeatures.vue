@@ -9,11 +9,11 @@ import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
 <template>
   <div>
     <SettingsItemGroup>
-      <SettingsItem :title="$t('settings.show_bcoin_receive_reminder')" right-width="auto">
+      <SettingsItem setting-id="settings.show_bcoin_receive_reminder" :title="$t('settings.show_bcoin_receive_reminder')" right-width="auto">
         <Radio v-model="settings.showBCoinReceiveReminder" />
       </SettingsItem>
       <SettingsItem
-        v-if="settings.showBCoinReceiveReminder"
+        v-if="settings.showBCoinReceiveReminder" setting-id="settings.auto_receive_bcoin_coupon"
         :title="$t('settings.auto_receive_bcoin_coupon')"
         :desc="$t('settings.auto_receive_bcoin_coupon_desc')"
         right-width="auto"
@@ -21,7 +21,7 @@ import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
         <Radio v-model="settings.autoReceiveBCoinCoupon" />
       </SettingsItem>
       <SettingsItem
-        :title="$t('settings.auto_receive_vip_exp')"
+        setting-id="settings.auto_receive_vip_exp" :title="$t('settings.auto_receive_vip_exp')"
         :desc="$t('settings.auto_receive_vip_exp_desc')"
         right-width="auto"
       >

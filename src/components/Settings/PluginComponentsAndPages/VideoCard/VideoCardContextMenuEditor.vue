@@ -35,7 +35,7 @@ const groups = computed<MenuGroup[]>(() => [
     elements: [
       { key: 'openInNewTab', label: t('video_card.operation.open_in_new_tab'), icon: 'i-tabler:layout-bottombar' },
       { key: 'openInBackground', label: t('video_card.operation.open_in_background'), icon: 'i-tabler:layout-navbar' },
-      { key: 'openInNewWindow', label: t('video_card.operation.open_in_new_window'), icon: 'i-tabler:maximize' },
+      { key: 'openInNewWindow', label: t('documentPictureInPicture' in window ? 'video_card.operation.open_in_pip_window' : 'video_card.operation.open_in_new_window'), icon: 'i-tabler:maximize' },
       { key: 'openInCurrentTab', label: t('video_card.operation.open_in_current_tab'), icon: 'i-tabler:layout-bottombar' },
     ],
   },
@@ -62,7 +62,7 @@ const groups = computed<MenuGroup[]>(() => [
   },
 ])
 
-// On = shown directly in the menu; off = folded under “高级选项”.
+// On = shown directly in the menu; off = folded under “更多操作”.
 function isVisible(key: VideoCardContextMenuKey) {
   return !settings.value.videoCardContextMenuAdvanced.includes(key)
 }

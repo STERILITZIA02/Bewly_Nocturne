@@ -6,6 +6,7 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { DELAYED_MEDIA_PREVIEW_MS } from '~/constants/mediaPreview'
 import { settings } from '~/logic'
 import { findLayoutEditableTarget } from '~/logic/layoutEdit'
+import { getRecommendationRequestIdentity } from '~/logic/recommendationMode'
 import type { VideoInfo } from '~/models/video/videoInfo'
 import type { VideoPreviewResult } from '~/models/video/videoPreview'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -152,7 +153,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     if (removed.value || !props.value.video)
       return undefined
 
-    const url = getCurrentVideoUrl(props.value.video, videoCurrentTime)
+    const url = getCurrentVideoUrl(props.value.video, videoCurrentTime, settings.value.resumeFromPreviewPosition)
 
     try {
       const urlObj = new URL(url)
@@ -467,8 +468,9 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     try {
       const video = props.value.video
 
-      if (props.value.type === 'appRcmd' && video) {
+      if (video?.recommendationSource === 'app') {
         const target = getAppFeedFeedbackTarget(video)
+        const requestIdentity = video.recommendationRequestIdentity
         const state = interactionState
         if (!target) {
           toast.warning(t('video_card.feedback_unavailable'))
@@ -479,10 +481,10 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
           toast.warning(t('auth.auth_access_key_first'))
           return
         }
-        if (state !== interactionState || !isSameAppFeedFeedbackTarget(target, getAppFeedFeedbackTarget(props.value.video)))
+        if ((requestIdentity && requestIdentity !== getRecommendationRequestIdentity()) || state !== interactionState || !isSameAppFeedFeedbackTarget(target, getAppFeedFeedbackTarget(props.value.video)))
           return
         const { outcome, message } = await submitAppFeedFeedback('feedDislikeCancel', auth, target)
-        if (outcome === 'stale')
+        if (outcome === 'stale' || (requestIdentity && requestIdentity !== getRecommendationRequestIdentity()) || !isSameAppFeedFeedbackTarget(target, getAppFeedFeedbackTarget(props.value.video)))
           return
         if (outcome === 'succeeded')
           state.removed = false

@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 
+import Logo from '~/components/Logo.vue'
+import SearchBar from '~/components/SearchBar/SearchBar.vue'
 import { settings } from '~/logic'
 
 const searchInput = ref<string>('')

@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import Button from '~/components/Button.vue'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { COMMENT_REPLY_BATCH_MAX, COMMENT_REPLY_CONTAINER_HEIGHT } from '~/constants/commentReading'
 import { DOCK_POSITIONS } from '~/constants/dock'
@@ -11,7 +12,6 @@ import { originalSettings, settings } from '~/logic'
 import type { Settings } from '~/logic/storage'
 import { videoCardContextMenuKeys } from '~/logic/storage'
 import { LOCAL_LOUDNESS_RANGE } from '~/utils/localLoudnessProtocol'
-import { migrateSidebarCoverSetting } from '~/utils/sidebarCoverSettings'
 import { isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
 import SettingsItem from '../components/SettingsItem.vue'
@@ -151,13 +151,6 @@ const settingValueValidators: Partial<Record<keyof Settings, (value: unknown) =>
     && hasExactProperties(item, ['page', 'visible'])
     && homeSubPageValues.has(item.page as string)
     && typeof item.visible === 'boolean'),
-  videoCardShadowCurve: value => Array.isArray(value) && value.every(item =>
-    isPlainObject(item)
-    && hasExactProperties(item, ['position', 'opacity'])
-    && typeof item.position === 'number'
-    && Number.isFinite(item.position)
-    && typeof item.opacity === 'number'
-    && Number.isFinite(item.opacity)),
   videoPlayerModeOverrides: value => isPlainObject(value)
     && Object.values(value).every(mode => videoPlayerModeOverrideValues.has(mode as string)),
   customPlayOrderOverrides: value => isPlainObject(value)
@@ -179,10 +172,9 @@ function handleImportFile(event: Event) {
   const reader = new FileReader()
   reader.onload = async () => {
     try {
-      let importedSettings = JSON.parse(String(reader.result)) as Record<string, unknown>
+      const importedSettings = JSON.parse(String(reader.result)) as Record<string, unknown>
       if (!importedSettings || Array.isArray(importedSettings) || typeof importedSettings !== 'object')
         throw new TypeError('Invalid settings backup')
-      importedSettings = migrateSidebarCoverSetting(importedSettings)
 
       const validSettings: Partial<Record<keyof Settings, unknown>> = {}
       let importedCount = 0
@@ -260,11 +252,11 @@ async function handleResetSettings() {
 <template>
   <div>
     <SettingsItemGroup
-      :title="$t('settings.maintenance.backup_title')"
+      data-setting-id="settings.maintenance.backup_title" :title="$t('settings.maintenance.backup_title')"
       :desc="$t('settings.maintenance.backup_desc')"
     >
       <SettingsItem
-        :title="$t('settings.import_settings')"
+        setting-id="settings.import_settings" :title="$t('settings.import_settings')"
         :desc="$t('settings.maintenance.import_desc')"
         right-width="auto"
       >
@@ -283,7 +275,7 @@ async function handleResetSettings() {
         </Button>
       </SettingsItem>
       <SettingsItem
-        :title="$t('settings.export_settings')"
+        setting-id="settings.export_settings" :title="$t('settings.export_settings')"
         :desc="$t('settings.export_settings_desc')"
         right-width="auto"
       >
@@ -297,11 +289,11 @@ async function handleResetSettings() {
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      :title="$t('settings.maintenance.reset_title')"
+      data-setting-id="settings.maintenance.reset_title" :title="$t('settings.maintenance.reset_title')"
       :desc="$t('settings.maintenance.reset_desc')"
     >
       <SettingsItem
-        :title="$t('settings.reset_settings')"
+        setting-id="settings.reset_settings" :title="$t('settings.reset_settings')"
         :desc="$t('settings.maintenance.reset_warning')"
         :badge="$t('settings.badge_irreversible')"
         right-width="auto"
@@ -316,12 +308,12 @@ async function handleResetSettings() {
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      v-if="developmentBuildId"
+      v-if="developmentBuildId" data-setting-id="settings.maintenance.development_title"
       :title="$t('settings.maintenance.development_title')"
       :desc="$t('settings.maintenance.development_desc')"
     >
       <SettingsItem
-        :title="$t('settings.maintenance.build_id')"
+        setting-id="settings.maintenance.build_id" :title="$t('settings.maintenance.build_id')"
         right-width="auto"
       >
         <code class="build-id">{{ developmentBuildId }}</code>

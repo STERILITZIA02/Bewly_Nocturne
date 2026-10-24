@@ -46,6 +46,7 @@ import api from '~/utils/api'
 import { toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { showBewlyTopBar } from '~/utils/effectiveTopBarSource'
 import { i18n } from '~/utils/i18n'
+import { isIframeDocumentActive } from '~/utils/iframeActivity'
 import { getCSRF, isHomePage } from '~/utils/main'
 import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure, sendMessage } from '~/utils/messaging'
 import { countVisibleNewMomentItems } from '~/utils/momentFeedOrder'
@@ -96,7 +97,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   const currentLocationHref = useCurrentLocationHref()
   let sharedStateMessagingUnavailable = false
   let uiActive = !document.hidden
-  const canRefreshUi = () => uiActive && !document.hidden && !sharedStateMessagingUnavailable
+  const canRefreshUi = () => uiActive && !document.hidden && isIframeDocumentActive() && !sharedStateMessagingUnavailable
   const resourceVersions: Record<TopBarSharedResource, number> = { unread: 0, moments: 0, rewards: 0 }
   const resourceRefreshIds: Record<TopBarSharedResource, number> = { unread: -1, moments: -1, rewards: -1 }
   const dirtyResources = new Set<TopBarSharedResource>()

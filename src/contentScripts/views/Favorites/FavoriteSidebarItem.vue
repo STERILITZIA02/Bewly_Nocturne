@@ -92,6 +92,7 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/truncateFade";
 .favorite-sidebar-item {
   flex: none;
   min-width: 0;
@@ -157,9 +158,7 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
 .favorite-sidebar-item__title {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 .favorite-sidebar-item__meta {
   display: flex;

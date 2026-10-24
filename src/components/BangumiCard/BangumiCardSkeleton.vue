@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
-import { useBangumiCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
+import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 
 defineProps<{
   horizontal?: boolean
   showStats?: boolean
 }>()
-const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
+const { textStyle } = useVideoCardSharedStyles()
 </script>
 
 <template>
@@ -15,7 +15,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
       <SkeletonBlock class="bangumi-card-skeleton__image" height="auto" radius="media" />
     </div>
     <div class="bangumi-card-skeleton__content">
-      <div class="bangumi-card__heading" :class="bangumiTitleClass" :style="bangumiTitleStyle">
+      <div class="bangumi-card__heading" :style="textStyle">
         <SkeletonBlock height="1lh" />
         <SkeletonBlock height="1lh" />
       </div>

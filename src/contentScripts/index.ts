@@ -6,7 +6,7 @@ import { createApp } from 'vue'
 
 import { stopDarkState, useDark } from '~/composables/useDark'
 import { onRouteChange, stopRouteObserver } from '~/composables/useRouteState'
-import { CONTENT_SCRIPT_COMMIT, CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG } from '~/constants/contentScript'
+import { CONTENT_SCRIPT_COMMIT, CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG, isContentScriptTargetUrl } from '~/constants/contentScript'
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
 import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_MOUNTED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { getPageBridgeTargetOrigin, isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
@@ -32,6 +32,7 @@ import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
+import { isImmersiveFrame } from '~/utils/iframeActivity'
 import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { handleIframeNavigationRequest } from '~/utils/iframeNavigation'
@@ -43,8 +44,7 @@ import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { initNativeFavoriteSeasonPlayAllIntercept, stopNativeFavoriteSeasonPlayAllIntercept } from '~/utils/nativeFavoriteSeasonPlayAll'
 import { getPageBridgeChannelId, setPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
-import { IFRAME_PLAYBACK_RATE } from '~/utils/playbackRateCommand'
-import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, applyExplicitPlaybackRate, cancelPlayerRetryTasks, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isPlayerShowingEndingRecommendation, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, stopAutoExitFullscreenMonitoring, stopAutoPlayUserChangeMonitoring, stopPlaybackRateMonitoring, webFullscreen, widescreen } from '~/utils/player'
+import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, cancelPlayerRetryTasks, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isPlayerShowingEndingRecommendation, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, stopAutoExitFullscreenMonitoring, stopAutoPlayUserChangeMonitoring, stopPlaybackRateMonitoring, webFullscreen, widescreen } from '~/utils/player'
 import { getPlayerModeContainer, getPlayerModeControl, getPlayerModeReadiness, hasNativePlayerError, PLAYER_ERROR_SELECTOR, PLAYER_MODE_CONTAINER_SELECTOR, PLAYER_MODE_CONTROL_SELECTORS } from '~/utils/playerMedia'
 import type { PlayerModeApplication } from '~/utils/playerModeApplication'
 import { createPlayerModeApplication } from '~/utils/playerModeApplication'
@@ -66,6 +66,7 @@ import { suspendHiddenHomepageImages } from './features/hiddenHomepageImages'
 import { cleanupIframePhotoViewerDetector, setupIframePhotoViewerDetector } from './features/iframePhotoViewerDetector'
 import { setupNotificationStateInvalidation } from './features/notificationStateInvalidation'
 import { disposeOpusDetailDrawerLayout, setupOpusDetailDrawerLayout } from './features/opusDetailDrawerLayout'
+import { setupImmersiveFrame } from './immersiveFrame'
 import { setupLocalLoudnessControl } from './localLoudnessControl'
 import { getPageLoadingGuard } from './pageLoadingGuard'
 import { observePlayerDom } from './playerDomLifecycle'
@@ -83,6 +84,7 @@ const contentScriptGlobal = globalThis as typeof globalThis & {
 }
 const bundledShadowStyleText = contentScriptGlobal.__BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__
 const shouldInitializeContentScript = !contentScriptGlobal.__BEWLY_NOCTURNE_CONTENT_SCRIPT_INITIALIZED__
+  && isContentScriptTargetUrl(document.URL)
   && !isConfirmedLiveEmbeddedFrame()
 const contentScriptDisposers: Array<() => void> = []
 let contentScriptAbortController: AbortController | null = null
@@ -133,8 +135,8 @@ function disposeContentScriptRuntime() {
     stopPlaybackRateMonitoring,
     stopAdaptedStyles,
     stopRouteObserver,
-    stopDarkState,
     cleanupIframePhotoViewerDetector,
+    stopDarkState,
     disposeOpusDetailDrawerLayout,
     exitBewlyWidescreen,
     destroyRandomPlay,
@@ -230,7 +232,7 @@ function isFestivalPage(): boolean {
 }
 
 function isSupportedPages(): boolean {
-  if (isInIframe())
+  if (isInIframe() || !isContentScriptTargetUrl(currentUrl))
     return false
   if (
     // homepage
@@ -248,7 +250,7 @@ function isSupportedPages(): boolean {
     // https://github.com/BewlyBewly/BewlyBewly/issues/1256
     // https://github.com/BewlyBewly/BewlyBewly/issues/1266
     // https://github.com/keleus/BewlyCat/issues/150
-    || /https?:\/\/t\.bilibili\.com(?!\/vote|\/share|\/pages\/nav).*/.test(currentUrl)
+    || /https?:\/\/t\.bilibili\.com(?!\/vote|\/share).*/.test(currentUrl)
     // moment detail
     || /https?:\/\/(?:www\.)?bilibili\.com\/opus\/.*/.test(currentUrl)
     // history page
@@ -293,6 +295,7 @@ function isSupportedPages(): boolean {
 export function isSupportedIframePages(): boolean {
   if (
     isInIframe()
+    && isContentScriptTargetUrl(currentUrl)
     && (
       // supports Bilibili page URLs recorded in the dock
       isHomePage()
@@ -309,7 +312,7 @@ export function isSupportedIframePages(): boolean {
       // https://github.com/BewlyBewly/BewlyBewly/issues/1256
       // https://github.com/BewlyBewly/BewlyBewly/issues/1266
       // https://github.com/keleus/BewlyCat/issues/150
-      || /https?:\/\/t\.bilibili\.com(?!\/vote|\/share|\/pages\/nav).*/.test(currentUrl)
+      || /https?:\/\/t\.bilibili\.com(?!\/vote|\/share).*/.test(currentUrl)
       // moment detail (opus)
       || /https?:\/\/(?:www\.)?bilibili\.com\/opus\/.*/.test(currentUrl)
       // notifications page, for `Open the notifications page as a drawer`
@@ -470,6 +473,17 @@ else if (shouldInitializeContentScript) {
     if (contentScriptSignal.aborted)
       return
     playerModeSettingsReady = true
+    contentScriptDisposers.push(setupImmersiveFrame(useDark().iframeDocument, (active) => {
+      void useTopBarStore().setUiActive(active && !document.hidden)
+      if (active) {
+        waitForPlayerModePageSettle(false)
+        applyDefaultPlayerMode()
+      }
+      else {
+        clearPlayerModeRetry()
+        invalidatePlayerModeApplication()
+      }
+    }))
     contentScriptDisposers.push(setupVideoWatchProgress())
     contentScriptDisposers.push(setupVideoQualityMemory())
     contentScriptDisposers.push(setupLocalLoudnessControl())
@@ -552,12 +566,12 @@ else if (shouldInitializeContentScript) {
     if (settings.value.adaptToOtherPageStyles || settings.value.videoPageDarkMode)
       useDark()
 
-    const shouldApplyFullStyles = applyBewlyDesignClasses()
-    // opus 详情分栏布局不依赖“适配其他页样式”，只要在 iframe 内就尝试重排
-    if (isInIframe())
+    applyBewlyDesignClasses()
+    // Content layout and viewer visibility are independent of native-page styling.
+    if (isSupportedIframePages()) {
       setupOpusDetailDrawerLayout()
-    if (shouldApplyFullStyles && isInIframe())
-      setupIframePhotoViewerDetector()
+      setupIframePhotoViewerDetector(useDark().iframeDocument)
+    }
   }
 
   function removeHomePageHiddenStyle() {
@@ -1034,7 +1048,9 @@ else if (shouldInitializeContentScript) {
 
   // 初始化随机播放功能
   function initRandomPlayFeature() {
-  // 只在视频页面初始化随机播放功能
+    if (isImmersiveFrame())
+      return
+    // 只在视频页面初始化随机播放功能
     if (isCustomPlayPage() && settings.value.enableRandomPlay) {
       initRandomPlay()
     }
@@ -1178,6 +1194,7 @@ else if (shouldInitializeContentScript) {
         clearPendingWidescreenReloadNavigation()
         cancelPlayerRetryTasks()
         stopAutoExitFullscreenMonitoring()
+        stopPlaybackRateMonitoring()
         resetRandomPlayInitialization()
         exitBewlyWidescreen()
         autoContinuationNavigationKey = undefined
@@ -1436,21 +1453,48 @@ else if (shouldInitializeContentScript) {
         scheduleNativeWatchLaterStateSync(true)
     }, { capture: true, signal: contentScriptSignal })
 
-    const observer = new MutationObserver((mutations) => {
-      if (!isWatchLaterListPage(location.href)
-        || !mutations.some(isNativeWatchLaterListMutation)) {
-        return
+    let list: Element | null = null
+    const ancestry = new MutationObserver(() => {
+      if (!list?.isConnected) {
+        scheduleNativeWatchLaterStateSync()
+        syncNativeWatchLaterListObserver()
       }
-
-      scheduleNativeWatchLaterStateSync()
+      else {
+        observeAncestors()
+      }
+    })
+    const observer = new MutationObserver((mutations) => {
+      if (!list) {
+        if (mutations.some(record => Array.from(record.addedNodes).some(node => node instanceof Element
+          && (node.matches(nativeWatchLaterListSelector) || node.querySelector(nativeWatchLaterListSelector))))) {
+          syncNativeWatchLaterListObserver()
+        }
+      }
+      else if (mutations.some(isNativeWatchLaterListMutation)) {
+        scheduleNativeWatchLaterStateSync()
+      }
     })
     nativeWatchLaterListObserver = observer
-
-    const syncNativeWatchLaterListObserver = () => {
-      observer.disconnect()
-      if (document.documentElement && isWatchLaterListPage(location.href))
-        observer.observe(document.documentElement, { childList: true, subtree: true })
+    function observeAncestors() {
+      ancestry.disconnect()
+      for (let parent = list?.parentElement; parent; parent = parent.parentElement)
+        ancestry.observe(parent, { childList: true })
     }
+    function syncNativeWatchLaterListObserver() {
+      observer.disconnect()
+      ancestry.disconnect()
+      list = null
+      if (!isWatchLaterListPage(location.href))
+        return
+      list = document.querySelector(nativeWatchLaterListSelector)
+      observer.observe(list ?? document.documentElement, { childList: true, subtree: true })
+      if (list)
+        observeAncestors()
+    }
+    contentScriptDisposers.push(() => {
+      ancestry.disconnect()
+      list = null
+    })
     if (document.documentElement) {
       contentScriptDisposers.push(onRouteChange(syncNativeWatchLaterListObserver, true))
     }
@@ -1819,25 +1863,11 @@ else if (shouldInitializeContentScript) {
       removeWatchLaterButton()
   }))
 
-  let lastRateCommand: { sessionId: unknown, id: number } | undefined
   // Theme messages are owned by useDark's document-scoped reactive state.
   window.addEventListener('message', (event) => {
-    const data = getParentMessageData(event, [IFRAME_TOP_BAR_CHANGE, IFRAME_PLAYBACK_RATE])
+    const data = getParentMessageData(event, [IFRAME_TOP_BAR_CHANGE])
     if (!data)
       return
-
-    if (data.type === IFRAME_PLAYBACK_RATE) {
-      const channel = useDark().iframeDocument
-      if (data.phase !== 'apply' || !channel.matches(data) || typeof data.rate !== 'number'
-        || !Number.isSafeInteger(data.requestId) || Number(data.requestId) < 1
-        || (lastRateCommand && lastRateCommand.sessionId === data.sessionId && Number(data.requestId) <= lastRateCommand.id)) {
-        return
-      }
-      lastRateCommand = { sessionId: data.sessionId, id: Number(data.requestId) }
-      const applied = applyExplicitPlaybackRate(data.rate)
-      channel.send({ type: IFRAME_PLAYBACK_RATE, phase: 'result', requestId: data.requestId, applied })
-      return
-    }
 
     const { type, useOriginalBilibiliTopBar } = data
     if (type === IFRAME_TOP_BAR_CHANGE) {

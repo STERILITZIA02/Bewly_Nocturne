@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 
+import SearchBar from '~/components/SearchBar/SearchBar.vue'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { arriveSearchAt, departSearchFrom } from '~/utils/searchHandoff'

@@ -5,12 +5,19 @@ import { provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppAuthorizationDialog from '~/components/AppAuthorizationDialog.vue'
+import AppGradientBackground from '~/components/AppGradientBackground.vue'
 import ConfirmDialog from '~/components/ConfirmDialog.vue'
+import Dock from '~/components/Dock/Dock.vue'
 import ElementSettingsContextMenu from '~/components/ElementSettingsContextMenu.vue'
+import IframeDrawer from '~/components/IframeDrawer.vue'
+import IframePage from '~/components/IframePage.vue'
 import LayoutEditorOverlay from '~/components/LayoutEditorOverlay.vue'
 import LocalLoudnessPanel from '~/components/LocalLoudnessPanel.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
 import PersistentSidebar from '~/components/PersistentSidebar.vue'
+import Settings from '~/components/Settings/Settings.vue'
+import SideBar from '~/components/SideBar/SideBar.vue'
+import TopBar from '~/components/TopBar/TopBar.vue'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { DrawerType, UndoForwardState } from '~/composables/useAppProvider'
 import { confirmDialogKey } from '~/composables/useConfirmDialog'
@@ -41,6 +48,7 @@ import {
 import type { IframePlaybackContext } from '~/logic/iframePageState'
 import { reportIframePlayerMode, setIframePageActive } from '~/logic/iframePageState'
 import { exitLayoutEditMode } from '~/logic/layoutEdit'
+import { getRecommendationRequestIdentity } from '~/logic/recommendationMode'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
@@ -53,7 +61,6 @@ import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { homeTabStateKey, resolveDefaultAppPage } from '~/utils/homeRoute'
 import { readIframeDrawerHistory } from '~/utils/iframeDrawerHistory'
-import { getIframeMessageData } from '~/utils/iframeMessage'
 import { isSentinelWithinLoadThreshold } from '~/utils/loadMoreSentinel'
 import { getUserID, isHomePage, isInIframe, isVideoOrBangumiPage, openLinkToNewTab, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
@@ -86,11 +93,8 @@ const capturePanelOrigin = providePanelOrigin()
 const dockBottomShift = ref(0)
 const { showSettings, settingsDockHeld, onSettingsAfterLeave, settingsLaunchStyle, settingsNavigationRequest, toggleSettings, openSettingsAt, openLayoutEditorSetting } = useSettingsPanel()
 const showAppAuthorizationDialog = computed(() => (
-  settings.value.recommendationMode === 'app'
-  && (
-    appAuthorizationState.value === 'invalid'
-    || appAuthorizationState.value === 'authorizing'
-  )
+  appAuthorizationState.value === 'authorizing'
+  || (settings.value.recommendationMode === 'app' && appAuthorizationState.value === 'invalid')
 ))
 let appAuthorizationTokenObserverReady = false
 watch(() => [
@@ -338,20 +342,10 @@ const iframePageURL = computed((): string => {
     : ''
 })
 
-// 监听来自当前 iframe page 的图片预览器状态；旧 iframe 的延迟消息不得重新隐藏 UI。
-useEventListener(window, 'message', (event) => {
-  const iframe = iframePageRef.value?.$el?.querySelector('iframe') as HTMLIFrameElement | null
-  if (!iframe || !iframePageURL.value)
-    return
-  const configuredUrl = new URL(iframe.getAttribute('src') || '', window.location.href).href
-  const expectedUrl = new URL(iframePageURL.value, window.location.href).href
-  if (configuredUrl !== expectedUrl)
-    return
-  const data = getIframeMessageData(event, iframe)
-  if (data?.type !== 'IFRAME_PHOTO_VIEWER_STATE' || typeof data.isOpen !== 'boolean')
-    return
-  hideUIForIframePhotoViewer.value = data.isOpen
-})
+function handleIframePhotoViewerChange(open: boolean, url: string) {
+  if (url === iframePageURL.value)
+    hideUIForIframePhotoViewer.value = open
+}
 
 watch(iframePageURL, (url) => {
   hideUIForIframePhotoViewer.value = false
@@ -382,7 +376,7 @@ let scrollRestoreObserver: ResizeObserver | undefined
 let pendingPageScroll: number | undefined
 function pageScrollKey(page: AppPage) {
   return page === AppPage.Home
-    ? `${page}:${homeTabStateKey(homeActivatedPage.value, settings.value.recommendationMode, settings.value.useFollowingNewLayout)}`
+    ? `${page}:${homeTabStateKey(homeActivatedPage.value, getRecommendationRequestIdentity())}`
     : page
 }
 function cancelPageScrollRestore() {
@@ -557,8 +551,7 @@ watch(
 watch([
   activatedPage,
   () => activatedPage.value === AppPage.Home ? homeActivatedPage.value : undefined,
-  () => activatedPage.value === AppPage.Home && homeActivatedPage.value === HomeSubPage.ForYou ? settings.value.recommendationMode : undefined,
-  () => activatedPage.value === AppPage.Home && homeActivatedPage.value === HomeSubPage.Following ? settings.value.useFollowingNewLayout : undefined,
+  () => activatedPage.value === AppPage.Home && homeActivatedPage.value === HomeSubPage.ForYou ? getRecommendationRequestIdentity() : undefined,
   showBewlyPage,
 ], () => {
   cancelPendingRefreshScroll()
@@ -571,7 +564,7 @@ watch([
 }, { flush: 'sync' })
 
 // Setup necessary settings watchers
-setupNecessarySettingsWatchers()
+setupNecessarySettingsWatchers(scrollViewportRef)
 let scrollingEmitted = false
 
 function handleDocumentScroll() {
@@ -1024,7 +1017,7 @@ onBeforeUnmount(stopUrlCleaner)
       </Transition>
 
       <Transition v-if="!showBewlyPage && iframePageURL && !isInIframe()" name="fade">
-        <IframePage ref="iframePageRef" :url="iframePageURL" />
+        <IframePage ref="iframePageRef" :url="iframePageURL" @photo-viewer-change="handleIframePhotoViewerChange" />
       </Transition>
     </div>
 

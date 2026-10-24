@@ -1,9 +1,12 @@
-import { postMessageToParent } from '~/utils/iframeMessage'
+import type { createIframeDocumentClient } from '~/utils/iframeDocument'
 import { runWhenIdle } from '~/utils/lazyLoad'
 import { observePhotoViewerState } from '~/utils/photoViewer'
 
 let stopObserver: (() => void) | null = null
 let photoViewerOpen = false
+let documentClient: ReturnType<typeof createIframeDocumentClient> | undefined
+let stopBindingListener: (() => void) | undefined
+let reportedOpen: boolean | undefined
 let idleSetup: ReturnType<typeof runWhenIdle> | null = null
 let domReadyListener: (() => void) | null = null
 let rootReadyRetryTimer: number | null = null
@@ -54,7 +57,7 @@ function setupObserverWhenReady() {
  * 监听页面中 PhotoSwipe (pswp) 图片查看器的打开/关闭状态
  * 当检测到图片查看器打开时，通知父页面隐藏顶栏和 Dock
  */
-export function setupIframePhotoViewerDetector() {
+export function setupIframePhotoViewerDetector(client: ReturnType<typeof createIframeDocumentClient>) {
   // 只在 iframe 内运行
   if (window.self === window.top)
     return
@@ -63,6 +66,11 @@ export function setupIframePhotoViewerDetector() {
   if (stopObserver || idleSetup || domReadyListener || rootReadyRetryTimer !== null)
     return
 
+  documentClient = client
+  stopBindingListener = client.subscribe(() => {
+    reportedOpen = undefined
+    reportPhotoViewerState()
+  })
   idleSetup = runWhenIdle(() => {
     idleSetup = null
     setupObserverWhenReady()
@@ -70,16 +78,13 @@ export function setupIframePhotoViewerDetector() {
 }
 
 function checkPhotoViewerState(isOpen: boolean) {
-  // 只在状态变化时发送消息
-  if (isOpen !== photoViewerOpen) {
-    photoViewerOpen = isOpen
+  photoViewerOpen = isOpen
+  reportPhotoViewerState()
+}
 
-    // 通知父页面 PhotoSwipe 的状态
-    postMessageToParent({
-      type: 'IFRAME_PHOTO_VIEWER_STATE',
-      isOpen,
-    })
-  }
+function reportPhotoViewerState() {
+  if (reportedOpen !== photoViewerOpen && documentClient?.send({ type: 'IFRAME_PHOTO_VIEWER_STATE', isOpen: photoViewerOpen }))
+    reportedOpen = photoViewerOpen
 }
 
 export function cleanupIframePhotoViewerDetector() {
@@ -87,10 +92,14 @@ export function cleanupIframePhotoViewerDetector() {
   stopObserver?.()
   stopObserver = null
   if (photoViewerOpen) {
-    postMessageToParent({
+    documentClient?.send({
       type: 'IFRAME_PHOTO_VIEWER_STATE',
       isOpen: false,
     })
   }
+  stopBindingListener?.()
+  stopBindingListener = undefined
+  documentClient = undefined
+  reportedOpen = undefined
   photoViewerOpen = false
 }

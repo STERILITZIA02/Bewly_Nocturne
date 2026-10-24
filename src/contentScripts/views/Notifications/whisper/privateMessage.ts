@@ -10,21 +10,6 @@ import {
   parsePrivateMessageTextSegments,
 } from './privateMessageRenderers'
 
-export {
-  collectPrivateEmotePackages,
-  collectPrivateEmotes,
-  collectPrivateMessageEmotions,
-  insertPrivateEmoteToken,
-  mergePrivateEmotePackages,
-  type ParsedPrivateMessageContent,
-  parsePrivateMessageContent,
-  parsePrivateMessageTextSegments,
-  PRIVATE_MESSAGE_RENDERERS,
-  type PrivateEmote,
-  type PrivateEmotePackage,
-  type PrivateMessageTextSegment,
-} from './privateMessageRenderers'
-
 export interface DisplayPrivateMessage {
   msgKey: string
   seqno: string

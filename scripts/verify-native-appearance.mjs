@@ -2369,7 +2369,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
           '~/contentScripts/views/Home/adapters/appRecommendationItem': await import('../src/contentScripts/views/Home/adapters/appRecommendationItem'),
           '~/enums/appEnums': await import('../src/enums/appEnums'),
           '~/logic': { settings, appAuthTokens: Vue.ref({ accessToken: 'fixture' }) },
-          '~/logic/appAuthorizationCoordinator': { appAuthorizationSuccessVersion: Vue.ref(0), reportAppAuthorizationInvalid() {}, requestAppAuthorization() {} },
+          '~/logic/appAuthorizationCoordinator': { reportAppAuthorizationInvalid() {}, requestAppAuthorization() {} },
           '~/logic/appAuthStorage': { getAppAuthIdentity: () => 'fixture' },
           '~/logic/loginStatus': await import('../src/logic/loginStatus'),
           '~/utils/accountScope': await import('../src/utils/accountScope'),
@@ -2666,11 +2666,13 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
     assert.equal(card.bvid, '')
     assert.equal(card.aid, undefined)
     assert.equal(card.advertisementKey, 'ad:91')
-    const Component = await compileComponent('../src/components/VideoCard/AdvertisementCard.vue', { 'vue-i18n': { useI18n: () => ({ t: key => key }) } })
+    const Component = await compileComponent('../src/components/VideoCard/AdvertisementCard.vue', {
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      '~/components/LazyPicture.vue': { default: { props: ['src', 'alt'], setup: props => () => Vue.h('img', { src: props.src, alt: props.alt }) } },
+    })
     const source = Vue.ref(card)
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ render: () => Vue.h(Component, { video: source.value }) })
-    app.component('LazyPicture', { props: ['src', 'alt'], setup: props => () => Vue.h('img', { src: props.src, alt: props.alt }) })
     try {
       app.mount(host)
       assert.equal(host.querySelector('a').href, 'https://example.com/promotion')

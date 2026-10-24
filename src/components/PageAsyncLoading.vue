@@ -54,17 +54,19 @@ const historyFilters = createHistoryFilters()
       <template #sidebar="{ contentId }">
         <MomentsSidebar model-value="all" :content-id="contentId" loading inert />
       </template>
+      <!-- The followed-users bar as on the page: tiles and names above the
+           content layout, the feed starting the same gap below. -->
+      <div v-if="settings.momentsShowUpList" class="bew-page-async-loading__moments-users" aria-hidden="true">
+        <div v-for="index in 10" :key="index">
+          <SkeletonBlock width="var(--bew-moments-up-tile-size)" height="var(--bew-moments-up-tile-size)" radius="media" />
+          <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
+        </div>
+      </div>
       <MomentsContentLayout :sidebar-label="$t('moments.hot_search_title')">
         <template #sidebar>
           <MomentsHotSearch placeholder />
         </template>
         <div ref="momentContent" class="bew-page-async-loading__moments-content">
-          <div v-if="settings.momentsShowUpList" class="bew-page-async-loading__moments-users" aria-hidden="true">
-            <div v-for="index in 10" :key="index">
-              <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-space-12)" radius="circle" />
-              <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-caption)" />
-            </div>
-          </div>
           <div class="bew-page-async-loading__moments" :style="{ gridTemplateColumns: `repeat(${momentColumns}, minmax(0, 1fr))` }">
             <MomentCardSkeleton v-for="index in momentColumns * 2" :key="index" :variant="getMomentSkeletonVariant('all', index)" />
           </div>
@@ -303,16 +305,17 @@ const historyFilters = createHistoryFilters()
   gap: var(--bew-space-4);
 }
 .bew-page-async-loading__moments-users {
+  // Same height and gap below as the Moments page bar (.moments-up-list).
   display: flex;
   gap: var(--bew-space-4);
-  padding: var(--bew-space-3);
+  height: calc(var(--bew-moments-up-tile-size) + var(--bew-space-2) + var(--bew-line-height-control));
+  margin-bottom: var(--bew-space-8);
   overflow: hidden;
-  border-radius: var(--bew-surface-radius);
-  border: 1px solid var(--bew-surface-border-color);
   > div {
     display: grid;
     flex: none;
-    gap: var(--bew-space-1);
+    align-content: start;
+    gap: var(--bew-space-2);
   }
 }
 .bew-page-async-loading__toolbar {
