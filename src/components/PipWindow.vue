@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Button from '~/components/Button.vue'
 import { useDark } from '~/composables/useDark'
 
 const props = defineProps<{

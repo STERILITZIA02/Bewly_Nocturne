@@ -11,7 +11,7 @@ import { createServer } from 'vite'
 const root = process.cwd()
 const virtual = {
   '/__color-settings.js': `import {ref} from 'vue';
-export const settings=ref({theme:'dark',themeColor:'#eab308',darkModeBaseColor:'#2d2a2f',enableDarkModeTint:false,enableOledDarkMode:false,themeScheduleStart:'06:00',themeScheduleEnd:'18:00',disableFrostedGlass:false,frostedGlassBlurIntensity:20,disableShadow:false,enableSidebarCoverBlur:false,adaptToOtherPageStyles:true,videoPageDarkMode:false,useLinearGradientThemeColorBackground:false,customizeFont:'default',fontFamily:''});
+export const settings=ref({theme:'dark',themeColor:'#eab308',darkModeBaseColor:'#2d2a2f',enableDarkModeTint:false,enableOledDarkMode:false,themeScheduleStart:'06:00',themeScheduleEnd:'18:00',disableFrostedGlass:false,frostedGlassBlurIntensity:20,disableShadow:false,adaptToOtherPageStyles:true,videoPageDarkMode:false,useLinearGradientThemeColorBackground:false,customizeFont:'default',fontFamily:''});
 export const FROSTED_GLASS_BLUR_MAX_PX=20, FROSTED_GLASS_BLUR_MIN_PX=1;`,
   '/__color-app.js': `import {ref} from 'vue'; export const useBewlyApp=()=>({mainAppRef:ref(document.body)});`,
   '/__color-preview.vue': `<script setup>

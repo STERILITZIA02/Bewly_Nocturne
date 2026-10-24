@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import api from '~/utils/api'
 
 import type { MomentTopicSearchState, SelectedMomentTopic } from './momentForwardContent'

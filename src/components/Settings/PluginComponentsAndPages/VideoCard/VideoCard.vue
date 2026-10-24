@@ -1,12 +1,11 @@
 <script lang="ts" setup>
 import { useI18n } from 'vue-i18n'
 
-import Button from '~/components/Button.vue'
 import Input from '~/components/Input.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import Slider from '~/components/Slider.vue'
-import { originalSettings, settings } from '~/logic'
+import { settings } from '~/logic'
 import type { VideoCardFontSizeSetting } from '~/logic/storage'
 import {
   MAX_LIST_LAYOUT_BREAKPOINT,
@@ -21,7 +20,6 @@ import {
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
-import ShadowCurveEditor from '../../components/ShadowCurveEditor.vue'
 import LinkOpening from '../../Navigation/LinkOpening.vue'
 import VideoCardContentEditor from './VideoCardContentEditor.vue'
 import VideoCardContextMenuEditor from './VideoCardContextMenuEditor.vue'
@@ -42,11 +40,6 @@ watch(() => settings.value.autoSwitchListLayoutBreakpoint, (value) => {
   if (!isEditingListLayoutBreakpoint.value)
     listLayoutBreakpointDraft.value = String(value)
 })
-
-function resetShadowSettings() {
-  settings.value.videoCardShadowCurve = [...originalSettings.videoCardShadowCurve]
-  settings.value.videoCardShadowHeight = originalSettings.videoCardShadowHeight
-}
 
 function updateListLayoutBreakpointDraft(value: string | number | undefined) {
   isEditingListLayoutBreakpoint.value = true
@@ -72,29 +65,32 @@ function cancelListLayoutBreakpointEditing() {
 
 <template>
   <div>
-    <SettingsItemGroup :title="$t('settings.group_video_card_display')">
-      <SettingsItem :title="$t('settings.enable_video_preview')" right-width="auto">
+    <SettingsItemGroup data-setting-id="settings.group_video_card_display" :title="$t('settings.group_video_card_display')">
+      <SettingsItem setting-id="settings.enable_video_preview" :title="$t('settings.enable_video_preview')" right-width="auto">
         <Radio v-model="settings.enableVideoPreview" />
       </SettingsItem>
 
       <template v-if="settings.enableVideoPreview">
-        <SettingsItem :title="$t('settings.enable_video_ctrl_bar_on_video_card')" right-width="auto">
+        <SettingsItem setting-id="settings.resume_from_preview_position" :title="$t('settings.resume_from_preview_position')" :desc="$t('settings.resume_from_preview_position_desc')" right-width="auto">
+          <Radio v-model="settings.resumeFromPreviewPosition" />
+        </SettingsItem>
+        <SettingsItem setting-id="settings.enable_video_ctrl_bar_on_video_card" :title="$t('settings.enable_video_ctrl_bar_on_video_card')" right-width="auto">
           <Radio v-model="settings.enableVideoCtrlBarOnVideoCard" />
         </SettingsItem>
 
         <SettingsItem
-          :title="$t('settings.video_preview_swipe_seek')"
+          setting-id="settings.video_preview_swipe_seek" :title="$t('settings.video_preview_swipe_seek')"
           :desc="$t('settings.video_preview_swipe_seek_desc')"
           right-width="auto"
         >
           <Radio v-model="settings.enableVideoPreviewSwipeSeek" />
         </SettingsItem>
 
-        <SettingsItem :title="$t('settings.hover_video_card_delayed')" right-width="auto">
+        <SettingsItem setting-id="settings.hover_video_card_delayed" :title="$t('settings.hover_video_card_delayed')" right-width="auto">
           <Radio v-model="settings.hoverVideoCardDelayed" />
         </SettingsItem>
 
-        <SettingsItem :title="$t('settings.only_cover_video_preview')" right-width="auto">
+        <SettingsItem setting-id="settings.only_cover_video_preview" :title="$t('settings.only_cover_video_preview')" right-width="auto">
           <Radio v-model="settings.onlyCoverVideoPreview" />
         </SettingsItem>
       </template>
@@ -102,11 +98,11 @@ function cancelListLayoutBreakpointEditing() {
 
     <!-- 视频卡片网格：打开设置时直接展示断点配置 -->
     <SettingsItemGroup
-      :title="$t('settings.group_video_card_grid')"
+      data-setting-id="settings.group_video_card_grid" :title="$t('settings.group_video_card_grid')"
       :desc="$t('settings.group_video_card_grid_desc')"
     >
       <SettingsItem
-        :title="$t('settings.auto_switch_list_layout')"
+        setting-id="settings.auto_switch_list_layout" :title="$t('settings.auto_switch_list_layout')"
         :desc="$t('settings.auto_switch_list_layout_desc')"
         right-width="auto"
       >
@@ -135,7 +131,7 @@ function cancelListLayoutBreakpointEditing() {
       </SettingsItem>
 
       <SettingsItem
-        :title="$t('settings.video_card_cover_ratio')"
+        setting-id="settings.video_card_cover_ratio" :title="$t('settings.video_card_cover_ratio')"
         :desc="$t('settings.video_card_cover_ratio_desc')"
       >
         <template #bottom>
@@ -162,13 +158,13 @@ function cancelListLayoutBreakpointEditing() {
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      :title="$t('settings.group_video_card_content')"
+      data-setting-id="settings.group_video_card_content" :title="$t('settings.group_video_card_content')"
       :desc="$t('settings.group_video_card_content_desc')"
     >
       <VideoCardContentEditor />
 
       <SettingsItem
-        :title="$t('settings.video_card_title_font_size')"
+        setting-id="settings.video_card_title_font_size" :title="$t('settings.video_card_title_font_size')"
         :desc="$t('settings.video_card_title_font_size_desc')"
         right-width="auto"
       >
@@ -176,7 +172,7 @@ function cancelListLayoutBreakpointEditing() {
       </SettingsItem>
 
       <SettingsItem
-        :title="$t('settings.video_card_author_font_size')"
+        setting-id="settings.video_card_author_font_size" :title="$t('settings.video_card_author_font_size')"
         :desc="$t('settings.video_card_author_font_size_desc')"
         right-width="auto"
       >
@@ -185,45 +181,11 @@ function cancelListLayoutBreakpointEditing() {
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      :title="$t('settings.group_video_card_context_menu')"
+      data-setting-id="settings.group_video_card_context_menu" :title="$t('settings.group_video_card_context_menu')"
       :desc="$t('settings.group_video_card_context_menu_desc')"
       collapsible
     >
       <VideoCardContextMenuEditor />
-    </SettingsItemGroup>
-
-    <!-- 阴影设置仅适用于现代布局，默认折叠 -->
-    <SettingsItemGroup
-      :title="$t('settings.video_card_shadow_curve')"
-      :desc="$t('settings.video_card_shadow_curve_desc')"
-      collapsible
-      default-collapsed
-    >
-      <SettingsItem :title="$t('settings.video_card_shadow_curve')" :desc="$t('settings.video_card_shadow_curve_desc')" right-width="auto">
-        <ShadowCurveEditor v-model="settings.videoCardShadowCurve" />
-      </SettingsItem>
-
-      <SettingsItem :title="$t('settings.video_card_shadow_height')" :desc="$t('settings.video_card_shadow_height_desc')" right-width="auto">
-        <div class="shadow-height-control" flex="~ items-center gap-2">
-          <input
-            v-model.number="settings.videoCardShadowHeight"
-            type="range"
-            :min="0"
-            :max="2"
-            :step="0.1"
-            flex-1
-            class="shadow-height-slider"
-            :style="{ '--shadow-height-progress': `${settings.videoCardShadowHeight * 50}%` }"
-          >
-          <span text-sm min-w-8 text-right>{{ settings.videoCardShadowHeight.toFixed(1) }}</span>
-        </div>
-      </SettingsItem>
-
-      <SettingsItem right-width="auto">
-        <Button type="secondary" center @click="resetShadowSettings">
-          {{ $t('settings.video_card_shadow_reset') }}
-        </Button>
-      </SettingsItem>
     </SettingsItemGroup>
 
     <LinkOpening scope="videoCard" />
@@ -253,41 +215,5 @@ function cancelListLayoutBreakpointEditing() {
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
   white-space: nowrap;
-}
-
-.shadow-height-control {
-  width: 220px;
-}
-
-.shadow-height-slider {
-  height: 4px;
-  appearance: none;
-  background: linear-gradient(
-    to right,
-    var(--bew-theme-color) 0,
-    var(--bew-theme-color) var(--shadow-height-progress),
-    var(--bew-fill-2) var(--shadow-height-progress),
-    var(--bew-fill-2) 100%
-  );
-  border-radius: var(--bew-pill-radius);
-  corner-shape: round;
-  cursor: pointer;
-  accent-color: var(--bew-theme-color);
-
-  &::-webkit-slider-thumb {
-    width: 16px;
-    height: 16px;
-    appearance: none;
-    background: var(--bew-theme-color);
-    border: 2px solid var(--bew-elevated-solid);
-    border-radius: 50%;
-    corner-shape: var(--bew-corner-shape-round);
-    box-shadow: var(--bew-shadow-1);
-  }
-
-  &:focus-visible {
-    outline: var(--bew-focus-ring, 1px solid CanvasText);
-    outline-offset: var(--bew-space-1);
-  }
 }
 </style>

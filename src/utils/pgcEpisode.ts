@@ -3,6 +3,7 @@ import api from '~/utils/api'
 export interface PgcEpisodeVideoIds {
   aid: number
   bvid?: string
+  hasNextEpisode?: boolean
 }
 
 // Public ID metadata is cheap to reload; a long-lived tab must not retain every
@@ -12,16 +13,21 @@ const episodeVideoIds = new Map<number, PgcEpisodeVideoIds>()
 const episodeVideoIdRequests = new Map<number, Promise<PgcEpisodeVideoIds | undefined>>()
 
 export function findPgcEpisodeVideoIds(result: any, epid: number): PgcEpisodeVideoIds | undefined {
-  const episodes = [
-    ...(Array.isArray(result?.episodes) ? result.episodes : []),
+  const groups = [
+    ...(Array.isArray(result?.episodes) ? [result.episodes] : []),
     ...(Array.isArray(result?.section)
-      ? result.section.flatMap((section: any) => Array.isArray(section?.episodes) ? section.episodes : [])
+      ? result.section.map((section: any) => Array.isArray(section?.episodes) ? section.episodes : [])
       : []),
   ]
-  const episode = episodes.find((episode: any) => Number(episode?.id ?? episode?.ep_id) === epid)
-  const aid = Number(episode?.aid)
-  if (Number.isSafeInteger(aid) && aid > 0)
-    return { aid, bvid: typeof episode?.bvid === 'string' && episode.bvid ? episode.bvid : undefined }
+  for (const episodes of groups) {
+    const index = episodes.findIndex((episode: any) => Number(episode?.id ?? episode?.ep_id) === epid)
+    if (index < 0)
+      continue
+    const episode = episodes[index]
+    const aid = Number(episode?.aid)
+    if (Number.isSafeInteger(aid) && aid > 0)
+      return { aid, bvid: typeof episode?.bvid === 'string' && episode.bvid ? episode.bvid : undefined, hasNextEpisode: index < episodes.length - 1 }
+  }
 }
 
 export async function resolvePgcEpisodeVideoIds(epid: number): Promise<PgcEpisodeVideoIds | undefined> {

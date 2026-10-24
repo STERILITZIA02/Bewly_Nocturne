@@ -4,11 +4,17 @@ import { useToast } from 'vue-toastification'
 
 import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
 import ArticleCardSkeleton from '~/components/ArticleCard/ArticleCardSkeleton.vue'
+import Button from '~/components/Button.vue'
+import Dialog from '~/components/Dialog.vue'
+import Empty from '~/components/Empty.vue'
+import IconButton from '~/components/IconButton.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import Tooltip from '~/components/Tooltip.vue'
 import type { FavoriteResource } from '~/components/TopBar/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -1083,6 +1089,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 </template>
 
 <style lang="scss" scoped>
+@use "../../../styles/truncateFade";
 @use "../../../styles/breakpoints";
 @use "../../../styles/sidebarSurface";
 @use "../../../styles/scrollEdgeFade";
@@ -1340,9 +1347,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 }
 
 .category-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .category-count {
@@ -1450,9 +1455,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 }
 
 .batch-target-folder-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .batch-target-folder-count {

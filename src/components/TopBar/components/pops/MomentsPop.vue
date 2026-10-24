@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import ALink from '~/components/ALink.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
@@ -295,6 +296,7 @@ defineExpose({
 </template>
 
 <style lang="scss" scoped>
+@use "../../../../styles/truncateFade";
 @use "../../styles/popoverCards";
 
 .moments-pop {
@@ -342,14 +344,12 @@ defineExpose({
 
 .moments-pop__authors a {
   min-width: 0;
-  overflow: hidden;
   font-weight: var(--bew-font-weight-medium);
-  text-overflow: ellipsis;
+  @include truncateFade.line;
 }
 
 .moments-pop__title {
   overflow: hidden;
-  text-overflow: ellipsis;
   overflow-wrap: anywhere;
 }
 

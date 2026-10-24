@@ -57,18 +57,29 @@ async function syncPreventMobileRedirectRule(enabled: boolean) {
   }
 }
 
-void browser.storage.local.get('settings').then((result) => {
-  return syncPreventMobileRedirectRule(isPreventMobileRedirectEnabled(result.settings))
-})
+let preventMobileRedirectEnabled: boolean | undefined
+let preventMobileRedirectSync = Promise.resolve()
+
+function applyPreventMobileRedirectSetting(storedSettings: unknown) {
+  const enabled = isPreventMobileRedirectEnabled(storedSettings)
+  if (enabled === preventMobileRedirectEnabled)
+    return
+  preventMobileRedirectEnabled = enabled
+  preventMobileRedirectSync = preventMobileRedirectSync.then(() => syncPreventMobileRedirectRule(enabled))
+}
 
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local' || !changes.settings)
     return
 
-  const enabled = isPreventMobileRedirectEnabled(changes.settings.newValue)
-  if (enabled !== isPreventMobileRedirectEnabled(changes.settings.oldValue))
-    void syncPreventMobileRedirectRule(enabled)
+  applyPreventMobileRedirectSetting(changes.settings.newValue)
 })
+
+void browser.storage.local.get('settings').then((result) => {
+  // onChanged received during the read is newer than this startup snapshot.
+  if (preventMobileRedirectEnabled === undefined)
+    applyPreventMobileRedirectSetting(result.settings)
+}).catch(error => console.error('[Bewly Nocturne] Failed to read the mobile redirect setting:', error))
 
 // Signed transports restore/fetch their WBI keys on demand. Waking this worker
 // for storage or a hidden tab does not itself start a profile/network request.

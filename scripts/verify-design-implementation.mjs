@@ -284,7 +284,7 @@ export function registerDesignImplementationChecks(check, { Vue, compileComponen
     const dark = Vue.ref(false)
     const Card = await compileComponent('../src/components/BangumiCard/BangumiCard.vue', {
       '~/composables/useDark': { useDark: () => ({ isDark: dark }) },
-      '~/composables/useVideoCardSharedStyles': { useBangumiCardSharedStyles: () => ({ bangumiTitleClass: '', bangumiTitleStyle: {} }) },
+      '~/composables/useVideoCardSharedStyles': { useVideoCardSharedStyles: () => ({ textStyle: {} }) },
       '~/utils/dataFormatter': { numFormatter: String },
       '~/utils/main': { removeHttpFromUrl: value => value },
       '~/utils/themeColor': colors,

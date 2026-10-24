@@ -591,7 +591,19 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
 
   check('App authorization: actual Dialog omits only its top blur while preserving instructions, QR polling and cleanup', async () => {
     const host = document.body.appendChild(document.createElement('div'))
-    const settings = Vue.ref({ recommendationMode: 'app', disableFrostedGlass: false })
+    const settings = Vue.ref({ recommendationMode: 'web', disableFrostedGlass: false })
+    const authorizationState = Vue.ref('authorizing')
+    const shell = await loadSourceFunctions('../src/contentScripts/views/App.vue', ['showAppAuthorizationDialog'], {
+      computed: Vue.computed,
+      settings,
+      appAuthorizationState: authorizationState,
+    })
+    assert.equal(shell.showAppAuthorizationDialog.value, true, 'explicit authorization works in Web mode')
+    authorizationState.value = 'invalid'
+    assert.equal(shell.showAppAuthorizationDialog.value, false, 'Web mode does not prompt for unrelated expired APP tokens')
+    settings.value.recommendationMode = 'app'
+    assert.equal(shell.showAppAuthorizationDialog.value, true)
+    settings.value.recommendationMode = 'web'
     const tokens = Vue.ref({ accessToken: '' })
     const Button = { props: ['disabled'], setup: (props, { slots }) => () => Vue.h('button', { disabled: props.disabled }, slots.default?.()) }
     const Dialog = await compileComponent('../src/components/Dialog.vue', {
@@ -608,7 +620,7 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
     const Authorization = await compileComponent('../src/components/AppAuthorizationDialog.vue', {
       'vue-i18n': i18n,
       'vue-toastification': { useToast: () => ({ success() {} }) },
-      'qrcode.vue': { default: { props: ['value'], setup: props => () => Vue.h('svg', { 'data-qr': props.value }) } },
+      'qrcode.vue': { __esModule: true, default: { props: ['value'], setup: props => () => Vue.h('svg', { 'data-qr': props.value }) } },
       '~/logic': { settings, appAuthTokens: tokens },
       '~/logic/appAuthorizationCoordinator': { beginAppAuthorization() {}, completeAppAuthorization() {}, dismissAppAuthorization() {} },
       '~/utils/authProvider': {

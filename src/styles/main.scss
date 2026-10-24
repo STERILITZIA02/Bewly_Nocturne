@@ -6,8 +6,10 @@
 @use "./sendButton";
 @use "./messageSearch";
 @use "./scrollEdgeFade";
+@use "./truncateFade";
 
 @include scrollEdgeFade.global;
+@include truncateFade.global;
 
 :host,
 :host *,
@@ -184,20 +186,13 @@ html.dark.bewly-design {
   }
 
   .keep-one-line {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @include truncateFade.line;
   }
 
   .keep-two-lines {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
     line-break: auto;
     overflow-wrap: anywhere;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    @include truncateFade.lines(2);
   }
 
   code {

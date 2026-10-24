@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import Button from '~/components/Button.vue'
 import { normalizeIntlLocale } from '~/utils/locale'
 
 import { PRIVATE_HISTORY_VISIBLE_BATCH_SIZE } from './privateSearchPolicy'
@@ -124,6 +125,7 @@ function formatTime(timestamp: number) {
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/truncateFade";
 @use "../../../../styles/sidebarSurface";
 @use "../../../../styles/scrollEdgeFade";
 .private-history-results {
@@ -185,11 +187,9 @@ function formatTime(timestamp: number) {
 }
 .private-history-results__heading strong {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
+  @include truncateFade.line;
 }
 .private-history-results__heading time {
   flex: none;
@@ -197,14 +197,11 @@ function formatTime(timestamp: number) {
   color: var(--bew-text-3);
 }
 .private-history-results__snippet {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   overflow-wrap: anywhere;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
+  @include truncateFade.lines(2);
 }
 
 .private-history-results__snippet mark {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ALink from '~/components/ALink.vue'
 import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'

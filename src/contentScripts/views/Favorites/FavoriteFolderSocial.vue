@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import type { Info } from '~/models/video/favorite'
 import { removeHttpFromUrl } from '~/utils/main'
 
@@ -37,6 +38,7 @@ const { t } = useI18n()
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/truncateFade";
 .favorite-folder-social {
   display: flex;
   flex-wrap: wrap;
@@ -103,9 +105,7 @@ const { t } = useI18n()
     display: grid;
     min-width: 0;
     > span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      @include truncateFade.line;
     }
   }
   small {

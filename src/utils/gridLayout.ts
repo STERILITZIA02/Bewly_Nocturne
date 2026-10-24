@@ -1,7 +1,5 @@
 import { VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
 
-export { GRID_BREAKPOINTS } from '~/constants/layout'
-
 /**
  * The default width at which a manually selected two-column list falls back
  * to one column when automatic switching is enabled.

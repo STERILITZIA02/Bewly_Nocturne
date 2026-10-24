@@ -59,6 +59,7 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/truncateFade";
 @use "../../../styles/sidebarSurface";
 @use "../../../styles/scrollEdgeFade";
 
@@ -158,13 +159,10 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
   color: var(--bew-text-1);
 }
 .moments-hot-search__keyword {
-  display: -webkit-box;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
+  @include truncateFade.lines(2);
 }
 .moments-hot-search__badge {
   flex: none;

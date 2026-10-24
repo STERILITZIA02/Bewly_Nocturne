@@ -21,15 +21,15 @@ type CommentToggleSetting
 
 interface CommentToggleOption {
   setting: CommentToggleSetting
-  label: string
+  labelKey: string
   description: string
   icon: string
 }
 
 const commentToggleOptions = computed<CommentToggleOption[]>(() => [
-  { setting: 'showIPLocation', label: t('settings.show_ip_location'), description: t('settings.show_ip_location_desc'), icon: 'i-tabler-map-pin' },
-  { setting: 'showSex', label: t('settings.show_sex'), description: t('settings.show_sex_desc'), icon: 'i-tabler-gender-bigender' },
-  { setting: 'showCommentHostTag', label: t('settings.show_comment_host_tag'), description: t('settings.show_comment_host_tag_desc'), icon: 'i-tabler-user-star' },
+  { setting: 'showIPLocation', labelKey: 'settings.show_ip_location', description: t('settings.show_ip_location_desc'), icon: 'i-tabler-map-pin' },
+  { setting: 'showSex', labelKey: 'settings.show_sex', description: t('settings.show_sex_desc'), icon: 'i-tabler-gender-bigender' },
+  { setting: 'showCommentHostTag', labelKey: 'settings.show_comment_host_tag', description: t('settings.show_comment_host_tag_desc'), icon: 'i-tabler-user-star' },
 ])
 
 const commentReplyTreeModeOptions = computed<{ label: string, value: CommentReplyTreeMode }[]>(() => [
@@ -60,13 +60,14 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
 </script>
 
 <template>
-  <SettingsItemGroup :title="$t('settings.group_comments')">
+  <SettingsItemGroup data-setting-id="settings.group_comments" :title="$t('settings.group_comments')">
     <div class="comment-setting-tags" role="group" :aria-label="$t('settings.group_comments')">
       <SettingsToggleTag
         v-for="option in commentToggleOptions"
         :key="option.setting"
         v-model="settings[option.setting]"
-        :label="option.label"
+        :label="$t(option.labelKey)"
+        :data-setting-id="option.labelKey"
         :description="option.description"
         :icon="option.icon"
         :show-state-icon="false"
@@ -74,7 +75,7 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
     </div>
 
     <SettingsItem
-      :title="$t('settings.enable_comment_reply_tree_display')"
+      setting-id="settings.enable_comment_reply_tree_display" :title="$t('settings.enable_comment_reply_tree_display')"
       :desc="$t('settings.enable_comment_reply_tree_display_desc')"
       right-width="auto"
     >
@@ -82,7 +83,7 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
     </SettingsItem>
 
     <SettingsItem
-      v-if="settings.enableCommentReplyTreeDisplay"
+      v-if="settings.enableCommentReplyTreeDisplay" setting-id="settings.comment_reply_pagination_mode.title"
       :title="$t('settings.comment_reply_pagination_mode.title')"
       :desc="$t('settings.comment_reply_pagination_mode.desc')"
       right-width="auto"
@@ -95,22 +96,22 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
     </SettingsItem>
 
     <SettingsItem
-      v-if="settings.enableCommentReplyTreeDisplay && settings.commentReplyPaginationMode === 'loadMore'"
+      v-if="settings.enableCommentReplyTreeDisplay && settings.commentReplyPaginationMode === 'loadMore'" setting-id="settings.comment_reply_batch_pages"
       :title="t('settings.comment_reply_batch_pages')"
       :desc="t('settings.comment_reply_batch_pages_desc')"
     >
       <Slider v-model="settings.commentReplyBatchPages" :min="1" :max="COMMENT_REPLY_BATCH_MAX" :step="1" :label="String(settings.commentReplyBatchPages)" />
     </SettingsItem>
 
-    <SettingsItem :title="t('settings.enable_comment_reply_tree_container')" :desc="t('settings.enable_comment_reply_tree_container_desc')" right-width="auto">
+    <SettingsItem setting-id="settings.enable_comment_reply_tree_container" :title="t('settings.enable_comment_reply_tree_container')" :desc="t('settings.enable_comment_reply_tree_container_desc')" right-width="auto">
       <Radio v-model="settings.enableCommentReplyTreeContainer" />
     </SettingsItem>
-    <SettingsItem v-if="settings.enableCommentReplyTreeContainer" :title="t('settings.comment_reply_tree_container_height')" :desc="t('settings.comment_reply_tree_container_height_desc')">
+    <SettingsItem v-if="settings.enableCommentReplyTreeContainer" setting-id="settings.comment_reply_tree_container_height" :title="t('settings.comment_reply_tree_container_height')" :desc="t('settings.comment_reply_tree_container_height_desc')">
       <Slider v-model="settings.commentReplyTreeContainerHeight" :min="COMMENT_REPLY_CONTAINER_HEIGHT.min" :max="COMMENT_REPLY_CONTAINER_HEIGHT.max" :step="20" :label="`${settings.commentReplyTreeContainerHeight}px`" />
     </SettingsItem>
 
     <SettingsItem
-      v-if="settings.enableCommentReplyTreeDisplay"
+      v-if="settings.enableCommentReplyTreeDisplay" setting-id="settings.comment_reply_tree_mode.title"
       :title="$t('settings.comment_reply_tree_mode.title')"
       :desc="$t('settings.comment_reply_tree_mode.desc')"
       right-width="auto"
@@ -123,7 +124,7 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
     </SettingsItem>
 
     <SettingsItem
-      :title="$t('settings.adjust_comment_image_height')"
+      setting-id="settings.adjust_comment_image_height" :title="$t('settings.adjust_comment_image_height')"
       :desc="$t('settings.adjust_comment_image_height_desc')"
       right-width="auto"
     >
@@ -131,7 +132,7 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
     </SettingsItem>
 
     <SettingsItem
-      :title="$t('settings.hide_comment_image_scrollbar')"
+      setting-id="settings.hide_comment_image_scrollbar" :title="$t('settings.hide_comment_image_scrollbar')"
       :desc="$t('settings.hide_comment_image_scrollbar_desc')"
       right-width="auto"
     >

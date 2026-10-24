@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
 import { normalizeIntlLocale } from '~/utils/locale'
 
 import type { DisplayNotificationActor, InteractionNotification } from '../notification'
@@ -137,6 +138,7 @@ function markAvatarFailed(index: number) {
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/truncateFade";
 .native-notification-item__avatars {
   display: flex;
   align-self: start;
@@ -306,11 +308,8 @@ function markAvatarFailed(index: number) {
 
 .native-notification-item__source > span:last-child {
   min-width: 0;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
   overflow-wrap: anywhere;
+  @include truncateFade.lines(3);
 }
 
 .native-notification-item__source:hover {

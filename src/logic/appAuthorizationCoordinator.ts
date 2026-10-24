@@ -7,10 +7,8 @@ const snapshot = shallowRef<AppAuthorizationSnapshot>({
   state: 'valid',
   invalidToken: '',
 })
-const successVersion = shallowRef(0)
 
 export const appAuthorizationState = computed(() => snapshot.value.state)
-export const appAuthorizationSuccessVersion = computed(() => successVersion.value)
 
 function applySnapshot(next: AppAuthorizationSnapshot) {
   if (
@@ -60,19 +58,15 @@ export function completeAppAuthorization(accessToken: string) {
     type: 'authorized',
     token: accessToken,
   }))
-  successVersion.value++
 }
 
 export function completeExternalAppAuthorization(accessToken: string) {
   if (!accessToken || accessToken === snapshot.value.invalidToken)
     return false
-  const changed = applySnapshot(resolveAppAuthorizationState(snapshot.value, {
+  return applySnapshot(resolveAppAuthorizationState(snapshot.value, {
     type: 'authorized',
     token: accessToken,
   }))
-  if (changed)
-    successVersion.value++
-  return changed
 }
 
 export function synchronizeValidAppAuthorization(accessToken: string) {

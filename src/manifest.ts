@@ -64,7 +64,7 @@ export async function getManifest() {
       {
         matches: [...CONTENT_SCRIPT_MATCHES],
         exclude_matches: [...CONTENT_SCRIPT_EXCLUDE_MATCHES],
-        js: ['./dist/contentScripts/pageLoading.js', './dist/contentScripts/index.global.js'],
+        js: ['./dist/contentScripts/pageLoading.js'],
         css: ['./dist/contentScripts/style.css'],
         run_at: 'document_start',
         match_about_blank: true,
@@ -81,6 +81,10 @@ export async function getManifest() {
       },
     ],
     web_accessible_resources: [
+      {
+        resources: ['dist/contentScripts/runtime.js', 'dist/contentScripts/chunks/*.js'],
+        matches: [...CONTENT_SCRIPT_MATCHES],
+      },
       {
         resources: [
           'assets/*',

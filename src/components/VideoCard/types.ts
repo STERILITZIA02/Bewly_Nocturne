@@ -13,6 +13,9 @@ export function createVideoCardState(): VideoCardState {
 }
 
 export interface Video {
+  /** Feed feedback belongs to the recommendation source, regardless of media layout. */
+  recommendationSource?: 'web' | 'app'
+  recommendationRequestIdentity?: string
   /** Advertisements render as link cards without video APIs or actions. */
   isAdvertisement?: boolean
   advertisementKey?: string
@@ -85,6 +88,6 @@ export interface Author {
 
 // 预处理的显示数据，减少模板中的计算
 export interface VideoCardDisplayData extends Video {
-  author: Required<Pick<Author, 'name' | 'authorFace' | 'followed' | 'mid'>>
+  author: Author
   bvid: string
 }

@@ -39,6 +39,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/truncateFade";
 .private-recipient-result {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -97,9 +98,7 @@ const emit = defineEmits<{
 
 .private-recipient-result__copy strong,
 .private-recipient-result__copy span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .private-recipient-result__copy strong {

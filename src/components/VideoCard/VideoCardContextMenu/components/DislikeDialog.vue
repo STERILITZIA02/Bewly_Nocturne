@@ -3,10 +3,13 @@ import { onKeyStroke } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import Dialog from '~/components/Dialog.vue'
 import type { Video } from '~/components/VideoCard/types'
+import { getRecommendationRequestIdentity } from '~/logic/recommendationMode'
 import type { DislikeReason } from '~/models/video/appForYou'
 import { Type as ThreePointV2Type } from '~/models/video/appForYou'
-import { getAppFeedFeedbackTarget, isSameAppFeedFeedbackTarget, submitAppFeedFeedback } from '~/utils/appFeedFeedback'
+import type { AppFeedFeedbackSelection, AppFeedFeedbackType } from '~/utils/appFeedFeedback'
+import { getAppFeedFeedbackReasonKey, getAppFeedFeedbackTarget, isSameAppFeedFeedbackTarget, submitAppFeedFeedback } from '~/utils/appFeedFeedback'
 import { captureAppAuth, ensureFreshAppAccessToken } from '~/utils/authProvider'
 
 const props = defineProps<{
@@ -15,7 +18,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (event: 'removed', selectedOpt: { reasonId?: number, feedbackId?: number }): void
+  (event: 'removed', selectedOpt: AppFeedFeedbackSelection): void
   (event: 'close'): void
 }>()
 
@@ -25,47 +28,53 @@ const toast = useToast()
 const { t } = useI18n()
 
 const loadingDislikeDialog = ref<boolean>(false)
-type FeedFeedbackType = ThreePointV2Type.Dislike | ThreePointV2Type.Feedback
 interface SelectableReason {
-  type: FeedFeedbackType
+  key: string
+  type: AppFeedFeedbackType
   reason: DislikeReason
 }
 
-const selectedOption = ref<{ type: FeedFeedbackType, id: number }>()
+const selectedOptionKey = ref<string>()
+const emptyReasons: DislikeReason[] = []
 
-const dislikeReasons = computed(() => props.video?.threePointV2?.find(option => option.type === ThreePointV2Type.Dislike)?.reasons || [])
-const feedbackReasons = computed(() => props.video?.threePointV2?.find(option => option.type === ThreePointV2Type.Feedback)?.reasons || [])
-const toSelectableReason = (type: FeedFeedbackType) => (reason: DislikeReason): SelectableReason => ({ type, reason })
+const dislikeReasons = computed(() => props.video?.threePointV2?.find(option => option.type === ThreePointV2Type.Dislike)?.reasons || emptyReasons)
+const feedbackReasons = computed(() => props.video?.threePointV2?.find(option => option.type === ThreePointV2Type.Feedback)?.reasons || emptyReasons)
+const toSelectableReason = (type: AppFeedFeedbackType) => (reason: DislikeReason): SelectableReason => ({ key: getAppFeedFeedbackReasonKey(type, reason), type, reason })
 const selectableOptions = computed<SelectableReason[]>(() => [
   ...dislikeReasons.value.map(toSelectableReason(ThreePointV2Type.Dislike)),
   ...feedbackReasons.value.map(toSelectableReason(ThreePointV2Type.Feedback)),
 ])
 
-watch(selectableOptions, (options) => {
-  if (selectedOption.value || options.length === 0)
-    return
+watch([
+  () => JSON.stringify([getAppFeedFeedbackTarget(props.video), props.video.recommendationRequestIdentity]),
+  dislikeReasons,
+  feedbackReasons,
+  () => JSON.stringify(selectableOptions.value.map(option => option.key)),
+  showDislikeDialog,
+], () => {
+  selectedOptionKey.value = selectableOptions.value[0]?.key
+}, { immediate: true, flush: 'sync' })
 
-  selectedOption.value = {
-    type: options[0].type,
-    id: options[0].reason.id,
-  }
-}, { immediate: true })
-
-function selectOption(type: FeedFeedbackType, reason: DislikeReason) {
-  selectedOption.value = { type, id: reason.id }
+function selectOption(type: AppFeedFeedbackType, reason: DislikeReason) {
+  selectedOptionKey.value = getAppFeedFeedbackReasonKey(type, reason)
 }
 
-function isSelected(type: FeedFeedbackType, reason: DislikeReason) {
-  return selectedOption.value?.type === type && selectedOption.value.id === reason.id
+function isSelected(type: AppFeedFeedbackType, reason: DislikeReason) {
+  return selectedOptionKey.value === getAppFeedFeedbackReasonKey(type, reason)
 }
 
-function getSelectedPayload(): { reasonId?: number, feedbackId?: number } | undefined {
-  if (!selectedOption.value)
+function getSelectedPayload(): AppFeedFeedbackSelection | undefined {
+  const option = selectableOptions.value.find(option => option.key === selectedOptionKey.value)
+  if (!option)
     return undefined
 
-  return selectedOption.value.type === ThreePointV2Type.Feedback
-    ? { feedbackId: selectedOption.value.id }
-    : { reasonId: selectedOption.value.id }
+  const { id, mid, rid, tag_id } = option.reason
+  return {
+    ...(option.type === ThreePointV2Type.Feedback ? { feedbackId: id } : { reasonId: id }),
+    mid,
+    rid,
+    tag_id,
+  }
 }
 
 function closeDislikeDialog() {
@@ -77,7 +86,9 @@ async function handleAppDislike() {
   if (loadingDislikeDialog.value)
     return
   const selectedPayload = getSelectedPayload()
+  const selectionKey = selectedOptionKey.value
   const target = getAppFeedFeedbackTarget(props.video)
+  const requestIdentity = props.video.recommendationRequestIdentity
   if (!selectedPayload || !target) {
     toast.warning(t('video_card.feedback_unavailable'))
     return
@@ -89,10 +100,10 @@ async function handleAppDislike() {
       toast.warning(t('auth.auth_access_key_first'))
       return
     }
-    if (!isSameAppFeedFeedbackTarget(target, getAppFeedFeedbackTarget(props.video)))
+    if ((requestIdentity && requestIdentity !== getRecommendationRequestIdentity()) || selectionKey !== selectedOptionKey.value || !isSameAppFeedFeedbackTarget(target, getAppFeedFeedbackTarget(props.video)))
       return
     const { outcome, message } = await submitAppFeedFeedback('feedDislike', auth, target, selectedPayload)
-    if (outcome === 'stale' || !isSameAppFeedFeedbackTarget(target, getAppFeedFeedbackTarget(props.video)))
+    if (outcome === 'stale' || (requestIdentity && requestIdentity !== getRecommendationRequestIdentity()) || !isSameAppFeedFeedbackTarget(target, getAppFeedFeedbackTarget(props.video)))
       return
     if (outcome === 'succeeded')
       emit('removed', selectedPayload)
@@ -112,7 +123,7 @@ onKeyStroke((e: KeyboardEvent) => {
   if (showDislikeDialog.value) {
     const options = selectableOptions.value
 
-    if (e.key >= '0' && e.key <= '9') {
+    if (e.key >= '1' && e.key <= '9') {
       e.preventDefault()
       const option = options[Number(e.key) - 1]
       if (option)
@@ -120,13 +131,13 @@ onKeyStroke((e: KeyboardEvent) => {
     }
     else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      const currentIndex = options.findIndex(option => selectedOption.value?.type === option.type && selectedOption.value.id === option.reason.id)
+      const currentIndex = options.findIndex(option => option.key === selectedOptionKey.value)
       if (currentIndex > 0)
         selectOption(options[currentIndex - 1].type, options[currentIndex - 1].reason)
     }
     else if (e.key === 'ArrowDown') {
       e.preventDefault()
-      const currentIndex = options.findIndex(option => selectedOption.value?.type === option.type && selectedOption.value.id === option.reason.id)
+      const currentIndex = options.findIndex(option => option.key === selectedOptionKey.value)
       if (currentIndex < options.length - 1)
         selectOption(options[currentIndex + 1].type, options[currentIndex + 1].reason)
     }
@@ -147,7 +158,7 @@ onKeyStroke((e: KeyboardEvent) => {
     <ul v-if="dislikeReasons.length > 0" flex="~ col gap-2">
       <li
         v-for="(reason, index) in dislikeReasons"
-        :key="reason.id"
+        :key="getAppFeedFeedbackReasonKey(ThreePointV2Type.Dislike, reason)"
         :class="{ 'activated-dislike-reason': isSelected(ThreePointV2Type.Dislike, reason) }"
         p="x-6 y-4" rounded="$bew-interactive-radius" cursor-pointer bg="$bew-fill-1 hover:$bew-fill-2"
         flex="~ gap-2 items-center justify-between"
@@ -173,7 +184,7 @@ onKeyStroke((e: KeyboardEvent) => {
       <ul flex="~ col gap-2">
         <li
           v-for="(reason, index) in feedbackReasons"
-          :key="reason.id"
+          :key="getAppFeedFeedbackReasonKey(ThreePointV2Type.Feedback, reason)"
           :class="{ 'activated-dislike-reason': isSelected(ThreePointV2Type.Feedback, reason) }"
           p="x-6 y-4" rounded="$bew-interactive-radius" cursor-pointer bg="$bew-fill-1 hover:$bew-fill-2"
           flex="~ gap-2 items-center justify-between"

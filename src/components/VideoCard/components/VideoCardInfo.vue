@@ -26,7 +26,7 @@ const content = computed(() => {
   const video = props.video
   return {
     name,
-    showName: name && Boolean(video?.author),
+    showName: name && (Array.isArray(video?.author) ? video.author.some(author => author.name) : Boolean(video?.author?.name)),
     publishTime,
     publishText: publishTime && video
       ? video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() ?? ''

@@ -3,6 +3,8 @@ import ALink from '~/components/ALink.vue'
 import Button from '~/components/Button.vue'
 import IconButton from '~/components/IconButton.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
+import Progress from '~/components/Progress.vue'
+import Tooltip from '~/components/Tooltip.vue'
 import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import type { List as VideoItem } from '~/models/video/watchLater'
 import { calcCurrentTime } from '~/utils/dataFormatter'
@@ -121,6 +123,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/truncateFade";
 @use "../../../styles/contentCard";
 
 .watch-later-grid-card {
@@ -267,9 +270,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
   @include contentCard.video-subtitle;
 
   span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @include truncateFade.line;
   }
 
   &:hover,

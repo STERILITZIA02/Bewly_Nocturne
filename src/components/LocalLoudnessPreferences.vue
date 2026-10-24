@@ -12,13 +12,13 @@ const { t } = useI18n()
 
 <template>
   <div>
-    <SettingsItem :title="t('local_loudness.enable')" :desc="t('local_loudness.description')" right-width="auto">
+    <SettingsItem setting-id="local_loudness.enable" :title="t('local_loudness.enable')" :desc="t('local_loudness.description')" right-width="auto">
       <Radio v-model="settings.localLoudnessEnabled" />
     </SettingsItem>
-    <SettingsItem :title="t('local_loudness.target')">
+    <SettingsItem setting-id="local_loudness.target" :title="t('local_loudness.target')">
       <Slider v-model="settings.localLoudnessTarget" v-bind="LOCAL_LOUDNESS_RANGE.target" :label="`${settings.localLoudnessTarget} LUFS`" />
     </SettingsItem>
-    <SettingsItem :title="t('local_loudness.strength')">
+    <SettingsItem setting-id="local_loudness.strength" :title="t('local_loudness.strength')">
       <Slider v-model="settings.localLoudnessStrength" v-bind="LOCAL_LOUDNESS_RANGE.strength" :label="`${settings.localLoudnessStrength}%`" />
     </SettingsItem>
   </div>

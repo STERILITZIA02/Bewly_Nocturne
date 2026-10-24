@@ -1,4 +1,18 @@
 .momentsPage {
+  &.moments-native-feed {
+    // Native dark texture is decorative; business overlays retain their own layers.
+    #app::after {
+      display: none !important;
+      pointer-events: none !important;
+    }
+
+    .bili-dyn-home--member,
+    .bili-dyn-home--visitor {
+      z-index: 2;
+      position: relative;
+    }
+  }
+
   &.moments-hide-original-user-card {
     .bili-dyn-home--member > aside.left > section:has(.bili-dyn-my-info),
     .bili-dyn-home--member > aside.left > section:has(.bili-dyn-my-info--skeleton),
@@ -96,11 +110,6 @@
       margin-right: auto !important;
       box-sizing: border-box !important;
     }
-  }
-
-  .bili-dyn-home--member {
-    z-index: 1;
-    position: relative;
   }
 
   .reply-box.fixed-box {

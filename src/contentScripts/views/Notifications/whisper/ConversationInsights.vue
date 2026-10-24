@@ -155,6 +155,7 @@ const privateShare = computed(() => {
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/truncateFade";
 .conversation-insights__mark-read {
   display: inline-flex;
   align-items: center;
@@ -441,12 +442,10 @@ const privateShare = computed(() => {
   min-width: 0;
 }
 .conversation-insights__session-copy strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
   font-weight: var(--bew-font-weight-medium);
+  @include truncateFade.line;
 }
 .conversation-insights__session-copy time {
   color: var(--bew-text-3);

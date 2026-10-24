@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Button from '~/components/Button.vue'
+import Dialog from '~/components/Dialog.vue'
 import IconButton from '~/components/IconButton.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 

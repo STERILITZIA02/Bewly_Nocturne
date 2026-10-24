@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import Input from '~/components/Input.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import { settings } from '~/logic'
@@ -36,37 +37,37 @@ type MomentToggleSetting
 
 interface MomentTagOption {
   setting: MomentToggleSetting
-  label: string
+  labelKey: string
   icon: string
 }
 
 const originalComponentOptions = computed<MomentTagOption[]>(() => [
-  { setting: 'originalMomentsShowUserCard', label: t('settings.original_moments_show_user_card'), icon: 'i-tabler-user-square-rounded' },
-  { setting: 'originalMomentsShowLiveList', label: t('settings.original_moments_show_live_list'), icon: 'i-tabler-live-photo' },
-  { setting: 'originalMomentsShowCommunityCenter', label: t('settings.original_moments_show_community_center'), icon: 'i-tabler-layout-dashboard' },
-  { setting: 'originalMomentsShowHotSearch', label: t('settings.original_moments_show_hot_search'), icon: 'i-tabler-flame' },
-  { setting: 'originalMomentsShowUpList', label: t('settings.original_moments_show_up_list'), icon: 'i-tabler-users' },
+  { setting: 'originalMomentsShowUserCard', labelKey: 'settings.original_moments_show_user_card', icon: 'i-tabler-user-square-rounded' },
+  { setting: 'originalMomentsShowLiveList', labelKey: 'settings.original_moments_show_live_list', icon: 'i-tabler-live-photo' },
+  { setting: 'originalMomentsShowCommunityCenter', labelKey: 'settings.original_moments_show_community_center', icon: 'i-tabler-layout-dashboard' },
+  { setting: 'originalMomentsShowHotSearch', labelKey: 'settings.original_moments_show_hot_search', icon: 'i-tabler-flame' },
+  { setting: 'originalMomentsShowUpList', labelKey: 'settings.original_moments_show_up_list', icon: 'i-tabler-users' },
 ])
 
 const pluginComponentOptions = computed<MomentTagOption[]>(() => [
-  { setting: 'momentsSidebarShowUserCard', label: t('settings.moments_show_user_card'), icon: 'i-tabler-user-square-rounded' },
-  { setting: 'momentsSidebarShowPublish', label: t('settings.moments_show_publish'), icon: 'i-tabler-edit' },
-  { setting: 'momentsSidebarShowLive', label: t('settings.moments_show_live'), icon: 'i-tabler-live-photo' },
-  { setting: 'momentsShowUpList', label: t('settings.moments_show_up_list'), icon: 'i-tabler-users' },
+  { setting: 'momentsSidebarShowUserCard', labelKey: 'settings.moments_show_user_card', icon: 'i-tabler-user-square-rounded' },
+  { setting: 'momentsSidebarShowPublish', labelKey: 'settings.moments_show_publish', icon: 'i-tabler-edit' },
+  { setting: 'momentsSidebarShowLive', labelKey: 'settings.moments_show_live', icon: 'i-tabler-live-photo' },
+  { setting: 'momentsShowUpList', labelKey: 'settings.moments_show_up_list', icon: 'i-tabler-users' },
 ])
 
 const pluginFilterOptions = computed<MomentTagOption[]>(() => [
-  { setting: 'momentsHideVideoDynamics', label: t('settings.moments_filter_video_dynamic'), icon: 'i-tabler-player-play' },
-  { setting: 'momentsHideDrawDynamics', label: t('settings.moments_filter_draw_dynamic'), icon: 'i-tabler-photo' },
-  { setting: 'momentsHideUgcSeasonDynamics', label: t('settings.moments_filter_ugc_season_dynamic'), icon: 'i-tabler-stack' },
-  { setting: 'momentsHideForwardDynamics', label: t('settings.moments_filter_forward_dynamic'), icon: 'i-tabler-repeat' },
-  { setting: 'momentsHidePgcDynamics', label: t('settings.moments_filter_pgc_dynamic'), icon: 'i-tabler-device-tv' },
-  { setting: 'momentsHideArticleDynamics', label: t('settings.moments_filter_article_dynamic'), icon: 'i-tabler-news' },
-  { setting: 'momentsFilterUpRecommendation', label: t('settings.moments_filter_up_recommendation_short'), icon: 'i-tabler-sparkles' },
-  { setting: 'momentsHideChargeExclusive', label: t('settings.moments_filter_charge_dynamic'), icon: 'i-tabler-battery-charging' },
-  { setting: 'momentsHideVideoReservation', label: t('settings.moments_filter_video_reservation'), icon: 'i-tabler-calendar-time' },
-  { setting: 'momentsHideLiveReservation', label: t('settings.moments_filter_live_reservation'), icon: 'i-tabler-calendar-event' },
-  { setting: 'momentsHideLiveDynamics', label: t('settings.moments_filter_live_dynamic'), icon: 'i-tabler-broadcast' },
+  { setting: 'momentsHideVideoDynamics', labelKey: 'settings.moments_filter_video_dynamic', icon: 'i-tabler-player-play' },
+  { setting: 'momentsHideDrawDynamics', labelKey: 'settings.moments_filter_draw_dynamic', icon: 'i-tabler-photo' },
+  { setting: 'momentsHideUgcSeasonDynamics', labelKey: 'settings.moments_filter_ugc_season_dynamic', icon: 'i-tabler-stack' },
+  { setting: 'momentsHideForwardDynamics', labelKey: 'settings.moments_filter_forward_dynamic', icon: 'i-tabler-repeat' },
+  { setting: 'momentsHidePgcDynamics', labelKey: 'settings.moments_filter_pgc_dynamic', icon: 'i-tabler-device-tv' },
+  { setting: 'momentsHideArticleDynamics', labelKey: 'settings.moments_filter_article_dynamic', icon: 'i-tabler-news' },
+  { setting: 'momentsFilterUpRecommendation', labelKey: 'settings.moments_filter_up_recommendation_short', icon: 'i-tabler-sparkles' },
+  { setting: 'momentsHideChargeExclusive', labelKey: 'settings.moments_filter_charge_dynamic', icon: 'i-tabler-battery-charging' },
+  { setting: 'momentsHideVideoReservation', labelKey: 'settings.moments_filter_video_reservation', icon: 'i-tabler-calendar-time' },
+  { setting: 'momentsHideLiveReservation', labelKey: 'settings.moments_filter_live_reservation', icon: 'i-tabler-calendar-event' },
+  { setting: 'momentsHideLiveDynamics', labelKey: 'settings.moments_filter_live_dynamic', icon: 'i-tabler-broadcast' },
 ])
 
 const openModeOptions = computed(() => [
@@ -93,12 +94,12 @@ const gridColumnOptions = computed(() => [
 
 <template>
   <div>
-    <SettingsItemGroup :title="$t('settings.group_original_moments_page')">
-      <SettingsItem :title="$t('settings.original_moments_use_bewly_filters')" :desc="$t('settings.original_moments_use_bewly_filters_desc')" right-width="auto">
+    <SettingsItemGroup data-setting-id="settings.group_original_moments_page" :title="$t('settings.group_original_moments_page')">
+      <SettingsItem setting-id="settings.original_moments_use_bewly_filters" :title="$t('settings.original_moments_use_bewly_filters')" :desc="$t('settings.original_moments_use_bewly_filters_desc')" right-width="auto">
         <Radio v-model="settings.originalMomentsUseBewlyFilters" />
       </SettingsItem>
       <SettingsItem
-        setting-id="page.moments.sidebar"
+        setting-id="settings.original_moments_visible_components"
         :title="$t('settings.moments_visible_components')"
         :desc="$t('settings.moments_visible_components_original_desc')"
       >
@@ -108,7 +109,8 @@ const gridColumnOptions = computed(() => [
               v-for="option in originalComponentOptions"
               :key="option.setting"
               v-model="settings[option.setting]"
-              :label="option.label"
+              :label="$t(option.labelKey)"
+              :data-setting-id="option.labelKey"
               :icon="option.icon"
             />
           </div>
@@ -117,12 +119,12 @@ const gridColumnOptions = computed(() => [
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      :title="$t('settings.group_new_moments_page')"
+      data-setting-id="settings.group_new_moments_page" :title="$t('settings.group_new_moments_page')"
       :desc="$t('settings.group_new_moments_page_desc')"
       warning-desc
     >
       <SettingsItem
-        :title="$t('settings.moments_visible_components')"
+        setting-id="page.moments.sidebar" :title="$t('settings.moments_visible_components')"
         :desc="$t('settings.moments_visible_components_plugin_desc')"
       >
         <template #bottom>
@@ -131,7 +133,8 @@ const gridColumnOptions = computed(() => [
               v-for="option in pluginComponentOptions"
               :key="option.setting"
               v-model="settings[option.setting]"
-              :label="option.label"
+              :label="$t(option.labelKey)"
+              :data-setting-id="option.labelKey"
               :icon="option.icon"
             />
           </div>
@@ -150,35 +153,35 @@ const gridColumnOptions = computed(() => [
         />
       </SettingsItem>
       <SettingsItem
-        :title="$t('settings.moments_enable_live_preview')"
+        setting-id="settings.moments_enable_live_preview" :title="$t('settings.moments_enable_live_preview')"
         :desc="$t('settings.moments_enable_live_preview_desc')"
         right-width="auto"
       >
         <Radio v-model="settings.momentsEnableLivePreview" />
       </SettingsItem>
       <SettingsItem
-        :title="$t('settings.moments_enable_video_preview')"
+        setting-id="settings.moments_enable_video_preview" :title="$t('settings.moments_enable_video_preview')"
         :desc="$t('settings.moments_enable_video_preview_desc')"
         right-width="auto"
       >
         <Radio v-model="settings.momentsEnableVideoPreview" />
       </SettingsItem>
       <template v-if="settings.momentsEnableVideoPreview">
-        <SettingsItem :title="$t('settings.enable_video_ctrl_bar_on_video_card')" right-width="auto">
+        <SettingsItem setting-id="settings.enable_video_ctrl_bar_on_video_card" :title="$t('settings.enable_video_ctrl_bar_on_video_card')" right-width="auto">
           <Radio v-model="settings.momentsEnableVideoControls" />
         </SettingsItem>
-        <SettingsItem :title="$t('settings.video_preview_swipe_seek')" :desc="$t('settings.video_preview_swipe_seek_desc')" right-width="auto">
+        <SettingsItem setting-id="settings.video_preview_swipe_seek" :title="$t('settings.video_preview_swipe_seek')" :desc="$t('settings.video_preview_swipe_seek_desc')" right-width="auto">
           <Radio v-model="settings.momentsEnableVideoPreviewSwipeSeek" />
         </SettingsItem>
-        <SettingsItem :title="$t('settings.hover_video_card_delayed')" right-width="auto">
+        <SettingsItem setting-id="settings.hover_video_card_delayed" :title="$t('settings.hover_video_card_delayed')" right-width="auto">
           <Radio v-model="settings.momentsVideoPreviewDelayed" />
         </SettingsItem>
-        <SettingsItem :title="$t('settings.only_cover_video_preview')" right-width="auto">
+        <SettingsItem setting-id="settings.only_cover_video_preview" :title="$t('settings.only_cover_video_preview')" right-width="auto">
           <Radio v-model="settings.momentsOnlyCoverVideoPreview" />
         </SettingsItem>
       </template>
       <SettingsItem
-        :title="$t('settings.moments_filtered_types')"
+        setting-id="settings.moments_filtered_types" :title="$t('settings.moments_filtered_types')"
         :desc="$t('settings.moments_filtered_types_desc')"
       >
         <template #bottom>
@@ -187,7 +190,8 @@ const gridColumnOptions = computed(() => [
               v-for="option in pluginFilterOptions"
               :key="option.setting"
               v-model="settings[option.setting]"
-              :label="option.label"
+              :label="$t(option.labelKey)"
+              :data-setting-id="option.labelKey"
               :icon="option.icon"
               inverted
               :show-state-icon="false"
@@ -196,7 +200,7 @@ const gridColumnOptions = computed(() => [
         </template>
       </SettingsItem>
       <SettingsItem
-        :title="$t('settings.moments_enable_keyword_filter')"
+        setting-id="settings.moments_enable_keyword_filter" :title="$t('settings.moments_enable_keyword_filter')"
         :desc="$t('settings.moments_enable_keyword_filter_desc')"
         right-width="auto"
       >
@@ -209,7 +213,7 @@ const gridColumnOptions = computed(() => [
         </template>
       </SettingsItem>
       <SettingsItem
-        :title="$t('settings.moments_card_open_mode')"
+        setting-id="settings.moments_card_open_mode" :title="$t('settings.moments_card_open_mode')"
         :desc="$t('settings.moments_card_open_mode_desc')"
         right-width="auto"
       >

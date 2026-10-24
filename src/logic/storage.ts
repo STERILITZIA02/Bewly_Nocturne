@@ -20,9 +20,7 @@ import { DEFAULT_THEME_COLOR, normalizeThemeColor } from '~/utils/themeColor'
 import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
 import { DEFAULT_SCREENSHOT_SHORTCUT, isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
-export type { AppAuthTokens } from './appAuthStorage'
-export { appAuthTokens, defaultAppAuthTokens, resetAppAuthTokens } from './appAuthStorage'
-export { GRID_BREAKPOINTS } from '~/utils/gridLayout'
+export { appAuthTokens } from './appAuthStorage'
 
 export interface NoCookieForYouRecommendationState {
   showlistGroups: string[]
@@ -60,6 +58,8 @@ export type VideoPlayerModeOverride = DefaultVideoPlayerMode | 'inherit'
 export type VideoPlayerModeContext = 'multipart' | 'collection' | 'bangumi' | 'watchLater' | 'playlist' | 'momentsDialog'
 export type VideoPlayerModeOverrides = Record<VideoPlayerModeContext, VideoPlayerModeOverride>
 export type RecommendationMode = 'web' | 'app' | 'webNoCookie'
+export type RecommendationModeOption = 'web' | 'webNoCookie' | 'appSingle' | 'appDouble'
+export type AppRecommendationColumn = 1 | 2
 /**
  * 评论回复树展示模式：
  * - lineCollapseMain：线条，收起时折叠父节点本体
@@ -75,11 +75,6 @@ export interface LastPrivateConversationRoute {
   mid: string
   talkerId: string
   sessionType: number
-}
-
-export interface ShadowCurvePoint {
-  position: number
-  opacity: number
 }
 
 // 本地存储配置接口（不同步到云端的配置）
@@ -141,6 +136,7 @@ export interface Settings {
   language: string
   customizeFont: 'default' | 'recommend' | 'custom'
   fontFamily: string
+  textAutospaceMode: 'default' | 'on' | 'off'
   overrideDanmakuFont: boolean
   removeTheIndentFromChinesePunctuation: boolean
 
@@ -149,6 +145,7 @@ export interface Settings {
   disableShadow: boolean
 
   enableVideoPreview: boolean
+  resumeFromPreviewPosition: boolean
 
   // Link Opening Behavior
   videoCardLinkOpenMode: 'drawer' | 'newTab' | 'currentTab' | 'background'
@@ -171,11 +168,6 @@ export interface Settings {
   onlyCoverVideoPreview: boolean
   showVideoCardAuthorName: boolean
   showVideoCardPublishTime: boolean
-  showVideoCardViewCount: boolean
-  showVideoCardDanmakuCount: boolean
-  showVideoCardLikeCount: boolean
-  showVideoCardDuration: boolean
-  showVideoCardWatchLater: boolean
   showVideoWatchedBadge: boolean
   /** Card menu items folded under “高级选项” at the bottom; every other item shows directly. */
   videoCardContextMenuAdvanced: VideoCardContextMenuKey[]
@@ -251,6 +243,7 @@ export interface Settings {
   pageMode: PageMode
   disableLightDarkModeSwitcherOnDock: boolean
   backToTopAndRefreshButtonsAreSeparated: boolean
+  showDockBackToTop: boolean
   enableUndoRefreshButton: boolean // 添加撤销刷新按钮配置项
 
   sidebarPosition: 'left' | 'right'
@@ -283,10 +276,19 @@ export interface Settings {
   // 搜索结果页设置
   usePluginSearchResultsPage: boolean
   depersonalizeSearchResults: boolean
+  showSearchIdentitySwitcher: boolean
   searchResultsPaginationMode: 'scroll' | 'pagination' // 搜索结果分页模式：滚动加载或翻页
 
   recommendationMode: RecommendationMode
+  appRecommendationColumn: AppRecommendationColumn
+  recommendationModeSwitcherOptions: RecommendationModeOption[]
   showRecommendationModeSwitcher: boolean
+  showImmersiveModeEntry: boolean
+  immersiveWheelSwitch: boolean
+  immersiveKeyboardSwitch: boolean
+  immersiveAutoPlay: boolean
+  immersiveAutoNext: boolean
+  immersivePreloadNext: boolean
   autoSwitchRecommendationMode: boolean
 
   // filter setting
@@ -308,7 +310,6 @@ export interface Settings {
   followingTabShowLivestreamingVideos: boolean
   followingFilterChargingVideos: boolean // 过滤充电专属视频
   followingFilterDynamicVideos: boolean // 过滤动态视频
-  useFollowingNewLayout: boolean
   followingUploaderSort: 'updated' | 'group'
   collectedSeasonPlayAllMode: CollectedSeasonPlayAllMode // 订阅合集「播放全部」起播：开头 / 最新 / 上次观看
   enableFollowingInactiveBlacklist: boolean // 启用不活跃名单
@@ -318,19 +319,10 @@ export interface Settings {
   fixedHomeTabsOnHomePage: boolean
   enableVersionReminder: boolean
   lastAcknowledgedVersion: string
-  // Title font size for cards (px); when auto is enabled, this is ignored
-  homeAdaptiveTitleFontSize: number
-  // Auto adjust title font size based on grid width
-  homeAdaptiveTitleAutoSize: boolean
   // Video card title font size token
   videoCardTitleFontSize: VideoCardFontSizeSetting
   // Video card author (UP) font size token
   videoCardAuthorFontSize: VideoCardFontSizeSetting
-  // Video card tag/meta font size token
-  // Preferred video card layout
-  // Video card shadow customization (modern layout only)
-  videoCardShadowCurve: ShadowCurvePoint[]
-  videoCardShadowHeight: number // 1.0-3.0
   useSearchPageModeOnHomePage: boolean
   preserveForYouState: boolean
   rememberNoCookieRecommendationState: boolean
@@ -370,7 +362,6 @@ export interface Settings {
 
   videoPlayerScroll: boolean // 添加视频播放器滚动设置
   videoPlayerScrollMode: VideoPlayerScrollMode
-  enableSidebarCoverBlur: boolean
 
   // 倍速记忆设置
   rememberPlaybackRate: boolean // 启用倍速记忆功能
@@ -426,6 +417,7 @@ export const originalSettings: Settings = {
   language: '',
   customizeFont: 'default',
   fontFamily: '',
+  textAutospaceMode: 'default',
   overrideDanmakuFont: true,
   removeTheIndentFromChinesePunctuation: false,
 
@@ -449,17 +441,13 @@ export const originalSettings: Settings = {
   cleanShareLinkRemoveTrackingParams: true,
 
   enableVideoPreview: true,
+  resumeFromPreviewPosition: true,
   enableVideoCtrlBarOnVideoCard: false,
   enableVideoPreviewSwipeSeek: false,
   hoverVideoCardDelayed: false,
   onlyCoverVideoPreview: false,
   showVideoCardAuthorName: true,
   showVideoCardPublishTime: true,
-  showVideoCardViewCount: true,
-  showVideoCardDanmakuCount: true,
-  showVideoCardLikeCount: true,
-  showVideoCardDuration: true,
-  showVideoCardWatchLater: true,
   showVideoWatchedBadge: false,
   videoCardContextMenuAdvanced: ['copyOriginalLink', 'copyBVNumber', 'copyAVNumber'],
 
@@ -534,6 +522,7 @@ export const originalSettings: Settings = {
   pageMode: 'custom',
   disableLightDarkModeSwitcherOnDock: false,
   backToTopAndRefreshButtonsAreSeparated: true,
+  showDockBackToTop: true,
   enableUndoRefreshButton: true, // 默认开启撤销刷新按钮
 
   sidebarPosition: 'right',
@@ -565,10 +554,19 @@ export const originalSettings: Settings = {
   // 搜索结果页设置
   usePluginSearchResultsPage: true,
   depersonalizeSearchResults: false,
+  showSearchIdentitySwitcher: false,
   searchResultsPaginationMode: 'scroll', // 默认使用滚动加载
 
   recommendationMode: 'web',
+  appRecommendationColumn: 2,
+  recommendationModeSwitcherOptions: ['web', 'webNoCookie', 'appSingle', 'appDouble'],
   showRecommendationModeSwitcher: false,
+  showImmersiveModeEntry: true,
+  immersiveWheelSwitch: true,
+  immersiveKeyboardSwitch: true,
+  immersiveAutoPlay: true,
+  immersiveAutoNext: true,
+  immersivePreloadNext: false,
   autoSwitchRecommendationMode: true,
 
   // filter setting
@@ -590,7 +588,6 @@ export const originalSettings: Settings = {
   followingTabShowLivestreamingVideos: false,
   followingFilterChargingVideos: false, // 默认不过滤充电视频
   followingFilterDynamicVideos: false, // 默认不过滤动态视频
-  useFollowingNewLayout: false, // 默认使用旧布局
   followingUploaderSort: 'updated',
   collectedSeasonPlayAllMode: 'beginning', // 默认从合集开头播放
   enableFollowingInactiveBlacklist: true, // 默认启用不活跃名单
@@ -600,16 +597,8 @@ export const originalSettings: Settings = {
   fixedHomeTabsOnHomePage: false,
   enableVersionReminder: true,
   lastAcknowledgedVersion: '',
-  homeAdaptiveTitleFontSize: 16,
-  homeAdaptiveTitleAutoSize: true,
   videoCardTitleFontSize: 'base',
   videoCardAuthorFontSize: 'sm',
-  videoCardShadowCurve: [
-    { position: 0, opacity: 80 },
-    { position: 30, opacity: 70 },
-    { position: 100, opacity: 0 },
-  ],
-  videoCardShadowHeight: 1.0,
   useSearchPageModeOnHomePage: true,
   preserveForYouState: false,
   rememberNoCookieRecommendationState: true,
@@ -656,7 +645,6 @@ export const originalSettings: Settings = {
 
   videoPlayerScroll: true, // 默认开启视频播放器滚动
   videoPlayerScrollMode: 'sendingBar',
-  enableSidebarCoverBlur: true,
 
   // 倍速记忆设置
   rememberPlaybackRate: false, // 启用倍速记忆功能
@@ -719,6 +707,16 @@ function normalizeSettings(value: Settings) {
   if (!isValidScreenshotShortcut(value.videoScreenshotShortcut))
     value.videoScreenshotShortcut = ''
   const record = value as Settings & Record<string, unknown>
+  if (!['web', 'webNoCookie', 'app'].includes(value.recommendationMode))
+    value.recommendationMode = originalSettings.recommendationMode
+  if (value.appRecommendationColumn !== 1 && value.appRecommendationColumn !== 2)
+    value.appRecommendationColumn = 2
+  if (!['default', 'on', 'off'].includes(value.textAutospaceMode))
+    value.textAutospaceMode = 'default'
+  const visibleModes = new Set(Array.isArray(value.recommendationModeSwitcherOptions) ? value.recommendationModeSwitcherOptions : originalSettings.recommendationModeSwitcherOptions)
+  const normalizedModes = originalSettings.recommendationModeSwitcherOptions.filter(option => visibleModes.has(option))
+  if (!Array.isArray(value.recommendationModeSwitcherOptions) || normalizedModes.length !== value.recommendationModeSwitcherOptions.length || normalizedModes.some((option, index) => option !== value.recommendationModeSwitcherOptions[index]))
+    value.recommendationModeSwitcherOptions = normalizedModes
   const legacyRecord = asUnknownRecord(value)
   if (typeof value.localLoudnessEnabled !== 'boolean')
     value.localLoudnessEnabled = false
@@ -727,7 +725,7 @@ function normalizeSettings(value: Settings) {
 
   // Missing category switches preserve Nocturne's existing reminders. They
   // change badge presentation only, never the server's read/unread state.
-  for (const field of ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount', 'rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters'] as const) {
+  for (const field of ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount', 'rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters', 'showImmersiveModeEntry', 'immersiveWheelSwitch', 'immersiveKeyboardSwitch', 'immersiveAutoPlay', 'immersiveAutoNext', 'immersivePreloadNext', 'resumeFromPreviewPosition', 'showDockBackToTop', 'showSearchIdentitySwitcher'] as const) {
     if (typeof record[field] !== 'boolean')
       record[field] = originalSettings[field]
   }
@@ -928,8 +926,6 @@ function normalizeSettings(value: Settings) {
   const validPlayerDefaultStates: PlayerDefaultState[] = ['system', 'remember', 'on', 'off']
   if (!['sendingBar', 'playerCenter'].includes(record.videoPlayerScrollMode))
     record.videoPlayerScrollMode = originalSettings.videoPlayerScrollMode
-  if (typeof record.enableSidebarCoverBlur !== 'boolean')
-    record.enableSidebarCoverBlur = originalSettings.enableSidebarCoverBlur
   if (!validPlayerDefaultStates.includes(record.defaultDanmakuState))
     record.defaultDanmakuState = originalSettings.defaultDanmakuState
   if (!validPlayerDefaultStates.includes(record.defaultCaptionState))

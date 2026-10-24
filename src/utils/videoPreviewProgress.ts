@@ -46,7 +46,7 @@ export function normalizePreviewPosition(time: number, duration: number, ended =
   return ended || time >= duration ? 0 : time
 }
 
-export function getVideoPlaybackUrl(video: Video, time: number | null): string {
+export function getVideoPlaybackUrl(video: Video, time: number | null, injectPreviewTime = true): string {
   const fallback = video.bvid || video.aid
     ? `https://www.bilibili.com/video/${video.bvid || `av${video.aid}`}`
     : video.epid
@@ -55,10 +55,9 @@ export function getVideoPlaybackUrl(video: Video, time: number | null): string {
   const target = playbackTarget(video)
   if (!target)
     return video.url || fallback
-  if (time !== null && Number.isFinite(time) && time >= 0) {
-    if (time > 5)
-      target.url.searchParams.set('t', String(time))
-    else target.url.searchParams.delete('t')
+  if (injectPreviewTime && time !== null && Number.isFinite(time) && time > 5
+    && !target.url.searchParams.has('t') && !target.url.searchParams.has('start_progress')) {
+    target.url.searchParams.set('t', String(time))
   }
   return target.url.href
 }

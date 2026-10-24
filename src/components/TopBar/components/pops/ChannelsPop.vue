@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
+
 import { genreChannelConfigs, otherChannelConfigs } from '../../constants/channels'
 
 const { t } = useI18n()

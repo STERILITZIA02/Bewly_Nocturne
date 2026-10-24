@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, toRef } from 'vue'
+import { computed, toRef } from 'vue'
 
 import { usePageModeSwitcher } from '~/composables/usePageModeSwitcher'
 import type { AppPage } from '~/enums/appEnums'
@@ -23,17 +23,13 @@ const PAGE_MODE_ICONS: Readonly<Record<PageMode, string>> = {
   custom: 'i-tabler:adjustments-horizontal',
 }
 
-const hovered = ref(false)
-const focused = ref(false)
 const {
   currentMode,
   disabled,
-  previewMode,
   tooltip,
   cyclePageMode,
 } = usePageModeSwitcher(toRef(props, 'activatedPage'))
-const previewNextMode = computed(() => (hovered.value || focused.value) && !disabled.value)
-const displayedIcon = computed(() => PAGE_MODE_ICONS[previewNextMode.value ? previewMode.value : currentMode.value])
+const displayedIcon = computed(() => PAGE_MODE_ICONS[currentMode.value])
 const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
 </script>
 
@@ -48,10 +44,6 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
       :disabled="disabled"
       :aria-label="tooltip"
       @click="cyclePageMode"
-      @mouseenter="hovered = true"
-      @mouseleave="hovered = false"
-      @focus="focused = true"
-      @blur="focused = false"
     >
       <span class="page-mode-switcher__glyph">
         <Transition name="mode-glyph">

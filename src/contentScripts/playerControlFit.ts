@@ -1,3 +1,4 @@
+import { getMotionRemaining, MAX_MOTION_WAIT_MS } from '~/utils/motionPriority'
 import { getPlayerRoot } from '~/utils/playerMedia'
 
 import { observePlayerDom } from './playerDomLifecycle'
@@ -17,6 +18,13 @@ let alternativeGroup: HTMLElement | undefined
 let resizeObserver: ResizeObserver | undefined
 let stopStructure: (() => void) | undefined
 let frame: number | undefined
+let resizeFrame: number | undefined
+let resizeVersion = 0
+let observedVersion = -1
+let quietFrames = 0
+let resizeStarted = 0
+let observedSizes = new WeakMap<Element, string>()
+let intrinsicTargets = new Set<Element>()
 
 const pixels = (value: string) => Number.parseFloat(value) || 0
 function outerWidth(element: HTMLElement) {
@@ -96,6 +104,7 @@ function measure() {
   if (document.hidden)
     return
   const targets = new Set<Element>()
+  const nextIntrinsicTargets = new Set<Element>()
   const decisions: Array<[HTMLElement, boolean]> = []
   const bars = new Set([...controls.keys()].map(element => element.closest<HTMLElement>('.bpx-player-control-bottom-right')?.parentElement).filter((bar): bar is HTMLElement => !!bar?.isConnected))
   for (const bar of bars) {
@@ -117,7 +126,10 @@ function measure() {
     const rightStyle = getComputedStyle(right)
     const rightChildren = Array.from(right.children).filter((node): node is HTMLElement => node instanceof HTMLElement)
     const visibleNative = rightChildren.filter(child => !controls.has(child) && getComputedStyle(child).display !== 'none' && getComputedStyle(child).position !== 'absolute')
-    rightChildren.forEach(child => targets.add(child))
+    rightChildren.forEach((child) => {
+      targets.add(child)
+      nextIntrinsicTargets.add(child)
+    })
     occupied += visibleNative.reduce((sum, child) => sum + outerWidth(child), 0)
       + pixels(rightStyle.paddingLeft) + pixels(rightStyle.paddingRight) + pixels(rightStyle.marginLeft) + pixels(rightStyle.marginRight)
       + Math.max(0, visibleNative.length - 1) * pixels(rightStyle.columnGap)
@@ -138,6 +150,7 @@ function measure() {
       }
     }
   }
+  intrinsicTargets = nextIntrinsicTargets
   // Measurements finish before any visibility writes. Absolute hidden controls
   // retain measurable intrinsic width, so restoring them never needs a probe.
   for (const [element, collapsed] of decisions) {
@@ -180,13 +193,50 @@ function schedule() {
     frame = requestAnimationFrame(measure)
 }
 
+function settleResize() {
+  resizeFrame = undefined
+  quietFrames = observedVersion === resizeVersion ? quietFrames + 1 : 0
+  observedVersion = resizeVersion
+  if ((quietFrames >= 2 && getMotionRemaining() <= 0) || performance.now() - resizeStarted >= MAX_MOTION_WAIT_MS) {
+    schedule()
+    return
+  }
+  resizeFrame = requestAnimationFrame(settleResize)
+}
+
+function resized(entries: ResizeObserverEntry[]) {
+  let changed = false
+  let intrinsicChanged = false
+  for (const entry of entries) {
+    const box = entry.borderBoxSize?.[0]
+    const size = box ? `${box.inlineSize}x${box.blockSize}` : `${entry.contentRect.width}x${entry.contentRect.height}`
+    const previous = observedSizes.get(entry.target)
+    observedSizes.set(entry.target, size)
+    if (previous !== size) {
+      changed = true
+      intrinsicChanged ||= previous !== undefined && intrinsicTargets.has(entry.target)
+    }
+  }
+  if (!changed || document.hidden)
+    return
+  resizeVersion++
+  if (intrinsicChanged)
+    schedule()
+  if (resizeFrame === undefined) {
+    resizeStarted = performance.now()
+    quietFrames = 0
+    observedVersion = -1
+    resizeFrame = requestAnimationFrame(settleResize)
+  }
+}
+
 export function registerPlayerControlFit(element: HTMLElement, control: Control) {
   controls.set(element, { ...control, inert: element.inert, ariaHidden: element.getAttribute('aria-hidden') })
   if (!resizeObserver) {
-    resizeObserver = new ResizeObserver(schedule)
+    resizeObserver = new ResizeObserver(resized)
     document.addEventListener('visibilitychange', schedule)
     stopStructure = observePlayerDom((records) => {
-      if (!records || records.some(record => record.target instanceof Element && (record.target.closest('.bpx-player-control-bottom, .bpx-player-contextmenu')
+      if (!records || records.some(record => record.target instanceof Element && (record.target.matches('.bpx-player-control-bottom, .bpx-player-control-bottom-left, .bpx-player-control-bottom-right, .bpx-player-control-bottom-center') || record.target.closest('.bpx-player-contextmenu')
         || [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node => node instanceof Element && (node.matches('.bpx-player-control-bottom, .bpx-player-contextmenu') || node.querySelector('.bpx-player-control-bottom, .bpx-player-contextmenu')))))) {
         schedule()
       }
@@ -213,13 +263,18 @@ export function registerPlayerControlFit(element: HTMLElement, control: Control)
       }
       resizeObserver?.disconnect()
       resizeObserver = undefined
+      intrinsicTargets.clear()
       observed.clear()
       stopStructure?.()
       stopStructure = undefined
       document.removeEventListener('visibilitychange', schedule)
       if (frame !== undefined)
         cancelAnimationFrame(frame)
+      if (resizeFrame !== undefined)
+        cancelAnimationFrame(resizeFrame)
       frame = undefined
+      resizeFrame = undefined
+      observedSizes = new WeakMap()
       alternativeGroup?.remove()
       alternativeGroup = undefined
       alternatives.clear()

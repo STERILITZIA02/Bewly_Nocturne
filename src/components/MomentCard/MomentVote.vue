@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, reactive, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartRungs from '~/components/ChartRungs.vue'
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { normalizeIntlLocale } from '~/utils/locale'

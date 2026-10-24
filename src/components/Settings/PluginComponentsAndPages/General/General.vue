@@ -1,107 +1,31 @@
-<script lang="ts" setup>
-import { useI18n } from 'vue-i18n'
+<script setup lang="ts">
+import SettingsCategoryLayout from '../../components/SettingsCategoryLayout.vue'
 
-import Button from '~/components/Button.vue'
-import Radio from '~/components/Radio.vue'
-import Select from '~/components/Select.vue'
-import { settings } from '~/logic'
-
-import SettingsItem from '../../components/SettingsItem.vue'
-import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
-
-const { t, locale } = useI18n()
-const startQuickLayoutEdit = inject<() => void>('startQuickLayoutEdit')
-
-const langOptions = computed(() => {
-  return [
-    {
-      label: t('settings.select_language_opt.mandarin_cn'),
-      value: 'cmn-CN',
-    },
-    {
-      label: t('settings.select_language_opt.mandarin_tw'),
-      value: 'cmn-TW',
-    },
-    {
-      label: t('settings.select_language_opt.english'),
-      value: 'en',
-    },
-    {
-      label: t('settings.select_language_opt.jyut'),
-      value: 'jyut',
-    },
-  ]
-})
-
-const drawerEscapeBehaviorOptions = computed(() => [
-  { label: t('settings.drawer_escape_immediate'), value: 'immediate' },
-  { label: t('settings.drawer_escape_second_press'), value: 'secondPress' },
-])
-
-watch(() => settings.value.language, (newValue) => {
-  locale.value = newValue
-})
+const pages = [
+  {
+    value: 'preferences',
+    titleKey: 'settings.general_preferences',
+    icon: 'i-tabler:adjustments-horizontal',
+    iconActivated: 'i-tabler:adjustments-horizontal',
+    component: defineAsyncComponent(() => import('./Preferences.vue')),
+  },
+  {
+    value: 'authorization',
+    titleKey: 'settings.authorize_app',
+    icon: 'i-tabler:key',
+    iconActivated: 'i-tabler:key',
+    component: defineAsyncComponent(() => import('./AppAuthorization.vue')),
+  },
+  {
+    value: 'data',
+    titleKey: 'settings.settings_data',
+    icon: 'i-tabler:database',
+    iconActivated: 'i-tabler:database',
+    component: defineAsyncComponent(() => import('./SettingsData.vue')),
+  },
+]
 </script>
 
 <template>
-  <div>
-    <p class="bew-help" mb-4>
-      {{ $t('settings.category_general_desc') }}
-    </p>
-
-    <SettingsItemGroup :title="$t('settings.group_language')">
-      <SettingsItem :title="$t('settings.select_language')" right-width="auto">
-        <Select
-          v-model="settings.language"
-          :options="langOptions"
-          w="160px"
-        />
-      </SettingsItem>
-    </SettingsItemGroup>
-
-    <SettingsItemGroup :title="$t('settings.group_interaction_layout')">
-      <SettingsItem
-        :title="$t('layout_editor.quick_edit')"
-        :desc="$t('layout_editor.quick_edit_desc')"
-        right-width="auto"
-      >
-        <Button
-          type="primary"
-          size="small"
-          :disabled="!startQuickLayoutEdit"
-          @click="startQuickLayoutEdit?.()"
-        >
-          <template #left>
-            <i i-tabler:edit />
-          </template>
-          {{ $t('layout_editor.start_quick_edit') }}
-        </Button>
-      </SettingsItem>
-
-      <SettingsItem :title="$t('settings.touch_screen_optimization')" :desc="$t('settings.touch_screen_optimization_desc')" right-width="auto">
-        <Radio v-model="settings.touchScreenOptimization" />
-      </SettingsItem>
-
-      <SettingsItem :title="$t('settings.enable_grid_layout_switcher')" right-width="auto">
-        <Radio v-model="settings.enableGridLayoutSwitcher" />
-      </SettingsItem>
-
-      <SettingsItem :title="$t('settings.history_layout')" right-width="auto">
-        <Select v-model="settings.historyLayout" :options="[{ label: t('settings.history_layout_list'), value: 'list' }, { label: t('settings.history_layout_grid'), value: 'grid' }]" w="180px" />
-      </SettingsItem>
-
-      <SettingsItem :title="$t('settings.enable_horizontal_scrolling')" :desc="$t('settings.enable_horizontal_scrolling_desc')" right-width="auto">
-        <Radio v-model="settings.enableHorizontalScrolling" />
-      </SettingsItem>
-    </SettingsItemGroup>
-
-    <SettingsItemGroup :title="$t('settings.group_drawer_behavior')">
-      <SettingsItem :title="$t('settings.drawer_escape_behavior')" right-width="auto">
-        <Select v-model="settings.drawerEscapeBehavior" :options="drawerEscapeBehaviorOptions" w="160px" />
-      </SettingsItem>
-    </SettingsItemGroup>
-  </div>
+  <SettingsCategoryLayout :pages="pages" storage-key="bewly-settings-general-page" />
 </template>
-
-<style lang="scss" scoped>
-</style>

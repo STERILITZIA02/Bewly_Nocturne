@@ -1,6 +1,7 @@
 <script lang="ts">
 import { useAnchoredPopoverPosition } from '~/composables/useAnchoredPopoverPosition'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
+import { DIALOG_TELEPORT_TARGET } from '~/utils/dialogFocus'
 import type { TooltipPlacement } from '~/utils/floatingMenu'
 import { computeTooltipPosition } from '~/utils/floatingMenu'
 
@@ -16,12 +17,14 @@ const props = withDefaults(defineProps<{
 }>(), { placement: 'top' })
 
 const app = inject<BewlyAppProvider | undefined>('BEWLY_APP', undefined)
-const teleportTarget = computed(() => props.teleport ? app?.mainAppRef.value : undefined)
+const dialogTarget = inject(DIALOG_TELEPORT_TARGET, undefined)
+const teleportTarget = computed(() => props.teleport ? dialogTarget?.value ?? app?.mainAppRef.value : undefined)
 const wrapperRef = ref<HTMLElement>()
 const tooltipRef = ref<HTMLElement>()
 const visible = ref(false)
 const instant = ref(false)
 let enterTimer: ReturnType<typeof setTimeout> | undefined
+let pointerInside = false
 const floatingVisible = computed(() => visible.value && Boolean(teleportTarget.value))
 const { scheduleUpdate } = useAnchoredPopoverPosition(wrapperRef, tooltipRef, floatingVisible, (anchor, popup, width, height) => computeTooltipPosition(anchor, popup, width, height, props.placement))
 watch([() => props.placement, () => props.content, teleportTarget], ([,, target]) => {
@@ -47,7 +50,7 @@ function showTooltip(keyboard = false) {
 }
 
 function hideTooltip() {
-  if (wrapperRef.value?.matches(':focus-within'))
+  if (pointerInside || wrapperRef.value?.matches(':focus-visible') || wrapperRef.value?.querySelector(':focus-visible'))
     return
   clearTimeout(enterTimer)
   enterTimer = undefined
@@ -56,7 +59,23 @@ function hideTooltip() {
   visible.value = false
 }
 
+function handleFocusIn(event: FocusEvent) {
+  if (event.target instanceof Element && event.target.matches(':focus-visible'))
+    showTooltip(true)
+}
+
+function handleMouseEnter() {
+  pointerInside = true
+  showTooltip()
+}
+
+function handleMouseLeave() {
+  pointerInside = false
+  hideTooltip()
+}
+
 function dismissTooltip() {
+  pointerInside = false
   clearTimeout(enterTimer)
   enterTimer = undefined
   visible.value = false
@@ -70,9 +89,9 @@ onBeforeUnmount(() => clearTimeout(enterTimer))
   <span
     ref="wrapperRef"
     class="b-tooltip-wrapper"
-    @mouseenter="showTooltip()"
-    @mouseleave="hideTooltip"
-    @focusin="showTooltip(true)"
+    @mouseenter="handleMouseEnter"
+    @mouseleave="handleMouseLeave"
+    @focusin="handleFocusIn"
     @focusout="hideTooltip"
     @keydown.esc="dismissTooltip"
   >

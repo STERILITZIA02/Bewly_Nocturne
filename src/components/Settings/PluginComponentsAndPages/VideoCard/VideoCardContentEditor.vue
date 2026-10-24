@@ -1,69 +1,38 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-
 import { settings } from '~/logic'
 
 import SettingsToggleTag from '../../components/SettingsToggleTag.vue'
 
-const { t } = useI18n()
-
 type ContentSettingKey
   = | 'showVideoCardAuthorName'
     | 'showVideoCardPublishTime'
-    | 'showVideoCardViewCount'
-    | 'showVideoCardDanmakuCount'
-    | 'showVideoCardLikeCount'
-    | 'showVideoCardDuration'
-    | 'showVideoCardWatchLater'
     | 'showVideoWatchedBadge'
 
 interface ContentElement {
   setting: ContentSettingKey
-  label: string
+  labelKey: string
   icon: string
 }
 
-interface ContentGroup {
-  id: string
-  label: string
-  elements: ContentElement[]
-}
-
-const groups = computed<ContentGroup[]>(() => [
-  {
-    id: 'stats',
-    label: t('settings.video_card_content_region_stats'),
-    elements: [
-      { setting: 'showVideoCardViewCount', label: t('settings.show_video_card_view_count'), icon: 'i-tabler:player-play' },
-      { setting: 'showVideoCardDanmakuCount', label: t('settings.show_video_card_danmaku_count'), icon: 'i-tabler:message' },
-      { setting: 'showVideoCardLikeCount', label: t('settings.show_video_card_like_count'), icon: 'i-tabler:thumb-up' },
-      { setting: 'showVideoCardDuration', label: t('settings.show_video_card_duration'), icon: 'i-tabler:clock' },
-    ],
-  },
-  {
-    id: 'other',
-    label: t('settings.video_card_content_region_other'),
-    elements: [
-      { setting: 'showVideoCardAuthorName', label: t('settings.show_video_card_author_name'), icon: 'i-tabler:edit' },
-      { setting: 'showVideoCardPublishTime', label: t('settings.show_video_card_publish_time'), icon: 'i-tabler:calendar-plus' },
-      { setting: 'showVideoWatchedBadge', label: t('settings.show_video_watched_badge'), icon: 'i-tabler:eye' },
-      { setting: 'showVideoCardWatchLater', label: t('settings.show_video_card_watch_later'), icon: 'i-tabler:playlist' },
-    ],
-  },
+const elements = computed<ContentElement[]>(() => [
+  { setting: 'showVideoCardAuthorName', labelKey: 'settings.show_video_card_author_name', icon: 'i-tabler:edit' },
+  { setting: 'showVideoCardPublishTime', labelKey: 'settings.show_video_card_publish_time', icon: 'i-tabler:calendar-plus' },
+  { setting: 'showVideoWatchedBadge', labelKey: 'settings.show_video_watched_badge', icon: 'i-tabler:eye' },
 ])
 </script>
 
 <template>
   <div class="video-card-content-editor">
-    <div v-for="group in groups" :key="group.id" class="content-row">
-      <span class="content-row__label">{{ group.label }}</span>
+    <div class="content-row">
+      <span class="content-row__label">{{ $t('settings.video_card_content_region_other') }}</span>
 
       <div class="content-row__elements">
         <SettingsToggleTag
-          v-for="element in group.elements"
+          v-for="element in elements"
           :key="element.setting"
           v-model="settings[element.setting]"
-          :label="element.label"
+          :label="$t(element.labelKey)"
+          :data-setting-id="element.labelKey"
           :icon="element.icon"
         />
       </div>
@@ -83,10 +52,6 @@ const groups = computed<ContentGroup[]>(() => [
   align-items: center;
   gap: var(--bew-space-3);
   min-height: 3rem;
-}
-
-.content-row + .content-row {
-  border-top: 1px solid var(--bew-border-color);
 }
 
 .content-row__label {

@@ -3,7 +3,9 @@ import { computed, nextTick, onScopeDispose, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Dialog from '~/components/Dialog.vue'
+import Empty from '~/components/Empty.vue'
 import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import type { FavoriteFolderForm } from '~/utils/favoriteFolderForm'
 import { FAVORITE_COVER_TYPES, FAVORITE_FOLDER_INTRO_LIMIT, FAVORITE_FOLDER_TITLE_LIMIT, isFavoriteCover } from '~/utils/favoriteFolderForm'
 

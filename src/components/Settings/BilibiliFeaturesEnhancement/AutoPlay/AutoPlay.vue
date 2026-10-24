@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import Input from '~/components/Input.vue'
+import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import { settings } from '~/logic'
 import type { AutoPlayMode, CollectedSeasonPlayAllMode, CustomPlayOrderContext, DefaultCustomPlayOrder } from '~/logic/storage'
@@ -81,12 +82,12 @@ const randomPlayActivationModeOptions = computed(() => {
 
 <template>
   <div>
-    <SettingsItemGroup :title="$t('settings.group_playback_end_behavior')">
-      <SettingsItem :title="$t('settings.auto_remove_watch_later_on_end')" :desc="$t('settings.auto_remove_watch_later_on_end_desc')" right-width="auto">
+    <SettingsItemGroup data-setting-id="settings.group_playback_end_behavior" :title="$t('settings.group_playback_end_behavior')">
+      <SettingsItem setting-id="settings.auto_remove_watch_later_on_end" :title="$t('settings.auto_remove_watch_later_on_end')" :desc="$t('settings.auto_remove_watch_later_on_end_desc')" right-width="auto">
         <Radio v-model="settings.autoRemoveWatchLaterOnEnd" />
       </SettingsItem>
       <SettingsItem
-        :title="t('settings.use_bilibili_default_auto_play')"
+        setting-id="settings.use_bilibili_default_auto_play" :title="t('settings.use_bilibili_default_auto_play')"
         :desc="t('settings.use_bilibili_default_auto_play_desc')"
         right-width="auto"
       >
@@ -94,12 +95,12 @@ const randomPlayActivationModeOptions = computed(() => {
       </SettingsItem>
 
       <SettingsItemSubgroup
-        v-if="!settings.useBilibiliDefaultAutoPlay"
+        v-if="!settings.useBilibiliDefaultAutoPlay" data-setting-id="settings.group_video_type_end_behavior"
         :title="t('settings.group_video_type_end_behavior')"
         :desc="t('settings.group_custom_auto_play_behavior_desc')"
       >
         <SettingsItem
-          :title="t('settings.auto_play_multipart')"
+          setting-id="settings.auto_play_multipart" :title="t('settings.auto_play_multipart')"
           right-width="auto"
         >
           <Select
@@ -110,7 +111,7 @@ const randomPlayActivationModeOptions = computed(() => {
         </SettingsItem>
 
         <SettingsItem
-          :title="t('settings.auto_play_collection')"
+          setting-id="settings.auto_play_collection" :title="t('settings.auto_play_collection')"
           right-width="auto"
         >
           <Select
@@ -121,7 +122,7 @@ const randomPlayActivationModeOptions = computed(() => {
         </SettingsItem>
 
         <SettingsItem
-          :title="t('settings.auto_play_watch_later')"
+          setting-id="settings.auto_play_watch_later" :title="t('settings.auto_play_watch_later')"
           right-width="auto"
         >
           <Select
@@ -132,7 +133,7 @@ const randomPlayActivationModeOptions = computed(() => {
         </SettingsItem>
 
         <SettingsItem
-          :title="t('settings.auto_play_playlist')"
+          setting-id="settings.auto_play_playlist" :title="t('settings.auto_play_playlist')"
           right-width="auto"
         >
           <Select
@@ -143,7 +144,7 @@ const randomPlayActivationModeOptions = computed(() => {
         </SettingsItem>
 
         <SettingsItem
-          :title="t('settings.auto_play_recommend')"
+          setting-id="settings.auto_play_recommend" :title="t('settings.auto_play_recommend')"
           right-width="auto"
         >
           <Select
@@ -155,9 +156,9 @@ const randomPlayActivationModeOptions = computed(() => {
       </SettingsItemSubgroup>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="t('settings.group_random_play')">
+    <SettingsItemGroup data-setting-id="settings.group_random_play" :title="t('settings.group_random_play')">
       <SettingsItem
-        :title="t('settings.enable_random_play')"
+        setting-id="settings.enable_random_play" :title="t('settings.enable_random_play')"
         :desc="t('settings.enable_random_play_desc')"
         right-width="auto"
       >
@@ -165,7 +166,7 @@ const randomPlayActivationModeOptions = computed(() => {
       </SettingsItem>
 
       <SettingsItem
-        v-if="settings.enableRandomPlay"
+        v-if="settings.enableRandomPlay" setting-id="settings.default_custom_play_order"
         :title="t('settings.default_custom_play_order')"
         :desc="t('settings.default_custom_play_order_desc')"
         right-width="auto"
@@ -174,7 +175,7 @@ const randomPlayActivationModeOptions = computed(() => {
       </SettingsItem>
 
       <SettingsItem
-        v-if="settings.enableRandomPlay"
+        v-if="settings.enableRandomPlay" setting-id="settings.enable_custom_play_order_overrides"
         :title="t('settings.enable_custom_play_order_overrides')"
         :desc="t('settings.enable_custom_play_order_overrides_desc')"
         right-width="auto"
@@ -183,7 +184,7 @@ const randomPlayActivationModeOptions = computed(() => {
       </SettingsItem>
 
       <SettingsItemSubgroup
-        v-if="settings.enableRandomPlay && settings.enableCustomPlayOrderOverrides"
+        v-if="settings.enableRandomPlay && settings.enableCustomPlayOrderOverrides" data-setting-id="settings.custom_play_order_overrides"
         :title="t('settings.custom_play_order_overrides')"
         :desc="t('settings.custom_play_order_overrides_desc')"
       >
@@ -203,12 +204,12 @@ const randomPlayActivationModeOptions = computed(() => {
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      v-if="settings.enableRandomPlay"
+      v-if="settings.enableRandomPlay" data-setting-id="settings.group_random_play_settings"
       :title="t('settings.group_random_play_settings')"
       :desc="t('settings.group_random_play_settings_desc')"
     >
       <SettingsItem
-        :title="t('settings.random_play_mode')"
+        setting-id="settings.random_play_mode" :title="t('settings.random_play_mode')"
         :desc="t('settings.random_play_mode_desc')"
         right-width="auto"
       >
@@ -216,7 +217,7 @@ const randomPlayActivationModeOptions = computed(() => {
       </SettingsItem>
 
       <SettingsItem
-        v-if="settings.randomPlayMode === 'auto'"
+        v-if="settings.randomPlayMode === 'auto'" setting-id="settings.min_videos_for_random"
         :title="t('settings.min_videos_for_random')"
         :desc="t('settings.min_videos_for_random_desc')"
         right-width="auto"
@@ -229,9 +230,9 @@ const randomPlayActivationModeOptions = computed(() => {
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="t('settings.group_playlist_start_behavior')">
+    <SettingsItemGroup data-setting-id="settings.group_playlist_start_behavior" :title="t('settings.group_playlist_start_behavior')">
       <SettingsItem
-        :title="t('settings.collected_season_play_all_mode')"
+        setting-id="settings.collected_season_play_all_mode" :title="t('settings.collected_season_play_all_mode')"
         :desc="t('settings.collected_season_play_all_mode_desc')"
         right-width="auto"
       >

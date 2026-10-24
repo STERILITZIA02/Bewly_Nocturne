@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import Loading from '~/components/Loading.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
@@ -14,6 +15,9 @@ import { releaseIframeMedia } from '~/utils/mediaResources'
 
 const props = defineProps<{
   url: string
+}>()
+const emit = defineEmits<{
+  (event: 'photoViewerChange', open: boolean, url: string): void
 }>()
 const { reachTop } = useBewlyApp()
 const { t } = useI18n()
@@ -135,7 +139,8 @@ function syncIframeTopBarVisibility(useOriginalBilibiliTopBar: boolean) {
   }
 }
 
-useIframeDocumentHost(iframeRef, () => currentUrl.value !== 'about:blank')
+const { channel: documentChannel, photoViewerOpen } = useIframeDocumentHost(iframeRef, () => currentUrl.value !== 'about:blank')
+watch(photoViewerOpen, open => emit('photoViewerChange', open, currentUrl.value), { flush: 'sync' })
 
 watch(() => settingsStore.getEffectiveTopBarSource(), (source) => {
   const newValue = showNativeBilibiliTopBar(source)
@@ -182,6 +187,8 @@ function handleIframeLoad(event: Event) {
 }
 
 function beginNavigation() {
+  documentChannel.clear()
+  photoViewerOpen.value = false
   iframeGeneration++
   commandId++
   cleanupIframeScrollSync()

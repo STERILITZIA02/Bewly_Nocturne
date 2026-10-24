@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import ALink from '~/components/ALink.vue'
 import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
@@ -287,8 +288,6 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
             <div class="popover-card__copy">
               <h3
                 class="keep-two-lines popover-card__title"
-                overflow="hidden"
-                text="ellipsis"
                 break-anywhere
               >
                 {{ item.title }}

@@ -22,11 +22,11 @@ interface PrivateMessageModules {
   transport: typeof import('../src/background/privateMessage/transport')
   types: typeof import('../src/background/privateMessage/types')
   privateSession: typeof import('../src/contentScripts/views/Notifications/whisper/privateSession')
-  privateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/privateMessage')
+  privateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/privateMessage') & typeof import('../src/contentScripts/views/Notifications/whisper/privateMessageRenderers')
   conversationExpansion: typeof import('../src/contentScripts/views/Notifications/whisper/conversationExpansion')
   usePrivateSessions: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions')
   usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages')
-  experimentalPrivateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/experimental')
+  experimentalPrivateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/experimental/privateMessageTransactions')
   privateMessageWorkspace: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateMessageWorkspace')
   privateConversationRoute: typeof import('../src/utils/privateConversationRoute')
   notificationSections: typeof import('../src/contentScripts/views/Notifications/notificationSections')
@@ -95,6 +95,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       types,
       privateSession,
       privateMessage,
+      privateMessageRenderers,
       conversationExpansion,
       usePrivateSessions,
       usePrivateMessages,
@@ -117,10 +118,11 @@ async function loadModules(): Promise<PrivateMessageModules> {
       import('../src/background/privateMessage/types'),
       import('../src/contentScripts/views/Notifications/whisper/privateSession'),
       import('../src/contentScripts/views/Notifications/whisper/privateMessage'),
+      import('../src/contentScripts/views/Notifications/whisper/privateMessageRenderers'),
       import('../src/contentScripts/views/Notifications/whisper/conversationExpansion'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages'),
-      import('../src/contentScripts/views/Notifications/whisper/experimental'),
+      import('../src/contentScripts/views/Notifications/whisper/experimental/privateMessageTransactions'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateMessageWorkspace'),
       import('../src/utils/privateConversationRoute'),
       import('../src/contentScripts/views/Notifications/notificationSections'),
@@ -139,7 +141,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       transport,
       types,
       privateSession,
-      privateMessage,
+      privateMessage: { ...privateMessage, ...privateMessageRenderers },
       conversationExpansion,
       usePrivateSessions,
       usePrivateMessages,
@@ -994,11 +996,6 @@ verify('transport errors are structured without raw response data', async ({ err
 })
 
 verify('preferred private-message transport retries only an API -403 signature rejection', async ({ errors, transport }) => {
-  const { PRIVATE_MESSAGE_SIGNING_POLICIES } = await import('../src/background/privateMessage/types')
-  assert.equal(PRIVATE_MESSAGE_SIGNING_POLICIES.getPrivateMessages, 'preferred')
-  assert.equal(PRIVATE_MESSAGE_SIGNING_POLICIES.ackPrivateSession, 'preferred')
-  assert.equal(PRIVATE_MESSAGE_SIGNING_POLICIES.sendPrivateMessage, 'required')
-
   let fetchCount = 0
   const signCalls: Array<boolean | undefined> = []
   const response = await transport.requestPrivateMessage({
@@ -1777,11 +1774,9 @@ verify('private write assets reuse the existing controller while text and image 
   api,
   experimentalApi,
 }) => {
-  const [experimentalApiSource, experimentalControllerSource, experimentalEntrySource, knipSource] = await Promise.all([
+  const [experimentalApiSource, experimentalControllerSource] = await Promise.all([
     readFile(new URL('../src/background/privateMessage/experimental/api.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/whisper/experimental/index.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../knip.json', import.meta.url), 'utf8'),
   ])
   assert.ok(experimentalApiSource.includes('Private-message write API handlers'))
   assert.ok(experimentalControllerSource.includes('Private-message write controller'))
@@ -1794,12 +1789,6 @@ verify('private write assets reuse the existing controller while text and image 
     assert.ok(experimentalApiSource.includes(retainedWrite), retainedWrite)
   }
   assert.ok(experimentalControllerSource.includes('reconcileOptimisticPrivateMessages'))
-  assert.ok(experimentalEntrySource.includes(`export type { default as MessageComposer }`))
-  assert.ok(experimentalEntrySource.includes(`export * from './privateMessageWriteProtocolGate'`))
-  assert.ok(experimentalEntrySource.includes(`export * from './usePrivateMessageWrites'`))
-  assert.ok(knipSource.includes('whisper/experimental/index.ts'))
-  assert.equal(knipSource.includes('whisper/experimental/MessageComposer.vue'), false)
-  assert.equal(knipSource.includes('whisper/experimental/privateMessageWriteProtocolGate.ts'), false)
   assert.deepEqual(Object.keys(api.default).sort(), [
     'getPrivateConversationTarget',
     'getPrivateSessionDetail',
@@ -4279,7 +4268,7 @@ verify('session controller clears unread only after confirmed ACK', ({ privateSe
   assert.equal(controller.state.items[0]?.original.session_ts, 1755000005000000)
 })
 
-verify('optimistic text messages reconcile to one server message without duplicates', ({ experimentalPrivateMessage: privateMessage }) => {
+verify('optimistic text messages reconcile to one server message without duplicates', ({ experimentalPrivateMessage: privateMessage, privateMessage: serverMessages }) => {
   const optimistic = privateMessage.createOptimisticPrivateTextMessage({
     localId: 'local-1',
     senderId: '100',
@@ -4296,7 +4285,7 @@ verify('optimistic text messages reconcile to one server message without duplica
 
   optimistic.sendState = 'reconciling'
   optimistic.serverMsgKey = '9223372036854775807'
-  const [server] = privateMessage.transformPrivateMessages([
+  const [server] = serverMessages.transformPrivateMessages([
     createRawMessage('9223372036854775807', '105', {
       sender_uid: '100',
       receiver_id: '200',
@@ -4304,7 +4293,7 @@ verify('optimistic text messages reconcile to one server message without duplica
       timestamp: 1755000002,
     }),
   ], [], '100')
-  const [sameContentWrongKey] = privateMessage.transformPrivateMessages([
+  const [sameContentWrongKey] = serverMessages.transformPrivateMessages([
     createRawMessage('different-server-key', '104', {
       sender_uid: '100',
       receiver_id: '200',
@@ -4320,7 +4309,7 @@ verify('optimistic text messages reconcile to one server message without duplica
   assert.equal(notReconciled.items.some(item => item.localId === 'local-1'), true)
 
   optimistic.serverMsgKey = undefined
-  const [wrongConversation] = privateMessage.transformPrivateMessages([
+  const [wrongConversation] = serverMessages.transformPrivateMessages([
     createRawMessage('fallback-wrong-conversation', '104', {
       sender_uid: '100',
       receiver_id: '300',
@@ -4642,7 +4631,7 @@ verify('failed optimistic sends retain text and retry remains single-flight', as
   assert.equal(controller.states.has('200'), false)
 })
 
-verify('optimistic image messages retain local previews and reconcile by server msg_key or uploaded URL', ({ experimentalPrivateMessage: privateMessage }) => {
+verify('optimistic image messages retain local previews and reconcile by server msg_key or uploaded URL', ({ experimentalPrivateMessage: privateMessage, privateMessage: serverMessages }) => {
   const optimistic = privateMessage.createOptimisticPrivateImageMessage({
     localId: 'image-local-1',
     senderId: '100',
@@ -4661,7 +4650,7 @@ verify('optimistic image messages retain local previews and reconcile by server 
 
   optimistic.sendState = 'reconciling'
   optimistic.serverMsgKey = '9223372036854775807'
-  const [server] = privateMessage.transformPrivateMessages([
+  const [server] = serverMessages.transformPrivateMessages([
     createRawMessage('9223372036854775807', '105', {
       sender_uid: '100',
       receiver_id: '200',

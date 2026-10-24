@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import Button from '~/components/Button.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import { usePageViewState } from '~/composables/usePageViewState'
 

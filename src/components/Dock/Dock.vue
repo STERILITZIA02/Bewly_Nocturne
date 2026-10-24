@@ -180,7 +180,15 @@ const canRefreshCurrentPage = computed((): boolean => {
 })
 
 const showBackToTopOrRefreshActions = computed((): boolean => {
-  return showBackToTopOrRefreshButton.value && (canRefreshCurrentPage.value || !reachTop.value)
+  return showBackToTopOrRefreshButton.value && (canRefreshCurrentPage.value || (settings.value.showDockBackToTop && !reachTop.value))
+})
+const combinedActionIsRefresh = computed(() => canRefreshCurrentPage.value && (reachTop.value || !settings.value.showDockBackToTop))
+watch(() => settings.value.showDockBackToTop, async (visible) => {
+  const root = document.getElementById('bewly')?.shadowRoot
+  if (!visible && root?.activeElement?.hasAttribute('data-dock-back-to-top')) {
+    await nextTick()
+    dockContentRef.value?.querySelector<HTMLElement>('button:not(:disabled), a[href]')?.focus({ preventScroll: true })
+  }
 })
 
 /**
@@ -504,10 +512,10 @@ function handleBackToTopOrRefresh(action: 'backToTop' | 'refresh' | 'auto' = 'au
       emit('refresh')
   }
   else {
-    if (reachTop.value && canRefreshCurrentPage.value) {
+    if (combinedActionIsRefresh.value) {
       emit('refresh')
     }
-    else {
+    else if (settings.value.showDockBackToTop) {
       emit('backToTop')
     }
   }
@@ -956,8 +964,9 @@ onUnmounted(() => {
           <template v-for="key in 2" :key="key">
             <Transition name="fade">
               <IconButton
-                v-if="(key === 1 && canRefreshCurrentPage) || (key === 2 && !reachTop)"
+                v-if="(key === 1 && canRefreshCurrentPage) || (key === 2 && settings.showDockBackToTop && !reachTop)"
                 v-layout-editable="key === 1 ? 'dock-refresh-action' : 'dock-back-to-top-action'"
+                :data-dock-back-to-top="key === 2 ? '' : undefined"
                 class="back-to-top-or-refresh-btn"
                 :label="key === 1 ? $t('common.operation.refresh') : $t('common.operation.back_to_top')"
                 :class="{
@@ -983,9 +992,10 @@ onUnmounted(() => {
         </template>
         <template v-else>
           <IconButton
+            v-if="showBackToTopOrRefreshActions"
             v-layout-editable="'dock-refresh-back-to-top-action'"
             class="back-to-top-or-refresh-btn"
-            :label="reachTop && canRefreshCurrentPage ? $t('common.operation.refresh') : $t('common.operation.back_to_top')"
+            :label="combinedActionIsRefresh ? $t('common.operation.refresh') : $t('common.operation.back_to_top')"
             :class="{
               inactive: hoveringDockItem.themeMode && isDark,
             }"
@@ -993,7 +1003,7 @@ onUnmounted(() => {
           >
             <Transition name="fade">
               <span
-                v-if="reachTop && canRefreshCurrentPage"
+                v-if="combinedActionIsRefresh"
                 class="dock-action-icon i-tabler:rotate-clockwise"
                 shrink-0 absolute
                 aria-hidden="true"

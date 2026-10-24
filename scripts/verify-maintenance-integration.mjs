@@ -64,7 +64,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       './appAuthStorage': {},
     })
     const defaults = JSON.parse(JSON.stringify(storage.originalSettings))
-    const retired = { customizeCSS: true, customizeCSSContent: 'body { color: red; }', videoCardLayout: 'old', enableDockLiquidGlass: true, dockLiquidGlassRefraction: 70, dockLiquidGlassTintColor: '#7a3f91' }
+    const retired = { useFollowingNewLayout: false, homeAdaptiveTitleFontSize: 16, homeAdaptiveTitleAutoSize: true, customizeCSS: true, customizeCSSContent: 'body { color: red; }', videoCardLayout: 'old', enableDockLiquidGlass: true, dockLiquidGlassRefraction: 70, dockLiquidGlassTintColor: '#7a3f91', showVideoCardViewCount: true, showVideoCardDanmakuCount: true, showVideoCardLikeCount: true, showVideoCardDuration: true, showVideoCardWatchLater: true, videoCardShadowCurve: [{ position: 0, opacity: 80 }], videoCardShadowHeight: 1, enableSidebarCoverBlur: true, enableFavoriteCoverBlur: true }
     const { removeRetiredSettings } = await import('../src/constants/retiredSettings')
     for (const malformed of [null, undefined, false, 0, 'invalid'])
       assert.doesNotThrow(() => removeRetiredSettings(malformed))
@@ -141,7 +141,6 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       '~/enums/appEnums': await import('../src/enums/appEnums'),
       '~/logic': { originalSettings: defaults, settings },
       '~/logic/storage': { videoCardContextMenuKeys: storage.videoCardContextMenuKeys },
-      '~/utils/sidebarCoverSettings': await import('../src/utils/sidebarCoverSettings'),
       '~/utils/videoScreenshotShortcut': await import('../src/utils/videoScreenshotShortcut'),
       '../components/SettingsItem.vue': { default: slot },
       '../components/SettingsItemGroup.vue': { default: slot },
@@ -392,7 +391,6 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     app.component('IconButton', IconButton)
     app.component('Tooltip', { props: ['content', 'placement'], setup: (_props, { slots }) => () => slots.default?.() })
     app.component('Progress', { props: ['percentage'], setup: props => () => Vue.h('span', { 'data-progress': props.percentage }) })
-    app.component('CoverSidebarSurface', { setup: (_props, { slots }) => () => Vue.h('aside', slots.default?.()) })
     app.component('Button', { setup: (_props, { slots }) => () => Vue.h('button', slots.default?.()) })
     app.component('Empty', blank)
     app.config.globalProperties.$t = key => key
@@ -542,7 +540,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     const targetTitle = Vue.ref('Target')
     const leaf = { setup: () => {
       const edit = Vue.inject('startQuickLayoutEdit')
-      return () => Vue.h('div', [Vue.h('button', { 'data-quick-edit': '', 'onClick': edit }, 'Edit layout'), Vue.h(Group, { title: 'Group', collapsible: true, defaultCollapsed: true }, () => ready.value ? Vue.h('div', { 'data-settings-title': targetTitle.value }, [Vue.h('input', { 'aria-label': 'target control' })]) : null)])
+      return () => Vue.h('div', [Vue.h('button', { 'data-quick-edit': '', 'onClick': edit }, 'Edit layout'), Vue.h(Group, { title: 'Group', collapsible: true, defaultCollapsed: true }, () => ready.value ? Vue.h('div', { 'data-setting-id': targetTitle.value, 'data-settings-title': targetTitle.value }, [Vue.h('input', { 'aria-label': 'target control' })]) : null)])
     } }
     const host = document.body.appendChild(document.createElement('div'))
     const menus = await import('../src/components/Settings/types')
@@ -554,12 +552,12 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       '~/components/PanelTopBlur.vue': { default: { render: () => null } },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ mainAppRef: Vue.ref(host) }) },
       '~/logic': { settings },
-      '~/logic/layoutEdit': { enterLayoutEditMode: (...args) => edits.push(args), subscribeSettingNavigation: () => () => {} },
+      '~/logic/layoutEdit': { enterLayoutEditMode: (...args) => edits.push(args), getSettingDescriptors: () => [], subscribeSettingNavigation: () => () => {} },
       '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
-      './searchCatalog': { settingsSearchEntries: [{ title: 'Target', menu: menus.MenuType.General }, { title: 'Delayed', menu: menus.MenuType.General }] },
+      './searchCatalog': { settingsSearchEntries: [{ title: 'Target', targetId: 'Target', menu: menus.MenuType.General }, { title: 'Delayed', targetId: 'Delayed', menu: menus.MenuType.General }] },
       './types': menus,
       './navigateToSetting': navigation,
-    }, { globals: { ...clock, sessionStorage: window.sessionStorage, defineAsyncComponent: () => leaf } })
+    }, { globals: { ...clock, CSS: { escape: String }, sessionStorage: window.sessionStorage, defineAsyncComponent: () => leaf } })
     const shown = Vue.ref(true)
     const app = Vue.createApp({
       setup: () => () => Vue.h(Vue.KeepAlive, null, {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import ALink from '~/components/ALink.vue'
 import { useDark } from '~/composables/useDark'
-import { useBangumiCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
+import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import { numFormatter } from '~/utils/dataFormatter'
 import { removeHttpFromUrl } from '~/utils/main'
 import { getContrastingForeground } from '~/utils/themeColor'
@@ -37,7 +38,7 @@ const badgeStyle = computed(() => {
   const backgroundColor = /^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(color) ? color : isDark.value ? '#1b1b1b' : '#ffffff'
   return { backgroundColor, color: getContrastingForeground(backgroundColor) }
 })
-const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
+const { textStyle } = useVideoCardSharedStyles()
 </script>
 
 <template>
@@ -165,7 +166,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
           marginTop: horizontal ? '0' : 'var(--bew-card-stack-gap)',
         }"
       >
-        <p class="bangumi-card__heading" mb-2 :class="bangumiTitleClass" :style="bangumiTitleStyle">
+        <p class="bangumi-card__heading" mb-2 :style="textStyle">
           <span
             class="bangumi-card__title keep-two-lines"
             :title="bangumi.title"

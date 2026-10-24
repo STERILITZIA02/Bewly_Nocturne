@@ -74,6 +74,9 @@ export interface Item {
   bottom_rcmd_reason?: string
   official_icon?: number
   bottom_rcmd_reason_style?: RcmdReasonStyle
+  multiply_desc?: { author_name?: string, extra?: string }
+  is_atten?: boolean
+  pubdate?: number
 }
 
 export interface RcmdReason {
@@ -404,6 +407,9 @@ export interface ThreePoint {
 
 export interface DislikeReason {
   id: number
+  mid?: number
+  rid?: number
+  tag_id?: number
   name: string
   toast: ToastEnum
 }

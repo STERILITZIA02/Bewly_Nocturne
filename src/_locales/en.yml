@@ -171,9 +171,40 @@ player_screenshot:
   failed: Failed to capture screenshot
   video_unavailable: The current video frame is unavailable
 settings:
-  custom_playback_rate: Custom playback speed
-  apply_playback_rate: Apply
-  playback_rate_unavailable: No active main player is available
+  page_mode_desc: 'Use Bilibili pages, Bewly pages, or configure each page and the top bar separately.'
+  app_authorized: Authorized
+  settings_data: Settings data
+  page_mode: Page mode
+  app_not_authorized: Not authorized or expired
+  general_preferences: Preferences
+  text_autospace_default: Browser default
+  text_autospace_on: On
+  text_autospace_off: Off
+  recommendation_mode_app_single: APP single column
+  recommendation_mode_app_double: APP double column
+  recommendation_mode_visible_options: Quick switch options
+  recommendation_mode_visible_options_desc: Controls shortcut visibility. The full menu stays available; APP columns only affect requests.
+  resume_from_preview_position: Open videos at the preview position
+  resume_from_preview_position_desc: 'Adds the preview position to video links. Preview memory, history resume and existing link times are preserved when disabled.'
+  show_dock_back_to_top: Show Back to top in Dock
+  show_dock_back_to_top_desc: Controls Back to top; refresh and undo remain available.
+  show_search_identity_switcher: Show search identity shortcut
+  show_search_identity_switcher_desc: Switch between account and guest requests without signing out. Keywords and filters are preserved.
+  search_identity: Search identity
+  search_identity_account: Account
+  search_identity_guest: Guest
+  enable_text_autospace: Automatic CJK spacing
+  enable_text_autospace_desc: Uses browser text-autospace for reading content without changing text. Code and editors retain their original spacing.
+  project_license: Project license
+  third_party_licenses: Third-party licenses
+  licenses_loading: Loading license assets
+  licenses_failed: Could not load license assets
+  licenses_incomplete: License information is incomplete
+  licenses_entry_missing: Missing build entry report
+  licenses_unknown: Unknown
+  licenses_sources: Build entries
+  licenses_text: License text
+  licenses_summary: "Lists dependencies contributing to this build's final output, with versions listed separately."
   comment_reply_batch_pages: Reply pages per batch
   comment_reply_batch_pages_desc: Only Load next batch requests several pages. Initial expansion and direct page selection request one page; the rest of the thread is never fetched automatically.
   enable_comment_reply_tree_container: Separate reply reading area
@@ -188,8 +219,6 @@ settings:
   video_screenshot_shortcut: Screenshot shortcut
   video_screenshot_shortcut_desc: Focus the field and press a key combination; Backspace clears it. Default Shift+S works even when the screenshot button is hidden.
   video_screenshot_shortcut_conflict: Invalid combination or a conflict with a common browser shortcut.
-  enable_sidebar_cover_blur: Sidebar cover background
-  enable_sidebar_cover_blur_desc: Use a blurred cover behind Favorites and Watch Later sidebars. Turn off to use neutral surfaces from the current theme.
   following_sort: Uploader order in the new Following layout
   following_sort_updated: By update time
   following_sort_group: By group
@@ -201,6 +230,7 @@ settings:
   category_navigation: Settings category navigation
   badge_irreversible: Irreversible
   search:
+    parent_control_hint: 'This option is controlled by “{setting}”.'
     placeholder: Search settings
     no_results: No matching settings
     located: Setting located
@@ -308,7 +338,6 @@ settings:
     home: Home
     moments: Dynamic Feed
     watch_later_page: Watch Later
-    favorites: Favorites
     search: Search
     playback_page: Playback Page
     messages_page: Messages Page
@@ -329,15 +358,14 @@ settings:
   group_video_card: Video Card
   group_video_card_display: Display & Preview
   group_video_card_content: Card Content
-  group_video_card_content_desc: Choose which information and actions appear on video cards.
+  group_video_card_content_desc: Adjust card text sizes and visible information.
   group_video_card_context_menu: More Menu
-  group_video_card_context_menu_desc: 'Choose which options show directly in the right-click menu; switched-off options move into "Advanced" at the bottom.'
+  group_video_card_context_menu_desc: Right-click or long-press a card to open its menu. Choose which actions appear directly; the rest go under More actions.
   video_card_context_menu_region_recommendation: Recommend
   video_card_context_menu_region_opening: Open
   video_card_context_menu_region_copying: Copy
   video_card_context_menu_region_user: User
   video_card_context_menu_follow_user: Follow or Unfollow
-  video_card_content_region_stats: Stats
   video_card_content_region_other: Other
   group_player_components: Player Components
   group_player_display_mode: Display Mode
@@ -376,8 +404,7 @@ settings:
   group_recommendation_mode: '"For you" Recommendation Mode'
   group_recommendation_filters: '"For you" Recommendation Filters'
   group_following: Following
-  group_following_desc: Configure the Following page layout, inactive uploader list, live content, and video filters.
-  group_favorites: Favorites
+  group_following_desc: Browse uploads by creator or group and filter videos and live streams. Right-click a creator or group to manage groups.
   group_search_page_mode: Search Page Mode
   group_home_tabs: Home Tabs
   group_home_layout: Home Layout
@@ -475,9 +502,7 @@ settings:
     These fonts also possess the capability to convert simplified Chinese into
     traditional characters.
   override_danmaku_font: Override danmaku font
-  override_danmaku_font_desc: >
-    Set the danmaku font to your customized font to override the default. The
-    video player won't be able to change it afterwards.
+  override_danmaku_font_desc: 'In recommended or custom font mode, apply the selected font to danmaku instead of the player font setting.'
   remove_the_indent_from_chinese_punctuation: Remove the indent from Chinese punctuation
   remove_the_indent_from_chinese_punctuation_desc: >
     By default, Bilibili will specifically handle Chinese punctuation to achieve
@@ -548,22 +573,17 @@ settings:
   only_cover_video_preview: Preview videos only when hovering the cover
   show_video_card_author_name: Show uploader name
   show_video_card_publish_time: Show publish time
-  show_video_card_view_count: Show view count
-  show_video_card_danmaku_count: Show danmaku count
-  show_video_card_like_count: Show like count
-  show_video_card_duration: Show video duration
-  show_video_card_watch_later: Show Watch Later button
-  show_video_watched_badge: Track and show watched
+  show_video_watched_badge: Show watch status on activity videos
   show_bewly_or_bili_page_switcher: Show page mode switcher
-  filter_articles_in_moments: Filter articles
-  filter_articles_in_moments_desc: Hide articles from the moments feed and only show videos
+  filter_articles_in_moments: Hide articles in the top bar feed
+  filter_articles_in_moments_desc: "Applies only to the top bar's activity menu."
   top_bar_icon_badges_opt:
     number: Number
     dot: Dot
     none: Do not show
   show_bcoin_receive_reminder: VIP B-coin receive reminder
   auto_receive_bcoin_coupon: Auto receive B-coin coupon
-  auto_receive_bcoin_coupon_desc: When enabled, B-coin coupons will be automatically received when detected
+  auto_receive_bcoin_coupon_desc: 'With claim reminders enabled, automatically claim available B Coin coupons when detected.'
   auto_receive_bcoin_coupon_success: B-coin coupon received automatically
   auto_receive_bcoin_coupon_failed: 'Failed to receive B-coin coupon: {message}'
   auto_receive_bcoin_coupon_error: Unable to receive the B-coin coupon. Please try again later.
@@ -588,12 +608,6 @@ settings:
   video_card_title_font_size_desc: Controls the font size of the video card title.
   video_card_author_font_size: UP info font size
   video_card_author_font_size_desc: Controls the font size of the uploader and publish-time line under the title.
-  video_card_shadow_curve: Shadow gradient curve
-  video_card_shadow_curve_desc: Customize the gradient effect of the bottom shadow on video cards
-  video_card_shadow_curve_hint: Drag the line to create control points, right-click to delete
-  video_card_shadow_height: Shadow height
-  video_card_shadow_height_desc: Adjust the height ratio of the shadow covering the cover
-  video_card_shadow_reset: Reset shadow settings
   font_size_option:
     xs: Extra small
     sm: Small
@@ -618,7 +632,7 @@ settings:
   always_use_dock: Always use the dock
   always_use_dock_desc: The dock will always be visible and the sidebar will be hidden.
   dock_collapse_mode: Dock collapse behavior
-  dock_collapse_mode_desc: Choose whether to show the collapse button or collapse to a floating orb when the pointer leaves.
+  dock_collapse_mode_desc: 'Show a collapse button, hide the control, or collapse automatically when the pointer leaves.'
   dock_collapse_mode_button: Show collapse button
   dock_collapse_mode_hidden: Hide collapse button
   dock_collapse_mode_automatic: No button; collapse on leave
@@ -655,7 +669,7 @@ settings:
   enable_dark_mode_tint: Dark background tint
   enable_dark_mode_tint_desc: Use neutral gray by default. Enable to use the tint below; disabling preserves your chosen color.
   enable_oled_dark_mode: OLED pure black mode
-  enable_oled_dark_mode_desc: Only applies while the effective theme is dark; page backgrounds become pure black while cards and overlays keep their layers.
+  enable_oled_dark_mode_desc: 'Use a black page background in dark mode, while keeping cards and panels distinct. Playback pages retain the standard dark background.'
   gradient_theme_color_background: Use a neutral gradient in dark mode
   gradient_theme_color_background_desc: Apply a neutral gradient to the page background and top bar without using the theme color.
   logo_color: Logo color
@@ -669,26 +683,39 @@ settings:
   choose_search_bar_focused_character: Choose the character that appears when the search bar is focused
   show_hot_search_in_top_bar: Show trending searches
   show_hot_search_in_top_bar_desc: Display trending searches when the search box is focused
-  show_hot_search_in_search_page: Show hot search in search page
-  show_hot_search_in_search_page_desc: Display hot search ranking on the search page
+  show_hot_search_in_search_page: Show trending searches on focus
+  show_hot_search_in_search_page_desc: Applies to search fields in the top bar and the search page.
   show_search_recommendation: Show search recommendation
   show_search_recommendation_desc: Display recommended search terms as placeholder in the search box, and search for them when pressing Enter with an empty input
   enable_search_history: Enable search history
   enable_search_history_desc: When enabled, the search bar will record and display your search history. Disabling this will clear all history
   use_plugin_search_results_page: Use plugin search results page
-  use_plugin_search_results_page_desc: When enabled, searches will use the plugin's built-in search results page with category filtering and more features
+  use_plugin_search_results_page_desc: 'Use Bewly search results. Page mode takes precedence; in custom mode, set the search page to Bewly.'
   depersonalize_search_results: Depersonalized search
   depersonalize_search_results_desc: When enabled, search result requests are sent without login cookies.
   search_results_pagination_mode: Search results pagination mode
   search_results_pagination_mode_desc: 'Choose how search results are displayed: infinite scroll or page-based navigation'
   recommendation_mode: Recommendation mode
   show_recommendation_mode_switcher: Show quick recommendation mode switcher
-  show_recommendation_mode_switcher_desc: Show Web, No Cookie and App mode buttons beside the tabs on the For You home page.
+  immersive_mode: Immersive recommendations
+  immersive_entry: Show immersive recommendations entry
+  immersive_wheel: Switch videos with the wheel over the picture
+  immersive_keyboard: Switch videos with arrows / W S / PageUp PageDown
+  immersive_autoplay: Start playback after switching
+  immersive_auto_next: Play the next recommendation when finished
+  immersive_preload: Preload the next video
+  immersive_preload_desc: Prepare at most one next page. Preparation does not play media or add an extension watch record.
+  immersive_previous: Previous recommendation
+  immersive_next: Next recommendation
+  immersive_recommendations: Recommendations sidebar
+  immersive_current: Now playing
+  immersive_native_pending: Layout is still preparing. You can use the native player or exit and try again.
+  show_recommendation_mode_switcher_desc: Show shortcuts for Web, Web Guest, APP single column and APP double column beside the For You tabs.
   recommendation_mode_desc: >
-    Web: normal web recommendation mode. No Cookie: request homepage
-    recommendations without cookies. App: mobile recommendation mode, requires
-    an access key first.
-  recommendation_mode_web_no_cookie: No Cookie
+    Web: web recommendations. Web Guest: requests without cookies.
+    APP single / double column: two authorized APP request configurations.
+    They do not change the Nocturne desktop grid columns.
+  recommendation_mode_web_no_cookie: Web Guest
   remember_no_cookie_recommendation_state: Reduce No Cookie recommendation repeats
   remember_no_cookie_recommendation_state_desc: After reloading the page, continue the recommendation refresh progress and send recent exposure records with recommendation requests to reduce repeats. Only applies in No Cookie mode.
   auto_switch_recommendation_mode: Auto switch recommendation mode
@@ -696,13 +723,8 @@ settings:
     Automatically switch from App mode to Web mode when App recommendation fails.
   app_recommendation_auto_switched_to_web: App recommendations failed to load. Switched to Web mode automatically.
   app_recommendation_failed: App recommendations failed to load. Switch to Web mode or try again later.
-  authorize_app: Authorize the BewlyBewly to use the access key
-  authorize_app_desc: >
-    After authentication, you will receive the video recommendations based on
-    the bilibili app recommendation algorithm. The access key is valid for about
-    one month. After that, remember to re-authorize the BewlyBewly to use the
-    access key.
-  authorize_app_more_info_access_key: More information about the access key
+  authorize_app: App authorization
+  authorize_app_desc: Used for app recommendations and feedback. Authorization refreshes when needed; authorize again if it expires. You can revoke it here.
   app_authorization_success: App recommendation authorization succeeded
   scan_qrcode_desc: >-
     Use the Bilibili mobile app to scan this QR code in order to authorize the
@@ -713,16 +735,16 @@ settings:
     users you follow.
   filter_out_vertical_videos: Filter out vertical videos (only works on the app recommendation mode)
   filter_by_view_count: Filter by view count
-  filter_by_view_count_desc: Filtered out videos with less than the view count you set.
+  filter_by_view_count_desc: Keep videos with more views than the set value.
   filter_by_view_count_unit: views
   filter_by_like_count: Filter by like count
-  filter_by_like_count_desc: Filter out videos with fewer likes than you set.
+  filter_by_like_count_desc: 'For Web and Web guest recommendations: keep videos with more likes than the set value.'
   filter_by_like_count_unit: likes
   filter_by_duration: Filter by duration
-  filter_by_duration_desc: Filtered out videos with less than the duration you set.
+  filter_by_duration_desc: Keep videos longer than the set duration.
   filter_by_duration_unit: sec
   filter_by_publish_time: Filter by publish time
-  filter_by_publish_time_desc: Filter out videos published more than the specified number of days ago (only works in Web recommendation mode, minimum 7 days).
+  filter_by_publish_time_desc: 'For Web and Web guest recommendations: keep videos published within the set number of days, with a minimum of 7 days.'
   filter_by_publish_time_unit: days
   filter_item_already_exist: This filter item already exists!
   filter_type_title: title
@@ -750,8 +772,6 @@ settings:
   following_filter_charging_videos_desc: When enabled, paid videos that require charging to watch will be hidden in the "Following" page
   following_filter_dynamic_videos: Filter dynamic videos
   following_filter_dynamic_videos_desc: When enabled, videos marked as dynamic videos will be hidden in the "Following" page
-  use_following_new_layout: Use new layout for Following tab
-  use_following_new_layout_desc: Display followed UPs list on the left and video feed on the right
   collected_season_play_all_mode: Subscribed favorites Play All start position
   collected_season_play_all_mode_desc: Applies to subscribed public folders and series. Latest means the most recently saved video in public folders and the latest episode in series. Uses the native list entry if history is missing or the list is incomplete. Keeps list order and playback direction.
   collected_season_play_all_mode_beginning: Beginning
@@ -759,10 +779,10 @@ settings:
   collected_season_play_all_mode_last_watched: Last watched
   enable_version_reminder: New version reminders
   enable_version_reminder_desc: Show unacknowledged version updates on the extension home page; each version is shown only once.
-  enable_following_inactive_blacklist: Enable Inactive List
-  enable_following_inactive_blacklist_desc: When a UP has not posted for the specified number of days or has no videos, they will be automatically moved to the Inactive List. They will be removed from the Inactive List when appearing in ALL view or when clicked
-  following_inactive_days: UP inactive days
-  following_inactive_days_desc: The feature takes effect after applying 'Use new layout for Following tab' It is unrelated to the custom user blacklist and only modifies recommendations within the 'new layout for Following tab' module.
+  enable_following_inactive_blacklist: Move less active creators down
+  enable_following_inactive_blacklist_desc: Sort using activity dates from records loaded locally.
+  following_inactive_days: Activity interval
+  following_inactive_days_desc: 'Based on the latest known upload, or the follow date when no upload date is available.'
   preserve_for_you_state: Preserve "For You" pre-switch state
   preserve_for_you_state_desc: When switching from dock to other pages, preserve the browsing state of the "For You" page and maintain content before switching when returning
   show_standalone_search_page: Show standalone search page
@@ -833,12 +853,8 @@ settings:
   auto_exit_fullscreen_on_end: Auto exit fullscreen/webFullscreen when video ends
   auto_exit_fullscreen_on_end_desc: >
     When enabled, the player will automatically exit fullscreen mode when the video finishes playing and no single-loop, random-play, or auto-play behavior is active
-  auto_exit_fullscreen_exclude_auto_play: Exclude auto-play mode
-  auto_exit_fullscreen_exclude_auto_play_desc: >
-    When enabled, videos in auto-play mode will not auto-exit fullscreen when finished, allowing continuous viewing
   use_bilibili_default_auto_play: Use Bilibili's default auto-play behavior
-  use_bilibili_default_auto_play_desc: >
-    Let Bilibili decide what happens when playback ends instead of applying the per-video-type settings below.
+  use_bilibili_default_auto_play_desc: 'Let Bilibili control what happens at the end, without the per-type settings below. An active custom playback order takes precedence.'
   auto_play_watch_later: Watch Later
   auto_play_mode_default: Bilibili Default
   auto_play_mode_auto_play: Auto-play
@@ -1416,6 +1432,7 @@ moments:
   fit_window: Fit to window
   rotate_clockwise: Rotate clockwise
 moment_card:
+  video_post: Video post
   copy_link: Copy moment link
   link_copied: Link copied
   delete: Delete moment
@@ -1545,6 +1562,7 @@ video_card:
     verify: Favorite status is not confirmed. Refresh to check.
     empty: No favorite folders
   operation:
+    open_in_pip_window: Open in a picture-in-picture window
     favorite: Save to favorite folders
     not_interested: Not Interested
     not_interested_uploader: Don't Recommend This Uploader
@@ -1561,7 +1579,7 @@ video_card:
     unfollow_user: Unfollow User
     block_user: Block User
     more_options: More options
-    advanced_options: Advanced
+    advanced_options: More actions
   follow_user_confirm:
     title: Confirm Follow User
     message: Are you sure you want to follow {name}?

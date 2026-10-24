@@ -11,7 +11,7 @@ import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { usePanelTrigger } from '~/composables/usePanelOrigin'
 import { useSourcePanelMotion } from '~/composables/useSourcePanelMotion'
 import { settings } from '~/logic'
-import { DIALOG_FOCUS_OWNER, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard, restoreOverlayFocus } from '~/utils/dialogFocus'
+import { DIALOG_FOCUS_OWNER, DIALOG_TELEPORT_TARGET, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard, restoreOverlayFocus } from '~/utils/dialogFocus'
 import { resolveDialogKeyboardAction } from '~/utils/dialogKeyboard'
 
 const props = withDefaults(defineProps<{
@@ -74,6 +74,7 @@ const dialogMotion = useSourcePanelMotion('.dialog__panel', [
   ':scope > .dialog__panel > .dialog__clip > footer',
 ].join(', '))
 provide(DIALOG_FOCUS_OWNER, dialogId)
+provide(DIALOG_TELEPORT_TARGET, dialogRef)
 let previousFocus: HTMLElement | null = null
 const getTrigger = usePanelTrigger()
 let focusRestored = false

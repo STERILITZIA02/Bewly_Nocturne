@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import QRCodeVue from 'qrcode.vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
-import { appAuthTokens, settings } from '~/logic'
+import Button from '~/components/Button.vue'
+import Dialog from '~/components/Dialog.vue'
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import { appAuthTokens } from '~/logic'
 import {
   beginAppAuthorization,
   completeAppAuthorization,
@@ -17,6 +19,11 @@ interface DialogExpose {
 
 const AUTHORIZATION_POLL_DELAY = 3_000
 const AUTHORIZATION_DEADLINE = 3 * 60_000
+const QRCodeVue = defineAsyncComponent({
+  loader: () => import('qrcode.vue'),
+  loadingComponent: { render: () => h(SkeletonBlock, { width: '150px', height: '150px', radius: 'interactive' }) },
+  delay: 0,
+})
 
 const { t } = useI18n()
 const toast = useToast()
@@ -98,7 +105,7 @@ function scheduleAuthorizationPoll(generation: number, expectedAuthCode: string)
 }
 
 async function startAuthorization() {
-  if (authorizationClosing || authorizationSucceeded || settings.value.recommendationMode !== 'app')
+  if (authorizationClosing || authorizationSucceeded)
     return
 
   invalidateAuthorization()
@@ -146,11 +153,6 @@ function handleClosed() {
     dismissAppAuthorization()
 }
 
-watch(() => settings.value.recommendationMode, (mode) => {
-  if (mode !== 'app')
-    dialogRef.value?.close()
-}, { immediate: true })
-
 watch(() => [
   appAuthTokens.value.accessToken,
   appAuthTokens.value.refreshToken,
@@ -164,8 +166,7 @@ watch(() => [
 })
 
 onMounted(() => {
-  if (settings.value.recommendationMode === 'app')
-    void startAuthorization()
+  void startAuthorization()
 })
 
 onBeforeUnmount(invalidateAuthorization)

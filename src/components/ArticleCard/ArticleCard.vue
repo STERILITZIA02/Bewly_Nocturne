@@ -66,9 +66,8 @@ function formatDate(timestamp: number | string | undefined) {
     <div class="article-content" flex-1 min-w-0>
       <!-- 标题 -->
       <h3
-        class="article-title"
+        class="article-title keep-two-lines"
         text="$bew-text-1"
-        line-clamp-2
         mb-2
       >
         {{ title }}
@@ -77,9 +76,8 @@ function formatDate(timestamp: number | string | undefined) {
       <!-- 描述 -->
       <p
         v-if="desc"
-        class="article-desc"
+        class="article-desc keep-two-lines"
         text="$bew-text-2"
-        line-clamp-2
         mb-2
       >
         {{ desc }}
@@ -146,6 +144,7 @@ function formatDate(timestamp: number | string | undefined) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/truncateFade";
 @use "../../styles/contentCard";
 .article-title {
   font-size: var(--bew-font-size-title);
@@ -170,18 +169,14 @@ function formatDate(timestamp: number | string | undefined) {
 .article-meta .author {
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-weight: var(--bew-font-weight-regular);
+  @include truncateFade.line;
 }
 .article-tags > span {
   display: block;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   line-height: var(--bew-space-6);
+  @include truncateFade.line;
 }
 .article-meta .author:hover {
   color: var(--bew-theme-foreground);

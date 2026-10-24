@@ -29,6 +29,21 @@ const model = computed({
 const sliderStyle = computed(() => ({
   '--slider-progress': `${getRangeProgress(props.modelValue, props.min, props.max)}%`,
 }))
+const labelWidthSample = computed(() => {
+  const numbers = [...props.label.matchAll(/[−+-]?(?:\d+(?:\.\d*)?|\.\d+)/g)]
+  const number = numbers.findLast(match => Number(match[0].replace('−', '-')) === props.modelValue) ?? numbers.at(-1)
+  if (!number)
+    return props.label
+  const decimals = (value: number | string) => {
+    const [mantissa, exponent = '0'] = String(value).toLowerCase().split('e')
+    return Math.max(0, (mantissa.split('.')[1]?.length ?? 0) - Number(exponent))
+  }
+  const precision = Math.max(decimals(number[0]), decimals(props.min), decimals(props.max), props.step === 'any' ? 0 : decimals(props.step))
+  const digits = String(Math.trunc(Math.max(Math.abs(props.min), Math.abs(props.max)))).length
+  const sign = props.min < 0 || /^[−-]/.test(number[0]) ? '−' : number[0].startsWith('+') ? '+' : ''
+  const sample = sign + '0'.repeat(digits) + (precision ? `.${'0'.repeat(precision)}` : '')
+  return props.label.slice(0, number.index) + sample + props.label.slice(number.index + number[0].length)
+})
 </script>
 
 <template>
@@ -46,7 +61,10 @@ const sliderStyle = computed(() => ({
       appearance-none outline-none rounded="$b-slider-height"
       border="size-$b-border-width color-$bew-border-color" w="$b-slider-width" h="$b-slider-height"
     >
-    <span>{{ label }}</span>
+    <span class="slider-label">
+      <span class="slider-label__sizer" aria-hidden="true">{{ labelWidthSample }}</span>
+      <span>{{ label }}</span>
+    </span>
   </label>
 </template>
 
@@ -72,6 +90,22 @@ label {
     var(--bew-fill-1) var(--slider-progress),
     var(--bew-fill-1) 100%
   );
+}
+
+.slider-label {
+  display: grid;
+  flex: none;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  > span {
+    grid-area: 1 / 1;
+  }
+
+  &__sizer {
+    visibility: hidden;
+  }
 }
 
 input[type="range"] {

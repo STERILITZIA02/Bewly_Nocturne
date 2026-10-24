@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
+import IconButton from '~/components/IconButton.vue'
+import Tooltip from '~/components/Tooltip.vue'
+
 import type { DisplayPrivateSession } from './privateSession'
 import { normalizePrivateSessionLocale } from './privateSession'
 import { canManagePrivateSession, privateSessionActionsKey } from './usePrivateSessionActions'
@@ -94,7 +98,7 @@ watch(() => props.session.avatar, () => {
         <span class="conversation-list-item__name">
           <strong>{{ displayName }}</strong>
           <span v-if="session.assistantType" class="conversation-list-item__assistant-label">
-            {{ assistantLabel }}
+            <span>{{ assistantLabel }}</span>
           </span>
         </span>
         <time v-if="displayTime">{{ displayTime }}</time>
@@ -130,6 +134,7 @@ watch(() => props.session.avatar, () => {
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/truncateFade";
 .conversation-list-item {
   position: relative;
   display: flex;
@@ -304,26 +309,30 @@ watch(() => props.session.avatar, () => {
   flex: 0 0 auto;
   max-width: 50%;
   padding: 0 var(--bew-space-1);
-  overflow: hidden;
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
-  text-overflow: ellipsis;
-  white-space: nowrap;
   background: var(--bew-fill-1);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+
+// The fade masks the label only, not its plate.
+.conversation-list-item__assistant-label > span {
+  min-width: 0;
+  @include truncateFade.line;
 }
 
 .conversation-list-item strong {
   min-width: 0;
-  overflow: hidden;
   font-size: var(--bew-font-size-title);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .conversation-list-item time,
@@ -341,9 +350,7 @@ watch(() => props.session.avatar, () => {
 
 .conversation-list-item__summary {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .conversation-list-item__status {

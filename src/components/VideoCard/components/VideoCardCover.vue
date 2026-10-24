@@ -363,9 +363,6 @@ onBeforeUnmount(() => {
   if (videoRef.value)
     releaseMediaElement(videoRef.value)
 })
-
-// Shadow styles are now injected globally via CSS variables from App.vue
-// No per-card computation needed - significant performance improvement!
 </script>
 
 <template>

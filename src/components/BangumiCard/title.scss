@@ -1,11 +1,7 @@
 .bangumi-card__heading {
   color: var(--bew-text-1);
-  font-size: var(--bew-font-size-title);
+  font-size: var(--video-card-title-size);
   font-weight: var(--bew-font-weight-medium);
-  line-height: var(--bew-line-height-title);
+  line-height: var(--bew-title-line-height);
   min-height: 2lh;
-}
-.bew-title-auto {
-  font-size: clamp(var(--bew-font-size-control), 5cqw, var(--bew-font-size-title));
-  line-height: var(--bew-line-height-title);
 }

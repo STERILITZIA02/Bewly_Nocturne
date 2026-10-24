@@ -10,6 +10,7 @@ import { shouldUseWideMomentCardLayout, supportsWideMomentCardLayout } from '~/u
 import { createMomentColumnIndex } from '~/utils/momentColumnIndex'
 import { MOMENT_GRID_DIMENSIONS, resolveMomentCardWidth, resolveMomentGridColumnCount } from '~/utils/momentsLayout'
 import { isPortraitRatio, PORTRAIT_MAX_CLEAR_HEIGHT } from '~/utils/portraitMedia'
+import { SUPPORTS_TEXT_AUTOSPACE } from '~/utils/textAutospace'
 import type { ViewportFrameReason, ViewportGeometry } from '~/utils/viewportGeometry'
 import { getLayoutHeight, getRemainingScroll, invalidateViewportGeometry, readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
 
@@ -21,6 +22,7 @@ interface LayoutHooks {
 /** Owns columns, measurements, visible ranges and their observers; never writes feed data. */
 export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHooks) {
   const { scrollViewportRef } = useBewlyApp()
+  const textAutospaceMode = computed(() => SUPPORTS_TEXT_AUTOSPACE ? settings.value.textAutospaceMode : 'default')
   let active = false
   interface VirtualColumn {
     topPad: number
@@ -549,6 +551,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
       Math.round(measuredCardWidths.get(card) ?? gridCardWidth.value),
       gridGap,
       settings.value.fontFamily,
+      textAutospaceMode.value,
       moment.title,
       getCardPreviewText(moment),
       moment.descInherited ? 1 : 0,
@@ -814,7 +817,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     }
   })
   watch(
-    () => settings.value.fontFamily,
+    () => [settings.value.fontFamily, textAutospaceMode.value],
     async () => {
       await nextTick()
       if (!active)

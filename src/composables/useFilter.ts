@@ -37,7 +37,7 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
   const userNames = computed(() => new Set(compiledUserRules.value.stringValues))
   function filterOutVerticalVideos(item: any, keyPath: string[], _filterValue: number) {
     const value = get(item, keyPath)
-    return !isVerticalVideo(value)
+    return typeof value === 'boolean' ? !value : !isVerticalVideo(value)
   }
 
   /**
@@ -261,9 +261,7 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
     if (!settings.value.disableFilterForFollowedUser)
       return false
     const followed = get(item, isFollowedKeyPath)
-    return settings.value.recommendationMode === 'app'
-      ? followed === '已关注' || followed === '已關注'
-      : Boolean(followed)
+    return Boolean(followed)
   }
   return filter
 }

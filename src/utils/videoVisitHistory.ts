@@ -1,8 +1,10 @@
 import { computed, shallowRef, watch } from 'vue'
 import browser from 'webextension-polyfill'
 
+import { IFRAME_ACTIVITY_CHANGE } from '~/constants/immersive'
 import { settings, settingsReady } from '~/logic'
 import { waitWithSignal, withRequestDeadline } from '~/utils/abort'
+import { isIframeDocumentActive } from '~/utils/iframeActivity'
 import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure, sendMessage } from '~/utils/messaging'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { parsePlaybackTabUrl } from '~/utils/playbackTab'
@@ -89,6 +91,8 @@ function writeSiteMarker(value: string) {
 }
 
 function initialize(): Promise<void> {
+  if (!isIframeDocumentActive())
+    return Promise.resolve()
   // Watched badges are shown here; while hidden this document is only marked stale.
   followStateTopic('videoHistory', () => void initialize())
   if (pendingRead)
@@ -255,6 +259,11 @@ const stopSettings = watch(() => settings.value.showVideoWatchedBadge, (enabled)
 })
 
 if (typeof window !== 'undefined') {
+  const activityChanged = () => {
+    if (settingsLoaded && settings.value.showVideoWatchedBadge && isIframeDocumentActive())
+      void initialize()
+  }
+  window.addEventListener(IFRAME_ACTIVITY_CHANGE, activityChanged)
   const changed = (event: StorageEvent) => {
     if (event.key === null || (event.key === VIDEO_VISIT_HISTORY_STORAGE_KEY && event.newValue === null
       && localStorage.getItem(VIDEO_VISIT_HISTORY_MIGRATION_KEY) !== 'v2')) {
@@ -269,15 +278,20 @@ if (typeof window !== 'undefined') {
       disposed = true
       stopSettings()
       window.removeEventListener('storage', changed)
+      window.removeEventListener(IFRAME_ACTIVITY_CHANGE, activityChanged)
     }
   })
 }
 
 export function recordVideoVisit(video: VideoIdentity, visitedAt = Date.now()): boolean {
+  if (!isIframeDocumentActive())
+    return false
   return record({ identity: video, record: { visitedAt } })
 }
 
 export function recordVideoWatchProgress(video: VideoIdentity, progress: number, duration: number | undefined, completed: boolean, expectedEpoch: string): boolean {
+  if (!isIframeDocumentActive())
+    return false
   const now = Date.now()
   return record({ identity: video, record: { visitedAt: now, playedAt: now, progress, duration, completed } }, expectedEpoch)
 }

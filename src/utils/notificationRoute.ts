@@ -106,7 +106,3 @@ export function normalizeNotificationRoute(url: string | URL): NormalizedNotific
     normalizedUrl: buildBewlyNotificationUrl('whisper'),
   }
 }
-
-export function parseNotificationView(url: string | URL): NotificationView {
-  return normalizeNotificationRoute(url).view
-}

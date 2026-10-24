@@ -61,9 +61,9 @@ const videoCardOpenModeOptions = computed(() => {
 </script>
 
 <template>
-  <SettingsItemGroup :title="$t('settings.group_link_opening_behavior')">
+  <SettingsItemGroup data-setting-id="settings.group_link_opening_behavior" :title="$t('settings.group_link_opening_behavior')">
     <SettingsItem
-      v-if="props.scope === 'topBar'"
+      v-if="props.scope === 'topBar'" setting-id="settings.top_bar_link_opening_behavior"
       :title="$t('settings.top_bar_link_opening_behavior')"
       :desc="`${$t('settings.link_opening_behavior_desc')} ${$t('settings.current_tab_if_homepage_desc')}`"
       right-width="auto"
@@ -71,7 +71,7 @@ const videoCardOpenModeOptions = computed(() => {
       <Select v-model="settings.topBarLinkOpenMode" :options="openModeOptions" w="160px" />
     </SettingsItem>
     <SettingsItem
-      v-if="props.scope === 'videoCard'"
+      v-if="props.scope === 'videoCard'" setting-id="settings.video_card_link_opening_behavior"
       :title="$t('settings.video_card_link_opening_behavior')"
       :desc="$t('settings.video_card_link_opening_behavior_desc')"
       right-width="auto"
@@ -83,7 +83,7 @@ const videoCardOpenModeOptions = computed(() => {
       />
     </SettingsItem>
     <SettingsItem
-      v-if="props.scope === 'topBar'"
+      v-if="props.scope === 'topBar'" setting-id="settings.search_bar_link_opening_behavior"
       :title="$t('settings.search_bar_link_opening_behavior')"
       :desc="`${$t('settings.link_opening_behavior_desc')} ${$t('settings.current_tab_if_homepage_desc')}`"
       right-width="auto"

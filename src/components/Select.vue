@@ -3,6 +3,7 @@ import { onClickOutside } from '@vueuse/core'
 
 import { FORM_FIELD_LABEL_ID } from '~/components/formFieldLabel'
 import LoadingRing from '~/components/LoadingRing.vue'
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 import { DIALOG_FOCUS_OWNER } from '~/utils/dialogFocus'
@@ -225,8 +226,7 @@ watch(unavailable, (disabled) => {
     >
       <div
         :id="valueLabelId"
-        truncate
-        overflow="hidden"
+        class="keep-one-line"
         m="r-2"
         :aria-label="loading && !label ? $t('common.loading') : undefined"
       >

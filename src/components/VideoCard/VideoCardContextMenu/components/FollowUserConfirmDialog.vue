@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import Dialog from '~/components/Dialog.vue'
 import type { Video } from '~/components/VideoCard/types'
 
 const props = defineProps<{

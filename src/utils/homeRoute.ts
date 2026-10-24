@@ -5,10 +5,8 @@ import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 import type { HomeTabConfigItem } from './homeTabConfig'
 import { PRIVATE_CONVERSATION_ROUTE_PARAMS } from './privateConversationRoute'
 
-export function homeTabStateKey(tab: HomeSubPage, recommendationMode: string, useFollowingNewLayout: boolean) {
-  return tab === HomeSubPage.Following
-    ? `${tab}:${useFollowingNewLayout ? 'new' : 'old'}`
-    : tab === HomeSubPage.ForYou ? `${tab}:${recommendationMode}` : tab
+export function homeTabStateKey(tab: HomeSubPage, requestIdentity: string) {
+  return tab === HomeSubPage.ForYou ? `${tab}:${requestIdentity}` : tab
 }
 
 export function resolveDefaultAppPage(config: readonly { page: AppPage, visible: boolean }[]): AppPage {

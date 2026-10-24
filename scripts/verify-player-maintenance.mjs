@@ -973,10 +973,10 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       assert.equal(screenshot.classList.contains('bewly-player-control-collapsed'), false)
       assert.equal(loudness.classList.contains('bewly-player-control-collapsed'), false)
       width = 560
-      for (let i = 0; i < 30; i++) observers[0].callback()
+      for (let i = 0; i < 30; i++) observers[0].callback([{ target: bar, contentRect: { width, height: 36 } }])
       assert.equal(frames.size, 1)
       loudness.focus()
-      step()
+      for (let i = 0; i < 5; i++) step()
       assert.equal(screenshot.classList.contains('bewly-player-control-collapsed'), false)
       assert.equal(loudness.inert, true)
       assert.equal(document.activeElement, native, 'collapsing a focused injected action returns focus to a native control')
@@ -994,8 +994,8 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       width = 600
       input.style.fontSize = '24px'
       input.focus()
-      observers[0].callback()
-      step()
+      observers[0].callback([{ target: bar, contentRect: { width, height: 36 } }])
+      for (let i = 0; i < 5; i++) step()
       assert.equal(screenshot.inert, true, 'larger input text keeps usable native entry width instead of following a window breakpoint')
       assert.equal(document.activeElement, input)
       assert.equal(root.querySelectorAll('.bewly-player-control-alternative').length, 2)

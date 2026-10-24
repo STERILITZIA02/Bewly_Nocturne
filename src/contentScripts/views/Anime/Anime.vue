@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import BangumiCard from '~/components/BangumiCard/BangumiCard.vue'
+import BangumiCardSkeleton from '~/components/BangumiCard/BangumiCardSkeleton.vue'
+import Button from '~/components/Button.vue'
+import Empty from '~/components/Empty.vue'
+import HorizontalScrollView from '~/components/HorizontalScrollView.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { usePageViewState } from '~/composables/usePageViewState'
 import type { List as PopularAnimeItem, PopularAnimeResult } from '~/models/anime/popular'

@@ -88,7 +88,7 @@ export function registerUpstreamCommentChecks(check) {
     const epochs = new WeakMap()
     const frames = []
     let updates = 0
-    const functions = await loadSourceFunctions('../src/inject/index.ts', ['getCommentReplyTreeIdentity', 'getCommentReplyTreeState', 'clearCommentReplyTreeState', 'scheduleCommentReplyTreeLayoutUpdate'], {
+    const functions = await loadSourceFunctions('../src/inject/index.ts', ['getCommentReplyTreeIdentity', 'getCommentReplyTreeState', 'clearCommentReplyTreeState', 'restoreCommentReplyNativeOrder', 'scheduleCommentReplyTreeLayoutUpdate'], {
       HTMLElement,
       document,
       ...missing,

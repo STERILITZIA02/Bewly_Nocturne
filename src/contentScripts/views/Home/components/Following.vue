@@ -41,6 +41,8 @@
  */
 import { useI18n } from 'vue-i18n'
 
+import Button from '~/components/Button.vue'
+import IconButton from '~/components/IconButton.vue'
 import type { Author, Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -472,47 +474,38 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
     if (!isFollowingRequestCurrent(token))
       return
 
-    // 记录从ALL视图中提取的最新投稿时间
-    void recordUploaderLatestVideoTimes(
-      Array.from(uploaderLatestTimes, ([mid, time]) => ({ mid, time })),
-      'following-all',
-    )
+    if (uploaderLatestTimes.size) {
+      // 记录从ALL视图中提取的最新投稿时间
+      void recordUploaderLatestVideoTimes(
+        Array.from(uploaderLatestTimes, ([mid, time]) => ({ mid, time })),
+        'following-all',
+      )
 
-    let updatedCount = 0
-    let removedFromBlacklistCount = 0
-    let markedAsViewedCount = 0
-    uploaderLatestTimes.forEach((time, mid) => {
-      const uploader = uploaderList.value.find(u => u.mid === mid)
-      if (uploader) {
+      const viewed = getViewedUploaders()
+      const blacklist = getBlacklistedUploaders()
+      let viewedChanged = false
+      let blacklistChanged = false
+      for (const uploader of uploaderList.value) {
+        const time = uploaderLatestTimes.get(uploader.mid)
+        if (time === undefined)
+          continue
         const knownPostTime = uploader.hasPostTime ? uploader.lastUpdateTime : 0
-
-        if (time > knownPostTime) {
-          directory.notePublication(mid, time)
-          updatedCount++
+        if (time >= knownPostTime && time > (viewed[uploader.mid] ?? 0)) {
+          viewed[uploader.mid] = time
+          viewedChanged = true
         }
-
-        // 用户在ALL视图中看到了该UP主的投稿，标记为已查看
-        // 使用该UP主在ALL视图中的最新投稿时间作为已查看时间
-        const viewed = getViewedUploaders()
-        const lastViewedTime = viewed[mid] || 0
-
-        // 如果当前看到的时间等于或晚于已知的最新时间，更新已查看时间
-        if (time >= knownPostTime && time > lastViewedTime) {
-          markUploaderAsViewed(mid, time)
-          markedAsViewedCount++
-        }
-
-        // 如果该UP主在黑名单中，说明他们有新活动，从黑名单移除
-        const blacklist = getBlacklistedUploaders()
-        if (blacklist.has(mid)) {
-          removeFromBlacklist(mid)
-          removedFromBlacklistCount++
-        }
+        if (blacklist.delete(uploader.mid))
+          blacklistChanged = true
       }
-    })
-
-    if (updatedCount > 0 || removedFromBlacklistCount > 0 || markedAsViewedCount > 0) {
-      directory.updateStatus()
+      const updated = directory.notePublications(uploaderLatestTimes)
+      const viewedKey = getFollowingStorageKey(VIEWED_UPLOADERS_KEY)
+      const blacklistKey = getFollowingStorageKey(UPLOADER_BLACKLIST_KEY)
+      if (viewedChanged && viewedKey)
+        localStorage.setItem(viewedKey, JSON.stringify(viewed))
+      if (blacklistChanged && blacklistKey)
+        localStorage.setItem(blacklistKey, JSON.stringify([...blacklist]))
+      if (updated || viewedChanged || blacklistChanged)
+        directory.updateStatus(viewed, blacklist)
     }
 
     // 如果一条视频都没加载到，设置 noMoreContent
@@ -547,7 +540,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
   needToLoginFirst.value = false
 
   // 收集本次点击后实际加载到的视频时间
-  const allVideoTimes: number[] = []
+  let latestLoadedPostTime = 0
 
   try {
     let tempOffset = userMomentsOffset.value || undefined
@@ -633,7 +626,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
             })
 
             allVideoItems.push({ item, time })
-            allVideoTimes.push(time) // 收集所有视频时间
+            latestLoadedPostTime = Math.max(latestLoadedPostTime, time)
           }
         })
         if (pageItems.length)
@@ -648,25 +641,17 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
     }
 
     // 加载完成后，用点击后实际取得的最新投稿时间更新排序
-    if (allVideoTimes.length > 0) {
+    if (latestLoadedPostTime > 0) {
       // 再次检查 token，防止在处理缓存更新期间选择改变
       if (!isFollowingRequestCurrent(token))
         return
 
       const uploader = uploaderList.value.find(u => u.mid === mid)
       if (uploader) {
-        // 排序视频时间（降序）
-        allVideoTimes.sort((a, b) => b - a)
-
-        // 计算最新视频时间（考虑置顶）
-        const latestTime = allVideoTimes.length === 1
-          ? allVideoTimes[0]
-          : Math.max(allVideoTimes[0], allVideoTimes[1])
-
         const knownLatestTime = uploader.hasPostTime
-          ? Math.max(uploader.lastUpdateTime, latestTime)
-          : latestTime
-        directory.notePublication(mid, knownLatestTime)
+          ? Math.max(uploader.lastUpdateTime, latestLoadedPostTime)
+          : latestLoadedPostTime
+        directory.notePublications(new Map([[mid, knownLatestTime]]))
         void recordUploaderLatestVideoTimes(
           [{ mid, time: knownLatestTime }],
           'following-selected',

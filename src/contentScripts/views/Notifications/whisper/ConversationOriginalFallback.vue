@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
+import Empty from '~/components/Empty.vue'
+import IconButton from '~/components/IconButton.vue'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
@@ -65,6 +68,7 @@ defineExpose({ focusHeading })
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/truncateFade";
 @use "../../../../styles/breakpoints";
 
 .conversation-original-fallback {
@@ -93,13 +97,11 @@ defineExpose({ focusHeading })
 }
 
 .conversation-original-fallback__header strong {
-  overflow: hidden;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-title);
   font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-title);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .conversation-original-fallback__header span {

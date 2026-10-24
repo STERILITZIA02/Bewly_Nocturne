@@ -290,10 +290,10 @@ defineExpose({ initData })
         @keydown.down.prevent="openDropdown"
         @keydown.up.prevent="openDropdown"
       >
-        <span v-if="activatedSeries" truncate mr-2>
+        <span v-if="activatedSeries" class="keep-one-line" mr-2>
           {{ activatedSeries.name || `第${activatedSeries.number}期` }}
         </span>
-        <span v-else text="$bew-text-3" truncate mr-2>{{ $t('home.weekly_choose_series') }}</span>
+        <span v-else class="keep-one-line" text="$bew-text-3" mr-2>{{ $t('home.weekly_choose_series') }}</span>
         <!-- arrow -->
         <div
           border="~ solid t-0 l-0 r-2 b-2"

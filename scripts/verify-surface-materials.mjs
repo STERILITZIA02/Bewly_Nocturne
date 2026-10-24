@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 
 import { compileStyleAsync } from 'vue/compiler-sfc'
 
@@ -14,7 +15,9 @@ export function registerSurfaceMaterialChecks(check, { Vue, compileComponent, fl
     const topBlur = await compileComponent('../src/components/PanelTopBlur.vue')
     const styles = []
     for (const file of ['segmentControl.scss', 'segmentLiquidIndicator.scss', 'popover.scss']) {
-      const compiled = await compileStyleAsync({ source: await readFile(new URL(`../src/styles/${file}`, import.meta.url), 'utf8'), filename: file, id: 'surface-test', preprocessLang: 'scss' })
+      const url = new URL(`../src/styles/${file}`, import.meta.url)
+      // The full path lets Sass resolve the sheet's relative @use rules.
+      const compiled = await compileStyleAsync({ source: await readFile(url, 'utf8'), filename: fileURLToPath(url), id: 'surface-test', preprocessLang: 'scss' })
       assert.deepEqual(compiled.errors, [])
       const style = document.head.appendChild(document.createElement('style'))
       style.textContent = compiled.code

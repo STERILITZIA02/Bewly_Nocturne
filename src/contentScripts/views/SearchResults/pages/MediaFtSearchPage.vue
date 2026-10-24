@@ -3,6 +3,7 @@ import '../components/mediaResults.scss'
 
 import { useI18n } from 'vue-i18n'
 
+import ALink from '~/components/ALink.vue'
 import Empty from '~/components/Empty.vue'
 import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSelect.vue'
 

@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
+</script>
+
 <template>
   <ul class="favorite-sidebar-skeleton" aria-hidden="true">
     <li v-for="index in 5" :key="index">

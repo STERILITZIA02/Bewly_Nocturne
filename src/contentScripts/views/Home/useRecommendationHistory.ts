@@ -9,7 +9,8 @@ export interface RecommendationSnapshot {
   videoList: VideoElement[]
   appVideoList: AppVideoElement[]
   appFeedIdx: number
-  appAuthIdentity: string
+  requestIdentity: string
+  appRecentShownKeys: string[]
   refreshIdx: number
   webFetchRow: number
   webShowlistGroups: string[]

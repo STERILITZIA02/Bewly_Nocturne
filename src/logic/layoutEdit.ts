@@ -6,7 +6,7 @@ import { AppPage } from '~/enums/appEnums'
 import { gridLayout, settings } from '~/logic/storage'
 
 import { createLayoutPreviewController } from './layoutEditPreview'
-import { selectRecommendationMode } from './recommendationMode'
+import { getRecommendationModeOption, selectRecommendationMode } from './recommendationMode'
 
 export type LayoutEditSection = 'dock' | 'topBar' | 'sidebar' | 'page'
 export type LayoutEditCategory = 'navigation' | 'page-layout'
@@ -90,6 +90,10 @@ export function registerLayoutEditableDescriptors(descriptors: LayoutEditableDes
 
 export function getSettingDescriptor(id: string) {
   return settingDescriptorMap.get(id)
+}
+
+export function getSettingDescriptors(): readonly SettingDescriptor[] {
+  return Array.from(settingDescriptorMap.values())
 }
 
 export function getLayoutEditableDescriptor(id: string) {
@@ -349,7 +353,7 @@ registerSettingDescriptors([
   { id: 'page.home.gridLayout', category: 'BewlyPages', page: 'home', group: 'layout', titleKey: 'settings.home_grid_layout', get: () => gridLayout.value.home, set: value => gridLayout.value.home = value as typeof gridLayout.value.home },
   { id: 'page.home.tabs', category: 'BewlyPages', page: 'home', group: 'layout', titleKey: 'settings.home_tabs_adjustment', get: () => settings.value.homePageTabVisibilityList, set: value => settings.value.homePageTabVisibilityList = value as typeof settings.value.homePageTabVisibilityList },
   { id: 'page.home.recommendationSwitcher', category: 'BewlyPages', page: 'home', group: 'recommendation', titleKey: 'settings.show_recommendation_mode_switcher', get: () => settings.value.showRecommendationModeSwitcher, set: value => settings.value.showRecommendationModeSwitcher = Boolean(value) },
-  { id: 'page.home.recommendationMode', category: 'BewlyPages', page: 'home', group: 'recommendation', titleKey: 'settings.recommendation_mode', get: () => settings.value.recommendationMode, set: value => selectRecommendationMode(value as typeof settings.value.recommendationMode) },
+  { id: 'page.home.recommendationMode', category: 'BewlyPages', page: 'home', group: 'recommendation', titleKey: 'settings.recommendation_mode', get: getRecommendationModeOption, set: value => selectRecommendationMode(value as ReturnType<typeof getRecommendationModeOption>) },
   { id: 'page.moments.gridColumns', category: 'BewlyPages', page: 'moments', group: 'layout', titleKey: 'settings.moments_grid_columns', get: () => settings.value.momentsGridColumns, set: value => settings.value.momentsGridColumns = value as typeof settings.value.momentsGridColumns },
   {
     id: 'page.moments.sidebar',

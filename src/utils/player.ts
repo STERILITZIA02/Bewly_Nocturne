@@ -1,21 +1,21 @@
 // 更完善的播放器元素选择器
 import { watch } from 'vue'
 
-import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
+import { hasPlayerMediaMutation, observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import { useIframePlaybackContext } from '~/logic/iframePageState'
 import type { AutoPlayMode, DefaultVideoPlayerMode, VideoPlayerModeContext, VideoPlayerModeOverride } from '~/logic/storage'
 import { selectors as playbackSelectors } from '~/utils/bewlyWidescreen/constants'
 import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
+import { isImmersiveFrame } from '~/utils/iframeActivity'
 import {
   applyConfiguredPlaybackRate,
-  isValidPlaybackRate,
   resolvePlaybackRateChange,
 } from '~/utils/playbackRate'
 import type { PlayerModeApplication } from '~/utils/playerModeApplication'
-import { isNativeVideoComponentReady, readVideoPageMetadata } from '~/utils/videoMetadataBridge'
+import { readVideoPageMetadata } from '~/utils/videoMetadataBridge'
 
-import { getPlayerModeContainer, getPlayerModeControl, getPlayerRoot, getVideoElement, isPlayerAdvertisement, PLAYER_MEDIA_SELECTOR } from './playerMedia'
+import { getPlayerModeContainer, getPlayerModeControl, getPlayerRoot, getVideoElement, PLAYER_MEDIA_SELECTOR } from './playerMedia'
 
 export { getVideoElement } from './playerMedia'
 
@@ -158,11 +158,8 @@ export function cancelPlayerRetryTasks() {
   stateElement?.remove()
   stateElement = null
 }
-export const AUTO_EXIT_FULLSCREEN_RETRY_MAX = 20
-
-let autoExitFullscreenRetryTimer: ReturnType<typeof setTimeout> | null = null
-let autoExitFullscreenRetryCount = 0
 let autoExitFullscreenGeneration = 0
+let stopAutoExitFullscreenSettingsWatch: (() => void) | undefined
 let autoExitFullscreenVideo: HTMLVideoElement | null = null
 let autoExitFullscreenEndedListener: (() => void) | null = null
 let autoExitFullscreenEndTimer: ReturnType<typeof setTimeout> | null = null
@@ -228,10 +225,8 @@ export function showState(text: string) {
 
 // 应用播放器辅助功能（倍速记忆等）
 function applyPlayerEnhancements() {
-  if (!playbackRateLifecycleActive)
-    return
-  applyRememberedPlaybackRate()
   startPlaybackRateMonitoring()
+  applyRememberedPlaybackRate()
 }
 
 function applyNativeDisplayMode(mode: 'normal' | 'web' | 'wide', application: PlayerModeApplication) {
@@ -619,6 +614,8 @@ export function resolveMomentsDialogPlayerModeOverride(context?: string): Defaul
 }
 
 export function resolveDefaultVideoPlayerMode(): DefaultVideoPlayerMode {
+  if (isImmersiveFrame())
+    return 'bewlyWidescreen'
   const embeddedMode = resolveMomentsDialogPlayerModeOverride(useIframePlaybackContext().value)
   if (embeddedMode)
     return embeddedMode
@@ -912,6 +909,8 @@ export function disableNativeEndPlaybackBehavior(videoType = detectEndBehaviorVi
 
 // 根据视频类型和设置应用自动连播状态
 export function applyAutoPlayByVideoType() {
+  if (isImmersiveFrame())
+    return
   invalidatePendingEndPlaybackStateChanges()
   const videoType = detectEndBehaviorVideoType()
 
@@ -990,25 +989,6 @@ function markPlaybackRateUserIntent(video: HTMLVideoElement) {
   playbackRateUserIntentUntil.set(video, Date.now() + PLAYBACK_RATE_USER_INTENT_DURATION_MS)
 }
 
-export function applyExplicitPlaybackRate(rate: number): boolean {
-  if (!playbackRateLifecycleActive || !isValidPlaybackRate(rate) || !isVideoPage())
-    return false
-  const video = getVideoElement()
-  if (!video || !video.isConnected || isNativeVideoComponentReady(video) !== true || isPlayerAdvertisement(video))
-    return false
-  monitorPlaybackRateVideo(video)
-  markPlaybackRateUserIntent(video)
-  // Commit before native asynchronous events or metadata correction can restore
-  // the previous rate. With memory disabled only this media element changes.
-  applyingPlaybackRateVideos.add(video)
-  try {
-    if (settings.value.rememberPlaybackRate)
-      settings.value.savedPlaybackRate = rate
-    return applyConfiguredPlaybackRate(video, rate)
-  }
-  finally { applyingPlaybackRateVideos.delete(video) }
-}
-
 function consumePlaybackRateUserIntent(video: HTMLVideoElement): boolean {
   const intentUntil = playbackRateUserIntentUntil.get(video) ?? 0
   playbackRateUserIntentUntil.delete(video)
@@ -1025,21 +1005,6 @@ function applyRememberedPlaybackRateToVideo(video: HTMLVideoElement): boolean {
   }
   finally {
     applyingPlaybackRateVideos.delete(video)
-  }
-}
-
-function cleanupReleasedPlaybackRateVideos() {
-  for (const [video, controller] of playbackRateListenerControllers) {
-    if (video.isConnected)
-      continue
-    controller.abort()
-    const correctionFrameId = playbackRateCorrectionFrameIds.get(video)
-    if (correctionFrameId !== undefined)
-      cancelAnimationFrame(correctionFrameId)
-    playbackRateCorrectionFrameIds.delete(video)
-    metadataCorrectionVideos.delete(video)
-    playbackRateUserIntentUntil.delete(video)
-    playbackRateListenerControllers.delete(video)
   }
 }
 
@@ -1128,14 +1093,22 @@ function monitorPlaybackRateVideo(video: HTMLVideoElement) {
     schedulePlaybackRateInitializationCorrection(video, true)
 }
 
-function discoverPlaybackRateVideos(root: ParentNode | HTMLVideoElement = document) {
-  if (root instanceof HTMLVideoElement && root.matches(_videoClassTag.video))
-    monitorPlaybackRateVideo(root)
-
-  root.querySelectorAll?.(_videoClassTag.video).forEach((element) => {
-    if (element instanceof HTMLVideoElement)
-      monitorPlaybackRateVideo(element)
-  })
+function discoverPlaybackRateVideos() {
+  const video = getVideoElement()
+  for (const [previous, controller] of playbackRateListenerControllers) {
+    if (previous === video)
+      continue
+    controller.abort()
+    const frame = playbackRateCorrectionFrameIds.get(previous)
+    if (frame !== undefined)
+      cancelAnimationFrame(frame)
+    playbackRateCorrectionFrameIds.delete(previous)
+    metadataCorrectionVideos.delete(previous)
+    playbackRateUserIntentUntil.delete(previous)
+    playbackRateListenerControllers.delete(previous)
+  }
+  if (video)
+    monitorPlaybackRateVideo(video)
 }
 
 function ensurePlaybackRateControlIntentMonitoring() {
@@ -1161,40 +1134,27 @@ function ensurePlaybackRateControlIntentMonitoring() {
 }
 
 function ensurePlaybackRateMonitoring() {
-  if (!playbackRateLifecycleActive)
+  if (!playbackRateLifecycleActive || stopPlaybackRateSettingsWatch)
     return
-  ensurePlaybackRateControlIntentMonitoring()
-  if (!stopPlaybackRatePlayerObserver) {
-    stopPlaybackRatePlayerObserver = observePlayerDom(() => {
-      cleanupReleasedPlaybackRateVideos()
+  stopPlaybackRateSettingsWatch = watch(
+    [() => settings.value.rememberPlaybackRate, () => settings.value.savedPlaybackRate],
+    ([enabled]) => {
+      if (!enabled) {
+        releasePlaybackRateResources()
+        return
+      }
+      ensurePlaybackRateControlIntentMonitoring()
+      stopPlaybackRatePlayerObserver ??= observePlayerDom((mutations) => {
+        if (hasPlayerMediaMutation(mutations))
+          discoverPlaybackRateVideos()
+      })
       discoverPlaybackRateVideos()
-    })
-  }
-
-  if (!stopPlaybackRateSettingsWatch) {
-    stopPlaybackRateSettingsWatch = watch(
-      [() => settings.value.rememberPlaybackRate, () => settings.value.savedPlaybackRate],
-      ([rememberPlaybackRate]) => {
-        if (!rememberPlaybackRate) {
-          playbackRateListenerControllers.forEach((_controller, video) => {
-            const correctionFrameId = playbackRateCorrectionFrameIds.get(video)
-            if (correctionFrameId !== undefined)
-              cancelAnimationFrame(correctionFrameId)
-            playbackRateCorrectionFrameIds.delete(video)
-            metadataCorrectionVideos.delete(video)
-          })
-          return
-        }
-        discoverPlaybackRateVideos()
-        const video = getVideoElement()
-        if (video)
-          applyRememberedPlaybackRateToVideo(video)
-      },
-      { flush: 'sync' },
-    )
-  }
-
-  discoverPlaybackRateVideos()
+      const video = getVideoElement()
+      if (video)
+        applyRememberedPlaybackRateToVideo(video)
+    },
+    { immediate: true, flush: 'sync' },
+  )
 }
 
 // 应用记住的倍速
@@ -1212,15 +1172,20 @@ export function applyRememberedPlaybackRate() {
 
 // 监听播放器倍速变化并记录（监听所有倍速变化，包括播放器UI操作）
 export function startPlaybackRateMonitoring() {
+  playbackRateLifecycleActive = true
   ensurePlaybackRateMonitoring()
 }
 
 export function stopPlaybackRateMonitoring() {
   playbackRateLifecycleActive = false
-  stopPlaybackRatePlayerObserver?.()
-  stopPlaybackRatePlayerObserver = null
   stopPlaybackRateSettingsWatch?.()
   stopPlaybackRateSettingsWatch = null
+  releasePlaybackRateResources()
+}
+
+function releasePlaybackRateResources() {
+  stopPlaybackRatePlayerObserver?.()
+  stopPlaybackRatePlayerObserver = null
   playbackRateControlIntentController?.abort()
   playbackRateControlIntentController = null
   playbackRateListenerControllers.forEach((controller, video) => {
@@ -1329,15 +1294,15 @@ async function handleAutoExitFullscreenVideoEnded(generation: number) {
     return
   }
 
-  // 检查是否应该取消自动连播（针对推广视频）
-  // 延迟检查，等待结束面板完全渲染
-  if (autoExitFullscreenEndTimer !== null)
-    clearTimeout(autoExitFullscreenEndTimer)
-  autoExitFullscreenEndTimer = setTimeout(() => {
-    autoExitFullscreenEndTimer = null
-    if (generation === autoExitFullscreenGeneration)
-      checkAndCancelAutoPlayForRecommendation()
-  }, 1500)
+  if (needsRecommendationEndCheck()) {
+    if (autoExitFullscreenEndTimer !== null)
+      clearTimeout(autoExitFullscreenEndTimer)
+    autoExitFullscreenEndTimer = setTimeout(() => {
+      autoExitFullscreenEndTimer = null
+      if (generation === autoExitFullscreenGeneration)
+        checkAndCancelAutoPlayForRecommendation()
+    }, 1500)
+  }
 
   // 非互动视频且开启了自动退出全屏
   if (settings.value.autoExitFullscreenOnEnd) {
@@ -1366,47 +1331,16 @@ async function handleAutoExitFullscreenVideoEnded(generation: number) {
   }
 }
 
-function attachAutoExitFullscreenListener(generation: number) {
-  if (generation !== autoExitFullscreenGeneration)
-    return
-
-  const video = getVideoElement()
-  if (!video) {
-    if (autoExitFullscreenRetryCount >= AUTO_EXIT_FULLSCREEN_RETRY_MAX
-      || autoExitFullscreenRetryTimer !== null) {
-      return
-    }
-    autoExitFullscreenRetryCount++
-    autoExitFullscreenRetryTimer = setTimeout(() => {
-      autoExitFullscreenRetryTimer = null
-      attachAutoExitFullscreenListener(generation)
-    }, 1000)
-    return
-  }
-
-  autoExitFullscreenRetryCount = 0
-  if (video === autoExitFullscreenVideo)
-    return
-
-  if (autoExitFullscreenVideo && autoExitFullscreenEndedListener) {
-    autoExitFullscreenVideo.removeEventListener('ended', autoExitFullscreenEndedListener)
-    autoExitFullscreenVideo.removeAttribute('bewly-auto-exit-listener')
-  }
-  autoExitFullscreenVideo = video
-  autoExitFullscreenEndedListener = () => {
-    void handleAutoExitFullscreenVideoEnded(generation)
-  }
-  video.setAttribute('bewly-auto-exit-listener', 'true')
-  video.addEventListener('ended', autoExitFullscreenEndedListener)
+function needsRecommendationEndCheck() {
+  if (settings.value.useBilibiliDefaultAutoPlay)
+    return false
+  const type = detectEndBehaviorVideoType()
+  return (type === VideoType.MULTIPART || type === VideoType.COLLECTION)
+    && getAutoPlayModeForVideoType(type) !== 'autoPlayWithRecommend'
 }
 
-// 监听视频结束事件并自动退出全屏
-export function startAutoExitFullscreenMonitoring() {
+function releaseAutoExitFullscreenMedia() {
   autoExitFullscreenGeneration++
-  autoExitFullscreenRetryCount = 0
-  if (autoExitFullscreenRetryTimer !== null)
-    clearTimeout(autoExitFullscreenRetryTimer)
-  autoExitFullscreenRetryTimer = null
   if (autoExitFullscreenEndTimer !== null)
     clearTimeout(autoExitFullscreenEndTimer)
   autoExitFullscreenEndTimer = null
@@ -1416,31 +1350,59 @@ export function startAutoExitFullscreenMonitoring() {
   }
   autoExitFullscreenVideo = null
   autoExitFullscreenEndedListener = null
-  stopAutoExitFullscreenDomObserver?.()
+}
+
+function attachAutoExitFullscreenListener() {
+  const video = getVideoElement()
+  if (video === autoExitFullscreenVideo)
+    return
+  releaseAutoExitFullscreenMedia()
+  if (!video)
+    return
   const generation = autoExitFullscreenGeneration
-  stopAutoExitFullscreenDomObserver = observePlayerDom(() => {
-    attachAutoExitFullscreenListener(generation)
-  })
-  attachAutoExitFullscreenListener(generation)
+  autoExitFullscreenVideo = video
+  autoExitFullscreenEndedListener = () => {
+    void handleAutoExitFullscreenVideoEnded(generation)
+  }
+  video.setAttribute('bewly-auto-exit-listener', 'true')
+  video.addEventListener('ended', autoExitFullscreenEndedListener)
+}
+
+export function startAutoExitFullscreenMonitoring() {
+  if (stopAutoExitFullscreenSettingsWatch)
+    return
+  stopAutoExitFullscreenSettingsWatch = watch([
+    () => settings.value.autoExitFullscreenOnEnd,
+    () => settings.value.useBilibiliDefaultAutoPlay,
+    () => settings.value.autoPlayMultipart,
+    () => settings.value.autoPlayCollection,
+  ], () => {
+    releaseAutoExitFullscreenMedia()
+    // A collection may appear after the player. Keep the requested policy ready
+    // without inspecting unrelated player mutations or scheduling idle checks.
+    const checkRecommendations = !settings.value.useBilibiliDefaultAutoPlay
+      && (settings.value.autoPlayMultipart !== 'autoPlayWithRecommend' || settings.value.autoPlayCollection !== 'autoPlayWithRecommend')
+    if (!settings.value.autoExitFullscreenOnEnd && !checkRecommendations) {
+      stopAutoExitFullscreenDomObserver?.()
+      stopAutoExitFullscreenDomObserver = null
+      return
+    }
+    if (stopAutoExitFullscreenDomObserver) {
+      attachAutoExitFullscreenListener()
+    }
+    else {
+      stopAutoExitFullscreenDomObserver = observePlayerDom((mutations) => {
+        if (hasPlayerMediaMutation(mutations))
+          attachAutoExitFullscreenListener()
+      })
+    }
+  }, { immediate: true })
 }
 
 export function stopAutoExitFullscreenMonitoring() {
-  autoExitFullscreenGeneration++
-  autoExitFullscreenRetryCount = 0
-  if (autoExitFullscreenRetryTimer !== null) {
-    clearTimeout(autoExitFullscreenRetryTimer)
-    autoExitFullscreenRetryTimer = null
-  }
-  if (autoExitFullscreenEndTimer !== null) {
-    clearTimeout(autoExitFullscreenEndTimer)
-    autoExitFullscreenEndTimer = null
-  }
+  stopAutoExitFullscreenSettingsWatch?.()
+  stopAutoExitFullscreenSettingsWatch = undefined
   stopAutoExitFullscreenDomObserver?.()
   stopAutoExitFullscreenDomObserver = null
-  if (autoExitFullscreenVideo && autoExitFullscreenEndedListener) {
-    autoExitFullscreenVideo.removeEventListener('ended', autoExitFullscreenEndedListener)
-    autoExitFullscreenVideo.removeAttribute('bewly-auto-exit-listener')
-  }
-  autoExitFullscreenEndedListener = null
-  autoExitFullscreenVideo = null
+  releaseAutoExitFullscreenMedia()
 }

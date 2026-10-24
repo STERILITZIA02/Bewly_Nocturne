@@ -1,0 +1,122 @@
+// Truncated text (user-specified, 2026-10-24): text that does not fit has no
+// ellipsis; its end fades out from right to left over a soft eased ramp (the
+// scroll-edge curve, 16% → 48% → 78% → opaque).
+//
+// The element's own overflow drives a registered number through a scroll-driven
+// animation (inline axis for one line, block axis for clamped lines), so there
+// is no observer or JS: text that fits has no active timeline and no fade.
+// Browsers without scroll timelines keep the ellipsis / line clamp.
+//
+// Controls that appear over the end on hover (a more button laid over the
+// text): include `reveal($width)` in the host's hover rule. The fade moves left
+// by that width and stays on even when the text fits, because the controls
+// cover its end. Controls that keep their space in the row need nothing: the
+// text box already ends before them.
+//
+// Clamped lines take their count from `--bew-truncate-lines`, so a modifier
+// changes the count by setting that property. The mask is the element's whole
+// box: no block padding on a clamped element.
+
+@mixin _mask($axis) {
+  --bew-truncate-fade-alpha: calc(1 - max(var(--bew-truncate-fade-on), var(--bew-truncate-fade-cover)));
+  --bew-truncate-fade-size: min(var(--bew-space-10), 40%);
+  --bew-truncate-fade-ramp: linear-gradient(
+    to left,
+    rgb(0 0 0 / var(--bew-truncate-fade-alpha)) var(--bew-truncate-fade-end),
+    rgb(0 0 0 / calc(var(--bew-truncate-fade-alpha) + (1 - var(--bew-truncate-fade-alpha)) * 0.16))
+      calc(var(--bew-truncate-fade-end) + var(--bew-truncate-fade-size) * 0.18),
+    rgb(0 0 0 / calc(var(--bew-truncate-fade-alpha) + (1 - var(--bew-truncate-fade-alpha)) * 0.48))
+      calc(var(--bew-truncate-fade-end) + var(--bew-truncate-fade-size) * 0.45),
+    rgb(0 0 0 / calc(var(--bew-truncate-fade-alpha) + (1 - var(--bew-truncate-fade-alpha)) * 0.78))
+      calc(var(--bew-truncate-fade-end) + var(--bew-truncate-fade-size) * 0.73),
+    #000 calc(var(--bew-truncate-fade-end) + var(--bew-truncate-fade-size))
+  );
+  animation: bew-truncate-fade linear both;
+  animation-timeline: scroll(self #{$axis});
+}
+
+// One line: the end of the line fades.
+@mixin line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  @supports (animation-timeline: scroll()) {
+    text-overflow: clip;
+    @include _mask(inline);
+    mask-image: var(--bew-truncate-fade-ramp);
+  }
+}
+
+// Up to `$count` lines: the end of the last visible line fades.
+@mixin lines($count) {
+  --bew-truncate-lines: #{$count};
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--bew-truncate-lines);
+
+  @supports (animation-timeline: scroll()) {
+    display: block;
+    max-height: calc(var(--bew-truncate-lines) * 1lh);
+    -webkit-line-clamp: unset;
+    @include _mask(block);
+    // Every line above the last stays opaque; the ramp covers only the last.
+    mask-image: linear-gradient(#000, #000), var(--bew-truncate-fade-ramp);
+    mask-position: top, bottom;
+    mask-repeat: no-repeat;
+    mask-size:
+      100% calc(100% - 1lh),
+      100% 1lh;
+  }
+}
+
+// Shows clamped text in full (an expanded description).
+@mixin release {
+  display: block;
+  max-height: none;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  mask-image: none;
+  animation: none;
+}
+
+// On the hovered host: controls `$width` wide now cover the text's end.
+@mixin reveal($width) {
+  --bew-truncate-fade-end: #{$width};
+  --bew-truncate-fade-cover: 1;
+}
+
+// Add to the host's `transition` list so the fade slides with its controls.
+$transition:
+  --bew-truncate-fade-end var(--bew-duration-fast) var(--bew-ease-standard),
+  --bew-truncate-fade-cover var(--bew-duration-fast) var(--bew-ease-standard);
+
+// Global registration: @property only takes effect at document level, which the
+// host stylesheet provides; the keyframes must also exist in the shadow copy.
+@mixin global {
+  @property --bew-truncate-fade-on {
+    syntax: "<number>";
+    inherits: false;
+    initial-value: 0;
+  }
+
+  @property --bew-truncate-fade-cover {
+    syntax: "<number>";
+    inherits: true;
+    initial-value: 0;
+  }
+
+  @property --bew-truncate-fade-end {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+  }
+
+  @keyframes bew-truncate-fade {
+    from,
+    to {
+      --bew-truncate-fade-on: 1;
+    }
+  }
+}

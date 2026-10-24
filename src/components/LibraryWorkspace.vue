@@ -47,7 +47,6 @@ const sidebarHost = useSidebarRail()
   @include sidebarSurface.rail;
   --bew-sidebar-control: var(--bew-fill-1);
   --bew-sidebar-control-hover: var(--bew-fill-2);
-  --bew-sidebar-media-shadow: none;
   position: sticky;
   top: 0;
   display: flex;

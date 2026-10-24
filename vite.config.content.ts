@@ -1,8 +1,9 @@
 import UnoCSS from 'unocss/vite'
 import type { Plugin } from 'vite'
-import { defineConfig } from 'vite'
+import { defineConfig, normalizePath } from 'vite'
 
-import packageJson from './package.json' with { type: 'json' }
+import { VITE_SCRIPT_ENTRIES } from './scripts/buildEntries.ts'
+import { bundleLicenses, licenseBuildEntries } from './scripts/bundleLicenses.ts'
 import { splitContentStyles } from './scripts/contentStyleSplit.ts'
 import { isDev, isSafari, r } from './scripts/utils.ts'
 import { bundlerChecks, sharedConfig } from './vite.config.ts'
@@ -20,11 +21,14 @@ function embedShadowStyles(): Plugin {
     enforce: 'post',
     generateBundle(_options, bundle) {
       const styleAsset = Object.values(bundle).find(output => output.type === 'asset' && output.fileName === 'style.css')
-      const entryChunk = Object.values(bundle).find(output => output.type === 'chunk' && output.fileName === 'index.global.js')
+      // Grouping may move the entry module into startup. Put styles beside the
+      // code that reads them, before that module evaluates its boot constants.
+      const entryChunk = Object.values(bundle).find(output => output.type === 'chunk'
+        && Object.hasOwn(output.modules, normalizePath(r(VITE_SCRIPT_ENTRIES.content))))
       if (!styleAsset || styleAsset.type !== 'asset')
         this.error('Unable to find style.css for Shadow DOM embedding')
       if (!entryChunk || entryChunk.type !== 'chunk')
-        this.error('Unable to find index.global.js for Shadow DOM embedding')
+        this.error('Unable to find content runtime for Shadow DOM embedding')
 
       const styleText = typeof styleAsset.source === 'string'
         ? styleAsset.source
@@ -39,10 +43,12 @@ function embedShadowStyles(): Plugin {
 // bundling the content script using Vite
 export default defineConfig({
   ...sharedConfig,
+  base: './',
   plugins: [
     UnoCSS(),
     ...sharedConfig.plugins!,
     embedShadowStyles(),
+    ...bundleLicenses('content', licenseBuildEntries(isDev)),
   ],
   build: {
     watch: isDev
@@ -50,20 +56,21 @@ export default defineConfig({
       : undefined,
     outDir: r(isSafari ? 'extension-safari/dist/contentScripts' : 'extension/dist/contentScripts'),
     cssCodeSplit: false,
+    modulePreload: false,
     emptyOutDir: false,
     minify: isDev ? false : undefined,
     sourcemap: false, // https://github.com/vitejs/vite-plugin-vue/issues/35
     lib: {
-      entry: r('src/contentScripts/index.ts'),
-      name: packageJson.name,
-      formats: ['iife'],
+      entry: r(VITE_SCRIPT_ENTRIES.content),
+      formats: ['es'],
     },
     rolldownOptions: {
       checks: bundlerChecks,
       output: {
-        entryFileNames: 'index.global.js',
+        entryFileNames: 'runtime.js',
+        chunkFileNames: 'chunks/[name]-[hash].js',
+        codeSplitting: { groups: [{ name: 'startup', tags: ['$initial'] }] },
         assetFileNames: 'style.css',
-        extend: true,
       },
     },
   },

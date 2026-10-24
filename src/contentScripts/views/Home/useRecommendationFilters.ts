@@ -29,7 +29,7 @@ export function useRecommendationFilters(tabState: HomeTabState, isWebRecommenda
   )
 
   const appFilterFunc = useFilter(
-    ['bottom_rcmd_reason'],
+    ['normalized', 'followed'],
     [
       FilterType.filterOutVerticalVideos,
       FilterType.duration,
@@ -39,7 +39,7 @@ export function useRecommendationFilters(tabState: HomeTabState, isWebRecommenda
       FilterType.user,
     ],
     [
-      ['uri'],
+      ['normalized', 'vertical'],
       ['player_args', 'duration'],
       ['cover_left_text_1'],
       ['title'],

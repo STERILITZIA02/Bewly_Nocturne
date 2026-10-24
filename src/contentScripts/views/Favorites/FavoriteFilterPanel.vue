@@ -197,6 +197,7 @@ function clear() {
 </template>
 
 <style lang="scss" scoped>
+@use "../../../styles/truncateFade";
 @use "../../../styles/scrollEdgeFade";
 
 .favorite-filter {
@@ -287,10 +288,8 @@ function clear() {
 }
 
 .favorite-filter__chip-label {
-  overflow: hidden;
   min-width: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .favorite-filter__chip-count {

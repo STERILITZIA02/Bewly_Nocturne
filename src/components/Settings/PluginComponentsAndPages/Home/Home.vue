@@ -3,19 +3,14 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 import draggable from 'vuedraggable'
 
+import Button from '~/components/Button.vue'
 import Input from '~/components/Input.vue'
 import Radio from '~/components/Radio.vue'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
-import { appAuthTokens, gridLayout, settings } from '~/logic'
-import {
-  appAuthorizationState,
-  dismissAppAuthorization,
-  requestAppAuthorization,
-} from '~/logic/appAuthorizationCoordinator'
-import { getRecommendationModeOptions, selectRecommendationMode } from '~/logic/recommendationMode'
-import type { GridLayoutType } from '~/logic/storage'
+import { gridLayout, settings } from '~/logic'
+import { getRecommendationModeOption, getRecommendationModeOptions, selectRecommendationMode } from '~/logic/recommendationMode'
+import type { GridLayoutType, RecommendationModeOption } from '~/logic/storage'
 import { useMainStore } from '~/stores/mainStore'
-import { hasValidAppAuthTokens, revokeAccessKey } from '~/utils/authProvider'
 import { normalizeImportedFilterRules } from '~/utils/filterRules'
 
 import SettingsItem from '../../components/SettingsItem.vue'
@@ -29,6 +24,12 @@ const { t } = useI18n()
 const toast = useToast()
 
 const recommendationModeOptions = computed(() => getRecommendationModeOptions(t))
+const recommendationModeOption = computed({ get: getRecommendationModeOption, set: selectRecommendationMode })
+function setModeVisible(option: RecommendationModeOption, visible: boolean) {
+  settings.value.recommendationModeSwitcherOptions = visible
+    ? [...settings.value.recommendationModeSwitcherOptions, option]
+    : settings.value.recommendationModeSwitcherOptions.filter(value => value !== option)
+}
 const homeGridLayoutOptions = computed<{ label: string, value: GridLayoutType }[]>(() => [
   { label: t('layout_editor.layout_adaptive'), value: 'adaptive' },
   { label: t('layout_editor.layout_two_columns'), value: 'twoColumns' },
@@ -39,21 +40,12 @@ const followingSortOptions = computed(() => [
   { label: t('settings.following_sort_group'), value: 'group' },
 ])
 
-const hasUsableAppAuthorization = computed(() => (
-  appAuthorizationState.value === 'valid'
-  && hasValidAppAuthTokens()
-))
-
 const showStandaloneSearchPage = computed({
   get: () => !settings.value.useSearchPageModeOnHomePage,
   set: (showStandalone: boolean) => {
     settings.value.useSearchPageModeOnHomePage = !showStandalone
   },
 })
-
-function handleAuthorize() {
-  requestAppAuthorization(appAuthTokens.value.accessToken)
-}
 
 function moveHomeTab(page: HomeSubPage, direction: -1 | 1) {
   const items = [...settings.value.homePageTabVisibilityList]
@@ -64,11 +56,6 @@ function moveHomeTab(page: HomeSubPage, direction: -1 | 1) {
   const [item] = items.splice(index, 1)
   items.splice(target, 0, item)
   settings.value.homePageTabVisibilityList = items
-}
-
-function handleRevoke() {
-  revokeAccessKey()
-  dismissAppAuthorization('')
 }
 
 function handleExport(filterType: 'title' | 'user') {
@@ -174,7 +161,7 @@ function handleToggleHomeTab(tab: any) {
 
 <template>
   <div>
-    <SettingsItemGroup :title="$t('settings.group_home_layout')">
+    <SettingsItemGroup data-setting-id="settings.group_home_layout" :title="$t('settings.group_home_layout')">
       <SettingsItem
         setting-id="page.home.gridLayout"
         :title="$t('settings.home_grid_layout')"
@@ -189,16 +176,15 @@ function handleToggleHomeTab(tab: any) {
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.group_recommendation_mode')">
+    <SettingsItemGroup data-setting-id="settings.group_recommendation_mode" :title="$t('settings.group_recommendation_mode')">
       <SettingsItem setting-id="page.home.recommendationMode" :title="$t('settings.recommendation_mode')" right-width="auto">
         <template #desc>
           <p>{{ $t('settings.recommendation_mode_desc') }}</p>
         </template>
         <SettingsSegmentedControl
-          v-model="settings.recommendationMode"
+          v-model="recommendationModeOption"
           :label="$t('settings.recommendation_mode')"
           :options="recommendationModeOptions"
-          @change="selectRecommendationMode"
         />
       </SettingsItem>
 
@@ -210,8 +196,14 @@ function handleToggleHomeTab(tab: any) {
         <Radio v-model="settings.showRecommendationModeSwitcher" />
       </SettingsItem>
 
+      <SettingsItem setting-id="settings.recommendation_mode_visible_options" :title="$t('settings.recommendation_mode_visible_options')" :desc="$t('settings.recommendation_mode_visible_options_desc')" right-width="auto">
+        <div flex="~ col gap-2">
+          <Radio v-for="option in recommendationModeOptions" :key="option.value" :label="option.label" :model-value="settings.recommendationModeSwitcherOptions.includes(option.value)" @update:model-value="setModeVisible(option.value, $event)" />
+        </div>
+      </SettingsItem>
+
       <SettingsItem
-        v-if="settings.recommendationMode === 'webNoCookie'"
+        v-if="settings.recommendationMode === 'webNoCookie'" setting-id="settings.remember_no_cookie_recommendation_state"
         :title="$t('settings.remember_no_cookie_recommendation_state')"
         :desc="$t('settings.remember_no_cookie_recommendation_state_desc')"
         right-width="auto"
@@ -219,49 +211,49 @@ function handleToggleHomeTab(tab: any) {
         <Radio v-model="settings.rememberNoCookieRecommendationState" />
       </SettingsItem>
 
-      <SettingsItem v-if="settings.recommendationMode === 'app'" :title="$t('settings.authorize_app')" right-width="auto">
-        <template #desc>
-          {{ $t('settings.authorize_app_desc') }}
-          <br>
-          <a
-            href="https://github.com/indefined/UserScripts/tree/master/bilibiliHome#%E6%8E%88%E6%9D%83%E8%AF%B4%E6%98%8E" target="_blank" color="$bew-theme-color"
-          >{{ $t('settings.authorize_app_more_info_access_key') }}</a>
-        </template>
-
-        <div w-full>
-          <Button v-if="!hasUsableAppAuthorization" type="primary" center @click="handleAuthorize">
-            {{ $t('settings.btn.authorize') }}...
-          </Button>
-          <Button
-            v-else type="secondary" center style="--b-button-text-color: var(--bew-error-color)"
-            @click="handleRevoke"
-          >
-            {{ $t('settings.btn.revoke') }}
-          </Button>
-        </div>
-      </SettingsItem>
-
-      <SettingsItem :title="$t('settings.auto_switch_recommendation_mode')" :desc="$t('settings.auto_switch_recommendation_mode_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.auto_switch_recommendation_mode" :title="$t('settings.auto_switch_recommendation_mode')" :desc="$t('settings.auto_switch_recommendation_mode_desc')" right-width="auto">
         <Radio v-model="settings.autoSwitchRecommendationMode" />
       </SettingsItem>
 
-      <SettingsItem :title="$t('settings.preserve_for_you_state')" :desc="$t('settings.preserve_for_you_state_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.preserve_for_you_state" :title="$t('settings.preserve_for_you_state')" :desc="$t('settings.preserve_for_you_state_desc')" right-width="auto">
         <Radio v-model="settings.preserveForYouState" />
       </SettingsItem>
     </SettingsItemGroup>
 
+    <SettingsItemGroup data-setting-id="settings.immersive_mode" :title="$t('settings.immersive_mode')">
+      <SettingsItem setting-id="settings.immersive_entry" :title="$t('settings.immersive_entry')" right-width="auto">
+        <Radio v-model="settings.showImmersiveModeEntry" />
+      </SettingsItem>
+      <template v-if="settings.showImmersiveModeEntry">
+        <SettingsItem setting-id="settings.immersive_wheel" :title="$t('settings.immersive_wheel')" right-width="auto">
+          <Radio v-model="settings.immersiveWheelSwitch" />
+        </SettingsItem>
+        <SettingsItem setting-id="settings.immersive_keyboard" :title="$t('settings.immersive_keyboard')" right-width="auto">
+          <Radio v-model="settings.immersiveKeyboardSwitch" />
+        </SettingsItem>
+        <SettingsItem setting-id="settings.immersive_autoplay" :title="$t('settings.immersive_autoplay')" right-width="auto">
+          <Radio v-model="settings.immersiveAutoPlay" />
+        </SettingsItem>
+        <SettingsItem setting-id="settings.immersive_auto_next" :title="$t('settings.immersive_auto_next')" right-width="auto">
+          <Radio v-model="settings.immersiveAutoNext" />
+        </SettingsItem>
+        <SettingsItem setting-id="settings.immersive_preload" :title="$t('settings.immersive_preload')" :desc="$t('settings.immersive_preload_desc')" right-width="auto">
+          <Radio v-model="settings.immersivePreloadNext" />
+        </SettingsItem>
+      </template>
+    </SettingsItemGroup>
     <SettingsItemGroup
-      :title="$t('settings.group_recommendation_filters')"
+      data-setting-id="settings.group_recommendation_filters" :title="$t('settings.group_recommendation_filters')"
       collapsible
       default-collapsed
     >
-      <SettingsItem :title="$t('settings.disable_filters_for_followed_users')" :desc="$t('settings.disable_filters_for_followed_users_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.disable_filters_for_followed_users" :title="$t('settings.disable_filters_for_followed_users')" :desc="$t('settings.disable_filters_for_followed_users_desc')" right-width="auto">
         <Radio v-model="settings.disableFilterForFollowedUser" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.filter_out_vertical_videos')" right-width="auto">
+      <SettingsItem setting-id="settings.filter_out_vertical_videos" :title="$t('settings.filter_out_vertical_videos')" right-width="auto">
         <Radio v-model="settings.filterOutVerticalVideos" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.filter_by_view_count')" :desc="$t('settings.filter_by_view_count_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.filter_by_view_count" :title="$t('settings.filter_by_view_count')" :desc="$t('settings.filter_by_view_count_desc')" right-width="auto">
         <div class="filter-control" :class="{ 'filter-control--enabled': settings.enableFilterByViewCount }" flex="~ justify-end">
           <Input
             v-if="settings.enableFilterByViewCount"
@@ -275,7 +267,7 @@ function handleToggleHomeTab(tab: any) {
           <Radio v-model="settings.enableFilterByViewCount" />
         </div>
       </SettingsItem>
-      <SettingsItem :title="$t('settings.filter_by_like_count')" :desc="$t('settings.filter_by_like_count_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.filter_by_like_count" :title="$t('settings.filter_by_like_count')" :desc="$t('settings.filter_by_like_count_desc')" right-width="auto">
         <div class="filter-control" :class="{ 'filter-control--enabled': settings.enableFilterByLikeCount }" flex="~ justify-end">
           <Input
             v-if="settings.enableFilterByLikeCount"
@@ -289,7 +281,7 @@ function handleToggleHomeTab(tab: any) {
           <Radio v-model="settings.enableFilterByLikeCount" />
         </div>
       </SettingsItem>
-      <SettingsItem :title="$t('settings.filter_by_duration')" :desc="$t('settings.filter_by_duration_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.filter_by_duration" :title="$t('settings.filter_by_duration')" :desc="$t('settings.filter_by_duration_desc')" right-width="auto">
         <div class="filter-control" :class="{ 'filter-control--enabled': settings.enableFilterByDuration }" flex="~ justify-end">
           <Input
             v-if="settings.enableFilterByDuration"
@@ -303,7 +295,7 @@ function handleToggleHomeTab(tab: any) {
           <Radio v-model="settings.enableFilterByDuration" />
         </div>
       </SettingsItem>
-      <SettingsItem :title="$t('settings.filter_by_publish_time')" :desc="$t('settings.filter_by_publish_time_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.filter_by_publish_time" :title="$t('settings.filter_by_publish_time')" :desc="$t('settings.filter_by_publish_time_desc')" right-width="auto">
         <div class="filter-control" :class="{ 'filter-control--enabled': settings.enableFilterByPublishTime }" flex="~ justify-end">
           <Input
             v-if="settings.enableFilterByPublishTime"
@@ -320,7 +312,7 @@ function handleToggleHomeTab(tab: any) {
 
       <div grid="~ lg:gap-4 lg:cols-2 cols-1" lg:border="t-1 $bew-border-color">
         <SettingsItem
-          class="unrestricted-width-settings-item"
+          setting-id="settings.filter_by_title" class="unrestricted-width-settings-item"
           :title="$t('settings.filter_by_title')"
           right-width="auto"
           border="lg:none t-1 $bew-border-color"
@@ -364,7 +356,7 @@ function handleToggleHomeTab(tab: any) {
           </template>
         </SettingsItem>
         <SettingsItem
-          class="unrestricted-width-settings-item"
+          setting-id="settings.filter_by_user" class="unrestricted-width-settings-item"
           :title="$t('settings.filter_by_user')"
           right-width="auto"
           border="lg:none b-1 $bew-border-color"
@@ -411,7 +403,7 @@ function handleToggleHomeTab(tab: any) {
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      :title="$t('settings.group_home_tabs')"
+      data-setting-id="settings.group_home_tabs" :title="$t('settings.group_home_tabs')"
     >
       <SettingsItem
         setting-id="page.home.tabs"
@@ -460,28 +452,25 @@ function handleToggleHomeTab(tab: any) {
           </draggable>
         </template>
       </SettingsItem>
-      <SettingsItem :title="$t('settings.fixed_home_tabs_on_home_page')" right-width="auto">
+      <SettingsItem setting-id="settings.fixed_home_tabs_on_home_page" :title="$t('settings.fixed_home_tabs_on_home_page')" right-width="auto">
         <Radio v-model="settings.fixedHomeTabsOnHomePage" />
       </SettingsItem>
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      :title="$t('settings.group_following')"
+      data-setting-id="settings.group_following" :title="$t('settings.group_following')"
       :desc="$t('settings.group_following_desc')"
       collapsible
       default-collapsed
     >
-      <SettingsItem :title="$t('settings.use_following_new_layout')" :desc="$t('settings.use_following_new_layout_desc')" right-width="auto">
-        <Radio v-model="settings.useFollowingNewLayout" />
-      </SettingsItem>
-      <SettingsItem v-if="settings.useFollowingNewLayout" :title="$t('settings.following_sort')" right-width="auto">
+      <SettingsItem setting-id="settings.following_sort" :title="$t('settings.following_sort')" right-width="auto">
         <SettingsSegmentedControl v-model="settings.followingUploaderSort" :label="$t('settings.following_sort')" :options="followingSortOptions" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.enable_following_inactive_blacklist')" :desc="$t('settings.enable_following_inactive_blacklist_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.enable_following_inactive_blacklist" :title="$t('settings.enable_following_inactive_blacklist')" :desc="$t('settings.enable_following_inactive_blacklist_desc')" right-width="auto">
         <Radio v-model="settings.enableFollowingInactiveBlacklist" />
       </SettingsItem>
       <template v-if="settings.enableFollowingInactiveBlacklist">
-        <SettingsItem :title="$t('settings.following_inactive_days')" :desc="$t('settings.following_inactive_days_desc')" right-width="auto">
+        <SettingsItem setting-id="settings.following_inactive_days" :title="$t('settings.following_inactive_days')" :desc="$t('settings.following_inactive_days_desc')" right-width="auto">
           <Input
             v-model="settings.followingInactiveDays" type="number" :min="1" :max="365"
             w-120px
@@ -492,20 +481,20 @@ function handleToggleHomeTab(tab: any) {
           </Input>
         </SettingsItem>
       </template>
-      <SettingsItem :title="$t('settings.following_tab_show_livestreaming_videos')" right-width="auto">
+      <SettingsItem setting-id="settings.following_tab_show_livestreaming_videos" :title="$t('settings.following_tab_show_livestreaming_videos')" right-width="auto">
         <Radio v-model="settings.followingTabShowLivestreamingVideos" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.following_filter_charging_videos')" :desc="$t('settings.following_filter_charging_videos_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.following_filter_charging_videos" :title="$t('settings.following_filter_charging_videos')" :desc="$t('settings.following_filter_charging_videos_desc')" right-width="auto">
         <Radio v-model="settings.followingFilterChargingVideos" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.following_filter_dynamic_videos')" :desc="$t('settings.following_filter_dynamic_videos_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.following_filter_dynamic_videos" :title="$t('settings.following_filter_dynamic_videos')" :desc="$t('settings.following_filter_dynamic_videos_desc')" right-width="auto">
         <Radio v-model="settings.followingFilterDynamicVideos" />
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.group_search_page_mode')">
+    <SettingsItemGroup data-setting-id="settings.group_search_page_mode" :title="$t('settings.group_search_page_mode')">
       <SettingsItem
-        :title="$t('settings.show_standalone_search_page')"
+        setting-id="settings.show_standalone_search_page" :title="$t('settings.show_standalone_search_page')"
         :desc="$t('settings.show_standalone_search_page_desc')"
         right-width="auto"
       >

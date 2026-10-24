@@ -171,9 +171,40 @@ player_screenshot:
   failed: 截圖失敗
   video_unavailable: 目前影片畫面無法使用
 settings:
-  custom_playback_rate: 自訂倍速
-  apply_playback_rate: 套用
-  playback_rate_unavailable: 目前沒有可用的主播放器
+  page_mode_desc: 選擇原版、Bewly，或分別設定各頁面與頂欄。
+  app_authorized: 已授權
+  settings_data: 設定資料
+  page_mode: 頁面模式
+  app_not_authorized: 未授權或已失效
+  general_preferences: 一般
+  text_autospace_default: 保留瀏覽器預設
+  text_autospace_on: 開啟
+  text_autospace_off: 關閉
+  recommendation_mode_app_single: APP 單列
+  recommendation_mode_app_double: APP 雙列
+  recommendation_mode_visible_options: 快速切換顯示項
+  recommendation_mode_visible_options_desc: 只改變入口顯示，完整選單始終可用；APP 欄數只影響請求設定。
+  resume_from_preview_position: 從預覽位置開啟影片
+  resume_from_preview_position_desc: 僅控制連結中的預覽時間，保留預覽記憶、歷史續播及既有時間參數。
+  show_dock_back_to_top: 顯示 Dock 回頂按鈕
+  show_dock_back_to_top_desc: 僅控制回頂入口，重新整理和復原仍可使用。
+  show_search_identity_switcher: 顯示搜尋身分快速切換
+  show_search_identity_switcher_desc: 在搜尋結果中切換帳號或訪客請求，不登出帳號，保留關鍵字和篩選。
+  search_identity: 搜尋身分
+  search_identity_account: 帳號
+  search_identity_guest: 訪客
+  enable_text_autospace: 中英文自動間距
+  enable_text_autospace_desc: 由支援的瀏覽器為閱讀文字加入中英文視覺間距，不改寫內容；程式碼和編輯器維持原樣。
+  project_license: 專案授權條款
+  third_party_licenses: 第三方相依套件授權
+  licenses_loading: 正在讀取授權資產
+  licenses_failed: 授權資產讀取失敗
+  licenses_incomplete: 授權資訊不完整
+  licenses_entry_missing: 缺少建置入口清單
+  licenses_unknown: 未知
+  licenses_sources: 建置入口
+  licenses_text: 授權原文
+  licenses_summary: 僅列出本次建置最終輸出有貢獻的相依套件；不同版本分別列出。
   comment_reply_batch_pages: 每次載入的回覆頁數
   comment_reply_batch_pages_desc: 只在點擊載入下一批時請求；首次展開與直接選頁各請求一頁，不自動載入整個樓層。
   enable_comment_reply_tree_container: 獨立回覆閱讀區域
@@ -188,8 +219,6 @@ settings:
   video_screenshot_shortcut: 截圖快捷鍵
   video_screenshot_shortcut_desc: 點擊輸入框後按組合鍵；退格鍵清除。預設 Shift+S，隱藏截圖按鈕後仍可使用。
   video_screenshot_shortcut_conflict: 此組合鍵無效或與瀏覽器常用快捷鍵衝突。
-  enable_sidebar_cover_blur: 側欄封面背景
-  enable_sidebar_cover_blur_desc: 收藏與稍後再看的側欄使用模糊封面背景；關閉後使用目前主題的中性表面。
   following_sort: 新版關注列表排序
   following_sort_updated: 按更新時間
   following_sort_group: 按分組
@@ -201,6 +230,7 @@ settings:
   category_navigation: 設定分類導覽
   badge_irreversible: 無法復原
   search:
+    parent_control_hint: '此項受「{setting}」控制。'
     placeholder: 搜尋設定
     no_results: 找不到相關設定
     located: 已定位到此設定
@@ -308,7 +338,6 @@ settings:
     home: 首頁
     moments: 動態頁
     watch_later_page: 稍後觀看
-    favorites: 收藏
     search: 搜尋頁
     playback_page: 播放頁
     messages_page: 訊息頁
@@ -329,15 +358,14 @@ settings:
   group_video_card: 影片卡片
   group_video_card_display: 顯示與預覽
   group_video_card_content: 卡片內容
-  group_video_card_content_desc: 自訂影片卡片上各項資訊與操作的顯示。
+  group_video_card_content_desc: 調整卡片字級與資訊顯示。
   group_video_card_context_menu: 更多選單
-  group_video_card_context_menu_desc: 選擇右鍵選單中直接顯示的選項；關閉的選項收進選單底部的「進階選項」。
+  group_video_card_context_menu_desc: 右鍵或長按卡片可開啟選單。選擇直接顯示的操作，其餘收進「更多操作」。
   video_card_context_menu_region_recommendation: 推薦
   video_card_context_menu_region_opening: 開啟
   video_card_context_menu_region_copying: 複製
   video_card_context_menu_region_user: 使用者
   video_card_context_menu_follow_user: 追蹤或取消追蹤
-  video_card_content_region_stats: 數據
   video_card_content_region_other: 其它
   group_player_components: 播放器組件
   group_player_display_mode: 播放模式
@@ -373,8 +401,7 @@ settings:
   group_recommendation_mode: 「為你推薦」推薦模式
   group_recommendation_filters: 「為你推薦」過濾
   group_following: 正在跟隨
-  group_following_desc: 設定「正在跟隨」頁面的版面、不活躍 UP 主名單、直播內容與影片過濾規則。
-  group_favorites: 收藏
+  group_following_desc: 按 UP 主或分組瀏覽投稿，設定直播內容與影片篩選。右鍵 UP 主或分組可管理分組。
   group_search_page_mode: 搜尋頁模式
   group_home_tabs: 首頁標籤欄
   group_home_layout: 首頁版面
@@ -465,8 +492,7 @@ settings:
 
     這些字型還具有將簡體中文轉換為繁體/繁體中文的能力。
   override_danmaku_font: 覆蓋彈幕字型
-  override_danmaku_font_desc: |
-    設定彈幕字型為你的自訂字型以覆蓋預設值。影片播放器將無法在之後更改彈幕字型。
+  override_danmaku_font_desc: 在推薦或自訂字型模式下，將所選字型套用至彈幕，覆蓋播放器的字型設定。
   remove_the_indent_from_chinese_punctuation: 移除中文標點符號的縮排
   remove_the_indent_from_chinese_punctuation_desc: |
     Bilibili 預設會特別處理中文標點符號以達到左對齊。 如果你正在使用自訂字型，建議移除縮排。
@@ -508,12 +534,6 @@ settings:
   video_card_title_font_size_desc: 控制影片卡片標題的字級。
   video_card_author_font_size: UP 資訊字級
   video_card_author_font_size_desc: 控制標題下方 UP 主與發布時間這一行的字級。
-  video_card_shadow_curve: 陰影漸層曲線
-  video_card_shadow_curve_desc: 自訂影片卡片底部陰影的漸層效果
-  video_card_shadow_curve_hint: 拖曳線條建立控制點，右鍵刪除
-  video_card_shadow_height: 陰影高度
-  video_card_shadow_height_desc: 調整陰影覆蓋封面的高度比例
-  video_card_shadow_reset: 重設陰影設定
   font_size_option:
     xs: 特小
     sm: 小
@@ -560,22 +580,17 @@ settings:
   only_cover_video_preview: 僅封面影片預覽
   show_video_card_author_name: 顯示使用者暱稱
   show_video_card_publish_time: 顯示發布時間
-  show_video_card_view_count: 顯示播放量
-  show_video_card_danmaku_count: 顯示彈幕數
-  show_video_card_like_count: 顯示按讚數
-  show_video_card_duration: 顯示影片時長
-  show_video_card_watch_later: 顯示稍後再看按鈕
-  show_video_watched_badge: 記錄並顯示已觀看
+  show_video_watched_badge: 在動態影片中顯示觀看狀態
   show_bewly_or_bili_page_switcher: 顯示頁面模式切換按鈕
-  filter_articles_in_moments: 過濾專欄
-  filter_articles_in_moments_desc: 在動態列表中過濾專欄內容，僅顯示影片
+  filter_articles_in_moments: 頂欄動態中隱藏專欄
+  filter_articles_in_moments_desc: 只影響頂欄的動態選單。
   top_bar_icon_badges_opt:
     number: 數字
     dot: 圓點
     none: 不顯示
   show_bcoin_receive_reminder: 大會員B幣領取提醒
   auto_receive_bcoin_coupon: 大會員B幣自動領取
-  auto_receive_bcoin_coupon_desc: 啟用後，當檢測到有未領取的B幣券時將自動領取
+  auto_receive_bcoin_coupon_desc: 開啟領取提醒後，偵測到未領取的 B 幣券時自動領取。
   auto_receive_bcoin_coupon_success: B幣券自動領取成功
   auto_receive_bcoin_coupon_failed: 'B幣券自動領取失敗：{message}'
   auto_receive_bcoin_coupon_error: B幣券自動領取異常，請稍後再試
@@ -587,7 +602,7 @@ settings:
   always_use_dock: 總是使用 Dock
   always_use_dock_desc: 啟用後，Dock 將始終顯示，側邊欄將隱藏。
   dock_collapse_mode: Dock 收合方式
-  dock_collapse_mode_desc: 控制是否顯示收合按鈕，或在指標離開後自動收合為懸浮圓球。
+  dock_collapse_mode_desc: 顯示收起按鈕、隱藏入口，或在游標離開後自動收起。
   dock_collapse_mode_button: 顯示收合按鈕
   dock_collapse_mode_hidden: 不顯示收合按鈕
   dock_collapse_mode_automatic: 無按鈕，離開後自動收合
@@ -624,7 +639,7 @@ settings:
   enable_dark_mode_tint: 深色背景色調
   enable_dark_mode_tint_desc: 預設使用無色調的中性灰。開啟後使用下方的背景色調；關閉會保留已選顏色。
   enable_oled_dark_mode: OLED 純黑模式
-  enable_oled_dark_mode_desc: 僅在實際處於深色模式時生效；網頁底色會變為純黑，卡片和浮層仍保留層次。
+  enable_oled_dark_mode_desc: 深色模式下使用純黑底色，卡片和浮層保留層次。影片播放頁仍使用一般深色。
   gradient_theme_color_background: 在深色模式下使用中性漸變
   gradient_theme_color_background_desc: 同時套用於網頁背景和頂部列，不使用主題色。
   logo_color: Logo 顏色
@@ -638,8 +653,8 @@ settings:
   choose_search_bar_focused_character: 選擇搜尋列聚焦時出現的人物
   show_hot_search_in_top_bar: 顯示熱門搜尋
   show_hot_search_in_top_bar_desc: 搜尋列聚焦時顯示熱門搜尋列表
-  show_hot_search_in_search_page: 在搜尋頁顯示熱門搜尋
-  show_hot_search_in_search_page_desc: 在搜尋頁面顯示熱門搜尋排行榜
+  show_hot_search_in_search_page: 搜尋框聚焦時顯示熱搜
+  show_hot_search_in_search_page_desc: 適用於頂欄和獨立搜尋頁的搜尋框。
   show_search_recommendation: 顯示搜尋推薦
   show_search_recommendation_desc: 在搜尋框中顯示推薦的搜尋詞作為佔位符，空白輸入時按回車將搜尋該推薦詞
   enable_search_history: 啟用搜尋歷史
@@ -648,10 +663,23 @@ settings:
   depersonalize_search_results_desc: 啟用後，搜尋結果請求不攜帶登入 Cookie。
   recommendation_mode: 推薦模式
   show_recommendation_mode_switcher: 顯示推薦模式快速切換按鈕組
-  show_recommendation_mode_switcher_desc: 在首頁「為你推薦」的分頁列旁顯示 Web、無 Cookie 和 App 推薦模式按鈕組。
+  immersive_mode: 沉浸式推薦
+  immersive_entry: 顯示沉浸式推薦入口
+  immersive_wheel: 在畫面上滾輪切換影片
+  immersive_keyboard: 方向鍵 / W S / PageUp PageDown 切換影片
+  immersive_autoplay: 切換後自動播放
+  immersive_auto_next: 播完自動進入下一則推薦
+  immersive_preload: 預先載入下一則
+  immersive_preload_desc: 切換前準備下一則，僅保留一則。準備頁不播放，也不計入擴充功能觀看紀錄。
+  immersive_previous: 上一則推薦
+  immersive_next: 下一則推薦
+  immersive_recommendations: 推薦側欄
+  immersive_current: 正在播放
+  immersive_native_pending: 版面仍在準備，可直接操作原生播放器或退出後重試。
+  show_recommendation_mode_switcher_desc: 在首頁「為你推薦」的分頁列旁顯示 Web、Web 訪客、APP 單列與 APP 雙列的快速入口。
   recommendation_mode_desc: |
-    Web：普通網頁端推薦模式。無 Cookie：請求首頁推薦時不攜帶 Cookie。App：手機端推薦模式，需先授權 access key。
-  recommendation_mode_web_no_cookie: 無 Cookie
+    Web：網頁端推薦。Web 訪客：請求時不攜帶 Cookie。APP 單列 / 雙列：兩種 APP 介面請求設定，需先授權，不改變 Nocturne 桌面網格欄數。
+  recommendation_mode_web_no_cookie: Web 訪客
   remember_no_cookie_recommendation_state: 減少無 Cookie 推薦重複
   remember_no_cookie_recommendation_state_desc: 重新整理頁面後延續推薦刷新進度，並向推薦接口帶上最近曝光記錄，以減少重複推薦。僅無 Cookie 模式生效。
   auto_switch_recommendation_mode: 自動切換推薦模式
@@ -659,11 +687,8 @@ settings:
     當手機端推薦失敗時自動切換至網頁模式。
   app_recommendation_auto_switched_to_web: App 推薦資料載入失敗，已自動切換至 Web 模式
   app_recommendation_failed: App 推薦資料載入失敗，請手動切換至 Web 模式或稍後再試
-  authorize_app: 授權 BewlyBewly 使用 access key
-  authorize_app_desc: >
-    授權使用後能在首頁推送 bilibili 手機端推介演算法的影片，授權金鑰的有效期約為一個月，過了有效期後，請記得重新取得授權以取得 access
-    key。
-  authorize_app_more_info_access_key: 關於 access key
+  authorize_app: APP 授權
+  authorize_app_desc: 用於 APP 推薦及回饋。使用時自動更新授權，失效後需重新授權。可隨時撤銷。
   app_authorization_success: APP 推薦授權成功
   scan_qrcode_desc: 使用 Bilibili 手機應用程式掃描這個行動條碼，以授權取得 access key。
   disable_filters_for_followed_users: 正在跟隨的使用者不受過濾條件限制
@@ -671,16 +696,16 @@ settings:
     如果啟用此選項，正在跟隨的使用者不受過濾條件限制。
   filter_out_vertical_videos: 過濾直式影片（僅在 app 推薦模式下有效）
   filter_by_view_count: 依觀看次數篩選
-  filter_by_view_count_desc: 篩選掉觀看次數少於你設定的影片。
+  filter_by_view_count_desc: 只保留播放量大於設定值的影片。
   filter_by_view_count_unit: 次
   filter_by_like_count: 依按讚數篩選
-  filter_by_like_count_desc: 篩選掉按讚數少於你設定的影片。
+  filter_by_like_count_desc: Web 與 Web 訪客推薦：只保留按讚數大於設定值的影片。
   filter_by_like_count_unit: 次
   filter_by_duration: 依影片長度篩選
-  filter_by_duration_desc: 篩選掉時長少於你設定的影片。
+  filter_by_duration_desc: 只保留時長大於設定值的影片。
   filter_by_duration_unit: 秒
   filter_by_publish_time: 依發布時間篩選
-  filter_by_publish_time_desc: 篩選掉發布時間超過設定天數的影片（僅在 Web 推薦模式下有效，最少 7 天）。
+  filter_by_publish_time_desc: Web 與 Web 訪客推薦：保留最近設定天數內的影片，最少 7 天。
   filter_by_publish_time_unit: 天
   filter_item_already_exist: 這個篩選項目已經存在！
   filter_type_title: 標題
@@ -704,8 +729,6 @@ settings:
   following_filter_charging_videos_desc: 啟用後，在「正在跟隨」頁面中將隱藏需要充電才能觀看的付費影片
   following_filter_dynamic_videos: 過濾動態影片
   following_filter_dynamic_videos_desc: 啟用後，在「正在跟隨」頁面中將隱藏標記為動態影片的內容
-  use_following_new_layout: 使用正在跟隨新版面
-  use_following_new_layout_desc: 左側顯示關注的 UP 主列表，右側顯示影片流
   collected_season_play_all_mode: 訂閱收藏「播放全部」起播位置
   collected_season_play_all_mode_desc: 適用於訂閱的公開收藏夾與合集。預設從開頭播放；「最新」在公開夾中指最近收藏的影片，在合集中保留最新一期語意。找不到上次觀看或列表不完整時使用原生入口，不改變列表順序與連播方向。
   collected_season_play_all_mode_beginning: 從頭播放
@@ -713,10 +736,10 @@ settings:
   collected_season_play_all_mode_last_watched: 上次觀看
   enable_version_reminder: 新版本提醒
   enable_version_reminder_desc: 在外掛首頁提醒尚未確認的新版本；每個版本只提醒一次。
-  enable_following_inactive_blacklist: 啟用不活躍名單
-  enable_following_inactive_blacklist_desc: 當UP主超過指定天數未更新或無投稿時，將自動移至不活躍名單。在ALL視圖中出現更新或點擊該UP主時會自動移出不活躍名單。
-  following_inactive_days: UP 主不活躍天數
-  following_inactive_days_desc: 套用『使用正在關注新佈局』後該功能生效。與自主新增的使用者黑名單無關，僅更改『正在關注』頁面推薦。
+  enable_following_inactive_blacklist: 將較少活動的 UP 主排後
+  enable_following_inactive_blacklist_desc: 依本地已知活動時間排序。只使用已載入的紀錄。
+  following_inactive_days: 活動時間間隔
+  following_inactive_days_desc: 依本地已知時間判斷；沒有投稿紀錄時使用關注時間。
   preserve_for_you_state: 留存為你推薦切換前狀態
   preserve_for_you_state_desc: 當從 Dock 列切換到其他頁面時，留存為你推薦頁面的瀏覽狀態，返回時保持切換前的內容
   show_standalone_search_page: 單獨顯示搜尋頁
@@ -776,10 +799,8 @@ settings:
   remember_video_aspect_ratio_desc: 啟用後，播放器會記住你上次選擇的影片比例，並在下次打開影片時自動套用
   auto_exit_fullscreen_on_end: 全螢幕/網頁全螢幕播放完畢後自動退出
   auto_exit_fullscreen_on_end_desc: 啟用後，當影片播放結束且沒有單集循環、隨機播放、自動連播等後續播放行為時，會自動退出全螢幕模式
-  auto_exit_fullscreen_exclude_auto_play: 自動連播下除外
-  auto_exit_fullscreen_exclude_auto_play_desc: 啟用後，在自動連播下播放結束時不會自動退出全螢幕，方便連續觀看
   use_bilibili_default_auto_play: 使用 Bilibili 預設自動播放行為
-  use_bilibili_default_auto_play_desc: 啟用後由 Bilibili 決定播放結束行為，不套用下方依影片類型設定。
+  use_bilibili_default_auto_play_desc: 由 Bilibili 決定播放結束行為，不使用下方依類型設定。正在使用的自訂播放順序優先。
   auto_play_watch_later: 稍後觀看
   auto_play_mode_default: Bilibili 預設
   auto_play_mode_auto_play: 自動連播
@@ -899,7 +920,7 @@ settings:
   visibility: 顯示
   group_search_results: 搜尋結果
   use_plugin_search_results_page: 使用插件搜尋結果頁
-  use_plugin_search_results_page_desc: 啟用後，搜尋時將使用插件內置的搜尋結果頁面，支持分類篩選等功能
+  use_plugin_search_results_page_desc: 使用 Bewly 搜尋結果頁。受頁面模式控制；自訂模式下需將搜尋頁設為 Bewly。
   search_results_pagination_mode: 搜尋結果分頁模式
   search_results_pagination_mode_desc: 選擇搜尋結果的展示方式：滾動自動加載或翻頁
 auth:
@@ -1374,6 +1395,7 @@ moments:
   fit_window: 適應視窗
   rotate_clockwise: 順時針旋轉
 moment_card:
+  video_post: 影片投稿
   copy_link: 複製動態連結
   link_copied: 連結已複製
   delete: 刪除動態
@@ -1503,6 +1525,7 @@ video_card:
     verify: 收藏狀態尚未確認，請重新整理
     empty: 暫無收藏夾
   operation:
+    open_in_pip_window: 子母畫面視窗開啟
     favorite: 收藏到收藏夾
     not_interested: 不感興趣
     not_interested_uploader: 不想看此 UP 主
@@ -1519,7 +1542,7 @@ video_card:
     unfollow_user: 取消關注
     block_user: 拉黑用戶
     more_options: 更多操作
-    advanced_options: 進階選項
+    advanced_options: 更多操作
   follow_user_confirm:
     title: 確認關注用戶
     message: 確定要關注 {name} 嗎？

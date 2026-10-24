@@ -3,13 +3,18 @@ import browser from 'webextension-polyfill'
 import { LanguageType } from '~/enums/appEnums'
 import { settings } from '~/logic'
 
-import { i18n } from './i18n'
+import { i18n, loadLocaleMessages } from './i18n'
 import { normalizeInterfaceLanguageTag, resolveInterfaceLanguage } from './interfaceLanguagePolicy'
 
 const supportedLanguages = new Set<string>(Object.values(LanguageType))
 let languageResolution: Promise<LanguageType> | undefined
+let languageRevision = 0
 
-export function applyInterfaceLanguage(language: LanguageType): void {
+export async function applyInterfaceLanguage(language: LanguageType): Promise<void> {
+  const revision = ++languageRevision
+  await loadLocaleMessages(language)
+  if (revision !== languageRevision)
+    return
   i18n.global.locale.value = language
   if (typeof document === 'undefined')
     return
@@ -27,7 +32,7 @@ export async function ensureInterfaceLanguage(): Promise<LanguageType> {
   const configuredLanguage = settings.value.language
   if (supportedLanguages.has(configuredLanguage)) {
     const language = configuredLanguage as LanguageType
-    applyInterfaceLanguage(language)
+    await applyInterfaceLanguage(language)
     return language
   }
 
@@ -56,7 +61,7 @@ export async function ensureInterfaceLanguage(): Promise<LanguageType> {
       : detectedLanguage
     if (!supportedLanguages.has(currentLanguage) && settings.initializationState.value === 'loaded')
       settings.value.language = language
-    applyInterfaceLanguage(language)
+    await applyInterfaceLanguage(language)
     return language
   })()
 

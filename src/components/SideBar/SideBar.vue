@@ -2,6 +2,7 @@
 import { Icon } from '@iconify/vue'
 import { useMediaQuery, useMutationObserver } from '@vueuse/core'
 
+import Button from '~/components/Button.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'

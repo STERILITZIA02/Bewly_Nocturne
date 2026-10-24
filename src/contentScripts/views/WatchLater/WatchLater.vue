@@ -3,6 +3,9 @@ import { useDateFormat, useResizeObserver } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import ALink from '~/components/ALink.vue'
+import Button from '~/components/Button.vue'
+import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
@@ -10,7 +13,9 @@ import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryVideoCardSkeleton from '~/components/LibraryVideoCardSkeleton.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
+import Progress from '~/components/Progress.vue'
 import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
+import Tooltip from '~/components/Tooltip.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import OpenTabsDialog from '~/components/WatchLater/OpenTabsDialog.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -800,8 +805,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                         class="watch-later-list-card__action keep-two-lines"
                         :href="getWatchLaterPlaybackUrl(item)"
                         type="videoCard"
-                        overflow="hidden"
-                        un-text="lg overflow-ellipsis"
+                        un-text="lg"
                       >
                         {{ item.title }}
                       </ALink>

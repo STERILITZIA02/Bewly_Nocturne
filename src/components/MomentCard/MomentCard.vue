@@ -1268,6 +1268,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/truncateFade";
 @use "../../styles/contentCard";
 @use "../../styles/breakpoints";
 @use "../../styles/momentDisclosure";
@@ -1372,8 +1373,13 @@ $tone-transition:
   --bew-hover-bg: color-mix(in srgb, var(--moment-tone-fg) 8%, transparent);
   --bew-selected-bg: color-mix(in srgb, var(--moment-tone-fg) 12%, transparent);
   --bew-theme-foreground: var(--moment-tone-fg);
-  --bew-glass-tint: color-mix(in srgb, var(--moment-tone-fg) 10%, var(--moment-tone));
-  --bew-glass-tint-solid: var(--bew-glass-tint);
+  // Glass stays glass: the solid tint takes the tone, and the glass tint is it
+  // at the global glass opacity, as the shared tokens are built. Inherited
+  // tints were resolved against the page's solid tint, so all four are set.
+  --bew-glass-tint-solid: color-mix(in srgb, var(--moment-tone-fg) 10%, var(--moment-tone));
+  --bew-glass-tint-solid-hover: color-mix(in srgb, var(--moment-tone-fg) 7%, var(--bew-glass-tint-solid));
+  --bew-glass-tint: rgb(from var(--bew-glass-tint-solid) r g b / var(--bew-content-opacity));
+  --bew-glass-tint-hover: rgb(from var(--bew-glass-tint-solid-hover) r g b / var(--bew-content-opacity));
   --bew-glass-border-color: var(--bew-surface-border-color);
   color: var(--bew-text-1);
   color-scheme: var(--moment-tone-scheme);
@@ -1479,7 +1485,7 @@ $tone-transition:
 
 .moment-card--text .moment-card__desc {
   flex: 1 1 auto;
-  -webkit-line-clamp: 10;
+  --bew-truncate-lines: 10;
 }
 
 .moment-card__title {
@@ -1502,13 +1508,10 @@ $tone-transition:
 }
 
 .moment-card__desc {
-  display: -webkit-box;
   margin: 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
   white-space: pre-wrap;
   word-break: break-word;
+  @include truncateFade.lines(4);
 }
 
 .moment-card__footer {
@@ -1571,9 +1574,7 @@ $tone-transition:
 .moment-card__additional-main strong,
 .moment-card__additional-main small {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .moment-card__additional-main small {
@@ -1708,9 +1709,7 @@ $tone-transition:
 
 .moment-card__identity strong,
 .moment-card__identity small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .moment-card__identity strong {
@@ -1863,17 +1862,12 @@ $tone-transition:
 .moment-card__main--video .moment-card__desc {
   min-height: 0;
   flex: 1 1 auto;
-  -webkit-line-clamp: var(--moment-card-description-lines, 3);
-  text-overflow: ellipsis;
+  --bew-truncate-lines: var(--moment-card-description-lines, 3);
 }
 
 .moment-card__main--video:not(.moment-card__main--live) .moment-card__title {
-  display: -webkit-box;
   flex: 0 0 auto;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  text-overflow: ellipsis;
+  @include truncateFade.lines(2);
 }
 
 .moment-card--text .moment-card__body {
@@ -1882,7 +1876,7 @@ $tone-transition:
 
 .moment-card--text .moment-card__desc,
 .moment-card--forward-video .moment-card__desc {
-  -webkit-line-clamp: var(--moment-card-description-lines, 7);
+  --bew-truncate-lines: var(--moment-card-description-lines, 7);
 }
 
 .moment-card--forward-draw .moment-card__body {
@@ -1906,21 +1900,18 @@ $tone-transition:
   font-size: var(--bew-font-size-body);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-body);
-  -webkit-line-clamp: var(--moment-card-description-lines, 7);
+  --bew-truncate-lines: var(--moment-card-description-lines, 7);
 }
 
 .moment-card__desc.is-expanded:not([data-description-measure-collapsed]) {
-  display: block;
-  overflow: visible;
-  -webkit-line-clamp: unset;
-  text-overflow: clip;
+  @include truncateFade.release;
 }
 
 .moment-card__desc--inherited {
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-  -webkit-line-clamp: 2;
+  --bew-truncate-lines: 2;
 }
 
 .moment-card__description-toggle {
@@ -2087,23 +2078,17 @@ $tone-transition:
 }
 
 .moment-card__quote-title {
-  display: -webkit-box;
   margin: 0;
-  overflow: hidden;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
   line-height: var(--bew-line-height-title);
   text-decoration: none;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  @include truncateFade.lines(2);
 }
 
 .moment-card__quote-text {
-  display: -webkit-box;
   margin: 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  @include truncateFade.lines(2);
 }
 
 .moment-card__quote-meta {
@@ -2111,11 +2096,9 @@ $tone-transition:
   min-width: 0;
   align-items: center;
   gap: var(--bew-space-1);
-  overflow: hidden;
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2180,9 +2163,7 @@ $tone-transition:
 .moment-card__hot-comment-content {
   display: block;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateFade.line;
 }
 
 .moment-card__footer {

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
 
+import ALink from '~/components/ALink.vue'
 import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useUserRelations } from '~/composables/useUserRelations'
@@ -160,7 +161,7 @@ provide('getVideoType', () => props.type!)
       rounded-inherit
     >
       <component
-        :is="coverSkeleton ? 'div' : 'ALink'"
+        :is="coverSkeleton ? 'div' : ALink"
         :style="{ display: horizontal ? 'flex' : 'block', gap: horizontal ? 'var(--bew-card-inset)' : '0' }"
         v-bind="coverSkeleton ? {} : {
           href: logic.videoUrl.value,

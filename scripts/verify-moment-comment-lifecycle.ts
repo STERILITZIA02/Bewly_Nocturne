@@ -12,6 +12,7 @@ import * as commentTree from '../src/utils/commentTree'
 import * as sessions from '../src/utils/momentCommentSession'
 import * as targets from '../src/utils/momentCommentTarget'
 import * as threads from '../src/utils/momentCommentThread'
+import { globalComponentFixture } from './sourceModuleHarness'
 
 interface HostNode {
   type: string
@@ -174,6 +175,11 @@ export async function verifyMomentCommentLifecycle() {
     const exports: Record<string, any> = {}
     const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: false } }).outputText
     vm.runInNewContext(code, { exports, Error, AbortController, document: { hidden: false, addEventListener() {}, removeEventListener() {} }, require: (name: string) => {
+      if (!(name in mockModules)) {
+        const fixture = globalComponentFixture(name, vue)
+        if (fixture)
+          return fixture
+      }
       assert.ok(name in mockModules, `Unexpected module: ${name}`)
       return mockModules[name]
     } })

@@ -1,9 +1,11 @@
 // 由于是浏览器环境，所以引入的ts不能使用webextension-polyfill相关api，包含获取本地Storage，获取的是网页的localStorage
+import { isContentScriptTargetUrl } from '~/constants/contentScript'
 import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } from '~/constants/globalEvents'
 import { createPageBridgeChannelId, getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { setupLocalLoudnessBridge } from '~/inject/audio/localLoudnessBridge'
 import { COMMENT_SPINNER_RING_CSS } from '~/inject/commentLoadingRing'
 import { clearMissingCommentParents, isMissingCommentParentMutationNode, MISSING_COMMENT_PARENT_CSS, MISSING_COMMENT_PARENT_SELECTOR, syncMissingCommentParents } from '~/inject/commentMissingParents'
+import { moveCommentReplyParts } from '~/inject/commentReplyDomOrder'
 import { getCommentReplyBranchPath, getCommentReplyBranchToggleY } from '~/inject/commentReplyGeometry'
 import { patchCommentReplyInteraction } from '~/inject/commentReplyInteraction'
 import { createCommentReplyPaginationController } from '~/inject/commentReplyPagination'
@@ -12,6 +14,7 @@ import { createCommentReplyReadingController, getCommentReplyGuideCoordinates } 
 import { updateCommentSendButton } from '~/inject/commentSendButton'
 import { sortPlaybackDanmakuListBySender } from '~/inject/danmakuSenderOrder'
 import { EXTERNAL_COMPOSER_COMMENT_BOX_CSS, EXTERNAL_COMPOSER_HEADER_CSS, insertExternalComposerReply, patchExternalComposerReply } from '~/inject/externalCommentComposer'
+import { setupImmersiveMediaGate } from '~/inject/immersiveMediaGate'
 import { syncNativeCommentContinuation } from '~/inject/nativeCommentContinuation'
 import { wakeNativeCommentLists } from '~/inject/nativeCommentWake'
 import { patchNativeUserProfile } from '~/inject/nativeUserProfile'
@@ -29,6 +32,14 @@ import { buildCommentTree } from '~/utils/commentTree'
 import { getUserID, isElectron } from '~/utils/main'
 import type { PageSettingsPayload } from '~/utils/pageSettingsProtocol'
 import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
+import { COMMENT_TEXT_AUTOSPACE_CSS } from '~/utils/textAutospace'
+
+const pageScriptGlobal = globalThis as typeof globalThis & {
+  __BEWLYCAT_PAGE_SCRIPT_INITIALIZED__?: boolean
+}
+const shouldInitializePageScript = !pageScriptGlobal.__BEWLYCAT_PAGE_SCRIPT_INITIALIZED__
+  && isContentScriptTargetUrl(document.URL)
+  && !isConfirmedLiveEmbeddedFrame()
 
 // 存储当前设置状态
 let currentSettings: PageSettingsPayload | null = null
@@ -36,25 +47,21 @@ let settingsReady = false
 let preventMobileRedirectEnabled = false
 let resolveSettingsReady: (() => void) | null = null
 const pageBridgeChannelId = createPageBridgeChannelId()
-const settingsReadyPromise = new Promise<void>((resolve) => {
-  let timeoutId: number | undefined
-  const finish = () => {
-    if (timeoutId !== undefined)
-      window.clearTimeout(timeoutId)
-    resolveSettingsReady = null
-    resolve()
-  }
-  resolveSettingsReady = finish
-  timeoutId = window.setTimeout(finish, 1500)
-})
+const settingsReadyPromise = shouldInitializePageScript
+  ? new Promise<void>((resolve) => {
+      let timeoutId: number | undefined
+      const finish = () => {
+        if (timeoutId !== undefined)
+          window.clearTimeout(timeoutId)
+        resolveSettingsReady = null
+        resolve()
+      }
+      resolveSettingsReady = finish
+      timeoutId = window.setTimeout(finish, 1500)
+    })
+  : Promise.resolve()
 
 const CLEAN_SHARE_WRITE_TEXT = Symbol.for('bewly-nocturne.clean-share-write-text')
-
-const pageScriptGlobal = globalThis as typeof globalThis & {
-  __BEWLYCAT_PAGE_SCRIPT_INITIALIZED__?: boolean
-}
-const shouldInitializePageScript = !pageScriptGlobal.__BEWLYCAT_PAGE_SCRIPT_INITIALIZED__
-  && !isConfirmedLiveEmbeddedFrame()
 
 if (shouldInitializePageScript)
   pageScriptGlobal.__BEWLYCAT_PAGE_SCRIPT_INITIALIZED__ = true
@@ -64,6 +71,7 @@ if (isElectronEnv) {
   console.warn('[Bewly Nocturne] Detected Electron environment, extension disabled.')
 }
 else if (shouldInitializePageScript) {
+  setupImmersiveMediaGate(pageBridgeChannelId)
   setupVideoMetadataBridge(pageBridgeChannelId)
   // Audio is independent of comment renderers and remains dormant until opted in.
   let loudness: ReturnType<typeof setupLocalLoudnessBridge> | undefined
@@ -203,6 +211,7 @@ else if (shouldInitializePageScript) {
     resizeObserver?: ResizeObserver
     observedReplyContainer?: HTMLElement
     replyContainerMutationObserver?: MutationObserver
+    processReplyMutations?: (records: MutationRecord[]) => void
     imageLoadAbort?: AbortController
     imageLoadListeners?: WeakSet<HTMLImageElement>
     layoutUpdateRaf?: number
@@ -538,7 +547,6 @@ else if (shouldInitializePageScript) {
         :host([data-bewly-comment-reply-tree]) #expander-contents > :is(bili-comment-reply-renderer, bili-comment-renderer, ${MISSING_COMMENT_PARENT_SELECTOR})[data-bewly-comment-reply-depth] {
           box-sizing: border-box;
           display: block;
-          order: var(--bew-comment-reply-order, 0);
           padding-inline-start: var(--bew-comment-reply-indent, 0px);
           width: 100%;
         }
@@ -891,6 +899,7 @@ else if (shouldInitializePageScript) {
     enhance: (component: any) => void,
     options?: {
       afterUpdate?: (component: any) => void
+      afterNativeUpdate?: (component: any) => void
       beforeUpdate?: (component: any) => void
       silent?: boolean
     },
@@ -971,6 +980,7 @@ else if (shouldInitializePageScript) {
       }
       const result = Reflect.apply(boundOriginal, this, updateArgs)
       try {
+        options?.afterNativeUpdate?.(this)
         scheduleEnhance(this)
       }
       catch (error) {
@@ -1274,6 +1284,7 @@ else if (shouldInitializePageScript) {
     commentReplyTreeEpochs.set(component, (commentReplyTreeEpochs.get(component) ?? 0) + 1)
     const state = commentReplyTreeStates.get(component)
     if (state) {
+      restoreCommentReplyNativeOrder(component)
       disconnectCommentReplyTreeResizeObserver(state)
       state.replyMetaByRpid.clear()
       state.collapsedNodeKeys.clear()
@@ -1354,6 +1365,7 @@ else if (shouldInitializePageScript) {
     state.renderedTree = undefined
     state.replyContainerMutationObserver?.disconnect()
     state.replyContainerMutationObserver = undefined
+    state.processReplyMutations = undefined
     state.observedReplyContainer = undefined
     state.imageLoadAbort?.abort()
     state.imageLoadAbort = undefined
@@ -1471,9 +1483,9 @@ else if (shouldInitializePageScript) {
     // 没有按剩余回复重新绘制。
     if (state.observedReplyContainer !== replyContainer || !state.replyContainerMutationObserver) {
       state.replyContainerMutationObserver?.disconnect()
-      const observer = new MutationObserver((mutations) => {
+      const process = (mutations: MutationRecord[]) => {
         if (!component?.isConnected) {
-          observer.disconnect()
+          state.replyContainerMutationObserver?.disconnect()
           return
         }
 
@@ -1495,10 +1507,12 @@ else if (shouldInitializePageScript) {
         })
         if (hasExternalChildListMutation)
           scheduleCommentReplyTreeLayoutUpdate(component, 'topology')
-      })
+      }
+      const observer = new MutationObserver(process)
       observer.observe(replyContainer, { childList: true })
       state.observedReplyContainer = replyContainer
       state.replyContainerMutationObserver = observer
+      state.processReplyMutations = process
     }
 
     // 每次更新都补一次图片监听，避免图片/嵌套 shadow 在首次更新后才挂载时漏监听。
@@ -1537,6 +1551,19 @@ else if (shouldInitializePageScript) {
       state.originalOrderByRenderer.set(renderer, originalOrder)
     }
     return originalOrder
+  }
+
+  function restoreCommentReplyNativeOrder(component: any) {
+    const state = commentReplyTreeStates.get(component)
+    const container = component.shadowRoot?.querySelector('#expander-contents') as HTMLElement | undefined
+    if (!state?.enabled || !container)
+      return
+    clearMissingCommentParents(container)
+    const replies = Array.from(container.children).filter(isCommentReplyRenderer)
+    const order = [...replies].sort((a, b) => getCommentReplyOriginalOrder(state, a) - getCommentReplyOriginalOrder(state, b))
+    const result = moveCommentReplyParts(container, replies, order, state.replyContainerMutationObserver)
+    if (result.external.length)
+      state.processReplyMutations?.(result.external)
   }
 
   function getCommentReplyCtime(replyItem: any): number | null {
@@ -2738,6 +2765,7 @@ else if (shouldInitializePageScript) {
     component.toggleAttribute('data-bewly-comment-reply-tree', enabled)
 
     if (!enabled) {
+      restoreCommentReplyNativeOrder(component)
       disconnectCommentReplyTreeResizeObserver(state)
       state.topologyKey = undefined
       state.renderedTree = undefined
@@ -2799,13 +2827,15 @@ else if (shouldInitializePageScript) {
     const indentStep = getCommentReplyTreeIndentStep(replyContainer)
     const depthLimit = getCommentReplyTreeDepthLimit(replyContainer, indentStep)
     component.style.setProperty('--bew-comment-reply-indent-step', `${indentStep}px`)
-    orderedNodes.forEach(({ depth, node }, visualOrder) => {
+    orderedNodes.forEach(({ depth, node }) => {
       const visualDepth = Math.min(depth, depthLimit)
       node.renderer.dataset.bewlyCommentReplyDepth = String(visualDepth)
       node.renderer.style.setProperty('--bew-comment-reply-indent', getCommentReplyIndent(visualDepth))
-      node.renderer.style.setProperty('--bew-comment-reply-order', String(visualOrder))
     })
     updateCommentReplyTreeVisibility(component, state, orderedNodes, rootNodes, collapseParentBody)
+    const domOrder = moveCommentReplyParts(replyContainer, replyRenderers, orderedNodes.map(({ node }) => node.renderer), state.replyContainerMutationObserver)
+    if (domOrder.external.length)
+      state.processReplyMutations?.(domOrder.external)
     // Missing parents are represented once. If their author is unknown, keep
     // the child's native reply prefix instead of inventing an author on the placeholder.
     const missingById = new Map(missing.map(parent => [parent.rpid, parent]))
@@ -2822,7 +2852,7 @@ else if (shouldInitializePageScript) {
         setCommentReplyAtPrefixHidden(replyRenderer, false)
     })
     // After the build: indent-only mode may have cleared collapse keys above.
-    state.topologyKey = getCommentReplyTreeTopologyKey(state, replyRenderers, treeMode)
+    state.topologyKey = getCommentReplyTreeTopologyKey(state, Array.from(replyContainer.children).filter(isCommentReplyRenderer), treeMode)
     state.renderedTree = { collapseParentBody, depthLimit, indentStep, orderedNodes, rootNodes, showGuides }
     if (showGuides) {
       renderCommentReplyTreeGuides(
@@ -3248,6 +3278,8 @@ else if (shouldInitializePageScript) {
               return
 
             ensureCommentShadowStyle(root, shadowStylePatch.id, shadowStylePatch.css)
+            if (name === 'bili-comment-renderer')
+              ensureCommentShadowStyle(root, 'bewly-comment-text-autospace', COMMENT_TEXT_AUTOSPACE_CSS)
             if (name === 'bili-comments') {
               syncNativeCommentContinuation(component)
             }
@@ -3263,7 +3295,7 @@ else if (shouldInitializePageScript) {
               }
             }
             else if (name === 'bili-comment-replies-renderer') {
-              updateCommentReplyTree(component)
+              updateCommentReplyTree(component, 'content')
               // 深链目标楼中楼刚挂载/更新时再结算一次
               if (getCommentReplyDeepLinkId())
                 scheduleCommentReplyDeepLinkSettlement('hash')
@@ -3275,7 +3307,20 @@ else if (shouldInitializePageScript) {
           }, name === 'bili-comment-replies-renderer'
             ? {
                 afterUpdate: animateCommentReplyMotion,
-                beforeUpdate: captureCommentReplyMotion,
+                afterNativeUpdate: (component) => {
+                  if (commentReplyTreeStates.get(component)?.enabled)
+                    scheduleCommentReplyTreeLayoutUpdate(component, 'topology')
+                },
+                beforeUpdate: (component) => {
+                  restoreCommentReplyNativeOrder(component)
+                  const state = commentReplyTreeStates.get(component)
+                  if (state) {
+                    state.originalOrderByRenderer = new WeakMap()
+                    state.nextOriginalOrder = 0
+                    state.topologyKey = undefined
+                  }
+                  captureCommentReplyMotion(component)
+                },
               }
             : name === 'bili-comments-spinner'
               ? {
@@ -3296,6 +3341,8 @@ else if (shouldInitializePageScript) {
       if (name === 'bili-comment-reply-renderer') {
         try {
           patchCommentComponentUpdate(name, classConstructor, (component) => {
+            if (component.shadowRoot)
+              ensureCommentShadowStyle(component.shadowRoot, 'bewly-comment-text-autospace', COMMENT_TEXT_AUTOSPACE_CSS)
             const rootNode = component.getRootNode?.()
             const repliesRenderer = rootNode instanceof ShadowRoot ? rootNode.host : null
             if (repliesRenderer?.localName === 'bili-comment-replies-renderer') {

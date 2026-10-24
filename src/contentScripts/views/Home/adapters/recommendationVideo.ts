@@ -1,16 +1,16 @@
 import type { VideoCardDisplayData } from '~/components/VideoCard/types'
-import type { Item as AppVideoItem } from '~/models/video/appForYou'
 import type { Item as VideoItem } from '~/models/video/forYou'
 import { isBilibiliAdvertisement, toAdvertisementCard } from '~/utils/advertising'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
-import { isVerticalVideo } from '~/utils/uriParse'
 
-import { APP_FOLLOWED_REASONS, getAppBangumiUrl, getAppRcmdReasonText } from './appRecommendationItem'
+import type { NormalizedAppVideoItem } from './appRecommendationItem'
+import { getAppBangumiUrl, getAppVideoAid } from './appRecommendationItem'
 
 export function transformWebVideo(item: VideoItem): VideoCardDisplayData {
   if (isBilibiliAdvertisement(item))
     return toAdvertisementCard(item)
   return {
+    recommendationSource: 'web',
     id: item.id,
     duration: item.duration,
     title: decodeHtmlEntities(item.title),
@@ -34,50 +34,35 @@ export function transformWebVideo(item: VideoItem): VideoCardDisplayData {
   }
 }
 
-export function transformAppVideo(item: AppVideoItem): VideoCardDisplayData {
+export function transformAppVideo(item: NormalizedAppVideoItem): VideoCardDisplayData {
   if (isBilibiliAdvertisement(item))
     return toAdvertisementCard(item)
-  // 预先计算 followed 状态，避免多次 trim 和比较
-  const bottomReason = item?.bottom_rcmd_reason?.trim()
-  const followed = !!bottomReason && APP_FOLLOWED_REASONS.has(bottomReason)
-  const rcmdReason = getAppRcmdReasonText(item)
-  const tag = rcmdReason && rcmdReason !== '竖屏' && rcmdReason !== '豎屏' && !APP_FOLLOWED_REASONS.has(rcmdReason) ? rcmdReason : undefined
-
-  // 预先计算 capsuleText，提取复杂逻辑
-  const descPart = item?.desc?.split('·')?.[1]?.trim()
-  const capsuleText = descPart || (followed ? bottomReason : undefined)
-
-  // 预先计算 type，避免在模板中调用函数
-  let type: 'horizontal' | 'vertical' | 'bangumi' = 'horizontal'
-  if (item.card_goto === 'bangumi') {
-    type = 'bangumi'
-  }
-  else if (item.uri && isVerticalVideo(item.uri)) {
-    type = 'vertical'
-  }
-
+  const { followed, authorName, publishedText, publishedTimestamp, portrait, vertical } = item.normalized
+  const type = item.card_goto === 'bangumi' ? 'bangumi' : vertical ? 'vertical' : 'horizontal'
+  const aid = getAppVideoAid(item)
   return {
+    recommendationSource: 'app',
     // 注意：aid 可能为 0 或 undefined，但只要有 bvid 就是有效视频
     // VideoCardGrid 的骨架屏判断已优化为同时检查 id 和 bvid
-    id: item.args?.aid ?? 0,
-    aid: item.args?.aid,
+    id: aid ?? 0,
+    aid,
     durationStr: item.cover_right_text,
     title: decodeHtmlEntities(item.title),
     cover: item.cover || '',
     author: {
-      name: decodeHtmlEntities(item.args?.up_name || ''),
-      authorFace: item?.mask?.avatar?.cover || item?.avatar?.cover || '',
+      name: authorName,
+      authorFace: '',
       followed,
-      mid: item.args?.up_id || 0,
+      mid: item.args?.up_id,
     },
-    displayTags: tag ? [decodeHtmlEntities(tag)] : [],
-    capsuleText: decodeHtmlEntities(capsuleText),
+    capsuleText: publishedText,
+    publishedTimestamp,
     bvid: item.bvid || '',
     viewStr: item.cover_left_text_1,
     danmakuStr: item.cover_left_text_2,
     cid: item?.player_args?.cid,
     goto: item.card_goto,
-    portrait: type === 'vertical',
+    portrait,
     param: item?.param,
     trackId: item?.track_id,
     url: item.card_goto === 'bangumi' ? getAppBangumiUrl(item.uri) : '',

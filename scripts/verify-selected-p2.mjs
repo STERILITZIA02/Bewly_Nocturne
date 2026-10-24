@@ -8,7 +8,7 @@ import ts from 'typescript'
 import { compileScript, parse } from 'vue/compiler-sfc'
 
 import { loadSourceFunctions } from './sourceFunctionHarness'
-import { loadSourceModule } from './sourceModuleHarness'
+import { globalComponentFixture, loadSourceModule } from './sourceModuleHarness'
 import { registerAccountTransactionChecks } from './verify-account-transactions.mjs'
 import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
 import { registerCommentReadingChecks } from './verify-comment-reading.mjs'
@@ -21,6 +21,7 @@ import { registerFourFeatureChecks } from './verify-four-features.mjs'
 import { registerFrostedGlassSurfaceChecks } from './verify-frosted-glass-surfaces.mjs'
 import { registerGlobalResourceChecks } from './verify-global-resources.mjs'
 import { registerHomeLoadingRegressionChecks } from './verify-home-loading-regressions.mjs'
+import { registerImmersiveAndControlChecks } from './verify-immersive-and-controls.mjs'
 import { registerLibraryMemoryChecks } from './verify-library-memory.mjs'
 import { registerLibraryToolChecks } from './verify-library-tools.mjs'
 import { registerLoadingSkeletonChecks } from './verify-loading-skeletons.mjs'
@@ -41,6 +42,8 @@ import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.
 import { registerPlayerMaintenanceChecks } from './verify-player-maintenance.mjs'
 import { registerPrivateHistorySearchChecks } from './verify-private-history-search.mjs'
 import { registerPrivateSessionActionChecks } from './verify-private-session-actions.mjs'
+import { registerRecommendationConfigChecks } from './verify-recommendation-config.mjs'
+import { registerRecommendationRuntimeChecks } from './verify-recommendation-runtime-fixes.mjs'
 import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
 import { registerRuntimeErrorChecks } from './verify-runtime-errors.mjs'
 import { registerSeptemberAdaptationChecks } from './verify-september-adaptation.mjs'
@@ -159,6 +162,9 @@ registerUpstreamFollowingChecks(check, { Vue, flush, compileComponent })
 registerUpstreamHomeChecks(check, { Vue, flush, compileComponent })
 registerUpstreamMenuChecks(check, { Vue, flush, compileComponent })
 registerUpstreamSettingsChecks(check, { Vue, flush, compileComponent })
+registerRecommendationRuntimeChecks(check, { Vue, flush, compileComponent })
+registerRecommendationConfigChecks(check, { Vue, flush, compileComponent })
+registerImmersiveAndControlChecks(check, { Vue, flush, compileComponent })
 function noop() {}
 async function flush() {
   for (let turn = 0; turn < 8; turn++)
@@ -486,6 +492,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   const exports = {}
   const modules = {
     'vue': Vue,
+    '~/components/VideoCard/utils': await import('../src/components/VideoCard/utils'),
     '~/composables/useSidebarHost': await import('../src/composables/useSidebarHost'),
     '~/composables/usePageViewState': await import('../src/composables/usePageViewState'),
     '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
@@ -499,7 +506,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/utils/videoFavoriteSelection': await import('../src/utils/videoFavoriteSelection'),
     // The document protocol has dedicated actual-module tests; unrelated Drawer
     // fixtures do not create a real embedded document or settings owner.
-    '~/composables/useIframeDocumentHost': { useIframeDocumentHost: () => ({ currentHref: Vue.ref('') }) },
+    '~/composables/useIframeDocumentHost': { useIframeDocumentHost: () => ({ currentHref: Vue.ref(''), photoViewerOpen: Vue.ref(false), channel: { clear() {} } }) },
     '~/utils/motionPresence': await import('../src/utils/motionPresence'),
     '~/utils/fullscreenChange': await import('../src/utils/fullscreenChange'),
     '~/constants/appClient': await import('../src/constants/appClient'),
@@ -705,6 +712,16 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   }
   if (text.includes('\'~/components/LazyPicture.vue\'') && !modules['~/components/LazyPicture.vue'])
     modules['~/components/LazyPicture.vue'] = { default: await compileComponent('../src/components/LazyPicture.vue') }
+  if (text.includes('\'~/logic/recommendationMode\'') && !modules['~/logic/recommendationMode']) {
+    modules['~/logic/recommendationMode'] = await loadSourceModule('../src/logic/recommendationMode.ts', {
+      '~/logic/storage': modules['~/logic/storage'] ?? modules['~/logic'] ?? { settings: Vue.ref({ recommendationMode: 'web', appRecommendationColumn: 2 }) },
+      '~/utils/authProvider': modules['~/utils/authProvider'] ?? {},
+      './appAuthorizationCoordinator': modules['~/logic/appAuthorizationCoordinator'] ?? {},
+      './appAuthStorage': modules['~/logic/appAuthStorage'] ?? { getAppAuthIdentity: () => '' },
+    })
+  }
+  if (text.includes('\'~/utils/escapePriority\'') && !modules['~/utils/escapePriority'])
+    modules['~/utils/escapePriority'] = await import('../src/utils/escapePriority')
   vm.runInNewContext(code, {
     ...Vue,
     exports,
@@ -732,6 +749,11 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     requestAnimationFrame,
     cancelAnimationFrame,
     require: (name) => {
+      if (!(name in modules)) {
+        const fixture = globalComponentFixture(name, Vue)
+        if (fixture)
+          return fixture
+      }
       assert.ok(name in modules, `Unexpected component dependency: ${name}`)
       return modules[name]
     },
