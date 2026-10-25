@@ -25,10 +25,11 @@ const styleOnly: Array<[RegExp, string]> = [
 export async function findBorderViolations(files: string[]) {
   const violations: string[] = []
   for (const file of files) {
+    const native = NATIVE.test(file.replaceAll('\\', '/'))
     const rules = [
       ...everywhere,
-      ...(NATIVE.test(file) ? [] : bewly),
-      ...(NATIVE.test(file) || !/\.(?:vue|scss|css)$/.test(file) ? [] : styleOnly),
+      ...(native ? [] : bewly),
+      ...(native || !/\.(?:vue|scss|css)$/.test(file) ? [] : styleOnly),
     ]
     const lines = (await readFile(file, 'utf8')).split('\n')
     lines.forEach((line, index) => {

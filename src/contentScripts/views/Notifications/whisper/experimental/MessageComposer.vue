@@ -111,7 +111,7 @@ function submitCurrent() {
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Enter' || event.shiftKey || event.isComposing || isComposing.value)
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229 || isComposing.value)
     return
   event.preventDefault()
   submitCurrent()

@@ -4314,7 +4314,7 @@ async function verifyP4CleanupContracts() {
     assert.doesNotMatch(command, /\bnpm run\b|\bnpx\b/, `script ${name} must use the pnpm toolchain`)
   })
   assert.doesNotMatch(prepareScript, /\bnpm run\b|\bnpx\b/)
-  assert.match(prepareScript, /execFileSync\('pnpm', \['exec', 'esno'/)
+  assert.match(prepareScript, /execFileSync\(process\.execPath, \[\.\.\.process\.execArgv, r\('scripts\/manifest\.ts'\)\]/)
   assert.doesNotMatch(prepareScript, /console\.error\([^\n]*,\s*error\)/)
 }
 
@@ -4420,7 +4420,7 @@ async function verifyTrackSegmentControls() {
   const surfacedExceptions = new Set(['src/components/TopBar/components/TopBarPinnedChannels.vue', 'src/contentScripts/views/Home/components/HomeChannelsMenu.vue'])
   const tracks: string[] = []
   for (const file of sources) {
-    const relative = path.relative(root, file)
+    const relative = path.relative(root, file).split(path.sep).join('/')
     const content = await readFile(file, 'utf8')
     assert.doesNotMatch(content, /bew-segment-control--flush/, `${relative} still uses the retired flush modifier`)
     if (!/(?:components\/LiquidSegmentIndicator\.vue|composables\/useLiquidSegmentIndicator\.ts)$/.test(relative))

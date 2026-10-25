@@ -188,7 +188,7 @@ function handleImageClick(index: number, event: MouseEvent) {
 // A sideways trackpad swipe moves one image per gesture; vertical wheels keep
 // scrolling the page.
 function handleImageWheel(event: WheelEvent) {
-  if (images.length < 2 || Math.abs(event.deltaX) <= Math.abs(event.deltaY))
+  if (event.ctrlKey || event.defaultPrevented || images.length < 2 || Math.abs(event.deltaX) <= Math.abs(event.deltaY))
     return
   event.preventDefault()
   const direction = imageStepper.step(event.deltaX, event.deltaMode, event.timeStamp)
@@ -238,7 +238,6 @@ watch(thumbScrollerRef, (scroller, _previous, onCleanup) => {
 function handleThumbWheel(event: WheelEvent) {
   if (Math.abs(event.deltaX) <= Math.abs(event.deltaY))
     return
-  event.preventDefault()
   thumbElastic?.handleWheel(event)
 }
 

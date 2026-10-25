@@ -101,7 +101,6 @@ function configureInactive() {
       :title="title"
       :tabindex="active ? 0 : -1"
       allow="autoplay; fullscreen; picture-in-picture; clipboard-write"
-      allowfullscreen
       @load="loaded"
     />
     <div v-if="!layoutReady && !timedOut" class="immersive-frame__loading" role="status" :aria-label="$t('common.loading')">

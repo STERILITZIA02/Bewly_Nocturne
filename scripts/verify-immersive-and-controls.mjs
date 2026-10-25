@@ -485,6 +485,8 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       assert.equal(iframe.name, constants.IMMERSIVE_PRELOAD_NAME)
       const policy = iframe.getAttribute('allow')
       assert.match(policy, /autoplay;/)
+      assert.match(policy, /(?:^|;)\s*fullscreen(?:;|$)/)
+      assert.equal(iframe.hasAttribute('allowfullscreen'), false, 'fullscreen has one permission declaration, avoiding Chromium precedence warnings')
       assert.equal(iframe.parentElement.style.display, 'none')
       currentHref.value = props.url
       await flush()

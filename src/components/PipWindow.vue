@@ -15,6 +15,8 @@ const pipWindowEl = ref<any | null>(null)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const currentUrl = ref<string>(props.url)
 const { isDark, isOledDark, darkModeBaseColor } = useDark()
+let pipHost: HTMLElement | null = null
+let disposed = false
 let closing = false
 let closed = false
 
@@ -23,16 +25,26 @@ function applyPipTheme() {
   if (!documentElement)
     return
 
-  documentElement.classList.toggle('dark', isDark.value)
-  documentElement.classList.toggle('oled-dark', isOledDark.value)
-  documentElement.style.setProperty('--bew-dark-base-color', darkModeBaseColor.value)
-  documentElement.style.background = isOledDark.value ? '#000' : 'var(--bew-bg)'
+  for (const element of [documentElement, pipHost]) {
+    if (!element)
+      continue
+    element.classList.toggle('dark', isDark.value)
+    element.classList.toggle('oled-dark', isOledDark.value)
+    element.style.setProperty('--bew-dark-base-color', darkModeBaseColor.value)
+  }
+  if (pipHost)
+    documentElement.style.background = pipWindowEl.value.getComputedStyle(pipHost).getPropertyValue('--bew-bg')
 }
 
 watch([isDark, isOledDark, darkModeBaseColor], applyPipTheme)
 
 onMounted(() => {
-  openPipWindow()
+  void openPipWindow()
+})
+
+onBeforeUnmount(() => {
+  disposed = true
+  void handleClose()
 })
 
 async function openPipWindow() {
@@ -41,29 +53,47 @@ async function openPipWindow() {
     // The Document Picture-in-Picture API is supported.
     const width = window.innerWidth * 0.8
     const height = window.innerHeight * 0.8
-    pipWindowEl.value = await (window as any).documentPictureInPicture.requestWindow({
-      disallowReturnToOpener: true,
-      width,
-      height,
-    })
+    let openedWindow: Window
+    try {
+      openedWindow = await (window as any).documentPictureInPicture.requestWindow({
+        disallowReturnToOpener: true,
+        width,
+        height,
+      })
+    }
+    catch (error) {
+      console.warn('[Bewly] Unable to open picture-in-picture window:', error)
+      await handleClose()
+      return
+    }
+    if (disposed || closing || closed) {
+      openedWindow.close()
+      return
+    }
+    pipWindowEl.value = openedWindow
     pipWindowEl.value.document.body.style.padding = '0'
     pipWindowEl.value.document.body.style.margin = '0'
 
+    // Styles in the opener's Shadow root do not follow a node into a new document.
+    const sourceRoot = pipWindowRef.value!.getRootNode() as ShadowRoot
+    pipHost = openedWindow.document.createElement('div')
+    pipHost.className = sourceRoot.host.className
+    pipHost.style.cssText = sourceRoot.host.getAttribute('style') ?? ''
+    const shadow = pipHost.attachShadow({ mode: 'open' })
+    sourceRoot.querySelectorAll('style').forEach(style => shadow.append(style.cloneNode(true)))
+    shadow.append(pipWindowRef.value!)
+    openedWindow.document.body.append(pipHost)
     applyPipTheme()
 
-    pipWindowEl.value.document.body.append(pipWindowRef.value)
-
-    pipWindowEl.value.addEventListener('pagehide', () => {
-      handleClose()
-    })
+    openedWindow.addEventListener('pagehide', handleClose, { once: true })
   }
   else {
     const width = window.innerWidth * 0.8
     const height = window.innerHeight * 0.8
-    const left = (screen.width / 2) - (width / 2)
-    const top = (screen.height / 2) - (height / 2)
-    window.open(currentUrl.value, '', `width=${width}px,height=${height}px,left=${left}px,top=${top}px,toolbar=no,location=no,directories=no,menubar=no,scrollbars=yes,resizable=yes,status=no`)
-    handleClose()
+    const left = Math.round(window.screenX + (window.outerWidth - width) / 2)
+    const top = Math.round(window.screenY + (window.outerHeight - height) / 2)
+    window.open(currentUrl.value, '', `width=${Math.round(width)},height=${Math.round(height)},left=${left},top=${top},toolbar=no,location=no,directories=no,menubar=no,scrollbars=yes,resizable=yes,status=no`)
+    await handleClose()
   }
 }
 
@@ -85,9 +115,11 @@ async function handleClose() {
     // The user may already have closed the Document Picture-in-Picture window.
   }
   pipWindowEl.value = null
+  pipHost = null
   closed = true
   closing = false
-  emit('close')
+  if (!disposed)
+    emit('close')
 }
 
 async function releaseIframeResources() {
@@ -108,7 +140,7 @@ async function releaseIframeResources() {
 </script>
 
 <template>
-  <div ref="pipWindowRef">
+  <div ref="pipWindowRef" class="bewly-wrapper">
     <div pos="absolute top-0 left-0" w-full h-full>
       <div
         pos="relative top-0" z-1 flex="~ items-center justify-end gap-2"

@@ -5,6 +5,46 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent }) {
+  check('runtime boot: native callbacks can use Pinia before Vue mounts and reuse the same stores after setup', async () => {
+    const pinia = await import('pinia')
+    const previous = pinia.getActivePinia()
+    pinia.setActivePinia(undefined)
+    const host = document.body.appendChild(document.createElement('div'))
+    let owner
+    let app
+    try {
+      const common = await loadSourceModule('../src/logic/common-setup.ts', {
+        pinia,
+        '~/utils/i18n': { i18n: { install() {} } },
+        'vue-toastification': { default: { install() {} }, POSITION: { TOP_RIGHT: 'top-right' }, TYPE: { SUCCESS: 'success', INFO: 'info', WARNING: 'warning', ERROR: 'error' } },
+      })
+      owner = pinia.getActivePinia()
+      assert.ok(owner, 'native iframe activity can arrive before setupApp installs the Vue plugin')
+      const useState = pinia.defineStore('boot-fixture', () => ({ active: Vue.ref(true) }))
+      const early = useState()
+      early.active = false
+      let mountedStore
+      app = Vue.createApp({ setup() {
+        mountedStore = useState()
+        return () => Vue.h('div', String(mountedStore.active))
+      } })
+      common.setupApp(app)
+      app.mount(host)
+      assert.equal(mountedStore, early, 'mounting must not replace the store used by native callbacks')
+      assert.equal(host.textContent, 'false')
+      await Promise.resolve().then(() => useState().active = true)
+      await flush()
+      assert.equal(host.textContent, 'true', 'later callbacks and components share one state owner')
+    }
+    finally {
+      app?.unmount()
+      host.remove()
+      if (owner)
+        pinia.disposePinia(owner)
+      pinia.setActivePinia(previous)
+    }
+  })
+
   async function runtimeFixture() {
     const listeners = new Set()
     const warnings = []
