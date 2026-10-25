@@ -1,0 +1,19 @@
+// A rail module laid flat on the rail glass (user-specified): no backing plate.
+// Hairlines that run edge to edge across the rail separate it from its
+// neighbours; the block reaches out over the rail's inline padding and pads
+// back in, so its content stays on the rail's content box.
+@mixin flat($top: true, $bottom: true) {
+  box-sizing: border-box;
+  min-width: 0;
+  // Wider than the rail's content box by its bleed: the 100% cap on the
+  // rail content's children would cut its right end.
+  max-width: none;
+  margin-inline: calc(-1 * var(--bew-sidebar-inline-padding));
+  padding: var(--bew-space-3) var(--bew-sidebar-inline-padding);
+  @if $top {
+    border-top: var(--bew-hairline) solid var(--bew-separator-color);
+  }
+  @if $bottom {
+    border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
+  }
+}

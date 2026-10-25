@@ -25,10 +25,31 @@ const toast = useToast()
 
 const recommendationModeOptions = computed(() => getRecommendationModeOptions(t))
 const recommendationModeOption = computed({ get: getRecommendationModeOption, set: selectRecommendationMode })
+const shortcutDraft = shallowRef(settings.value.recommendationModeSwitcherOptions.slice())
+let shortcutDragSnapshot: string | undefined
+const shortcutSignature = () => JSON.stringify(settings.value.recommendationModeSwitcherOptions)
+watch(shortcutSignature, () => {
+  if (shortcutDragSnapshot === undefined)
+    shortcutDraft.value = settings.value.recommendationModeSwitcherOptions.slice()
+})
+function finishShortcutDrag() {
+  if (shortcutDragSnapshot === shortcutSignature() && JSON.stringify(shortcutDraft.value) !== shortcutDragSnapshot)
+    settings.value.recommendationModeSwitcherOptions = shortcutDraft.value
+  shortcutDragSnapshot = undefined
+  shortcutDraft.value = settings.value.recommendationModeSwitcherOptions.slice()
+}
 function setModeVisible(option: RecommendationModeOption, visible: boolean) {
-  settings.value.recommendationModeSwitcherOptions = visible
-    ? [...settings.value.recommendationModeSwitcherOptions, option]
-    : settings.value.recommendationModeSwitcherOptions.filter(value => value !== option)
+  settings.value.recommendationModeSwitcherOptions = settings.value.recommendationModeSwitcherOptions.map(item => item.mode === option ? { ...item, visible } : item)
+}
+function moveShortcut(mode: RecommendationModeOption, direction: -1 | 1) {
+  const items = settings.value.recommendationModeSwitcherOptions.slice()
+  const index = items.findIndex(item => item.mode === mode)
+  const target = index + direction
+  if (target < 0 || target >= items.length)
+    return
+  const [item] = items.splice(index, 1)
+  items.splice(target, 0, item)
+  settings.value.recommendationModeSwitcherOptions = items
 }
 const homeGridLayoutOptions = computed<{ label: string, value: GridLayoutType }[]>(() => [
   { label: t('layout_editor.layout_adaptive'), value: 'adaptive' },
@@ -39,13 +60,6 @@ const followingSortOptions = computed(() => [
   { label: t('settings.following_sort_updated'), value: 'updated' },
   { label: t('settings.following_sort_group'), value: 'group' },
 ])
-
-const showStandaloneSearchPage = computed({
-  get: () => !settings.value.useSearchPageModeOnHomePage,
-  set: (showStandalone: boolean) => {
-    settings.value.useSearchPageModeOnHomePage = !showStandalone
-  },
-})
 
 function moveHomeTab(page: HomeSubPage, direction: -1 | 1) {
   const items = [...settings.value.homePageTabVisibilityList]
@@ -197,9 +211,26 @@ function handleToggleHomeTab(tab: any) {
       </SettingsItem>
 
       <SettingsItem setting-id="settings.recommendation_mode_visible_options" :title="$t('settings.recommendation_mode_visible_options')" :desc="$t('settings.recommendation_mode_visible_options_desc')" right-width="auto">
-        <div flex="~ col gap-2">
-          <Radio v-for="option in recommendationModeOptions" :key="option.value" :label="option.label" :model-value="settings.recommendationModeSwitcherOptions.includes(option.value)" @update:model-value="setModeVisible(option.value, $event)" />
-        </div>
+        <draggable
+          v-model="shortcutDraft" item-key="mode"
+          :component-data="{ style: 'display: flex; gap: var(--bew-space-2); flex-wrap: wrap;' }"
+          @start="shortcutDragSnapshot = shortcutSignature()" @end="finishShortcutDrag"
+        >
+          <template #item="{ element }">
+            <button
+              type="button" class="bew-settings-option--lift"
+              flex="~ gap-2 items-center" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-interactive-radius" cursor-all-scroll
+              :aria-pressed="element.visible" :title="$t('settings.reorder_keyboard_hint')"
+              aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+              :style="{ background: element.visible ? 'var(--bew-selected-bg)' : 'var(--bew-fill-1)', color: element.visible ? 'var(--bew-text-1)' : 'var(--bew-text-3)' }"
+              @click="setModeVisible(element.mode, !element.visible)"
+              @keydown.alt.left.prevent="moveShortcut(element.mode, -1)"
+              @keydown.alt.right.prevent="moveShortcut(element.mode, 1)"
+            >
+              {{ recommendationModeOptions.find(option => option.value === element.mode)?.label }}
+            </button>
+          </template>
+        </draggable>
       </SettingsItem>
 
       <SettingsItem
@@ -310,12 +341,12 @@ function handleToggleHomeTab(tab: any) {
         </div>
       </SettingsItem>
 
-      <div grid="~ lg:gap-4 lg:cols-2 cols-1" lg:border="t-1 $bew-border-color">
+      <div grid="~ lg:gap-4 lg:cols-2 cols-1" lg:border="t-hairline $bew-separator-color">
         <SettingsItem
           setting-id="settings.filter_by_title" class="unrestricted-width-settings-item"
           :title="$t('settings.filter_by_title')"
           right-width="auto"
-          border="lg:none t-1 $bew-border-color"
+          border="lg:none t-hairline $bew-separator-color"
         >
           <Radio v-model="settings.enableFilterByTitle" />
           <template v-if="settings.enableFilterByTitle" #bottom>
@@ -359,7 +390,7 @@ function handleToggleHomeTab(tab: any) {
           setting-id="settings.filter_by_user" class="unrestricted-width-settings-item"
           :title="$t('settings.filter_by_user')"
           right-width="auto"
-          border="lg:none b-1 $bew-border-color"
+          border="lg:none b-hairline $bew-separator-color"
         >
           <Radio v-model="settings.enableFilterByUser" />
           <template v-if="settings.enableFilterByUser" #bottom>
@@ -489,16 +520,6 @@ function handleToggleHomeTab(tab: any) {
       </SettingsItem>
       <SettingsItem setting-id="settings.following_filter_dynamic_videos" :title="$t('settings.following_filter_dynamic_videos')" :desc="$t('settings.following_filter_dynamic_videos_desc')" right-width="auto">
         <Radio v-model="settings.followingFilterDynamicVideos" />
-      </SettingsItem>
-    </SettingsItemGroup>
-
-    <SettingsItemGroup data-setting-id="settings.group_search_page_mode" :title="$t('settings.group_search_page_mode')">
-      <SettingsItem
-        setting-id="settings.show_standalone_search_page" :title="$t('settings.show_standalone_search_page')"
-        :desc="$t('settings.show_standalone_search_page_desc')"
-        right-width="auto"
-      >
-        <Radio v-model="showStandaloneSearchPage" />
       </SettingsItem>
     </SettingsItemGroup>
   </div>

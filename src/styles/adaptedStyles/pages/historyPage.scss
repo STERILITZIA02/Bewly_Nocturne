@@ -113,12 +113,12 @@
     .history-list .r-info .r-txt,
     .history-dlg,
     .history-dlg .hsbtn .cancel {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .go-top-m .go-top,
     .b-head-search {
-      border-color: var(--bew-border-color) !important;
+      border-color: var(--bew-separator-color) !important;
     }
 
     .history-list .l-info {
@@ -126,7 +126,7 @@
     }
 
     .history-list .r-info .w-info .name {
-      border-left-color: var(--bew-border-color);
+      border-left-color: var(--bew-separator-color);
     }
 
     .history-list .l-info .lastplay-time .history-red-round {

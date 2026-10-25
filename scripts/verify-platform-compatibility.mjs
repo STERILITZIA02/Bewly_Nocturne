@@ -216,6 +216,24 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
       assert.equal(timers.size, 0)
       assert.equal(observers.at(-1).disconnected, true)
       release()
+
+      // An opened row cut off by the list's edges glides into full view.
+      const { revealSelectionRow } = await import('../src/utils/selectionScrollAnchor')
+      const glides = []
+      viewport.scrollTo = options => glides.push(options)
+      viewport.getBoundingClientRect = () => ({ top: 100, bottom: 400, height: 300 })
+      row.style.setProperty('--bew-space-2', '8px')
+      viewport.scrollTop = 50
+      row.getBoundingClientRect = () => ({ top: 300, bottom: 500, height: 200 })
+      revealSelectionRow(row, viewport)
+      assert.deepEqual(glides.at(-1), { top: 50 + 108, behavior: 'smooth' }, 'a row cut at the bottom rises until it ends 8px inside')
+      row.getBoundingClientRect = () => ({ top: 60, bottom: 260, height: 200 })
+      revealSelectionRow(row, viewport)
+      assert.deepEqual(glides.at(-1), { top: 50 - 48, behavior: 'smooth' }, 'a row cut at the top drops to 8px inside')
+      const count = glides.length
+      row.getBoundingClientRect = () => ({ top: 150, bottom: 350, height: 200 })
+      revealSelectionRow(row, viewport)
+      assert.equal(glides.length, count, 'a row in full view stays')
     }
     finally {
       app?.unmount()

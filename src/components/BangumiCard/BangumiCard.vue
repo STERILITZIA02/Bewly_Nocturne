@@ -87,7 +87,7 @@ const { textStyle } = useVideoCardSharedStyles()
             w-full
             pos="absolute bottom-0" z-1
             text="white shadow"
-            p-2 fw-bold h-150px flex items-end
+            p-2 h-150px flex items-end
             bg="gradient-to-b gradient-from-transparent gradient-to-[rgba(0,0,0,.6)]"
             :style="{
               '--un-text-shadow': bangumi.rank <= 3 ? '4px 4px 0 var(--bew-selected-bg), 6px 6px 0 var(--bew-fill-3)' : '',

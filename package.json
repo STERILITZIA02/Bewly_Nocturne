@@ -59,6 +59,7 @@
     "submit:chrome": "publish-extension --chrome-zip ./extension.zip",
     "release": "release-it",
     "preview:progressive-blur": "node scripts/serve-progressive-blur-preview.mjs",
+    "preview:capsule": "node scripts/serve-capsule-preview.mjs",
     "build:profile": "cross-env BEWLY_PROFILE_BUILD=1 pnpm build"
   },
   "dependencies": {
@@ -102,7 +103,7 @@
     "lint-staged": "^17.6.0",
     "npm-run-all2": "^9.0.4",
     "publish-browser-extension": "^6.2.0",
-    "release-it": "^21.1.1",
+    "release-it": "21.1.1",
     "rimraf": "^6.1.3",
     "sass": "^1.106.0",
     "simple-git-hooks": "^2.14.0",

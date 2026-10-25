@@ -747,6 +747,6 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
       assert.ok(css.includes(`line-height:var(--bew-line-height-${role})`))
     }
     assert.match(css, /padding:var\(--bew-space-4\)/)
-    assert.ok(css.includes('font-weight:var(--bew-font-weight-semibold)'))
+    assert.ok(css.includes('font-weight:var(--bew-font-weight-regular)'), 'heavier utilities resolve to regular')
   })
 }

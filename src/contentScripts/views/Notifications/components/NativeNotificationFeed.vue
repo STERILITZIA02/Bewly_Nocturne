@@ -544,13 +544,13 @@ defineExpose({ refresh })
   padding: 0 var(--bew-space-3);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
   background: var(--bew-content-solid);
   border: 0;
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
 }
 
 .native-notification-feed__original-link:hover {

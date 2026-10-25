@@ -22,7 +22,7 @@
  */
 
 /** Where the blur is strongest: an edge, or the centre fading outward (radial). */
-export type ProgressiveBlurEdge = 'top' | 'bottom' | 'center'
+export type ProgressiveBlurEdge = 'top' | 'bottom' | 'left' | 'right' | 'center'
 
 export const PROGRESSIVE_BLUR_LAYER_COUNT = 5
 
@@ -59,7 +59,8 @@ const STACK_SPREAD = 18
  * `radius` is any CSS length; it defaults to the global frosted-glass radius.
  */
 export function createProgressiveBlurLayers(edge: ProgressiveBlurEdge, radius = 'var(--bew-glass-blur-radius)') {
-  const shape = edge === 'center' ? 'radial-gradient(closest-side' : `linear-gradient(${edge === 'top' ? 'to bottom' : 'to top'}`
+  const directions = { top: 'to bottom', bottom: 'to top', left: 'to right', right: 'to left' }
+  const shape = edge === 'center' ? 'radial-gradient(closest-side' : `linear-gradient(${directions[edge]}`
   return Array.from({ length: PROGRESSIVE_BLUR_LAYER_COUNT }, (_, index) => {
     const solid = ((PROGRESSIVE_BLUR_LAYER_COUNT - 1 - index) / PROGRESSIVE_BLUR_LAYER_COUNT) * 100
     const fade = ((PROGRESSIVE_BLUR_LAYER_COUNT - index) / PROGRESSIVE_BLUR_LAYER_COUNT) * 100

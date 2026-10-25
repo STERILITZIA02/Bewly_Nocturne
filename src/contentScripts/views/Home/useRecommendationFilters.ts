@@ -34,6 +34,7 @@ export function useRecommendationFilters(tabState: HomeTabState, isWebRecommenda
       FilterType.filterOutVerticalVideos,
       FilterType.duration,
       FilterType.viewCountStr,
+      FilterType.likeCount,
       FilterType.title,
       FilterType.user,
       FilterType.user,
@@ -42,6 +43,7 @@ export function useRecommendationFilters(tabState: HomeTabState, isWebRecommenda
       ['normalized', 'vertical'],
       ['player_args', 'duration'],
       ['cover_left_text_1'],
+      ['normalized', 'likeCount'],
       ['title'],
       ['args', 'up_name'],
       ['args', 'up_id'],
@@ -66,6 +68,7 @@ export function useRecommendationFilters(tabState: HomeTabState, isWebRecommenda
   const hasActiveAppRecommendationFilter = computed(() => settings.value.filterOutVerticalVideos
     || settings.value.enableFilterByDuration
     || settings.value.enableFilterByViewCount
+    || settings.value.enableFilterByLikeCount
     || settings.value.enableFilterByTitle
     || settings.value.enableFilterByUser)
 

@@ -33,6 +33,115 @@ function clock() {
 }
 
 export function registerUpstreamMomentChecks(check, { Vue, flush, compileComponent }) {
+  check('moments projection: stable render keys, raw unread IDs and merged visible counts remain separate', async () => {
+    const moments = Vue.reactive([])
+    const store = await loadSourceFunctions('../src/stores/topBarStore.ts', ['acceptTopBarMoments', 'mergeCollaborativeVideos', 'extractBvid', 'normalizeAuthor', 'collectAuthors', 'mergeAuthors', 'updateMomentCollaborative', 'isNewMoment'], {
+      moments,
+      collaborativeVideoMap: new Map(),
+      entryUnreadIds: new Set(['200', '190']),
+      visibleNewMomentsCount: Vue.ref(0),
+      settings: Vue.ref({ filterArticlesInMoments: false }),
+      recordUploaderLatestVideoTimes() {},
+      parseTopBarPublicationTime: () => 0,
+      ...(await import('../src/utils/momentKey')),
+      ...(await import('../src/utils/momentsReadPosition')),
+    })
+    const item = (id_str, bvid, mid) => ({ id_str, type: 8, title: 'Video', jump_url: `https://www.bilibili.com/video/${bvid}`, author: { name: `Author ${mid}`, jump_url: `https://space.bilibili.com/${mid}`, face: '' } })
+    store.acceptTopBarMoments([item('200', 'BVfirst', 1), item('190', 'BVfirst', 2), item('180', 'BVsecond', 3)], 'video')
+    assert.equal(moments.length, 2)
+    assert.equal(moments[0].id_str, 'moment:api:200')
+    assert.equal(moments[0].dynamicId, '200')
+    assert.equal(moments[0].authors.length, 2)
+    assert.equal(store.isNewMoment(0), true)
+    assert.equal(store.isNewMoment(1), false)
+    assert.equal(store.visibleNewMomentsCount.value, 1)
+    store.entryUnreadIds.add('205')
+    store.acceptTopBarMoments([item('205', 'BVsecond', 4)], 'video', '200')
+    assert.equal(store.visibleNewMomentsCount.value, 2, 'an unread collaborator joins an existing visible video without adding a row')
+    store.acceptTopBarMoments([item('220', 'BVnew', 4)], 'video', '200')
+    assert.deepEqual(moments.map(item => item.dynamicId), ['220', '200', '180'])
+  })
+  check('moments continuity: bounded scans retain gaps, distinguish terminal outcomes and preserve exact IDs', async () => {
+    const { fetchNewerMoments, parseMomentUnreadSnapshot, dynamicId, MOMENTS_LATEST_OFFSET } = await import('../src/utils/momentsReadPosition')
+    const id = '1234567890123456789'
+    assert.equal(dynamicId(Number(id)), undefined)
+    assert.equal(parseMomentUnreadSnapshot({ code: 0, data: {} }), undefined)
+    assert.deepEqual(parseMomentUnreadSnapshot({ code: 0, data: { dyn_basic_infos: [] } }), { ids: [], oldestId: undefined })
+    assert.deepEqual(parseMomentUnreadSnapshot({ code: 0, data: { dyn_basic_infos: [{ dyn_id: id }, { dyn_id: '1234567890123456790' }, { dyn_id: id }] } }).ids, ['1234567890123456790', id])
+    const json = await loadSourceFunctions('../src/background/utils.ts', ['toJsonHandler'], { Response, ApiRiskControlError: Error })
+    const decoded = await json.toJsonHandler(new Response('{"code":0,"data":{"dyn_basic_infos":[{"dyn_id":1234567890123456789}]}}'), true)
+    assert.equal(decoded.data.dyn_basic_infos[0].dyn_id, id)
+    const page = (ids, offset, hasMore = true) => ({ items: ids.map(id_str => ({ id_str })), offset, hasMore })
+    const calls = []
+    const pages = [page(['200', '190'], '190'), page(['190', '180'], '180'), page(['170'], '170')]
+    const first = await fetchNewerMoments(async (offset) => {
+      calls.push(offset)
+      return pages.shift()
+    }, { cursor: MOMENTS_LATEST_OFFSET, targetId: '100' }, item => item.id_str)
+    assert.equal(first.status, 'budget')
+    assert.equal(first.gap.cursor, '170')
+    assert.equal(first.gap.targetId, '100')
+    assert.equal(first.gap.headId, '200')
+    assert.deepEqual(first.items.map(item => item.id_str), ['200', '190', '180', '170'])
+    assert.equal(calls.length, 3)
+    const connected = await fetchNewerMoments(async () => page(['160', '100', '90'], '90'), first.gap, item => item.id_str)
+    assert.equal(connected.status, 'connected')
+    assert.equal(connected.gap, undefined)
+    assert.equal(connected.newestId, '200')
+    assert.deepEqual(connected.items.map(item => item.id_str), ['160'])
+    for (const [response, expected] of [[page(['160'], '150', false), 'ended'], [page(['160'], '170'), 'stalled'], [null, 'failed']]) {
+      const result = await fetchNewerMoments(async () => {
+        if (!response)
+          throw new Error('fixture')
+        return response
+      }, first.gap, item => item.id_str)
+      assert.equal(result.status, expected)
+      assert.ok(result.gap, `${expected} is not continuity`)
+    }
+  })
+
+  check('moments reading: normal and filtered reads use nonempty cursors; only an explicit latest read advances the boundary', async () => {
+    const calls = []
+    let id = 300
+    const module = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {
+      '~/utils/api': { default: { moment: { getMoments: async (params) => {
+        calls.push(params)
+        return { code: 0, data: { items: [{ id_str: String(id--), type: 'DYNAMIC_TYPE_AV' }], offset: '', has_more: true } }
+      } } } },
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      '~/utils/momentHostFollowState': {},
+    })
+    const reader = module.createMomentFeedReader(item => ({ id: item.id_str }))
+    const request = { reset: true, type: 'all', hostMid: '', offset: '', updateBaseline: '', page: 1, filtered: true }
+    await reader.read(request, () => true)
+    assert.equal(calls.length, 2)
+    assert.ok(calls.every(call => call.offset), 'a missing response cursor never falls through to a reading homepage request')
+    await reader.read({ ...request, advanceRead: true }, () => true)
+    assert.equal(calls.length, 3, 'explicit reading has one head request; subsequent autofill is ordinary pagination')
+    assert.equal(calls.at(-1).offset, '')
+    reader.reset()
+  })
+
+  check('moments anchor: a surviving neighbor preserves the position and scrolling or a newer jump retires restoration', async () => {
+    const scroll = await import('../src/utils/scrollIntent')
+    const viewport = document.body.appendChild(document.createElement('div'))
+    viewport.scrollTop = 500
+    viewport.scrollTo = ({ top }) => {
+      viewport.scrollTop = top
+    }
+    const anchor = scroll.claimScrollCardAnchor(viewport, [{ key: 'first', top: 510 }, { key: 'neighbor', top: 550 }])
+    assert.equal(scroll.resolveScrollCardAnchor(viewport, anchor, key => key === 'neighbor' ? 1050 : undefined), 1000)
+    viewport.scrollTop = 520
+    assert.equal(scroll.resolveScrollCardAnchor(viewport, anchor, () => 1050), undefined, 'scrollbar movement also retires the old anchor')
+    viewport.scrollTop = 500
+    viewport.dispatchEvent(new Event('wheel'))
+    assert.equal(scroll.resolveScrollCardAnchor(viewport, anchor, () => 1050), undefined)
+    const next = scroll.claimScrollCardAnchor(viewport, [{ key: 'neighbor', top: 550 }])
+    scroll.scrollToPosition(viewport, 0)
+    assert.equal(scroll.resolveScrollCardAnchor(viewport, next, () => 1050), undefined)
+    viewport.remove()
+  })
+
   check('Home drag selection: only unmodified empty background is intercepted; titles, links, selection and layout editing remain native', async () => {
     const editing = Vue.ref(false)
     const selection = { isCollapsed: true }

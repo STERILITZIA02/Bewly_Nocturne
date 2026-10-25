@@ -273,7 +273,7 @@ watch(() => props.session.avatar, () => {
   place-items: center;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
   background: var(--bew-fill-1);
 }
@@ -311,7 +311,7 @@ watch(() => props.session.avatar, () => {
   padding: 0 var(--bew-space-1);
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
   background: var(--bew-fill-1);
   border-radius: var(--bew-interactive-radius);
@@ -330,7 +330,8 @@ watch(() => props.session.avatar, () => {
 .conversation-list-item strong {
   min-width: 0;
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-medium);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
   @include truncateFade.line;
 }
@@ -372,7 +373,7 @@ watch(() => props.session.avatar, () => {
   padding: 0 var(--bew-space-1);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
   background: var(--bew-selected-bg);
   border-radius: var(--bew-interactive-radius);

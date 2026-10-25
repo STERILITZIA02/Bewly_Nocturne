@@ -12,6 +12,88 @@ function deferred() {
 }
 
 export function registerRecommendationConfigChecks(check, { Vue, flush, compileComponent }) {
+  check('recommendation shortcuts: a drag commits once, no-op writes nothing and a remote edit wins over its old draft', async () => {
+    let options = [{ mode: 'web', visible: true }, { mode: 'appDouble', visible: false }]
+    let writes = 0
+    const value = {
+      get recommendationModeSwitcherOptions() { return options },
+      set recommendationModeSwitcherOptions(next) {
+        options = next
+        writes++
+      },
+    }
+    const owner = await loadSourceFunctions('../src/components/Settings/PluginComponentsAndPages/Home/Home.vue', ['finishShortcutDrag'], {
+      settings: { value },
+      shortcutDraft: { value: options.slice() },
+      shortcutDragSnapshot: JSON.stringify(options),
+      shortcutSignature: () => JSON.stringify(options),
+    })
+    owner.finishShortcutDrag()
+    assert.equal(writes, 0)
+    owner.shortcutDragSnapshot = JSON.stringify(options)
+    owner.shortcutDraft.value = options.slice().reverse()
+    owner.finishShortcutDrag()
+    assert.equal(writes, 1)
+    assert.equal(options[0].mode, 'appDouble')
+    owner.shortcutDragSnapshot = JSON.stringify(options)
+    owner.shortcutDraft.value = options.slice().reverse()
+    options = options.map(item => ({ ...item, visible: false }))
+    owner.finishShortcutDrag()
+    assert.equal(writes, 1)
+    assert.equal(owner.shortcutDraft.value.every(item => !item.visible), true)
+  })
+  check('recommendation shortcuts: legacy visibility and ordered objects normalize without reviving hidden options', async () => {
+    const modes = ['web', 'webNoCookie', 'appSingle', 'appDouble']
+    const { normalizeRecommendationSwitcherOptions: normalize } = await loadSourceFunctions('../src/logic/storage.ts', ['normalizeRecommendationSwitcherOptions'], { RECOMMENDATION_MODES: modes })
+    assert.deepEqual(plain(normalize(['appDouble', 'web', 'web'])), [
+      { mode: 'appDouble', visible: true },
+      { mode: 'web', visible: true },
+      { mode: 'webNoCookie', visible: false },
+      { mode: 'appSingle', visible: false },
+    ])
+    assert.equal(normalize([]).some(item => item.visible), false)
+    const sorted = normalize([{ mode: 'appSingle', visible: false }, { mode: 'web', visible: true }, { mode: 'appDouble', visible: 'yes' }, null, { mode: 'unknown', visible: true }])
+    assert.deepEqual(plain(sorted.map(item => item.mode)), ['appSingle', 'web', 'appDouble', 'webNoCookie'])
+    assert.equal(sorted.filter(item => item.visible).length, 1)
+    assert.deepEqual(plain(normalize(sorted)), plain(sorted))
+  })
+  check('APP likes: bounded batch reads deduplicate aid, preserve zero and unknown targets, and abort queued work', async () => {
+    const adapter = await import('../src/contentScripts/views/Home/adapters/appRecommendationItem')
+    const { isAboveKnownCount } = await import('../src/utils/filterRules')
+    const requests = []
+    const likes = await loadSourceModule('../src/contentScripts/views/Home/appRecommendationLikes.ts', {
+      './adapters/appRecommendationItem': adapter,
+      '~/utils/api': { default: { video: { getVideoInfo({ aid: aidString }, { signal }) {
+        const aid = Number(aidString)
+        const pending = deferred()
+        requests.push({ aid, pending })
+        return new Promise((resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+          pending.promise.then(resolve, reject)
+        })
+      } } } },
+    })
+    const cards = [1, 2, 3, 4, 1].map(aid => adapter.normalizeAppVideoItem({ card_goto: 'av', param: String(aid), args: {} }))
+    const season = adapter.normalizeAppVideoItem({ card_goto: 'bangumi', param: '999', args: { aid: 999 } })
+    const owner = new AbortController()
+    const pending = likes.completeAppLikeCounts([...cards, season], owner.signal).catch(error => error)
+    assert.deepEqual(requests.map(request => request.aid), [1, 2, 3])
+    requests[0].pending.resolve({ code: 0, data: { aid: 1, stat: { like: 0 } } })
+    await flush()
+    assert.deepEqual(requests.map(request => request.aid), [1, 2, 3, 4])
+    assert.equal(cards[0].normalized.likeCount, 0)
+    assert.equal(cards[4].normalized.likeCount, 0)
+    assert.equal(season.normalized.likeCount, undefined)
+    assert.equal(isAboveKnownCount(0, 0), false)
+    assert.equal(isAboveKnownCount(100, 100), false)
+    assert.equal(isAboveKnownCount(101, 100), true)
+    assert.equal(isAboveKnownCount(undefined, 100), true)
+    owner.abort()
+    assert.equal((await pending).name, 'AbortError')
+    requests.slice(1).forEach(request => request.pending.resolve({ code: 0, data: { aid: request.aid, stat: { like: 101 } } }))
+    await flush()
+    assert.equal(cards[1].normalized.likeCount, undefined, 'late reads cannot enrich an aborted batch')
+  })
   check('batch three: APP normalization keeps combined reasons, explicit follow state, author, portrait and actual publish information together', async () => {
     const { normalizeAppVideoItem } = await import('../src/contentScripts/views/Home/adapters/appRecommendationItem')
     const { transformAppVideo } = await import('../src/contentScripts/views/Home/adapters/recommendationVideo')
@@ -71,7 +153,9 @@ export function registerRecommendationConfigChecks(check, { Vue, flush, compileC
       assert.equal(mode.getRecommendationModeOption(), 'webNoCookie')
       assert.equal(settings.value.desktopColumns, 5)
       const switcher = await readFile(new URL('../src/contentScripts/views/Home/components/RecommendationModeSwitcher.vue', import.meta.url), 'utf8')
-      assert.match(switcher, /<Select[\s\S]*:options="options"/)
+      assert.match(switcher, /v-if="visibleOptions.length"/)
+      const preferences = await readFile(new URL('../src/components/Settings/PluginComponentsAndPages/Home/Home.vue', import.meta.url), 'utf8')
+      assert.match(preferences, /:options="recommendationModeOptions"/)
     }
     finally {
       stop()
@@ -101,6 +185,17 @@ export function registerRecommendationConfigChecks(check, { Vue, flush, compileC
     }
     const provider = { haveScrollbar: async () => true, handleBackToTop() {}, ...Object.fromEntries(['handleReachBottom', 'handlePageRefresh', 'undoForwardState', 'handleUndoRefresh', 'handleForwardRefresh'].map(key => [key, Vue.ref()])) }
     const owners = []
+    const statRequests = []
+    const statsApi = { video: { getVideoInfo({ aid: aidString }, { signal }) {
+      const aid = Number(aidString)
+      const pending = deferred()
+      statRequests.push({ aid, signal, pending })
+      return pending.promise
+    } } }
+    const appLikes = await loadSourceModule('../src/contentScripts/views/Home/appRecommendationLikes.ts', {
+      './adapters/appRecommendationItem': await import('../src/contentScripts/views/Home/adapters/appRecommendationItem'),
+      '~/utils/api': { default: statsApi },
+    })
     async function mount() {
       const key = mode.getRecommendationRequestIdentity()
       const slots = new Map()
@@ -134,11 +229,13 @@ export function registerRecommendationConfigChecks(check, { Vue, flush, compileC
         '~/utils/bilibiliApiError': { isBilibiliRiskControl: () => false },
         '~/utils/debug': { debugLog() {} },
         '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+        '~/utils/filterRules': await import('../src/utils/filterRules'),
+        './appRecommendationLikes': appLikes,
         './forYouInitialData': await import('../src/contentScripts/views/Home/forYouInitialData'),
         './recommendationFeed': await import('../src/contentScripts/views/Home/recommendationFeed'),
         './recommendationState': await import('../src/contentScripts/views/Home/recommendationState'),
         './useRecommendationHistory': await import('../src/contentScripts/views/Home/useRecommendationHistory'),
-        './useRecommendationFilters': { useRecommendationFilters: () => ({ filterFunc: Vue.ref(null), appFilterFunc: Vue.ref(null), hasActiveWebRecommendationFilter: Vue.ref(true), hasActiveAppRecommendationFilter: Vue.ref(true), hasActiveRecommendationFilter: Vue.ref(true), requiresManualFilteredPaging: Vue.ref(false), recommendationFilterSettingsSignature: Vue.ref('fixture'), resetFilteredFeedPagingState() {}, recordFilteredFeedBatch() {} }) },
+        './useRecommendationFilters': { useRecommendationFilters: () => ({ filterFunc: Vue.ref(null), appFilterFunc: Vue.ref(async items => items.map(() => true)), hasActiveWebRecommendationFilter: Vue.ref(true), hasActiveAppRecommendationFilter: Vue.ref(true), hasActiveRecommendationFilter: Vue.ref(true), requiresManualFilteredPaging: Vue.ref(false), recommendationFilterSettingsSignature: Vue.computed(() => JSON.stringify([settings.value.enableFilterByLikeCount, settings.value.filterByLikeCount])), resetFilteredFeedPagingState() {}, recordFilteredFeedBatch() {} }) },
         './useWebRecommendationCursor': await loadSourceModule('../src/contentScripts/views/Home/useWebRecommendationCursor.ts', { '~/logic': { settings, noCookieForYouRecommendationState: Vue.ref({ showlistGroups: [], nextFreshIdx: 1 }) } }),
       })
       const host = document.body.appendChild(document.createElement('div'))
@@ -206,10 +303,83 @@ export function registerRecommendationConfigChecks(check, { Vue, flush, compileC
       requests[4].pending.resolve(response(5))
       await flush()
       assert.equal(third.state.currentVideoList.value.length, 0)
+      assert.equal(statRequests.length, 0, 'disabled likes have no additional requests')
+      third.stop()
+      settings.value.enableFilterByLikeCount = true
+      settings.value.filterByLikeCount = 100
+      const fourth = await mount()
+      requests.at(-1).pending.resolve(response(6))
+      await flush()
+      assert.equal(statRequests[0].aid, 6)
+      assert.equal(fourth.slots.get('appFeedIdx').value, 0, 'cursor waits for statistics and filtering')
+      fourth.stop()
+      assert.equal(statRequests[0].signal.aborted, true)
+      const fifth = await mount()
+      const batch = response(7)
+      batch.data.items.push(...response(8).data.items, { card_goto: 'bangumi', param: '999', args: { aid: 999 } })
+      requests.at(-1).pending.resolve(batch)
+      await flush()
+      statRequests[0].pending.resolve({ code: 0, data: { aid: 6, stat: { like: 1000 } } })
+      statRequests[1].pending.resolve({ code: 0, data: { aid: 7, stat: { like: 101 } } })
+      statRequests[2].pending.resolve({ code: 0, data: { aid: 8, stat: { like: 100 } } })
+      await flush()
+      assert.deepEqual(Array.from(fifth.state.currentVideoList.value, row => row.item.param), ['7', '999'])
+      assert.equal(fourth.state.currentVideoList.value.length, 0, 'a late old read never commits')
+      assert.equal(fifth.slots.get('appFeedIdx').value, 1)
+      await flush()
+      assert.equal(fifth.slots.get('hasInitializedData').value, true)
+      const requestCountBeforePaging = requests.length
+      fifth.state.handleManualLoadMore()
+      await flush()
+      assert.equal(requests.length, requestCountBeforePaging + 1)
+      requests.at(-1).pending.resolve(response(9))
+      await flush()
+      const hiddenRead = statRequests.at(-1)
+      assert.equal(hiddenRead.aid, 9)
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+      assert.equal(hiddenRead.signal.aborted, true)
+      assert.equal(fifth.slots.get('appFeedIdx').value, 1)
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false })
+      document.dispatchEvent(new Event('visibilitychange'))
+      await flush()
+      assert.equal(requests.at(-1).params.idx, 1, 'resume retains the uncommitted cursor')
+      requests.at(-1).pending.resolve(response(10))
+      await flush()
+      hiddenRead.pending.resolve({ code: 0, data: { aid: 9, stat: { like: 999 } } })
+      statRequests.at(-1).pending.resolve({ code: 0, data: { aid: 10, stat: { like: 101 } } })
+      await flush()
+      assert.deepEqual(Array.from(fifth.state.currentVideoList.value, row => row.item.param), ['7', '999', '10'])
+      await flush()
+      assert.equal(fifth.state.isLoading.value, false)
+      provider.handlePageRefresh.value()
+      await flush()
+      const obsolete = requests.at(-1)
+      assert.ok(fifth.slots.get('recommendationBack').value)
+      settings.value.filterByLikeCount = 200
+      await flush()
+      assert.equal(fifth.slots.get('recommendationBack').value, null, 'filter changes invalidate old undo snapshots')
+      const beforeSettling = requests.length
+      settings.value.filterByLikeCount = 199
+      await flush()
+      settings.value.filterByLikeCount = 200
+      await flush()
+      assert.equal(requests.length, beforeSettling, 'typing does not issue a request per keystroke')
+      await new Promise(resolve => setTimeout(resolve, 320))
+      await flush()
+      assert.equal(requests.length, beforeSettling + 1)
+      assert.equal(requests.at(-1).params.idx, 0)
+      obsolete.pending.resolve(response(12))
+      requests.at(-1).pending.resolve(response(11))
+      await flush()
+      statRequests.at(-1).pending.resolve({ code: 0, data: { aid: 11, stat: { like: 201 } } })
+      await flush()
+      assert.deepEqual(Array.from(fifth.state.currentVideoList.value, row => row.item.param), ['11'])
     }
     finally {
       for (const owner of owners)
         owner.stop()
+      delete document.hidden
     }
   })
 

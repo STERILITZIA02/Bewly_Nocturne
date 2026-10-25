@@ -118,7 +118,7 @@ function handleOpenImage(index: number, event: MouseEvent) {
   color: white;
   background: rgb(0 0 0 / 58%);
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
 }
 </style>

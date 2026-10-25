@@ -27,7 +27,7 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
     font-size: var(--bew-font-size-control);
-    font-weight: var(--bew-font-weight-medium);
+    font-weight: var(--bew-font-weight-regular);
   }
 }
 
@@ -197,7 +197,7 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
       [class*="rankList_sp_right"]
       [class*="rankList_sp_msg"],
     [class*="sponsor_sponsor_module"] {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     [class*="mediainfo_mediaRight"]
@@ -247,7 +247,7 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
       [class*="rankList_sp_left"]
       [class*="rankList_face_wrap"]
       [class*="rankList_svg"] {
-      fill: var(--bew-border-color);
+      fill: var(--bew-separator-color);
     }
   }
 
@@ -385,15 +385,15 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
     .main-container .sponsor-module,
     .main-container .ep-list-wrapper .list-wrapper.simple ul .ep-item,
     .sponsor-rank-item.pos-rank-module .sp-right .sp-msg {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .sponsor-rank-item.pos-rank-module .sp-left .face-wrap.iconfont:before {
-      color: var(--bew-border-color);
+      color: var(--bew-separator-color);
     }
 
     .main-container .media-info .media-right .pub-wrapper .up-info-wrapper .split-line {
-      background-color: var(--bew-border-color);
+      background-color: var(--bew-separator-color);
     }
 
     .main-container .ep-list-wrapper,

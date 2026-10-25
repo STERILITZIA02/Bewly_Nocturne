@@ -33,7 +33,7 @@ export function registerUpstreamSettingsChecks(check, { Vue, flush, compileCompo
     host.remove()
     const { settingsSearchEntries } = await import('../src/components/Settings/searchCatalog')
     const entry = settingsSearchEntries.find(item => item.titleKey === 'settings.video_player_scroll_position')
-    assert.ok(entry.storageValues.some(item => item.value === 'playback'))
+    assert.ok(entry.storageValues.some(item => item.key === 'bewly-settings-playback-page' && item.value === 'layout'))
     assert.deepEqual(entry.keywordKeys, ['settings.video_player_scroll_sending_bar', 'settings.video_player_scroll_center'])
     for (const locale of ['cmn-CN', 'cmn-TW', 'jyut', 'en']) {
       const source = await readFile(new URL(`../src/_locales/${locale}.yml`, import.meta.url), 'utf8')

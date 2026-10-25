@@ -70,7 +70,7 @@ provide(FORM_FIELD_LABEL_ID, titleId)
 }
 
 .b-settings-item + .b-settings-item {
-  --uno: "border-t-1 border-$bew-border-color";
+  --uno: "border-t-hairline border-$bew-separator-color";
 }
 
 .settings-item-title {

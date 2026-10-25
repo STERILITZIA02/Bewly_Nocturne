@@ -598,7 +598,6 @@ function handleClearKeyword() {
         h-inherit
         spellcheck="false"
         text="$b-search-bar-normal-text-color group-focus-within:$b-search-bar-focus-text-color group-hover:$b-search-bar-hover-text-color"
-        un-border="1 solid $bew-surface-border-color"
         @focus="isFocus = true"
         @input="handleNativeInput"
         @compositionend="handleNativeInput"
@@ -691,7 +690,7 @@ function handleClearKeyword() {
           <div
             v-if="(showHotSearch ?? settings.showHotSearchInTopBar) && hotSearchList.length > 0 && searchHistory.length > 0"
             class="divider"
-            mx-2 my-1 h-px bg="$bew-border-color"
+            mx-2 my-1 h-px bg="$bew-separator-color"
           />
 
           <!-- 搜索历史区块 -->
@@ -863,7 +862,7 @@ function handleClearKeyword() {
   --b-search-bar-focus-text-color: var(--bew-text-1);
 
   @mixin card-content {
-    --uno: "text-base outline-none w-full bg-transparent border-1 border-$bew-surface-border-color";
+    --uno: "text-base outline-none w-full bg-transparent";
   }
 
   // Focus keeps the same pill, material and shadow; no shape or opacity change.
@@ -874,12 +873,12 @@ function handleClearKeyword() {
     z-index: 1;
     border-radius: var(--b-search-bar-current-radius);
     corner-shape: var(--b-search-bar-current-corner);
-    box-shadow: var(--bew-shadow-2);
+    box-shadow: var(--bew-glass-shadow);
     pointer-events: none;
   }
 
   .search-bar {
-    --b-search-bar-current-corner: var(--bew-corner-shape-round);
+    --b-search-bar-current-corner: var(--bew-corner-shape-capsule);
     background: var(--b-search-bar-normal-color);
     backdrop-filter: var(--bew-filter-glass-1);
     transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
@@ -910,6 +909,8 @@ function handleClearKeyword() {
     input {
       @include card-content;
       appearance: none;
+      // The input fills the glass capsule, so it draws the glass rim.
+      border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
       min-width: 0;
       position: relative;
       z-index: 0;
@@ -925,10 +926,6 @@ function handleClearKeyword() {
         color: inherit;
         opacity: var(--b-search-bar-placeholder-opacity, 0.65);
       }
-    }
-
-    &.focus input {
-      border-color: var(--bew-focus-ring-color);
     }
 
     .search-submit-btn {
@@ -967,7 +964,7 @@ function handleClearKeyword() {
 
     .title {
       font-size: var(--bew-font-size-title);
-      font-weight: var(--bew-font-weight-semibold);
+      font-weight: var(--bew-font-weight-regular);
       line-height: var(--bew-line-height-title);
     }
 
@@ -996,7 +993,7 @@ function handleClearKeyword() {
           }
 
           .index {
-            --uno: "text-xs min-w-4 text-center font-semibold";
+            --uno: "text-xs min-w-4 text-center ";
 
             &.top-1 {
               --uno: "text-red-500";
@@ -1028,7 +1025,7 @@ function handleClearKeyword() {
     }
 
     .divider {
-      --uno: "mx-2 my-1 h-px bg-$bew-border-color";
+      --uno: "mx-2 my-1 h-px bg-$bew-separator-color";
     }
 
     .history-section {

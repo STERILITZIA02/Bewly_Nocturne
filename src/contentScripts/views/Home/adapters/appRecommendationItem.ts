@@ -14,6 +14,7 @@ export interface NormalizedAppVideoItem extends AppVideoItem {
     publishedTimestamp?: number
     portrait?: boolean
     vertical?: boolean
+    likeCount?: number
   }
 }
 

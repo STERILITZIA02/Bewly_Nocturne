@@ -138,9 +138,9 @@ onBeforeUnmount(() => clearTimeout(enterTimer))
   z-index: var(--bew-z-popover);
   padding-block: var(--bew-space-1);
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
 
   &--placement-right {

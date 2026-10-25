@@ -748,10 +748,10 @@ onBeforeUnmount(() => {
     color: var(--bew-text-1);
     background: var(--bew-selected-bg);
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
     box-shadow: var(--bew-shadow-2);
     font-size: var(--bew-font-size-control);
-    font-weight: var(--bew-font-weight-medium);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-control);
   }
 }
@@ -789,7 +789,7 @@ onBeforeUnmount(() => {
   gap: var(--bew-space-3);
   color: var(--bew-text-1);
   background: var(--bew-elevated-alt-solid);
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   box-shadow: var(--bew-shadow-4);
   pointer-events: auto;
@@ -803,7 +803,7 @@ onBeforeUnmount(() => {
 
   strong {
     font-size: var(--bew-font-size-title);
-    font-weight: var(--bew-font-weight-semibold);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-title);
   }
 
@@ -842,13 +842,12 @@ onBeforeUnmount(() => {
     padding: 0 var(--bew-space-3);
     color: var(--bew-text-1);
     background: var(--bew-content-solid);
-    border: 1px solid var(--bew-surface-border-color);
+    border: var(--bew-hairline) solid var(--bew-edge-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
     outline: none;
 
     &:focus-visible {
-      border-color: var(--bew-focus-ring-color);
       box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
     }
   }
@@ -857,7 +856,7 @@ onBeforeUnmount(() => {
 .layout-editor-menu__footer {
   justify-content: flex-end;
   padding-top: var(--bew-space-1);
-  border-top: 1px solid var(--bew-border-color);
+  border-top: var(--bew-hairline) solid var(--bew-separator-color);
 }
 
 .layout-editor-context-menu {
@@ -879,7 +878,7 @@ onBeforeUnmount(() => {
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
     font-size: var(--bew-font-size-control);
-    font-weight: var(--bew-font-weight-medium);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-control);
     text-align: left;
 

@@ -162,7 +162,9 @@ const otherLinks = computed(() => {
 .icon {
   --uno: "w-2em h-2em mr-3 bg-$bew-content-solid vertical-bottom fill-current overflow-hidden";
   --uno: "text-1.25em grid place-items-center rounded-$bew-pill-radius shrink-0";
-  --uno: "border-1 border-$bew-border-color";
+  --uno: "border-hairline border-$bew-edge-color";
+  // A true circle, not a capsule.
+  corner-shape: var(--bew-corner-shape-round);
 
   svg {
     --uno: "w-1.25em h-1.25em";

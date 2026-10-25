@@ -481,9 +481,11 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
     }
   })
 
-  check('favorite resource actions: transfer gating and pending state preserve the existing batch commands', async () => {
+  check('favorite resource actions: icon actions in one row keep transfer gating and pending state', async () => {
     const Actions = await compileComponent('../src/contentScripts/views/Favorites/FavoriteResourceActions.vue', {
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      '~/components/IconButton.vue': { default: await compileComponent('../src/components/IconButton.vue') },
+      '~/components/Tooltip.vue': { default: { setup: (_props, { slots }) => () => slots.default?.() } },
     })
     const state = Vue.reactive({ managing: false, pending: false, total: 2, selectedCount: 0, allSelected: false, canTransfer: true })
     const events = []
@@ -500,7 +502,9 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
     try {
       host.querySelector('button').click()
       await Vue.nextTick()
-      const button = label => [...host.querySelectorAll('button')].find(item => item.textContent.includes(label))
+      // Icon-only: each action is named by its label.
+      const button = label => [...host.querySelectorAll('button')].find(item => item.getAttribute('aria-label') === `favorites.${label}`)
+      assert.ok([...host.querySelectorAll('button')].every(item => !item.textContent.trim()), 'no full-width text buttons')
       assert.ok(button('batch_copy').disabled)
       button('batch_select_all').click()
       state.selectedCount = 2

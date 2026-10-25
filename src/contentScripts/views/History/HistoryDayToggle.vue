@@ -27,7 +27,7 @@ defineEmits<{ (event: 'toggle', trigger: MouseEvent): void }>()
   background: transparent;
   color: var(--bew-history-timeline-color);
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
   text-align: start;
   cursor: pointer;

@@ -8,14 +8,21 @@ import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
+import LibraryBleedStrip from '~/components/LibraryBleedStrip.vue'
+import LibraryDateRange from '~/components/LibraryDateRange.vue'
+import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
+import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
+import LibraryHero from '~/components/LibraryHero.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryVideoCardSkeleton from '~/components/LibraryVideoCardSkeleton.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
+import LoadingFill from '~/components/LoadingFill.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 import Progress from '~/components/Progress.vue'
 import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import SmoothLoading from '~/components/SmoothLoading.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -23,6 +30,7 @@ import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindo
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { useLibraryBatchSelection } from '~/composables/useLibraryBatchSelection'
+import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
@@ -39,12 +47,12 @@ import { getHistoryResumeUrl, getHistoryUrl, getHistoryVideoIdentity } from '~/u
 import { normalizeIntlLocale } from '~/utils/locale'
 import { getCSRF, getUserID, removeHttpFromUrl } from '~/utils/main'
 import { retiringListTransition } from '~/utils/motionPresence'
+import { scrollToPosition } from '~/utils/scrollIntent'
 import { clearVideoVisitHistory, getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
 
-import HistoryAdvancedFilters from './HistoryAdvancedFilters.vue'
 import HistoryDayToggle from './HistoryDayToggle.vue'
 import type { HistoryFilters, HistorySortOrder } from './historyFilters'
-import { sortHistoryItems } from './historyFilters'
+import { hasHistoryFilters, historyRangeBounds, sortHistoryItems } from './historyFilters'
 import type { HistoryDayGroup, HistoryWindowCell } from './historyWindow'
 import { createHistoryWindow, historyDayKey, historyItemKey } from './historyWindow'
 import { useHistoryDayMotion } from './useHistoryDayMotion'
@@ -83,6 +91,13 @@ const batch = useLibraryBatchSelection({
   },
 })
 const controlsDisabled = computed(() => batch.busy.value || isClearingHistory.value || timeline.deleting.size > 0)
+// Filtered reads (search, filters, a content type) scan pages for an unknown
+// number of matches: they show the ring, never skeletons. Unfiltered pages
+// have a known size and keep skeletons.
+const pendingRef = ref<{ $el: Element }>()
+const pendingLoading = computed(() => filtersActive.value && isLoading.value && !historyList.length)
+const pendingPhase = useLoadingRingPhase(() => pendingLoading.value, () => pendingRef.value?.$el)
+const showSkeletons = computed(() => isLoading.value && !filtersActive.value)
 batch.managing.value = viewState.read('managing', false)
 batch.selected.value = viewState.read('selected', new Set<string>())
 viewState.capture('managing', () => batch.managing.value)
@@ -99,6 +114,29 @@ function updateFilters(value: HistoryFilters) {
   filters.value = value
   handleSearch()
 }
+// The filter behind the search field's funnel; a custom period opens the
+// date range on the rail.
+const DURATIONS = ['all', 'short', 'medium', 'long', 'extraLong'] as const
+const PERIODS = ['all', 'today', 'yesterday', 'week', 'custom'] as const
+const DEVICES = ['all', 'pc', 'phone', 'tablet', 'tv'] as const
+const DURATION_ICONS = { all: 'i-tabler:clock', short: 'i-tabler:clock-hour-2', medium: 'i-tabler:clock-hour-5', long: 'i-tabler:clock-hour-8', extraLong: 'i-tabler:clock-hour-11' } as const
+const PERIOD_ICONS = { all: 'i-tabler:infinity', today: 'i-tabler:calendar-event', yesterday: 'i-tabler:calendar-minus', week: 'i-tabler:calendar-week', custom: 'i-tabler:calendar-cog' } as const
+const DEVICE_ICONS = { all: 'i-tabler:devices', pc: 'i-tabler:device-desktop', phone: 'i-tabler:device-mobile', tablet: 'i-tabler:device-tablet', tv: 'i-tabler:device-tv' } as const
+const filterGroups = computed<LibraryFilterGroup[]>(() => [
+  { key: 'duration', title: t('library_tools.filter_duration'), value: filters.value.duration, options: DURATIONS.map(value => ({ value, label: t(`watch_later.filters.duration_${value}`), icon: DURATION_ICONS[value] })) },
+  { key: 'period', title: t('library_tools.filter_watched'), value: filters.value.period, options: PERIODS.map(value => ({ value, label: t(value === 'custom' ? 'library_tools.date_custom' : `history.filters.period_${value}`), icon: PERIOD_ICONS[value] })) },
+  { key: 'device', title: t('library_tools.filter_device'), value: filters.value.device, options: DEVICES.map(value => ({ value, label: t(`history.filters.device_${value}`), icon: DEVICE_ICONS[value] })) },
+])
+function selectFilter(key: string, value: string) {
+  if (key === 'period')
+    updateFilters({ ...filters.value, period: value as HistoryFilters['period'], ...(value === 'custom' ? {} : { startDate: '', endDate: '' }) })
+  else
+    updateFilters({ ...filters.value, [key]: value })
+}
+function updateFilterDate(key: 'startDate' | 'endDate', value: string) {
+  updateFilters({ ...filters.value, [key]: value })
+}
+const invalidRange = computed(() => historyRangeBounds(filters.value) === null)
 function toggleSortOrder() {
   sortOrder.value = sortOrder.value === 'newest' ? 'oldest' : 'newest'
   resetHistoryPosition()
@@ -134,6 +172,7 @@ const historyGroups = computed(() => {
 })
 
 const historyContainer = ref<HTMLElement | null>(null)
+
 const dayMotion = useHistoryDayMotion(historyContainer)
 const layoutMotion = useLayoutMotion(historyContainer, () => `${settings.value.historyLayout}:${sortedHistory.value.map(historyItemKey).join(',')}`, {
   selector: '[data-history-cell]',
@@ -175,6 +214,44 @@ type RenderedHistoryCell = Exclude<HistoryWindowCell, { kind: 'padding' }> | { k
 const renderedCells = computed(() => cardWindow.ranges.value.flatMap<RenderedHistoryCell>(range => range.height !== undefined
   ? [{ kind: 'spacer' as const, key: `spacer:${range.start}`, height: range.height }]
   : windowCells.value.slice(range.start, range.end).filter(cell => cell.kind !== 'padding')))
+// The day strip over the content: each loaded day, jumping to its heading.
+const dayFormatter = computed(() => new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), { month: 'short', day: 'numeric', weekday: 'short' }))
+const historyDays = computed(() => {
+  const now = new Date()
+  const dayKey = (offset: number) => {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset)
+    return `${day.getFullYear()}-${day.getMonth() + 1}-${day.getDate()}`
+  }
+  const [today, yesterday] = [dayKey(0), dayKey(1)]
+  return historyGroups.value.filter(group => group.key !== 'unknown').map((group) => {
+    const [year, month, day] = group.key.split('-').map(Number)
+    const label = group.key === today
+      ? t('history.filters.period_today')
+      : group.key === yesterday ? t('history.filters.period_yesterday') : dayFormatter.value.format(new Date(year, month - 1, day))
+    return { key: group.key, label }
+  })
+})
+function jumpToDay(groupKey: string) {
+  const viewport = scrollViewportRef.value
+  const container = historyContainer.value
+  if (!viewport || !container)
+    return
+  const key = `date:${groupKey}`
+  const viewportTop = viewport === document.scrollingElement ? 0 : viewport.getBoundingClientRect().top
+  // A mounted heading is measured; one outside the window comes from its row offset.
+  const heading = container.querySelector<HTMLElement>(`[data-history-cell="${CSS.escape(key)}"]`)
+  const offset = heading
+    ? heading.getBoundingClientRect().top - viewportTop
+    : (cardWindow.offsetOf(key) ?? Number.NaN) + container.getBoundingClientRect().top - viewportTop
+  if (!Number.isFinite(offset))
+    return
+  const inset = (Number.parseFloat(getComputedStyle(viewport).getPropertyValue('--bew-top-bar-height')) || 0) + 16
+  void scrollToPosition(viewport, Math.max(0, viewport.scrollTop + offset - inset), 'smooth')
+}
+// The hero: the latest video left unfinished, while the plain newest-first list shows.
+const resumeItem = computed(() => !submittedKeyword.value && sortOrder.value === 'newest' && !hasHistoryFilters(filters.value)
+  ? sortedHistory.value.find(item => getHistoryResumeUrl(item))
+  : undefined)
 function toggleHistoryDay(key: string, event?: MouseEvent) {
   if (controlsDisabled.value)
     return
@@ -297,6 +374,17 @@ function retryHistoryRequest() {
     void timeline.retry()
 }
 
+function getHistoryItemTag(item: HistoryItem) {
+  if (item.history.business === Business.LIVE)
+    return t('search.categories.live')
+  return item.history.business === Business.PGC ? t('history.media') : ''
+}
+function getHistoryItemProgressText(item: HistoryItem) {
+  if (item.history.business !== Business.ARCHIVE && item.history.business !== Business.PGC)
+    return ''
+  // -1 means the whole video was watched.
+  return `${calcCurrentTime(item.progress === -1 ? item.duration : item.progress)} / ${calcCurrentTime(item.duration)}`
+}
 function getHistoryItemCover(item: HistoryItem) {
   if (item.history.business === 'article' || item.history.business === 'article-list') {
     if (item.covers)
@@ -347,15 +435,41 @@ function jumpToLoginPage() {
 <template>
   <LibraryWorkspace v-if="getCSRF()" :label="t('history.title')">
     <main class="history-content">
+      <!-- The first unfiltered page holds the strip with chips of the same height. -->
+      <section v-if="historyDays.length > 1 || (showSkeletons && !historyList.length)" class="history-day-strip" :aria-label="t('library_tools.days')" :aria-busy="historyDays.length <= 1">
+        <LibraryBleedStrip v-if="historyDays.length <= 1" :label="t('library_tools.days')" compact>
+          <SkeletonBlock v-for="index in 6" :key="index" width="calc(var(--bew-space-12) + var(--bew-space-4))" height="var(--bew-control-height)" radius="full" />
+        </LibraryBleedStrip>
+        <LibraryBleedStrip v-else :label="t('library_tools.days')" compact>
+          <button v-for="day in historyDays" :key="day.key" type="button" class="history-day-strip__day" @click="jumpToDay(day.key)">
+            {{ day.label }}
+          </button>
+        </LibraryBleedStrip>
+      </section>
+      <Transition name="library-hero" :duration="300">
+        <LibraryHero v-if="resumeItem && !batch.managing.value" :image="getHistoryItemCover(resumeItem)" :label="t('history.continue_watching')" class="history-hero">
+          <span class="history-hero__eyebrow">{{ t('history.continue_watching') }}</span>
+          <h2 class="history-hero__title keep-two-lines">
+            {{ resumeItem.show_title || resumeItem.title }}
+          </h2>
+          <span class="history-hero__meta">{{ [resumeItem.author_name, t('library_tools.resume_at', { time: calcCurrentTime(resumeItem.progress), total: calcCurrentTime(resumeItem.duration) })].filter(Boolean).join(' · ') }}</span>
+          <template #actions>
+            <ALink :href="getHistoryResumeUrl(resumeItem)!" type="videoCard" class="history-hero__resume">
+              <i i-tabler:player-play-filled aria-hidden="true" />{{ t('history.continue_watching') }}
+            </ALink>
+          </template>
+        </LibraryHero>
+      </Transition>
       <p v-if="submittedKeyword" class="history-query-summary" role="status">
         {{ t('library_tools.search_results', { query: submittedKeyword }) }}
       </p>
+      <LoadingFill v-if="pendingPhase !== 'idle'" ref="pendingRef" :loading="pendingLoading" />
       <Empty
-        v-if="requestFailed && !isLoading && historyList.length === 0" text-only fill :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')"
+        v-else-if="requestFailed && !isLoading && historyList.length === 0" text-only fill :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')"
         @action="retryHistoryRequest"
       />
       <Empty v-else-if="noMoreContent && !isLoading && !historyList.length" text-only fill :description="t(filtersActive ? 'library_tools.no_matches' : 'common.no_data')" role="status" />
-      <VideoListSkeleton v-else-if="isLoading && historyList.length === 0 && settings.historyLayout === 'list'" class="history-timeline-skeleton" :count="5" history />
+      <VideoListSkeleton v-else-if="showSkeletons && historyList.length === 0 && settings.historyLayout === 'list'" class="history-timeline-skeleton" :count="5" history />
 
       <!-- historyList -->
       <div v-else ref="historyContainer" class="history-groups">
@@ -410,50 +524,9 @@ function jumpToLoginPage() {
                     object-cover
                   />
 
-                  <span
-                    v-if="entry.item.history.business === HistoryBusiness.LIVE || entry.item.history.business === HistoryBusiness.PGC"
-                    pos="absolute right-0 top-0"
-                    bg="$bew-selected-bg"
-                    text="xs $bew-text-1"
-                    p="x-2 y-1"
-                    m-1
-                    rounded="$bew-interactive-radius"
-                  >
-                    <template
-                      v-if="entry.item.history.business === HistoryBusiness.LIVE"
-                    >
-                      {{ t('search.categories.live') }}
-                    </template>
-                    <template
-                      v-else-if="entry.item.history.business === HistoryBusiness.PGC"
-                    >
-                      {{ t('history.media') }}
-                    </template>
-                  </span>
-
-                  <div
-                    v-if="
-                      entry.item.history.business === HistoryBusiness.ARCHIVE
-                        || entry.item.history.business === HistoryBusiness.PGC
-                    "
-                    pos="absolute bottom-0 right-0"
-                    bg="black opacity-60"
-                    m="2"
-                    p="x-2 y-1"
-                    text="white xs"
-                    rounded="$bew-interactive-radius"
-                  >
-                    <!--  When progress = -1 means that the user watched the full video -->
-                    {{
-                      `${
-                        entry.item.progress === -1
-                          ? calcCurrentTime(entry.item.duration)
-                          : calcCurrentTime(entry.item.progress)
-                      } /
-                      ${calcCurrentTime(entry.item.duration)}`
-                    }}
-                  </div>
-                  <div w-full pos="absolute bottom-0" bg="white opacity-60">
+                  <!-- The cover carries no text (user-specified): only the watched
+                       line along its bottom edge; times and labels are in the details. -->
+                  <div class="history-list-card__progress">
                     <Progress
                       v-if="
                         entry.item.history.business === HistoryBusiness.ARCHIVE
@@ -534,7 +607,7 @@ function jumpToLoginPage() {
                         <i v-if="entry.item.history.dt === 33" i-tabler:device-tv />
                       </span>
                       <span>
-                        {{ formatHistoryTime(entry.item) }}
+                        {{ [formatHistoryTime(entry.item), getHistoryItemTag(entry.item), getHistoryItemProgressText(entry.item)].filter(Boolean).join(' · ') }}
                       </span>
                       <ALink
                         v-if="getHistoryResumeUrl(entry.item)"
@@ -564,11 +637,11 @@ function jumpToLoginPage() {
               />
             </div>
           </template>
-          <div v-if="isLoading && !historyList.length && settings.historyLayout === 'grid'" key="loading:date" class="history-day-heading history-day-heading--first history-day-heading--grid" aria-hidden="true">
+          <div v-if="showSkeletons && !historyList.length && settings.historyLayout === 'grid'" key="loading:date" class="history-day-heading history-day-heading--first history-day-heading--grid" aria-hidden="true">
             <SkeletonBlock width="112px" height="var(--bew-line-height-title)" />
           </div>
           <LibraryVideoCardSkeleton
-            v-for="index in (isLoading && settings.historyLayout === 'grid' ? (historyList.length ? columns : columns * 2) : 0)"
+            v-for="index in (showSkeletons && settings.historyLayout === 'grid' ? (historyList.length ? columns : columns * 2) : 0)"
             :key="`loading:${index}`" history
           />
         </TransitionGroup>
@@ -580,11 +653,12 @@ function jumpToLoginPage() {
       />
 
       <VideoListSkeleton
-        v-if="isLoading && historyList.length !== 0 && !noMoreContent && settings.historyLayout === 'list'"
+        v-if="showSkeletons && historyList.length !== 0 && !noMoreContent && settings.historyLayout === 'list'"
         class="history-timeline-skeleton"
         :count="2"
         history
       />
+      <SmoothLoading v-if="filtersActive && historyList.length" :show="isLoading" />
     </main>
 
     <template #sidebar="{ contentId }">
@@ -595,8 +669,15 @@ function jumpToLoginPage() {
           @update:model-value="selectRailContent"
         />
         <fieldset class="history-controls library-rail-content" :disabled="controlsDisabled" :aria-label="t('history.title')">
-          <div class="library-rail-tools">
-            <LibrarySearchField v-model="keyword" :label="t('history.search_watch_history')" :clearable="Boolean(submittedKeyword)" @submit="handleSearch()" @clear="clearSearch" />
+          <div class="library-rail-tools library-rail-tools--ruled">
+            <LibrarySearchField
+              v-model="keyword" :label="t('history.search_watch_history')" :clearable="Boolean(submittedKeyword)" :filter-active="hasHistoryFilters(filters)" @submit="handleSearch()"
+              @clear="clearSearch"
+            >
+              <template #filter>
+                <LibraryFilterMenu :label="t('library_tools.filters')" :groups="filterGroups" :disabled="controlsDisabled" @select="selectFilter" />
+              </template>
+            </LibrarySearchField>
             <div class="history-layout-switcher" :class="{ 'history-layout-switcher--sort-only': !settings.enableGridLayoutSwitcher }">
               <SettingsSegmentedControl
                 v-if="settings.enableGridLayoutSwitcher" v-model="settings.historyLayout"
@@ -609,7 +690,10 @@ function jumpToLoginPage() {
               </Tooltip>
             </div>
           </div>
-          <HistoryAdvancedFilters :model-value="filters" :disabled="controlsDisabled" @update:model-value="updateFilters" />
+          <LibraryDateRange
+            :open="filters.period === 'custom'" :title="t('library_tools.date_range')" :start="filters.startDate" :end="filters.endDate"
+            :invalid="invalidRange" :disabled="controlsDisabled" @update="updateFilterDate"
+          />
           <Button
             class="library-sidebar-action" :type="batch.managing.value ? 'primary' : 'default'"
             role="switch" :aria-checked="batch.managing.value" @click="batch.toggleManaging"
@@ -709,6 +793,7 @@ function jumpToLoginPage() {
 @use "../../../styles/videoList";
 @use "../../../styles/contentCard";
 @use "./historyTimeline";
+@use "../../../styles/bleedStrip";
 .history-action--warning {
   --bew-library-action-foreground: var(--bew-warning-foreground);
 }
@@ -762,10 +847,97 @@ function jumpToLoginPage() {
 }
 .history-content,
 .history-groups {
+  // Later and positioned: it slides up over the pinned day strip.
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--bew-space-6);
   min-width: 0;
+}
+// Each loaded day, jumping to its heading; pinned like the Moments up-list.
+.history-day-strip {
+  @include bleedStrip.bar(var(--bew-control-height), var(--bew-space-6));
+}
+.history-day-strip__day {
+  flex: none;
+  height: var(--bew-control-height);
+  padding-inline: var(--bew-space-3);
+  border: 0;
+  border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
+  background: var(--bew-fill-1);
+  color: var(--bew-text-2);
+  font: inherit;
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--bew-duration-fast) var(--bew-ease-standard),
+    color var(--bew-duration-fast) var(--bew-ease-standard);
+  &:hover {
+    background: var(--bew-fill-2);
+    color: var(--bew-text-1);
+  }
+  &:focus-visible {
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
+    outline-offset: var(--bew-space-0-5);
+  }
+}
+.history-hero {
+  position: relative;
+  margin-bottom: var(--bew-space-6);
+}
+.history-hero__eyebrow {
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+}
+.history-hero__title {
+  margin: 0;
+  color: var(--bew-text-1);
+  font-size: var(--bew-font-size-heading);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-line-height-heading);
+}
+.history-hero__meta {
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-callout);
+  line-height: var(--bew-line-height-callout);
+  font-variant-numeric: tabular-nums;
+}
+.history-hero__resume {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bew-space-2);
+  height: var(--bew-control-height);
+  padding-inline: var(--bew-space-4);
+  border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
+  background: var(--bew-accent-solid);
+  color: var(--bew-on-accent-solid);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  text-decoration: none;
+  transition: transform var(--bew-duration-fast) var(--bew-ease-standard);
+  i {
+    width: var(--bew-control-icon-size);
+    height: var(--bew-control-icon-size);
+  }
+  &:active {
+    transform: scale(var(--bew-control-press-scale));
+  }
+}
+// The watched line along the cover's bottom edge, the cover's only mark.
+.history-list-card__progress {
+  position: absolute;
+  inset: auto 0 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .history-day-strip__day,
+  .history-hero__resume {
+    transition: none;
+  }
 }
 
 .history-list-card--grid .history-list-card__content {
@@ -856,7 +1028,7 @@ function jumpToLoginPage() {
   padding-inline: var(--bew-space-2);
   border-radius: var(--bew-interactive-radius);
   color: var(--bew-theme-foreground);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
 
   &:hover {
     background: var(--bew-theme-surface);

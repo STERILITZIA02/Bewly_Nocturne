@@ -28,7 +28,7 @@ defineProps<{
   width: 100%;
   min-width: 0;
   padding: 0.75rem 0;
-  border-top: 1px solid var(--bew-border-color);
+  border-top: var(--bew-hairline) solid var(--bew-separator-color);
 }
 
 .settings-item-subgroup:first-child {

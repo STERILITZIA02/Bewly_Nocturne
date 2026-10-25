@@ -40,7 +40,7 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
   const hadHeaderClass = document.documentElement.classList.contains(headerClass)
   document.documentElement.classList.add(headerClass)
   function send(action: string, extra: Record<string, unknown> = {}) {
-    if (config?.active && !document.hidden && !disposed)
+    if (config?.active && !disposed)
       client.send({ type: IMMERSIVE_EVENT, key: config.key, playbackId: config.playbackId, action, navigation, ...extra })
   }
   function releaseMediaBinding(pause: boolean) {
@@ -92,7 +92,7 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
     }
   }
   function status() {
-    if (disposed || !config?.active || document.hidden || !isIframeDocumentActive())
+    if (disposed || !config?.active || !config.uiVisible || document.hidden || !isIframeDocumentActive())
       return
     const layoutReady = isBewlyPlaybackLayoutReady()
     const playing = !!media && !media.paused && !media.ended
@@ -114,7 +114,7 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
       }
       return
     }
-    if (config?.active && config.autoPlay && !document.hidden && media?.readyState && !playAttempted
+    if (config?.active && config.autoPlay && media?.readyState && !playAttempted
       && isNativeVideoComponentReady(media) === true) {
       playAttempted = true
       void media.play().catch(() => status())
@@ -129,7 +129,7 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
     const isCurrent = () => !disposed && config?.active && config.autoNext && config.key === key && config.playbackId === playbackId
       && generation === version && endGeneration === endVersion && video === media && video === getVideoElement()
       && navigation === getPlaybackNavigationKey(location.href) && source === (video?.currentSrc || video?.getAttribute('src') || '')
-      && video?.ended && !document.hidden
+      && video?.ended
     const quality = video ? readNativeQualityState(video) : undefined
     if (!isCurrent() || !playbackStarted || endedReported || !video || isPlayerAdvertisement(video)
       || isNativeVideoComponentReady(video) !== true || (quality?.ready && quality.preview)) {
@@ -153,7 +153,7 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
   }
   const stepper = createWheelStepper({ oncePerGesture: true })
   function keyboard(event: KeyboardEvent) {
-    if (!config?.active || isImmersiveInput(event))
+    if (!config?.active || !config.uiVisible || isImmersiveInput(event))
       return
     if (event.key === 'Escape') {
       if (hasIframeEscapePriorityState({ documentRoot: document }) || getPlayerModeContainer()?.getAttribute('data-screen') === 'web'
@@ -176,7 +176,7 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
     event.stopPropagation()
   }
   function wheel(event: WheelEvent) {
-    if (!config?.active || !config.wheel || isBrowserFullscreenActive() || isImmersiveInput(event)
+    if (!config?.active || !config.uiVisible || !config.wheel || isBrowserFullscreenActive() || isImmersiveInput(event)
       || event.deltaY === 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)
       || !(event.target instanceof Element) || !event.target.closest('.bpx-player-video-area, .bpx-player-video-wrap, .bpx-player-dm-wrap, .bilibili-player-video-wrap')) {
       return
@@ -189,7 +189,7 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
     }
   }
   function sync() {
-    if (disposed || !config?.active || document.hidden || !isIframeDocumentActive())
+    if (disposed || !config?.active || !isIframeDocumentActive())
       return
     const next = getVideoElement()
     const nextNavigation = getPlaybackNavigationKey(location.href)
@@ -260,7 +260,7 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
     const data = getParentMessageData(event, [IMMERSIVE_CONFIG])
     if (!data || !client.matches(data) || typeof data.key !== 'string' || typeof data.targetUrl !== 'string' || !parsePlaybackTabUrl(data.targetUrl)
       || !Number.isSafeInteger(data.playbackId) || Number(data.playbackId) < 0 || (config && Number(data.playbackId) < config.playbackId)
-      || !['active', 'autoPlay', 'autoNext', 'keyboard', 'wheel'].every(key => typeof data[key] === 'boolean')) {
+      || !['active', 'uiVisible', 'autoPlay', 'autoNext', 'keyboard', 'wheel'].every(key => typeof data[key] === 'boolean')) {
       return
     }
     const newSession = !!config && config.playbackId !== data.playbackId
@@ -271,8 +271,8 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
       endGeneration++
     config = data as unknown as ImmersiveConfig & IframeDocumentBinding
     lastStatus = ''
-    gate(config.active && !document.hidden)
-    if (activating && player && !document.hidden) {
+    gate(config.active)
+    if (activating && config.uiVisible && player && !document.hidden) {
       if (!player.hasAttribute('tabindex'))
         player.tabIndex = -1
       player.focus({ preventScroll: true })
@@ -289,7 +289,8 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
     gate(false)
   })
   const visibility = () => {
-    gate(config?.active === true && !document.hidden)
+    if (!document.hidden)
+      status()
   }
   const suspend = () => gate(false)
   const close = (event: Event) => {

@@ -52,6 +52,11 @@ defineProps<{ sidebarLabel: string }>()
   grid-row: 1;
   position: sticky;
   top: calc(var(--bew-top-bar-height) + var(--bew-space-4));
+  // Hot search and the reading buttons below it share the viewport height:
+  // the card's list shrinks so the buttons stay on screen.
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-4) - var(--bew-space-6));
   min-width: 0;
 }
 // A 360px feed, 240px hot-search card and their gap need more than 624px.
@@ -63,6 +68,7 @@ defineProps<{ sidebarLabel: string }>()
   .moments-content-layout__aside {
     --bew-moments-hot-search-max-height: var(--bew-moments-hot-search-compact-max-height);
     position: static;
+    max-height: none;
     grid-column: 1;
     grid-row: 1;
   }

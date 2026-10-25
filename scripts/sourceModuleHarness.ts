@@ -49,7 +49,7 @@ export async function loadSourceModule(file: string, imports: Record<string, unk
   }
   // Dependency-free helpers; fixtures may still override them. They run in the
   // fixture's own sandbox so defaults such as `location.href` read its globals.
-  for (const name of ['bilibiliLocale', 'bilibiliLiveContext', 'viewSnapshotBudget', 'fullscreenChange', 'pageBridgeChannel', 'videoMetadataBridge', 'playbackTab', 'themeColor', 'iframeActivity', 'motionPriority', 'htmlDecode', 'uriParse', 'textAutospace', 'viewportGeometry']) {
+  for (const name of ['momentsReadPosition', 'scrollIntent', 'bilibiliLocale', 'bilibiliLiveContext', 'viewSnapshotBudget', 'fullscreenChange', 'pageBridgeChannel', 'videoMetadataBridge', 'playbackTab', 'themeColor', 'iframeActivity', 'motionPriority', 'htmlDecode', 'uriParse', 'textAutospace', 'viewportGeometry']) {
     for (const path of [`~/utils/${name}`, `../utils/${name}`, `./${name}`]) {
       if (source.includes(`from '${path}'`) && !(path in imports))
         imports = { [path]: await loadSourceModule(`../src/utils/${name}.ts`, {}, globals), ...imports }

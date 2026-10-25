@@ -170,7 +170,7 @@ function handlePageMouseDown(event: MouseEvent) {
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-body);
   overflow-anchor: none;
   transition:

@@ -153,7 +153,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   margin-top: var(--bew-space-3);
   overflow: hidden;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   background: var(--bew-popover-surface-background-solid);
   box-shadow: var(--bew-popover-surface-shadow);
@@ -165,7 +165,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--bew-space-2);
   padding: 0 var(--bew-space-3);
-  border-bottom: 1px solid var(--bew-border-color);
+  border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
   color: var(--bew-text-3);
 }
 .moment-forward-topic-picker__search input {

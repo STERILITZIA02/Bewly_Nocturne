@@ -266,7 +266,7 @@ const deliveryLabel = computed(() => {
   :deep(.private-message-content__unknown) {
     color: var(--bew-text-1);
     background: var(--bew-selected-bg);
-    border-color: var(--bew-message-card-border);
+    border-color: var(--bew-edge-color);
   }
 }
 
@@ -279,7 +279,7 @@ const deliveryLabel = computed(() => {
   place-items: center;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   background: var(--bew-fill-2);
   border-radius: 50%;
@@ -305,7 +305,7 @@ const deliveryLabel = computed(() => {
   max-width: 100%;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
   @include truncateFade.line;
 }

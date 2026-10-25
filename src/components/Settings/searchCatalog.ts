@@ -30,6 +30,7 @@ interface SearchRoute {
 const bewlyPagesStorageKey = 'bewly-settings-bewly-pages-page'
 const bewlyComponentsStorageKey = 'bewly-settings-bewly-components-page'
 const bilibiliStorageKey = 'bewly-settings-bilibili-page'
+const playbackStorageKey = 'bewly-settings-playback-page'
 
 // 分类菜单只用于结果定位，不应作为独立搜索项参与匹配。
 const nonSettingTitleKeyPatterns = [
@@ -82,8 +83,8 @@ const momentsRoute: SearchRoute = {
 }
 const watchLaterPageRoute: SearchRoute = {
   menu: MenuType.BewlyPages,
-  secondaryPage: 'watch-later',
-  secondaryTitleKey: 'settings.plugin.watch_later_page',
+  secondaryPage: 'lists',
+  secondaryTitleKey: 'settings.list_layouts',
   storageKey: bewlyPagesStorageKey,
 }
 const videoCardRoute: SearchRoute = {
@@ -117,22 +118,22 @@ const messagesPageRoute: SearchRoute = {
   storageKey: bewlyPagesStorageKey,
 }
 const playbackPageRoute: SearchRoute = {
-  menu: MenuType.BewlyPages,
-  secondaryPage: 'playback',
-  secondaryTitleKey: 'settings.plugin.playback_page',
-  storageKey: bewlyPagesStorageKey,
+  menu: MenuType.Playback,
+  secondaryPage: 'layout',
+  secondaryTitleKey: 'settings.playback_layout',
+  storageKey: playbackStorageKey,
 }
 const playerRoute: SearchRoute = {
-  menu: MenuType.Bilibili,
-  secondaryPage: 'player',
-  secondaryTitleKey: 'settings.bilibili_features.video_playback',
-  storageKey: bilibiliStorageKey,
+  menu: MenuType.Playback,
+  secondaryPage: 'controls',
+  secondaryTitleKey: 'settings.playback_controls',
+  storageKey: playbackStorageKey,
 }
 const autoPlayRoute: SearchRoute = {
-  menu: MenuType.Bilibili,
-  secondaryPage: 'auto-play',
-  secondaryTitleKey: 'settings.bilibili_features.auto_play',
-  storageKey: bilibiliStorageKey,
+  menu: MenuType.Playback,
+  secondaryPage: 'behavior',
+  secondaryTitleKey: 'settings.playback_behavior',
+  storageKey: playbackStorageKey,
 }
 const appearanceRoute: SearchRoute = { menu: MenuType.Appearance }
 const commentsRoute: SearchRoute = {
@@ -187,6 +188,12 @@ const topBarGlobalTitleKeys = [
 ]
 
 const entries: SettingsSearchEntry[] = [
+  ...createEntries(autoPlayRoute, ['settings.play_order_multipart', 'settings.play_order_collection', 'settings.play_order_watch_later', 'settings.play_order_playlist'], { keywordKeys: ['settings.custom_play_order_inherit', 'settings.random_play_order_sequential', 'settings.random_play_order_reverse', 'settings.random_play_order_random'] }),
+  ...createEntries(watchLaterPageRoute, ['settings.history_layout']),
+  ...createEntries(searchPageRoute, ['settings.show_standalone_search_page', 'settings.search_bar_link_opening_behavior'], { keywordKeys: linkOpeningOptionKeys }),
+  ...createEntries(messagesPageRoute, ['settings.notification_badge_categories', 'settings.show_like_notification_reminder', 'settings.show_reply_notification_reminder', 'settings.show_at_notification_reminder', 'settings.show_system_notification_reminder', 'settings.show_followed_private_message_unread_count', 'settings.show_unfollowed_private_message_unread_count']),
+  ...createEntries(autoPlayRoute, ['settings.auto_exit_fullscreen_on_end']),
+  ...createEntries(vipFeaturesRoute, ['settings.bcoin_mode'], { keywordKeys: ['settings.bcoin_remind', 'settings.bcoin_auto'] }),
   ...createEntries(generalRoute, [
     'settings.menu_general',
     'settings.group_language',
@@ -195,7 +202,6 @@ const entries: SettingsSearchEntry[] = [
     'layout_editor.quick_edit',
     'settings.touch_screen_optimization',
     'settings.enable_grid_layout_switcher',
-    'settings.history_layout',
     'settings.enable_horizontal_scrolling',
     'settings.group_drawer_behavior',
     'settings.drawer_escape_behavior',
@@ -269,7 +275,6 @@ const entries: SettingsSearchEntry[] = [
     'settings.home_tabs_adjustment',
     'settings.fixed_home_tabs_on_home_page',
     'settings.group_search_page_mode',
-    'settings.show_standalone_search_page',
   ]),
   ...createEntries(homeRoute, [
     'settings.recommendation_mode',
@@ -298,12 +303,13 @@ const entries: SettingsSearchEntry[] = [
     'settings.moments_show_publish',
     'settings.moments_show_live',
     'settings.moments_show_up_list',
+    'settings.moments_start_from_last_seen',
     'settings.moments_enable_live_preview',
     'settings.moments_enable_video_preview',
-    'settings.enable_video_ctrl_bar_on_video_card',
-    'settings.video_preview_swipe_seek',
-    'settings.hover_video_card_delayed',
-    'settings.only_cover_video_preview',
+    'settings.moments_preview_controls',
+    'settings.moments_preview_swipe',
+    'settings.moments_preview_delay',
+    'settings.moments_preview_cover_only',
     'settings.moments_filter_video_dynamic',
     'settings.moments_filter_draw_dynamic',
     'settings.moments_filter_ugc_season_dynamic',
@@ -392,13 +398,6 @@ const entries: SettingsSearchEntry[] = [
   ]),
   ...createEntries(topBarRoute, [
     'settings.topbar_actions',
-    'settings.notification_badge_categories',
-    'settings.show_like_notification_reminder',
-    'settings.show_reply_notification_reminder',
-    'settings.show_at_notification_reminder',
-    'settings.show_system_notification_reminder',
-    'settings.show_followed_private_message_unread_count',
-    'settings.show_unfollowed_private_message_unread_count',
     'settings.filter_articles_in_moments',
   ], {
     keywordKeys: ['settings.visibility', 'settings.badge_type', 'settings.top_bar_icon_badges_opt'],
@@ -410,7 +409,6 @@ const entries: SettingsSearchEntry[] = [
   ...createEntries(topBarRoute, [
     'settings.group_link_opening_behavior',
     'settings.top_bar_link_opening_behavior',
-    'settings.search_bar_link_opening_behavior',
   ], { keywordKeys: linkOpeningOptionKeys }),
   ...[
     ['moments', 'topbar.moments'],
@@ -430,7 +428,6 @@ const entries: SettingsSearchEntry[] = [
   ...createEntries(dockRoute, [
     'settings.plugin.dock_and_sidebar',
     'settings.group_dock',
-    'settings.page_mode',
     'settings.dock_collapse_mode',
     'settings.always_use_dock',
     'settings.show_dock_back_to_top',
@@ -445,7 +442,7 @@ const entries: SettingsSearchEntry[] = [
   ...createEntries(dockRoute, [
     'settings.dock_position',
   ], { keywordKeys: ['common.position.left', 'common.position.right', 'common.position.bottom'] }),
-  ...createEntries(dockRoute, ['settings.topbar_mode'], { keywordKeys: ['settings.topbar_mode_bewly', 'settings.topbar_mode_bilibili'] }),
+  ...createEntries({ menu: MenuType.BewlyPages, secondaryPage: 'page-modes', storageKey: bewlyPagesStorageKey, secondaryTitleKey: 'settings.page_mode' }, ['settings.page_mode', 'settings.topbar_mode'], { keywordKeys: ['settings.topbar_mode_bewly', 'settings.topbar_mode_bilibili'] }),
   ...createEntries(dockRoute, [
     'settings.sidebar_position',
   ], { keywordKeys: ['common.position.left', 'common.position.right'] }),
@@ -493,7 +490,6 @@ const entries: SettingsSearchEntry[] = [
     'settings.video_player_mode.enable_overrides',
     'settings.video_player_mode.overrides',
     'settings.video_player_scroll',
-    'settings.auto_exit_fullscreen_on_end',
   ]),
   ...createEntries(playbackPageRoute, [
     'settings.video_default_player_mode',
@@ -517,7 +513,6 @@ const entries: SettingsSearchEntry[] = [
   ...createEntries(autoPlayRoute, [
     'settings.bilibili_features.auto_play',
     'settings.group_random_play',
-    'settings.enable_random_play',
     'settings.enable_custom_play_order_overrides',
     'settings.custom_play_order_overrides',
     'settings.group_random_play_settings',
@@ -615,8 +610,6 @@ const entries: SettingsSearchEntry[] = [
   ...createEntries(commentsRoute, ['settings.comment_reply_tree_container_height']),
   ...createEntries(vipFeaturesRoute, [
     'settings.bilibili_features.vip_features',
-    'settings.show_bcoin_receive_reminder',
-    'settings.auto_receive_bcoin_coupon',
     'settings.auto_receive_vip_exp',
   ]),
   ...createEntries(compatibilityRoute, [
@@ -646,6 +639,15 @@ const entries: SettingsSearchEntry[] = [
 ]
 
 const targetAliases: Record<string, string> = {
+  'settings.play_order_multipart': 'settings.custom_play_order_overrides.multipart',
+  'settings.play_order_collection': 'settings.custom_play_order_overrides.collection',
+  'settings.play_order_watch_later': 'settings.custom_play_order_overrides.watchLater',
+  'settings.play_order_playlist': 'settings.custom_play_order_overrides.playlist',
+  'settings.moments_preview_controls': 'settings.enable_video_ctrl_bar_on_video_card',
+  'settings.moments_preview_swipe': 'settings.video_preview_swipe_seek',
+  'settings.moments_preview_delay': 'settings.hover_video_card_delayed',
+  'settings.moments_preview_cover_only': 'settings.only_cover_video_preview',
+
   'settings.messages_server_msg_notify': 'messages.server.msgNotify',
   'settings.messages_server_ai_intercept': 'messages.server.aiIntercept',
   'settings.messages_server_reply': 'messages.server.reply',
@@ -660,9 +662,12 @@ const targetAliases: Record<string, string> = {
   'settings.remember_video_quality': 'settings.group_playback_memory',
 }
 const conditionalParents: Record<string, string[]> = {
+  'settings.override_danmaku_font': ['settings.customize_font'],
+  'settings.back_to_top_and_refresh_buttons_are_separated': ['settings.show_dock_back_to_top'],
+  'local_loudness.target': ['local_loudness.enable'],
+  'local_loudness.strength': ['local_loudness.enable'],
   'settings.clean_share_link_include_title': ['settings.enable_clean_share_link'],
   'settings.clean_share_link_remove_tracking_params': ['settings.enable_clean_share_link'],
-  'settings.auto_receive_bcoin_coupon': ['settings.show_bcoin_receive_reminder'],
   'settings.open_top_bar_items_in_bewly': ['settings.topbar_display_settings'],
   'settings.theme_schedule': ['settings.theme'],
   'settings.dark_mode_base_color': ['settings.enable_dark_mode_tint'],
@@ -672,11 +677,10 @@ const conditionalParents: Record<string, string[]> = {
   'settings.following_inactive_days': ['settings.enable_following_inactive_blacklist'],
   'settings.video_player_scroll_position': ['settings.video_player_scroll'],
   'settings.video_player_mode.overrides': ['settings.video_player_mode.enable_overrides'],
-  'settings.default_custom_play_order': ['settings.enable_random_play'],
-  'settings.enable_custom_play_order_overrides': ['settings.enable_random_play'],
-  'settings.custom_play_order_overrides': ['settings.enable_custom_play_order_overrides', 'settings.enable_random_play'],
-  'settings.random_play_mode': ['settings.enable_random_play'],
-  'settings.min_videos_for_random': ['settings.random_play_mode', 'settings.enable_random_play'],
+  'settings.enable_custom_play_order_overrides': ['settings.default_custom_play_order'],
+  'settings.custom_play_order_overrides': ['settings.enable_custom_play_order_overrides', 'settings.default_custom_play_order'],
+  'settings.random_play_mode': ['settings.default_custom_play_order'],
+  'settings.min_videos_for_random': ['settings.random_play_mode', 'settings.default_custom_play_order'],
   'settings.comment_reply_tree_mode.title': ['settings.enable_comment_reply_tree_display'],
   'settings.comment_reply_pagination_mode.title': ['settings.enable_comment_reply_tree_display'],
   'settings.comment_reply_batch_pages': ['settings.comment_reply_pagination_mode.title', 'settings.enable_comment_reply_tree_display'],
@@ -695,14 +699,19 @@ export const settingsSearchEntries = entries.map((entry) => {
     targetKey = 'settings.video_player_mode.overrides'
     parents = ['settings.video_player_mode.enable_overrides']
   }
+  if (key.startsWith('settings.play_order_'))
+    parents = ['settings.enable_custom_play_order_overrides', 'settings.default_custom_play_order']
   if (key.startsWith('settings.auto_play_'))
     parents = ['settings.use_bilibili_default_auto_play']
   if (key.startsWith('settings.immersive_') && !['settings.immersive_mode', 'settings.immersive_entry'].includes(key))
     parents = ['settings.immersive_entry']
+  if (key.startsWith('settings.moments_preview_'))
+    parents = ['settings.moments_enable_video_preview']
   if (previewKeys.has(key))
     parents = [page === 'moments' ? 'settings.moments_enable_video_preview' : 'settings.enable_video_preview']
   return {
     ...entry,
+    keywordKeys: targetAliases[key] ? [...(entry.keywordKeys ?? []), `${targetAliases[key]}_desc`] : entry.keywordKeys,
     targetId: entry.targetId ?? targetKey,
     fallbackIds: parents,
     conditionTitleKey: key === 'settings.open_top_bar_items_in_bewly' ? 'settings.touch_screen_optimization' : undefined,

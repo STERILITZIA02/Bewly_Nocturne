@@ -102,7 +102,7 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
     }
   })
 
-  check('Page continuity: code-ready 90/210ms content handoff preserves the shell, old scroll and one mounted data owner', async () => {
+  check('Page continuity: code-ready 60/150ms content handoff preserves the shell, old scroll and one mounted data owner', async () => {
     const { useReadyPageTransition } = await import('../src/composables/useReadyPageTransition')
     const animation = animationFixture()
     const selected = Vue.ref('a')
@@ -115,7 +115,7 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
       mounted++
       maximum = Math.max(maximum, mounted)
       Vue.onBeforeUnmount(() => mounted--)
-      return () => Vue.h('section', { 'data-page': name, style: { '--bew-page-exit-duration': '.09s', '--bew-page-enter-duration': '.21s' } }, name)
+      return () => Vue.h('section', { 'data-page': name, style: { '--bew-page-exit-duration': '.06s', '--bew-page-enter-duration': '.15s' } }, name)
     } })
     const pages = { a: page('a'), b: page('b') }
     const root = document.body.appendChild(document.createElement('div'))
@@ -145,7 +145,7 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
       resolveCode()
       await flush()
       const leave = animation.records.at(-1)
-      assert.equal(leave.options.duration, 90, 'compressed CSS seconds retain their millisecond meaning')
+      assert.equal(leave.options.duration, 60, 'compressed CSS seconds retain their millisecond meaning')
       assert.deepEqual(leave.frames.map(frame => Number(frame.opacity)), [1, 0])
       assert.equal(scroll, 900, 'outgoing content must not jump before its fade finishes')
       leave.finish()
@@ -153,7 +153,7 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
       assert.equal(swaps, 1)
       assert.equal(scroll, 240)
       const enter = animation.records.at(-1)
-      assert.equal(enter.options.duration, 210)
+      assert.equal(enter.options.duration, 150)
       assert.ok(enter.frames.every(frame => !('transform' in frame)), 'workspace fixed controls must keep their containing block')
       enter.finish()
       await flush()

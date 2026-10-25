@@ -10,6 +10,7 @@ export interface ImmersiveConfig {
   key: string
   targetUrl: string
   active: boolean
+  uiVisible: boolean
   autoPlay: boolean
   autoNext: boolean
   keyboard: boolean

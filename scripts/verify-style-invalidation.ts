@@ -184,7 +184,7 @@ async function main() {
     [{ 'will-change': 'transform', 'opacity': '1' }, undefined],
   ] as const)
     assert.equal(getProgressiveBlurAncestorIssue({ getPropertyValue: property => (values as Record<string, string>)[property] ?? '' }), expected)
-  for (const edge of ['top', 'bottom', 'center'] as const) {
+  for (const edge of ['top', 'bottom', 'left', 'right', 'center'] as const) {
     const layers = createProgressiveBlurLayers(edge)
     assert.equal(layers.length, PROGRESSIVE_BLUR_LAYER_COUNT)
     for (const [index, layer] of layers.entries()) {

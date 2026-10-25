@@ -195,6 +195,7 @@ onBeforeUnmount(() => {
   height: var(--bew-space-1);
   overflow: hidden;
   border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
   background: rgb(255 255 255 / 35%);
   pointer-events: none;
 

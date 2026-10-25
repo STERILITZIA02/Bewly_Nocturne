@@ -83,6 +83,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       './momentPortal': { getSidebarAvatarUrl: () => '' },
       './MomentsContentLayout.vue': { default: { render: () => null } },
       './MomentsHotSearch.vue': { default: { render: () => null } },
+      './MomentsReadingActions.vue': { default: { render: () => null } },
       './MomentsSidebar.vue': { default: { render: () => null } },
       '~/utils/viewportGeometry': await import('../src/utils/viewportGeometry'),
       './momentAdapter': { createMomentAdapter: () => ({ mapMoment: item => item, collectVideoPublicationTimes: () => [] }) },
@@ -228,7 +229,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     }
   })
 
-  check('moments uploader and series feeds keep auto-loading: unseen posts count as progress, only empty or repeated pages end the feed', async () => {
+  check('moments uploader and series feeds: unseen posts advance; empty or repeated pages pause automation without claiming an end', async () => {
     const page = (ids, offset, more = true) => ({ code: 0, data: { items: ids.map(id => ({ id_str: id, type: 'DYNAMIC_TYPE_DRAW' })), offset, has_more: more } })
     const responses = [page(['a', 'b'], ''), page(['c'], ''), page(['c'], ''), page([], 'x')]
     const pages = []
@@ -270,11 +271,12 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     assert.deepEqual(seriesTypes, ['pgc', 'pgc'])
 
     const moments = await readFile(new URL('../src/contentScripts/views/Moments/Moments.vue', import.meta.url), 'utf8')
-    assert.match(moments, /const ended = !hasMore \|\| response\.stalled\n[\s\S]{0,1600}noMoreContent\.value = ended/, 'a judged stall ends the feed instead of waiting for a button')
+    assert.match(moments, /const ended = !hasMore \|\| \(cutoff > 0 && \(normalizedItems\.at\(-1\)\?\.publishedAt \?\? cutoff\) < cutoff\)\n[\s\S]{0,1800}noMoreContent\.value = ended/, 'only a server end, or a page past the search time range, closes pagination')
+    assert.match(moments, /feedRequestFailed\.value = response\.stalled/, 'a stalled page remains retryable')
     assert.match(moments, /function requiresManualMomentPaging\(\) \{\s*return feedRequestFailed\.value\s*\}/, 'only failures need a button')
     assert.match(moments, /<template v-else-if="noMoreContent && !feedRequestFailed">\s*\{\{ t\('moments\.no_more'\) \}\}/, 'the end is a centred hint')
-    assert.match(moments, /<button\s+v-if="feedRequestFailed"\s+:disabled="isLoading"\s+@click="refresh\(\)"/, 'the empty state has no reload button')
-    assert.match(moments, /visibilitychange', \(\) => \{[\s\S]{0,240}maybeLoadMoreNearBottom\(\)/, 'returning to the tab resumes a short list')
+    assert.match(moments, /<button\s+v-if="feedRequestFailed"\s+:disabled="isLoading"\s+@click="loadMoments\(true, 0, true, atLatest \? 'latest' : 'resume'\)"/, 'retry reads content without marking the head as read')
+    assert.match(moments, /visibilitychange', \(\) => \{[\s\S]{0,450}maybeLoadMoreNearBottom\(\)/, 'returning to the tab resumes a short list')
     assert.match(moments, /updateVirtualColumns\(\)\s*\/\/ A restored list may not fill the viewport\.\s*maybeLoadMoreNearBottom\(\)/)
     assert.match(moments, /momentLayout\.remove\(id\)[\s\S]{0,120}void nextTick\(maybeLoadMoreNearBottom\)/)
   })
@@ -696,7 +698,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     const raw = id => ({ id_str: String(id), type: 'DYNAMIC_TYPE_WORD', modules: { module_author: { mid: '1', pub_ts: 20000 - id }, module_dynamic: { desc: { text: `post ${id}` } } } })
     const api = { moment: { getMoments: async (request) => {
       requests.push(request.offset || '')
-      const start = Number(request.offset || 0)
+      const start = request.offset === '9223372036854775807' ? 0 : Number(request.offset || 0)
       return { code: 0, data: { items: Array.from({ length: 50 }, (_, i) => raw(start + i + 1)), offset: String(start + 50), has_more: start + 50 < 1350 } }
     } } }
     const readerModule = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {

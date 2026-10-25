@@ -8,13 +8,19 @@ import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
+import LibraryDateRange from '~/components/LibraryDateRange.vue'
+import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
+import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
+import LibraryHero from '~/components/LibraryHero.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryVideoCardSkeleton from '~/components/LibraryVideoCardSkeleton.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
+import LoadingFill from '~/components/LoadingFill.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 import Progress from '~/components/Progress.vue'
 import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
+import SmoothLoading from '~/components/SmoothLoading.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import OpenTabsDialog from '~/components/WatchLater/OpenTabsDialog.vue'
@@ -23,6 +29,7 @@ import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindo
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useGridLayout } from '~/composables/useGridLayout'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
+import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
 import { LIBRARY_AUTOFILL_PAGE_LIMIT } from '~/constants/library'
@@ -44,9 +51,8 @@ import { getWatchLaterAuthor, getWatchLaterPlaybackUrl, mergeWatchLaterItemsByAi
 
 import { useWatchLaterBatch } from './useWatchLaterBatch'
 import { useWatchLaterBulkAction } from './useWatchLaterBulkAction'
-import WatchLaterAdvancedFilters from './WatchLaterAdvancedFilters.vue'
-import type { WatchLaterSortOrder } from './watchLaterFilters'
-import { createWatchLaterFilters, filterWatchLaterItems, hasWatchLaterFilters, sortWatchLaterItems } from './watchLaterFilters'
+import type { WatchLaterFilters, WatchLaterSortOrder } from './watchLaterFilters'
+import { createWatchLaterFilters, filterWatchLaterItems, hasWatchLaterFilters, sortWatchLaterItems, watchLaterAddedBounds } from './watchLaterFilters'
 import WatchLaterGridCard from './WatchLaterGridCard.vue'
 import WatchLaterPlayAllCard from './WatchLaterPlayAllCard.vue'
 import WatchLaterSelectionOverlay from './WatchLaterSelectionOverlay.vue'
@@ -70,6 +76,27 @@ const advancedFilters = viewState.ref('filters', createWatchLaterFilters())
 const sortOrder = viewState.ref<WatchLaterSortOrder>('sort', 'newest')
 const filtersActive = computed(() => Boolean(searchQuery.value.trim() || hasWatchLaterFilters(advancedFilters.value)))
 const filteredItems = computed(() => sortWatchLaterItems(filterWatchLaterItems(currentWatchLaterList.value, searchQuery.value, advancedFilters.value.progress, advancedFilters.value.duration, item => getVideoWatchState({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }), advancedFilters.value), sortOrder.value))
+// The filter behind the search field's funnel; a custom date opens the range on the rail.
+const PROGRESS = ['all', 'unstarted'] as const
+const ADDED = ['all', 'custom'] as const
+const DURATIONS = ['all', 'short', 'medium', 'long', 'extraLong'] as const
+const PROGRESS_ICONS = { all: 'i-tabler:list', unstarted: 'i-tabler:eye-off' } as const
+const ADDED_ICONS = { all: 'i-tabler:infinity', custom: 'i-tabler:calendar-cog' } as const
+const DURATION_ICONS = { all: 'i-tabler:clock', short: 'i-tabler:clock-hour-2', medium: 'i-tabler:clock-hour-5', long: 'i-tabler:clock-hour-8', extraLong: 'i-tabler:clock-hour-11' } as const
+const filterGroups = computed<LibraryFilterGroup[]>(() => [
+  { key: 'progress', title: t('library_tools.filter_progress'), value: advancedFilters.value.progress, options: PROGRESS.map(value => ({ value, label: t(`watch_later.filters.progress_${value}`), icon: PROGRESS_ICONS[value] })) },
+  { key: 'added', title: t('library_tools.filter_added'), value: advancedFilters.value.added, options: ADDED.map(value => ({ value, label: t(value === 'all' ? 'history.filters.period_all' : 'library_tools.date_custom'), icon: ADDED_ICONS[value] })) },
+  { key: 'duration', title: t('library_tools.filter_duration'), value: advancedFilters.value.duration, options: DURATIONS.map(value => ({ value, label: t(`watch_later.filters.duration_${value}`), icon: DURATION_ICONS[value] })) },
+])
+function selectFilter(key: string, value: string) {
+  advancedFilters.value = key === 'added' && value === 'all'
+    ? { ...advancedFilters.value, added: 'all', startDate: '', endDate: '' }
+    : { ...advancedFilters.value, [key]: value } as WatchLaterFilters
+}
+function updateFilterDate(key: 'startDate' | 'endDate', value: string) {
+  advancedFilters.value = { ...advancedFilters.value, [key]: value }
+}
+const invalidRange = computed(() => watchLaterAddedBounds(advancedFilters.value) === null)
 const layoutOptions = computed(() => [
   { label: t('library_tools.layout_list'), value: 'list' as const },
   { label: t('library_tools.layout_grid'), value: 'grid' as const },
@@ -679,17 +706,19 @@ function remove(item: VideoItem) {
 function isItemActionPending(): boolean {
   return batch.busy.value || bulkAction.pending.value || pendingAction.value?.accountId === getCurrentAccountId()
 }
-const hasNoMatches = computed(() => filtersActive.value && watchLaterCount.value > 0 && (!isLoading.value || isRefreshing.value) && !filteredItems.value.length && !requestFailed.value)
+// Filtering waits for the whole queue, so the number of matches is unknown
+// until it arrives: the ring, never skeletons. No matches show under the head.
+const pendingRef = ref<{ $el: Element }>()
+const pendingLoading = computed(() => filtersActive.value && isLoading.value && !filteredItems.value.length)
+const pendingPhase = useLoadingRingPhase(() => pendingLoading.value, () => pendingRef.value?.$el)
+const showSkeletons = computed(() => isLoading.value && !isRefreshing.value && !filtersActive.value)
+const hasNoMatches = computed(() => filtersActive.value && watchLaterCount.value > 0 && !isLoading.value && !filteredItems.value.length && !requestFailed.value)
 useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredItems.value.map(item => item.aid).join(',')}`)
 </script>
 
 <template>
-  <LibraryWorkspace v-if="getCSRF()" :label="t('watch_later.title')" :class="{ 'watch-later-workspace--empty': hasNoMatches }">
-    <p v-if="hasNoMatches" class="watch-later-no-matches" role="status">
-      {{ t('library_tools.no_matches') }}
-    </p>
+  <LibraryWorkspace v-if="getCSRF()" :label="t('watch_later.title')">
     <main
-      v-else
       v-layout-editable="'watch-later-layout'"
       :aria-busy="isLoading || batch.busy.value"
       data-layout-editable-id="watch-later-layout"
@@ -703,8 +732,25 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
       />
       <Empty v-else-if="watchLaterCount === 0 && (!isLoading || isRefreshing)" text-only fill :description="$t('common.no_data')" role="status" />
       <template v-else>
+        <!-- The queue's head: the first cover across the top, the stacked queue and Play All. -->
+        <Transition name="library-hero" :duration="300">
+          <LibraryHero v-if="!batch.managing.value" :image="currentWatchLaterList[0]?.pic" :media-pending="isLoading && !currentWatchLaterList.length" :label="t('watch_later.title')" class="watch-later-hero">
+            <h2 class="watch-later-hero__title">
+              {{ t('watch_later.title') }}
+            </h2>
+            <span class="watch-later-hero__meta">{{ t('library_tools.video_count', { count: watchLaterCount }) }}</span>
+            <template #actions>
+              <WatchLaterPlayAllCard
+                :items="currentWatchLaterList" :total="watchLaterCount" :loading="isLoading" :disabled="watchLaterCount === 0"
+                @play="handlePlayAll"
+              />
+            </template>
+          </LibraryHero>
+        </Transition>
+        <LoadingFill v-if="pendingPhase !== 'idle'" ref="pendingRef" :loading="pendingLoading" />
+        <Empty v-else-if="hasNoMatches" text-only fill :description="t('library_tools.no_matches')" role="status" />
         <VideoListSkeleton
-          v-if="isLoading && currentWatchLaterList.length === 0 && watchLaterLayoutMode === 'list'"
+          v-else-if="showSkeletons && currentWatchLaterList.length === 0 && watchLaterLayoutMode === 'list'"
           :count="5"
           :action-count="3"
         />
@@ -760,36 +806,9 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                       object-cover
                     />
 
-                    <!-- <div
-                  pos="absolute bottom-0 right-0"
-                  bg="black opacity-60"
-                  m="2"
-                  p="x-2 y-1"
-                  text="white xs"
-                  rounded="$bew-interactive-radius"
-                >
-                  {{ calcCurrentTime(item.duration) }}
-                </div> -->
-                    <div
-
-                      pos="absolute bottom-0 right-0"
-                      bg="black opacity-60"
-                      m="2"
-                      p="x-2 y-1"
-                      text="white xs"
-                      rounded="$bew-interactive-radius"
-                    >
-                      <!--  When progress = -1 means that the user watched the full video -->
-                      {{
-                        `${
-                          item.progress === -1
-                            ? calcCurrentTime(item.duration)
-                            : calcCurrentTime(getVideoPlaybackProgress({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)?.progress ?? 0)
-                        } /
-                      ${calcCurrentTime(item.duration)}`
-                      }}
-                    </div>
-                    <div w-full pos="absolute bottom-0" bg="white opacity-60">
+                    <!-- The cover carries no text: only the watched line along its
+                         bottom edge; the times are in the details. -->
+                    <div class="watch-later-list-card__progress">
                       <Progress
                         :percentage="
                           getVideoProgressPercentage({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)
@@ -837,6 +856,9 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                         >
                         {{ getWatchLaterAuthor(item).name }}
                       </a>
+                      <p class="watch-later-list-card__times">
+                        {{ `${item.progress === -1 ? calcCurrentTime(item.duration) : calcCurrentTime(getVideoPlaybackProgress({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)?.progress ?? 0)} / ${calcCurrentTime(item.duration)}` }}
+                      </p>
                       <p display="block xl:none" text="$bew-text-2 sm" mt-auto mb-2>
                         {{
                           useDateFormat(item.pubdate * 1000, 'YYYY-MM-DD HH:mm:ss')
@@ -926,7 +948,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                 </div>
               </template>
               <LibraryVideoCardSkeleton
-                v-for="index in (isLoading && !isRefreshing ? (currentWatchLaterList.length === 0 ? 8 : 4) : 0)"
+                v-for="index in (showSkeletons ? (currentWatchLaterList.length === 0 ? 8 : 4) : 0)"
                 :key="`watch-later-grid-skeleton-${index}`"
               />
             </TransitionGroup>
@@ -934,10 +956,11 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
         </div>
 
         <VideoListSkeleton
-          v-if="isLoading && !isRefreshing && currentWatchLaterList.length !== 0 && !noMoreContent && watchLaterLayoutMode === 'list'"
+          v-if="showSkeletons && currentWatchLaterList.length !== 0 && !noMoreContent && watchLaterLayoutMode === 'list'"
           :count="2"
           :action-count="3"
         />
+        <SmoothLoading v-if="filtersActive && filteredItems.length" :show="isLoading && !isRefreshing" />
         <Empty
           v-if="requestFailed && !isLoading && currentWatchLaterList.length > 0"
           text-only class="watch-later-load-more-error" :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')" @action="retryWatchLaterRequest"
@@ -949,8 +972,12 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
       <div class="library-rail-content">
         <LibrarySidebarHeading :title="t('watch_later.title')" :content-id="contentId" :count="watchLaterCount" />
         <fieldset class="watch-later-controls library-rail-content" :disabled="isItemActionPending()" :aria-label="t('watch_later.title')">
-          <div class="library-rail-tools">
-            <LibrarySearchField v-model="searchQuery" :label="t('library_tools.watch_later_search')" />
+          <div class="library-rail-tools library-rail-tools--ruled">
+            <LibrarySearchField v-model="searchQuery" :label="t('library_tools.watch_later_search')" :filter-active="hasWatchLaterFilters(advancedFilters)">
+              <template #filter>
+                <LibraryFilterMenu :label="t('library_tools.filters')" :groups="filterGroups" :disabled="isItemActionPending()" @select="selectFilter" />
+              </template>
+            </LibrarySearchField>
             <div class="watch-later-layout-switcher" :class="{ 'watch-later-layout-switcher--sort-only': !settings.enableGridLayoutSwitcher }">
               <SettingsSegmentedControl
                 v-if="settings.enableGridLayoutSwitcher" v-model="settings.watchLaterLayoutMode" class="library-rail-segments bew-segment-control--secondary"
@@ -966,10 +993,9 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
               </Tooltip>
             </div>
           </div>
-          <WatchLaterAdvancedFilters v-model="advancedFilters" :disabled="isItemActionPending()" />
-          <WatchLaterPlayAllCard
-            v-if="watchLaterCount > 0 || isLoading" :items="currentWatchLaterList" :total="watchLaterCount"
-            :loading="isLoading" :disabled="watchLaterCount === 0" @play="handlePlayAll"
+          <LibraryDateRange
+            :open="advancedFilters.added === 'custom'" :title="t('library_tools.date_range')" :start="advancedFilters.startDate" :end="advancedFilters.endDate"
+            :invalid="invalidRange" :disabled="isItemActionPending()" @update="updateFilterDate"
           />
           <Button
             class="library-sidebar-action" :type="batch.managing.value ? 'primary' : 'default'"
@@ -1054,18 +1080,6 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
 </template>
 
 <style lang="scss" scoped>
-.watch-later-workspace--empty :deep(.library-workspace__content) {
-  display: grid;
-  align-self: stretch;
-  place-items: center;
-}
-.watch-later-no-matches {
-  margin: 0;
-  text-align: center;
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-body);
-  line-height: var(--bew-line-height-body);
-}
 .watch-later-action--warning {
   --bew-library-action-foreground: var(--bew-warning-foreground);
 }
@@ -1105,6 +1119,34 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
   &:is(:hover, :focus-visible):not(:disabled) {
     color: var(--bew-message-icon-hover);
   }
+}
+.watch-later-list-card__progress {
+  position: absolute;
+  inset: auto 0 0;
+}
+.watch-later-list-card__times {
+  margin: 0 0 var(--bew-space-1);
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-callout);
+  line-height: var(--bew-line-height-callout);
+  font-variant-numeric: tabular-nums;
+}
+.watch-later-hero {
+  position: relative;
+  margin-bottom: var(--bew-space-6);
+}
+.watch-later-hero__title {
+  margin: 0;
+  color: var(--bew-text-1);
+  font-size: var(--bew-font-size-display);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-line-height-display);
+}
+.watch-later-hero__meta {
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-callout);
+  line-height: var(--bew-line-height-callout);
+  font-variant-numeric: tabular-nums;
 }
 .watch-later-controls {
   min-width: 0;

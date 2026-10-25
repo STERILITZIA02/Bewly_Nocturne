@@ -7,7 +7,7 @@ html.bewly-design[data-bewly-native-site="academy"] {
   :is(.bca-c-header-box, .bca-c-sidebar-box, .bca-v-hul-box, .overview-block) {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   :is(.bca-v-hul-box, .overview-block, .bca-c-series-card-box) {
@@ -43,7 +43,7 @@ html.bewly-design[data-bewly-native-site="academy"] {
     background: var(--bew-content-alt-solid);
     backdrop-filter: none;
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -70,7 +70,7 @@ html.bewly-design[data-bewly-native-site="academy"] {
     }
 
     .split {
-      background: var(--bew-border-color);
+      background: var(--bew-separator-color);
     }
   }
 
@@ -82,7 +82,7 @@ html.bewly-design[data-bewly-native-site="academy"] {
 
   .bca-c-more-box {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -116,7 +116,7 @@ html.bewly-design[data-bewly-native-site="academy"] {
   }
 
   :is(.h-separator, .v-separator, .bottom-bar) {
-    background: var(--bew-border-color);
+    background: var(--bew-separator-color);
   }
 
   .general-item.active .bottom-bar {
@@ -221,7 +221,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
     :is(.video-card-wrapper, .image-card-wrapper, .up-card-wrapper) {
       background: var(--bew-content-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     :is(.video-card-wrapper, .image-card-wrapper, .up-card-wrapper, .right-card-wrapper) {
@@ -241,11 +241,11 @@ html.bewly-design[data-bewly-native-site="materials"] {
     .up-card-wrapper .info :is(.stat .label, .tags .tag),
     .footer-wrapper .gray {
       color: var(--bew-text-2);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .footer-wrapper :is(.separator, .separator-black) {
-      border-color: var(--bew-border-color) !important;
+      border-color: var(--bew-separator-color) !important;
     }
 
     .image-card-wrapper .cover {
@@ -283,7 +283,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
       :is(.title, .subtitle) {
         background: var(--bew-content-solid);
         color: var(--bew-text-1);
-        border-color: var(--bew-border-color);
+        border-color: var(--bew-separator-color);
         border-radius: var(--bew-interactive-radius);
         corner-shape: var(--bew-corner-shape);
 
@@ -324,7 +324,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
 
       .btn-bg {
         background: var(--bew-content-alt-solid);
-        border-color: var(--bew-border-color);
+        border-color: var(--bew-separator-color);
         border-radius: var(--bew-interactive-radius);
         corner-shape: var(--bew-corner-shape);
       }
@@ -360,9 +360,9 @@ html.bewly-design[data-bewly-native-site="materials"] {
         .tags .tag {
           color: var(--bew-on-theme-surface);
           background: var(--bew-theme-surface);
-          border-color: var(--bew-border-color);
+          border-color: var(--bew-separator-color);
           border-radius: var(--bew-pill-radius);
-          corner-shape: var(--bew-corner-shape-round);
+          corner-shape: var(--bew-corner-shape-capsule);
         }
       }
     }
@@ -371,7 +371,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
   :is(.navbar-wrapper, .manage-nav, .bmc-manage-wrapper-main) {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   :is(.bmc-square-page, .bmc-manage-wrapper) {
@@ -467,13 +467,13 @@ html.bewly-design[data-bewly-native-site="materials"] {
   .bcc-table__wrap {
     color: var(--bew-text-1);
     background: var(--bew-content-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .bcc-table__wrap :is(th, td) {
     color: var(--bew-text-1);
     background: var(--bew-content-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .bcc-table__wrap th {
@@ -543,7 +543,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
     min-height: var(--bew-control-height);
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -594,7 +594,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
     padding: var(--bew-space-1) var(--bew-space-3);
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -635,7 +635,7 @@ html.bewly-design[data-bewly-native-site="materials"] {
     :is(.name-space-card-item, .detail-space-card-item) {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -825,7 +825,7 @@ html.bewly-design[data-bewly-native-site="music-portal"] {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   :is(.NavBar, .help-center, .main-view) {
@@ -1044,7 +1044,7 @@ html.bewly-design[data-bewly-native-site="music-rank"] {
 
   [class*="_card_"] {
     background: var(--bew-content-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1066,7 +1066,7 @@ html.bewly-design[data-bewly-native-site="music-rank"] {
   [class*="_btn_"] {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1131,7 +1131,7 @@ html.bewly-design[data-bewly-native-site="creator-data"] {
   }
 
   :is(.title-line, .subblock, .info) {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   :is(.header-nav .item.selected, .export) {
@@ -1202,7 +1202,7 @@ html.bewly-design[data-bewly-native-site="creator-data"] {
   :is(.pop-menu, .data-card-popper) {
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1308,7 +1308,7 @@ html.bewly-design[data-bewly-native-site="creator-quests"] {
   }
 
   .contion-detail .divider {
-    background: var(--bew-border-color);
+    background: var(--bew-separator-color);
   }
 
   .contion-item-value .reach {
@@ -1319,13 +1319,13 @@ html.bewly-design[data-bewly-native-site="creator-quests"] {
     background: var(--bew-theme-surface);
     color: var(--bew-on-theme-surface);
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   .question-item {
     background: var(--bew-content-alt-solid) !important;
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   .ups-block,
@@ -1353,7 +1353,7 @@ html.bewly-design[data-bewly-native-site="creator-quests"] {
   :is(.button-item, .not-reach-btn) {
     background: var(--bew-content-alt-solid) !important;
     color: var(--bew-text-1) !important;
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1365,7 +1365,7 @@ html.bewly-design[data-bewly-native-site="creator-quests"] {
 
   .shop-ways-block .button-item {
     border-radius: var(--bew-pill-radius) !important;
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
 
     .button-name {
       color: inherit !important;
@@ -1424,7 +1424,7 @@ html.bewly-design[data-bewly-native-site="creator-tasks"] {
   --el-text-color-primary: var(--bew-text-1);
   --el-text-color-regular: var(--bew-text-2);
   --el-text-color-secondary: var(--bew-text-2);
-  --el-border-color: var(--bew-border-color);
+  --el-border-color: var(--bew-separator-color);
 
   .clue-page {
     min-width: 0;
@@ -1455,9 +1455,9 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   --bd-text-color-disabled: var(--bew-text-3);
   --bd-disabled-text-color: var(--bew-text-3);
   --bd-disabled-bg-color: var(--bew-content-alt-solid);
-  --bd-border-color: var(--bew-border-color);
-  --bd-border-color-light: var(--bew-border-color);
-  --bd-border-color-lighter: var(--bew-border-color);
+  --bd-border-color: var(--bew-separator-color);
+  --bd-border-color-light: var(--bew-separator-color);
+  --bd-border-color-lighter: var(--bew-separator-color);
   --bd-border-radius-base: var(--bew-interactive-radius);
 
   :is(.pc-wrapper, .home-wrap) {
@@ -1469,7 +1469,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   .fly-pc-navigation {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1488,7 +1488,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   .b-card {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1525,7 +1525,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   .combo {
     background: var(--bew-content-alt-solid) !important;
     color: var(--bew-text-2);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1544,13 +1544,13 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   }
 
   .split-line {
-    background: var(--bew-border-color);
+    background: var(--bew-separator-color);
   }
 
   .home-wrap > .footer {
     background: var(--bew-content-solid) !important;
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -1569,7 +1569,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
 
   .target {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -1583,7 +1583,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   :is(.button-select-popover-content, .bd-radio-button__inner) {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1601,7 +1601,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   :is(.management, .data, .mine-card, .mine .user-info) {
     background: var(--bew-content-solid) !important;
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1638,7 +1638,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
 
   :is(.data-content .tabs, .data-content .select-item, .user-profile .empty-wrap, .bd-input__wrapper) {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1660,7 +1660,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   .bd-button {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -1683,7 +1683,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   .bd-picker-panel {
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1717,7 +1717,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   .qualification-entry-btn,
   .mine .go-btn {
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   @media (max-width: 1072px) {
@@ -1812,7 +1812,7 @@ html.bewly-design[data-bewly-native-site="creator-cooperation"] {
   :is(.settle-inner, .settle-about-comp, .right-item) {
     background-color: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1830,13 +1830,13 @@ html.bewly-design[data-bewly-native-site="creator-cooperation"] {
   }
 
   .divide-line {
-    background-color: var(--bew-border-color);
+    background-color: var(--bew-separator-color);
   }
 
   .bd-button {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -1853,7 +1853,7 @@ html.bewly-design[data-bewly-native-site="creator-cooperation"] {
 
   .ivu-checkbox-inner {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-radius-tiny);
     corner-shape: var(--bew-corner-shape);
   }

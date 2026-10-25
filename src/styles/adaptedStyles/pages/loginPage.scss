@@ -66,7 +66,7 @@ html.bewly-design:is(.loginPage, [data-bewly-native-site="login"]) {
 
     .main__middle-line,
     .tabs_wp div:nth-child(2n) {
-      background-color: var(--bew-border-color);
+      background-color: var(--bew-separator-color);
     }
 
     .login-scan__qrcode {
@@ -91,7 +91,7 @@ html.bewly-design:is(.loginPage, [data-bewly-native-site="login"]) {
     .btn_other,
     .tab-sms__vertical-line,
     .area-code-select {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .btn_other {

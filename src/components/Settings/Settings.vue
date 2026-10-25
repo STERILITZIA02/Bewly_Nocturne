@@ -25,8 +25,9 @@ import { MenuType } from './types'
 const props = defineProps<{
   navigationRequest?: SettingsNavigationRequest | null
 }>()
-
 const emit = defineEmits(['close'])
+
+const requestedNavigation = shallowRef<SettingsNavigationRequest | null>(null)
 
 const { t, tm, rt } = useI18n()
 const reducedMotion = usePreferredReducedMotion()
@@ -134,56 +135,17 @@ const settingsMenu = {
   [MenuType.General]: asyncSettings.define(() => import('./PluginComponentsAndPages/General/General.vue'), {}),
   [MenuType.BewlyPages]: asyncSettings.define(() => import('./Navigation/BewlyPages.vue'), {}),
   [MenuType.BewlyComponents]: asyncSettings.define(() => import('./Navigation/BewlyComponents.vue'), {}),
+  [MenuType.Playback]: asyncSettings.define(() => import('./Navigation/Playback.vue'), {}),
   [MenuType.Bilibili]: asyncSettings.define(() => import('./BilibiliFeaturesEnhancement/BilibiliFeaturesEnhancement.vue'), {}),
   [MenuType.Appearance]: asyncSettings.define(() => import('./Appearance/Appearance.vue'), {}),
   [MenuType.About]: asyncSettings.define(() => import('./About/About.vue'), {}),
 }
 const settingsMenuStorageKey = 'bewly-settings-active-menu'
-const navigationPageStorageKey = 'bewly-settings-navigation-page'
 const bewlyPagesStorageKey = 'bewly-settings-bewly-pages-page'
 const bewlyComponentsStorageKey = 'bewly-settings-bewly-components-page'
-const playbackPageStorageKey = 'bewly-settings-playback-page'
-const bilibiliPageStorageKey = 'bewly-settings-bilibili-page'
 const storedMenuItem = sessionStorage.getItem(settingsMenuStorageKey)
-const legacyNavigationPage = sessionStorage.getItem(navigationPageStorageKey)
-const legacyPlaybackPages: Record<string, string> = {
-  Player: 'player',
-  AutoPlay: 'auto-play',
-}
-if (storedMenuItem && legacyPlaybackPages[storedMenuItem])
-  sessionStorage.setItem(bilibiliPageStorageKey, legacyPlaybackPages[storedMenuItem])
-
-if (!sessionStorage.getItem(bilibiliPageStorageKey)) {
-  const legacyPlaybackPage = sessionStorage.getItem(playbackPageStorageKey)
-  if (legacyPlaybackPage)
-    sessionStorage.setItem(bilibiliPageStorageKey, legacyPlaybackPage)
-}
-
-const legacyNavigationComponentPages = new Set(['video-card', 'topbar', 'dock'])
-const legacyNavigationMenu = legacyNavigationPage === 'link-opening'
-  ? MenuType.General
-  : legacyNavigationPage && legacyNavigationComponentPages.has(legacyNavigationPage)
-    ? MenuType.BewlyComponents
-    : MenuType.BewlyPages
-
-const legacyMenuAliases: Record<string, MenuType> = {
-  Browsing: legacyNavigationMenu,
-  Navigation: legacyNavigationMenu,
-  Player: MenuType.Bilibili,
-  AutoPlay: MenuType.Bilibili,
-  Playback: MenuType.Bilibili,
-  BilibiliFeaturesEnhancement: MenuType.Bilibili,
-  Advanced: MenuType.General,
-}
-
-if (!sessionStorage.getItem(bewlyPagesStorageKey) && legacyNavigationPage && ['home', 'moments', 'search'].includes(legacyNavigationPage))
-  sessionStorage.setItem(bewlyPagesStorageKey, legacyNavigationPage)
-
-if (!sessionStorage.getItem(bewlyComponentsStorageKey) && legacyNavigationPage && legacyNavigationComponentPages.has(legacyNavigationPage))
-  sessionStorage.setItem(bewlyComponentsStorageKey, legacyNavigationPage)
-
 const initialMenuItem = storedMenuItem
-  ? legacyMenuAliases[storedMenuItem] ?? storedMenuItem as MenuType
+  ? storedMenuItem as MenuType
   : null
 const activatedMenuItem = ref<MenuType>(
   initialMenuItem && Object.values(MenuType).includes(initialMenuItem)
@@ -194,8 +156,17 @@ const contentTransition = useReadyPageTransition(() => settingsMenu[activatedMen
 watch(
   () => props.navigationRequest?.id,
   () => {
-    if (props.navigationRequest?.target.category === 'bewly-pages')
-      activatedMenuItem.value = MenuType.BewlyPages
+    requestedNavigation.value = props.navigationRequest ?? null
+    const target = props.navigationRequest?.target
+    if (target)
+      activatedMenuItem.value = target.category === 'playback' ? MenuType.Playback : MenuType.BewlyPages
+    if (target?.category === 'playback' && target.settingId) {
+      const requestId = props.navigationRequest!.id
+      nextTick(() => {
+        if (requestedNavigation.value?.id === requestId)
+          scrollToSettingId(target.settingId!, cancelSettingNavigation())
+      })
+    }
   },
   { immediate: true },
 )
@@ -302,6 +273,12 @@ const settingsMenuItems: MenuItem[] = [
     titleKey: 'settings.menu_bewly_components',
   },
   {
+    value: MenuType.Playback,
+    icon: 'i-tabler:player-play',
+    iconActivated: 'i-tabler:player-play-filled',
+    titleKey: 'settings.menu_playback',
+  },
+  {
     value: MenuType.Bilibili,
     icon: 'i-tabler:sparkles',
     iconActivated: 'i-tabler:sparkles',
@@ -323,8 +300,8 @@ const settingsMenuItems: MenuItem[] = [
   },
 ]
 const activeSettingsComponentProps = computed(() => (
-  activatedMenuItem.value === MenuType.BewlyPages
-    ? { navigationTarget: props.navigationRequest }
+  (activatedMenuItem.value === MenuType.BewlyPages || activatedMenuItem.value === MenuType.Playback)
+    ? { navigationTarget: requestedNavigation.value }
     : {}
 ))
 
@@ -516,6 +493,7 @@ function scrollToSearchTarget(entry: SettingsSearchEntry, navigationId: number, 
 }
 
 function navigateToSearchResult(entry: SettingsSearchEntry, keyboard = false) {
+  requestedNavigation.value = null
   searchQuery.value = ''
   const navigationId = cancelSettingNavigation()
   entry.storageValues?.forEach(({ key, value }) => sessionStorage.setItem(key, value))
@@ -531,6 +509,7 @@ function scrollToSettingId(settingId: string, navigationId: number) {
 }
 
 function navigateToSettingDescriptor(descriptor: SettingDescriptor) {
+  requestedNavigation.value = null
   const menu = descriptor.category as MenuType
   if (!(menu in settingsMenu))
     return
@@ -569,6 +548,7 @@ function startQuickLayoutEdit() {
 }
 
 function changeMenuItem(menuItem: MenuType) {
+  requestedNavigation.value = null
   cancelSettingNavigation()
   activatedMenuItem.value = menuItem
 }
@@ -648,7 +628,6 @@ function changeMenuItem(menuItem: MenuType) {
                   px-2 py-0.5
                   rounded="$bew-pill-radius"
                   text-orange-500
-                  fw-500
                 >
                   {{ menuItem.badge }}
                 </span>
@@ -817,7 +796,7 @@ function changeMenuItem(menuItem: MenuType) {
   align-items: stretch;
   gap: var(--bew-space-2);
   border-radius: var(--settings-primary-nav-collapsed-radius);
-  corner-shape: round;
+  corner-shape: var(--bew-corner-shape-capsule);
   transition:
     width var(--bew-duration-moderate) var(--bew-ease-standard),
     border-radius var(--bew-duration-moderate) var(--bew-ease-standard),
@@ -841,7 +820,7 @@ function changeMenuItem(menuItem: MenuType) {
   z-index: 0;
   inset: 0;
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
   border-radius: inherit;
   corner-shape: inherit;
   box-shadow: var(--bew-shadow-4);
@@ -856,10 +835,10 @@ function changeMenuItem(menuItem: MenuType) {
   height: var(--settings-primary-nav-item-size);
   align-items: center;
   font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   overflow-x: hidden;
   border-radius: calc(var(--settings-primary-nav-item-size) / 2);
-  corner-shape: round;
+  corner-shape: var(--bew-corner-shape-capsule);
   transition:
     border-radius var(--bew-duration-moderate) var(--bew-ease-standard),
     color var(--bew-duration-moderate) var(--bew-ease-standard),
@@ -904,7 +883,7 @@ function changeMenuItem(menuItem: MenuType) {
   z-index: 0;
   inset: 0;
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
   box-shadow: var(--bew-shadow-4);
   border-radius: inherit;
   corner-shape: inherit;
@@ -955,7 +934,7 @@ function changeMenuItem(menuItem: MenuType) {
     flex: 0 1 auto;
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-heading);
-    font-weight: var(--bew-heading-weight);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-heading);
     @include truncateFade.line;
   }
@@ -977,9 +956,9 @@ function changeMenuItem(menuItem: MenuType) {
   padding: 0 var(--bew-space-3);
   color: var(--bew-text-1);
   background: var(--bew-content);
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: calc(var(--bew-control-height) / 2);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   box-shadow: none;
   transition:
     width var(--bew-duration-moderate) var(--bew-ease-standard),
@@ -988,12 +967,7 @@ function changeMenuItem(menuItem: MenuType) {
     box-shadow var(--bew-duration-normal) var(--bew-ease-standard),
     background-color var(--bew-duration-normal) var(--bew-ease-standard);
 
-  &:hover {
-    border-color: var(--bew-focus-ring-color);
-  }
-
   &:focus-within {
-    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
@@ -1058,7 +1032,7 @@ function changeMenuItem(menuItem: MenuType) {
     min-width: 0;
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-body);
-    font-weight: var(--bew-font-weight-medium);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-body);
     @include truncateFade.line;
   }
@@ -1133,11 +1107,11 @@ function changeMenuItem(menuItem: MenuType) {
   color: var(--bew-text-1);
   background: var(--bew-selected-bg);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   box-shadow: var(--bew-shadow-2);
   content: attr(data-settings-search-highlight);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   pointer-events: none;
   white-space: nowrap;
@@ -1235,13 +1209,13 @@ function changeMenuItem(menuItem: MenuType) {
       .settings-primary-navigation__list {
         width: var(--settings-primary-nav-collapsed-width);
         border-radius: var(--settings-primary-nav-collapsed-radius);
-        corner-shape: round;
+        corner-shape: var(--bew-corner-shape-capsule);
         transform: none;
       }
 
       .settings-primary-navigation__item {
         border-radius: calc(var(--settings-primary-nav-item-size) / 2);
-        corner-shape: round;
+        corner-shape: var(--bew-corner-shape-capsule);
       }
     }
   }
@@ -1290,7 +1264,7 @@ function changeMenuItem(menuItem: MenuType) {
     right: 8px;
     left: 8px;
     height: 1px;
-    background: var(--bew-border-color);
+    background: var(--bew-separator-color);
     content: "";
   }
 }

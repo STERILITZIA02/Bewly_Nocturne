@@ -57,12 +57,12 @@ const sidebarHost = useSidebarRail()
   min-width: 0;
   padding: var(--bew-top-bar-height) var(--bew-sidebar-inline-padding) var(--bew-space-3);
   overflow: hidden;
-  border-inline-end: 1px solid var(--bew-surface-border-color);
+  border-inline-end: var(--bew-hairline) solid var(--bew-edge-color);
 }
 .library-workspace__rail-scroll {
   @include sidebarSurface.vertical-scroll;
-  // Its bottom is the screen edge, which needs no fade.
-  @include scrollEdgeFade.vertical($bottom: false);
+  // A rail never fades; its bottom is the screen edge, which needs no line.
+  @include scrollEdgeFade.lines($bottom: false);
   flex: 1;
   min-height: 0;
   margin-inline: calc(-1 * var(--bew-sidebar-inline-padding));
@@ -114,9 +114,19 @@ const sidebarHost = useSidebarRail()
   gap: var(--bew-space-2);
   min-width: 0;
 }
+// The search and the button row under it end with an edge-to-edge hairline
+// (user-specified), like the rail's other separators.
+.library-rail-tools--ruled {
+  box-sizing: border-box;
+  // Wider than the content box by its bleed (lifts the rail children's 100% cap).
+  max-width: none;
+  margin-inline: calc(-1 * var(--bew-sidebar-inline-padding));
+  padding: 0 var(--bew-sidebar-inline-padding) var(--bew-space-3);
+  border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
+}
 .library-rail-content .b-button {
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
 }
 .library-rail-actions {
   display: grid;
@@ -164,6 +174,7 @@ const sidebarHost = useSidebarRail()
   padding: 0 var(--bew-space-3);
   border: 0;
   border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-text-1);
   background: var(--bew-fill-1);
   font: inherit;

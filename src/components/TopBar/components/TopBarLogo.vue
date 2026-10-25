@@ -170,7 +170,9 @@ if (sidebarHost) {
 // Same material and border as the rail it stands for; the material tokens turn
 // opaque and unblurred when frosted glass is disabled.
 .logo-circle {
-  @include sidebarSurface.floating;
+  @include sidebarSurface.floating(round);
+  // The folded left rail keeps the rail's edge, so the morph hands over cleanly.
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   position: absolute;
   inset: 0;
   pointer-events: none;

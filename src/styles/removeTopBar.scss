@@ -225,7 +225,7 @@ html.bewly-outer-top-bars-suppressed {
     flex-direction: column;
     flex-wrap: wrap;
     padding: 0 16px;
-    border-right: 1px solid var(--bew-fill-2);
+    border-right: var(--bew-hairline) solid var(--bew-separator-color);
 
     &:last-child {
       border-right: 0;

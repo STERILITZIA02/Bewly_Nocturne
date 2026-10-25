@@ -77,7 +77,7 @@ function toggle() {
 <style scoped lang="scss">
 .watch-later-filter-section + .watch-later-filter-section {
   padding-top: var(--bew-space-3);
-  border-top: 1px solid var(--bew-message-card-border);
+  border-top: var(--bew-hairline) solid var(--bew-edge-color);
 }
 .watch-later-filter-section h2 {
   margin: 0;
@@ -95,7 +95,7 @@ function toggle() {
   color: var(--bew-text-1);
   background: transparent;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-align: start;
   cursor: pointer;

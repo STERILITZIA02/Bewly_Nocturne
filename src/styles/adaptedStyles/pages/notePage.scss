@@ -198,7 +198,7 @@
     }
 
     .note-tabs .van-tabs-bar:after {
-      background-color: var(--bew-border-color);
+      background-color: var(--bew-separator-color);
     }
 
     .el-pagination.is-background .btn-next,
@@ -282,11 +282,11 @@
     }
 
     .manage-note #web-toolbar {
-      border-top-color: var(--bew-border-color);
+      border-top-color: var(--bew-separator-color);
     }
 
     .protocal-dialog .van-dialog__header {
-      border-bottom-color: var(--bew-border-color);
+      border-bottom-color: var(--bew-separator-color);
     }
 
     .ql-toolbar.ql-snow .ql-picker-options {

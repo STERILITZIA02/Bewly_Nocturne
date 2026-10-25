@@ -19,15 +19,20 @@
 }
 
 // The rail folded into a floating capsule or circle in the top bar (logo circle,
-// right-hand tools): same glass and border, plus a contact shadow. Draw it on a
+// right-hand tools): same glass and border, plus the floating glass shadow. Draw it on a
 // layer behind the controls so their popovers are not inside its backdrop root.
-@mixin floating {
+// `$shape: round` for the standalone circles (logo circle, avatar orb).
+@mixin floating($shape: capsule) {
   @include material;
   box-sizing: border-box;
-  border: 1px solid var(--bew-glass-border-color);
+  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
-  box-shadow: var(--bew-shadow-1);
+  box-shadow: var(--bew-glass-shadow);
+  @if $shape == round {
+    corner-shape: var(--bew-corner-shape-round);
+  } @else {
+    corner-shape: var(--bew-corner-shape-capsule);
+  }
 }
 
 @mixin solid {

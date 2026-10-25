@@ -59,6 +59,27 @@ export type VideoPlayerModeContext = 'multipart' | 'collection' | 'bangumi' | 'w
 export type VideoPlayerModeOverrides = Record<VideoPlayerModeContext, VideoPlayerModeOverride>
 export type RecommendationMode = 'web' | 'app' | 'webNoCookie'
 export type RecommendationModeOption = 'web' | 'webNoCookie' | 'appSingle' | 'appDouble'
+export interface RecommendationModeSwitcherOption { mode: RecommendationModeOption, visible: boolean }
+const RECOMMENDATION_MODES: RecommendationModeOption[] = ['web', 'webNoCookie', 'appSingle', 'appDouble']
+
+function normalizeRecommendationSwitcherOptions(value: unknown): RecommendationModeSwitcherOption[] {
+  if (!Array.isArray(value))
+    return RECOMMENDATION_MODES.map(mode => ({ mode, visible: true }))
+  const result: RecommendationModeSwitcherOption[] = []
+  const seen = new Set<RecommendationModeOption>()
+  for (const entry of value) {
+    const mode = typeof entry === 'string' ? entry : entry?.mode
+    if (!RECOMMENDATION_MODES.includes(mode) || seen.has(mode))
+      continue
+    seen.add(mode)
+    result.push({ mode, visible: typeof entry === 'string' || entry.visible === true })
+  }
+  for (const mode of RECOMMENDATION_MODES) {
+    if (!seen.has(mode))
+      result.push({ mode, visible: false })
+  }
+  return result
+}
 export type AppRecommendationColumn = 1 | 2
 /**
  * 评论回复树展示模式：
@@ -215,6 +236,7 @@ export interface Settings {
   momentsOnlyCoverVideoPreview: boolean
   /** Bewly 动态页期望列数；窄屏会自动降列 */
   momentsGridColumns: '1' | '2' | '3'
+  momentsStartFromLastSeen: boolean
   momentsEnableKeywordFilter: boolean
   momentsBlockedKeywords: string
   momentsFilterUpRecommendation: boolean
@@ -281,7 +303,7 @@ export interface Settings {
 
   recommendationMode: RecommendationMode
   appRecommendationColumn: AppRecommendationColumn
-  recommendationModeSwitcherOptions: RecommendationModeOption[]
+  recommendationModeSwitcherOptions: RecommendationModeSwitcherOption[]
   showRecommendationModeSwitcher: boolean
   showImmersiveModeEntry: boolean
   immersiveWheelSwitch: boolean
@@ -500,6 +522,7 @@ export const originalSettings: Settings = {
   momentsVideoPreviewDelayed: false,
   momentsOnlyCoverVideoPreview: true,
   momentsGridColumns: '3',
+  momentsStartFromLastSeen: false,
   momentsEnableKeywordFilter: false,
   momentsBlockedKeywords: '',
   momentsFilterUpRecommendation: false,
@@ -559,7 +582,7 @@ export const originalSettings: Settings = {
 
   recommendationMode: 'web',
   appRecommendationColumn: 2,
-  recommendationModeSwitcherOptions: ['web', 'webNoCookie', 'appSingle', 'appDouble'],
+  recommendationModeSwitcherOptions: RECOMMENDATION_MODES.map(mode => ({ mode, visible: true })),
   showRecommendationModeSwitcher: false,
   showImmersiveModeEntry: true,
   immersiveWheelSwitch: true,
@@ -694,6 +717,8 @@ function asUnknownRecord(value: object): Record<string, unknown> {
 
 function normalizeSettings(value: Settings) {
   removeRetiredSettings(value)
+  if (typeof value.momentsStartFromLastSeen !== 'boolean')
+    value.momentsStartFromLastSeen = false
   if (typeof value.enableDarkModeTint !== 'boolean')
     value.enableDarkModeTint = false
   value.dockPosition = normalizeDockPosition(value.dockPosition)
@@ -713,9 +738,8 @@ function normalizeSettings(value: Settings) {
     value.appRecommendationColumn = 2
   if (!['default', 'on', 'off'].includes(value.textAutospaceMode))
     value.textAutospaceMode = 'default'
-  const visibleModes = new Set(Array.isArray(value.recommendationModeSwitcherOptions) ? value.recommendationModeSwitcherOptions : originalSettings.recommendationModeSwitcherOptions)
-  const normalizedModes = originalSettings.recommendationModeSwitcherOptions.filter(option => visibleModes.has(option))
-  if (!Array.isArray(value.recommendationModeSwitcherOptions) || normalizedModes.length !== value.recommendationModeSwitcherOptions.length || normalizedModes.some((option, index) => option !== value.recommendationModeSwitcherOptions[index]))
+  const normalizedModes = normalizeRecommendationSwitcherOptions(value.recommendationModeSwitcherOptions)
+  if (JSON.stringify(normalizedModes) !== JSON.stringify(value.recommendationModeSwitcherOptions))
     value.recommendationModeSwitcherOptions = normalizedModes
   const legacyRecord = asUnknownRecord(value)
   if (typeof value.localLoudnessEnabled !== 'boolean')
@@ -839,6 +863,9 @@ function normalizeSettings(value: Settings) {
       }
     }
   }
+
+  if (record.autoPlayRecommend === 'autoPlayWithRecommend')
+    record.autoPlayRecommend = 'autoPlay'
 
   // 确保 useBilibiliDefaultAutoPlay 存在（新用户或旧版本升级）
   if (typeof legacyRecord.useBilibiliDefaultAutoPlay !== 'boolean')

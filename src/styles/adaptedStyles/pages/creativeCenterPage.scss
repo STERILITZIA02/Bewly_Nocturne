@@ -15,7 +15,7 @@
   .material-wrp {
     color: var(--bew-text-1);
     background: var(--bew-content-solid) !important;
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .carousel-box,
@@ -33,10 +33,10 @@
   }
 
   .cc-nav-wrp {
-    border-right-color: var(--bew-border-color) !important;
+    border-right-color: var(--bew-separator-color) !important;
 
     .nav-cut-off-line {
-      background: var(--bew-border-color);
+      background: var(--bew-separator-color);
     }
   }
 
@@ -89,7 +89,7 @@
   .cc-header .ai-tool-capsule {
     background: var(--bew-content-alt-solid) !important;
     color: var(--bew-text-1) !important;
-    border-color: var(--bew-border-color) !important;
+    border-color: var(--bew-separator-color) !important;
   }
 
   .cc-header .ai-tool-text {
@@ -108,7 +108,7 @@
   .data-wrp .query-trigger {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -166,7 +166,7 @@
   #video-up-app {
     .upload-nav,
     .upload-card .divider {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .upload-nav-item,
@@ -195,7 +195,7 @@
     .banner-entry .enter-btn {
       background: var(--bew-theme-surface);
       color: var(--bew-on-theme-surface);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
 
@@ -226,7 +226,7 @@
 
     .info-wrapper .detail {
       background: var(--bew-elevated-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -234,7 +234,7 @@
 
   .upload-manage {
     .new-link-top-wrap {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .new-link-top-container {
@@ -280,7 +280,7 @@
   .bcc-select-list-wrap {
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -312,7 +312,7 @@
   .video-title-edit > input {
     color: var(--bew-text-1);
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -322,7 +322,7 @@
   :is(.comment_wrap, .interActive-wrap, .setting_box, .fans_wrap, .create-protect-wrp) {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -334,7 +334,7 @@
 
   :is(.comment_wrap, .interActive-wrap, .fans_wrap, .upload-wrap) .new-link-top-container {
     background: var(--bew-content-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius) var(--bew-surface-radius) 0 0;
     corner-shape: var(--bew-corner-shape);
   }
@@ -359,14 +359,14 @@
     }
 
     :is(.new-link-top-wrap, .commet_header, .card-wrp, .section, .public-setting, .watermark-setting) {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
   }
 
   .bcc-input-inner {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -380,7 +380,7 @@
   .interActive-wrap .button_wrap.default {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -392,12 +392,12 @@
   .cc-content-body .bcc-table__wrap {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
 
     :is(th, td) {
       background: var(--bew-content-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     th {
@@ -413,7 +413,7 @@
   .cc-content-body .bcc-button {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -436,7 +436,7 @@
     :is(.bili-btn, .dropdown-btn) {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -449,7 +449,7 @@
     .bili-btn.followed {
       color: var(--bew-text-2) !important;
       background: var(--bew-content-alt-solid) !important;
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
 
       &:hover {
         color: var(--bew-text-1) !important;
@@ -472,7 +472,7 @@
     .dropdown-menu {
       color: var(--bew-text-1);
       background: var(--bew-elevated-solid) !important;
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
 
@@ -527,13 +527,13 @@
         white-space: nowrap;
         color: var(--bew-text-2);
         font-size: var(--bew-font-size-control);
-        font-weight: var(--bew-font-weight-medium);
+        font-weight: var(--bew-font-weight-regular);
         line-height: var(--bew-line-height-control);
         border-radius: var(--bew-interactive-radius);
         corner-shape: var(--bew-corner-shape);
 
         &::after {
-          border-color: var(--bew-border-color);
+          border-color: var(--bew-separator-color);
         }
 
         &:hover {
@@ -588,7 +588,7 @@
       .bili-input {
         color: var(--bew-text-1);
         background: var(--bew-content-alt-solid);
-        border-color: var(--bew-border-color);
+        border-color: var(--bew-separator-color);
         border-radius: var(--bew-interactive-radius);
         corner-shape: var(--bew-corner-shape);
       }
@@ -630,7 +630,7 @@
         width: auto;
 
         > .content {
-          border-color: var(--bew-border-color);
+          border-color: var(--bew-separator-color);
           border-radius: var(--bew-surface-radius);
           corner-shape: var(--bew-corner-shape);
         }
@@ -643,7 +643,7 @@
 
     .danmu-container {
       background: var(--bew-content-alt-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -655,7 +655,7 @@
     .ui-input {
       color: var(--bew-text-1);
       background: var(--bew-content-alt-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
 
@@ -672,7 +672,7 @@
       .flatpickr-input[readonly] {
         // Readonly is the native date-picker trigger, not a disabled field.
         color: var(--bew-text-1) !important;
-        border-color: var(--bew-border-color) !important;
+        border-color: var(--bew-separator-color) !important;
         border-radius: var(--bew-interactive-radius) !important;
       }
 
@@ -681,7 +681,7 @@
         left: auto;
         color: var(--bew-text-1);
         background: var(--bew-elevated-solid);
-        border-color: var(--bew-border-color);
+        border-color: var(--bew-separator-color);
         border-radius: var(--bew-surface-radius);
         corner-shape: var(--bew-corner-shape);
         box-shadow: var(--bew-popover-surface-shadow);
@@ -757,7 +757,7 @@
       .confirm-wrap .ui-btn {
         color: var(--bew-text-1);
         background: var(--bew-content-alt-solid);
-        border-color: var(--bew-border-color);
+        border-color: var(--bew-separator-color);
         border-radius: var(--bew-interactive-radius);
         corner-shape: var(--bew-corner-shape);
 
@@ -772,18 +772,18 @@
 
   .setting-card {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .setting_box .auto-reply-setting {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .bili-switcher {
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
 
     &.checked {
       background-color: var(--bew-theme-color);
@@ -794,7 +794,7 @@
   :is(.Signment, .Flow, .data-overview-wrap, .beta-protect-wrp, .novice-task-module, .my-reward, .empty-guide-steps) {
     background-color: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -830,7 +830,7 @@
 
     .income-tab {
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
 
       &.income-tab-color-highlight {
         background: var(--bew-theme-surface);
@@ -841,9 +841,9 @@
     :is(.equity-card, .rec-activity-card) .btn {
       background: var(--bew-content-alt-solid);
       color: var(--bew-theme-foreground);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     .withdraw-btn {
@@ -908,7 +908,7 @@
 
   :is(.equity-card, .task-item, .protect-item, .quality-case-card, .Flow-video, .rec-activity-card, .college-card) {
     background-color: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -928,14 +928,14 @@
     &:is(.disabled, .is-disabled, .signment-btn-disabled, [disabled]) {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-3);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
   }
 
   :is(.income-popup, .dropdown-wrp .dropdown, .v-popper__inner) {
     color: var(--bew-text-1);
     background: var(--bew-elevated-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -967,7 +967,7 @@
     .card {
       background: var(--bew-content-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -1000,7 +1000,7 @@
   :is(.stats-card, .data-table-card) {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1016,7 +1016,7 @@
   .data-table-card :is(.ant-table, .ant-table-cell) {
     color: var(--bew-text-1);
     background: var(--bew-content-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .data-table-card .ant-table-thead .ant-table-cell {
@@ -1060,7 +1060,7 @@
     .home .home-unlock-action {
       max-width: 100%;
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     .header {
@@ -1100,7 +1100,7 @@
 
     .card-top-title {
       font-size: var(--bew-font-size-title);
-      font-weight: var(--bew-font-weight-semibold);
+      font-weight: var(--bew-font-weight-regular);
       line-height: var(--bew-line-height-title);
     }
 
@@ -1119,11 +1119,11 @@
       font-size: var(--bew-font-size-caption);
       line-height: var(--bew-line-height-caption);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     .case-preview {
-      border-color: var(--bew-surface-border-color);
+      border-color: var(--bew-edge-color);
     }
 
     .creator-income {
@@ -1135,7 +1135,7 @@
       background: var(--bew-theme-surface);
       color: var(--bew-on-theme-surface);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
 
       span {
         color: inherit !important;
@@ -1156,20 +1156,20 @@
       flex-shrink: 0;
       background: var(--bew-theme-surface);
       color: var(--bew-on-theme-surface);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     .unlock-action.disabled,
     .home .home-unlock-action.disabled {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-3);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .unlock-card-container > div:not(:last-child) {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
   }
 
@@ -1325,7 +1325,7 @@
       color: var(--bew-on-theme-surface);
       background: var(--bew-theme-surface);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     .task-item-button.full-pink:not(.disabled, .is-disabled, [disabled], [aria-disabled="true"]) {
@@ -1342,7 +1342,7 @@
 
       .filter,
       .bcc-select-input-wrap {
-        border-color: var(--bew-border-color);
+        border-color: var(--bew-separator-color);
       }
 
       .no-more {
@@ -1386,7 +1386,7 @@
       background: var(--bew-theme-color);
       color: var(--bew-on-theme-color);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     .close-btn {
@@ -1425,7 +1425,7 @@
     }
 
     .empty-guide-step-connector {
-      background: var(--bew-border-color);
+      background: var(--bew-separator-color);
     }
 
     .quality-case-list {
@@ -1444,11 +1444,11 @@
   #cc-body micro-app[name="upanimation-dashboard"] {
     .ant-tabs-nav::before,
     .data-table-header {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .ant-table-thead > tr > th::before {
-      background: var(--bew-border-color) !important;
+      background: var(--bew-separator-color) !important;
     }
 
     .stats-card-help {
@@ -1469,7 +1469,7 @@
     .bill-table-card {
       background: var(--bew-content-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -1484,13 +1484,13 @@
     }
 
     .bill-table-header {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .bill-table-card :is(.ant-table, .ant-table-cell) {
       color: var(--bew-text-1);
       background: var(--bew-content-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .bill-table-card .ant-table-thead .ant-table-cell {
@@ -1502,7 +1502,7 @@
       min-height: var(--bew-control-height);
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
 
@@ -1533,7 +1533,7 @@
   }
 
   #cc-body micro-app[name="video-up-playlet"] .playlet-entry {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -1594,7 +1594,7 @@
 
     .beta-protect-wrp .content-tips > span {
       color: var(--bew-text-1);
-      font-weight: var(--bew-font-weight-semibold);
+      font-weight: var(--bew-font-weight-regular);
     }
 
     .data-overview-wrap .title .qa {
@@ -1619,7 +1619,7 @@
       height: 100%;
       padding: var(--bew-space-4);
       gap: var(--bew-space-4);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
     }
 
@@ -1687,7 +1687,7 @@
         position: static;
         color: var(--bew-text-1);
         font-size: var(--bew-font-size-body);
-        font-weight: var(--bew-font-weight-medium);
+        font-weight: var(--bew-font-weight-regular);
         line-height: var(--bew-line-height-body);
       }
 
@@ -1742,7 +1742,7 @@
 
       :is(.core-value-item, .classification-item) .title {
         font-size: var(--bew-font-size-title);
-        font-weight: var(--bew-font-weight-medium);
+        font-weight: var(--bew-font-weight-regular);
         line-height: var(--bew-line-height-title);
       }
 
@@ -1760,7 +1760,7 @@
 
     :is(.core-value-item, .classification-item, .content-page) {
       background: var(--bew-content-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -1800,7 +1800,7 @@
     }
 
     #app-web .catalogue-bar {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     #app-web .catalogue-bar .catalogue-bar-title,
@@ -1809,7 +1809,7 @@
     }
 
     #app-web .catalogue-bar .parent-catalogue::before {
-      background: var(--bew-border-color);
+      background: var(--bew-separator-color);
     }
 
     #app-web .catalogue-bar .catalogue-block .children-catalogue {
@@ -1838,7 +1838,7 @@
     #app-web .feedback-bar-wrap .button {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
     }

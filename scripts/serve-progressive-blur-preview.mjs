@@ -22,7 +22,7 @@ body { margin: 0; background: var(--bew-bg); color: var(--bew-text-1); font: 14p
 main { padding: 24px; } h1 { font-size: 22px; }
 nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 24px; }
 nav button, nav input { font: inherit; }
-nav button { padding: 8px 12px; border: 1px solid var(--bew-border-color); border-radius: 8px; background: var(--bew-elevated); color: inherit; }
+nav button { padding: 8px 12px; border: 1px solid var(--bew-separator-color); border-radius: 8px; background: var(--bew-elevated); color: inherit; }
 .cases { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
 .scene { position: relative; padding: 40px 24px; background: repeating-conic-gradient(#dfb873 0 25%, #38546f 0 50%) 0/80px 80px; }
 .scene .context-menu-container { position: relative; width: 100%; height: 320px; max-height: none; z-index: 0; }

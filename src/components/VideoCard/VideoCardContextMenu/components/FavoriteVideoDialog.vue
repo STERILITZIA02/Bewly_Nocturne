@@ -96,7 +96,8 @@ async function save() {
   gap: var(--bew-space-3);
   &__title {
     overflow-wrap: anywhere;
-    font-weight: var(--bew-font-weight-medium);
+    color: var(--bew-text-1);
+    font-weight: var(--bew-font-weight-regular);
   }
   &__folders {
     display: grid;

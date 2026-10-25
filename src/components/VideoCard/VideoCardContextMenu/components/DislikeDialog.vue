@@ -218,6 +218,6 @@ onKeyStroke((e: KeyboardEvent) => {
 .divider {
   height: 1px;
   margin: 12px 0;
-  background: var(--bew-border-color);
+  background: var(--bew-separator-color);
 }
 </style>

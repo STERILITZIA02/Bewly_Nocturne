@@ -911,7 +911,8 @@ onBeforeUnmount(() => {
 }
 .moment-comments__title {
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
 }
 .moment-comments__refresh,
@@ -928,7 +929,7 @@ onBeforeUnmount(() => {
   color: var(--bew-text-2);
   background: transparent;
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
   cursor: pointer;
 }
@@ -1036,7 +1037,8 @@ onBeforeUnmount(() => {
 }
 .moment-comments__author {
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
   @include truncateFade.line;
 }
@@ -1068,7 +1070,7 @@ onBeforeUnmount(() => {
   color: var(--bew-text-3);
   background: transparent;
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
   cursor: pointer;
 }

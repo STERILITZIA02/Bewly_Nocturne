@@ -94,14 +94,6 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
     </SettingsItem>
 
     <SettingsItem
-      setting-id="settings.auto_exit_fullscreen_on_end" :title="t('settings.auto_exit_fullscreen_on_end')"
-      :desc="t('settings.auto_exit_fullscreen_on_end_desc')"
-      right-width="auto"
-    >
-      <Radio v-model="settings.autoExitFullscreenOnEnd" />
-    </SettingsItem>
-
-    <SettingsItem
       setting-id="settings.video_player_mode.enable_overrides" :title="t('settings.video_player_mode.enable_overrides')"
       :desc="t('settings.video_player_mode.enable_overrides_desc')"
       right-width="auto"

@@ -14,7 +14,7 @@ interface ReadyPageTransitionOptions {
 }
 
 /**
- * Code readiness gates the 90ms exit; only the incoming content enters for 210ms.
+ * Code readiness gates the 60ms exit; only the incoming content enters for 150ms.
  * Interaction motion goes first: while a slide, wheel or panel scale is still
  * running (utils/motionPriority), the old view fades out over that time and the
  * new view mounts only after it settles, so mounting never drops its frames.
@@ -40,7 +40,7 @@ export function useReadyPageTransition<T>(source: () => T, prepare: (component: 
       return
     const style = getComputedStyle(element)
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-    const duration = reduced ? (entering ? 70 : 30) : Math.max(minDuration, getMotionDuration(style, entering ? '--bew-page-enter-duration' : '--bew-page-exit-duration', entering ? 210 : 90))
+    const duration = reduced ? (entering ? 70 : 30) : Math.max(minDuration, getMotionDuration(style, entering ? '--bew-page-enter-duration' : '--bew-page-exit-duration', entering ? 150 : 60))
     const easing = style.getPropertyValue(entering ? '--bew-ease-out' : '--bew-ease-in').trim() || (entering ? 'ease-out' : 'ease-in')
     try {
       return element.animate(frames, { duration, easing, fill: 'both' })

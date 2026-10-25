@@ -22,7 +22,7 @@ type FetchAfterHandler
   = | ((data: Response) => unknown | Promise<unknown>)
     | ((data: unknown) => unknown | Promise<unknown>)
 
-async function toJsonHandler(data: unknown): Promise<unknown> {
+async function toJsonHandler(data: unknown, preserveDynamicIds = false): Promise<unknown> {
   if (!(data instanceof Response))
     throw new TypeError('Expected a fetch Response')
   const contentType = data.headers.get('content-type')
@@ -34,7 +34,17 @@ async function toJsonHandler(data: unknown): Promise<unknown> {
 
   const text = await data.text()
   try {
-    return JSON.parse(text)
+    return preserveDynamicIds
+      ? JSON.parse(text, (key, value, context?: { source: string }) => {
+          if (typeof value !== 'number' || !['dyn_id', 'dynamic_id', 'id_str', 'offset', 'update_baseline'].includes(key))
+            return value
+          if (context?.source)
+            return context.source
+          if (!Number.isSafeInteger(value))
+            throw new Error('Dynamic ID cannot be read without loss of precision')
+          return String(value)
+        })
+      : JSON.parse(text)
   }
   catch (error) {
     // 如果JSON解析失败，可能也是风控页面
@@ -56,8 +66,10 @@ function toData(data: unknown): unknown {
 // 定义后处理流
 const AHS: {
   J_D: FetchAfterHandler[]
+  MOMENTS: FetchAfterHandler[]
 } = {
   J_D: [toJsonHandler, toData],
+  MOMENTS: [(data: unknown) => toJsonHandler(data, true), toData],
 }
 
 interface Message {
@@ -88,14 +100,15 @@ interface APIMAP {
   [key: string]: APIType
 }
 
-const navReads = new Map<string, { promise: Promise<unknown>, expires: number }>()
+const accountReads = new Map<string, { promise: Promise<unknown>, expires: number }>()
 
-function readSharedNav(message: Message, api: API, sender?: Browser.Runtime.MessageSender, options?: ReadRequestOptions) {
+function readSharedAccountGet(message: Message, api: API, sender?: Browser.Runtime.MessageSender, options?: ReadRequestOptions) {
   return withRequestDeadline(async (signal) => {
     const cookie = await waitWithSignal(browser.cookies.get({ url: api.url, name: 'DedeUserID' }), signal)
     const mid = cookie?.value ?? ''
-    const key = `${Boolean(sender?.tab?.incognito ?? browser.extension?.inIncognitoContext)}:${mid}`
-    let entry = navReads.get(key)
+    const isNav = isBilibiliNavUrl(api.url)
+    const key = `${api.url}:${Boolean(sender?.tab?.incognito ?? browser.extension?.inIncognitoContext)}:${mid}`
+    let entry = accountReads.get(key)
     if (!entry || (entry.expires > 0 && entry.expires <= Date.now())) {
       const next = { promise: Promise.resolve<unknown>(undefined), expires: 0 }
       next.promise = withRequestDeadline(async (ownerSignal) => {
@@ -103,21 +116,21 @@ function readSharedNav(message: Message, api: API, sender?: Browser.Runtime.Mess
         const response = value as { code?: number, data?: { mid?: number, isLogin?: boolean } }
         const current = await waitWithSignal(browser.cookies.get({ url: api.url, name: 'DedeUserID' }), ownerSignal)
         ownerSignal.throwIfAborted()
-        if (response.code === 0 && response.data?.isLogin && String(response.data.mid) === mid && current?.value === mid)
+        if (isNav && response.code === 0 && response.data?.isLogin && String(response.data.mid) === mid && current?.value === mid)
           next.expires = Date.now() + 5_000
-        else if (navReads.get(key) === next)
-          navReads.delete(key)
+        else if (accountReads.get(key) === next)
+          accountReads.delete(key)
         return value
       }).catch((error) => {
-        if (navReads.get(key) === next)
-          navReads.delete(key)
+        if (accountReads.get(key) === next)
+          accountReads.delete(key)
         throw error
       })
-      navReads.set(key, next)
+      accountReads.set(key, next)
       entry = next
-      for (const [id, cached] of navReads) {
+      for (const [id, cached] of accountReads) {
         if (cached.expires && cached.expires <= Date.now())
-          navReads.delete(id)
+          accountReads.delete(id)
       }
     }
     return waitWithSignal(entry.promise, signal)
@@ -138,8 +151,8 @@ function apiListenerFactory(API_MAP: APIMAP) {
 
     const api = API_MAP[contentScriptQuery] as API
 
-    if (isBilibiliNavUrl(api.url) && api._fetch.method === 'get')
-      return readSharedNav(typedMessage, api, sender, request)
+    if ((isBilibiliNavUrl(api.url) || api.url === 'https://api.bilibili.com/x/web-interface/dynamic/entrance') && api._fetch.method === 'get')
+      return readSharedAccountGet(typedMessage, api, sender, request)
     return await doRequest(typedMessage, api, request)
   }
 }

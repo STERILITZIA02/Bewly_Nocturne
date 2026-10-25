@@ -55,7 +55,7 @@
   left: var(--bew-space-2);
   padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   background: var(--bew-overlay-background);
   color: var(--bew-on-overlay-color);
   font-size: var(--bew-font-size-caption);
@@ -73,7 +73,7 @@
 .bew-media-result-title {
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
 }
 
@@ -119,7 +119,7 @@
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
 

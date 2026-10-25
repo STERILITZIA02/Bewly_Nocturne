@@ -475,8 +475,7 @@ onBeforeUnmount(() => {
           class="bew-shape-circle bew-centered-numeral"
           bg="$bew-selected-bg" h-28px w-28px
           text="$bew-text-1 xl" shadow="$bew-shadow-1"
-          border="1 $bew-surface-border-color"
-          fw-bold
+          border="hairline $bew-edge-color"
         >
           <span>{{ video?.rank }}</span>
         </div>
@@ -485,7 +484,7 @@ onBeforeUnmount(() => {
           class="bew-shape-circle bew-centered-numeral"
           bg="$bew-elevated-solid" h-28px w-28px
           shadow="$bew-shadow-1"
-          border="1 $bew-border-color"
+          border="hairline $bew-edge-color"
         >
           <span>{{ video?.rank }}</span>
         </div>
@@ -506,7 +505,7 @@ onBeforeUnmount(() => {
           v-if="video?.liveStatus === 1"
           class="video-card-overlay-transition bew-shape-pill group-hover:opacity-0"
 
-          pos="absolute left-0 top-0" bg="$bew-selected-bg" text="xs $bew-text-1" fw-bold
+          pos="absolute left-0 top-0" bg="$bew-selected-bg" text="xs $bew-text-1"
           p="x-2 y-1" m="$bew-cover-overlay-inset" inline-block
         >
           LIVE
@@ -578,7 +577,7 @@ onBeforeUnmount(() => {
   height: 0.25rem;
   overflow: hidden;
   border-radius: var(--bew-pill-radius);
-  corner-shape: round;
+  corner-shape: var(--bew-corner-shape-capsule);
   background: rgb(255 255 255 / 35%);
   pointer-events: none;
 }

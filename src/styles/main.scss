@@ -5,11 +5,14 @@
 @use "./brandMark";
 @use "./sendButton";
 @use "./messageSearch";
+@use "./momentReading";
 @use "./scrollEdgeFade";
 @use "./truncateFade";
+@use "./bleedStrip";
 
 @include scrollEdgeFade.global;
 @include truncateFade.global;
+@include bleedStrip.global;
 
 :host,
 :host *,
@@ -56,7 +59,7 @@
   &::-webkit-scrollbar-thumb {
     background-color: rgba(120, 120, 140, 0.44);
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   &::-webkit-scrollbar-corner {
@@ -131,21 +134,21 @@ html.dark.bewly-design {
   .bew-page-heading {
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-heading);
-    font-weight: var(--bew-heading-weight);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-heading);
   }
 
   .bew-subheading {
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-subheading);
-    font-weight: var(--bew-subheading-weight);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-subheading);
   }
 
   .bew-section-label {
     color: var(--bew-text-2);
     font-size: var(--bew-font-size-caption);
-    font-weight: var(--bew-font-weight-medium);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-caption);
   }
 
@@ -214,7 +217,7 @@ html.dark.bewly-design {
     border-radius: var(--bew-radius-tiny);
     corner-shape: var(--bew-corner-shape);
     box-shadow:
-      0 0 0 1px var(--bew-border-color),
+      0 0 0 1px var(--bew-separator-color),
       0 1.4px 0 0 var(--bew-fill-2);
     line-height: 1.24;
     cursor: pointer;
@@ -231,7 +234,7 @@ html.dark.bewly-design {
       background-color: var(--bew-fill-3);
       translate: 0 1.4px;
       box-shadow:
-        0 0 0 1px var(--bew-border-color),
+        0 0 0 1px var(--bew-separator-color),
         0 -1.4px 0 0 var(--bew-fill-2);
     }
   }
@@ -265,7 +268,7 @@ html.dark.bewly-design {
 
 .bew-shape-pill {
   border-radius: var(--bew-pill-radius) !important;
-  corner-shape: var(--bew-corner-shape-round) !important;
+  corner-shape: var(--bew-corner-shape-capsule);
 }
 
 .bew-shape-circle {
@@ -297,7 +300,7 @@ html.dark.bewly-design {
 
 .bew-surface-border {
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
 }
 
 .bew-search-highlight em {
@@ -312,7 +315,7 @@ html.dark.bewly-design {
   box-sizing: border-box;
   isolation: isolate;
   background: var(--bew-notifications-card-background);
-  border: 1px solid var(--bew-notifications-card-border);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   box-shadow: none;
   transition: background-color var(--bew-duration-moderate) var(--bew-ease-standard);
@@ -367,9 +370,9 @@ html.dark.bewly-design {
   color: var(--bew-warning-color);
   background: color-mix(in oklab, var(--bew-warning-color), transparent 88%);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
 }
 

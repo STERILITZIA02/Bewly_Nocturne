@@ -158,9 +158,9 @@ function createEpisodeEntry(number: number): EpisodeEntry {
   color: var(--bew-text-1);
   text-decoration: none;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
-  border: 1px solid transparent;
+  border: var(--bew-hairline) solid transparent;
   transition:
     background-color var(--bew-duration-normal) var(--bew-ease-standard),
     border-color var(--bew-duration-normal) var(--bew-ease-standard),

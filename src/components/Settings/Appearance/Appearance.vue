@@ -11,10 +11,15 @@ import { clampThemeColor, DEFAULT_THEME_COLOR, NEUTRAL_THEME_COLOR } from '~/uti
 
 import SettingsItem from '../components/SettingsItem.vue'
 import SettingsItemGroup from '../components/SettingsItemGroup.vue'
+import SettingsItemSubgroup from '../components/SettingsItemSubgroup.vue'
 import SettingsSectionHeading from '../components/SettingsSectionHeading.vue'
 import SettingsSegmentedControl from '../components/SettingsSegmentedControl.vue'
 
 const { t } = useI18n()
+const frostedGlassEnabled = computed({
+  get: () => !settings.value.disableFrostedGlass,
+  set: (enabled: boolean) => { settings.value.disableFrostedGlass = !enabled },
+})
 
 const themeScheduleStart = ref(settings.value.themeScheduleStart)
 const themeScheduleEnd = ref(settings.value.themeScheduleEnd)
@@ -141,7 +146,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
         :desc="$t('settings.disable_frosted_glass_and_top_bar_gradient_desc')"
         right-width="auto"
       >
-        <Radio v-model="settings.disableFrostedGlass" />
+        <Radio v-model="frostedGlassEnabled" />
       </SettingsItem>
       <SettingsItem
         v-if="!settings.disableFrostedGlass" setting-id="settings.frosted_glass_blur_intensity"
@@ -207,8 +212,8 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             cursor-pointer transition duration-300 box-border
             :style="{
               transform: isNeutralThemeColor ? 'scale(1.3)' : 'scale(1)',
-              border: isNeutralThemeColor ? '1px solid var(--bew-focus-ring-color)' : '1px solid var(--bew-border-color)',
-              boxShadow: isNeutralThemeColor ? '0 0 0 1px var(--bew-border-color), var(--bew-shadow-1)' : 'none',
+              border: isNeutralThemeColor ? '1px solid var(--bew-focus-ring-color)' : 'var(--bew-hairline) solid var(--bew-separator-color)',
+              boxShadow: isNeutralThemeColor ? '0 0 0 1px var(--bew-separator-color), var(--bew-shadow-1)' : 'none',
             }"
             @click="changeThemeColor(NEUTRAL_THEME_COLOR)"
           />
@@ -224,7 +229,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
               background: color,
               transform: color === settings.themeColor ? 'scale(1.3)' : 'scale(1)',
               border: color === settings.themeColor ? '1px solid var(--bew-focus-ring-color)' : '1px solid transparent',
-              boxShadow: color === settings.themeColor ? '0 0 0 1px var(--bew-border-color), var(--bew-shadow-1)' : 'none',
+              boxShadow: color === settings.themeColor ? '0 0 0 1px var(--bew-separator-color), var(--bew-shadow-1)' : 'none',
             }"
             @click="changeThemeColor(color)"
           />
@@ -235,8 +240,8 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             flex="~ items-center justify-center"
             :style="{
               transform: isCustomColor ? 'scale(1.3)' : 'scale(1)',
-              border: isCustomColor ? '1px solid var(--bew-focus-ring-color)' : '1px solid var(--bew-border-color)',
-              boxShadow: isCustomColor ? '0 0 0 1px var(--bew-border-color), var(--bew-shadow-1)' : 'none',
+              border: isCustomColor ? '1px solid var(--bew-focus-ring-color)' : 'var(--bew-hairline) solid var(--bew-separator-color)',
+              boxShadow: isCustomColor ? '0 0 0 1px var(--bew-separator-color), var(--bew-shadow-1)' : 'none',
             }"
           >
             <div
@@ -276,7 +281,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
               background: color,
               transform: color === settings.darkModeBaseColor ? 'scale(1.3)' : 'scale(1)',
               border: color === settings.darkModeBaseColor ? '1px solid var(--bew-focus-ring-color)' : '1px solid transparent',
-              boxShadow: color === settings.darkModeBaseColor ? '0 0 0 1px var(--bew-border-color), var(--bew-shadow-1)' : 'none',
+              boxShadow: color === settings.darkModeBaseColor ? '0 0 0 1px var(--bew-separator-color), var(--bew-shadow-1)' : 'none',
             }"
             @click="changeDarkModeBaseColor(color)"
           />
@@ -287,8 +292,8 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             flex="~ items-center justify-center"
             :style="{
               transform: isCustomDarkModeBaseColor ? 'scale(1.3)' : 'scale(1)',
-              border: isCustomDarkModeBaseColor ? '1px solid var(--bew-focus-ring-color)' : '1px solid var(--bew-border-color)',
-              boxShadow: isCustomDarkModeBaseColor ? '0 0 0 1px var(--bew-border-color), var(--bew-shadow-1)' : 'none',
+              border: isCustomDarkModeBaseColor ? '1px solid var(--bew-focus-ring-color)' : 'var(--bew-hairline) solid var(--bew-separator-color)',
+              boxShadow: isCustomDarkModeBaseColor ? '0 0 0 1px var(--bew-separator-color), var(--bew-shadow-1)' : 'none',
             }"
           >
             <div
@@ -355,9 +360,11 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
       <SettingsItem setting-id="settings.remove_the_indent_from_chinese_punctuation" :title="$t('settings.remove_the_indent_from_chinese_punctuation')" :desc="$t('settings.remove_the_indent_from_chinese_punctuation_desc')" right-width="auto">
         <Radio v-model="settings.removeTheIndentFromChinesePunctuation" />
       </SettingsItem>
-      <SettingsItem setting-id="settings.override_danmaku_font" :title="$t('settings.override_danmaku_font')" :desc="$t('settings.override_danmaku_font_desc')" right-width="auto">
-        <Radio v-model="settings.overrideDanmakuFont" />
-      </SettingsItem>
+      <SettingsItemSubgroup v-if="settings.customizeFont !== 'default'" :title="$t('settings.font_overrides')">
+        <SettingsItem setting-id="settings.override_danmaku_font" :title="$t('settings.override_danmaku_font')" :desc="$t('settings.override_danmaku_font_desc')" right-width="auto">
+          <Radio v-model="settings.overrideDanmakuFont" />
+        </SettingsItem>
+      </SettingsItemSubgroup>
     </SettingsItemGroup>
   </div>
 </template>
@@ -389,7 +396,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
 
 .color-option:hover {
   filter: brightness(1.12);
-  outline: 1px solid var(--bew-border-color);
+  outline: var(--bew-hairline) solid var(--bew-separator-color);
   outline-offset: 2px;
 }
 
@@ -401,6 +408,12 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
   width: 252px;
 }
 
+// Colour swatches and the colour pickers are true circles, not capsules.
+.color-option,
+input[type="color"] {
+  corner-shape: var(--bew-corner-shape-round);
+}
+
 .theme-schedule input {
   flex: 1 1 0;
   min-width: 0;
@@ -408,7 +421,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
   padding: 0 var(--bew-space-3);
   color: var(--bew-text-1);
   background: var(--bew-fill-1);
-  border: 1px solid var(--bew-fill-3);
+  border: 1px solid var(--bew-field-edge-color);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   font-size: var(--bew-font-size-body);

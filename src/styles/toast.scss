@@ -27,7 +27,7 @@
   color: var(--bew-text-1);
   background: var(--bew-popover-surface-background-solid);
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-popover-surface-shadow);
@@ -75,7 +75,7 @@
     padding: 0;
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-body);
-    font-weight: var(--bew-font-weight-medium);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-body);
     overflow-wrap: anywhere;
     white-space: pre-wrap;

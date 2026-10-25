@@ -166,13 +166,14 @@ function handleContributorImageError() {
 
 <style lang="scss" scoped>
 .title {
-  --uno: "fw-bold mb-2";
+  --uno: "mb-2";
 }
 
 .about-brand {
   margin-top: var(--bew-space-2);
   font-size: var(--bew-font-size-display);
-  font-weight: var(--bew-font-weight-bold);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-display);
 }
 

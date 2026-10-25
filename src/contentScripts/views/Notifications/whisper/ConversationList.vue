@@ -260,7 +260,7 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
     :class="{ 'conversation-list--compact': compact }"
     :aria-label="t('notifications.whisper.list_aria')"
   >
-    <div class="conversation-list__tools" :class="{ 'conversation-list__tools--pinned': filteredItems.some(session => session.pinned) }">
+    <div class="conversation-list__tools">
       <LibrarySearchField
         ref="searchInputRef" v-model="query" :label="t('notifications.whisper.search_aria')"
         clear-on-escape :filter-active="typeFilter !== 'all'"
@@ -386,7 +386,6 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
 <style scoped lang="scss">
 @use "../../../../styles/breakpoints";
 @use "../../../../styles/sidebarSurface";
-@use "../../../../styles/scrollEdgeFade";
 
 .conversation-list {
   display: flex;
@@ -403,11 +402,8 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
   flex: 0 0 auto;
   gap: var(--bew-space-2);
   padding: var(--bew-space-3);
-  border-bottom: 1px solid var(--bew-border-color);
-}
-
-.conversation-list__tools--pinned {
-  border-bottom-color: transparent;
+  // Always drawn, edge to edge (user-specified), pinned sessions or not.
+  border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
 }
 
 .conversation-list__search-heading,
@@ -423,22 +419,9 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
 
 .conversation-list__items {
   @include sidebarSurface.vertical-scroll;
-  // Its bottom is the screen edge, which needs no fade.
-  @include scrollEdgeFade.vertical($bottom: false);
+  // A rail never fades: the tools' hairline above closes its top, and its
+  // bottom is the screen edge.
   animation: conversation-results-enter var(--bew-duration-fast) var(--bew-ease-standard);
-
-  // Keep the entrance alongside the edge-fade timelines instead of replacing them.
-  @supports (animation-timeline: scroll()) {
-    animation:
-      conversation-results-enter var(--bew-duration-fast) var(--bew-ease-standard),
-      bew-scroll-edge-top linear both,
-      bew-scroll-edge-bottom linear both;
-    animation-timeline: auto, scroll(self), scroll(self);
-    animation-range:
-      normal,
-      0 var(--bew-scroll-edge-ramp),
-      calc(100% - var(--bew-scroll-edge-ramp)) 100%;
-  }
 }
 @keyframes conversation-results-enter {
   from {

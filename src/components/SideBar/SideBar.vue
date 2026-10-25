@@ -232,7 +232,8 @@ function openPlayerFeedback() {
   position: relative;
   --b-button-width: var(--bew-floating-control-size);
   --b-button-height: var(--bew-floating-control-size);
-  --b-button-border-width: 1px;
+  --b-button-border-width: var(--bew-glass-edge-width);
+  --b-button-border-color: var(--bew-glass-edge-color);
   --b-button-color: var(--bew-glass-tint);
   --b-button-color-hover: var(--bew-glass-tint-hover);
   --b-button-shadow: var(--bew-shadow-1);
@@ -400,7 +401,7 @@ function openPlayerFeedback() {
       flex: none;
       width: 1px;
       height: var(--bew-icon-size-md);
-      background: var(--bew-border-color);
+      background: var(--bew-separator-color);
     }
   }
 

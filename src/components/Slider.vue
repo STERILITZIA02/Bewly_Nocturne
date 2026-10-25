@@ -59,7 +59,7 @@ const labelWidthSample = computed(() => {
       :style="sliderStyle"
       class="slider"
       appearance-none outline-none rounded="$b-slider-height"
-      border="size-$b-border-width color-$bew-border-color" w="$b-slider-width" h="$b-slider-height"
+      border="size-$b-border-width color-$bew-separator-color" w="$b-slider-width" h="$b-slider-height"
     >
     <span class="slider-label">
       <span class="slider-label__sizer" aria-hidden="true">{{ labelWidthSample }}</span>
@@ -82,7 +82,7 @@ label {
   // a second strip of theme color at the far end of the otherwise empty track.
   background-repeat: no-repeat;
   background-clip: padding-box;
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   background-image: linear-gradient(
     to right,
     var(--bew-theme-color) 0,
@@ -111,7 +111,7 @@ label {
 input[type="range"] {
   &::-webkit-slider-thumb {
     --uno: "appearance-none w-$b-thumb-height h-$b-thumb-height bg-white rounded-$b-thumb-height";
-    --uno: "ring-$bew-border-color ring-1 cursor-pointer duration-300";
+    --uno: "ring-$bew-separator-color ring-1 cursor-pointer duration-300";
     corner-shape: var(--bew-corner-shape-round);
   }
 

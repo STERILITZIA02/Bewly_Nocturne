@@ -130,7 +130,6 @@ function acknowledgeCurrentVersion() {
 .version-reminder-trigger:hover {
   color: var(--bew-on-theme-color);
   background: var(--bew-theme-color);
-  border-color: var(--bew-focus-ring-color);
   box-shadow: var(--bew-shadow-4);
 }
 
@@ -158,7 +157,7 @@ function acknowledgeCurrentVersion() {
 
 .version-reminder-trigger__text strong {
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
 }
 
 .version-reminder-trigger__text small {
@@ -197,7 +196,7 @@ function acknowledgeCurrentVersion() {
   color: var(--bew-text-1);
   background: var(--bew-fill-1);
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   transition:
@@ -209,7 +208,6 @@ function acknowledgeCurrentVersion() {
 .version-reminder-dialog__link:hover {
   color: var(--bew-on-theme-surface);
   background: var(--bew-theme-surface);
-  border-color: var(--bew-focus-ring-color);
 }
 
 .version-reminder-dialog__link-icon {
@@ -236,7 +234,7 @@ function acknowledgeCurrentVersion() {
 
 .version-reminder-dialog__link strong {
   font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-body);
 }
 

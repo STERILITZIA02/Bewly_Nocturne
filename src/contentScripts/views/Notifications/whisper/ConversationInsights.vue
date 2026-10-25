@@ -165,6 +165,7 @@ const privateShare = computed(() => {
   padding: var(--bew-space-2) var(--bew-space-3);
   border: 0;
   border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
   background: var(--bew-fill-1);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-control);
@@ -222,7 +223,7 @@ const privateShare = computed(() => {
   padding: var(--bew-space-4);
   color: var(--bew-text-1);
   background: transparent;
-  border: 1px solid var(--bew-message-card-border);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 
@@ -233,7 +234,8 @@ const privateShare = computed(() => {
     margin: 0;
     font-size: var(--bew-font-size-title);
     line-height: var(--bew-line-height-title);
-    font-weight: var(--bew-font-weight-semibold);
+    color: var(--bew-text-1);
+    font-weight: var(--bew-font-weight-regular);
   }
 
   i {
@@ -265,7 +267,8 @@ const privateShare = computed(() => {
   overflow-wrap: anywhere;
   font-size: var(--bew-font-size-data-emphasis);
   line-height: 1;
-  font-weight: var(--bew-font-weight-semibold);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   font-variant-numeric: tabular-nums;
 }
 
@@ -283,7 +286,7 @@ const privateShare = computed(() => {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--bew-space-3);
   padding-top: var(--bew-space-3);
-  border-top: 1px solid var(--bew-border-color);
+  border-top: var(--bew-hairline) solid var(--bew-separator-color);
 }
 .conversation-insights__session-stats > div {
   flex-direction: column;
@@ -291,12 +294,14 @@ const privateShare = computed(() => {
 .conversation-insights__session-stats dd {
   font-size: var(--bew-font-size-title);
   line-height: var(--bew-line-height-title);
-  font-weight: var(--bew-font-weight-semibold);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
 }
 .conversation-insights__number {
   font-size: var(--bew-font-size-data);
   line-height: 1;
-  font-weight: var(--bew-font-weight-semibold);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   font-variant-numeric: tabular-nums;
 }
 .conversation-insights__caption {
@@ -444,7 +449,8 @@ const privateShare = computed(() => {
 .conversation-insights__session-copy strong {
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-  font-weight: var(--bew-font-weight-medium);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   @include truncateFade.line;
 }
 .conversation-insights__session-copy time {
@@ -457,6 +463,7 @@ const privateShare = computed(() => {
   color: var(--bew-text-1);
   background: var(--bew-selected-bg);
   border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
 }

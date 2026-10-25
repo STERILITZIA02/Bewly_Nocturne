@@ -18,7 +18,7 @@ html.bewly-design[data-bewly-native-site="season-media"] {
   }
 
   .media-preview {
-    border-color: var(--bew-surface-border-color) !important;
+    border-color: var(--bew-edge-color) !important;
     border-radius: var(--bew-thumb-radius) !important;
     corner-shape: var(--bew-corner-shape);
   }
@@ -49,7 +49,7 @@ html.bewly-design[data-bewly-native-site="season-media"] {
   .pub-time,
   .misl-ep-title {
     color: var(--bew-text-2) !important;
-    border-color: var(--bew-border-color) !important;
+    border-color: var(--bew-separator-color) !important;
   }
 
   .media-tab-detail-l,
@@ -66,7 +66,7 @@ html.bewly-design[data-bewly-native-site="season-media"] {
   .show-sponsor-rank {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }

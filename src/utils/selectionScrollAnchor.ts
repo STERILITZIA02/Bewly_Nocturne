@@ -1,8 +1,32 @@
 import { getMotionDuration } from './motionTiming'
+import { scrollToPosition } from './scrollIntent'
 
 const owners = new WeakMap<HTMLElement, () => void>()
 
-/** One short-lived owner per list; user scroll intent always takes precedence. */
+/**
+ * Glides the list so the opened row shows whole (user-specified): one cut off
+ * at the top or bottom moves to the nearest edge, a margin inside it; one
+ * taller than the list starts at its top.
+ */
+export function revealSelectionRow(row: HTMLElement, viewport: HTMLElement) {
+  if (!row.isConnected)
+    return
+  const bounds = viewport.getBoundingClientRect()
+  const rect = row.getBoundingClientRect()
+  const margin = Number.parseFloat(getComputedStyle(row).getPropertyValue('--bew-space-2')) || 0
+  const delta = rect.top < bounds.top + margin || rect.height > bounds.height - margin * 2
+    ? rect.top - bounds.top - margin
+    : Math.max(0, rect.bottom - bounds.bottom + margin)
+  if (Math.abs(delta) < 1)
+    return
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  void scrollToPosition(viewport, viewport.scrollTop + delta, reduced ? 'auto' : 'smooth')
+}
+
+/**
+ * One short-lived owner per list; user scroll intent always takes precedence.
+ * Once the row has opened undisturbed, it is glided into full view.
+ */
 export function keepSelectionScrollAnchor(row: HTMLElement, viewport: HTMLElement) {
   owners.get(viewport)?.()
   if (typeof ResizeObserver !== 'function')
@@ -39,6 +63,9 @@ export function keepSelectionScrollAnchor(row: HTMLElement, viewport: HTMLElemen
   for (const type of ['wheel', 'touchstart', 'pointerdown', 'keydown'])
     viewport.addEventListener(type, cancel, { passive: true })
   const duration = getMotionDuration(getComputedStyle(row), '--bew-duration-normal')
-  timer = setTimeout(cancel, duration + 50)
+  timer = setTimeout(() => {
+    cancel()
+    revealSelectionRow(row, viewport)
+  }, duration + 50)
   return cancel
 }

@@ -2380,6 +2380,8 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
           '~/utils/bilibiliApiError': { isBilibiliRiskControl: () => false },
           '~/utils/debug': { debugLog() {} },
           '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+          '~/utils/filterRules': await import('../src/utils/filterRules'),
+          './appRecommendationLikes': { completeAppLikeCounts: () => assert.fail('Disabled APP likes must not read statistics') },
           './forYouInitialData': await import('../src/contentScripts/views/Home/forYouInitialData'),
           './recommendationFeed': await import('../src/contentScripts/views/Home/recommendationFeed'),
           './recommendationState': await import('../src/contentScripts/views/Home/recommendationState'),

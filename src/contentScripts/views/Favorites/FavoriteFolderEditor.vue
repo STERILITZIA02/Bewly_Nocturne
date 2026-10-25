@@ -176,7 +176,7 @@ function save() {
     box-sizing: border-box;
     width: 100%;
     padding: var(--bew-space-2) var(--bew-space-3);
-    border: 1px solid var(--bew-border-color);
+    border: 1px solid var(--bew-field-edge-color);
     border-radius: var(--bew-interactive-radius);
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);

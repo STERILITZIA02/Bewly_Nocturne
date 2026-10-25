@@ -149,7 +149,7 @@ function toggleAll() {
   &__lead {
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-title);
-    font-weight: var(--bew-font-weight-semibold);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-title);
   }
   &__hint {
@@ -161,6 +161,7 @@ function toggleAll() {
     height: var(--bew-space-2);
     background: var(--bew-fill-2);
     border-radius: var(--bew-pill-radius);
+    corner-shape: var(--bew-corner-shape-capsule);
     overflow: hidden;
   }
   &__items {

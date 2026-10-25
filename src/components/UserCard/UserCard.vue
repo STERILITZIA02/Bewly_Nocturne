@@ -200,7 +200,7 @@ async function handleFollowClick(e: Event) {
           <!-- 用户名 + 等级 + 性别 -->
           <div flex items-center gap-2>
             <div
-              class="username keep-one-line" text="base $bew-text-1" font-medium
+              class="username keep-one-line" text="base $bew-text-1"
             >
               {{ name }}
             </div>
@@ -307,7 +307,7 @@ async function handleFollowClick(e: Event) {
       <div class="user-info" flex-1 min-w-0>
         <!-- 用户名和认证 -->
         <div flex items-center gap-2 mb-1>
-          <div class="username keep-one-line" text="base $bew-text-1" font-medium>
+          <div class="username keep-one-line" text="base $bew-text-1">
             {{ name }}
           </div>
           <div
@@ -460,7 +460,7 @@ async function handleFollowClick(e: Event) {
   background: var(--bew-theme-color);
   color: var(--bew-on-theme-color);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   border: none;
   cursor: pointer;
@@ -485,7 +485,7 @@ async function handleFollowClick(e: Event) {
   &.followed {
     background: var(--bew-fill-2);
     color: var(--bew-text-2);
-    border: 1px solid var(--bew-surface-border-color);
+    border: var(--bew-hairline) solid var(--bew-edge-color);
 
     &:hover:not(:disabled) {
       background: var(--bew-fill-3);
@@ -538,6 +538,7 @@ async function handleFollowClick(e: Event) {
   right: var(--bew-space-2);
   padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
   font-size: var(--bew-font-size-control);
   background: rgba(0, 0, 0, 0.65);
   color: #fff;
@@ -552,6 +553,7 @@ async function handleFollowClick(e: Event) {
   gap: var(--bew-space-1);
   padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
   font-size: var(--bew-font-size-control);
   color: #fff;
   background: rgba(0, 0, 0, 0.5);
@@ -621,7 +623,7 @@ async function handleFollowClick(e: Event) {
 
 .live-status-badge {
   color: var(--bew-text-1);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
 }
 
 .user-card__compact-stats {
@@ -647,7 +649,7 @@ async function handleFollowClick(e: Event) {
   background: var(--bew-theme-color);
   color: var(--bew-on-theme-color);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   border: 1px solid var(--bew-theme-color);
   cursor: pointer;
@@ -677,7 +679,7 @@ async function handleFollowClick(e: Event) {
   &.followed {
     background: var(--bew-fill-1);
     color: var(--bew-text-2);
-    border: 1px solid transparent;
+    border: var(--bew-hairline) solid transparent;
 
     &:hover:not(:disabled) {
       background: var(--bew-fill-2);

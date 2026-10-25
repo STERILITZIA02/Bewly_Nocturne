@@ -736,7 +736,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer__toolbar {
   gap: 6px !important;
   padding: 8px 12px !important;
   border-radius: var(--bew-pill-radius, 9999px) !important;
-  corner-shape: round !important;
+  corner-shape: var(--bew-corner-shape-capsule);
   background: rgba(0, 0, 0, 0.55) !important;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28) !important;
   transform: translateX(-50%) !important;
@@ -786,7 +786,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__panel {
   background: var(--bg1, #fff) !important;
   padding: 12px 12px 28px !important;
   box-sizing: border-box !important;
-  border-left: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border-left: var(--bew-hairline, 1px) solid var(--bew-separator-color, rgba(0, 0, 0, 0.08)) !important;
   -webkit-overflow-scrolling: touch;
 }
 /* 去掉正文与父级左右边距，贴齐右侧面板 */
@@ -836,7 +836,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__panel .opus-pic-vie
   }
   html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__panel {
     border-left: 0 !important;
-    border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border-top: var(--bew-hairline, 1px) solid var(--bew-separator-color, rgba(0, 0, 0, 0.08)) !important;
   }
 }
 `

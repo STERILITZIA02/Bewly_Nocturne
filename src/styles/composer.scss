@@ -2,7 +2,7 @@
 @mixin surface {
   box-sizing: border-box;
   padding: var(--bew-space-3);
-  border: 1px solid var(--bew-glass-border-color);
+  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
   border-radius: var(--bew-shell-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-glass-tint-solid);
@@ -11,10 +11,6 @@
   @supports (backdrop-filter: blur(1px)) {
     background: var(--bew-glass-tint);
     backdrop-filter: var(--bew-filter-glass-1);
-  }
-
-  &:focus-within {
-    border-color: var(--bew-focus-ring-color);
   }
 }
 

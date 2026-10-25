@@ -68,7 +68,7 @@ function injectStyle() {
       padding: 0 var(--bew-space-3, 12px) !important;
       border: 0 !important;
       border-radius: var(--bew-pill-radius) !important;
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
       color: #fff !important;
       background: rgb(0 0 0 / 48%) !important;
       backdrop-filter: var(--bew-filter-glass-1) !important;

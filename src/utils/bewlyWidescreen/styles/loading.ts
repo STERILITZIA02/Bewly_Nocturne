@@ -104,7 +104,7 @@ export function injectLoadingStyle() {
       gap: var(--bew-space-2, 8px);
       padding: var(--bew-space-3, 12px);
       background: var(--bew-elevated-alt-solid);
-      border: 1px solid var(--bew-surface-border-color);
+      border: var(--bew-hairline, 1px) solid var(--bew-edge-color);
       border-radius: var(--bewly-widescreen-shell-radius);
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-shadow-2);
@@ -114,7 +114,7 @@ export function injectLoadingStyle() {
       width: 100%;
       height: var(--bew-space-1, 4px);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round, round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     #${LOADING_ROOT_ID} :is(
@@ -166,14 +166,14 @@ export function injectLoadingStyle() {
       height: var(--bew-control-height, 36px);
       flex: 1 1 auto;
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round, round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-send {
       width: var(--bew-space-12, 48px);
       height: var(--bew-control-height, 36px);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round, round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     /* Like the real column: the info, the tabs, then the list down to the
@@ -367,9 +367,9 @@ export function injectLoadingStyle() {
       padding: 0 var(--bew-space-3, 12px);
       color: var(--bew-text-1, #18191c);
       font: inherit;
-      font-weight: var(--bew-font-weight-medium, 500);
+      font-weight: var(--bew-font-weight-regular, 400);
       background: var(--bew-fill-2, rgb(0 0 0 / 8%));
-      border: 1px solid var(--bew-surface-border-color, rgb(127 127 127 / 12%));
+      border: var(--bew-hairline, 1px) solid var(--bew-edge-color, rgb(127 127 127 / 12%));
       border-radius: var(--bew-interactive-radius, 8px);
       cursor: pointer;
     }

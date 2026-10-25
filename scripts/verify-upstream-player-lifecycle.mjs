@@ -154,6 +154,7 @@ export function registerPlayerLifecycleChecks(check) {
 
   check('random play: a real modern episode header hosts one control set and remounting preserves manual state', async () => {
     const time = clock()
+    let customActive = false
     const settings = { value: { enableRandomPlay: true, defaultCustomPlayOrder: 'sequential', customPlayOrderOverrides: {} } }
     const host = document.body.appendChild(document.createElement('div'))
     host.innerHTML = '<div class="video-pod"><div class="video-pod__header"></div><div class="video-pod__list"><div class="simple-base-item" data-bvid="BV1xx411c7mD"></div><div class="simple-base-item" data-bvid="BV2xx411c7mD"></div></div></div>'
@@ -165,7 +166,7 @@ export function registerPlayerLifecycleChecks(check) {
       '~/utils/customPlayControls': await import('../src/utils/customPlayControls'),
       '~/utils/i18n': { i18n: { global: { t: key => key } } },
       '~/utils/randomPlayRetry': await import('../src/utils/randomPlayRetry'),
-      './player': { VideoType: { MULTIPART: 'multipart', COLLECTION: 'collection', RECOMMEND: 'recommend' }, detectVideoType: () => 'collection', detectCustomPlayListVideoType: () => 'collection', canCustomPlayHandleCurrentEnd: () => true, supportsCustomPlaybackForVideoType: () => true, getVideoElement: () => null, setCustomEndPlaybackHandlerActive() {}, applyAutoPlayByVideoType() {}, disableNativeEndPlaybackBehavior() {} },
+      './player': { VideoType: { MULTIPART: 'multipart', COLLECTION: 'collection', RECOMMEND: 'recommend' }, detectVideoType: () => 'collection', detectCustomPlayListVideoType: () => 'collection', canCustomPlayHandleCurrentEnd: () => true, supportsCustomPlaybackForVideoType: () => true, getVideoElement: () => null, setCustomEndPlaybackHandlerActive(active) { customActive = active }, applyAutoPlayByVideoType() {}, disableNativeEndPlaybackBehavior() {} },
     }, { ...time, location: { href: 'https://www.bilibili.com/video/BV1xx411c7mD/', pathname: '/video/BV1xx411c7mD/' }, window: { setTimeout: time.setTimeout, clearTimeout: time.clearTimeout } })
     try {
       const header = host.querySelector('.video-pod__header')
@@ -175,7 +176,7 @@ export function registerPlayerLifecycleChecks(check) {
       const select = controls.querySelector('select')
       select.value = 'reverse'
       select.dispatchEvent(new Event('change'))
-      assert.equal(module.isRandomPlayActive(), true)
+      assert.equal(customActive, true)
       const nextHeader = document.createElement('div')
       nextHeader.className = 'video-pod__header'
       header.replaceWith(nextHeader)
@@ -183,7 +184,7 @@ export function registerPlayerLifecycleChecks(check) {
       assert.equal(module.createRandomPlayUI(), controls)
       assert.equal(controls.parentElement, nextHeader)
       assert.equal(select.value, 'reverse')
-      assert.equal(module.isRandomPlayActive(), true)
+      assert.equal(customActive, true)
       assert.equal(host.querySelectorAll('.random-play').length, 1)
       settings.value.enableRandomPlay = false
       module.destroyRandomPlay()

@@ -47,6 +47,13 @@ const groups = computed<MenuGroup[]>(() => [
       { key: 'copyOriginalLink', label: t('video_card.operation.copy_original_link'), icon: 'i-tabler:copy' },
       { key: 'copyBVNumber', label: t('video_card.operation.copy_bv_number'), icon: 'i-tabler:copy' },
       { key: 'copyAVNumber', label: t('video_card.operation.copy_av_number'), icon: 'i-tabler:copy' },
+
+    ],
+  },
+  {
+    id: 'saving',
+    label: t('settings.video_card_context_menu_region_saving'),
+    elements: [
       { key: 'viewOriginalCover', label: t('video_card.operation.view_the_original_cover'), icon: 'i-tabler:photo' },
       { key: 'watchLater', label: t('common.save_to_watch_later'), icon: 'i-tabler:playlist-add' },
       { key: 'favorite', label: t('video_card.operation.favorite'), icon: 'i-tabler:star' },
@@ -106,7 +113,7 @@ function setVisible(key: VideoCardContextMenuKey, visible: boolean) {
 }
 
 .context-menu-row + .context-menu-row {
-  border-top: 1px solid var(--bew-border-color);
+  border-top: var(--bew-hairline) solid var(--bew-separator-color);
 }
 
 .context-menu-row__label {

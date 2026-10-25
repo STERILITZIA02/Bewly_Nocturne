@@ -100,7 +100,7 @@ const { variant = 'video' } = defineProps<{ variant?: MomentCardSkeletonVariant 
   border-radius: 0;
 }
 .moment-card-skeleton__thumb + .moment-card-skeleton__thumb {
-  border-inline-start: 1px solid var(--bew-surface-border-color);
+  border-inline-start: var(--bew-hairline) solid var(--bew-edge-color);
 }
 .moment-card-skeleton__header {
   display: flex;

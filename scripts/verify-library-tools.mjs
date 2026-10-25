@@ -4,6 +4,7 @@ import { countOpenTabsTask, selectOpenTabsTaskItems } from '../src/constants/ope
 import { createHistoryFilters, historyDateBounds, historyRangeBounds, matchesHistoryFilters, sortHistoryItems } from '../src/contentScripts/views/History/historyFilters'
 import { createWatchLaterFilters, filterWatchLaterItems, sortWatchLaterItems, watchLaterAddedBounds, watchLaterPlaybackState } from '../src/contentScripts/views/WatchLater/watchLaterFilters'
 import { loadSourceFunctions } from './sourceFunctionHarness'
+import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerLibraryToolChecks(check, { Vue, compileComponent, flush }) {
   check('Favorites filter: collapsed sections hold scope and conditions; scope applies at once and partitions load on first open', async () => {
@@ -56,6 +57,41 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
       app.unmount()
       host.remove()
     }
+  })
+  check('Favorites filter scan: a round stops only with new matches, then reads on when the grid asks for more; no manual pause', async () => {
+    const scanModule = await loadSourceModule('../src/contentScripts/views/Favorites/useFavoriteFilterScan.ts', {
+      vue: Vue,
+      '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
+      './favoriteFilter': await import('../src/contentScripts/views/Favorites/favoriteFilter'),
+    })
+    const reads = []
+    // Thirty one-item pages; only pages 27 and 29 match the uploader.
+    const api = {
+      getFavoriteResources: async ({ pn }) => {
+        reads.push(pn)
+        return { code: 0, data: { has_more: pn < 30, medias: [{ id: pn, type: 2, title: `v${pn}`, upper: { mid: pn === 27 || pn === 29 ? 7 : 1, name: 'up' } }] } }
+      },
+      getFavoritePartitions: async () => ({ code: 0, data: [] }),
+    }
+    const scope = Vue.effectScope()
+    const scan = scope.run(() => scanModule.useFavoriteFilterScan({ api, getAccountId: () => 1, getSourceIds: () => [5], getScope: () => 'current', getOrder: () => 'mtime', getNormalQuery: () => '', isActive: () => true }))
+    const settle = async () => {
+      for (let index = 0; index < 400 && scan.status.value === 'scanning'; index++)
+        await new Promise(resolve => setTimeout(resolve, 0))
+    }
+    assert.equal(scan.pause, undefined)
+    assert.equal(scan.scannedItems, undefined, 'no progress counts to show')
+    scan.apply({ mids: [7], tids: [], keywords: [] })
+    await settle()
+    assert.equal(scan.status.value, 'budget')
+    assert.equal(reads.length, 27, 'past the page budget until the first match, so the grid is never left empty')
+    assert.deepEqual(Array.from(scan.items.value, item => item.id), [27])
+    scan.continueScan()
+    await settle()
+    assert.equal(scan.status.value, 'complete')
+    assert.deepEqual(Array.from(scan.items.value, item => item.id), [27, 29])
+    scan.dispose()
+    scope.stop()
   })
   check('history recording status: unknown stays unknown, pending serializes writes, mismatched readback reports failure', async () => {
     const { useHistoryTimeline } = await import('../src/contentScripts/views/History/useHistoryTimeline')
@@ -507,85 +543,43 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     assert.equal(filterWatchLaterItems([{ ...items[0], progress: 1 }], '', 'unstarted', 'all', () => undefined).length, 0, 'partially watched is not unwatched')
     assert.equal(filterWatchLaterItems([{ ...items[0], progress: undefined }], '', 'unstarted', 'all', () => undefined).length, 0, 'unknown progress is not evidence of unwatched')
   })
-  check('Watch Later filter sections start collapsed, remember their state per tab, preserve values and release hidden focus', async () => {
-    const store = new Map()
-    const sessionStorage = { getItem: key => store.get(key) ?? null, setItem: (key, value) => store.set(key, String(value)) }
-    const state = Vue.ref(createWatchLaterFilters())
-    const Filter = await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterAdvancedFilters.vue', {
-      'vue-i18n': { useI18n: () => ({ t: key => key }) },
-      './WatchLaterFilterSection.vue': { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterFilterSection.vue', {}, { globals: { sessionStorage } }) },
+  check('library filters: one funnel menu of titled single-choice groups that apply at once', async () => {
+    let menu
+    const Menu = await compileComponent('../src/components/LibraryFilterMenu.vue', {
+      '~/components/ContextMenu.vue': { default: { props: ['options', 'anchor', 'trigger'], emits: ['select', 'close'], setup(props, { emit }) {
+        return () => {
+          menu = { props, emit }
+          return null
+        }
+      } } },
     })
+    const selected = []
+    const groups = [
+      { key: 'duration', title: 'Length', value: 'all', options: [{ value: 'all', label: 'All', icon: 'i-a' }, { value: 'long', label: 'Long', icon: 'i-b' }] },
+      { key: 'period', title: 'Watched', value: 'custom', options: [{ value: 'all', label: 'Any', icon: 'i-c' }, { value: 'custom', label: 'Custom', icon: 'i-d' }] },
+    ]
     const host = document.body.appendChild(document.createElement('div'))
-    const app = Vue.createApp({ render: () => Vue.h(Filter, { modelValue: state.value, 'onUpdate:modelValue': value => state.value = value }) })
-    app.config.globalProperties.$t = key => key
+    const app = Vue.createApp({ render: () => Vue.h(Menu, { label: 'Filter', groups, onSelect: (key, value) => selected.push([key, value]) }) })
     app.mount(host)
-    const click = key => [...host.querySelectorAll('button')].find(button => button.textContent.trim() === `watch_later.filters.${key}`).click()
-    const date = (index, value) => {
-      const input = host.querySelectorAll('.date-picker-input')[index]
-      input.value = value
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-      input.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
-    }
     try {
-      const initialHeaders = [...host.querySelectorAll('.watch-later-filter-section > h2 > button')]
-      assert.deepEqual(initialHeaders.map(header => header.getAttribute('aria-expanded')), ['false', 'false', 'false'], 'every section starts collapsed')
-      for (const key of ['by_progress', 'by_date', 'by_duration'])
-        click(key)
+      const trigger = host.querySelector('button.library-filter-menu')
+      assert.equal(trigger.getAttribute('aria-haspopup'), 'menu')
+      assert.equal(menu, undefined, 'the menu mounts only when opened')
+      trigger.click()
       await flush()
-      click('progress_unstarted')
+      assert.equal(trigger.getAttribute('aria-expanded'), 'true')
+      assert.deepEqual(menu.props.options.map(option => [option.value, option.section, option.checked, option.kind, option.closeOnSelect]), [
+        ['duration:all', 'Length', true, 'radio', false],
+        ['duration:long', 'Length', false, 'radio', false],
+        ['period:all', 'Watched', false, 'radio', false],
+        ['period:custom', 'Watched', true, 'radio', false],
+      ], 'titled groups, one checked choice each, the menu stays open')
+      menu.emit('select', 'duration:long')
+      menu.emit('select', 'period:all')
+      assert.deepEqual(selected, [['duration', 'long'], ['period', 'all']])
+      menu.emit('close')
       await flush()
-      click('duration_long')
-      await flush()
-      date(0, '2026-10-12')
-      await flush()
-      date(1, '2026-10-11')
-      await flush()
-      assert.equal(state.value.added, 'custom')
-      assert.equal(state.value.endDate, '', 'manual entry enforces the opposite range boundary')
-      state.value = { ...state.value, endDate: '2026-10-11' }
-      await flush()
-      assert.ok(host.querySelector('[role="alert"]'))
-      assert.equal(host.querySelector('input').getAttribute('aria-invalid'), 'true')
-      const headers = [...host.querySelectorAll('.watch-later-filter-section > h2 > button')]
-      assert.equal(headers.length, 3)
-      const beforeCollapse = { ...state.value }
-      host.querySelector('input').focus()
-      click('by_date')
-      await flush()
-      const panel = document.getElementById(headers[1].getAttribute('aria-controls'))
-      assert.equal(panel.hasAttribute('inert'), true)
-      assert.equal(panel.getAttribute('aria-hidden'), 'true')
-      assert.equal(document.activeElement, headers[1])
-      assert.deepEqual({ ...state.value }, beforeCollapse)
-      assert.equal(headers[0].getAttribute('aria-expanded'), 'true')
-      assert.equal(headers[2].getAttribute('aria-expanded'), 'true')
-      click('by_date')
-      await flush()
-      assert.equal(panel.hasAttribute('inert'), false)
-      assert.equal(host.querySelector('input').value, '2026/10/12')
-      date(1, '2026-10-12')
-      await flush()
-      assert.equal(host.querySelector('[role="alert"]'), null)
-      date(0, '')
-      await flush()
-      date(1, '')
-      await flush()
-      assert.equal(state.value.added, 'all')
-      assert.equal(state.value.progress, 'unstarted')
-      assert.equal(state.value.duration, 'long')
-      click('by_progress')
-      click('by_progress')
-      await flush()
-      assert.equal(headers[0].getAttribute('aria-expanded'), 'true')
-      click('by_duration')
-      await flush()
-      app.unmount()
-      const remounted = Vue.createApp({ render: () => Vue.h(Filter, { modelValue: state.value, 'onUpdate:modelValue': value => state.value = value }) })
-      remounted.config.globalProperties.$t = key => key
-      remounted.mount(host)
-      await flush()
-      assert.deepEqual([...host.querySelectorAll('.watch-later-filter-section > h2 > button')].map(header => header.getAttribute('aria-expanded')), ['true', 'true', 'false'], 'open state survives a remount in the same tab')
-      remounted.unmount()
+      assert.equal(trigger.getAttribute('aria-expanded'), 'false')
     }
     finally {
       app.unmount()

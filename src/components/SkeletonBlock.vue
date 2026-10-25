@@ -60,7 +60,7 @@ onBeforeUnmount(() => releaseVisibility?.())
 
 .bew-skeleton-block--control {
   border-radius: var(--bew-control-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
 }
 
 .bew-skeleton-block--interactive {
@@ -85,7 +85,7 @@ onBeforeUnmount(() => releaseVisibility?.())
 
 .bew-skeleton-block--full {
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
 }
 
 .bew-skeleton-block--circle {

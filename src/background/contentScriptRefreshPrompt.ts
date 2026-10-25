@@ -276,8 +276,11 @@ function showRefreshPrompt(...args: unknown[]): void {
     '--bew-dark-base-color',
     '--bew-text-1',
     '--bew-text-2',
-    '--bew-border-color',
-    '--bew-surface-border-color',
+    '--bew-hairline',
+    '--bew-glass-edge-width',
+    '--bew-glass-edge-color',
+    '--bew-separator-color',
+    '--bew-edge-color',
     '--bew-elevated',
     '--bew-elevated-solid',
     '--bew-glass-tint',
@@ -294,7 +297,6 @@ function showRefreshPrompt(...args: unknown[]): void {
     '--bew-line-height-control',
     '--bew-line-height-body',
     '--bew-font-weight-regular',
-    '--bew-font-weight-semibold',
     '--bew-space-2',
     '--bew-space-3',
     '--bew-control-height',
@@ -340,7 +342,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       background: var(--bew-elevated-solid, rgb(255 255 255 / 96%));
       background: color-mix(in oklab, var(--bew-elevated-solid, white) 90%, transparent);
       background: var(--bew-glass-tint, color-mix(in oklab, var(--bew-elevated-solid, white) 90%, transparent));
-      border: 1px solid var(--bew-surface-border-color, rgb(0 0 0 / 12%));
+      border: var(--bew-glass-edge-width, 1px) solid var(--bew-glass-edge-color, rgb(255 255 255 / 70%));
       border-radius: var(--bew-surface-radius, 16px);
       box-shadow: var(--bew-shadow-3, 0 8px 30px rgb(0 0 0 / 18%));
       backdrop-filter: var(--bew-filter-glass-1, blur(12px));
@@ -353,7 +355,7 @@ function showRefreshPrompt(...args: unknown[]): void {
     .title {
       margin: 0;
       font-size: var(--bew-font-size-body, 14px);
-      font-weight: var(--bew-font-weight-semibold, 600);
+      font-weight: var(--bew-font-weight-regular, 400);
       line-height: var(--bew-line-height-body, 20px);
       overflow-wrap: anywhere;
     }
@@ -383,7 +385,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       color: var(--bew-text-1, #18191c);
       font: inherit;
       font-size: var(--bew-font-size-control, 12px);
-      font-weight: var(--bew-font-weight-medium, 500);
+      font-weight: var(--bew-font-weight-regular, 400);
       line-height: var(--bew-line-height-control, 16px);
       background: transparent;
       border: 0;
@@ -417,7 +419,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       color: var(--bew-text-1, #f1f2f3);
       background: var(--bew-elevated-solid, #2b2d31);
       background: color-mix(in oklab, var(--bew-elevated-solid, #2b2d31) 90%, transparent);
-      border-color: var(--bew-border-color, rgb(255 255 255 / 12%));
+      border-color: var(--bew-separator-color, rgb(255 255 255 / 12%));
       box-shadow: var(--bew-shadow-3, 0 8px 30px rgb(0 0 0 / 38%));
     }
     :host([data-theme="dark"]) .description {
@@ -425,7 +427,7 @@ function showRefreshPrompt(...args: unknown[]): void {
     }
     :host([data-theme="dark"]) button {
       color: var(--bew-text-2, #c9ccd0);
-      border-color: var(--bew-border-color, rgb(255 255 255 / 14%));
+      border-color: var(--bew-separator-color, rgb(255 255 255 / 14%));
     }
     :host([data-theme="dark"]) .primary,
     :host([data-theme="dark"]) .primary:hover {

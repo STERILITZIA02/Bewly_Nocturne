@@ -241,7 +241,7 @@ function handleClickChannel() {
     <div class="bew-popover__scroll user-panel-pop__scroll">
       <div
         class="user-panel-pop__identity"
-        text="xl" font-medium flex="~ items-center gap-2"
+        text="xl" flex="~ items-center gap-2"
       >
         <!-- Clicking the avatar opens this panel, so the name leads to the profile. -->
         <Button type="secondary" strong @click="handleClickChannel">
@@ -535,7 +535,7 @@ function handleClickChannel() {
   }
 
   .num {
-    --uno: "font-semibold text-xl";
+    --uno: "text-xl";
     font-variant-numeric: tabular-nums;
 
     + div {

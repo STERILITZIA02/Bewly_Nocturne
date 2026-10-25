@@ -5,36 +5,19 @@ import draggable from 'vuedraggable'
 import Button from '~/components/Button.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
-import { useBewlyApp } from '~/composables/useAppProvider'
-import { pageModeChangePending, selectPageMode } from '~/composables/usePageModeSwitcher'
 import type { DockCollapseMode } from '~/constants/dock'
 import { DOCK_POSITIONS } from '~/constants/dock'
 import { settings } from '~/logic'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
-import type { PageMode } from '~/utils/pageMode'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
-import SettingsSegmentedControl from '../../components/SettingsSegmentedControl.vue'
 
 const { t } = useI18n()
 const mainStore = useMainStore()
 const settingsStore = useSettingsStore()
-const { activatedPage } = useBewlyApp()
-const pageMode = computed({
-  get: () => settings.value.pageMode,
-  set: (mode: PageMode) => {
-    void selectPageMode(mode, activatedPage.value)
-  },
-})
-const pageModeOptions = computed(() => [
-  { label: t('dock.page_mode_original'), value: 'original' },
-  { label: t('dock.page_mode_bewly'), value: 'bewly' },
-  { label: t('dock.page_mode_custom'), value: 'custom' },
-])
-
 const dockPositions = computed(() => DOCK_POSITIONS.map(value => ({ label: t(`common.position.${value}`), value })))
 
 const dockCollapseModeOptions = computed((): { label: string, value: DockCollapseMode }[] => {
@@ -64,27 +47,6 @@ const pageOptions = computed((): { label: string, icon: string, value: string }[
   })
 })
 
-const topBarModeOptions = computed(() => [
-  {
-    label: t('settings.topbar_mode_bewly'),
-    value: false,
-  },
-  {
-    label: t('settings.topbar_mode_bilibili'),
-    value: true,
-  },
-])
-
-const topBarMode = computed({
-  get: () => settingsStore.getUseOriginalBilibiliTopBar(),
-  set: (useOriginalBilibiliTopBar: boolean) => {
-    if (settings.value.pageMode === 'custom')
-      settingsStore.setCustomUseOriginalBilibiliTopBar(useOriginalBilibiliTopBar)
-  },
-})
-
-const topBarModeDisabled = computed(() => settings.value.pageMode !== 'custom')
-
 const sidebarPositions = computed(() => {
   return [
     {
@@ -106,10 +68,6 @@ function handleToggleDockItem(dockItem: DockItem) {
   settingsStore.toggleDockItemVisibility(dockItem.page)
 }
 
-function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean) {
-  settingsStore.setDockItemCustomUseOriginalBiliPage(dockItem.page, useOriginalBiliPage)
-}
-
 function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
   const items = [...settings.value.dockItemsConfig]
   const index = items.findIndex(item => item.page === dockItem.page)
@@ -125,9 +83,6 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
 <template>
   <div>
     <SettingsItemGroup data-setting-id="settings.group_dock" :title="$t('settings.group_dock')">
-      <SettingsItem setting-id="navigation.pageMode" :title="$t('settings.page_mode')" :desc="$t('settings.page_mode_desc')" right-width="auto">
-        <SettingsSegmentedControl v-model="pageMode" :disabled="pageModeChangePending" :label="$t('settings.page_mode')" :options="pageModeOptions" />
-      </SettingsItem>
       <SettingsItem setting-id="settings.always_use_dock" :title="$t('settings.always_use_dock')" :desc="$t('settings.always_use_dock_desc')" right-width="auto">
         <Radio v-model="settings.alwaysUseDock" />
       </SettingsItem>
@@ -171,30 +126,6 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
         </template>
 
         <template #bottom>
-          <div
-            class="bew-settings-option--lift"
-            data-setting-id="navigation.topBar.mode"
-            flex="~ gap-2 justify-between items-center wrap" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-interactive-radius"
-            mb-2
-          >
-            <div flex="~ gap-2 items-center">
-              <div i-tabler:layout-navbar />
-              <div class="keep-one-line" w-80px>
-                {{ $t('settings.topbar_mode') }}
-              </div>
-            </div>
-            <Select
-              v-model="topBarMode"
-              :options="topBarModeOptions"
-              :accessible-label="$t('settings.topbar_mode')"
-              :disabled="topBarModeDisabled"
-              w="160px"
-            />
-            <div v-if="topBarModeDisabled" w-full text="sm $bew-text-2">
-              {{ $t('settings.custom_page_mode_required') }}
-            </div>
-          </div>
-
           <draggable
             v-model="settings.dockItemsConfig"
             data-setting-id="navigation.dock.items"
@@ -229,17 +160,6 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
                   </div>
                 </button>
                 <div flex="~ gap-4 items-center justify-between wrap" @click.stop>
-                  <div
-                    flex="~ items-center"
-                  >
-                    {{ $t('settings.dock_item_use_original_bili_web_page') }}
-                    <Radio
-                      :model-value="element.useOriginalBiliPage"
-                      :accessible-label="`${pageOptions.find(option => option.value === element.page)?.label} · ${$t('settings.dock_item_use_original_bili_web_page')}`"
-                      :disabled="settings.pageMode !== 'custom'"
-                      @update:model-value="updateDockItemPageMode(element, $event as boolean)"
-                    />
-                  </div>
                   <div flex="~ items-center">
                     {{ $t('settings.dock_item_open_in_new_tab') }}
                     <Radio
@@ -263,7 +183,7 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
       <SettingsItem setting-id="navigation.dock.themeSwitcher" :title="$t('settings.disable_light_dark_mode_switcher')" right-width="auto">
         <Radio v-model="settings.disableLightDarkModeSwitcherOnDock" />
       </SettingsItem>
-      <SettingsItem setting-id="navigation.dock.actionButtons" :title="$t('settings.back_to_top_and_refresh_buttons_are_separated')" right-width="auto">
+      <SettingsItem v-if="settings.showDockBackToTop" setting-id="navigation.dock.actionButtons" :title="$t('settings.back_to_top_and_refresh_buttons_are_separated')" right-width="auto">
         <Radio v-model="settings.backToTopAndRefreshButtonsAreSeparated" />
       </SettingsItem>
       <SettingsItem setting-id="navigation.dock.undoRefresh" :title="$t('settings.enable_undo_refresh_button')" :desc="$t('settings.enable_undo_refresh_button_desc')" right-width="auto">

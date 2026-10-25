@@ -11,17 +11,8 @@ import { settings } from '~/logic'
 import { allChannelConfigs } from '../../../TopBar/constants/channels'
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
-import SettingsItemSubgroup from '../../components/SettingsItemSubgroup.vue'
 
 const { t } = useI18n()
-const notificationCategories = [
-  ['showReplyNotificationReminder', 'settings.show_reply_notification_reminder'],
-  ['showAtNotificationReminder', 'settings.show_at_notification_reminder'],
-  ['showLikeNotificationReminder', 'settings.show_like_notification_reminder'],
-  ['showSystemNotificationReminder', 'settings.show_system_notification_reminder'],
-  ['showFollowedPrivateMessageUnreadCount', 'settings.show_followed_private_message_unread_count'],
-  ['showUnfollowedPrivateMessageUnreadCount', 'settings.show_unfollowed_private_message_unread_count'],
-] as const
 
 type BadgeType = 'number' | 'dot' | 'none'
 
@@ -338,11 +329,6 @@ function toggleChannel(value: string) {
         </div>
       </SettingsItem>
 
-      <SettingsItemSubgroup data-setting-id="settings.notification_badge_categories" :title="$t('settings.notification_badge_categories')" :desc="$t('settings.notification_badge_categories_desc')">
-        <SettingsItem v-for="[key, label] in notificationCategories" :key="key" :title="$t(label)" :setting-id="label" right-width="auto">
-          <Radio v-model="settings[key]" />
-        </SettingsItem>
-      </SettingsItemSubgroup>
       <SettingsItem
         setting-id="settings.filter_articles_in_moments" :title="$t('settings.filter_articles_in_moments')"
         :desc="$t('settings.filter_articles_in_moments_desc')"
@@ -475,7 +461,7 @@ function toggleChannel(value: string) {
   min-width: 0;
   min-height: var(--bew-control-height);
   padding: var(--bew-space-3);
-  border: 1px solid transparent;
+  border: var(--bew-hairline) solid transparent;
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-fill-1);
@@ -516,7 +502,7 @@ function toggleChannel(value: string) {
   height: var(--bew-icon-size-xl);
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   background: color-mix(in oklab, white, transparent 20%);
@@ -535,7 +521,7 @@ function toggleChannel(value: string) {
   min-width: 0;
   flex: 1;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   @include truncateFade.line;
 }
@@ -551,7 +537,7 @@ function toggleChannel(value: string) {
   background: var(--bew-selected-bg);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   pointer-events: none;
 }

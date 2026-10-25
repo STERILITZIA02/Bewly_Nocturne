@@ -336,7 +336,7 @@ export function getTopBarItemLayoutEditableId(key: string): string {
 }
 
 registerSettingDescriptors([
-  { id: 'navigation.pageMode', category: 'BewlyComponents', page: 'dock', group: 'page-mode', titleKey: 'settings.page_mode', get: () => settings.value.pageMode, set: value => settings.value.pageMode = value as typeof settings.value.pageMode },
+  { id: 'navigation.pageMode', category: 'BewlyPages', page: 'page-modes', group: 'page-mode', titleKey: 'settings.page_mode', get: () => settings.value.pageMode, set: value => settings.value.pageMode = value as typeof settings.value.pageMode },
   { id: 'navigation.dock.collapseMode', category: 'BewlyComponents', page: 'dock', group: 'dock', titleKey: 'settings.dock_collapse_mode', get: () => settings.value.dockCollapseMode, set: value => settings.value.dockCollapseMode = value as typeof settings.value.dockCollapseMode },
   { id: 'navigation.dock.position', category: 'BewlyComponents', page: 'dock', group: 'dock', titleKey: 'settings.dock_position', get: () => settings.value.dockPosition, set: value => settings.value.dockPosition = normalizeDockPosition(value) },
   { id: 'navigation.dock.items', category: 'BewlyComponents', page: 'dock', group: 'dock', titleKey: 'settings.dock_content_adjustment', get: () => settings.value.dockItemsConfig, set: value => settings.value.dockItemsConfig = value as typeof settings.value.dockItemsConfig },
@@ -345,7 +345,7 @@ registerSettingDescriptors([
   { id: 'navigation.dock.undoRefresh', category: 'BewlyComponents', page: 'dock', group: 'dock', titleKey: 'settings.enable_undo_refresh_button', get: () => settings.value.enableUndoRefreshButton, set: value => settings.value.enableUndoRefreshButton = Boolean(value) },
   { id: 'navigation.sidebar.position', category: 'BewlyComponents', page: 'dock', group: 'sidebar', titleKey: 'settings.sidebar_position', get: () => settings.value.sidebarPosition, set: value => settings.value.sidebarPosition = value as typeof settings.value.sidebarPosition },
   { id: 'navigation.sidebar.autoHide', category: 'BewlyComponents', page: 'dock', group: 'sidebar', titleKey: 'settings.auto_hide_sidebar', get: () => settings.value.autoHideSidebar, set: value => settings.value.autoHideSidebar = Boolean(value) },
-  { id: 'navigation.topBar.mode', category: 'BewlyComponents', page: 'dock', group: 'top-bar', titleKey: 'settings.topbar_mode', get: () => settings.value.useOriginalBilibiliTopBar, set: value => settings.value.useOriginalBilibiliTopBar = Boolean(value) },
+  { id: 'navigation.topBar.mode', category: 'BewlyPages', page: 'page-modes', group: 'top-bar', titleKey: 'settings.topbar_mode', get: () => settings.value.useOriginalBilibiliTopBar, set: value => settings.value.useOriginalBilibiliTopBar = Boolean(value) },
   { id: 'navigation.topBar.logo', category: 'BewlyComponents', page: 'topbar', group: 'logo', titleKey: 'settings.top_bar_logo_style', get: () => settings.value.topBarLogoStyle, set: value => settings.value.topBarLogoStyle = value as typeof settings.value.topBarLogoStyle },
   { id: 'navigation.topBar.pinnedChannels', category: 'BewlyComponents', page: 'topbar', group: 'channels', titleKey: 'settings.topbar_pinned_channels_title', get: () => settings.value.topBarPinnedChannels, set: value => settings.value.topBarPinnedChannels = value as typeof settings.value.topBarPinnedChannels },
   { id: 'navigation.topBar.components', category: 'BewlyComponents', page: 'topbar', group: 'actions', titleKey: 'settings.topbar_actions', get: () => settings.value.topBarComponentsConfig, set: value => settings.value.topBarComponentsConfig = value as typeof settings.value.topBarComponentsConfig },
@@ -375,7 +375,7 @@ registerSettingDescriptors([
       settings.value.momentsShowUpList = Boolean(next.upList)
     },
   },
-  { id: 'page.watchLater.layout', category: 'BewlyPages', page: 'watch-later', group: 'layout', titleKey: 'settings.watch_later_layout_mode', get: () => settings.value.watchLaterLayoutMode, set: value => settings.value.watchLaterLayoutMode = value as typeof settings.value.watchLaterLayoutMode },
+  { id: 'page.watchLater.layout', category: 'BewlyPages', page: 'lists', group: 'layout', titleKey: 'settings.watch_later_layout_mode', get: () => settings.value.watchLaterLayoutMode, set: value => settings.value.watchLaterLayoutMode = value as typeof settings.value.watchLaterLayoutMode },
   { id: 'search.bar.recommendation', category: 'BewlyPages', page: 'search', group: 'searchBar', titleKey: 'settings.show_search_recommendation', get: () => settings.value.showSearchRecommendation, set: value => settings.value.showSearchRecommendation = Boolean(value) },
   { id: 'messages.autoMarkRead', category: 'BewlyPages', page: 'messages', group: 'reading', titleKey: 'settings.messages_auto_mark_read', get: () => settings.value.autoMarkPrivateMessagesRead, set: value => settings.value.autoMarkPrivateMessagesRead = Boolean(value) },
   { id: 'messages.followNew', category: 'BewlyPages', page: 'messages', group: 'reading', titleKey: 'settings.messages_follow_new', get: () => settings.value.followNewPrivateMessages, set: value => settings.value.followNewPrivateMessages = Boolean(value) },

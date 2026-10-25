@@ -30,7 +30,7 @@ const model = defineModel()
 label {
   --b-switch-width: 44px;
   --b-switch-height: 24px;
-  --b-switch-border-width: 1px;
+  --b-switch-border-width: var(--bew-hairline);
   --b-switch-edge-inset: 2px;
   --b-switch-thumb-size: 20px;
 
@@ -56,9 +56,9 @@ label {
   height: var(--b-switch-height);
   flex: 0 0 auto;
   background: var(--bew-fill-1);
-  border: var(--b-switch-border-width) solid var(--bew-surface-border-color);
+  border: var(--b-switch-border-width) solid var(--bew-edge-color);
   border-radius: var(--bew-pill-radius);
-  corner-shape: round;
+  corner-shape: var(--bew-corner-shape-capsule);
   overflow: hidden;
 
   &::after {
@@ -75,7 +75,8 @@ label {
     aspect-ratio: 1;
     background: white;
     border-radius: 50%;
-    corner-shape: round;
+    // Nested in the track's end: the capsule shape keeps the gap even.
+    corner-shape: var(--bew-corner-shape-capsule);
     content: "";
     transform: translate(var(--b-switch-thumb-offset), -50%) scale(var(--b-switch-thumb-scale));
   }

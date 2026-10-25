@@ -69,7 +69,8 @@ const { t } = useI18n()
 }
 .bew-promotion-card__title {
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-medium);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
   overflow-wrap: anywhere;
 }

@@ -167,6 +167,9 @@ const showBackToTopOrRefreshButton = computed((): boolean => {
   if (settingsStore.getDockItemIsUseOriginalBiliPage(props.activatedPage)) {
     return false
   }
+  // Moments carries its own back-to-latest and refresh buttons under hot search.
+  if (props.activatedPage === AppPage.Moments)
+    return false
 
   // 在首页显示返回顶部/刷新按钮（包括搜索页）
   return isHomePage()
@@ -651,19 +654,15 @@ const dockScale = computed((): number => {
   const buttonSize = DOCK_LAYOUT.actionControlSize
   const buttonGap = DOCK_LAYOUT.controlGap
 
-  let additionalHeight = 0
-  let additionalWidth = 0
-
-  if (dockPosition.value === 'bottom') {
-    const maxButtonCount = settings.value.backToTopAndRefreshButtonsAreSeparated ? 2 : 1
-    const maxUndoForwardButtonCount = settings.value.enableUndoRefreshButton ? 1 : 0
-    additionalWidth = (maxButtonCount + maxUndoForwardButtonCount) * buttonSize + maxButtonCount * buttonGap
-  }
-  else {
-    const maxButtonCount = settings.value.backToTopAndRefreshButtonsAreSeparated ? 2 : 1
-    const maxUndoForwardButtonCount = settings.value.enableUndoRefreshButton ? 1 : 0
-    additionalHeight = (maxButtonCount + maxUndoForwardButtonCount) * buttonSize + maxButtonCount * buttonGap
-  }
+  // Reserve only available actions, without resizing again when scrolling reveals them.
+  const availableActions = Number(canRefreshCurrentPage.value) + Number(settings.value.showDockBackToTop)
+  const maxButtonCount = showBackToTopOrRefreshButton.value
+    ? Math.min(availableActions, settings.value.backToTopAndRefreshButtonsAreSeparated ? 2 : 1)
+    : 0
+  const undoCount = settings.value.enableUndoRefreshButton && shouldShowUndoForwardButtons.value ? 1 : 0
+  const actionSpace = (maxButtonCount + undoCount) * (buttonSize + buttonGap)
+  const additionalWidth = dockPosition.value === 'bottom' ? actionSpace : 0
+  const additionalHeight = dockPosition.value === 'bottom' ? 0 : actionSpace
 
   const effectiveDockHeight = dockHeight.value + additionalHeight
   const effectiveDockWidth = dockWidth.value + additionalWidth
@@ -1065,10 +1064,6 @@ onUnmounted(() => {
     inset: 0 0 0 auto;
     width: 0;
   }
-
-  > * {
-    --uno: "pointer-events-auto";
-  }
 }
 
 .dock-content {
@@ -1078,6 +1073,7 @@ onUnmounted(() => {
   --uno: "absolute flex justify-center items-center scale-$scale";
 
   transition-duration: 0ms;
+  pointer-events: none;
 
   &.ready {
     transition-duration: var(--bew-duration-moderate, 300ms);
@@ -1106,8 +1102,8 @@ onUnmounted(() => {
   }
 
   .divider {
-    --uno: "my-1 mx-3 h-3px bg-$bew-border-color rounded-$bew-pill-radius";
-    corner-shape: var(--bew-corner-shape-round);
+    --uno: "my-1 mx-3 h-3px bg-$bew-separator-color rounded-$bew-pill-radius";
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   &.bottom .divider {
@@ -1126,12 +1122,12 @@ onUnmounted(() => {
 
     &.collapsed:hover .dock-shell-surface {
       background: var(--bew-fill-2);
-      --dock-surface-shadow: 0 0 0 2px var(--bew-fill-2), var(--bew-shadow-2);
+      --dock-surface-shadow: 0 0 0 2px var(--bew-fill-2), var(--bew-glass-shadow);
     }
   }
 
   .dock-shell-surface {
-    --dock-surface-shadow: var(--bew-shadow-2);
+    --dock-surface-shadow: var(--bew-glass-shadow);
     position: absolute;
     top: 50%;
     left: 50%;
@@ -1139,13 +1135,13 @@ onUnmounted(() => {
     height: 100%;
     z-index: 0;
     background: var(--dock-surface-background);
-    border: 1px solid var(--bew-glass-border-color);
+    border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
     border-radius: var(--dock-shell-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
     backdrop-filter: var(--bew-filter-glass-1);
     box-sizing: border-box;
     box-shadow: var(--dock-surface-shadow);
-    pointer-events: none;
+    pointer-events: auto;
     transform: translate(-50%, -50%);
     transition:
       transform var(--bew-duration-moderate) var(--bew-ease-standard),
@@ -1198,6 +1194,7 @@ onUnmounted(() => {
     height: var(--dock-collapsed-height);
     min-height: calc(var(--bew-space-6) / var(--scale, 1));
     border-radius: var(--bew-pill-radius);
+    corner-shape: var(--bew-corner-shape-capsule);
     background: transparent;
     color: var(--bew-text-1);
     visibility: hidden;
@@ -1229,7 +1226,7 @@ onUnmounted(() => {
     top: 0;
     left: 50%;
     width: var(--dock-wake-width);
-    height: calc(100% + var(--bew-space-2));
+    height: 100%;
     transform: translateX(-50%);
   }
 
@@ -1240,11 +1237,15 @@ onUnmounted(() => {
       content: "";
       position: absolute;
       top: 50%;
-      left: 0;
-      width: calc(100% + var(--bew-space-4));
+      right: 0;
+      width: 100%;
       height: var(--dock-wake-height);
       transform: translateY(-50%);
     }
+  }
+
+  .back-to-top-or-refresh-btn {
+    pointer-events: auto;
   }
 
   .dock-collapsed-mark {
@@ -1268,6 +1269,7 @@ onUnmounted(() => {
     height: 100%;
     background: currentColor;
     border-radius: var(--bew-pill-radius);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   .dock-collapsed-mark__line {
@@ -1290,7 +1292,7 @@ onUnmounted(() => {
   // Selection is a neutral translucent plate under a filled black/white icon.
   .dock-page-navigation {
     --bew-liquid-indicator-bg: var(--bew-dock-navigation-active-bg);
-    --bew-liquid-indicator-shadow: none;
+    // The plate keeps the default hairline edge (user-specified), not the glass rim.
 
     flex-direction: column;
     width: auto;
@@ -1344,7 +1346,7 @@ onUnmounted(() => {
   }
 
   .dock-page-navigation__indicator {
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   .dock-count-badge {
@@ -1366,13 +1368,13 @@ onUnmounted(() => {
   }
 
   .back-to-top-or-refresh-btn {
-    --dock-surface-shadow: var(--bew-shadow-2);
+    --dock-surface-shadow: var(--bew-glass-shadow);
     --uno: "transform active:important-scale-90 hover:scale-110";
     --uno: "lg:w-45px w-35px lg:h-45px h-35px";
     --uno: "grid place-items-center";
 
     background: var(--dock-surface-background);
-    border: 1px solid var(--bew-glass-border-color);
+    border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
     backdrop-filter: var(--bew-filter-glass-1);
     box-sizing: border-box;
     transition:
@@ -1409,7 +1411,7 @@ onUnmounted(() => {
   --uno: "rounded-$bew-pill-radius antialiased";
   --uno: "bg-$bew-fill-alt hover:bg-$bew-fill-2 cursor-pointer";
   --uno: "dark:bg-$bew-fill-1 dark-hover:bg-$bew-fill-4";
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
 
   box-shadow: var(--bew-shadow-1);
   transition:

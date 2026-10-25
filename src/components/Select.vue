@@ -213,7 +213,7 @@ watch(unavailable, (disabled) => {
       p="x-4 y-2"
       bg="$bew-input-bg"
       rounded="$bew-interactive-radius"
-      border="1 $bew-surface-border-color"
+      border="1 $bew-field-edge-color"
       box-border
       text="center $bew-text-1"
       cursor="pointer"
@@ -242,7 +242,7 @@ watch(unavailable, (disabled) => {
           <div
             class="select-arrow"
             border="~ solid t-0 l-0 r-2 b-2"
-            :border-color="showOptions ? '$bew-focus-ring-color' : '$bew-input-border-color'"
+            :border-color="showOptions ? '$bew-focus-ring-color' : '$bew-field-edge-color'"
             p="3px"
             display="inline-block"
             :transform="`~ ${!showOptions ? 'rotate-45 -translate-y-1/4' : 'rotate-225 translate-y-1/4'} `"
@@ -331,7 +331,7 @@ watch(unavailable, (disabled) => {
   height: var(--bew-control-height);
   padding: 0 var(--bew-space-3);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
 }
 

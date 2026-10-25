@@ -1,6 +1,7 @@
 <script setup lang="ts" generic="T = any">
 import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
+import LoadingFill from '~/components/LoadingFill.vue'
 import AdvertisementCard from '~/components/VideoCard/AdvertisementCard.vue'
 import type { Video, VideoCardState } from '~/components/VideoCard/types'
 import { createVideoCardState } from '~/components/VideoCard/types'
@@ -12,6 +13,8 @@ import type { CardWindowSnapshot } from '~/composables/useCardWindow'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useGridLayout } from '~/composables/useGridLayout'
 import { useHomeTabViewState } from '~/composables/useHomeTabState'
+import { useLayoutMotion } from '~/composables/useLayoutMotion'
+import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { useUserRelations } from '~/composables/useUserRelations'
 import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
 import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
@@ -96,6 +99,8 @@ interface VideoCardGridProps<T = any> {
    * @default false
    */
   disableContentVisibility?: boolean
+  /** Cards that stay slide to their new places when others leave or the order changes. */
+  layoutMotion?: boolean
 
   /**
    * 数据转换函数：将原始数据转换为 VideoCard 所需的格式
@@ -135,6 +140,12 @@ interface VideoCardGridProps<T = any> {
   emptyDescription?: string
   /** Sidebar workspaces use centered text states and no completed-page footer. */
   textOnlyStates?: boolean
+  /**
+   * The result count is unknown (a filter scan): loading shows the ring in the
+   * middle instead of skeletons, and the tail ring instead of loading-more
+   * skeletons. Results, empty and error states wait for the ring to close.
+   */
+  indeterminate?: boolean
 
   /**
    * 登录按钮文本
@@ -261,12 +272,17 @@ const MAX_CONSECUTIVE_FAILURES = 3
 
 // 仅首屏空数据加载时显示骨架屏；滚动加载时直接追加真实卡片。
 const showInitialSkeleton = computed(() => {
-  if (props.needToLoginFirst)
+  if (props.needToLoginFirst || props.indeterminate)
     return false
   if (!props.loading)
     return false
   return props.items.length === 0
 })
+
+const pendingRef = ref<{ $el: Element }>()
+const pendingLoading = computed(() => Boolean(props.indeterminate && props.loading && props.items.length === 0 && !props.needToLoginFirst))
+const pendingPhase = useLoadingRingPhase(() => pendingLoading.value, () => pendingRef.value?.$el)
+const pendingPresent = computed(() => pendingPhase.value !== 'idle')
 
 // 生成首屏骨架屏数据
 const initialSkeletonItems = computed(() => {
@@ -282,6 +298,7 @@ const initialSkeletonItems = computed(() => {
 // 有真实数据时，用与视频卡片相同结构的骨架卡片表示下一批数据正在加载。
 const showLoadingMoreSkeletonItems = computed(() => {
   return props.showLoadingMoreSkeleton
+    && !props.indeterminate
     && props.loading
     && props.items.length > 0
     && !props.needToLoginFirst
@@ -973,6 +990,8 @@ const renderItems = computed(() => {
   }
   return result
 })
+// Keyed by the data, not the window: scrolling must not measure every card.
+useLayoutMotion(gridContainerRef, () => props.layoutMotion ? props.items.map((item, index) => props.getItemKey(item, index)).join(',') : '', { enabled: () => Boolean(props.layoutMotion) })
 
 // One stable function for every card; the menu builds its page groups only while open.
 function getCardMenuExtraGroups(item: unknown): VideoCardContextMenuExtraOption[][] {
@@ -1096,7 +1115,7 @@ function getUniqueKey(item: T, index: number): string | number {
 </script>
 
 <template>
-  <div class="video-card-grid-root" :class="{ 'video-card-grid-root--empty': textOnlyStates && (needToLoginFirst || showErrorState || showEmptyState) }">
+  <div class="video-card-grid-root" :class="{ 'video-card-grid-root--empty': pendingPresent || (textOnlyStates && (needToLoginFirst || showErrorState || showEmptyState)) }">
     <!-- 需要登录 -->
     <Empty
       v-if="needToLoginFirst" :class="{ 'mt-6': !textOnlyStates }" :text-only="textOnlyStates" :fill="textOnlyStates" :description="$t('common.please_log_in_first')"
@@ -1107,6 +1126,8 @@ function getUniqueKey(item: T, index: number): string | number {
         {{ loginButtonText || $t('common.login') }}
       </Button>
     </Empty>
+
+    <LoadingFill v-else-if="pendingPresent" ref="pendingRef" :loading="pendingLoading" />
 
     <Empty
       v-else-if="showErrorState" :class="{ 'mt-6': !textOnlyStates }" :text-only="textOnlyStates" :fill="textOnlyStates" :description="$t('common.load_failed')"
@@ -1143,6 +1164,7 @@ function getUniqueKey(item: T, index: number): string | number {
         :key="renderItem.key"
         :ref="(element) => renderItem.card && cardWindow.setElement(renderItem.card.key, element)"
         :class="renderItem.card ? 'video-card-slot' : 'video-card-spacer'"
+        :data-motion-key="renderItem.card && layoutMotion ? renderItem.card.key : undefined"
         :style="renderItem.card ? undefined : { height: `${String(renderItem.height)}px` }"
         :aria-hidden="renderItem.card ? undefined : true"
       >
@@ -1182,9 +1204,9 @@ function getUniqueKey(item: T, index: number): string | number {
     </div>
 
     <SmoothLoading
-      v-if="showLoadMoreIndicator"
+      v-if="showLoadMoreIndicator || indeterminate"
       class="load-more-loading"
-      :show="loading && !showLoadingMoreSkeletonItems"
+      :show="loading && items.length > 0 && !showLoadingMoreSkeletonItems"
       :keep-space="true"
       :min-height="loadMoreIndicatorHeight"
     />

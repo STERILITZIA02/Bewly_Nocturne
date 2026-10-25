@@ -56,7 +56,7 @@ const href = computed(() => live.value && Number.isSafeInteger(props.roomid) && 
   color: var(--bew-text-1);
   background: var(--bew-selected-bg);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
   white-space: nowrap;

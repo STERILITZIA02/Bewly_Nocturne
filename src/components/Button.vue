@@ -60,13 +60,13 @@ function handleClick(evt: MouseEvent) {
   --b-button-radius: var(--bew-interactive-radius);
   --b-button-padding: var(--bew-space-3);
   --b-button-font-size: var(--bew-font-size-control);
-  --b-button-font-weight: var(--bew-font-weight-medium);
+  --b-button-font-weight: var(--bew-font-weight-regular);
   --b-button-line-height: var(--bew-line-height-control);
   --b-button-icon-size: var(--bew-control-icon-size);
   --b-button-width: fit-content;
   --b-button-height: var(--bew-control-height);
   --b-button-border-width: 1px;
-  --b-button-border-color: var(--bew-surface-border-color);
+  --b-button-border-color: var(--bew-edge-color);
   --b-button-shadow: none;
   --b-button-shadow-hover: var(--b-button-shadow);
   --b-button-shadow-active: var(--b-button-shadow);
@@ -161,7 +161,7 @@ function handleClick(evt: MouseEvent) {
   }
 
   &--strong {
-    --b-button-font-weight: var(--bew-font-weight-semibold);
+    --b-button-font-weight: var(--bew-font-weight-regular);
   }
 }
 

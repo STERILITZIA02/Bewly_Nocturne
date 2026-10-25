@@ -95,7 +95,7 @@ const sidebarHost = useSidebarRail()
   box-sizing: border-box;
   padding-top: var(--bew-top-bar-height);
   border: 0;
-  border-inline-end: 1px solid var(--bew-surface-border-color);
+  border-inline-end: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: 0;
 }
 

@@ -2,7 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import LoadingRing from '~/components/LoadingRing.vue'
 import TagRemoveButton from '~/components/TagRemoveButton.vue'
+import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import FilterSection from '~/contentScripts/views/WatchLater/WatchLaterFilterSection.vue'
 
 import type { FavoriteFilterQuery, FavoritePartitionOption, FavoriteUploaderOption } from './favoriteFilter'
@@ -27,6 +29,9 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+// Reading partitions shows the ring until it has closed, then the result.
+const partitionRing = ref<HTMLElement>()
+const partitionPhase = useLoadingRingPhase(() => props.partitionsLoading && !props.partitions.length, () => partitionRing.value)
 const draftMids = ref<number[]>([])
 const draftTids = ref<number[]>([])
 const draftKeywords = ref<string[]>([])
@@ -115,7 +120,6 @@ function clear() {
 </script>
 
 <template>
-  <!-- Same collapsible container as the History / Watch Later advanced filters. -->
   <section class="favorite-filter" :aria-label="t('favorites.filter_title')">
     <FilterSection v-if="scopeOptions?.length" memory-key="favorites:scope" :title="t('library_tools.search_scope')">
       <div class="bew-segment-control bew-segment-control--static bew-segment-control--secondary favorite-filter__options" role="group" :aria-label="t('library_tools.search_scope')">
@@ -135,8 +139,8 @@ function clear() {
           v-for="option in uploaderOptions" :key="option.mid" type="button" class="favorite-filter__chip"
           :aria-pressed="draftMids.includes(option.mid)" :disabled="disabled" @click="toggleMid(option.mid)"
         >
+          <!-- No count: it would only cover the pages read so far. -->
           <span class="favorite-filter__chip-label">{{ option.name }}</span>
-          <span v-if="option.count" class="favorite-filter__chip-count">{{ option.count }}</span>
         </button>
       </div>
       <p v-else class="bew-help">
@@ -155,9 +159,9 @@ function clear() {
             <span v-if="option.count" class="favorite-filter__chip-count">{{ option.count }}</span>
           </button>
         </div>
-        <p v-else-if="partitionsLoading" class="bew-help" role="status">
-          {{ t('common.loading') }}
-        </p>
+        <div v-else-if="partitionPhase !== 'idle'" ref="partitionRing" class="favorite-filter__loading" role="status" :aria-label="partitionsLoading ? t('common.loading') : undefined">
+          <LoadingRing :loading="partitionsLoading" size="var(--bew-icon-size-md)" />
+        </div>
         <p v-else class="bew-help">
           {{ t('favorites.filter_partition_empty') }}
         </p>
@@ -199,15 +203,13 @@ function clear() {
 <style lang="scss" scoped>
 @use "../../../styles/truncateFade";
 @use "../../../styles/scrollEdgeFade";
+@use "../../../styles/railSection";
 
+// Laid flat on the rail between edge-to-edge hairlines, no backing plate.
 .favorite-filter {
+  @include railSection.flat;
   display: grid;
   gap: var(--bew-space-3);
-  padding: var(--bew-library-filter-padding);
-  min-width: 0;
-  border-radius: var(--bew-library-filter-radius);
-  corner-shape: var(--bew-corner-shape);
-  background: var(--bew-message-pinned-background);
 }
 
 // Matches the History / Watch Later two-column choice rows.
@@ -235,7 +237,8 @@ function clear() {
 }
 
 .favorite-filter__chips {
-  @include scrollEdgeFade.vertical;
+  // A rail never fades (its section's clip keeps the lines to its own width).
+  @include scrollEdgeFade.lines;
   display: flex;
   flex-wrap: wrap;
   gap: var(--bew-space-1);
@@ -253,12 +256,12 @@ function clear() {
   padding: 0 var(--bew-space-3);
   border: 0;
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-text-2);
   background: transparent;
   font: inherit;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   cursor: pointer;
   transition:
@@ -292,6 +295,12 @@ function clear() {
   @include truncateFade.line;
 }
 
+.favorite-filter__loading {
+  display: grid;
+  place-items: center;
+  min-height: var(--bew-control-height);
+  color: var(--bew-text-2);
+}
 .favorite-filter__chip-count {
   color: var(--bew-text-3);
   font-variant-numeric: tabular-nums;
@@ -302,9 +311,9 @@ function clear() {
   width: 100%;
   min-height: var(--bew-control-item-height);
   padding: 0 var(--bew-space-3);
-  border: 1px solid var(--bew-border-color);
+  border: 1px solid var(--bew-field-edge-color);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-text-1);
   background: transparent;
   font: inherit;
@@ -343,12 +352,12 @@ function clear() {
   padding: 0 var(--bew-space-3);
   border: 0;
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-text-2);
   background: var(--bew-hover-bg);
   font: inherit;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   cursor: pointer;
 
   &:disabled {

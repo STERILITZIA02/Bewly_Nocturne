@@ -57,7 +57,6 @@ import { classifyMomentAdditional, resolveMomentVoteStatus } from '../src/utils/
 import { shouldUseWideMomentCardLayout, supportsWideMomentCardLayout } from '../src/utils/momentCardLayout'
 import { createMomentCommentThreadController } from '../src/utils/momentCommentThread'
 import { isMomentDescriptionOverflowing, resolveMomentTextSources } from '../src/utils/momentDescription'
-import { countVisibleNewMomentItems } from '../src/utils/momentFeedOrder'
 import { resolveMomentHostFollowState } from '../src/utils/momentHostFollowState'
 import { resolveStableMomentKey } from '../src/utils/momentKey'
 import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize } from '../src/utils/momentsLayout'
@@ -1866,7 +1865,11 @@ async function verifyComponentContracts() {
   assert.match(loadMomentsSection, /if \(reset\) \{[\s\S]{0,260}isInitialLoading\.value = true/)
   assert.doesNotMatch(loadMomentsSection, /await prepareMomentCovers/)
   assert.doesNotMatch(momentsPage, /async function prepareMomentCovers/)
-  assert.match(momentsPage, /<div v-if="isInitialLoading" class="moments-page__initial-loading">/)
+  // A load of unknown count (a search, or a filtered stream with nothing shown)
+  // takes the ring first; the known first page keeps its skeleton.
+  assert.match(momentsPage, /<LoadingFill v-if="pendingRingPhase !== 'idle'" ref="pendingRingRef" :loading="pendingRingLoading" \/>\s*<div v-else-if="isInitialLoading" class="moments-page__initial-loading">/)
+  assert.match(momentsPage, /const pendingRingLoading = computed\(\(\) => !moments\.value\.length\s+&& \(isInitialLoading\.value \? isMomentSearchActive\(momentSearch\.value\) : isLoading\.value\)\)/)
+  assert.doesNotMatch(momentsPage, /moments\.loading_more/, 'the tail shows only the ring')
   assert.match(momentsPage, /forwardCount: resolveMomentForwardCount\(id, raw\.modules\?\.module_stat\?\.forward\?\.count\)/)
   assert.match(momentsPage, /function handleMomentForwardCountChange/)
   assert.match(momentsPage, /forwardCountOverrides/)
@@ -1962,7 +1965,7 @@ async function verifyAuthCloudMomentsContracts() {
   assert.doesNotMatch(forYou, /<AppAuthorizationDialog\b/)
   assert.match(forYou, /function requireAppAuthorization\(\)[\s\S]{0,220}reportAppAuthorizationInvalid/)
   assert.match(forYou, /const requestIdentity = getRecommendationRequestIdentity\(\)/)
-  assert.match(forYou, /watch\(getRecommendationRequestIdentity,[\s\S]{0,120}requestVersion\+\+[\s\S]{0,60}flush: 'sync'/)
+  assert.match(forYou, /watch\(getRecommendationRequestIdentity,[\s\S]{0,120}invalidateRequests\(\)[\s\S]{0,60}flush: 'sync'/)
   assert.match(forYou, /noMoreContent\.value = recommendationDataState\.value === 'empty'/)
   assert.match(forYou, /else if \(response\.code === 62011\)[\s\S]{0,220}requireAppAuthorization\(\)/)
   assert.match(appAuthorizationDialog, /AUTHORIZATION_DEADLINE/)
@@ -2016,7 +2019,8 @@ async function verifyAuthCloudMomentsContracts() {
   assert.match(moments, /clearMomentPresentationForRefresh\(items\)/)
   assert.match(moments, /isInitialLoading\.value = moments\.value\.length === 0/)
   assert.match(moments, /likingMomentRequests\.get\(moment\.id\)\?\.requestId === requestId/)
-  assert.match(moments, /const ended = !hasMore \|\| response\.stalled/, 'the reader alone judges paging progress')
+  assert.match(moments, /const ended = !hasMore/, 'only the server declares the end')
+  assert.match(moments, /feedRequestFailed\.value = response\.stalled/, 'no progress remains retryable')
   assert.match(moments, /if \(!pageApplied && previousPagination\)/)
   assert.match(moments, /const owner = lifetime\.capture\(\)/)
   assert.match(moments, /if \(!owner\.isCurrent\(\)\)/)
@@ -2488,7 +2492,7 @@ async function verifyP2WidescreenControl() {
   // The column is layout only: no surface, border, radius, shadow or glass;
   // padding keeps the spacing.
   assert.match(shellSurfaceStyles, /background: transparent;/)
-  assert.doesNotMatch(shellSurfaceStyles, /border|corner-shape|box-shadow|backdrop-filter|--bew-elevated-alt|--bew-surface-border-color/)
+  assert.doesNotMatch(shellSurfaceStyles, /border|corner-shape|box-shadow|backdrop-filter|--bew-elevated-alt|--bew-edge-color/)
   assert.match(shellSurfaceStyles, /padding: var\(--bewly-widescreen-page-padding\) var\(--bewly-widescreen-page-padding\) 0;/)
   assert.match(widescreen, /--bewly-widescreen-shell-radius: var\(--bew-modal-radius, 24px\)/)
   assert.match(shellSurfaceStyles, /pointer-events: auto/)
@@ -2844,7 +2848,7 @@ async function verifyP2WidescreenControl() {
   // The docked app controls start the bar when the viewer pill is hidden, and
   // a hairline separates them from the danmaku controls.
   assert.match(widescreen, /const left = viewerRect && viewerRect\.width > 0 && viewerRect\.height > 0\s*\? viewerRect\.right \+ gap\s*: dockRect\.left \+ gap/)
-  assert.match(sideBar, /\.sidebar-content \{[\s\S]{0,600}&::after \{\s*content: "";\s*flex: none;\s*width: 1px;\s*height: var\(--bew-icon-size-md\);\s*background: var\(--bew-border-color\);/)
+  assert.match(sideBar, /\.sidebar-content \{[\s\S]{0,600}&::after \{\s*content: "";\s*flex: none;\s*width: 1px;\s*height: var\(--bew-icon-size-md\);\s*background: var\(--bew-separator-color\);/)
   assert.match(widescreen, /updatePlayerControlTooltip\(button, filling \? `\$\{label\} \(Esc\)` : label\)/)
   assert.match(widescreen, /button\.setAttribute\('aria-keyshortcuts', 'Escape'\)/)
 
@@ -2894,9 +2898,9 @@ async function verifyP2WidescreenControl() {
     assert.match(widescreen, /\.bewly-widescreen-title \{[\s\S]{0,260}font-size: var\(--bew-font-size-heading\);/)
     assert.match(widescreen, /\.bewly-widescreen-metadata-slot :is\(\.item, \.view-text, \.dm-text, \.pubdate-ip-text, \.argue-text, \.copyright-text\) \{\s*font-size: var\(--bew-font-size-caption\) !important;/)
     assert.match(widescreen, /\.basic-desc-info \{\s*height: auto !important;\s*color: var\(--bewly-widescreen-text-secondary\) !important;\s*font-size: var\(--bew-font-size-body, 15px\) !important;\s*line-height: var\(--bew-line-height-body, 24px\) !important;/)
-    assert.match(widescreen, /\.rec-title \.title-txt \{[\s\S]{0,80}font-size: var\(--bew-font-size-title\) !important;\s*font-weight: var\(--bew-font-weight-medium\) !important;/)
+    assert.match(widescreen, /\.rec-title \.title-txt \{[\s\S]{0,80}font-size: var\(--bew-font-size-title\) !important;\s*font-weight: var\(--bew-font-weight-regular\) !important;/)
     assert.match(widescreen, /\.pic-box \.duration \{\s*font-size: var\(--bew-font-size-caption\) !important;/)
-    assert.match(commentStyles, /#title h2 \{\s*font-size: var\(--bew-font-size-title\) !important;\s*font-weight: var\(--bew-font-weight-medium\) !important;/)
+    assert.match(commentStyles, /#title h2 \{\s*font-size: var\(--bew-font-size-title\) !important;\s*font-weight: var\(--bew-font-weight-regular\) !important;/)
     assert.doesNotMatch(commentStyles, /font-size: var\(--bew-font-size-heading\)/, 'only the video title is a heading')
     assert.match(commentStyles, /:is\(#user-name, #user-name a\) \{\s*font-size: var\(--bew-font-size-control, 13px\) !important;/)
     assert.match(commentStyles, /#location \{\s*color: var\(--bew-text-3\) !important;\s*font-size: var\(--bew-font-size-caption, 12px\) !important;/)
@@ -2921,7 +2925,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /\.bewly-widescreen-player-toolbar \{\s*position: absolute;\s*top: var\(--bewly-widescreen-card-inset\);\s*left: var\(--bewly-widescreen-card-inset\);[\s\S]{0,200}width: calc\(var\(--bew-control-height\) \* 4 \+ var\(--bew-space-2\) \* 3\);\s*height: var\(--bew-control-height\);\s*pointer-events: none;/)
   assert.match(widescreen, /:is\(\[data-display-mode="fill"\], \[data-zooming="true"\]\) \.bewly-widescreen-player-toolbar \{\s*visibility: hidden;/)
   // Every player popover shares one surface constant, the feedback panel included.
-  assert.match(widescreen, /const PLAYER_POPOVER_SURFACE = `background: var\(--bew-elevated-alt-solid\) !important;\s*border: 1px solid var\(--bew-surface-border-color\) !important;\s*border-radius: var\(--bew-surface-radius\) !important;/)
+  assert.match(widescreen, /const PLAYER_POPOVER_SURFACE = `background: var\(--bew-elevated-alt-solid\) !important;\s*border: var\(--bew-hairline(?:, 1px)?\) solid var\(--bew-edge-color\) !important;\s*border-radius: var\(--bew-surface-radius\) !important;/)
   assert.equal((widescreen.match(/\$\{PLAYER_POPOVER_SURFACE\}/g) ?? []).length, 6)
   assert.equal((widescreen.match(/border-radius: var\(--bew-surface-radius\) !important;\s*corner-shape: var\(--bew-corner-shape\);\s*box-shadow: var\(--bew-popover-surface-shadow\) !important;/g) ?? []).length, 1, 'the popover surface is declared once')
   const feedbackStyles = widescreen.slice(widescreen.indexOf('/* Player feedback, opened by the docked help button.'), widescreen.indexOf('/* 弹幕设置/弹幕样式弹窗文字颜色适配浅色模式'))
@@ -2929,7 +2933,7 @@ async function verifyP2WidescreenControl() {
   assert.match(feedbackStyles, /\.b-back-tabmenu-list\.b-back-show::before \{\s*border-color: var\(--bew-text-1\) !important;/)
   assert.match(feedbackStyles, /background: var\(--bew-accent-solid\) !important;/)
   assert.match(feedbackStyles, /\.b-back-submit\.disable, \.b-back-content-fail-resubmit:not\(\.b-back-show\)\) \{\s*color: var\(--bew-text-3\) !important;\s*background: var\(--bew-fill-1\) !important;/)
-  assert.match(feedbackStyles, /background: var\(--bew-input-bg\) !important;\s*border: 1px solid var\(--bew-input-border-color\) !important;/)
+  assert.match(feedbackStyles, /background: var\(--bew-input-bg\) !important;\s*border: 1px solid var\(--bew-field-edge-color\) !important;/)
   // No rule keys on a bare element type or `*`, which would test every element on the page.
   assert.doesNotMatch(feedbackStyles, /:where\(div|> \*|\) \* \{|\[class\*=/)
   assert.match(widescreen, /prefers-reduced-motion: reduce[\s\S]*\.b-back-panel :is\(\.b-back-submit[^)]*\):active \{\s*scale: none;/)
@@ -3010,7 +3014,7 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuSurfaceStyles, /opacity: var\(--bewly-widescreen-controls-opacity, 0\) !important/)
   assert.match(danmakuSurfaceStyles, /transform: none !important/)
   assert.match(danmakuSurfaceStyles, /will-change: opacity/)
-  assert.doesNotMatch(danmakuSurfaceStyles, /border-top: 1px solid var\(--bew-border-color\) !important/)
+  assert.doesNotMatch(danmakuSurfaceStyles, /border-top: var\(--bew-hairline(?:, 1px)?\) solid var\(--bew-separator-color\) !important/)
   assert.match(danmakuSurfaceStyles, /pointer-events: auto !important/)
   assert.match(widescreen, /const DANMAKU_GLASS_CLASS = 'bewly-widescreen-danmaku-glass'/)
   const danmakuSurfaceBackgroundStyles = widescreen.slice(
@@ -3023,10 +3027,10 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuSurfaceBackgroundStyles, /left: var\(--bewly-widescreen-controls-glass-inset\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /width: auto !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /height: var\(--bewly-widescreen-controls-glass-height\) !important/)
-  assert.match(danmakuSurfaceBackgroundStyles, /border: 1px solid var\(--bew-glass-border-color\) !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /border: var\(--bew-glass-edge-width, 1px\) solid var\(--bew-glass-edge-color, rgb\(255 255 255 \/ 70%\)\) !important/, 'the control bar glass draws the glass rim')
   assert.match(danmakuSurfaceBackgroundStyles, /border-radius: var\(--bewly-widescreen-shell-radius\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /corner-shape: var\(--bew-corner-shape\)/)
-  assert.doesNotMatch(danmakuSurfaceBackgroundStyles, /border-top: 1px solid var\(--bew-border-color\) !important/)
+  assert.doesNotMatch(danmakuSurfaceBackgroundStyles, /border-top: var\(--bew-hairline(?:, 1px)?\) solid var\(--bew-separator-color\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /z-index: calc\(var\(--bew-z-popover\) - 1\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /background: var\(--bewly-widescreen-danmaku-bar-bg\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /backdrop-filter: var\(--bew-filter-glass-1\) !important/)
@@ -3181,7 +3185,7 @@ async function verifyP2WidescreenControl() {
   )
   assert.match(danmakuModuleSurfaceStyles, /background: var\(--bew-elevated-alt-solid\) !important/)
   assert.match(danmakuModuleSurfaceStyles, /backdrop-filter: none !important/)
-  assert.match(danmakuModuleSurfaceStyles, /border: 1px solid var\(--bew-surface-border-color\) !important/)
+  assert.match(danmakuModuleSurfaceStyles, /border: var\(--bew-hairline(?:, 1px)?\) solid var\(--bew-edge-color\) !important/)
   assert.match(danmakuModuleSurfaceStyles, /box-shadow: var\(--bew-popover-surface-shadow\) !important/)
   assert.match(danmakuModuleSurfaceStyles, /backdrop-filter: none !important/)
   const danmakuViewerInfoStyles = widescreen.slice(
@@ -3189,7 +3193,7 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-root`),
   )
   assert.match(danmakuViewerInfoStyles, /border-radius: var\(--bew-pill-radius\)/)
-  assert.match(danmakuViewerInfoStyles, /corner-shape: var\(--bew-corner-shape-round\)/)
+  assert.match(danmakuViewerInfoStyles, /corner-shape: var\(--bew-corner-shape-capsule\)/)
   assert.match(danmakuViewerInfoStyles, /color: var\(--bew-on-overlay-color\) !important/)
   assert.match(danmakuViewerInfoStyles, /background: var\(--bew-overlay-background\) !important/)
   assert.match(danmakuViewerInfoStyles, /border: 0 !important/)
@@ -3276,7 +3280,7 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-video-inputbar:focus-within`),
   )
   assert.match(danmakuInputbarStyles, /border-radius: var\(--bew-pill-radius\) !important/)
-  assert.match(danmakuInputbarStyles, /corner-shape: var\(--bew-corner-shape-round\)/)
+  assert.match(danmakuInputbarStyles, /corner-shape: var\(--bew-corner-shape-capsule\)/)
   assert.match(danmakuInputbarStyles, /height: var\(--bewly-widescreen-inputbar-height, 44px\) !important/)
   assert.match(danmakuInputbarStyles, /padding-inline: var\(--bew-space-1, 4px\) !important/)
   assert.match(danmakuInputbarStyles, /overflow: visible !important/)
@@ -3349,7 +3353,7 @@ async function verifyP2WidescreenControl() {
   assert.match(playlistToggleStyles, /font-size: var\(--bew-font-size-control, 13px\)/)
   assert.match(playlistToggleStyles, /width: auto !important/)
   assert.match(playlistToggleStyles, /background: transparent/)
-  assert.match(playlistToggleStyles, /border: 1px solid var\(--bew-surface-border-color\)/)
+  assert.match(playlistToggleStyles, /border: var\(--bew-hairline(?:, 1px)?\) solid var\(--bew-edge-color\)/)
   assert.doesNotMatch(playlistToggleStyles, /position: sticky|top: 0/)
   assert.match(widescreen, /actions\.insertBefore\(toggleButton, subscribeButton\)/)
   assert.match(widescreen, /\.is-episode-section-collapsed \.\$\{EPISODE_SECTION_CLASS\}[\s\S]{0,120}max-height: 0 !important/)
@@ -3537,23 +3541,6 @@ function verifyStageRouteAndTopBarPolicies() {
   ]
   for (const [pageMode, customNative, expected] of effectiveSources)
     assert.equal(resolveEffectiveTopBarSource(pageMode, customNative), expected)
-
-  const apiItems = [
-    { id: 'new-video-a', bvid: 'BV1', type: 8 },
-    { id: 'new-article', type: 64 },
-    { id: 'new-video-a-collaborator', bvid: 'BV1', type: 8 },
-    { id: 'old-video', bvid: 'BV2', type: 8 },
-  ]
-  assert.equal(
-    countVisibleNewMomentItems(apiItems, apiItems, 3, item => item.bvid ?? null),
-    2,
-    'new-moment dots must follow the filtered API prefix while collaborative duplicates collapse',
-  )
-  assert.equal(
-    countVisibleNewMomentItems(apiItems, apiItems.filter(item => item.type === 8), 3, item => item.bvid ?? null),
-    1,
-    'filtered articles must not shift the unread boundary onto old videos',
-  )
 }
 
 function verifyUpstreamReliabilityPolicies() {
@@ -3789,17 +3776,18 @@ async function verifyUpstreamReliabilityContracts() {
 
   const mixedMomentSection = topBarStore.slice(
     topBarStore.indexOf('// 联合投稿只会按 bvid'),
-    topBarStore.indexOf('// 如果是第一次加载', topBarStore.indexOf('// 联合投稿只会按 bvid')),
+    topBarStore.indexOf('processedItems.forEach', topBarStore.indexOf('// 联合投稿只会按 bvid')),
   )
   assert.match(mixedMomentSection, /mergeCollaborativeVideos\(filteredItems\)/)
   assert.doesNotMatch(mixedMomentSection, /filter\(\(item: any\) => item\.type|mergedVideos|articles/)
   assert.match(topBarStore, /const requestGeneration = momentsRequestGeneration/)
   assert.match(topBarStore, /requestGeneration === momentsRequestGeneration/)
-  assert.match(topBarStore, /const cursorAdvanced = offset !== requestOffset/)
+  assert.match(topBarStore, /res\.data\.offset === requestOffset/)
   assert.match(topBarStore, /liveMoments\.length === 0/)
   assert.match(topBarStore, /isLoadingMomentsCount/)
   assert.match(topBarStore, /requestGeneration === momentsCountRequestGeneration/)
-  assert.match(topBarStore, /countVisibleNewMomentItems\([\s\S]{0,180}extractBvid/)
+  assert.match(topBarStore, /unread: item\.bewlyUnread === true \|\| entryUnreadIds\.has\(item\.id_str\)/)
+  assert.match(topBarStore, /visibleNewMomentsCount = ref\(0\)/)
 
   assert.match(topBarVisualConfig, /key: 'favorites',[\s\S]{0,120}supportsBadge: false/)
   assert.match(topBarVisualConfig, /key: 'history',[\s\S]{0,120}supportsBadge: false/)
@@ -3814,7 +3802,7 @@ async function verifyUpstreamReliabilityContracts() {
 
   assert.match(variables, /--bew-media-pop-title-font-size: var\(--bew-font-size-title\)/)
   assert.match(variables, /--bew-media-pop-title-line-height: var\(--bew-line-height-title\)/)
-  assert.match(variables, /--bew-media-pop-title-font-weight: var\(--bew-font-weight-medium\)/)
+  assert.match(variables, /--bew-media-pop-title-font-weight: var\(--bew-font-weight-regular\)/)
   assert.match(popoverCards, /\.popover-card__title[\s\S]{0,260}var\(--bew-media-pop-title-font-size\)[\s\S]{0,160}var\(--bew-media-pop-title-line-height\)/)
   assert.match(favoritesPopSource, /\.favorites-pop[\s\S]{0,120}width: 450px/)
   assert.match(historyPopSource, /\.history-pop[\s\S]{0,120}width: 380px/)
