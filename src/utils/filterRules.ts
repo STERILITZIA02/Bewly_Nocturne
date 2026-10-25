@@ -115,3 +115,8 @@ export function compileFilterRules(rules: unknown): CompiledFilterRules {
 
   return { regExpValues, stringValues }
 }
+
+/** An absent statistic is unknown, not zero. */
+export function isAboveKnownCount(value: number | null | undefined, threshold: number): boolean {
+  return value == null || value > threshold
+}

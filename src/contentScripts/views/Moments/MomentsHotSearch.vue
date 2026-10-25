@@ -69,11 +69,13 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  flex: 0 1 auto;
   min-width: 0;
+  min-height: 0;
   max-height: var(--bew-moments-hot-search-max-height);
   overflow: hidden;
   padding: var(--bew-space-4);
-  border: 1px solid var(--bew-message-card-border);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   color: var(--bew-text-1);
@@ -91,7 +93,8 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
   h2 {
     margin: 0;
     font-size: var(--bew-font-size-title);
-    font-weight: var(--bew-font-weight-semibold);
+    color: var(--bew-text-1);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-title);
   }
   i {
@@ -151,7 +154,7 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
 .moments-hot-search__rank {
   flex: 0 0 var(--bew-space-5);
   color: var(--bew-text-2);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-regular);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }

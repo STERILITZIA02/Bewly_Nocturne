@@ -1,0 +1,127 @@
+@use "./contentCard";
+@use "./truncateFade";
+
+// A sideways strip at the top of a library page's content (user-specified,
+// after the Moments up-list): no container, edge buttons or fades. Its
+// scroller reaches left to the window edge, so items pass under the rail's
+// glass, and right past the content edge; wheels and trackpads scroll it with
+// elastic ends (`utils/elasticScroll.ts`, see LibraryBleedStrip.vue).
+//
+// `bar` keeps it in place while the page scrolls: pinned at its own place,
+// the content after it (a later stacking context) slides up over it, and it
+// fades from when that content reaches its bottom edge until it reaches its
+// top edge, then stops taking input. `$height` is the strip's own height and
+// `$gap` the space between it and the content.
+@mixin bar($height, $gap: var(--bew-space-8)) {
+  // Its own formatting context: the scroller's negative top margin must not
+  // collapse through and lift the box, or sticky would push it back down.
+  display: flow-root;
+  position: sticky;
+  top: calc(var(--bew-top-bar-height) + var(--bew-space-4));
+  height: $height;
+  margin-bottom: $gap;
+  // Without scroll timelines the content simply covers it.
+  @supports (animation-timeline: scroll()) {
+    animation: bew-bleed-strip-cover linear both;
+    animation-timeline: --bew-page-scroll;
+    animation-range: $gap calc(#{$gap} + #{$height});
+  }
+}
+
+@mixin global {
+  @keyframes bew-bleed-strip-cover {
+    to {
+      opacity: 0;
+      visibility: hidden;
+    }
+  }
+}
+
+@mixin scroller {
+  --bew-bleed-strip-start: calc(var(--bew-messages-sidebar-width) + var(--library-content-inline-padding));
+  margin-inline: calc(-1 * var(--bew-bleed-strip-start)) calc(-1 * var(--library-content-inline-padding));
+  // Room for the hover scale and shadow, which the scroller would clip.
+  margin-block: calc(-1 * var(--bew-space-4));
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@mixin track($gap: var(--bew-space-4)) {
+  display: flex;
+  width: max-content;
+  gap: $gap;
+  box-sizing: content-box;
+  padding-block: var(--bew-space-4);
+  padding-inline: var(--bew-bleed-strip-start) var(--library-content-inline-padding);
+}
+
+// A square tile (as tall as a video cover, framed like one) over one name line.
+@mixin tile($size) {
+  @include contentCard.bare;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--bew-space-2);
+  box-sizing: content-box;
+  width: $size;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  &:hover:not(:disabled) {
+    color: var(--bew-text-1);
+  }
+  &:focus-visible {
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
+    outline-offset: var(--bew-space-0-5);
+  }
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+@mixin tile-media($size) {
+  @include contentCard.media-frame;
+  position: relative;
+  display: block;
+  width: $size;
+  height: $size;
+  flex: 0 0 auto;
+  border-radius: var(--bew-media-radius);
+  corner-shape: var(--bew-corner-shape);
+  background: var(--bew-fill-1);
+  transition:
+    box-shadow var(--bew-duration-moderate) var(--bew-ease-standard),
+    background-color var(--bew-duration-fast) var(--bew-ease-standard),
+    color var(--bew-duration-fast) var(--bew-ease-standard);
+  > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    corner-shape: inherit;
+    object-fit: cover;
+  }
+}
+
+@mixin tile-name {
+  display: block;
+  align-self: stretch;
+  max-width: 100%;
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-line-height-control);
+  text-align: start;
+  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+  @include truncateFade.line;
+}

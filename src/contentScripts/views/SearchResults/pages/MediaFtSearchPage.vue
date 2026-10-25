@@ -90,7 +90,7 @@ defineExpose({
               {{ item.title }}
             </div>
             <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
-              <span v-if="item.score" text="$bew-text-1" font-semibold tabular-nums>
+              <span v-if="item.score" text="$bew-text-1" tabular-nums>
                 {{ t('search.media.score', { score: item.score?.toFixed(1) }) }}
               </span>
               <span v-if="item.areas">

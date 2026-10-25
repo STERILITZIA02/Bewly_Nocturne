@@ -334,7 +334,7 @@ defineExpose({ initData })
   padding-inline: var(--bew-space-2);
   border-radius: var(--bew-interactive-radius);
   color: var(--bew-theme-foreground);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   &:hover {
     background: var(--bew-fill-1);
   }

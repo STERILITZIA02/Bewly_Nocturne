@@ -3,7 +3,7 @@
   box-sizing: border-box;
   color: var(--bew-text-1);
   background: var(--bew-popover-surface-background-solid);
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-popover-surface-shadow);
@@ -13,6 +13,7 @@
 // These fixed TopBar panels extend beyond the header's glass boundary.
 // Menus and controls inside them retain the default solid surface.
 .bew-popover.bew-popover-surface {
+  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
   background: var(--bew-popover-surface-background);
   backdrop-filter: var(--bew-filter-glass-1);
 }
@@ -49,7 +50,8 @@
   min-width: 0;
   margin: 0;
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
   @include truncateFade.line;
 }
@@ -71,7 +73,7 @@
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   white-space: nowrap;
   transition:

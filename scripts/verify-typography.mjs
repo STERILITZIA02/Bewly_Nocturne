@@ -15,7 +15,7 @@ export function registerTypographyChecks(check) {
     const fixture = document.body.appendChild(document.createElement('div'))
     fixture.className = 'bewly-design'
     fixture.innerHTML = '<p class="native">原站 123</p><div class="bewly-wrapper"><p class="body">正文 123 <strong>强调</strong></p><time>12:34</time><svg class="iconify--tabler" stroke-width="2"><path /></svg><svg class="explicit-chevron" stroke-width="2.5"><path /></svg></div>'
-    style.textContent = `${reset}\n${fonts.css}\n${main.css}`.replaceAll('var(--bew-font-weight-semibold, 600)', '600')
+    style.textContent = `${reset}\n${fonts.css}\n${main.css}`
     try {
       const ui = fixture.querySelector('.bewly-wrapper')
       assert.equal(getComputedStyle(ui).fontFamily, 'var(--bew-fonts-ui)')
@@ -23,7 +23,7 @@ export function registerTypographyChecks(check) {
       assert.equal(getComputedStyle(fixture.querySelector('.body')).fontFeatureSettings, 'normal')
       assert.equal(getComputedStyle(fixture.querySelector('.native')).fontFeatureSettings, '"tnum"')
       assert.equal(getComputedStyle(fixture.querySelector('time')).fontVariantNumeric, 'tabular-nums')
-      assert.equal(getComputedStyle(fixture.querySelector('strong')).fontWeight, '600')
+      assert.equal(getComputedStyle(fixture.querySelector('strong')).fontWeight, getComputedStyle(fixture.querySelector('.body')).fontWeight, 'emphasis is tone, not weight')
       fixture.classList.add('modify-fonts')
       assert.equal(getComputedStyle(ui).fontFamily, 'var(--bew-fonts)', 'recommended/custom modes retain their existing override')
       assert.equal(getComputedStyle(fixture.querySelector('.native')).fontFamily, 'var(--bew-fonts)')
@@ -50,6 +50,6 @@ export function registerTypographyChecks(check) {
     assert.ok(!search?.includes('stroke-width=\'2\''))
     assert.ok(decoded.includes('.i-tabler\\:star-filled{'))
     assert.ok(decoded.includes('.i-tabler\\:copy{'))
-    assert.ok(css.includes('font-weight:var(--bew-font-weight-medium)'))
+    assert.ok(css.includes('font-weight:var(--bew-font-weight-regular)'))
   })
 }

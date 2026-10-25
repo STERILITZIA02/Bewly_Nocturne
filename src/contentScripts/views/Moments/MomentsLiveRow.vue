@@ -3,7 +3,6 @@ import { useIntersectionObserver } from '@vueuse/core'
 import { computed, onBeforeUnmount, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import LoadingRing from '~/components/LoadingRing.vue'
 import MomentVideoPreview from '~/components/MomentCard/MomentVideoPreview.vue'
 
 import type { MomentsPortalLiveUser } from './momentPortal'
@@ -72,11 +71,12 @@ onBeforeUnmount(leave)
             v-else class="moments-live-row__preview-link" :href="href" :aria-label="t('moments.enter_live_room', { name: user.uname })" target="_blank"
             rel="noopener noreferrer"
           >
+            <!-- Mounted before the stream URL arrives, so one dark scrim and its
+                 ring cover the whole load (no second placeholder to hand over from). -->
             <MomentVideoPreview
-              v-if="active && url" :url="url" :loading="previews?.previewState.value !== 'ready'" :generation="previews?.previewGeneration.value"
+              v-if="active" :url="url" :loading="previews?.previewState.value !== 'ready'" :generation="previews?.previewGeneration.value"
               live hover-surface=".moments-live-row" @video="element => previews?.bindPreviewVideo(element, media)" @leave="leave"
             />
-            <LoadingRing v-else :loading="active" class="moments-live-row__pending" size="var(--bew-icon-size-xl)" />
           </a>
         </div>
       </div>
@@ -85,6 +85,7 @@ onBeforeUnmount(leave)
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/contentCard";
 @use "../../../styles/truncateFade";
 .moments-live-row {
   min-width: 0;
@@ -96,32 +97,37 @@ onBeforeUnmount(leave)
   gap: var(--bew-space-2);
   min-width: 0;
   min-height: calc(var(--bew-space-10) + var(--bew-space-4));
-  padding: var(--bew-space-2) var(--bew-space-1);
+  // Avatar on the rail's content line; the live icon ends as far from the right.
+  padding: var(--bew-space-2) var(--bew-sidebar-label-inset);
   box-sizing: border-box;
   color: var(--bew-text-1);
   border-radius: inherit;
   text-decoration: none;
 }
+// Avatars carry the media hairline drawn over the picture.
 .moments-live-row__avatar {
+  @include contentCard.media-frame;
+  position: relative;
   flex: none;
   width: var(--bew-space-10);
   height: var(--bew-space-10);
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   img {
+    display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: var(--bew-pill-radius);
+    border-radius: inherit;
+    corner-shape: inherit;
   }
 }
+// The bare icon, no disc behind it.
 .moments-live-row__badge {
   flex: none;
   display: grid;
   place-items: center;
-  width: var(--bew-space-6);
-  height: var(--bew-space-6);
-  border-radius: var(--bew-pill-radius);
   color: var(--bew-text-1);
-  background: var(--bew-selected-bg);
   i {
     display: block;
     width: var(--bew-control-icon-size);
@@ -139,7 +145,8 @@ onBeforeUnmount(leave)
   }
   strong {
     font-size: var(--bew-font-size-control);
-    font-weight: var(--bew-font-weight-medium);
+    color: var(--bew-text-1);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-control);
   }
   small {
@@ -160,14 +167,21 @@ onBeforeUnmount(leave)
   min-height: 0;
   overflow: hidden;
 }
+// The video cover's hairline drawn over the picture; no shadow, which the
+// reveal's clip would cut.
 .moments-live-row__preview {
+  @include contentCard.media-frame;
+  box-shadow: none;
   display: block;
   position: relative;
   aspect-ratio: 16 / 9;
   width: 100%;
   overflow: hidden;
+  // One step below the video cover (media) radius, with the same smooth corner.
   border-radius: var(--bew-thumb-radius);
-  background: var(--bew-content-solid);
+  corner-shape: var(--bew-corner-shape);
+  // No surface of its own: while loading only the preview's scrim shows.
+  background: transparent;
   border: 0;
   box-sizing: border-box;
 }
@@ -176,12 +190,7 @@ onBeforeUnmount(leave)
   inset: 0;
   display: block;
   border-radius: inherit;
-}
-.moments-live-row__pending {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  color: var(--bew-text-2);
+  corner-shape: inherit;
 }
 .moments-live-row__error {
   position: absolute;
@@ -200,6 +209,7 @@ onBeforeUnmount(leave)
     padding-inline: var(--bew-space-3);
     border: 0;
     border-radius: var(--bew-pill-radius);
+    corner-shape: var(--bew-corner-shape-capsule);
     background: var(--bew-fill-1);
     color: var(--bew-text-1);
     font: inherit;

@@ -148,7 +148,7 @@ watch(() => [props.accountId, props.business], () => {
   flex-direction: column;
   margin-top: var(--bew-space-3);
   overflow: hidden;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   background: var(--bew-popover-surface-background-solid);
   box-shadow: var(--bew-popover-surface-shadow);
@@ -159,7 +159,7 @@ watch(() => [props.accountId, props.business], () => {
   gap: var(--bew-space-1);
   padding: var(--bew-space-2);
   overflow-x: auto;
-  border-bottom: 1px solid var(--bew-border-color);
+  border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
 }
 .moment-forward-emoji-picker__categories button,
 .moment-forward-emoji-picker__grid button {

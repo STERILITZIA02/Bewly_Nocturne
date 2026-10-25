@@ -329,7 +329,7 @@ defineExpose({ initData })
             @focusout="handleDropdownFocusOut"
           >
             <!-- 搜索框 -->
-            <div p-3 shrink-0 border-b="1px solid $bew-border-color">
+            <div p-3 shrink-0 border-b="hairline $bew-separator-color">
               <input
                 ref="searchInputRef"
                 v-model="searchQuery"

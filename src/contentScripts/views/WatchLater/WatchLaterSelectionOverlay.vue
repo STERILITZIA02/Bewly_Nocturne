@@ -38,7 +38,7 @@ defineEmits<{ (event: 'toggle'): void }>()
   box-sizing: border-box;
   width: var(--bew-space-6);
   height: var(--bew-space-6);
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-interactive-radius);
   color: var(--bew-text-1);
   background: var(--bew-content-solid);

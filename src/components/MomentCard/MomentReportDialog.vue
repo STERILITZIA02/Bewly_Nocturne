@@ -131,7 +131,7 @@ defineExpose({ close: () => dialogRef.value?.close() })
   color: var(--bew-text-2);
   background: var(--bew-fill-1);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   cursor: pointer;
   transition:
@@ -172,7 +172,7 @@ defineExpose({ close: () => dialogRef.value?.close() })
   box-sizing: border-box;
   width: 100%;
   padding: var(--bew-space-2) var(--bew-space-3) var(--bew-space-6);
-  border: 1px solid var(--bew-border-color);
+  border: 1px solid var(--bew-field-edge-color);
   border-radius: var(--bew-interactive-radius);
   color: var(--bew-text-1);
   background: var(--bew-fill-1);

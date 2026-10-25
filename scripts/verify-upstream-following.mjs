@@ -22,6 +22,8 @@ async function createFixture(Vue, apiOverrides = {}) {
   const account = Vue.ref(1)
   const revision = Vue.ref(0)
   const recordedTimes = Vue.ref({})
+  const settings = Vue.ref({ enableFollowingInactiveBlacklist: true })
+  const blocked = new Set()
   const listeners = new Set()
   const api = { user: {
     getUserFollowings: async () => ({ code: 0, data: { list: [member(10)], total: 1 } }),
@@ -43,6 +45,7 @@ async function createFixture(Vue, apiOverrides = {}) {
   const dependencies = { 'vue': Vue, '~/utils/accountLifetime': lifetime, '~/utils/api': { default: api }, '~/utils/userRelation': relations, './model': model }
   const directoryModule = await loadSourceModule('../src/contentScripts/views/Home/following/useFollowingDirectory.ts', {
     ...dependencies,
+    '~/logic': { settings },
     '~/logic/uploaderLatestVideoTimes': { uploaderLatestVideoTimes: recordedTimes, uploaderLatestVideoTimesReady: Promise.resolve() },
   })
   const writesModule = await loadSourceModule('../src/contentScripts/views/Home/following/useFollowingGroupWrites.ts', {
@@ -54,18 +57,34 @@ async function createFixture(Vue, apiOverrides = {}) {
   let writes
   const app = Vue.createApp({ setup() {
     const state = stateModule.useHomeTabState()
-    directory = directoryModule.useFollowingDirectory(state, () => account.value, { viewed: () => ({}), blocked: () => new Set(), selected: () => null })
+    directory = directoryModule.useFollowingDirectory(state, () => account.value, { viewed: () => ({}), blocked: () => blocked, selected: () => null })
     writes = writesModule.useFollowingGroupWrites(directory, () => account.value, state.isCurrent)
     return () => Vue.h('div')
   } })
   app.mount(host)
-  return { directory, writes, account, revision, api, model, listeners, recordedTimes, dispose() {
+  return { directory, writes, account, revision, api, model, listeners, recordedTimes, settings, blocked, dispose() {
     app.unmount()
     host.remove()
   } }
 }
 
 export function registerUpstreamFollowingChecks(check, { Vue, flush, compileComponent }) {
+  check('following: disabling local activity sorting restores chronological order without deleting records', async () => {
+    const fixture = await createFixture(Vue, { getUserFollowings: async () => ({ code: 0, data: { list: [member(10), member(20)], total: 2 } }) })
+    try {
+      fixture.blocked.add(20)
+      await fixture.directory.load()
+      assert.deepEqual(Array.from(fixture.directory.uploaders.value, user => user.mid), [10, 20])
+      fixture.settings.value.enableFollowingInactiveBlacklist = false
+      await flush()
+      assert.deepEqual(Array.from(fixture.directory.uploaders.value, user => user.mid), [20, 10])
+      assert.equal(fixture.blocked.has(20), true)
+      fixture.settings.value.enableFollowingInactiveBlacklist = true
+      await flush()
+      assert.deepEqual(Array.from(fixture.directory.uploaders.value, user => user.mid), [10, 20])
+    }
+    finally { fixture.dispose() }
+  })
   check('following directory: recorded times and group removal batch once, retain unchanged members and scale linearly', async () => {
     const size = 1200
     const fixture = await createFixture(Vue, { getUserFollowings: async ({ pn }) => ({ code: 0, data: { total: size, list: Array.from({ length: 50 }, (_, i) => member((pn - 1) * 50 + i + 1, i % 2 ? [2] : [-10, 1])) } }) })

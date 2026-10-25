@@ -5,6 +5,61 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerImmersiveAndControlChecks(check, { Vue, flush, compileComponent }) {
+  check('immersive exit: late restoration belongs to its original page, account, scroll intent and focus owner', async () => {
+    const blank = { render: () => null }
+    for (const change of ['none', 'page', 'tab', 'account', 'scroll', 'focus']) {
+      const viewport = document.body.appendChild(document.createElement('div'))
+      viewport.scrollTop = 350
+      viewport.scrollTo = ({ top }) => {
+        viewport.scrollTop = top
+      }
+      const trigger = document.body.appendChild(document.createElement('button'))
+      const overlay = document.body.appendChild(document.createElement('section'))
+      const button = overlay.appendChild(document.createElement('button'))
+      const host = document.body.appendChild(document.createElement('div'))
+      const appState = { activatedPage: Vue.ref('Home'), homeActivatedPage: Vue.ref('ForYou'), mainAppRef: Vue.ref(host), scrollViewportRef: Vue.ref(viewport) }
+      let account = 1
+      const Component = await compileComponent('../src/contentScripts/views/Home/components/ImmersiveFeed.vue', {
+        '~/components/CloseButton.vue': { default: blank },
+        '~/components/IconButton.vue': { default: blank },
+        '~/components/VideoCardGrid.vue': { default: blank },
+        './ImmersiveVideoFrame.vue': { default: blank },
+        '~/composables/useAppProvider': { useBewlyApp: () => appState },
+        '~/logic': { settings: Vue.ref({}) },
+        '~/logic/loginStatus': { parseDedeUserID: () => account },
+        '~/utils/immersiveRecommendation': await import('../src/utils/immersiveRecommendation'),
+        '~/utils/pageScrollLock': { lockPageScroll() {}, unlockPageScroll() {} },
+      }, { renderTemplate: false })
+      Component.render = () => null
+      let state
+      const app = Vue.createApp({ render: () => Vue.h(Component, { items: [], initialIndex: 0, loading: false, noMoreContent: true, requestFailed: false, trigger, ref: value => state = value?.$?.setupState }) })
+      app.mount(host)
+      state.root = overlay
+      button.focus()
+      state.close()
+      app.unmount()
+      overlay.remove()
+      viewport.scrollTop = 0
+      if (change === 'page')
+        appState.activatedPage.value = 'History'
+      if (change === 'tab')
+        appState.homeActivatedPage.value = 'Popular'
+      if (change === 'account')
+        account = 2
+      if (change === 'scroll')
+        viewport.dispatchEvent(new Event('wheel'))
+      const other = document.body.appendChild(document.createElement('button'))
+      if (change === 'focus')
+        other.focus()
+      await flush()
+      assert.equal(viewport.scrollTop, change === 'none' ? 350 : 0, change)
+      assert.equal(document.activeElement === trigger, change === 'none', change)
+      viewport.remove()
+      trigger.remove()
+      other.remove()
+      host.remove()
+    }
+  })
   check('batch two: Tooltip separates keyboard focus from pointer residue, preserves copied feedback and stays in its Dialog layer', async () => {
     const timers = new Map()
     let id = 0
@@ -289,6 +344,7 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       './ImmersiveVideoFrame.vue': { default: frame },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ activatedPage: Vue.ref('Home'), homeActivatedPage: Vue.ref('ForYou'), mainAppRef: Vue.ref(surface), scrollViewportRef: Vue.ref(viewport) }) },
       '~/logic': { settings: Vue.ref(settings) },
+      '~/logic/loginStatus': await import('../src/logic/loginStatus'),
       '~/utils/immersiveRecommendation': helpers,
       '~/utils/pageScrollLock': { lockPageScroll() {}, unlockPageScroll() {} },
     })
@@ -325,6 +381,7 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       assert.equal(window.location.href, initialHref)
       assert.equal(window.history.state, initialState)
       const staleLoad = loadMore
+      surface.querySelector('[aria-label="common.close"]')?.click()
       app.unmount()
       await flush()
       const count = loads
@@ -354,6 +411,7 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       './ImmersiveVideoFrame.vue': { default: blank },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ activatedPage: Vue.ref('Home'), homeActivatedPage: Vue.ref('ForYou'), mainAppRef: Vue.ref(host), scrollViewportRef: Vue.ref(null) }) },
       '~/logic': { settings },
+      '~/logic/loginStatus': await import('../src/logic/loginStatus'),
       '~/utils/immersiveRecommendation': await import('../src/utils/immersiveRecommendation'),
       '~/utils/pageScrollLock': { lockPageScroll() {}, unlockPageScroll() {} },
     }, { renderTemplate: false })
@@ -414,7 +472,7 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       timers.set(++id, callback)
       return id
     }, clearTimeout: key => timers.delete(key) } })
-    const props = Vue.reactive({ active: false, itemKey: 'one', title: 'One', url: 'https://www.bilibili.com/video/av1' })
+    const props = Vue.reactive({ active: false, uiVisible: true, itemKey: 'one', title: 'One', url: 'https://www.bilibili.com/video/av1' })
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ render: () => Vue.h(Component, { ...props, onAction: value => actions.push(value) }) })
     app.config.globalProperties.$t = key => key
@@ -439,6 +497,16 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       message('status', { layoutReady: true, playing: false })
       await flush()
       assert.equal(host.querySelector('.immersive-frame__loading'), null, 'a paused or autoplay-blocked player is already visible after layout')
+      const selectedPlaybackId = commands.at(-1).playbackId
+      props.uiVisible = false
+      await flush()
+      assert.equal(commands.at(-1).active, true)
+      assert.equal(commands.at(-1).playbackId, selectedPlaybackId)
+      assert.equal(iframe.name, constants.IMMERSIVE_FRAME_NAME)
+      props.uiVisible = true
+      await flush()
+      assert.equal(commands.at(-1).playbackId, selectedPlaybackId, 'visibility does not create a new playback session')
+      assert.equal(host.querySelector('.immersive-frame__loading'), null)
       token = 'replacement'
       message('ended')
       message('next')
@@ -533,7 +601,7 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
     }, { location })
     const stop = module.setupImmersiveFrame(client, () => {})
     assert.equal(subscriptions, 0, 'inactive preparation documents do not own player observers')
-    const configure = extra => window.dispatchEvent(new window.MessageEvent('message', { data: { token: 'current', documentId: 'current-doc', sessionId: 'current-session', playbackId: 1, type: constants.IMMERSIVE_CONFIG, key: 'one', targetUrl: 'https://www.bilibili.com/video/av1', active: true, autoPlay: false, autoNext: true, keyboard: true, wheel: true, ...extra } }))
+    const configure = extra => window.dispatchEvent(new window.MessageEvent('message', { data: { token: 'current', documentId: 'current-doc', sessionId: 'current-session', playbackId: 1, type: constants.IMMERSIVE_CONFIG, key: 'one', targetUrl: 'https://www.bilibili.com/video/av1', active: true, uiVisible: true, autoPlay: false, autoNext: true, keyboard: true, wheel: true, ...extra } }))
     const finish = (current) => {
       Object.defineProperty(current, 'ended', { configurable: true, value: false })
       Object.defineProperty(current, 'paused', { configurable: true, value: false })
@@ -575,9 +643,21 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       assert.equal(sent.filter(data => data.action === 'ended').length, 0, 'an internal part or unrelated media never advances the recommendation queue')
       location.href = 'https://www.bilibili.com/video/av1?p=2'
       route()
+      configure({ uiVisible: false })
+      const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, 'hidden')
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+      assert.equal(documentActive, true, 'background playback retains selected document ownership')
       finish(video)
       await flush()
       assert.equal(sent.filter(data => data.action === 'ended').length, 1)
+      if (hiddenDescriptor)
+        Object.defineProperty(document, 'hidden', hiddenDescriptor)
+      else delete document.hidden
+      const attemptsBeforeVisible = playRequests
+      configure()
+      document.dispatchEvent(new Event('visibilitychange'))
+      assert.equal(playRequests, attemptsBeforeVisible, 'visibility does not restart paused media')
       const oldEnded = listeners.at(-1)
       selected = unrelated
       metadata = { ...metadata, pageCount: 1 }

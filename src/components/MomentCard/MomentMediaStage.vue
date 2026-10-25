@@ -439,11 +439,11 @@ function getImageLabel(index: number) {
   gap: var(--bew-space-1);
   padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-text-1);
   background: var(--bew-selected-bg);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-regular);
   letter-spacing: 0.02em;
 }
 
@@ -570,7 +570,7 @@ function getImageLabel(index: number) {
 }
 
 .moment-media__thumb + .moment-media__thumb {
-  border-inline-start: 1px solid var(--bew-surface-border-color);
+  border-inline-start: var(--bew-hairline) solid var(--bew-edge-color);
 }
 
 .moment-media__thumb > img {

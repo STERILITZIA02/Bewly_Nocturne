@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import ALink from '~/components/ALink.vue'
+import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import { calcTimeSince, numFormatter } from '~/utils/dataFormatter'
 
 interface ArticleCardProps {
@@ -8,6 +9,7 @@ interface ArticleCardProps {
   title: string
   desc?: string
   cover?: string
+  coverFill?: boolean
   author: string
   authorMid?: number
   /** 数字或接口已格式化文案（如 "20.4万"） */
@@ -57,7 +59,7 @@ function formatDate(timestamp: number | string | undefined) {
     :href="articleUrl"
     type="videoCard"
     class="article-card bew-surface-border"
-    flex gap-4 p-4
+    :class="{ 'article-card--cover-fill': coverFill && cover }"
     bg="$bew-elevated"
     rounded="$bew-surface-radius"
     cursor-pointer
@@ -116,7 +118,7 @@ function formatDate(timestamp: number | string | undefined) {
           :key="tag.name"
           text="xs $bew-on-theme-surface"
           bg="$bew-theme-surface"
-          px-2 h-6 inline-flex items-center font-medium
+          px-2 h-6 inline-flex items-center
           rounded="$bew-pill-radius"
         >
           {{ tag.name }}
@@ -140,6 +142,10 @@ function formatDate(timestamp: number | string | undefined) {
         w-full h-full object-cover rounded-inherit
       >
     </div>
+    <div v-if="coverFill && cover" class="article-cover-transition" aria-hidden="true">
+      <ProgressiveBlur class="article-cover-transition__blur" edge="left" />
+      <div class="article-cover-transition__wash" />
+    </div>
   </ALink>
 </template>
 
@@ -148,15 +154,57 @@ function formatDate(timestamp: number | string | undefined) {
 @use "../../styles/contentCard";
 .article-title {
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
 }
 
 .article-card {
-  text-decoration: none;
-  color: inherit;
   display: flex;
+  gap: var(--bew-space-4);
+  padding: var(--bew-space-4);
+  color: inherit;
+  text-decoration: none;
   @include contentCard.surface;
+}
+.article-card--cover-fill {
+  --article-cover-width: min(38%, 180px);
+  position: relative;
+  display: block;
+  padding: 0;
+
+  .article-content {
+    padding: var(--bew-space-4);
+    padding-right: calc(var(--article-cover-width) + var(--bew-space-4));
+  }
+
+  .article-cover {
+    position: absolute;
+    inset: 0 0 0 auto;
+    // The side-by-side layout aligns the cover to the start; on an absolute box
+    // that shrinks it to its content (the image's own height) instead of
+    // filling between the insets, so the cover would stop short or overflow.
+    align-self: stretch;
+    width: var(--article-cover-width);
+    aspect-ratio: auto;
+    border-radius: 0 var(--bew-surface-radius) var(--bew-surface-radius) 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+}
+.article-cover-transition {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(100% - var(--article-cover-width));
+  width: var(--bew-space-10);
+  pointer-events: none;
+}
+.article-cover-transition__blur,
+.article-cover-transition__wash {
+  position: absolute;
+  inset: 0;
+}
+.article-cover-transition__wash {
+  background: linear-gradient(to right, var(--bew-elevated), transparent);
 }
 .article-desc {
   font-size: var(--bew-font-size-body);

@@ -15,7 +15,7 @@ import { PHOTO_VIEWER_SELECTOR } from '~/utils/photoViewer'
  * tooltips, the danmaku mode and settings panels, and the feedback panel.
  */
 const PLAYER_POPOVER_SURFACE = `background: var(--bew-elevated-alt-solid) !important;
-      border: 1px solid var(--bew-surface-border-color) !important;
+      border: var(--bew-hairline, 1px) solid var(--bew-edge-color) !important;
       border-radius: var(--bew-surface-radius) !important;
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-popover-surface-shadow) !important;
@@ -197,8 +197,8 @@ export function injectLayoutStyle() {
       --bewly-widescreen-text-primary: var(--bew-text-1, #18191c);
       --bewly-widescreen-text-secondary: var(--bew-text-2, #61666d);
       --bewly-widescreen-text-muted: var(--bew-text-3, #9499a0);
-      --bewly-widescreen-sidebar-border: var(--bew-surface-border-color);
-      --bewly-widescreen-divider: var(--bew-border-color);
+      --bewly-widescreen-sidebar-border: var(--bew-edge-color);
+      --bewly-widescreen-divider: var(--bew-separator-color);
       --bewly-widescreen-control-bg: var(--bew-fill-1);
       --bewly-widescreen-control-hover-bg: var(--bew-fill-2);
       --bew-comment-expand-all-display: none;
@@ -723,9 +723,9 @@ export function injectLayoutStyle() {
       align-items: center;
       height: var(--bew-space-12);
       padding: 0 var(--bew-space-12) 0 var(--bew-space-4);
-      border-bottom: 1px solid var(--bew-border-color) !important;
+      border-bottom: var(--bew-hairline, 1px) solid var(--bew-separator-color) !important;
       font-size: var(--bew-font-size-title) !important;
-      font-weight: var(--bew-font-weight-medium);
+      font-weight: var(--bew-font-weight-regular);
       line-height: var(--bew-line-height-title) !important;
       text-align: left !important;
     }
@@ -850,7 +850,7 @@ export function injectLayoutStyle() {
       padding: 0 var(--bew-space-2) !important;
       color: var(--bew-text-1) !important;
       background: var(--bew-input-bg) !important;
-      border: 1px solid var(--bew-input-border-color) !important;
+      border: 1px solid var(--bew-field-edge-color) !important;
       border-radius: var(--bew-interactive-radius) !important;
       corner-shape: var(--bew-corner-shape);
       font: inherit !important;
@@ -859,7 +859,7 @@ export function injectLayoutStyle() {
     }
 
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .b-back-panel :is(.b-back-input, .b-back-contact-information-input):hover {
-      border-color: var(--bew-input-border-color-hover) !important;
+      border-color: var(--bew-field-edge-color-hover) !important;
     }
 
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .b-back-panel :is(.b-back-input, .b-back-contact-information-input):focus {
@@ -880,7 +880,7 @@ export function injectLayoutStyle() {
       margin-top: var(--bew-space-4) !important;
       padding: var(--bew-space-4) 0 0 !important;
       border: 0 !important;
-      border-top: 1px solid var(--bew-border-color) !important;
+      border-top: var(--bew-hairline, 1px) solid var(--bew-separator-color) !important;
     }
 
     /* The panel's one primary action keeps the accent; disabled, it is neutral. */
@@ -897,7 +897,7 @@ export function injectLayoutStyle() {
       border: 0 !important;
       border-radius: var(--bew-interactive-radius) !important;
       corner-shape: var(--bew-corner-shape);
-      font-weight: var(--bew-font-weight-medium);
+      font-weight: var(--bew-font-weight-regular);
       line-height: var(--bew-control-height-sm) !important;
       transition:
         filter var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
@@ -1014,7 +1014,7 @@ export function injectLayoutStyle() {
       height: var(--bewly-widescreen-controls-glass-height) !important;
       z-index: calc(var(--bew-z-popover) - 1) !important;
       background: var(--bewly-widescreen-danmaku-bar-bg) !important;
-      border: 1px solid var(--bew-glass-border-color) !important;
+      border: var(--bew-glass-edge-width, 1px) solid var(--bew-glass-edge-color, rgb(255 255 255 / 70%)) !important;
       border-radius: var(--bewly-widescreen-shell-radius) !important;
       corner-shape: var(--bew-corner-shape);
       box-shadow: none !important;
@@ -1152,7 +1152,7 @@ export function injectLayoutStyle() {
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar {
       background: var(--bew-elevated-alt-solid) !important;
-      border: 1px solid var(--bew-surface-border-color) !important;
+      border: var(--bew-hairline, 1px) solid var(--bew-edge-color) !important;
       box-shadow: var(--bew-popover-surface-shadow) !important;
       backdrop-filter: none !important;
       background-clip: padding-box !important;
@@ -1170,7 +1170,7 @@ export function injectLayoutStyle() {
       background: var(--bew-overlay-background) !important;
       border: 0 !important;
       border-radius: var(--bew-pill-radius) !important;
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
       box-shadow: none !important;
       backdrop-filter: none !important;
       font-size: var(--bew-font-size-caption, 12px) !important;
@@ -1380,7 +1380,7 @@ export function injectLayoutStyle() {
       background: transparent !important;
       backdrop-filter: none !important;
       border-radius: var(--bew-pill-radius) !important;
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
       overflow: visible !important;
       transition:
         border-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
@@ -2000,7 +2000,7 @@ export function injectLayoutStyle() {
       color: var(--bew-text-1) !important;
       font-size: var(--bew-font-size-title) !important;
       line-height: var(--bew-line-height-title) !important;
-      font-weight: var(--bew-font-weight-medium) !important;
+      font-weight: var(--bew-font-weight-regular) !important;
       white-space: normal !important;
     }
 
@@ -2145,7 +2145,7 @@ export function injectLayoutStyle() {
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
       font-size: var(--bew-font-size-control);
-      font-weight: var(--bew-font-weight-medium);
+      font-weight: var(--bew-font-weight-regular);
       line-height: var(--bew-line-height-control);
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -2206,7 +2206,7 @@ export function injectLayoutStyle() {
       min-width: 0;
       overflow: hidden;
       font-size: var(--bew-font-size-title);
-      font-weight: var(--bew-font-weight-medium);
+      font-weight: var(--bew-font-weight-regular);
       line-height: var(--bew-line-height-title);
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -2284,7 +2284,7 @@ export function injectLayoutStyle() {
       background: var(--bew-fill-1) !important;
       border: 0 !important;
       border-radius: var(--bew-pill-radius) !important;
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
       font-size: var(--bew-font-size-control) !important;
       font-weight: var(--bew-font-weight-regular) !important;
       line-height: var(--bew-line-height-control) !important;
@@ -2324,6 +2324,7 @@ export function injectLayoutStyle() {
       outline: var(--bew-focus-ring, 1px solid CanvasText);
       outline-offset: 2px;
       border-radius: var(--bew-pill-radius);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     #${ROOT_ID} .bewly-widescreen-description-slot.is-empty {
@@ -2419,9 +2420,9 @@ export function injectLayoutStyle() {
       color: var(--bewly-widescreen-text-secondary);
       background: var(--bewly-widescreen-control-bg);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
       font-size: var(--bew-font-size-caption);
-      font-weight: var(--bew-font-weight-medium);
+      font-weight: var(--bew-font-weight-regular);
       line-height: var(--bew-line-height-caption);
     }
 
@@ -2463,23 +2464,48 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot #arc_toolbar_report {
-      flex-wrap: nowrap;
-      gap: 0;
+      display: grid !important;
+      grid-template-columns: minmax(0, max-content) max-content;
+      align-items: start !important;
+      column-gap: var(--bew-space-2);
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left {
-      display: block !important;
+      display: grid !important;
+      grid-template-columns: subgrid;
+      grid-template-rows: subgrid;
+      grid-column: 1 / -1;
+      grid-row: 1 / span 2;
+      width: auto !important;
       min-width: 0 !important;
       flex: 0 1 auto !important;
       overflow: visible !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-main {
+      grid-area: 1 / 1;
       display: flex !important;
+      flex-wrap: wrap;
+      gap: var(--bew-space-2);
       align-items: center !important;
       width: auto !important;
       min-width: 0 !important;
       overflow: visible !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-action-slot .video-owner-state {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      display: flex !important;
+      flex-wrap: wrap !important;
+      justify-content: flex-start !important;
+      gap: var(--bew-space-2) !important;
+      width: auto !important;
+      margin: var(--bew-space-2) 0 0 !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-action-slot .video-owner-state-item {
+      margin: 0 !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap {
@@ -2487,12 +2513,8 @@ export function injectLayoutStyle() {
       position: relative !important;
       min-width: 0 !important;
       width: auto !important;
-      margin: 0 var(--bew-space-2) 0 0 !important;
+      margin: 0 !important;
       overflow: visible !important;
-    }
-
-    #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap:last-child {
-      margin-right: 0 !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item,
@@ -2516,7 +2538,7 @@ export function injectLayoutStyle() {
       background: var(--bewly-widescreen-control-bg) !important;
       font-size: var(--bew-font-size-control, 13px) !important;
       line-height: var(--bew-line-height-control, 18px) !important;
-      font-weight: var(--bew-font-weight-medium) !important;
+      font-weight: var(--bew-font-weight-regular) !important;
       min-height: var(--bew-control-height, 36px) !important;
       white-space: nowrap !important;
       text-align: center !important;
@@ -2670,10 +2692,11 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-right {
+      grid-area: 1 / 2;
       display: flex !important;
       align-items: center !important;
       flex: 0 0 auto !important;
-      margin-left: var(--bew-space-2) !important;
+      margin: 0 !important;
       padding: 0 !important;
       background: transparent !important;
       border: 0 !important;
@@ -2789,7 +2812,7 @@ export function injectLayoutStyle() {
 
     #${ROOT_ID} .bewly-widescreen-up-slot .up-name {
       font-size: var(--bew-font-size-title) !important;
-      font-weight: var(--bew-font-weight-medium) !important;
+      font-weight: var(--bew-font-weight-regular) !important;
       line-height: var(--bew-line-height-title) !important;
     }
 
@@ -2833,7 +2856,7 @@ export function injectLayoutStyle() {
       border-radius: var(--bew-interactive-radius) !important;
       corner-shape: var(--bew-corner-shape);
       font-size: var(--bew-font-size-control) !important;
-      font-weight: var(--bew-font-weight-medium) !important;
+      font-weight: var(--bew-font-weight-regular) !important;
       line-height: var(--bew-line-height-control) !important;
       transition:
         background-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
@@ -2941,7 +2964,7 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-panel-error button {
       min-height: var(--bew-control-height);
       padding: 0 var(--bew-space-3);
-      border: 1px solid var(--bew-surface-border-color);
+      border: var(--bew-hairline, 1px) solid var(--bew-edge-color);
       border-radius: var(--bew-interactive-radius);
       background: var(--bew-elevated);
       color: var(--bew-text-1);
@@ -3323,7 +3346,7 @@ export function injectLayoutStyle() {
       padding: 0 var(--bew-space-2, 8px);
       color: var(--bew-text-2);
       background: transparent;
-      border: 1px solid var(--bew-surface-border-color);
+      border: var(--bew-hairline, 1px) solid var(--bew-edge-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
       box-shadow: none;
@@ -3331,7 +3354,7 @@ export function injectLayoutStyle() {
       cursor: pointer;
       font-family: var(--bew-font-family);
       font-size: var(--bew-font-size-control, 13px);
-      font-weight: var(--bew-font-weight-medium, 500);
+      font-weight: var(--bew-font-weight-regular, 400);
       line-height: var(--bew-line-height-control, 18px);
       transition:
         color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
@@ -3373,11 +3396,11 @@ export function injectLayoutStyle() {
       flex: 0 0 auto !important;
       color: var(--bew-text-2) !important;
       background: transparent !important;
-      border: 1px solid var(--bew-surface-border-color) !important;
+      border: var(--bew-hairline, 1px) solid var(--bew-edge-color) !important;
       border-radius: var(--bew-interactive-radius) !important;
       corner-shape: var(--bew-corner-shape);
       font-size: var(--bew-font-size-control, 13px) !important;
-      font-weight: var(--bew-font-weight-medium, 500) !important;
+      font-weight: var(--bew-font-weight-regular, 400) !important;
       line-height: var(--bew-line-height-control, 18px) !important;
       white-space: nowrap !important;
       transition:
@@ -3635,7 +3658,7 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-panel-playlist .rec-title .title-txt {
       color: var(--bew-text-1) !important;
       font-size: var(--bew-font-size-title) !important;
-      font-weight: var(--bew-font-weight-medium) !important;
+      font-weight: var(--bew-font-weight-regular) !important;
       line-height: var(--bew-line-height-title) !important;
     }
 
@@ -3663,7 +3686,7 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-panel-playlist .video-pod__header .header-top .title {
       color: var(--bew-text-1) !important;
       font-size: var(--bew-font-size-title) !important;
-      font-weight: var(--bew-font-weight-medium) !important;
+      font-weight: var(--bew-font-weight-regular) !important;
       line-height: var(--bew-line-height-title) !important;
     }
 
@@ -3679,7 +3702,7 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-panel-playlist .video-pod ~ :is(.recommend-list-v1, .recommend-list) {
       margin-top: var(--bew-space-3) !important;
       padding-top: var(--bew-space-4) !important;
-      border-top: 1px solid var(--bew-border-color) !important;
+      border-top: var(--bew-hairline, 1px) solid var(--bew-separator-color) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-playlist .video-pod ~ :is(.recommend-list-v1, .recommend-list)::before {
@@ -3688,7 +3711,7 @@ export function injectLayoutStyle() {
       margin-bottom: var(--bew-space-3);
       color: var(--bew-text-2);
       font-size: var(--bew-font-size-control);
-      font-weight: var(--bew-font-weight-medium);
+      font-weight: var(--bew-font-weight-regular);
       line-height: var(--bew-line-height-control);
     }
 

@@ -38,12 +38,6 @@
   transform: translateY(-100%);
 }
 
-:deep(.search-bar) {
-  input:not(:focus, :focus-within) {
-    --uno: "!border-$bew-surface-border-color !shadow-$bew-shadow-1";
-  }
-}
-
 .right-side {
   .others {
     display: flex;
@@ -150,7 +144,7 @@
     transition: transform var(--bew-duration-moderate) var(--bew-ease-standard);
 
     &::before {
-      @include sidebarSurface.floating;
+      @include sidebarSurface.floating(round);
       position: absolute;
       inset: 0;
       pointer-events: none;
@@ -277,6 +271,8 @@
       width: var(--bew-control-height);
       height: var(--bew-control-height);
       border-radius: var(--bew-control-radius);
+      // Nested in the tools capsule's ends: the capsule's shape keeps them concentric.
+      corner-shape: var(--bew-corner-shape-capsule);
       font-size: var(--bew-control-icon-size);
     }
 

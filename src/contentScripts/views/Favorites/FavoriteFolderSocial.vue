@@ -53,10 +53,11 @@ const { t } = useI18n()
     padding: var(--bew-space-1) var(--bew-space-3);
     border: 0;
     border-radius: var(--bew-pill-radius);
+    corner-shape: var(--bew-corner-shape-capsule);
     background: var(--bew-fill-1);
     color: var(--bew-text-2);
     font-size: var(--bew-font-size-control);
-    font-weight: var(--bew-font-weight-medium);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-control);
     cursor: pointer;
     transition:

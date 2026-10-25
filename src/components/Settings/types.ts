@@ -3,6 +3,7 @@ export enum MenuType {
   BewlyPages = 'BewlyPages',
   BewlyComponents = 'BewlyComponents',
   Bilibili = 'Bilibili',
+  Playback = 'Playback',
   Appearance = 'Appearance',
   About = 'About',
 }

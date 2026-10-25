@@ -96,7 +96,7 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       assert.equal(backdropOf(owner), 'var(--bew-filter-glass-1)')
       // JSDOM also leaves border shorthands containing var() unresolved.
       const border = [...style.sheet.cssRules].findLast(rule => rule.selectorText && rule.style.getPropertyValue('border') && owner.matches(rule.selectorText))?.style.getPropertyValue('border')
-      assert.equal(border, '1px solid var(--bew-glass-border-color)', 'surfaces keep their own frame')
+      assert.equal(border, 'var(--bew-glass-edge-width) solid var(--bew-glass-edge-color)', 'glass surfaces draw the glass rim')
       assert.equal(owner.querySelector('svg filter, [data-bew-liquid-glass]'), null)
     }
     assert.equal(host.querySelector('[data-bew-liquid-glass]'), null)

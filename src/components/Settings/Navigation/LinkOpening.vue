@@ -8,7 +8,7 @@ import SettingsItem from '../components/SettingsItem.vue'
 import SettingsItemGroup from '../components/SettingsItemGroup.vue'
 
 const props = defineProps<{
-  scope: 'topBar' | 'videoCard'
+  scope: 'topBar' | 'videoCard' | 'search'
 }>()
 
 const { t } = useI18n()
@@ -83,7 +83,7 @@ const videoCardOpenModeOptions = computed(() => {
       />
     </SettingsItem>
     <SettingsItem
-      v-if="props.scope === 'topBar'" setting-id="settings.search_bar_link_opening_behavior"
+      v-if="props.scope === 'search'" setting-id="settings.search_bar_link_opening_behavior"
       :title="$t('settings.search_bar_link_opening_behavior')"
       :desc="`${$t('settings.link_opening_behavior_desc')} ${$t('settings.current_tab_if_homepage_desc')}`"
       right-width="auto"

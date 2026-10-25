@@ -43,7 +43,7 @@ const elements = computed<ContentElement[]>(() => [
 <style lang="scss" scoped>
 .video-card-content-editor {
   padding: var(--bew-space-3) 0;
-  border-bottom: 1px solid var(--bew-border-color);
+  border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
 }
 
 .content-row {

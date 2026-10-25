@@ -207,8 +207,8 @@ onMounted(() => emit('scrollElement', scroller.value))
   flex: none;
 }
 .following-sidebar__scroll {
-  // Its bottom is the screen edge, which needs no fade.
-  @include scrollEdgeFade.vertical($bottom: false);
+  // A rail never fades; its bottom is the screen edge, which needs no line.
+  @include scrollEdgeFade.lines($bottom: false);
   flex: 1;
   min-height: 0;
   padding: var(--bew-space-1);
@@ -249,7 +249,7 @@ onMounted(() => emit('scrollElement', scroller.value))
   text-align: start;
   cursor: pointer;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   transition:
     background-color var(--bew-duration-fast),
@@ -318,7 +318,7 @@ onMounted(() => emit('scrollElement', scroller.value))
   gap: var(--bew-space-2);
   min-height: var(--bew-control-height);
   color: var(--bew-text-2);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
 }
 .following-sidebar__group-name {
   flex: 1;

@@ -9,7 +9,7 @@ const props = defineProps<{
 
 const storageKey = 'bewly-settings-bewly-pages-page'
 const legacyStorageKey = 'bewly-settings-navigation-page'
-const pageValues = ['home', 'moments', 'watch-later', 'search', 'playback', 'messages']
+const pageValues = ['page-modes', 'home', 'moments', 'lists', 'search', 'messages']
 const legacyPage = sessionStorage.getItem(legacyStorageKey)
 
 if (!sessionStorage.getItem(storageKey) && legacyPage && pageValues.includes(legacyPage))
@@ -18,6 +18,7 @@ if (!pageValues.includes(sessionStorage.getItem(storageKey) ?? ''))
   sessionStorage.setItem(storageKey, pageValues[0])
 
 const pages = [
+  { value: 'page-modes', titleKey: 'settings.page_mode', descriptionKey: 'settings.page_mode_desc', icon: 'i-tabler:adjustments-horizontal', iconActivated: 'i-tabler:adjustments-horizontal', component: defineAsyncComponent(() => import('./PageModes.vue')) },
   {
     value: 'home',
     titleKey: 'settings.plugin.home',
@@ -35,12 +36,12 @@ const pages = [
     component: defineAsyncComponent(() => import('../PluginComponentsAndPages/Moments/Moments.vue')),
   },
   {
-    value: 'watch-later',
-    titleKey: 'settings.plugin.watch_later_page',
-    descriptionKey: 'settings.category_navigation_watch_later_page_desc',
+    value: 'lists',
+    titleKey: 'settings.list_layouts',
+    descriptionKey: 'settings.list_layouts_desc',
     icon: 'i-tabler:playlist',
     iconActivated: 'i-tabler:playlist',
-    component: defineAsyncComponent(() => import('../PluginComponentsAndPages/WatchLaterPage/WatchLaterPage.vue')),
+    component: defineAsyncComponent(() => import('./ListLayouts.vue')),
   },
   {
     value: 'search',
@@ -50,14 +51,7 @@ const pages = [
     iconActivated: 'i-tabler:search',
     component: defineAsyncComponent(() => import('../PluginComponentsAndPages/SearchPage/SearchPage.vue')),
   },
-  {
-    value: 'playback',
-    titleKey: 'settings.plugin.playback_page',
-    descriptionKey: 'settings.category_navigation_playback_page_desc',
-    icon: 'i-tabler:player-play',
-    iconActivated: 'i-tabler:player-play-filled',
-    component: defineAsyncComponent(() => import('../PluginComponentsAndPages/PlaybackPage/PlaybackPage.vue')),
-  },
+
   {
     value: 'messages',
     titleKey: 'settings.plugin.messages_page',

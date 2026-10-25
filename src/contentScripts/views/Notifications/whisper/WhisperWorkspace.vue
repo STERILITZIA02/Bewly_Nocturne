@@ -576,7 +576,7 @@ defineExpose({ refresh })
   box-sizing: border-box;
   overflow: hidden;
   background: var(--bew-glass-tint);
-  border: 1px solid var(--bew-glass-border-color);
+  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
   border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-shadow-2);
@@ -594,7 +594,7 @@ defineExpose({ refresh })
   flex-direction: column;
   padding-top: var(--bew-top-bar-height);
   border: 0;
-  border-inline-end: 1px solid var(--bew-surface-border-color);
+  border-inline-end: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: 0;
 }
 
@@ -709,7 +709,7 @@ defineExpose({ refresh })
 .whisper-workspace__inline-error button {
   color: var(--bew-theme-color);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
 }

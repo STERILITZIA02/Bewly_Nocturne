@@ -563,7 +563,7 @@ const weekDays = computed(() => [
   padding: 0 var(--bew-space-8) 0 var(--bew-space-2);
   background: var(--bew-fill-1);
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   color: var(--bew-text-3);
@@ -592,7 +592,6 @@ const weekDays = computed(() => [
 
   &:focus {
     background: var(--bew-fill-2);
-    border-color: var(--bew-focus-ring-color);
   }
 }
 
@@ -687,7 +686,7 @@ const weekDays = computed(() => [
   min-width: 60px;
   text-align: center;
   font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-body);
   color: var(--bew-text-1);
 }
@@ -735,7 +734,7 @@ const weekDays = computed(() => [
   height: var(--bew-date-picker-day-size);
   font-size: var(--bew-font-size-control);
   color: var(--bew-text-3);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
 }
 
 .picker-days {
@@ -756,7 +755,7 @@ const weekDays = computed(() => [
   corner-shape: var(--bew-corner-shape);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition:
@@ -804,7 +803,7 @@ const weekDays = computed(() => [
   display: flex;
   justify-content: space-between;
   padding-top: var(--bew-space-2);
-  border-top: 1px solid var(--bew-border-color);
+  border-top: var(--bew-hairline) solid var(--bew-separator-color);
 }
 
 .footer-btn {
@@ -815,7 +814,7 @@ const weekDays = computed(() => [
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   cursor: pointer;
   &:disabled {

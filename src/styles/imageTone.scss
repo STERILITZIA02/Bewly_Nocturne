@@ -1,0 +1,35 @@
+// Surfaces that take an image's colour (`useImageTone`): a portrait moment
+// card under its picture, a quote under its own, a library hero under its
+// cover. The two colours are registered (`registerToneProperties`), so reading
+// one, or switching to an image with another, eases every derived colour.
+$tone-transition:
+  --moment-tone var(--bew-duration-moderate) var(--bew-ease-standard),
+  --moment-tone-fg var(--bew-duration-moderate) var(--bew-ease-standard);
+
+@mixin toned-surface {
+  --bew-elevated-over-page: var(--moment-tone);
+  --bew-elevated-solid: color-mix(in srgb, var(--moment-tone-fg) 8%, var(--moment-tone));
+  --bew-neutral-fg: var(--moment-tone-fg);
+  --bew-text-1: var(--moment-tone-fg);
+  --bew-text-2: color-mix(in srgb, var(--moment-tone-fg) 80%, transparent);
+  --bew-text-3: color-mix(in srgb, var(--moment-tone-fg) 70%, transparent);
+  --bew-text-4: color-mix(in srgb, var(--moment-tone-fg) 50%, transparent);
+  --bew-fill-1: color-mix(in srgb, var(--moment-tone-fg) 6%, transparent);
+  --bew-fill-2: color-mix(in srgb, var(--moment-tone-fg) 10%, transparent);
+  --bew-fill-3: color-mix(in srgb, var(--moment-tone-fg) 15%, transparent);
+  --bew-fill-4: color-mix(in srgb, var(--moment-tone-fg) 22%, transparent);
+  --bew-separator-color: color-mix(in srgb, var(--moment-tone-fg) 16%, transparent);
+  --bew-edge-color: color-mix(in srgb, var(--moment-tone-fg) 18%, transparent);
+  --bew-hover-bg: color-mix(in srgb, var(--moment-tone-fg) 8%, transparent);
+  --bew-selected-bg: color-mix(in srgb, var(--moment-tone-fg) 12%, transparent);
+  --bew-theme-foreground: var(--moment-tone-fg);
+  // Glass stays glass: the solid tint takes the tone, and the glass tint is it
+  // at the global glass opacity, as the shared tokens are built. Inherited
+  // tints were resolved against the page's solid tint, so all four are set.
+  --bew-glass-tint-solid: color-mix(in srgb, var(--moment-tone-fg) 10%, var(--moment-tone));
+  --bew-glass-tint-solid-hover: color-mix(in srgb, var(--moment-tone-fg) 7%, var(--bew-glass-tint-solid));
+  --bew-glass-tint: rgb(from var(--bew-glass-tint-solid) r g b / var(--bew-content-opacity));
+  --bew-glass-tint-hover: rgb(from var(--bew-glass-tint-solid-hover) r g b / var(--bew-content-opacity));
+  color: var(--bew-text-1);
+  color-scheme: var(--moment-tone-scheme);
+}

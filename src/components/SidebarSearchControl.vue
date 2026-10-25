@@ -86,16 +86,13 @@ defineExpose({ focus })
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-  border: 1px solid var(--bew-input-border-color);
+  border: 1px solid var(--bew-field-edge-color);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   background: var(--bew-content-solid);
 }
 .library-search-field:hover {
-  border-color: var(--bew-input-border-color-hover);
-}
-.library-search-field:focus-within {
-  border-color: var(--bew-focus-ring-color);
+  border-color: var(--bew-field-edge-color-hover);
 }
 .library-search-field input {
   flex: 1 1 auto;
@@ -121,6 +118,7 @@ defineExpose({ focus })
   padding: 0;
   border: 0;
   border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-text-2);
   background: transparent;
   transition: color var(--bew-duration-normal) var(--bew-ease-standard);

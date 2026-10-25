@@ -160,7 +160,7 @@ watch(() => props.item.id, () => {
   margin: 0;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
   overflow-wrap: anywhere;
 }
@@ -215,7 +215,7 @@ watch(() => props.item.id, () => {
   margin-top: var(--bew-space-2);
   color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
 }

@@ -1,6 +1,7 @@
 import { computed, onActivated, onScopeDispose, ref, watch } from 'vue'
 
 import type { HomeTabState } from '~/composables/useHomeTabState'
+import { settings } from '~/logic'
 import { uploaderLatestVideoTimes, uploaderLatestVideoTimesReady } from '~/logic/uploaderLatestVideoTimes'
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import type { AccountId } from '~/utils/accountScope'
@@ -48,8 +49,8 @@ export function useFollowingDirectory(state: HomeTabState, getAccountId: () => A
   function sortedUploaders(items: FollowingUploader[], excludeMid = context.selected(), blocked?: Set<number>) {
     if (excludeMid !== null)
       return items
-    const blockedIds = blocked ?? context.blocked()
-    const next = [...items].sort((a, b) => Number(blockedIds.has(a.mid)) - Number(blockedIds.has(b.mid)) || b.lastUpdateTime - a.lastUpdateTime)
+    const blockedIds = settings.value.enableFollowingInactiveBlacklist ? blocked ?? context.blocked() : undefined
+    const next = [...items].sort((a, b) => Number(blockedIds?.has(a.mid) ?? false) - Number(blockedIds?.has(b.mid) ?? false) || b.lastUpdateTime - a.lastUpdateTime)
     return next.some((item, index) => item !== items[index]) ? next : items
   }
   function sort(excludeMid = context.selected()) {
@@ -57,6 +58,7 @@ export function useFollowingDirectory(state: HomeTabState, getAccountId: () => A
     if (next !== uploaders.value)
       uploaders.value = next
   }
+  watch(() => settings.value.enableFollowingInactiveBlacklist, () => sort())
 
   function withUpdateStatus(uploader: FollowingUploader, viewed: Record<number, number>, now: number) {
     const hasUpdate = uploader.hasPostTime && uploader.lastUpdateTime > (viewed[uploader.mid] ?? 0)
@@ -64,7 +66,7 @@ export function useFollowingDirectory(state: HomeTabState, getAccountId: () => A
     return hasUpdate === uploader.hasUpdate ? uploader : { ...uploader, hasUpdate }
   }
 
-  function updateStatus(viewed = context.viewed(), blocked = context.blocked()) {
+  function updateStatus(viewed = context.viewed(), blocked = settings.value.enableFollowingInactiveBlacklist ? context.blocked() : undefined) {
     const now = Date.now()
     const next = sortedUploaders(uploaders.value.map(uploader => withUpdateStatus(uploader, viewed, now)), context.selected(), blocked)
     if (next.some((user, index) => user !== uploaders.value[index]))

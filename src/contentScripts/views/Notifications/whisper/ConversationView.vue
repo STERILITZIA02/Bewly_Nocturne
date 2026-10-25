@@ -840,7 +840,7 @@ defineExpose({
   padding: 0;
   color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
   appearance: none;
@@ -893,7 +893,7 @@ defineExpose({
   z-index: 4;
   padding: var(--bew-space-2);
   background: var(--bew-glass-tint);
-  border: 1px solid var(--bew-glass-border-color);
+  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
   border-radius: var(--bew-modal-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: none;
@@ -982,7 +982,7 @@ defineExpose({
   padding: 0;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
   appearance: none;
   cursor: pointer;

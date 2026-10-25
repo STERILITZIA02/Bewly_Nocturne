@@ -99,7 +99,7 @@ defineExpose({ focusHeading })
 .conversation-original-fallback__header strong {
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
   @include truncateFade.line;
 }
@@ -127,7 +127,7 @@ defineExpose({ focusHeading })
 .conversation-original-fallback__link {
   color: var(--bew-theme-color);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
 }

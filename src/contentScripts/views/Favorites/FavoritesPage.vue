@@ -5,9 +5,12 @@ import { useToast } from 'vue-toastification'
 import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
 import ArticleCardSkeleton from '~/components/ArticleCard/ArticleCardSkeleton.vue'
 import Button from '~/components/Button.vue'
+import ContextMenu from '~/components/ContextMenu.vue'
 import Dialog from '~/components/Dialog.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
+import LibraryBleedStrip from '~/components/LibraryBleedStrip.vue'
+import LibraryHero from '~/components/LibraryHero.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
@@ -34,7 +37,7 @@ import {
   FAVORITE_SEASON_PAGE_SIZE,
   resolveFavoriteSeasonPlayAllUrl,
 } from '~/utils/favoriteSeason'
-import { getCSRF, getUserID, openLinkToNewTab } from '~/utils/main'
+import { getCSRF, getUserID, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
 
 import { transformFavoriteArticle, transformFavoriteItem } from './favoriteAdapters'
 import type { FavoriteFilterQuery } from './favoriteFilter'
@@ -61,7 +64,7 @@ const { confirm: showConfirmDialog } = useConfirmDialog()
 type BatchTransferAction = 'copy' | 'move'
 type SidebarManageSection = 'folder' | 'season'
 
-const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
+const { handlePageRefresh, handleReachBottom, haveScrollbar, openSettingsAt } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
 const data = useFavoritesData({ api: api.favorite, getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null, haveScrollbar, t })
@@ -90,6 +93,17 @@ const filterActive = computed(() => favoriteView.value === 'video' && filterScan
 const filterStatus = filterScan.status
 const managedResources = computed(() => filterActive.value ? filterScan.items.value : favoriteResources)
 const filterUploaders = computed(() => collectFavoriteUploaders([...favoriteResources, ...filterScan.items.value]))
+// The strip over the content: this folder's uploaders, each a one-tap filter.
+const showUploaderStrip = computed(() => favoriteView.value === 'video' && Boolean(currentFolderId.value) && filterUploaders.value.length > 1)
+function isStripUploader(mid: number) {
+  const { mids } = filterScan.applied.value
+  return mids.length === 1 && mids[0] === mid
+}
+function selectStripUploader(mid?: number) {
+  applyFavoriteFilter({ ...filterScan.applied.value, mids: mid === undefined || isStripUploader(mid) ? [] : [mid] })
+}
+// The hero's cover: the folder's own, else its first item's.
+const heroImage = computed(() => folderInfo.value?.cover || visibleResources.value[0]?.cover || '')
 const ownFolder = computed(() => Boolean(folderInfo.value && String(folderInfo.value.mid || folderInfo.value.upper.mid) === String(accountId.value)))
 
 const isResolvingSeasonPlayAll = ref<boolean>(false)
@@ -147,6 +161,13 @@ const selectedContentCount = computed(() => {
 const isInitialSidebarLoading = computed(() => favoriteView.value === 'video'
   ? categoryState.loading && !favoriteCategories.length
   : favoriteView.value === 'season' && subscriptionState.loading && !collectedFavoriteSeasons.length)
+// While a folder's first page loads, the strip is held by tiles of the same
+// size, so the head and grid do not jump when the uploaders arrive.
+const uploaderStripPending = computed(() => favoriteView.value === 'video' && !filterUploaders.value.length && !filterActive.value && !keyword.value.trim()
+  && (isInitialSidebarLoading.value || (Boolean(currentFolderId.value) && (isLoading.value || isFullPageLoading.value))))
+// Until the folder or its first page arrives, the cover band is held.
+const heroMediaPending = computed(() => favoriteView.value !== 'article' && !heroImage.value
+  && (isInitialSidebarLoading.value || folderInfoLoading.value || ((isLoading.value || isFullPageLoading.value) && !visibleResources.value.length)))
 const favoriteGridStateKey = computed(() => `${accountId.value}:${favoriteView.value === 'season' && selectedSeason.value
   ? getFavoriteSourceKey(selectedSeason.value)
   : `folder:${selectedCategory.value?.id ?? ''}`}:${contentVersion.value}`)
@@ -188,6 +209,35 @@ const batchTransferDialogDesc = computed(() => {
 })
 
 const defaultFolderId = computed(() => favoriteCategories[0]?.id)
+
+// The open folder card's action row: Play All, a few icons, and the rest in
+// one "more" menu (no stack of full-width buttons).
+interface FolderMenuAction { value: string, label: string, icon: string, danger?: boolean, disabled?: boolean, run: () => void }
+const folderMenu = shallowRef<{ anchor: { x: number, y: number }, trigger: HTMLElement, actions: FolderMenuAction[] }>()
+function openFolderMenu(event: MouseEvent, actions: FolderMenuAction[]) {
+  const trigger = event.currentTarget as HTMLElement
+  const rect = trigger.getBoundingClientRect()
+  folderMenu.value = { anchor: { x: rect.right, y: rect.bottom }, trigger, actions }
+}
+function runFolderMenu(value: string | number) {
+  folderMenu.value?.actions.find(action => action.value === value)?.run()
+}
+function getFolderMenuActions(item: CategoryItem): FolderMenuAction[] {
+  const busy = isSidebarOperating.value
+  const removable = item.id !== defaultFolderId.value
+  return [
+    ...(removable ? [{ value: 'pin', label: t('favorites.pin_folder'), icon: 'i-tabler:pin', disabled: busy || favoriteCategories[1]?.id === item.id, run: () => void folders.pin(item.id) }] : []),
+    { value: 'edit', label: t('favorites.edit_folder'), icon: 'i-tabler:edit', disabled: busy, run: () => void openSingleEditFolder(item.id) },
+    { value: 'clean', label: t('favorites.clean_invalid'), icon: 'i-tabler:trash-x', disabled: busy, run: () => void folders.clean(item.id) },
+    ...(removable ? [{ value: 'delete', label: t('common.operation.delete'), icon: 'i-tabler:trash', danger: true, disabled: busy, run: () => void deleteFolders([item.id]) }] : []),
+  ]
+}
+function getSeasonMenuActions(item: CollectedFavoriteSeason): FolderMenuAction[] {
+  return [
+    { value: 'mode', label: t('settings.collected_season_play_all_mode'), icon: 'i-tabler:adjustments-horizontal', run: () => openSettingsAt({ category: 'playback', page: 'behavior', settingId: 'settings.collected_season_play_all_mode' }) },
+    { value: 'unfavorite', label: t('favorites.unfavorite'), icon: 'i-tabler:star-off', danger: true, disabled: isSidebarOperating.value, run: () => void unfavSeasons([{ id: item.id, type: item.type }]) },
+  ]
+}
 const editableFolderIds = computed(() => favoriteCategories.filter(item => item.id !== defaultFolderId.value).map(item => item.id))
 const selectedFolderCount = computed(() => selectedFolderIds.value.length)
 const selectedSeasonCount = computed(() => selectedSeasonKeys.value.length)
@@ -641,40 +691,21 @@ function requestPartitions() {
   void filterScan.loadPartitions()
 }
 
+// A filter scan reads further pages as the grid asks for more; retrying a
+// failed or stalled scan continues from where it stopped.
 function handleFavoriteGridLoadMore() {
   if (filterActive.value)
-    return
-  void loadNextPage()
+    filterScan.continueScan()
+  else
+    void loadNextPage()
 }
 
 function handleFavoriteGridRefresh() {
-  if (filterActive.value) {
-    if (filterStatus.value === 'failed' || filterStatus.value === 'stalled')
-      filterScan.continueScan()
-    return
-  }
-  void retryFavoriteContent()
+  if (filterActive.value)
+    filterScan.continueScan()
+  else
+    void retryFavoriteContent()
 }
-
-const filterStatusText = computed(() => {
-  const count = filterScan.items.value.length
-  switch (filterStatus.value) {
-    case 'scanning':
-      return t('favorites.filter_status_scanning', { count, scanned: filterScan.scannedItems.value })
-    case 'paused':
-      return t('favorites.filter_status_paused', { count })
-    case 'budget':
-      return t('favorites.filter_status_budget', { count, scanned: filterScan.scannedItems.value })
-    case 'complete':
-      return t('favorites.filter_status_complete', { count })
-    case 'failed':
-      return t('favorites.filter_status_failed', { count })
-    case 'stalled':
-      return t('favorites.filter_status_stalled', { count })
-    default:
-      return ''
-  }
-})
 
 watch(() => [favoriteView.value, searchScope.value, selectedCategory.value?.id, videoOrder.value, categoryState.loaded, searchScope.value === 'all' ? favoriteCategories.map(item => item.id).join(',') : ''] as const, () => {
   if (filterScan.active.value)
@@ -743,19 +774,47 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 <template>
   <LibraryWorkspace v-if="getCSRF()" :label="t('topbar.favorites')">
     <main class="favorites-old-main">
-      <h3 class="bew-page-heading favorites-main-heading">
-        <SkeletonBlock v-if="isInitialSidebarLoading" width="12em" height="1lh" />
-        <template v-else>
-          {{ selectedContentTitle }}<template v-if="selectedContentCount !== undefined">
-            ({{ selectedContentCount }})
+      <section v-if="showUploaderStrip || uploaderStripPending" class="favorite-uploader-strip" :aria-label="t('library_tools.uploaders')" :aria-busy="!showUploaderStrip">
+        <LibraryBleedStrip v-if="!showUploaderStrip" :label="t('library_tools.uploaders')">
+          <span v-for="index in 10" :key="index" class="favorite-uploader-strip__item favorite-uploader-strip__item--skeleton" data-bew-skeleton-group aria-hidden="true">
+            <SkeletonBlock width="var(--favorite-uploader-tile)" height="var(--favorite-uploader-tile)" radius="media" />
+            <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
+          </span>
+        </LibraryBleedStrip>
+        <LibraryBleedStrip v-else :label="t('library_tools.uploaders')">
+          <button
+            type="button" class="favorite-uploader-strip__item" :aria-pressed="!filterScan.applied.value.mids.length"
+            :disabled="isBatchOperating" @click="selectStripUploader()"
+          >
+            <span class="favorite-uploader-strip__avatar favorite-uploader-strip__avatar--all" aria-hidden="true"><i i-tabler:users /></span>
+            <span class="favorite-uploader-strip__name">{{ t('library_tools.all_uploaders') }}</span>
+          </button>
+          <button
+            v-for="uploader in filterUploaders" :key="uploader.mid" type="button" class="favorite-uploader-strip__item"
+            :aria-pressed="isStripUploader(uploader.mid)" :title="uploader.name" :disabled="isBatchOperating" @click="selectStripUploader(uploader.mid)"
+          >
+            <span class="favorite-uploader-strip__avatar" aria-hidden="true">
+              <img v-if="uploader.face" :src="removeHttpFromUrl(`${uploader.face}@160w_160h_1c.webp`)" alt="" loading="lazy" decoding="async">
+            </span>
+            <span class="favorite-uploader-strip__name">{{ uploader.name }}</span>
+          </button>
+        </LibraryBleedStrip>
+      </section>
+      <LibraryHero :image="heroImage" :media-pending="heroMediaPending" :label="selectedContentTitle" class="favorites-hero">
+        <h3 class="bew-page-heading favorites-main-heading">
+          <SkeletonBlock v-if="isInitialSidebarLoading" width="12em" height="1lh" />
+          <template v-else>
+            {{ selectedContentTitle }}<template v-if="selectedContentCount !== undefined">
+              ({{ selectedContentCount }})
+            </template>
           </template>
-        </template>
-      </h3>
-      <FavoriteFolderSocial
-        v-if="currentFolderId" :info="folderInfo" :own="ownFolder" :pending="isSidebarOperating" :loading="folderInfoLoading"
-        :failed="folderInfoFailed"
-        @like="folders.interact('like')" @subscribe="folders.interact('subscribe')" @share="shareFolder" @retry="folders.refreshInfo"
-      />
+        </h3>
+        <FavoriteFolderSocial
+          v-if="currentFolderId" :info="folderInfo" :own="ownFolder" :pending="isSidebarOperating" :loading="folderInfoLoading"
+          :failed="folderInfoFailed"
+          @like="folders.interact('like')" @subscribe="folders.interact('subscribe')" @share="shareFolder" @retry="folders.refreshInfo"
+        />
+      </LibraryHero>
 
       <Empty
         v-if="bootstrapFailed" text-only fill :description="t('common.load_failed')" :action-label="t('common.operation.refresh')"
@@ -792,19 +851,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
           :description="t('favorites.global_search_hint')"
         />
 
-        <div v-if="filterActive" class="favorite-filter-status" :role="filterStatus === 'failed' || filterStatus === 'stalled' ? 'alert' : 'status'">
-          <span>{{ filterStatusText }}</span>
-          <button v-if="filterStatus === 'scanning'" type="button" class="favorite-filter-status__action" @click="filterScan.pause()">
-            {{ t('favorites.filter_pause') }}
-          </button>
-          <button v-else-if="filterStatus === 'paused' || filterStatus === 'budget'" type="button" class="favorite-filter-status__action" @click="filterScan.continueScan()">
-            {{ t('favorites.filter_continue') }}
-          </button>
-          <button v-else-if="filterStatus === 'failed' || filterStatus === 'stalled'" type="button" class="favorite-filter-status__action" @click="filterScan.continueScan()">
-            {{ t('common.operation.refresh') }}
-          </button>
-        </div>
-        <Empty v-else-if="favoriteView === 'season' && keyword.trim() && !visibleResources.length && noMoreContent && !isLoading && failedContentPage === null && stalledContentPage === null" text-only fill :description="t('library_tools.no_matches')" role="status" />
+        <Empty v-if="!filterActive && favoriteView === 'season' && keyword.trim() && !visibleResources.length && noMoreContent && !isLoading && failedContentPage === null && stalledContentPage === null" text-only fill :description="t('library_tools.no_matches')" role="status" />
         <VideoCardGrid
           v-else
           :key="favoriteGridStateKey"
@@ -814,11 +861,13 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
           :transform-item="transformFavoriteItem"
           :get-item-key="filterActive ? filterScan.getItemKey : getFavoriteResourceKey"
           grid-layout="adaptive"
+          layout-motion
           :initial-skeleton-count="favoriteView === 'season' && selectedSeason?.type === 21 ? FAVORITE_SEASON_PAGE_SIZE : FAVORITE_FOLDER_PAGE_SIZE"
           disable-content-visibility
+          :indeterminate="filterActive"
           :loading="filterActive ? filterStatus === 'scanning' : isLoading || isFullPageLoading"
-          :no-more-content="filterActive ? filterStatus !== 'scanning' : noMoreContent"
-          :request-failed="filterActive ? false : failedContentPage !== null || stalledContentPage !== null"
+          :no-more-content="filterActive ? filterStatus === 'complete' : noMoreContent"
+          :request-failed="filterActive ? filterStatus === 'failed' || filterStatus === 'stalled' : failedContentPage !== null || stalledContentPage !== null"
           :empty-description="$t(keyword.trim() || filterActive ? 'library_tools.no_matches' : 'common.no_data')"
           :context-menu="favoriteView === 'video' && (searchScope === 'current' || filterActive) && !isBatchManaging"
           :get-menu-extra-groups="getFavoriteMenuGroups"
@@ -877,6 +926,10 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
           </button>
         </div>
       </Dialog>
+      <ContextMenu
+        v-if="folderMenu" :options="folderMenu.actions" :anchor="folderMenu.anchor" :trigger="folderMenu.trigger"
+        @select="runFolderMenu" @close="folderMenu = undefined"
+      />
     </main>
 
     <template #sidebar="{ contentId }">
@@ -983,7 +1036,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               @select="handleCategoryItemClick(item)" @visible="loadFolderCover(item.id)"
             >
               <button v-if="!isManagingFolder && !isBatchManaging" type="button" class="favorite-folder-action" :disabled="isSidebarOperating || searchScope === 'all'" @click="handlePlayAll">
-                <span i-tabler:player-play />{{ t('common.play_all') }}
+                <span i-tabler:player-play-filled />{{ t('common.play_all') }}
               </button>
               <FavoriteResourceActions
                 v-if="!isManagingFolder && canBatchManage"
@@ -992,18 +1045,14 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
                 @toggle="toggleBatchManage" @select-all="toggleSelectAllCurrentPage"
                 @copy="openBatchTransferDialog('copy')" @move="openBatchTransferDialog('move')" @remove="handleBatchDelete"
               />
-              <button v-if="!isManagingFolder && !isBatchManaging && item.id !== defaultFolderId" type="button" class="favorite-folder-action" :disabled="isSidebarOperating || favoriteCategories[1]?.id === item.id" @click="folders.pin(item.id)">
-                <span i-tabler:pin />{{ t('favorites.pin_folder') }}
-              </button>
-              <button v-if="!isManagingFolder && !isBatchManaging" type="button" class="favorite-folder-action" :disabled="isSidebarOperating" @click="openSingleEditFolder(item.id)">
-                <span i-tabler:edit />{{ t('favorites.edit_folder') }}
-              </button>
-              <button v-if="!isManagingFolder && !isBatchManaging" type="button" class="favorite-folder-action warning" :disabled="isSidebarOperating" @click="folders.clean(item.id)">
-                <span i-tabler:trash-x />{{ t('favorites.clean_invalid') }}
-              </button>
-              <button v-if="!isManagingFolder && !isBatchManaging && item.id !== defaultFolderId" type="button" class="favorite-folder-action danger" :disabled="isSidebarOperating" @click="deleteFolders([item.id])">
-                <span i-tabler:trash />{{ t('common.operation.delete') }}
-              </button>
+              <Tooltip v-if="!isManagingFolder && !isBatchManaging" :content="t('favorites.folder_more')" placement="top">
+                <IconButton
+                  class="bew-icon-button--control favorite-folder-icon-action" shape="smooth-rect" :label="t('favorites.folder_more')" aria-haspopup="menu"
+                  :disabled="isSidebarOperating" @click="openFolderMenu($event, getFolderMenuActions(item))"
+                >
+                  <i i-tabler:dots />
+                </IconButton>
+              </Tooltip>
             </FavoriteSidebarItem>
             <li v-if="!isManagingFolder" class="favorite-create-item">
               <button type="button" class="favorite-create-button" :disabled="isSidebarOperating" :aria-label="t('favorites.create_folder')" @click="folders.openEditor()">
@@ -1024,15 +1073,25 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
             >
               <button v-if="!isManagingSeason" type="button" class="favorite-folder-action" :disabled="isSidebarOperating || isResolvingSeasonPlayAll" @click="handlePlayAll">
                 <LoadingRing :loading="isResolvingSeasonPlayAll">
-                  <span i-tabler:player-play />
+                  <span i-tabler:player-play-filled />
                 </LoadingRing>{{ t('common.play_all') }}
               </button>
-              <button v-if="!isManagingSeason" type="button" class="favorite-folder-action danger" :disabled="isSidebarOperating" @click="unfavSeasons([{ id: item.id, type: item.type }])">
-                <span i-tabler:star-off />{{ t('favorites.unfavorite') }}
-              </button>
-              <button type="button" class="favorite-folder-action" :aria-pressed="isManagingSeason" :disabled="isSidebarOperating" @click="toggleCurrentSidebarManage">
-                <span :class="isManagingSeason ? 'i-tabler:x' : 'i-tabler:adjustments-horizontal'" />{{ t(isManagingSeason ? 'favorites.sidebar_manage_exit' : 'favorites.sidebar_manage') }}
-              </button>
+              <Tooltip :content="t(isManagingSeason ? 'favorites.sidebar_manage_exit' : 'favorites.sidebar_manage')" placement="top">
+                <IconButton
+                  class="bew-icon-button--control favorite-folder-icon-action" shape="smooth-rect" :label="t(isManagingSeason ? 'favorites.sidebar_manage_exit' : 'favorites.sidebar_manage')"
+                  :aria-pressed="isManagingSeason" :disabled="isSidebarOperating" @click="toggleCurrentSidebarManage"
+                >
+                  <i :class="isManagingSeason ? 'i-tabler:x' : 'i-tabler:list-check'" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip v-if="!isManagingSeason" :content="t('favorites.folder_more')" placement="top">
+                <IconButton
+                  class="bew-icon-button--control favorite-folder-icon-action" shape="smooth-rect" :label="t('favorites.folder_more')" aria-haspopup="menu"
+                  @click="openFolderMenu($event, getSeasonMenuActions(item))"
+                >
+                  <i i-tabler:dots />
+                </IconButton>
+              </Tooltip>
               <div v-if="isManagingSeason" class="sidebar-manage-bar">
                 <button class="sidebar-manage-select" :aria-pressed="isAllSeasonsSelected" :disabled="isSidebarOperating" @click="toggleSelectAllSeasons">
                   <span :class="isAllSeasonsSelected ? 'i-tabler:checkbox' : 'i-tabler:square'" />
@@ -1137,27 +1196,6 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
     transition: none;
   }
 }
-.favorite-filter-status {
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-3);
-  margin-bottom: var(--bew-space-3);
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-}
-.favorite-filter-status__action {
-  min-height: var(--bew-control-item-height);
-  padding: 0 var(--bew-space-3);
-  border: 0;
-  border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
-  color: var(--bew-text-1);
-  background: var(--bew-hover-bg);
-  font: inherit;
-  font-weight: var(--bew-font-weight-medium);
-  cursor: pointer;
-}
 .favorite-rail-toolbar {
   display: flex;
   align-items: center;
@@ -1253,7 +1291,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   overflow: hidden;
   color: var(--bew-sidebar-secondary);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   white-space: nowrap;
   border: 0;
@@ -1276,20 +1314,22 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;
+  // Clips only vertically, so the folder list can reach the rail edges.
+  overflow: visible clip;
 }
 
 .category-list {
   @include sidebarSurface.vertical-scroll;
-  // Its bottom is the screen edge, which needs no fade.
-  @include scrollEdgeFade.vertical($bottom: false);
+  // A rail never fades; its bottom is the screen edge, which needs no line.
+  // Edge to edge like the rail's separators, its rows padded back in.
+  @include scrollEdgeFade.lines($bottom: false);
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   gap: var(--bew-space-1);
   min-height: 0;
-  margin: 0;
-  padding: 0;
+  margin: 0 calc(-1 * var(--bew-sidebar-inline-padding));
+  padding: 0 var(--bew-sidebar-inline-padding);
   list-style: none;
 }
 
@@ -1314,7 +1354,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   padding: var(--bew-space-2);
   color: var(--bew-sidebar-secondary);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-align: left;
   border: 0;
@@ -1425,10 +1465,10 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   padding: 0 var(--bew-space-4);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-body);
   text-align: left;
-  border: 1px solid transparent;
+  border: var(--bew-hairline) solid transparent;
   border-radius: var(--bew-interactive-radius);
   background: var(--bew-fill-1);
   cursor: pointer;
@@ -1477,6 +1517,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   &::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.35);
     border-radius: var(--bew-pill-radius);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   &::-webkit-scrollbar-corner {

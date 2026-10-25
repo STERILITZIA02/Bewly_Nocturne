@@ -41,18 +41,13 @@
   --bew-line-height-display: calc(26px * var(--bew-font-scale));
   --bew-line-height-data: calc(32px * var(--bew-font-scale));
   --bew-font-weight-regular: 400;
-  --bew-font-weight-medium: 500;
-  --bew-font-weight-semibold: 600;
-  --bew-font-weight-bold: 700;
   // Section headings are emphasized; content and control labels stay regular.
-  --bew-heading-weight: var(--bew-font-weight-semibold);
-  --bew-subheading-weight: var(--bew-font-weight-semibold);
   --bew-label-weight: var(--bew-font-weight-regular);
   --bew-control-press-scale: 0.97;
   // Selecting or focusing an element never adds an emphasis border (user rule).
   // The ring tokens draw nothing, and focus/selected border colours resolve to
   // the resting border, so states read through background and text tone only.
-  --bew-focus-ring-color: var(--bew-border-color);
+  --bew-focus-ring-color: var(--bew-separator-color);
   --bew-focus-ring: none;
   --bew-focus-shadow: 0 0 0 transparent;
   // The layout editor's target outline is editor chrome, not element styling.
@@ -61,7 +56,7 @@
   // Compact media rows shared by Favorites, History, Moments and Watch Later pops.
   --bew-media-pop-title-font-size: var(--bew-font-size-title);
   --bew-media-pop-title-line-height: var(--bew-line-height-title);
-  --bew-media-pop-title-font-weight: var(--bew-font-weight-medium);
+  --bew-media-pop-title-font-weight: var(--bew-font-weight-regular);
   // #endregion
 
   // Icon-font glyphs use their own scale and must not be mistaken for text.
@@ -84,6 +79,13 @@
   --bew-radius-2xl: 32px;
   --bew-radius-full: 9999px;
   --bew-corner-shape: superellipse(1.7);
+  // Capsules (a 9999px radius: ends sized by the height, straight top and
+  // bottom edges at any width) take a light superellipse, close to the Apple
+  // Music search field: barely past round, so the ends ease into the straight
+  // edges without turning square. Square controls nested in a capsule's end use
+  // it too, staying concentric. Tune it with `pnpm preview:capsule`.
+  --bew-corner-shape-capsule: superellipse(1.1);
+  // Only true circles stay round: avatars, dots and standalone round buttons.
   --bew-corner-shape-round: round;
   // Skeleton text bars, text tags and small state blocks.
   --bew-radius-tiny: var(--bew-radius-xs);
@@ -141,6 +143,8 @@
   --bew-moments-hot-search-width: clamp(240px, 18vw, 300px);
   // Moments up-list tiles are squares as tall as the smallest video card cover (40:21).
   --bew-moments-up-tile-size: calc(var(--bew-video-card-min-width) * 21 / 40);
+  // The Favorites uploader strip's tiles (the page and its loading skeleton).
+  --bew-library-uploader-tile-size: calc(var(--bew-space-12) + var(--bew-space-6));
   --bew-moments-hot-search-compact-max-height: 240px;
   --bew-moments-hot-search-max-height: calc(
     100dvh - var(--bew-top-bar-height) - var(--bew-space-4) - var(--bew-space-6)
@@ -164,7 +168,7 @@
   --bew-message-search-highlight: color-mix(in srgb, var(--bew-text-1) 14%, transparent);
   // Leave room for a heading-height selection between the compact adjacent rows.
   --bew-wheel-label-size: var(--bew-font-size-display);
-  --bew-wheel-label-weight: var(--bew-font-weight-medium);
+  --bew-wheel-label-weight: var(--bew-font-weight-regular);
   --bew-message-share-width: calc(var(--bew-space-12) * 8);
   --bew-wheel-label-line-height: var(--bew-line-height-data);
   --bew-wheel-radius: calc((var(--bew-wheel-label-line-height) + var(--bew-space-2)) * 2);
@@ -184,9 +188,7 @@
   --bew-notifications-avatar-size: var(--bew-space-10);
   --bew-notifications-card-background: var(--bew-content-solid);
   --bew-notifications-card-background-hover: var(--bew-content-solid);
-  --bew-notifications-card-border: var(--bew-message-card-border);
   --bew-notifications-reference-background: var(--bew-content-alt-solid);
-  --bew-message-card-border: var(--bew-surface-border-color);
   --bew-insights-chart-height: calc(var(--bew-space-12) * 3);
   --bew-reading-line-length: 76ch;
   --bew-layout-sidebar-sticky-top: 150px;
@@ -250,8 +252,8 @@
   --bew-duration-moderate: 300ms;
   // Persistent rail folding into / growing out of the home logo circle.
   --bew-sidebar-morph-duration: 540ms;
-  --bew-page-exit-duration: 90ms;
-  --bew-page-enter-duration: 210ms;
+  --bew-page-exit-duration: 60ms;
+  --bew-page-enter-duration: 150ms;
   --bew-ease-in: ease-in;
   --bew-ease-standard: cubic-bezier(0.22, 0.61, 0.36, 1);
   --bew-ease-out: ease-out;
@@ -335,7 +337,7 @@
   --bew-segment-item-hover-color: var(--bew-text-1);
   --bew-segment-item-active-bg: var(--bew-selected-bg);
   --bew-segment-item-active-color: var(--bew-text-1);
-  --bew-segment-item-active-shadow: inset 0 0 0 1px var(--bew-surface-border-color);
+  --bew-segment-item-active-shadow: inset 0 0 0 var(--bew-hairline) var(--bew-edge-color);
   --bew-segment-item-hover-bg-white: rgba(255, 255, 255, 0.16);
   --bew-liquid-indicator-bg: var(--bew-segment-item-active-bg);
   --bew-liquid-indicator-shadow: var(--bew-segment-item-active-shadow);
@@ -370,7 +372,7 @@
 
   // #region Filters
   // The one frosted-glass filter, dialogs included (the blur-strength setting
-  // rewrites it). Pair it with --bew-glass-tint and --bew-glass-border-color.
+  // rewrites it). Pair it with --bew-glass-tint and --bew-edge-color.
   --bew-filter-glass-1: blur(20px) saturate(180%);
   // The same radius as a length, for gradient blurs (ProgressiveBlur.vue).
   --bew-glass-blur-radius: 20px;
@@ -538,7 +540,6 @@
   --bew-glass-tint-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-glass-tint-solid));
   --bew-glass-tint: rgb(from var(--bew-glass-tint-solid) r g b / var(--bew-content-opacity));
   --bew-glass-tint-hover: rgb(from var(--bew-glass-tint-solid-hover) r g b / var(--bew-content-opacity));
-  --bew-glass-border-color: var(--bew-surface-border-color);
   --bew-sidebar-background-solid: var(--bew-glass-tint-solid);
   --bew-sidebar-background: var(--bew-glass-tint);
   --bew-content-opacity: 0.68;
@@ -579,21 +580,29 @@
   --bew-fill-alt: color-mix(in srgb, var(--bew-neutral-bg) 45%, transparent);
   --bew-surface-inset-bg: color-mix(in srgb, var(--bew-neutral-fg) 4%, transparent);
   --bew-skeleton: color-mix(in srgb, var(--bew-neutral-fg) 7%, transparent);
-  // Light-mode edges: white surfaces on the 4% canvas need a little more line
-  // weight than dark mode, which pins its own values below. Keep 11.5–20.5%
-  // (scripts/serve-border-preview.mjs) so lines stay quieter than text.
-  --bew-border-color: color-mix(in srgb, var(--bew-neutral-fg) 14%, transparent);
-  --un-default-border-color: var(--bew-border-color);
-  --bew-surface-border-color: color-mix(in srgb, var(--bew-neutral-fg) 16%, transparent);
-  // Album-art hairline (Apple Music): drawn over covers, finer and crisper than
-  // surface edges. A device-pixel line on HiDPI, so the colour carries more weight.
+  // Lines have three roles (user-approved border system, 2026-10-24): a
+  // separator inside a surface, the edge of a surface (cards, panels, popovers,
+  // glass, dialogs) and a field's edge. Separators and edges are hairlines (one
+  // device pixel); fields keep 1px. Keep 11.5–20.5% so lines stay quieter than
+  // text; dark mode, where shadows barely read, gives edges more weight.
+  --bew-hairline: 1px;
+  --bew-separator-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  --un-default-border-color: var(--bew-separator-color);
+  --bew-edge-color: color-mix(in srgb, var(--bew-neutral-fg) 14%, transparent);
+  // Album-art hairline (Apple Music): drawn over covers, so it is tuned for
+  // arbitrary images rather than the neutral canvas.
   --bew-media-edge-color: rgb(0 0 0 / 14%);
-  --bew-media-edge-width: 1px;
-  --bew-comment-tree-line-color: color-mix(in srgb, var(--bew-neutral-fg) 14%, transparent);
+  // Glass rim (user-specified): thicker and brighter than surface edges, the lit
+  // lip of a pane of glass. 1px at every density, twice the hairline on HiDPI.
+  --bew-glass-edge-width: 1px;
+  --bew-glass-edge-color: rgb(255 255 255 / 70%);
+  // One lift for every floating glass control (Dock, top bar search, capsule,
+  // logo circle, avatar): the same rim and the same shadow (user-specified).
+  --bew-glass-shadow: var(--bew-shadow-2);
   --bew-input-bg: var(--bew-neutral-inset);
   --bew-input-bg-hover: color-mix(in srgb, var(--bew-neutral-fg) 3%, var(--bew-neutral-inset));
-  --bew-input-border-color: color-mix(in srgb, var(--bew-neutral-fg) 18%, transparent);
-  --bew-input-border-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 20.5%, transparent);
+  --bew-field-edge-color: color-mix(in srgb, var(--bew-neutral-fg) 18%, transparent);
+  --bew-field-edge-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 20.5%, transparent);
   --bew-switch-bg: var(--bew-fill-3);
   --bew-switch-thumb-active: var(--bew-on-theme-color);
   --bew-ip-tag-bg: var(--bew-fill-1);
@@ -603,7 +612,7 @@
 @media (min-resolution: 2dppx) {
   :host,
   :root {
-    --bew-media-edge-width: 0.5px;
+    --bew-hairline: 0.5px;
   }
 }
 
@@ -650,14 +659,14 @@
   --bew-wheel-text: rgb(255 255 255 / 67%);
   --bew-dock-navigation-active-color: hsl(0 0% 100%);
 
-  // Edge weights approved for dark and OLED; light mode is tuned separately.
-  --bew-border-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
-  --bew-surface-border-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  // Dark and OLED: shadows barely read, so surface edges carry the layering.
+  --bew-separator-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  --bew-edge-color: color-mix(in srgb, var(--bew-neutral-fg) 16%, transparent);
   // A light rim on artwork, brighter than surface edges (dark and OLED).
   --bew-media-edge-color: rgb(255 255 255 / 22%);
-  --bew-comment-tree-line-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
-  --bew-input-border-color: color-mix(in srgb, var(--bew-neutral-fg) 16%, transparent);
-  --bew-input-border-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 20%, transparent);
+  --bew-glass-edge-color: rgb(255 255 255 / 26%);
+  --bew-field-edge-color: color-mix(in srgb, var(--bew-neutral-fg) 18%, transparent);
+  --bew-field-edge-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 20.5%, transparent);
 
   // #region shadow
   --bew-shadow-1: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);
@@ -689,7 +698,6 @@
   // Match saved article cards without changing the light notification palette.
   --bew-notifications-card-background: var(--bew-elevated);
   --bew-notifications-card-background-hover: var(--bew-elevated-hover);
-  --bew-notifications-card-border: var(--bew-surface-border-color);
   --bew-notifications-reference-background: var(--bew-fill-1);
 
   --bew-fill-alt: var(--bew-fill-1);
@@ -726,11 +734,19 @@
     --bew-text-2: color-mix(in srgb, var(--bew-neutral-fg) 88%, transparent);
     --bew-text-3: color-mix(in srgb, var(--bew-neutral-fg) 76%, transparent);
     --bew-text-4: color-mix(in srgb, var(--bew-neutral-fg) 55%, transparent);
+    --bew-separator-color: color-mix(in srgb, var(--bew-neutral-fg) 28%, transparent);
+    --bew-edge-color: color-mix(in srgb, var(--bew-neutral-fg) 32%, transparent);
+    --bew-field-edge-color: color-mix(in srgb, var(--bew-neutral-fg) 40%, transparent);
+    --bew-field-edge-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 48%, transparent);
+    --bew-glass-edge-color: var(--bew-edge-color);
   }
 }
 
 :host(.disable-frosted-glass),
 :root.disable-frosted-glass {
+  // Solid surfaces have no glass lip: their edge is the ordinary hairline.
+  --bew-glass-edge-width: var(--bew-hairline);
+  --bew-glass-edge-color: var(--bew-edge-color);
   --bew-content-opacity: 1;
   --bew-elevated-alt: var(--bew-elevated-alt-solid);
   --bew-elevated-alt-hover: var(--bew-elevated-alt-solid-hover);
@@ -774,9 +790,9 @@
   --text2: var(--bew-text-2);
   --text3: var(--bew-text-3);
   --text4: var(--bew-text-4);
-  --line_light: var(--bew-border-color);
-  --line_regular: var(--bew-input-border-color);
-  --line_bold: var(--bew-input-border-color-hover);
+  --line_light: var(--bew-separator-color);
+  --line_regular: var(--bew-field-edge-color);
+  --line_bold: var(--bew-field-edge-color-hover);
 
   --brand_pink: var(--bew-theme-color);
   --brand_pink_thin: var(--bew-theme-surface);
@@ -845,9 +861,9 @@
   --text4: var(--bew-text-4);
   // --text_link: var(--bew-theme-color);
   --text_notice: var(--Ye6);
-  --line_light: var(--bew-border-color);
-  --line_regular: var(--bew-input-border-color);
-  --line_bold: var(--bew-input-border-color-hover);
+  --line_light: var(--bew-separator-color);
+  --line_regular: var(--bew-field-edge-color);
+  --line_bold: var(--bew-field-edge-color-hover);
 
   --graph_bg_thin_rgb: var(--bew-native-graph_bg_thin-rgb, 13, 13, 13);
 
@@ -864,7 +880,7 @@
   --bpx-dmsend-input-bg: var(--bew-fill-1);
   --bpx-dmsend-info-font: var(--bew-text-1);
   --bpx-dmsend-switch-icon: var(--bew-text-2);
-  --bpx-dmsend-border: var(--bew-border-color);
+  --bpx-dmsend-border: var(--bew-separator-color);
   --bpx-dmsend-input-font: var(--bew-text-1);
   --bg1_rgb: var(--bew-native-bg1-rgb, 9, 9, 9);
 
@@ -930,7 +946,7 @@
   --bpx-dmsend-input-bg: var(--Ga1_s);
   --bpx-dmsend-info-font: var(--Ga7);
   --bpx-dmsend-switch-icon: var(--Ga7);
-  --bpx-dmsend-border: var(--bew-border-color);
+  --bpx-dmsend-border: var(--bew-separator-color);
   --bpx-dmsend-input-font: var(--Ga10);
 }
 

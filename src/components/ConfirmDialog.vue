@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: var(--bew-elevated-alt-solid);
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-modal-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-shadow-4);
@@ -166,7 +166,8 @@ onBeforeUnmount(() => {
 .bew-confirm-dialog__title {
   margin: 0;
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
 }
 

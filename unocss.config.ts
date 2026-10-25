@@ -40,16 +40,17 @@ export default defineConfig({
       xl: ['var(--bew-font-size-display)', 'var(--bew-line-height-data)'],
       '2xl': ['var(--bew-font-size-data-emphasis)', 'var(--bew-line-height-data)'],
     },
-    // Preserve existing weights while using the same tokens as component SCSS.
+    // All text is regular (user rule); emphasis is tone and size. Heavier
+    // utilities resolve to regular too, and scripts/fontWeightPolicy.ts bans them.
     fontWeight: {
       400: 'var(--bew-font-weight-regular)',
       normal: 'var(--bew-font-weight-regular)',
-      500: 'var(--bew-font-weight-medium)',
-      medium: 'var(--bew-font-weight-medium)',
-      600: 'var(--bew-font-weight-semibold)',
-      semibold: 'var(--bew-font-weight-semibold)',
-      700: 'var(--bew-font-weight-bold)',
-      bold: 'var(--bew-font-weight-bold)',
+      500: 'var(--bew-font-weight-regular)',
+      medium: 'var(--bew-font-weight-regular)',
+      600: 'var(--bew-font-weight-regular)',
+      semibold: 'var(--bew-font-weight-regular)',
+      700: 'var(--bew-font-weight-regular)',
+      bold: 'var(--bew-font-weight-regular)',
     },
   },
   safelist: [
@@ -73,6 +74,17 @@ export default defineConfig({
     'i-tabler:building-store',
     'i-tabler:cat',
     'i-tabler:sword',
+  ],
+  rules: [
+    // Hairline borders (one device pixel, the separator and edge width):
+    // `border="hairline …"`, `border-t-hairline`.
+    [/^(?:border|b)(?:-([trblxy]))?-hairline$/, ([, side]) => {
+      const sides = ({ t: ['top'], r: ['right'], b: ['bottom'], l: ['left'], x: ['left', 'right'], y: ['top', 'bottom'] } as Record<string, string[]>)[side ?? ''] ?? ['']
+      return Object.fromEntries(sides.flatMap((name) => {
+        const property = name ? `border-${name}` : 'border'
+        return [[`${property}-width`, 'var(--bew-hairline)'], [`${property}-style`, 'solid']]
+      }))
+    }],
   ],
   presets: [
     presetWind3(),
@@ -138,11 +150,13 @@ export default defineConfig({
         if (!hasSmoothRadius && !hasRoundRadius && !inheritsRadius)
           return
 
+        // A full radius is a capsule (smooth); only 50% is a true circle.
+        const hasCircleRadius = radiusEntries.some(([, value]) => typeof value === 'string' && circleRadiusRE.test(value))
         util.entries.push([
           'corner-shape',
           inheritsRadius
             ? 'inherit'
-            : hasSmoothRadius ? 'var(--bew-corner-shape)' : 'var(--bew-corner-shape-round)',
+            : hasSmoothRadius ? 'var(--bew-corner-shape)' : hasCircleRadius ? 'var(--bew-corner-shape-round)' : 'var(--bew-corner-shape-capsule)',
         ])
       },
     },

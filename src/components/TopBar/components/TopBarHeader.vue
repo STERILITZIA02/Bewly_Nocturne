@@ -31,6 +31,7 @@ const sidebarHost = useSidebarHost()
       'top-bar-header--solid-force-white': settings.disableFrostedGlass && forceWhiteIcon,
       'top-bar-header--rail': sidebarHost?.railOpen.value,
       'top-bar-header--brand-logo': settings.topBarLogoStyle === 'brand',
+      'top-bar-header--pinned': settings.topBarPinnedChannels.length > 0,
     }"
     h="$bew-top-bar-height"
   >
@@ -72,11 +73,15 @@ const sidebarHost = useSidebarHost()
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/breakpoints";
+
 // The header spans the window: the logo is pinned to the rail content line on
 // every page, and the search follows it rather than centring in the bar.
 .top-bar-header {
   display: grid;
-  grid-template-columns: auto minmax(0, var(--b-search-bar-max-width, 550px)) minmax(0, 1fr) auto;
+  grid-template-columns:
+    auto minmax(0, var(--b-search-bar-max-width, 550px)) minmax(var(--top-bar-channels-min-width, 0px), 1fr)
+    max-content;
   align-items: center;
   gap: var(--bew-top-bar-section-gap);
   box-sizing: border-box;
@@ -117,6 +122,9 @@ const sidebarHost = useSidebarHost()
 .top-bar-header__side--right {
   grid-column: 4;
   justify-self: end;
+  margin-inline-start: 0;
+  // Keep the space until the search has returned; only the release is delayed.
+  transition: margin-inline-start 0s var(--bew-sidebar-morph-duration);
 }
 
 .top-bar-header__search {
@@ -130,6 +138,10 @@ const sidebarHost = useSidebarHost()
 // the rail's fold; the rail width itself transitions between page kinds.
 .top-bar-header {
   --top-bar-logo-slot: var(--bew-top-bar-primary-control-height);
+  --top-bar-rail-offset: max(
+    0px,
+    calc(var(--bew-messages-sidebar-width) - var(--bew-home-logo-inline-start) - var(--top-bar-logo-slot))
+  );
 }
 
 .top-bar-header--brand-logo {
@@ -142,15 +154,32 @@ const sidebarHost = useSidebarHost()
 }
 
 .top-bar-header--rail {
+  .top-bar-header__side--right {
+    // Translation does not take space in Grid: reserve its full distance first.
+    margin-inline-start: var(--top-bar-rail-offset);
+    transition: none;
+  }
+
   .top-bar-header__search,
   .top-bar-header__side--channels {
-    translate: calc(var(--bew-messages-sidebar-width) - var(--bew-home-logo-inline-start) - var(--top-bar-logo-slot)) 0;
+    translate: var(--top-bar-rail-offset) 0;
+  }
+}
+
+@media (min-width: breakpoints.$grid-xl) {
+  .top-bar-header--pinned {
+    // The collapsed channel list still needs room for its +N indicator.
+    --top-bar-channels-min-width: calc(
+      var(--bew-control-item-height) + var(--bew-space-2) * 2 +
+        (var(--bew-control-padding) + var(--bew-control-border-width)) * 2 + var(--bew-control-gap)
+    );
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .top-bar-header__search,
-  .top-bar-header__side--channels {
+  .top-bar-header__side--channels,
+  .top-bar-header__side--right {
     transition: none;
   }
 }

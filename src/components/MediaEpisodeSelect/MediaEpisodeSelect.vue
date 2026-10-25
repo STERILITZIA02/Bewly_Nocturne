@@ -219,9 +219,9 @@ watch(isOpen, async (open, _previous, onCleanup) => {
 
 .select-button {
   min-height: var(--bew-control-height);
-  border: 1px solid transparent;
+  border: var(--bew-hairline) solid transparent;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   user-select: none;
   transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
@@ -263,7 +263,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
     flex-shrink: 0;
     padding: var(--bew-space-0-5) var(--bew-space-2);
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
     background: var(--bew-theme-surface-hover);
     color: var(--bew-on-theme-surface);
     font-size: var(--bew-font-size-control);

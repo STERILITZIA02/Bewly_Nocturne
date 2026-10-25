@@ -138,8 +138,11 @@ function formatTime(timestamp: number) {
 }
 .private-history-results__list {
   @include sidebarSurface.vertical-scroll;
-  // Its bottom is the screen edge, which needs no fade.
-  @include scrollEdgeFade.vertical($bottom: false);
+  // A rail never fades; its bottom is the screen edge, which needs no line.
+  // It bleeds over its pane's 12px padding so the line spans the rail.
+  @include scrollEdgeFade.lines($bottom: false);
+  margin-inline: calc(-1 * var(--bew-space-3));
+  padding-inline: var(--bew-space-3);
   display: grid;
   align-content: start;
   flex: 1 1 auto;
@@ -188,7 +191,8 @@ function formatTime(timestamp: number) {
 .private-history-results__heading strong {
   min-width: 0;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   @include truncateFade.line;
 }
 .private-history-results__heading time {

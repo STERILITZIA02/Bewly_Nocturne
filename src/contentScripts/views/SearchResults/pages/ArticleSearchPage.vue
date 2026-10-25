@@ -60,15 +60,18 @@ defineExpose({
       <ArticleCardSkeleton
         v-for="index in (isLoading && (!results || results.length === 0) ? 6 : 0)"
         :key="`article-search-initial-skeleton-${index}`"
+        cover-fill
       />
       <ArticleCard
         v-for="article in results"
         :key="article.id"
         v-bind="convertArticleCardData(article)"
+        cover-fill
       />
       <ArticleCardSkeleton
         v-for="index in (isLoading && results && results.length > 0 ? 2 : 0)"
         :key="`article-search-more-skeleton-${index}`"
+        cover-fill
       />
     </div>
 

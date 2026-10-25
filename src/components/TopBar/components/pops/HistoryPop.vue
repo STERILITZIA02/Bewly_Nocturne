@@ -400,7 +400,6 @@ defineExpose({
                     p="x-2 y-1"
                     m="1"
                     rounded="$bew-pill-radius"
-                    font="semibold"
                   >
                     LIVE
                     <i i-svg-spinners:pulse-3 align-middle mt--0.2em />

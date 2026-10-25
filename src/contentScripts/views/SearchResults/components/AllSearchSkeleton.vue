@@ -56,7 +56,7 @@ function getSkeletonItemKey() {
     <section class="all-search-skeleton__section">
       <SkeletonBlock width="112px" height="var(--bew-line-height-heading)" />
       <div class="all-search-skeleton__article-grid">
-        <ArticleCardSkeleton v-for="index in 2" :key="index" />
+        <ArticleCardSkeleton v-for="index in 2" :key="index" cover-fill />
       </div>
     </section>
   </div>
@@ -82,7 +82,7 @@ function getSkeletonItemKey() {
 .all-search-skeleton__user-card {
   box-sizing: border-box;
   padding: var(--bew-space-4);
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-elevated);

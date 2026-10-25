@@ -153,6 +153,13 @@ const gridColumnOptions = computed(() => [
         />
       </SettingsItem>
       <SettingsItem
+        setting-id="settings.moments_start_from_last_seen"
+        :title="$t('settings.moments_start_from_last_seen')"
+        :desc="$t('settings.moments_start_from_last_seen_desc')" right-width="auto"
+      >
+        <Radio v-model="settings.momentsStartFromLastSeen" />
+      </SettingsItem>
+      <SettingsItem
         setting-id="settings.moments_enable_live_preview" :title="$t('settings.moments_enable_live_preview')"
         :desc="$t('settings.moments_enable_live_preview_desc')"
         right-width="auto"
@@ -167,16 +174,16 @@ const gridColumnOptions = computed(() => [
         <Radio v-model="settings.momentsEnableVideoPreview" />
       </SettingsItem>
       <template v-if="settings.momentsEnableVideoPreview">
-        <SettingsItem setting-id="settings.enable_video_ctrl_bar_on_video_card" :title="$t('settings.enable_video_ctrl_bar_on_video_card')" right-width="auto">
+        <SettingsItem setting-id="settings.enable_video_ctrl_bar_on_video_card" :title="$t('settings.moments_preview_controls')" right-width="auto">
           <Radio v-model="settings.momentsEnableVideoControls" />
         </SettingsItem>
-        <SettingsItem setting-id="settings.video_preview_swipe_seek" :title="$t('settings.video_preview_swipe_seek')" :desc="$t('settings.video_preview_swipe_seek_desc')" right-width="auto">
+        <SettingsItem setting-id="settings.video_preview_swipe_seek" :title="$t('settings.moments_preview_swipe')" :desc="$t('settings.video_preview_swipe_seek_desc')" right-width="auto">
           <Radio v-model="settings.momentsEnableVideoPreviewSwipeSeek" />
         </SettingsItem>
-        <SettingsItem setting-id="settings.hover_video_card_delayed" :title="$t('settings.hover_video_card_delayed')" right-width="auto">
+        <SettingsItem setting-id="settings.hover_video_card_delayed" :title="$t('settings.moments_preview_delay')" right-width="auto">
           <Radio v-model="settings.momentsVideoPreviewDelayed" />
         </SettingsItem>
-        <SettingsItem setting-id="settings.only_cover_video_preview" :title="$t('settings.only_cover_video_preview')" right-width="auto">
+        <SettingsItem setting-id="settings.only_cover_video_preview" :title="$t('settings.moments_preview_cover_only')" right-width="auto">
           <Radio v-model="settings.momentsOnlyCoverVideoPreview" />
         </SettingsItem>
       </template>

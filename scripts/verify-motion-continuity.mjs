@@ -581,30 +581,50 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     assert.match(css, /@property --bew-scroll-edge-top-clear\s*\{[^}]*initial-value: 1/, 'a list that fits keeps both edges opaque')
     assert.match(css, /animation-timeline: scroll\(self\), scroll\(self\)/)
     assert.match(css, /@supports \(animation-timeline: scroll\(\)\)/, 'browsers without scroll timelines keep the list unmasked')
+    // Lists in cards and panels fade their inner edges.
     const owners = {
-      'src/components/LibraryWorkspace.vue': '.library-workspace__rail-scroll',
-      'src/contentScripts/views/Favorites/FavoritesPage.vue': '.category-list',
-      'src/contentScripts/views/Notifications/whisper/ConversationList.vue': '.conversation-list__items',
-      'src/contentScripts/views/Notifications/whisper/PrivateHistorySearchResults.vue': '.private-history-results__list',
-      'src/contentScripts/views/Home/following/FollowingSidebar.vue': '.following-sidebar__scroll',
-      'src/contentScripts/views/Moments/MomentsSidebar.vue': '.moments-live-card__list',
       'src/contentScripts/views/Moments/MomentsHotSearch.vue': '.moments-hot-search__loading {',
       'src/components/MomentCard/MomentCommentSection.vue': '.moment-comments__list',
       'src/contentScripts/views/Home/components/SubscribedSeries.vue': '.series-updates-list',
-      'src/contentScripts/views/Favorites/FavoriteFilterPanel.vue': '.favorite-filter__chips',
     }
     for (const [file, selector] of Object.entries(owners)) {
       const source = await readFile(file, 'utf8')
       const start = source.indexOf(selector)
       assert.ok(start >= 0 && source.slice(start, source.indexOf('}', start)).includes('@include scrollEdgeFade.vertical'), `${file} fades ${selector}`)
     }
-    for (const file of ['src/components/LibraryWorkspace.vue', 'src/contentScripts/views/Favorites/FavoritesPage.vue', 'src/contentScripts/views/Notifications/whisper/ConversationList.vue', 'src/contentScripts/views/Notifications/whisper/PrivateHistorySearchResults.vue', 'src/contentScripts/views/Home/following/FollowingSidebar.vue'])
-      assert.match(await readFile(file, 'utf8'), /scrollEdgeFade\.vertical\(\$bottom: false\)/, `${file}: a sidebar bottom at the screen edge has no fade`)
+    // Left rails never fade (user-specified): a hairline closes an edge while
+    // more lies beyond it; a bottom at the screen edge has none.
+    const rails = {
+      'src/components/LibraryWorkspace.vue': ['.library-workspace__rail-scroll', '($bottom: false)'],
+      'src/contentScripts/views/Favorites/FavoritesPage.vue': ['.category-list {', '($bottom: false)'],
+      'src/contentScripts/views/Notifications/whisper/PrivateHistorySearchResults.vue': ['.private-history-results__list', '($bottom: false)'],
+      'src/contentScripts/views/Home/following/FollowingSidebar.vue': ['.following-sidebar__scroll', '($bottom: false)'],
+      'src/contentScripts/views/Moments/MomentsSidebar.vue': ['.moments-live-card__list {', ';'],
+      'src/contentScripts/views/Favorites/FavoriteFilterPanel.vue': ['.favorite-filter__chips', ';'],
+    }
+    for (const [file, [selector, args]] of Object.entries(rails)) {
+      const source = await readFile(file, 'utf8')
+      const start = source.indexOf(selector)
+      assert.ok(start >= 0, `${file}: ${selector}`)
+      assert.ok(source.slice(start, source.indexOf('}', start)).includes(`@include scrollEdgeFade.lines${args}`), `${file}: ${selector} closes its edges with hairlines`)
+      assert.doesNotMatch(source, /scrollEdgeFade\.vertical/, `${file}: no fade in a rail`)
+    }
+    const linesCss = compileString('@use "scrollEdgeFade"; @include scrollEdgeFade.global; .x { @include scrollEdgeFade.lines($bottom: false); }', { loadPaths: ['src/styles'] }).css
+    assert.match(linesCss, /@keyframes bew-scroll-edge-line-top \{\s*from \{\s*border-top-color: transparent;\s*\}\s*to \{\s*border-top-color: var\(--bew-separator-color\);/)
+    assert.match(linesCss, /\.x \{\s*border-top: var\(--bew-hairline\) solid transparent;\s*\}/)
+    assert.doesNotMatch(linesCss, /\.x \{[^}]*border-bottom/)
+    assert.match(linesCss, /animation: bew-scroll-edge-line-top linear both;\s*animation-timeline: scroll\(self\);/)
+    assert.match(await readFile('src/contentScripts/views/Favorites/FavoritesPage.vue', 'utf8'), /overflow: visible clip;/, 'the folder list reaches the rail edges')
+    // The conversation list is closed at its top by the tools' hairline, always drawn.
+    const conversations = await readFile('src/contentScripts/views/Notifications/whisper/ConversationList.vue', 'utf8')
+    assert.doesNotMatch(conversations, /scrollEdgeFade|tools--pinned/)
+    assert.match(conversations, /\.conversation-list__tools \{[^}]*border-bottom: var\(--bew-hairline\) solid var\(--bew-separator-color\);/)
     assert.match(await readFile('src/contentScripts/views/Home/components/Ranking.vue', 'utf8'), /bew-scroll-edge-fade--no-bottom/)
     assert.match(await readFile('src/components/MomentCard/MomentCommentSection.vue', 'utf8'), /has-composer[\s\S]*?--bew-scroll-edge-bottom-off: 1/, 'the pinned composer closes the comment list without a fade')
     const offCss = compileString('@use "scrollEdgeFade"; .x { @include scrollEdgeFade.vertical($bottom: false); }', { loadPaths: ['src/styles'] }).css
     assert.match(offCss, /--bew-scroll-edge-bottom-off: 1/)
     assert.match(offCss, /max\(var\(--bew-scroll-edge-bottom-clear\), var\(--bew-scroll-edge-bottom-off, 0\)\)/)
+    assert.match(await readFile('src/contentScripts/views/Moments/MomentsLiveRow.vue', 'utf8'), /\.moments-live-row__preview \{\s*@include contentCard\.media-frame;\s*box-shadow: none;/, 'the preview carries the video cover hairline')
     const hotSearch = await readFile('src/contentScripts/views/Moments/MomentsHotSearch.vue', 'utf8')
     const card = hotSearch.slice(hotSearch.indexOf('.moments-hot-search {'), hotSearch.indexOf('}', hotSearch.indexOf('.moments-hot-search {')))
     assert.doesNotMatch(card, /scrollEdgeFade|vertical-scroll/, 'the glass card never carries the mask')

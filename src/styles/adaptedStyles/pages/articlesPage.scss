@@ -405,7 +405,7 @@
     .article-up-info .nameplate-ctnr .info,
     .read-article-holder .bangumi-card-holder,
     .read-article-holder .article-card-holder {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .to-top,
@@ -426,7 +426,7 @@
     }
 
     .interaction-info .toolbar .share-box .qrcode-box {
-      box-shadow: 0 0 4px var(--bew-border-color);
+      box-shadow: 0 0 4px var(--bew-separator-color);
     }
 
     .interaction-info .toolbar .share-box .qrcode-ctnr {

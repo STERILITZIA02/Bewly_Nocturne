@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import LoadingRing from '~/components/LoadingRing.vue'
 
+// The label is announced, not shown: a load of unknown length shows only the ring.
+
 withDefaults(defineProps<{
   label?: string
   announce?: boolean
@@ -19,7 +21,6 @@ withDefaults(defineProps<{
     :aria-label="announce && label && loading ? label : undefined"
   >
     <LoadingRing :loading="loading" size="var(--bew-icon-size-sm)" />
-    <span v-if="label" class="bew-page-loading-indicator__label">{{ label }}</span>
   </div>
 </template>
 
@@ -33,9 +34,5 @@ withDefaults(defineProps<{
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-}
-
-.bew-page-loading-indicator__label {
-  color: inherit;
 }
 </style>

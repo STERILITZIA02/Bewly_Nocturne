@@ -8,7 +8,7 @@
   display: flex;
   flex-direction: column;
   padding-block: var(--bew-space-1);
-  border-top: 1px solid var(--bew-border-color);
+  border-top: var(--bew-hairline) solid var(--bew-separator-color);
 }
 
 .bewly-player-control-alternative {
@@ -19,7 +19,7 @@
   background: transparent;
   color: inherit;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-align: start;
   cursor: pointer;
@@ -109,7 +109,7 @@
     background: rgb(0 0 0 / 80%);
     box-shadow: var(--bew-shadow-1);
     font-size: var(--bew-font-size-caption);
-    font-weight: var(--bew-font-weight-medium);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-caption);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -197,7 +197,7 @@
       }
 
       .container::after {
-        background-color: var(--bew-border-color);
+        background-color: var(--bew-separator-color);
       }
 
       .h2 {
@@ -226,7 +226,7 @@
       }
 
       .bottom-btn {
-        border-color: var(--bew-border-color);
+        border-color: var(--bew-separator-color);
       }
 
       .card .up span {

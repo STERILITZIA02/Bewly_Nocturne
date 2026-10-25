@@ -1,4 +1,17 @@
 library_tools:
+  filters: 篩選
+  filter_duration: 時長
+  filter_watched: 觀看時間
+  filter_device: 裝置
+  filter_progress: 進度
+  filter_added: 加入時間
+  date_custom: 自訂日期
+  date_range: 自訂日期範圍
+  days: 依日期跳轉
+  resume_at: '看到 {time} / {total}'
+  video_count: '{count} 部影片'
+  uploaders: 本收藏夾的 UP 主
+  all_uploaders: 全部
   layout_list: 清單
   layout_grid: 網格
   search_scope: 搜尋範圍
@@ -171,7 +184,35 @@ player_screenshot:
   failed: 截圖失敗
   video_unavailable: 目前影片畫面無法使用
 settings:
-  page_mode_desc: 選擇原版、Bewly，或分別設定各頁面與頂欄。
+  moments_start_from_last_seen: 進入動態時自動續讀
+  moments_start_from_last_seen_desc: 用於全部動態、影片投稿與頂欄影片動態。優先恢復本視窗的閱讀書籤，否則定位至伺服器影片未讀分界；分界不代表所有類型的閱讀位置。
+  parameters: 參數
+  font_overrides: 字型覆寫
+  play_order_multipart: 分 P 影片播放順序
+  play_order_collection: 合集播放順序
+  play_order_watch_later: 稍後再看播放順序
+  play_order_playlist: 收藏清單播放順序
+  menu_playback: 播放
+  playback_layout: 版面
+  playback_controls: 控制項
+  playback_behavior: 播放行為
+  list_layouts: 清單與版面
+  list_layouts_desc: 設定觀看紀錄與稍後再看的預設版面。
+  search_results_effective_bewly: 目前使用 Bewly 搜尋結果頁。
+  search_results_effective_bilibili: 目前使用 Bilibili 搜尋結果頁。
+  search_results_controlled_by_mode: 目前使用 Bilibili 搜尋結果頁，由頁面模式中的搜尋頁選擇決定。
+  video_card_context_menu_region_saving: 收藏與儲存
+  playback_policy_priority: 播完暫停、單集循環優先；其餘情況依已啟用的清單順序續播，未接管時沿用原生結束行為。
+  play_order_native: 沿用原生
+  single_video_auto_play: 連播推薦
+  bcoin_mode: B 幣券領取
+  bcoin_remind: 僅提醒
+  bcoin_auto: 自動領取
+  moments_preview_controls: 動態影片預覽控制列
+  moments_preview_swipe: 動態影片預覽滑動定位
+  moments_preview_delay: 動態影片預覽延遲
+  moments_preview_cover_only: 僅在動態封面內預覽
+  page_mode_desc: 統一選擇頁面模式；在自訂模式下分別選擇各頁面與頂欄。
   app_authorized: 已授權
   settings_data: 設定資料
   page_mode: 頁面模式
@@ -183,7 +224,7 @@ settings:
   recommendation_mode_app_single: APP 單列
   recommendation_mode_app_double: APP 雙列
   recommendation_mode_visible_options: 快速切換顯示項
-  recommendation_mode_visible_options_desc: 只改變入口顯示，完整選單始終可用；APP 欄數只影響請求設定。
+  recommendation_mode_visible_options_desc: 點擊顯示或隱藏，拖曳或按 Alt + 方向鍵排序。這裡只調整快捷入口，目前推薦模式不變；上方可選擇全部模式。
   resume_from_preview_position: 從預覽位置開啟影片
   resume_from_preview_position_desc: 僅控制連結中的預覽時間，保留預覽記憶、歷史續播及既有時間參數。
   show_dock_back_to_top: 顯示 Dock 回頂按鈕
@@ -248,9 +289,9 @@ settings:
   category_browsing_video_card_desc: 設定影片卡片的版面、預覽、資訊顯示與開啟方式。
   category_browsing_favorites_desc: 設定收藏內容的顯示與互動方式。
   category_navigation_link_opening_desc: 統一設定頂欄、影片卡片與搜尋列連結的開啟位置和抽屜行為。
-  category_navigation_topbar_desc: 統一調整頂欄版面、元件、頻道、搜尋入口和通知顯示。
+  category_navigation_topbar_desc: 調整頂欄元件、置頂頻道與連結開啟方式。
   category_navigation_dock_desc: 設定 Dock 列與側欄的位置、顯示和快捷操作。
-  category_navigation_search_desc: 設定搜尋頁外觀、建議、歷史、熱門搜尋與結果頁。
+  category_navigation_search_desc: 設定搜尋入口、外觀、建議、紀錄與結果頁。
   category_navigation_moments_desc: 設定插件動態頁的左側元件和動態卡片開啟方式。
   category_navigation_watch_later_page_desc: 設定稍後觀看頁面的內容版面。
   category_navigation_playback_page_desc: 設定影片預設顯示模式與 Bewly 播放頁互動。
@@ -304,10 +345,10 @@ settings:
     network: 網路連線失敗
     invalid-response: 暫時無法讀取訊息設定
     api-error: 操作失敗，請重試
-  category_playback_player_desc: 設定播放器模式、捲動行為、彈幕、字幕和播放狀態。
+  category_playback_player_desc: 設定彈幕、字幕、播放記憶、響度與截圖。
   category_playback_autoplay_desc: 設定自動連播與自訂播放行為。
   category_bilibili_comments_desc: 增強留言區的使用者資訊與內容顯示。
-  category_bilibili_vip_desc: 設定大會員權益相關的提醒功能。
+  category_bilibili_vip_desc: 設定大會員權益的提醒與自動領取。
   category_advanced_compatibility_desc: 設定原版頁面、第三方擴充功能和其他頁面的相容行為。
   category_advanced_maintenance_desc: 匯出備份、匯入設定或還原 Bewly Nocturne 預設配置。
   maintenance:
@@ -375,13 +416,13 @@ settings:
   group_video_page_actions: 影片頁功能
   group_video_page_actions_desc: 標籤僅用於切換影片頁和播放器控制列中相關按鈕的顯示。
   group_custom_auto_play_behavior: 播放結束行為
-  group_custom_auto_play_behavior_desc: 關閉 Bilibili 預設行為後，可分別設定不同影片類型的後續動作。「連播推薦」會在目前影片結束後繼續播放推薦影片。
+  group_custom_auto_play_behavior_desc: 僅清單內連播會在清單結束時停止；連播推薦允許繼續播放推薦影片。
   group_playback_end_behavior: 播放結束行為
   group_video_type_end_behavior: 依影片類型設定
   group_playlist_start_behavior: 播放列表起點
-  group_random_play: 自訂播放
+  group_random_play: 清單播放順序
   group_random_play_settings: 隨機播放設定
-  group_random_play_settings_desc: 設定自訂播放預設值為「隨機播放」時的啟用方式。
+  group_random_play_settings_desc: 僅用於使用隨機順序的清單。
   group_topbar: 頂部列
   topbar_logo_and_channels: Logo 設定
   topbar_logo_and_channels_desc: 設定頂部列 Logo 樣式，以及觸控模式下是否顯示首頁按鈕。
@@ -496,8 +537,8 @@ settings:
   remove_the_indent_from_chinese_punctuation: 移除中文標點符號的縮排
   remove_the_indent_from_chinese_punctuation_desc: |
     Bilibili 預設會特別處理中文標點符號以達到左對齊。 如果你正在使用自訂字型，建議移除縮排。
-  disable_frosted_glass_and_top_bar_gradient: 關閉毛玻璃與頂部列漸變
-  disable_frosted_glass_and_top_bar_gradient_desc: 開啟後關閉全域毛玻璃和頂部列漸變，並使用實色表面；兩種效果預設開啟。
+  disable_frosted_glass_and_top_bar_gradient: 毛玻璃與頂欄漸層
+  disable_frosted_glass_and_top_bar_gradient_desc: 關閉後使用實色表面。
   frosted_glass_blur_intensity: 毛玻璃模糊強度
   disable_shadow: 停用陰影
   link_opening_behavior_opt:
@@ -572,12 +613,12 @@ settings:
     bewly_widescreen_sidebar_position_desc: 選擇留言、彈幕與推薦欄位於影片卡片的哪一側
     bewly_widescreen_sidebar_position_left: 左側
     bewly_widescreen_sidebar_position_right: 右側
-  enable_video_preview: 啟用影片預覽功能（如果可以的話）
-  enable_video_ctrl_bar_on_video_card: 在影片卡片上顯示影片控制欄
-  video_preview_swipe_seek: 滑動小範圍跳轉
+  enable_video_preview: 影片卡片懸停預覽
+  enable_video_ctrl_bar_on_video_card: 影片卡片預覽控制列
+  video_preview_swipe_seek: 影片卡片預覽滑動定位
   video_preview_swipe_seek_desc: 在影片預覽上按住並直接左右滑動，在目前播放位置附近倒退或快進。
-  hover_video_card_delayed: 將滑鼠懸停在影片卡片上時延遲影片預覽
-  only_cover_video_preview: 僅封面影片預覽
+  hover_video_card_delayed: 影片卡片預覽延遲
+  only_cover_video_preview: 僅在影片卡片封面內預覽
   show_video_card_author_name: 顯示使用者暱稱
   show_video_card_publish_time: 顯示發布時間
   show_video_watched_badge: 在動態影片中顯示觀看狀態
@@ -588,9 +629,7 @@ settings:
     number: 數字
     dot: 圓點
     none: 不顯示
-  show_bcoin_receive_reminder: 大會員B幣領取提醒
-  auto_receive_bcoin_coupon: 大會員B幣自動領取
-  auto_receive_bcoin_coupon_desc: 開啟領取提醒後，偵測到未領取的 B 幣券時自動領取。
+  auto_receive_bcoin_coupon_desc: 自動領取會在偵測到可領取的券時提交領取，無須開啟提醒。
   auto_receive_bcoin_coupon_success: B幣券自動領取成功
   auto_receive_bcoin_coupon_failed: 'B幣券自動領取失敗：{message}'
   auto_receive_bcoin_coupon_error: B幣券自動領取異常，請稍後再試
@@ -699,7 +738,7 @@ settings:
   filter_by_view_count_desc: 只保留播放量大於設定值的影片。
   filter_by_view_count_unit: 次
   filter_by_like_count: 依按讚數篩選
-  filter_by_like_count_desc: Web 與 Web 訪客推薦：只保留按讚數大於設定值的影片。
+  filter_by_like_count_desc: 保留按讚數大於設定值的影片。APP 推薦按需讀取候選稿件的按讚數；未知值不當作零。
   filter_by_like_count_unit: 次
   filter_by_duration: 依影片長度篩選
   filter_by_duration_desc: 只保留時長大於設定值的影片。
@@ -737,7 +776,7 @@ settings:
   enable_version_reminder: 新版本提醒
   enable_version_reminder_desc: 在外掛首頁提醒尚未確認的新版本；每個版本只提醒一次。
   enable_following_inactive_blacklist: 將較少活動的 UP 主排後
-  enable_following_inactive_blacklist_desc: 依本地已知活動時間排序。只使用已載入的紀錄。
+  enable_following_inactive_blacklist_desc: 依本機已知活動將較少更新的 UP 主排後。關閉後停止套用名單，保留已記錄的資料。
   following_inactive_days: 活動時間間隔
   following_inactive_days_desc: 依本地已知時間判斷；沒有投稿紀錄時使用關注時間。
   preserve_for_you_state: 留存為你推薦切換前狀態
@@ -789,8 +828,8 @@ settings:
   history_layout: 觀看記錄版面
   history_layout_list: 日期分組列表
   history_layout_grid: 日期分組網格
-  notification_badge_categories: 通知角標類別
-  notification_badge_categories_desc: 僅影響頂欄、Dock 和通知選單的數字顯示，不提交已讀或改變訊息未讀狀態。
+  notification_badge_categories: 本機通知徽章
+  notification_badge_categories_desc: 選擇計入 Dock 未讀數的訊息類別；不變更 B 站接收規則或已讀狀態。
   show_reply_notification_reminder: 顯示回覆提醒
   show_at_notification_reminder: "顯示 {'@'} 提醒"
   show_system_notification_reminder: 顯示系統通知提醒
@@ -799,8 +838,8 @@ settings:
   remember_video_aspect_ratio_desc: 啟用後，播放器會記住你上次選擇的影片比例，並在下次打開影片時自動套用
   auto_exit_fullscreen_on_end: 全螢幕/網頁全螢幕播放完畢後自動退出
   auto_exit_fullscreen_on_end_desc: 啟用後，當影片播放結束且沒有單集循環、隨機播放、自動連播等後續播放行為時，會自動退出全螢幕模式
-  use_bilibili_default_auto_play: 使用 Bilibili 預設自動播放行為
-  use_bilibili_default_auto_play_desc: 由 Bilibili 決定播放結束行為，不使用下方依類型設定。正在使用的自訂播放順序優先。
+  use_bilibili_default_auto_play: 沿用 Bilibili 結束行為
+  use_bilibili_default_auto_play_desc: 關閉後可依影片類型指定結束行為。清單播放順序在下方設定。
   auto_play_watch_later: 稍後觀看
   auto_play_mode_default: Bilibili 預設
   auto_play_mode_auto_play: 自動連播
@@ -815,10 +854,8 @@ settings:
   auto_play_recommend_desc: 選擇單影片播放結束後的自動播放行為。「連播推薦」表示目前影片結束後繼續播放推薦影片。
   auto_play_playlist: 收藏列表
   auto_play_playlist_desc: 選擇收藏列表的自動播放行為。「連播推薦」表示目前影片結束後繼續播放推薦影片。
-  enable_random_play: 啟用影片合集自訂播放
-  enable_random_play_desc: 為多P影片、合集、稍後觀看或播放列表加入順序、逆序、隨機播放與列表編輯功能。
-  default_custom_play_order: 預設自訂播放選項
-  default_custom_play_order_desc: 僅控制播放器中預設選取的順序，不控制開關狀態；啟用依影片類型設定後，類型專屬預設值會覆蓋此選項。
+  default_custom_play_order: 播放順序
+  default_custom_play_order_desc: 順序與逆序會自動啟用並在清單內循環；隨機播放可選擇手動或自動啟用。
   enable_custom_play_order_overrides: 依影片類型設定自訂播放預設值
   enable_custom_play_order_overrides_desc: 啟用後，可為支援的播放情境分別選擇預設自訂播放選項。
   custom_play_order_overrides: 依影片類型設定
@@ -920,7 +957,7 @@ settings:
   visibility: 顯示
   group_search_results: 搜尋結果
   use_plugin_search_results_page: 使用插件搜尋結果頁
-  use_plugin_search_results_page_desc: 使用 Bewly 搜尋結果頁。受頁面模式控制；自訂模式下需將搜尋頁設為 Bewly。
+  use_plugin_search_results_page_desc: 開啟後使用 Bewly 結果頁；全域或自訂頁面模式選擇原版搜尋時，仍使用 Bilibili。
   search_results_pagination_mode: 搜尋結果分頁模式
   search_results_pagination_mode_desc: 選擇搜尋結果的展示方式：滾動自動加載或翻頁
 auth:
@@ -1297,6 +1334,19 @@ dock:
   collapse_dock: 收合 Dock
   expand_dock: 展開 Dock
 moments:
+  loaded_new_videos: '本列表含 {count} 則新影片'
+  jump_to_last_seen: 回到上次正在看的動態
+  jump_to_video_boundary: 跳到影片未讀分界
+  jump_to_latest: 回到最新
+  refresh_moments: 重新整理動態
+  load_newer: 載入更新的動態
+  local_bookmark: 本視窗的閱讀書籤
+  video_boundary: 影片未讀分界
+  continue_gap: 繼續補齊這裡的動態
+  join_budget: 這段動態尚未接續，可繼續載入。
+  join_failed: 載入未完成，可重試接續。
+  join_stalled: 介面未回傳新的分頁，可重試。
+  join_ended: 介面已結束，但尚未接上原列表。
   vote_chart_unit: '每刻度 1% · 多選比例獨立計算'
   enter_live_room: '進入 {name} 的直播間'
   promotion_advertisement: 廣告
@@ -1359,6 +1409,23 @@ moments:
   followers: 粉絲
   moments: 動態
   publish: 發布動態
+  search_label: 搜尋動態
+  search_filter: 篩選動態
+  search_empty: 沒有找到符合條件的動態
+  search_type: 類型
+  search_time: 時間
+  search_kind_all: 全部類型
+  search_kind_original: 原創
+  search_kind_forward: 轉發
+  search_kind_video: 影片
+  search_kind_draw: 圖文
+  search_kind_live: 直播
+  search_kind_article: 專欄
+  search_time_all: 全部時間
+  search_time_day: 一天內
+  search_time_week: 一週內
+  search_time_month: 一個月內
+  search_time_year: 一年內
   live_now: 正在直播
   live_badge: 直播中
   live_preview_unavailable: 暫時無法預覽
@@ -1374,7 +1441,6 @@ moments:
   initial_loading: 正在準備動態和圖片…
   empty: 暫時沒有可顯示的動態
   loading: 正在載入…
-  loading_more: 正在載入並準備更多動態…
   no_more: 沒有更多動態了
   live_room: 直播間
   video_playback: 影片播放
@@ -1695,14 +1761,6 @@ favorites:
   filter_keyword_remove: '移除關鍵字 {keyword}'
   filter_reset: 重設
   filter_apply: 套用
-  filter_pause: 暫停
-  filter_continue: 繼續掃描
-  filter_status_scanning: '正在掃描，已掃描 {scanned} 個，符合 {count} 個'
-  filter_status_paused: '掃描已暫停，已符合 {count} 個'
-  filter_status_budget: '已掃描 {scanned} 個，符合 {count} 個；尚未掃描完畢'
-  filter_status_complete: '掃描完成，共符合 {count} 個'
-  filter_status_failed: '掃描失敗，已符合 {count} 個'
-  filter_status_stalled: '分頁沒有進展，已符合 {count} 個'
   saved_refresh_failed: 已儲存，但列表重新整理失敗，請重新整理查看
   create_folder: 新增收藏夾
   folder_name: 名稱
@@ -1731,6 +1789,7 @@ favorites:
   order_published: 最近投稿
   subscription_filter: 訂閱類型
   manage_folders: 管理收藏夾
+  folder_more: 更多操作
   subscription_all: 全部訂閱
   subscription_seasons: 影片合集
   subscription_folders: 收藏夾

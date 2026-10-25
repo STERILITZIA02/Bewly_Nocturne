@@ -196,7 +196,7 @@ export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent
   })
 
   check('recommendation capsule: actual component commits a complete request configuration, requests existing App authorization and retains page mode', async () => {
-    const settings = Vue.ref({ recommendationMode: 'web', appRecommendationColumn: 2, recommendationModeSwitcherOptions: ['web', 'webNoCookie', 'appSingle', 'appDouble'], pageMode: 'custom' })
+    const settings = Vue.ref({ recommendationMode: 'web', appRecommendationColumn: 2, recommendationModeSwitcherOptions: ['web', 'webNoCookie', 'appSingle', 'appDouble'].map(mode => ({ mode, visible: true })), pageMode: 'custom' })
     const requests = []
     const module = await loadSourceModule('../src/logic/recommendationMode.ts', {
       '~/logic/storage': { settings, appAuthTokens: Vue.ref({ accessToken: '' }) },
@@ -207,7 +207,7 @@ export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent
     const Component = await compileComponent('../src/contentScripts/views/Home/components/RecommendationModeSwitcher.vue', {
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       '~/logic': { settings },
-      '~/components/LiquidSegmentIndicator.vue': { default: { render: () => null } },
+      '~/components/LiquidSegmentIndicator.vue': { default: { methods: { updateIndicator() {} }, render: () => null } },
       '~/logic/layoutEdit': { vLayoutEditable: {} },
       '~/logic/recommendationMode': module,
     })
@@ -230,6 +230,15 @@ export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent
       await flush()
       assert.equal(settings.value.pageMode, 'custom')
       assert.equal(buttons[0].getAttribute('data-active'), 'true')
+      buttons[0].focus()
+      settings.value.recommendationModeSwitcherOptions.reverse()
+      await flush()
+      assert.equal(host.querySelectorAll('button')[3], buttons[0])
+      assert.equal(document.activeElement, buttons[0])
+      settings.value.recommendationModeSwitcherOptions = settings.value.recommendationModeSwitcherOptions.map(item => ({ ...item, visible: false }))
+      await flush()
+      assert.equal(host.querySelector('button'), null)
+      assert.equal(settings.value.recommendationMode, 'web')
     }
     finally {
       app.unmount()

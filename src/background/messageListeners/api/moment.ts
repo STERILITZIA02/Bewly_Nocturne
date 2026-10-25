@@ -49,7 +49,7 @@ const API_MOMENT = {
       method: 'get',
     },
     params: {},
-    afterHandle: AHS.J_D,
+    afterHandle: AHS.MOMENTS,
   },
   getTopBarMoments: {
     url: 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/nav',
@@ -61,7 +61,7 @@ const API_MOMENT = {
       update_baseline: '',
       offset: '',
     },
-    afterHandle: AHS.J_D,
+    afterHandle: AHS.MOMENTS,
   },
   getTopBarLiveMoments: {
     url: 'https://api.live.bilibili.com/xlive/web-ucenter/v1/xfetter/FeedList',
@@ -86,7 +86,7 @@ const API_MOMENT = {
       // itemOpusStyle: 图文/纯文字走 opus 结构；listOnlyfans: 充电专属列表字段
       features: 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,onlyfansAssetsV2,forwardListHidden,ugcDelete,onlyfansQaCard',
     },
-    afterHandle: AHS.J_D,
+    afterHandle: AHS.MOMENTS,
   },
   getMomentsPortal: {
     url: 'https://api.bilibili.com/x/polymer/web-dynamic/v1/portal',
@@ -108,7 +108,7 @@ const API_MOMENT = {
       id: '',
       features: 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,onlyfansAssetsV2,htmlNewStyle',
     },
-    afterHandle: AHS.J_D,
+    afterHandle: AHS.MOMENTS,
   },
   getMomentComments: {
     url: 'https://api.bilibili.com/x/v2/reply',
@@ -293,7 +293,7 @@ const API_MOMENT = {
       features: 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,onlyfansAssetsV2,forwardListHidden,ugcDelete,onlyfansQaCard',
       web_location: '333.1365',
     },
-    afterHandle: AHS.J_D,
+    afterHandle: AHS.MOMENTS,
   },
   getUserMoments: {
     url: 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space',
@@ -305,7 +305,7 @@ const API_MOMENT = {
       offset: '',
       features: 'itemOpusStyle',
     },
-    afterHandle: AHS.J_D,
+    afterHandle: AHS.MOMENTS,
   },
   getMomentsUpdate: {
     url: 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all/update',

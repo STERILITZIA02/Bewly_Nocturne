@@ -341,16 +341,16 @@ html.bewly-design.notificationsPage {
     .action-menu .menu-list,
     .bl-button--shallow-o,
     .cs-actions-wrap {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .action-menu .menu-list:before {
-      border-right-color: var(--bew-border-color);
-      border-top-color: var(--bew-border-color);
+      border-right-color: var(--bew-separator-color);
+      border-top-color: var(--bew-separator-color);
     }
 
     .share-card .footer {
-      border-top-color: var(--bew-border-color);
+      border-top-color: var(--bew-separator-color);
     }
 
     .orginal-reply {
@@ -374,7 +374,7 @@ html.bewly-design.notificationsPage {
     .header::after,
     .split-line,
     .content .chr {
-      background-color: var(--bew-border-color);
+      background-color: var(--bew-separator-color);
     }
 
     .space-right .space-right-bottom .bili-im .left,
@@ -493,7 +493,7 @@ html.bewly-design.notificationsPage {
     }
 
     .share-card .footer {
-      border-top: 1px solid var(--bew-border-color);
+      border-top: var(--bew-hairline) solid var(--bew-separator-color);
     }
   }
   // #endregion
@@ -574,7 +574,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .message-main .interaction-item {
     color: var(--bew-text-1);
     background: transparent;
-    border-bottom: 1px solid var(--bew-border-color);
+    border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
     border-radius: 0;
     box-shadow: none;
   }
@@ -661,7 +661,7 @@ html.notificationsPage.bewly-notifications-embedded {
 
   .bili-im .left {
     background: var(--bew-content) !important;
-    border-right-color: var(--bew-border-color) !important;
+    border-right-color: var(--bew-separator-color) !important;
   }
 
   .bili-im .right,
@@ -684,14 +684,14 @@ html.notificationsPage.bewly-notifications-embedded {
     color: var(--bew-text-1) !important;
     background: var(--bew-glass-tint) !important;
     backdrop-filter: var(--bew-filter-glass-1);
-    border-color: var(--bew-border-color) !important;
+    border-color: var(--bew-separator-color) !important;
   }
 
   .space-right-top .title,
   .bili-im .left > .title,
   .bili-im .right .dialog > .title {
     font-size: var(--bew-font-size-title);
-    font-weight: var(--bew-font-weight-semibold);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-title);
   }
 
@@ -810,7 +810,7 @@ html.notificationsPage.bewly-notifications-embedded {
   #link-message-container .send-box {
     color: var(--bew-text-1);
     background: var(--bew-elevated-solid) !important;
-    border-color: var(--bew-border-color) !important;
+    border-color: var(--bew-separator-color) !important;
   }
 
   .reply-textarea,
@@ -821,7 +821,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .content .kw-search-row .kw-search {
     color: var(--bew-text-1) !important;
     background: var(--bew-elevated-solid) !important;
-    border: 1px solid var(--bew-border-color) !important;
+    border: var(--bew-hairline) solid var(--bew-separator-color) !important;
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
     caret-color: var(--bew-theme-color);
@@ -859,7 +859,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .follow-btn.inactive {
     color: var(--bew-text-2) !important;
     background: var(--bew-elevated-solid) !important;
-    border-color: var(--bew-border-color) !important;
+    border-color: var(--bew-separator-color) !important;
   }
 
   .action-menu .menu-list,
@@ -870,7 +870,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .cs-actions-wrap {
     color: var(--bew-text-1) !important;
     background: var(--bew-elevated-solid) !important;
-    border: 1px solid var(--bew-surface-border-color) !important;
+    border: var(--bew-hairline) solid var(--bew-edge-color) !important;
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     box-shadow: var(--bew-shadow-3);
@@ -889,7 +889,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .cs-order-notice {
     color: var(--bew-text-1) !important;
     background: var(--bew-elevated-solid) !important;
-    border-color: var(--bew-surface-border-color) !important;
+    border-color: var(--bew-edge-color) !important;
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     box-shadow: none !important;
@@ -929,7 +929,7 @@ html.notificationsPage.bewly-notifications-embedded {
     color: var(--bew-text-1) !important;
     background: var(--bew-selected-bg) !important;
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   .divider,
@@ -937,7 +937,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .split-line,
   .content .chr,
   .share-card .footer {
-    border-color: var(--bew-border-color) !important;
+    border-color: var(--bew-separator-color) !important;
   }
 
   .message-list::-webkit-scrollbar-thumb,
@@ -945,6 +945,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .context-menu::-webkit-scrollbar-thumb {
     background: var(--bew-fill-2);
     border-radius: var(--bew-pill-radius);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   &.disable-frosted-glass {

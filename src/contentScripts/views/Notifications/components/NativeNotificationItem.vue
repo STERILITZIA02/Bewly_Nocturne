@@ -180,7 +180,7 @@ function markAvatarFailed(index: number) {
 .native-notification-item__remaining-actors {
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
   background: var(--bew-elevated-solid);
 }
@@ -232,7 +232,7 @@ function markAvatarFailed(index: number) {
 
 .native-notification-item__actor {
   color: var(--bew-text-1);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   text-decoration: none;
 }
 
@@ -324,7 +324,7 @@ function markAvatarFailed(index: number) {
   min-height: var(--bew-icon-button-size-sm);
   color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
 }

@@ -15,11 +15,11 @@
   background: var(--bew-fill-1);
   border: 0;
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   font-family: inherit;
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   cursor: pointer;
   transition: background-color var(--bew-duration-fast) ease;
 

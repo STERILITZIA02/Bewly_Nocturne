@@ -3,6 +3,7 @@ import { useElementSize } from '@vueuse/core'
 import { computed, inject, ref } from 'vue'
 
 import BangumiCardSkeleton from '~/components/BangumiCard/BangumiCardSkeleton.vue'
+import LibraryBleedStrip from '~/components/LibraryBleedStrip.vue'
 import LibraryVideoGridSkeleton from '~/components/LibraryVideoGridSkeleton.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import MomentCardSkeleton from '~/components/MomentCard/MomentCardSkeleton.vue'
@@ -15,13 +16,10 @@ import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useGridLayout } from '~/composables/useGridLayout'
 import AnimeTimeTableSkeleton from '~/contentScripts/views/Anime/components/AnimeTimeTableSkeleton.vue'
 import FavoriteSidebarSkeleton from '~/contentScripts/views/Favorites/FavoriteSidebarSkeleton.vue'
-import HistoryAdvancedFilters from '~/contentScripts/views/History/HistoryAdvancedFilters.vue'
-import { createHistoryFilters } from '~/contentScripts/views/History/historyFilters'
 import MomentsContentLayout from '~/contentScripts/views/Moments/MomentsContentLayout.vue'
 import MomentsHotSearch from '~/contentScripts/views/Moments/MomentsHotSearch.vue'
 import MomentsSidebar from '~/contentScripts/views/Moments/MomentsSidebar.vue'
 import NotificationsPageSkeleton from '~/contentScripts/views/Notifications/components/NotificationsPageSkeleton.vue'
-import WatchLaterPlayAllCard from '~/contentScripts/views/WatchLater/WatchLaterPlayAllCard.vue'
 import { AppPage } from '~/enums/appEnums'
 import type { GridLayoutType } from '~/logic'
 import { gridLayout as savedGridLayout, settings } from '~/logic'
@@ -44,7 +42,6 @@ const momentColumns = computed(() => resolveMomentGridColumnCount({
   gap: MOMENT_GRID_DIMENSIONS.gap,
 }))
 const emptyItems: never[] = []
-const historyFilters = createHistoryFilters()
 </script>
 
 <template>
@@ -82,7 +79,7 @@ const historyFilters = createHistoryFilters()
             <SkeletonBlock v-if="page === AppPage.WatchLater" width="var(--bew-space-10)" height="var(--bew-space-6)" radius="full" />
             <SkeletonBlock v-if="page !== AppPage.WatchLater" width="40%" height="var(--bew-line-height-control)" />
           </div>
-          <div class="library-rail-tools">
+          <div class="library-rail-tools" :class="{ 'library-rail-tools--ruled': page !== AppPage.Favorites }">
             <SkeletonBlock height="var(--bew-control-height)" radius="full" />
             <div v-if="page === AppPage.Favorites" class="bew-page-async-loading__favorite-order bew-segment-control--track">
               <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-item-height)" radius="full" />
@@ -95,43 +92,6 @@ const historyFilters = createHistoryFilters()
               <SkeletonBlock class="bew-page-async-loading__sort" width="var(--bew-control-height)" height="var(--bew-control-height)" radius="circle" />
             </div>
           </div>
-          <div v-if="page === AppPage.WatchLater" class="bew-page-async-loading__advanced">
-            <div class="bew-page-async-loading__filter-section">
-              <div class="bew-page-async-loading__filter-heading">
-                <SkeletonBlock width="45%" height="var(--bew-line-height-control)" />
-                <SkeletonBlock width="var(--bew-control-icon-size)" height="var(--bew-space-0-5)" />
-              </div>
-              <div class="bew-page-async-loading__filter-options">
-                <SkeletonBlock v-for="index in 2" :key="index" width="100%" height="var(--bew-control-item-height)" radius="interactive" />
-              </div>
-            </div>
-            <div class="bew-page-async-loading__filter-section">
-              <div class="bew-page-async-loading__filter-heading">
-                <SkeletonBlock width="45%" height="var(--bew-line-height-control)" />
-                <SkeletonBlock width="var(--bew-control-icon-size)" height="var(--bew-space-0-5)" />
-              </div>
-              <div class="bew-page-async-loading__filter-range">
-                <div v-for="index in 2" :key="index">
-                  <SkeletonBlock width="50%" height="var(--bew-line-height-caption)" />
-                  <SkeletonBlock width="100%" height="var(--bew-control-height)" radius="interactive" />
-                </div>
-              </div>
-            </div>
-            <div class="bew-page-async-loading__filter-section">
-              <div class="bew-page-async-loading__filter-heading">
-                <SkeletonBlock width="45%" height="var(--bew-line-height-control)" />
-                <SkeletonBlock width="var(--bew-control-icon-size)" height="var(--bew-space-0-5)" />
-              </div>
-              <div class="bew-page-async-loading__filter-options">
-                <SkeletonBlock
-                  v-for="index in 5" :key="index" :style="index === 1 ? { gridColumn: '1 / -1' } : undefined" width="100%" height="var(--bew-control-item-height)"
-                  radius="interactive"
-                />
-              </div>
-            </div>
-          </div>
-          <HistoryAdvancedFilters v-if="page === AppPage.History" :model-value="historyFilters" disabled inert />
-          <WatchLaterPlayAllCard v-if="page === AppPage.WatchLater" :items="[]" :total="0" loading disabled />
           <FavoriteSidebarSkeleton v-if="page === AppPage.Favorites" />
           <div v-else class="library-rail-actions">
             <SkeletonBlock
@@ -143,7 +103,28 @@ const historyFilters = createHistoryFilters()
           </div>
         </div>
       </template>
-      <SkeletonBlock v-if="page === AppPage.Favorites" class="bew-page-async-loading__toolbar" width="180px" height="var(--bew-line-height-heading)" />
+      <!-- The strips over the content: History's day chips, a folder's uploaders. -->
+      <section
+        v-if="page === AppPage.History || page === AppPage.Favorites" class="bew-page-async-loading__strip"
+        :class="page === AppPage.History ? 'bew-page-async-loading__strip--days' : 'bew-page-async-loading__strip--uploaders'" aria-hidden="true"
+      >
+        <LibraryBleedStrip :label="$t('common.loading')" :compact="page === AppPage.History">
+          <template v-if="page === AppPage.History">
+            <SkeletonBlock v-for="index in 6" :key="index" width="calc(var(--bew-space-12) + var(--bew-space-4))" height="var(--bew-control-height)" radius="full" />
+          </template>
+          <template v-else>
+            <span v-for="index in 10" :key="index" class="bew-page-async-loading__uploader">
+              <SkeletonBlock width="var(--bew-library-uploader-tile-size)" height="var(--bew-library-uploader-tile-size)" radius="media" />
+              <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
+            </span>
+          </template>
+        </LibraryBleedStrip>
+      </section>
+      <!-- The library heads are heroes: a cover band over the title and actions. -->
+      <SkeletonBlock
+        v-if="page === AppPage.Favorites || page === AppPage.WatchLater" class="bew-page-async-loading__hero" width="100%"
+        height="calc(clamp(160px, 22vw, 260px) + var(--bew-space-4) * 2 + var(--bew-line-height-heading) * 2)" radius="media"
+      />
       <VideoListSkeleton v-if="(page === AppPage.History && settings.historyLayout === 'list') || (page === AppPage.WatchLater && settings.watchLaterLayoutMode === 'list')" :class="{ 'history-timeline-skeleton': page === AppPage.History }" :count="5" :history="page === AppPage.History" :action-count="page === AppPage.WatchLater ? 3 : 1" />
       <LibraryVideoGridSkeleton v-else-if="page === AppPage.History || page === AppPage.WatchLater" :history="page === AppPage.History" />
       <VideoCardGrid
@@ -179,6 +160,7 @@ const historyFilters = createHistoryFilters()
 
 <style scoped lang="scss">
 @use "../contentScripts/views/History/historyTimeline";
+@use "../styles/bleedStrip";
 
 .bew-page-async-loading__favorite-order {
   display: grid;
@@ -206,48 +188,6 @@ const historyFilters = createHistoryFilters()
 }
 .bew-page-async-loading__rail-heading--wheel-only {
   padding-block-start: 0;
-}
-.bew-page-async-loading__advanced {
-  display: grid;
-  gap: var(--bew-space-3);
-  padding: var(--bew-library-filter-padding);
-  background: var(--bew-message-pinned-background);
-  border-radius: var(--bew-library-filter-radius);
-  corner-shape: var(--bew-corner-shape);
-  container-type: inline-size;
-}
-.bew-page-async-loading__filter-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--bew-control-gap);
-}
-.bew-page-async-loading__filter-section {
-  display: grid;
-  gap: var(--bew-space-2);
-  + .bew-page-async-loading__filter-section {
-    padding-top: var(--bew-space-3);
-    border-top: 1px solid var(--bew-message-card-border);
-  }
-}
-.bew-page-async-loading__filter-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: var(--bew-control-item-height);
-}
-.bew-page-async-loading__filter-range {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--bew-space-2);
-  > div {
-    display: grid;
-    gap: var(--bew-space-1);
-  }
-}
-@container (max-width: 240px) {
-  .bew-page-async-loading__filter-range {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 .bew-page-async-loading__watch-toolbar {
   display: grid;
@@ -318,8 +258,24 @@ const historyFilters = createHistoryFilters()
     gap: var(--bew-space-2);
   }
 }
-.bew-page-async-loading__toolbar {
-  margin-bottom: var(--bew-space-3);
+.bew-page-async-loading__strip--days {
+  // The History column also has a space-6 gap after the strip's own.
+  @include bleedStrip.bar(var(--bew-control-height), calc(var(--bew-space-6) * 2));
+}
+.bew-page-async-loading__strip--uploaders {
+  @include bleedStrip.bar(
+    calc(var(--bew-library-uploader-tile-size) + var(--bew-space-2) + var(--bew-line-height-control)),
+    var(--bew-space-6)
+  );
+}
+.bew-page-async-loading__uploader {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--bew-space-2);
+}
+.bew-page-async-loading__hero {
+  margin-bottom: var(--bew-space-6);
 }
 .bew-page-async-loading__sidebar {
   display: grid;

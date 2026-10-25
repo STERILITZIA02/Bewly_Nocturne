@@ -575,7 +575,7 @@ const unfollowUser = () => writeRelation(2)
   min-height: var(--bew-popover-row-min-height);
   padding: var(--bew-space-2) var(--bew-space-3);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   transition:
     color var(--bew-duration-fast) var(--bew-ease-standard),
@@ -602,7 +602,7 @@ const unfollowUser = () => writeRelation(2)
 }
 
 .divider {
-  --uno: "w-full h-1px px-2px bg-$bew-border-color";
+  --uno: "w-full h-1px px-2px bg-$bew-separator-color";
   flex: none;
 }
 
@@ -629,6 +629,8 @@ const unfollowUser = () => writeRelation(2)
     position: absolute;
     inset: 0;
     z-index: -1;
+    box-sizing: border-box;
+    border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
     border-radius: inherit;
     corner-shape: inherit;
     background: var(--bew-popover-surface-background);

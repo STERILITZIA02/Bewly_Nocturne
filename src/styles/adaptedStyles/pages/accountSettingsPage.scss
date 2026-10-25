@@ -18,7 +18,7 @@
   .security-right {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -43,7 +43,7 @@
   .class-coupon,
   .coupon-content-con,
   .security_content .el-form .padding-dom {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .security-right-title-text {
@@ -63,7 +63,7 @@
   .security_content .el-radio-button:not(.is-disabled) .el-radio-button__inner {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .security_content .el-button--primary:not(.is-disabled),
@@ -147,7 +147,7 @@
   .common-dialog-content {
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -156,7 +156,7 @@
   .home-to-space,
   .h-mp-space,
   .go-secuirty {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -190,7 +190,7 @@
     background: var(--bew-theme-surface);
     color: var(--bew-on-theme-surface);
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   .security_content
@@ -209,7 +209,7 @@
     ) {
     background-color: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -240,7 +240,7 @@
 
   .security-left .first-level {
     color: var(--bew-text-2);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
 
     &:hover {
       color: var(--bew-text-1);
@@ -263,7 +263,7 @@
 
   :is(.record-nav-item, .tabs-nav-item, .coin-nav-item, .tab-mk2, .face-g-tab a, .face-nav a) {
     color: var(--bew-text-2);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -274,7 +274,7 @@
   }
 
   :is(.sr-t, .face-nav, .record-nav, .tabs-nav, .notice-item, .points-faq-line) {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .face-nav > div {
@@ -300,7 +300,7 @@
     color: var(--bew-text-2);
     background: var(--bew-content-alt-solid);
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
 
     > a {
       display: inline-flex;
@@ -361,7 +361,7 @@
   }
 
   .tool-container {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -375,7 +375,7 @@
   .tool-uninstall-pendant {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -385,7 +385,7 @@
 
   .pendant-list > li {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -397,7 +397,7 @@
     // Keep one card surface and the same outline without clipping hover actions.
     > div {
       background: transparent;
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: inherit;
       corner-shape: inherit;
     }
@@ -458,7 +458,7 @@
   }
 
   .record-content .table-wrapper {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -466,7 +466,7 @@
   .record-content .table-normal :is(th, td) {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .record-content .table-normal th {
@@ -475,7 +475,7 @@
 
   .points-box {
     background-color: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -516,13 +516,13 @@
 
   .points-record .viptable {
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
 
     th,
     td {
       color: var(--bew-text-1);
       background: var(--bew-content-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     th {
@@ -536,7 +536,7 @@
 
   .points-pendant-item {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -546,7 +546,7 @@
   }
 
   :is(.points-pendant-warp, .points-how-warp, .points-index .bottom-help) {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .go-movie {
@@ -557,7 +557,7 @@
     min-height: var(--bew-control-height);
     padding: var(--bew-space-1) var(--bew-space-3);
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -572,7 +572,7 @@
     &:is(.disabled, .is-disabled) {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-3);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
   }
 
@@ -585,7 +585,7 @@
   }
 
   .black-list {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .black-btn {
@@ -593,7 +593,7 @@
     min-height: var(--bew-control-height);
     color: var(--bew-text-1);
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -624,13 +624,13 @@
 
   .invtable {
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
 
     th,
     td {
       color: var(--bew-text-1);
       background: var(--bew-content-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     th {
@@ -755,12 +755,12 @@
 
   .notice-item .el-switch__core {
     background: var(--bew-fill-3);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
 
     &::after {
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
   }
 
@@ -811,7 +811,7 @@
 
   .coupon-content {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -844,7 +844,7 @@
   }
 
   .coin-nav {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
 
     .coin-nav-item {
       scroll-margin-top: calc(var(--bew-top-bar-height) + var(--bew-space-2));
@@ -858,20 +858,20 @@
   }
 
   .coin-content .table-wrapper {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     overflow: hidden;
   }
 
   .coin-content .table-normal :is(th, td) {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
   }
 
   .coin-content .table-normal tr {
-    border-color: var(--bew-border-color) !important;
+    border-color: var(--bew-separator-color) !important;
   }
 
   .coin-content .table-normal th {
@@ -886,7 +886,7 @@
     min-height: var(--bew-control-height);
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -954,12 +954,12 @@
     .per-right-line,
     .organ-left-line,
     .organ-right-line {
-      background: var(--bew-border-color);
+      background: var(--bew-separator-color);
     }
 
     .el-input__inner:not(:focus),
     .el-textarea__inner:not(:focus) {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
   }
   // #endregion

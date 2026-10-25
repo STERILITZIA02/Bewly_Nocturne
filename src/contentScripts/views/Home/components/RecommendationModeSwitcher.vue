@@ -3,25 +3,26 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
-import Select from '~/components/Select.vue'
 import { settings } from '~/logic'
 import { vLayoutEditable } from '~/logic/layoutEdit'
 import { getRecommendationModeOption, getRecommendationModeOptions, selectRecommendationMode } from '~/logic/recommendationMode'
-import type { RecommendationModeOption } from '~/logic/storage'
 
 const { t } = useI18n()
 const options = computed(() => getRecommendationModeOptions(t))
-const visibleOptions = computed(() => options.value.filter(option => settings.value.recommendationModeSwitcherOptions.includes(option.value)))
+const visibleOptions = computed(() => settings.value.recommendationModeSwitcherOptions.flatMap(({ mode, visible }) => visible ? options.value.filter(option => option.value === mode) : []))
 const activeOption = computed(getRecommendationModeOption)
+const indicator = ref<InstanceType<typeof LiquidSegmentIndicator>>()
+watch(visibleOptions, () => indicator.value?.updateIndicator(true), { flush: 'post' })
 </script>
 
 <template>
   <div
+    v-if="visibleOptions.length"
     v-layout-editable="'home-recommendation-switcher'"
     class="home-recommendation-mode-switcher bew-segment-control bew-segment-control--surface bew-segment-control--track"
     role="group" :aria-label="$t('settings.recommendation_mode')"
   >
-    <LiquidSegmentIndicator :active-key="activeOption" />
+    <LiquidSegmentIndicator ref="indicator" :active-key="activeOption" />
     <button
       v-for="option in visibleOptions" :key="option.value" type="button"
       class="bew-segment-control__item" data-segment-item
@@ -31,12 +32,6 @@ const activeOption = computed(getRecommendationModeOption)
     >
       {{ option.label }}
     </button>
-    <Select
-      v-if="visibleOptions.length < options.length"
-      :model-value="activeOption" :options="options" size="compact"
-      :accessible-label="$t('settings.recommendation_mode')"
-      @update:model-value="selectRecommendationMode($event as RecommendationModeOption)"
-    />
   </div>
 </template>
 

@@ -17,6 +17,8 @@ interface ContextMenuItem {
   danger?: boolean
   disabled?: boolean
   pending?: boolean
+  /** Starts a titled group when it differs from the previous option's. */
+  section?: string
 }
 export type ContextMenuOption = ContextMenuItem & (
   | { kind?: 'action', closeOnSelect?: boolean, checked?: never }
@@ -193,30 +195,31 @@ onBeforeUnmount(() => {
         <li v-if="loading && !options.length" role="presentation" class="context-menu-loading">
           <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-height-sm)" radius="interactive" />
         </li>
-        <li
-          v-for="option in options"
-          :key="option.value"
-          role="presentation"
-        >
-          <button
-            type="button"
-            :role="option.kind === 'radio' ? 'menuitemradio' : option.kind === 'toggle' ? 'menuitemcheckbox' : 'menuitem'"
-            :aria-checked="option.kind === 'radio' || option.kind === 'toggle' ? option.checked : undefined"
-            :disabled="option.disabled"
-            tabindex="-1"
-            class="context-menu-item"
-            :class="{ danger: option.danger }"
-            @click="selectOption(option)"
-          >
-            <i class="item-icon" :class="option.icon" aria-hidden="true" />
-            <span class="item-label">{{ option.label }}<small v-if="option.description" class="item-description">{{ option.description }}</small></span>
-            <span v-if="option.kind === 'toggle' || option.kind === 'radio'" class="item-check" aria-hidden="true">
-              <LoadingRing :loading="Boolean(option.pending)" size="var(--bew-control-icon-size)">
-                <i v-if="option.checked" class="i-tabler:check" />
-              </LoadingRing>
-            </span>
-          </button>
-        </li>
+        <template v-for="(option, index) in options" :key="option.value">
+          <li v-if="option.section && option.section !== options[index - 1]?.section" role="presentation" class="context-menu-section">
+            {{ option.section }}
+          </li>
+          <li role="presentation">
+            <button
+              type="button"
+              :role="option.kind === 'radio' ? 'menuitemradio' : option.kind === 'toggle' ? 'menuitemcheckbox' : 'menuitem'"
+              :aria-checked="option.kind === 'radio' || option.kind === 'toggle' ? option.checked : undefined"
+              :disabled="option.disabled"
+              tabindex="-1"
+              class="context-menu-item"
+              :class="{ danger: option.danger }"
+              @click="selectOption(option)"
+            >
+              <i class="item-icon" :class="option.icon" aria-hidden="true" />
+              <span class="item-label">{{ option.label }}<small v-if="option.description" class="item-description">{{ option.description }}</small></span>
+              <span v-if="option.kind === 'toggle' || option.kind === 'radio'" class="item-check" aria-hidden="true">
+                <LoadingRing :loading="Boolean(option.pending)" size="var(--bew-control-icon-size)">
+                  <i v-if="option.checked" class="i-tabler:check" />
+                </LoadingRing>
+              </span>
+            </button>
+          </li>
+        </template>
       </ul>
     </div>
 
@@ -256,7 +259,7 @@ onBeforeUnmount(() => {
   text-align: left;
   padding: var(--bew-space-2);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
 
   &:active:not(:disabled) {
@@ -299,6 +302,18 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.context-menu-section {
+  padding: var(--bew-space-1) var(--bew-space-2) 0;
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+}
+.context-menu-section:not(:first-child) {
+  margin-top: var(--bew-space-1);
+  padding-top: var(--bew-space-2);
+  border-top: var(--bew-hairline) solid var(--bew-separator-color);
 }
 
 .context-menu-loading {

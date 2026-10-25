@@ -414,6 +414,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   margin-top: var(--bew-space-2);
   padding-left: var(--bew-space-2);
   border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-on-theme-surface);
   background: var(--bew-theme-surface);
   font-size: var(--bew-font-size-caption);
@@ -468,7 +469,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   color: var(--bew-text-2);
   background: transparent;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   cursor: pointer;
 }

@@ -2,7 +2,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import { settings } from '~/logic'
-import { compileFilterRules } from '~/utils/filterRules'
+import { compileFilterRules, isAboveKnownCount } from '~/utils/filterRules'
 import { createRegexBatchRunner } from '~/utils/regexBatchRunner'
 import { isVerticalVideo } from '~/utils/uriParse'
 
@@ -141,7 +141,7 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
       valueKey: 'filterByViewCount',
     },
     [FilterType.likeCount]: {
-      func: compareNumber,
+      func: (item, keyPath, threshold) => isAboveKnownCount(get(item, keyPath), threshold),
       enabledKey: 'enableFilterByLikeCount',
       valueKey: 'filterByLikeCount',
     },

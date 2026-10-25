@@ -285,7 +285,7 @@ else if (shouldInitializePageScript) {
 
     #${COMMENT_REPLY_TREE_GUIDES_ID} .bewly-comment-reply-branch__line {
       fill: none;
-      stroke: var(--bew-comment-tree-line-color, var(--line_regular, rgba(148, 153, 160, 0.28)));
+      stroke: var(--bew-separator-color, var(--line_regular, rgba(148, 153, 160, 0.28)));
       stroke-width: var(--bew-space-0-5, 2px);
       /* butt 避免圆角线帽在竖线外侧鼓出一截 */
       stroke-linecap: butt;
@@ -296,7 +296,7 @@ else if (shouldInitializePageScript) {
     #${COMMENT_REPLY_TREE_GUIDES_ID} .bewly-comment-reply-branch__symbol,
     #${COMMENT_REPLY_TREE_GUIDES_ID} .bewly-comment-reply-tail__symbol {
       fill: none;
-      stroke: var(--bew-comment-tree-line-color, var(--line_regular, rgba(148, 153, 160, 0.28)));
+      stroke: var(--bew-separator-color, var(--line_regular, rgba(148, 153, 160, 0.28)));
       stroke-width: var(--bew-space-0-5, 2px);
       stroke-linecap: round;
       stroke-linejoin: round;
@@ -329,7 +329,7 @@ else if (shouldInitializePageScript) {
     #${COMMENT_REPLY_TREE_GUIDES_ID} .bewly-comment-reply-branch__node,
     #${COMMENT_REPLY_TREE_GUIDES_ID} .bewly-comment-reply-tail__node {
       fill: var(--bew-bg, var(--bg1, #fff));
-      stroke: var(--bew-comment-tree-line-color, var(--line_regular, rgba(148, 153, 160, 0.28)));
+      stroke: var(--bew-separator-color, var(--line_regular, rgba(148, 153, 160, 0.28)));
       stroke-width: var(--bew-space-0-5, 2px);
     }
 
@@ -345,7 +345,7 @@ else if (shouldInitializePageScript) {
     #${COMMENT_REPLY_TREE_GUIDES_ID} .bewly-comment-reply-tail__label {
       fill: var(--bew-text-2, var(--text2, #61666d));
       font-size: var(--bew-font-size-caption, 12px);
-      font-weight: var(--bew-font-weight-medium, 500);
+      font-weight: var(--bew-font-weight-regular, 400);
       pointer-events: none;
     }
 
@@ -373,7 +373,7 @@ else if (shouldInitializePageScript) {
   const WIDESCREEN_COMMENT_USER_CSS = `
     :host-context(#bewly-widescreen-root) :is(#user-name, #user-name a) {
       font-size: var(--bew-font-size-control, 13px) !important;
-      font-weight: var(--bew-font-weight-medium, 500) !important;
+      font-weight: var(--bew-font-weight-regular, 400) !important;
       line-height: var(--bew-line-height-control, 18px) !important;
     }
     :host-context(#bewly-widescreen-root) #location {
@@ -450,7 +450,7 @@ else if (shouldInitializePageScript) {
         }
         :host-context(#bewly-widescreen-root) #title h2 {
           font-size: var(--bew-font-size-title) !important;
-          font-weight: var(--bew-font-weight-medium) !important;
+          font-weight: var(--bew-font-weight-regular) !important;
           line-height: var(--bew-line-height-title) !important;
         }
         :host-context(#bewly-widescreen-root) #count {
@@ -566,7 +566,7 @@ else if (shouldInitializePageScript) {
           color: var(--bew-text-3, var(--text3));
           font: inherit;
           font-size: var(--bew-font-size-control, 13px);
-          font-weight: var(--bew-font-weight-medium, 500);
+          font-weight: var(--bew-font-weight-regular, 400);
           line-height: var(--bew-line-height-control, 18px);
           cursor: pointer;
           transition:
@@ -3085,7 +3085,7 @@ else if (shouldInitializePageScript) {
     }
     // 楼主标签使用主题色，明暗模式由主题变量自动适配
     else if (id === 'host-tag') {
-      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); font-weight: var(--bew-font-weight-medium, 500); color: var(--bew-on-theme-surface); background-color: var(--bew-theme-surface); border-radius: var(--bew-radius-tiny, 4px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
+      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); font-weight: var(--bew-font-weight-regular, 400); color: var(--bew-on-theme-surface); background-color: var(--bew-theme-surface); border-radius: var(--bew-radius-tiny, 4px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
       element.textContent = String(text)
     }
     else {

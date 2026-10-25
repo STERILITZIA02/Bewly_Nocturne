@@ -158,7 +158,8 @@ onBeforeUnmount(controller.invalidate)
   margin: 0;
 }
 .moment-vote__title {
-  font-weight: var(--bew-font-weight-semibold);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   overflow-wrap: anywhere;
 }
 .moment-vote__meta,
@@ -175,7 +176,7 @@ onBeforeUnmount(controller.invalidate)
   position: relative;
   overflow: hidden;
   min-width: 0;
-  border: 1px solid var(--bew-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-interactive-radius);
   background: var(--bew-fill-1);
   cursor: pointer;
@@ -185,9 +186,6 @@ onBeforeUnmount(controller.invalidate)
 }
 .moment-vote__option:not(.is-locked):active {
   background: var(--bew-theme-surface);
-}
-.moment-vote__option.is-selected {
-  border-color: var(--bew-focus-ring-color);
 }
 .moment-vote__option.is-locked {
   cursor: default;
@@ -235,7 +233,7 @@ onBeforeUnmount(controller.invalidate)
   border: 0;
   border-radius: var(--bew-interactive-radius);
   font: inherit;
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   cursor: pointer;
 }
 .moment-vote__submit {

@@ -1849,7 +1849,7 @@ else if (shouldInitializeContentScript) {
   ], () => {
     if (isCustomPlayPage()) {
       scheduleDetachedTimer(() => {
-        applyAutoPlayByVideoType()
+        resetAutoPlayUserChangeFlag()
         applyRandomPlayActivationSettings()
       }, 1000)
     }

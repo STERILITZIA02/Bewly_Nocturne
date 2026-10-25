@@ -1,9 +1,58 @@
+@use "../../../styles/bleedStrip";
+
 .favorites-old-main {
   width: 100%;
   min-width: 0;
 }
 
 .favorites-main-heading {
-  margin: 0 0 var(--bew-space-6);
+  margin: 0;
   color: var(--bew-text-1);
+}
+
+// The folder's head (user-specified): its cover across the top, then the title,
+// creator and actions on the cover's colour.
+.favorites-hero {
+  position: relative;
+  margin-bottom: var(--bew-space-6);
+}
+
+// This folder's uploaders over the content, each a one-tap filter; pinned like
+// the Moments up-list and covered by the hero and grid as the page scrolls.
+.favorite-uploader-strip {
+  --favorite-uploader-tile: var(--bew-library-uploader-tile-size);
+  @include bleedStrip.bar(
+    calc(var(--favorite-uploader-tile) + var(--bew-space-2) + var(--bew-line-height-control)),
+    var(--bew-space-6)
+  );
+}
+.favorite-uploader-strip__item {
+  @include bleedStrip.tile(var(--favorite-uploader-tile));
+}
+.favorite-uploader-strip__avatar {
+  @include bleedStrip.tile-media(var(--favorite-uploader-tile));
+}
+.favorite-uploader-strip__item:hover:not(:disabled) .favorite-uploader-strip__avatar {
+  box-shadow: var(--bew-shadow-2);
+}
+.favorite-uploader-strip__avatar--all {
+  display: grid;
+  place-items: center;
+  color: var(--bew-text-2);
+  font-size: var(--bew-icon-size-lg);
+}
+.favorite-uploader-strip__item[aria-pressed="true"] {
+  .favorite-uploader-strip__name {
+    color: var(--bew-text-1);
+  }
+  .favorite-uploader-strip__avatar--all {
+    color: var(--bew-text-1);
+    background: var(--bew-selected-bg);
+  }
+}
+.favorite-uploader-strip__item--skeleton {
+  pointer-events: none;
+}
+.favorite-uploader-strip__name {
+  @include bleedStrip.tile-name;
 }

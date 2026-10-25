@@ -361,7 +361,7 @@
       border-width: 1px;
       border-radius: var(--bew-radius-tiny);
       corner-shape: var(--bew-corner-shape);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .content .group-list li input[type="checkbox"]:hover + i {
@@ -400,7 +400,7 @@
     #page-index .col-2 .section,
     #page-dynamic .col-2 .section {
       border: none;
-      box-shadow: 0 0 0 1px var(--bew-border-color);
+      box-shadow: 0 0 0 1px var(--bew-separator-color);
     }
 
     .n .n-data .n-data-v,
@@ -596,11 +596,11 @@
     .btn-cancel,
     #page-series-detail .channel-detail .channel-action-row .be-dropdown,
     #page-series-detail .paly-all-btn {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .feed-dynamic-content .card {
-      border-color: var(--bew-border-color) !important;
+      border-color: var(--bew-separator-color) !important;
     }
 
     .emoji-box {
@@ -733,12 +733,12 @@
     .series-item .split-line,
     .wrapper .edit-video-modal .favlist-body:after,
     #page-article .row .breadline {
-      background-color: var(--bew-border-color);
+      background-color: var(--bew-separator-color);
     }
 
     .col-full {
       background-color: var(--bew-content-solid);
-      box-shadow: 0 0 0 1px var(--bew-border-color);
+      box-shadow: 0 0 0 1px var(--bew-separator-color);
     }
 
     #page-video #submit-video-type-filter,

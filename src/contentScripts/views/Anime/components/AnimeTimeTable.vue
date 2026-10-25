@@ -239,7 +239,7 @@ defineExpose({ refreshAnimeTimeTable })
   margin: 0;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-heading);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-heading);
 }
 .anime-timetable__heading {

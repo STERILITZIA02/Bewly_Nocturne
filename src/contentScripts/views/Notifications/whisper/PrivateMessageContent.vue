@@ -287,7 +287,7 @@ watch(() => props.content, () => {
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-body);
   background: var(--bew-elevated-solid);
-  border: 1px solid var(--bew-message-card-border);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
@@ -301,7 +301,7 @@ watch(() => props.content, () => {
 .private-message-content__bubble--self {
   color: var(--bew-text-1);
   background: var(--bew-selected-bg);
-  border-color: var(--bew-message-card-border);
+  border-color: var(--bew-edge-color);
 }
 
 .private-message-content__bubble--self .private-message-content__inline-link {
@@ -356,12 +356,12 @@ watch(() => props.content, () => {
   padding: var(--bew-space-3);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   appearance: none;
   cursor: pointer;
   background: var(--bew-fill-1);
-  border: 1px solid var(--bew-message-card-border);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-thumb-radius);
   corner-shape: var(--bew-corner-shape);
 }
@@ -422,7 +422,7 @@ watch(() => props.content, () => {
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
   background: var(--bew-elevated-solid);
-  border: 1px solid var(--bew-message-card-border);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
 }
@@ -478,7 +478,8 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
 
 .private-message-content__card-copy strong {
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-medium);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
 }
 
@@ -535,7 +536,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
   padding: var(--bew-space-1) var(--bew-space-2);
   color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
   background: var(--bew-fill-1);
@@ -608,7 +609,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
 
 .private-message-content__unknown a {
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
 }
 </style>

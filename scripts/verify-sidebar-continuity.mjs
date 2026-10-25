@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -289,8 +290,9 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.doesNotMatch(logo, /translate:/, 'the icon never moves between rail and non-rail pages')
     assert.doesNotMatch(header, /ProgressiveBlur|translateX|ResizeObserver/, 'no top bar edge blur and no centring offset')
     assert.match(header, /padding-inline: var\(--bew-home-logo-inline-start\)/)
-    assert.match(header, /grid-template-columns: auto minmax\(0, var\(--b-search-bar-max-width, 550px\)\)/, 'search column follows the logo')
-    assert.match(header, /\.top-bar-header--rail \{[\s\S]*?translate: calc\(var\(--bew-messages-sidebar-width\)/, 'on rail pages the search follows the rail')
+    assert.match(header, /grid-template-columns:\s*auto minmax\(0, var\(--b-search-bar-max-width, 550px\)\)/, 'search column follows the logo')
+    assert.match(header, /--top-bar-rail-offset: max\(\s*0px,\s*calc\(var\(--bew-messages-sidebar-width\)/, 'rail displacement has one shared value')
+    assert.match(header, /\.top-bar-header--rail \{[\s\S]*?margin-inline-start: var\(--top-bar-rail-offset\);[\s\S]*?translate: var\(--top-bar-rail-offset\) 0;/, 'the grid reserves the displacement before translating search and channels')
     // The dock follows the scroll: sticky first, then the next stretch of scrolling
     // carries it to the logo, on the page scroller's named timeline.
     assert.match(app, /scroll-timeline: --bew-page-scroll block;/)
@@ -336,8 +338,8 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(retired, /'openNotificationsPageAsDrawer'/)
     assert.match(right, /<div v-if="isLogin" class="top-bar-tools">[\s\S]*<\/div>\s*<!-- Avatar/, 'the avatar stays outside the capsule')
     assert.match(styles, /\.top-bar-tools \{[\s\S]*?height: var\(--bew-top-bar-primary-control-height\);[\s\S]*?&::before \{\s*@include sidebarSurface\.floating;/, 'glass on a layer behind the buttons, as tall as the logo circle')
-    assert.match(logo, /\.logo-circle \{\s*@include sidebarSurface\.floating;/, 'one shared floating material for both sides')
-    assert.match(surface, /@mixin floating \{/)
+    assert.match(logo, /\.logo-circle \{\s*@include sidebarSurface\.floating\(round\);/, 'one shared floating material for both sides; the logo circle stays a true circle')
+    assert.match(surface, /@mixin floating\(\$shape: capsule\) \{/)
     assert.match(header, /padding-inline: var\(--bew-home-logo-inline-start\) var\(--bew-page-inline-inset\);/, 'avatar inset matches the page content inset')
   })
   check('top bar: the action for the page already open is hidden; the bar itself never hides', async () => {
@@ -465,7 +467,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     // One orb (circle + face): hover nudge, open = travel into the panel corner while the circle fades.
     assert.match(right, /<div class="avatar-orb" :class="\{ open: popupVisible\?\.userPanel \}">\s*<div class="avatar-face">/)
     const orb = styles.slice(styles.indexOf('  .avatar-orb {'), styles.indexOf('  .avatar-face {'))
-    assert.match(orb, /&::before \{\s*@include sidebarSurface\.floating;/)
+    assert.match(orb, /&::before \{\s*@include sidebarSurface\.floating\(round\);/)
     assert.match(orb, /&\.open \{\s*transform:\s*translate\([\s\S]*?scale\(var\(--avatar-panel-scale\)\);[\s\S]*?&::before \{\s*opacity: 0;/)
     assert.match(orb, /\.avatar:hover \.avatar-orb:not\(\.open\) \{\s*transform: scale\(1\.06\);/)
     assert.match(styles, /prefers-reduced-motion: reduce\)[\s\S]*?\.avatar-orb,\s*\.avatar-orb::before,/)
@@ -483,7 +485,8 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     ])
     assert.match(header, /'top-bar-header--rail': sidebarHost\?\.railOpen\.value/, 'driven by the destination rail state')
     assert.match(header, /transition: translate var\(--bew-sidebar-morph-duration\)/)
-    assert.match(header, /\.top-bar-header--rail \{[\s\S]*?translate: calc\(var\(--bew-messages-sidebar-width\) - var\(--bew-home-logo-inline-start\) - var\(--top-bar-logo-slot\)\) 0;/)
+    assert.match(header, /\.top-bar-header--rail \{[\s\S]*?translate: var\(--top-bar-rail-offset\) 0;/)
+    assert.match(header, /transition: margin-inline-start 0s var\(--bew-sidebar-morph-duration\);/, 'closing keeps the search narrow until its translation finishes')
     assert.doesNotMatch(app, /:deep\(\.top-bar-header\) \{\s*padding-inline-start/, 'no instant padding switch at page swap')
     assert.match(search, /@before-leave="departSearchFrom" @enter="\(element: Element\) => arriveSearchAt\(element as HTMLElement\)"/)
     assert.match(home, /previous !== AppPage\.Home \|\| page === AppPage\.Home[\s\S]{0,120}departSearchFrom\(searchDock\.value\)/)
@@ -555,7 +558,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(skeleton, /<article[\s\S]*?>\s*<!--[\s\S]*?-->\s*<div v-if="variant !== 'text'" class="moment-card-skeleton__stage">/)
     assert.match(skeleton, /\.moment-card-skeleton__stage::after \{[^}]*background: linear-gradient\(to bottom, transparent, var\(--bew-elevated-over-page\)\);/)
     assert.match(skeleton, /<div v-if="variant === 'gallery'" class="moment-card-skeleton__thumbs">/)
-    assert.match(skeleton, /\.moment-card-skeleton__thumb \+ \.moment-card-skeleton__thumb \{\s*border-inline-start: 1px solid var\(--bew-surface-border-color\);/)
+    assert.match(skeleton, /\.moment-card-skeleton__thumb \+ \.moment-card-skeleton__thumb \{\s*border-inline-start: var\(--bew-hairline(?:, 1px)?\) solid var\(--bew-edge-color\);/)
     const [utils, moments, asyncLoading] = await Promise.all([
       read('components/MomentCard/utils.ts'),
       read('contentScripts/views/Moments/Moments.vue'),
@@ -583,7 +586,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     ])
     // Spacing alone separates footer, comments, threads and the forward composer.
     for (const source of [card, ...parts])
-      assert.doesNotMatch(source, /border-(?:top|bottom): 1px solid var\(--bew-border-color\)/)
+      assert.doesNotMatch(source, /border-(?:top|bottom): var\(--bew-hairline(?:, 1px)?\) solid var\(--bew-separator-color\)/)
     // The video card hover, shared through one mixin.
     assert.match(contentCard, /@mixin hover-lift\(\$scale: var\(--bew-card-hover-scale\), \$held: ":hover"\) \{[\s\S]*?&:hover,\s*&#\{\$held\} \{\s*z-index: 1;\s*transform: scale\(\$scale\);/)
     assert.match(contentCard, /@mixin bare \{[^}]*@include hover-lift;/)
@@ -672,7 +675,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     // The thumbnail strip: hairlines between thumbnails, a nested smaller
     // corner, shared elastic sideways scrolling.
     assert.match(mediaStage, /v-if="gallery && images\.length > 1"\s*ref="thumbScrollerRef"\s*class="moment-media__thumbs"/)
-    assert.match(mediaStage, /\.moment-media__thumb \+ \.moment-media__thumb \{\s*border-inline-start: 1px solid var\(--bew-surface-border-color\);/)
+    assert.match(mediaStage, /\.moment-media__thumb \+ \.moment-media__thumb \{\s*border-inline-start: var\(--bew-hairline(?:, 1px)?\) solid var\(--bew-edge-color\);/)
     assert.match(mediaStage, /\.moment-media__thumbs \{[^}]*border-radius: var\(--moment-media-strip-radius, var\(--bew-interactive-radius\)\);/)
     assert.match(mediaStage, /createElasticWheelScroll\(scroller, track\)/)
     assert.match(layout, /Math\.round\(columnWidth \/ Math\.min\(2, ratio\)\)/)
@@ -683,11 +686,13 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(mediaStage, /\? Math\.max\(1 \/ PORTRAIT_MAX_CLEAR_HEIGHT, ratio\)/)
     assert.match(mediaStage, /\.moment-media--portrait \.moment-media__cover--images \{\s*box-sizing: content-box;\s*padding-bottom: var\(--moment-media-fade\);/)
     assert.match(toneComposable, /const band = \[getMomentThumbnailUrl\(image, 64\), Math\.max\(0, shown - 0\.15\), shown\] as const/)
-    assert.match(card, /@mixin toned-surface \{[\s\S]*?--bew-elevated-over-page: var\(--moment-tone\);[\s\S]*?--bew-text-1: var\(--moment-tone-fg\);[\s\S]*?color: var\(--bew-text-1\);/)
+    assert.match(card, /@use "\.\.\/\.\.\/styles\/imageTone" as \*;/, 'the tone mixins are shared (library heroes use them too)')
+    assert.match((await readFile(fileURLToPath(new URL('../src/styles/imageTone.scss', import.meta.url)), 'utf8')), /@mixin toned-surface \{[\s\S]*?--bew-elevated-over-page: var\(--moment-tone\);[\s\S]*?--bew-text-1: var\(--moment-tone-fg\);[\s\S]*?color: var\(--bew-text-1\);/)
     assert.match(card, /\.moment-card--portrait-top \.moment-card__surface \{\s*@include toned-surface;/)
     // A toned card's composer stays frosted: the glass tint keeps the global
     // glass opacity instead of the opaque tone.
-    const tonedMixin = card.slice(card.indexOf('@mixin toned-surface {'), card.indexOf('}', card.indexOf('@mixin toned-surface {')))
+    const toneStyles = (await readFile(fileURLToPath(new URL('../src/styles/imageTone.scss', import.meta.url)), 'utf8'))
+    const tonedMixin = toneStyles.slice(toneStyles.indexOf('@mixin toned-surface {'), toneStyles.indexOf('}', toneStyles.indexOf('@mixin toned-surface {')))
     assert.match(tonedMixin, /--bew-glass-tint-solid: color-mix\(in srgb, var\(--moment-tone-fg\) 10%, var\(--moment-tone\)\);/)
     assert.match(tonedMixin, /--bew-glass-tint: rgb\(from var\(--bew-glass-tint-solid\) r g b \/ var\(--bew-content-opacity\)\);/)
     assert.match(tonedMixin, /--bew-glass-tint-hover: rgb\(from var\(--bew-glass-tint-solid-hover\) r g b \/ var\(--bew-content-opacity\)\);/)
@@ -896,7 +901,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     // included) on arrival and on switching images; a colour read before is
     // used from the first render, so a remounted card does not ease again.
     assert.match(card, /\.moment-card--portrait-top \{\s*--moment-tone: var\(--bew-elevated-over-page\);\s*--moment-tone-fg: var\(--bew-neutral-fg\);/)
-    assert.match(card, /\$tone-transition:\s*--moment-tone var\(--bew-duration-moderate\) var\(--bew-ease-standard\),\s*--moment-tone-fg var\(--bew-duration-moderate\) var\(--bew-ease-standard\);/)
+    assert.match((await readFile(fileURLToPath(new URL('../src/styles/imageTone.scss', import.meta.url)), 'utf8')), /\$tone-transition:\s*--moment-tone var\(--bew-duration-moderate\) var\(--bew-ease-standard\),\s*--moment-tone-fg var\(--bew-duration-moderate\) var\(--bew-ease-standard\);/)
     assert.match(card, /\.moment-card--portrait-top \.moment-card__surface \{\s*@include toned-surface;\s*transition:\s*box-shadow var\(--bew-duration-moderate\) var\(--bew-ease-standard\),\s*\$tone-transition;\s*@media \(prefers-reduced-motion: reduce\) \{\s*transition: box-shadow/)
     // A quote's colour eases the same way, from the quote's own colour.
     assert.match(card, /\.moment-card__quote--portrait \{\s*--moment-tone: var\(--moment-quote-bg\);\s*--moment-tone-fg: var\(--bew-neutral-fg\);/)
@@ -933,6 +938,19 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
       globalThis.CSS = previousCss
     }
   })
+  check('article search cards: the cover fills the card height on the right, with a soft blurred edge', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const [card, skeleton] = await Promise.all([
+      read('components/ArticleCard/ArticleCard.vue'),
+      read('components/ArticleCard/ArticleCardSkeleton.vue'),
+    ])
+    // The base cover aligns to the start for the side-by-side layout; an
+    // absolute cover must stretch, or it shrinks to the image's own height.
+    assert.match(card, /\.article-cover \{[^}]*align-self: flex-start;/)
+    assert.match(card, /\.article-card--cover-fill \{[\s\S]*?\.article-cover \{\s*position: absolute;\s*inset: 0 0 0 auto;[^}]*align-self: stretch;/)
+    assert.match(skeleton, /\.article-card-skeleton--cover-fill \{[\s\S]*?\.article-card-skeleton__cover \{\s*position: absolute;\s*inset: 0 0 0 auto;[^}]*align-self: stretch;/)
+    assert.match(card, /<ProgressiveBlur class="article-cover-transition__blur" edge="left" \/>/)
+  })
   check('radius: one 16px-anchored scale; components use role tokens, never steps, retired names or literals', async () => {
     const { findRadiusViolations } = await import('./radiusPolicy')
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
@@ -946,6 +964,282 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(variables, /--bew-library-filter-padding: var\(--bew-space-2\);/)
     const files = await listStylePolicyFiles()
     assert.deepEqual(await findRadiusViolations(files), [])
+  })
+  check('lines: three roles (separator, edge, field); separators and edges are hairlines; dark edges carry the layering', async () => {
+    const { spawnSync } = await import('node:child_process')
+    const { findBorderViolations } = await import('./borderPolicy')
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const variables = await read('styles/variables.scss')
+    assert.match(variables, /--bew-hairline: 1px;/)
+    assert.match(variables, /@media \(min-resolution: 2dppx\) \{\n {2}:host,\n {2}:root \{\n {4}--bew-hairline: 0\.5px;/)
+    const light = variables.slice(0, variables.indexOf(':root.dark {'))
+    const dark = variables.slice(variables.indexOf(':root.dark {'))
+    const amount = (css, token) => Number(new RegExp(`${token}: color-mix\\(in srgb, var\\(--bew-neutral-fg\\) ([\\d.]+)%`).exec(css)?.[1])
+    assert.deepEqual(['--bew-separator-color', '--bew-edge-color', '--bew-field-edge-color', '--bew-field-edge-color-hover'].map(token => amount(light, token)), [12, 14, 18, 20.5])
+    assert.deepEqual(['--bew-separator-color', '--bew-edge-color', '--bew-field-edge-color', '--bew-field-edge-color-hover'].map(token => amount(dark, token)), [12, 16, 18, 20.5])
+    assert.match(variables, /prefers-contrast: more[\s\S]*?--bew-edge-color: color-mix\(in srgb, var\(--bew-neutral-fg\) 32%/)
+    assert.match(light, /--bew-glass-edge-width: 1px;\n {2}--bew-glass-edge-color: rgb\(255 255 255 \/ 70%\);/, 'glass rim: thicker and brighter than surface edges')
+    assert.match(dark, /--bew-glass-edge-color: rgb\(255 255 255 \/ 26%\);/)
+    assert.match(variables, /:root\.disable-frosted-glass \{\n[^}]*--bew-glass-edge-width: var\(--bew-hairline\);\n {2}--bew-glass-edge-color: var\(--bew-edge-color\);/, 'solid surfaces fall back to the hairline edge')
+    const rail = await read('components/PersistentSidebar.vue')
+    assert.match(rail, /\.persistent-sidebar__surface \{[^}]*border: var\(--bew-hairline\) solid var\(--bew-edge-color\);/, 'the left rail keeps the ordinary edge')
+    assert.match(await read('components/TopBar/components/TopBarLogo.vue'), /\.logo-circle \{[^}]*border: var\(--bew-hairline\) solid var\(--bew-edge-color\);/, 'so does the circle it folds into')
+    const searchBar = await read('components/SearchBar/SearchBar.vue')
+    assert.match(searchBar, /\n {4}input \{\n {6}@include card-content;\n {6}appearance: none;\n[^}]*border: var\(--bew-glass-edge-width\) solid var\(--bew-glass-edge-color\);/, 'the top bar and home search capsule draws the glass rim')
+    assert.doesNotMatch(searchBar, /border-hairline|border-\$bew-edge-color/, 'no ordinary edge competes with the rim')
+    assert.match(searchBar, /\.search-bar::before \{[^}]*box-shadow: var\(--bew-glass-shadow\);/, 'the search bar lifts like the other floating glass')
+    assert.doesNotMatch(await read('components/TopBar/styles/index.scss'), /:deep\(\.search-bar\)/, 'the top bar does not repaint the search rim or shadow')
+    assert.match(variables, /--bew-glass-shadow: var\(--bew-shadow-2\);/)
+    assert.match(await read('styles/sidebarSurface.scss'), /@mixin floating\(\$shape: capsule\) \{[^}]*box-shadow: var\(--bew-glass-shadow\);/, 'capsule, logo circle and avatar share it')
+    assert.equal((await read('components/Dock/Dock.vue')).match(/--dock-surface-shadow: var\(--bew-glass-shadow\);/g)?.length, 2, 'and the Dock')
+    assert.match(await read('components/SidebarSearchControl.vue'), /border: 1px solid var\(--bew-field-edge-color\);/, 'the sidebar search keeps its field edge')
+    assert.doesNotMatch(await read('components/Dock/Dock.vue'), /--bew-liquid-indicator-shadow:/, 'the Dock selection keeps the default hairline edge')
+    assert.match(variables, /--bew-segment-item-active-shadow: inset 0 0 0 var\(--bew-hairline\) var\(--bew-edge-color\);/)
+    const files = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', 'src'], { cwd: fileURLToPath(new URL('..', import.meta.url)) })
+      .stdout
+      .toString()
+      .trim()
+      .split('\n')
+      .filter(file => /\.(?:vue|scss|css|ts)$/.test(file))
+      .map(file => fileURLToPath(new URL(`../${file}`, import.meta.url)))
+      .filter(file => existsSync(file))
+    assert.deepEqual(await findBorderViolations(files), [])
+  })
+  check('moments reading buttons: floating glass pills under hot search; jump returns to the last card worked with; latest glides up then reloads', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const page = await read('contentScripts/views/Moments/Moments.vue')
+    const buttons = await read('contentScripts/views/Moments/MomentsReadingActions.vue')
+    const scroll = await read('utils/scrollIntent.ts')
+    assert.match(page, /<template #sidebar>\s*<MomentsHotSearch \/>\s*<MomentsReadingActions/, 'directly below hot search')
+    assert.doesNotMatch(page, /class="moments-reading-actions"/, 'no button row above the feed')
+    assert.match(buttons, /\.moments-reading__button \{\n {2}@include sidebarSurface\.floating;/, 'the floating glass of the top bar capsule')
+    assert.match(page, /@click\.capture="rememberInteraction\(\$event\.target\)"\s*@contextmenu\.capture="rememberInteraction\(\$event\.target\)"\s*@pointerover="handleGridPointerOver"/, 'clicks, right-clicks and a resting pointer on a card mark it')
+    assert.match(page, /if \(card\.matches\(':hover'\) && scrollViewportRef\.value\?\.scrollTop === scrollTop\)/, 'a card that only slid under the pointer does not count')
+    assert.match(page, /return !!target && !interactionInView\.value && \(canResumeMoments\.value \|\| getMomentPositions\(\)\.has\(target\.id\)\)/, 'jump shows only while the card is out of view and reachable')
+    assert.match(page, /if \(top !== undefined\) \{\n {4}void scrollToPosition\(viewport, Math\.max\(0, top - target\.offset\), 'smooth'\)/, 'a loaded card glides back into the same view, not reloaded')
+    assert.match(page, /await scrollToPosition\(viewport, 0, 'smooth'\)\n {2}returningToLatest = false\n {2}refresh\(\)/, 'latest glides to the top, then loads the newest posts')
+    assert.match(page, /@latest="returnToLatest"\s*@refresh="returnToLatest"/)
+    assert.doesNotMatch(page, /returnPoint|jumpTarget|'boundary'/, 'no reading-position return point')
+    assert.match(page, /:jump="showJumpToLastSeen"/, 'the template reads a boolean, so scrolling past cards does not re-render the page')
+    assert.doesNotMatch(page.slice(page.indexOf('<template>')), /interactionTarget|lastInteraction|interactionInView|readingAnchorId|readingBookmark/, 'no per-card reading state in the template')
+    assert.doesNotMatch(buttons, /TransitionGroup|-move \{|transition:[^;]*grid-template-columns/, 'no FLIP or column transition: both lay out while the feed scrolls')
+    assert.match(buttons, /await play\(keys, \[SHOWN, HIDDEN\][\s\S]*shownJump\.value = jump\n {4}shownLatest\.value = latest\n {4}await nextTick\(\)\n {4}if \(animate\)\n {6}await play\(keys, \[HIDDEN, SHOWN\]/, 'changed buttons shrink away first, then the new layout floats in')
+    assert.match(buttons, /const SHOWN = \{ opacity: 1, transform: 'none' \}\nconst HIDDEN = \{ opacity: 0, transform: 'scale\(0\.92\)' \}/, 'compositor-only keyframes')
+    assert.match(buttons, /holdAnimation\(animation\)/, 'registered with motion priority')
+    assert.match(buttons, /\.moments-reading__buttons \{\n {2}contain: layout size style;\n {2}height: calc\(2 \* var\(--bew-control-height\) \+ var\(--bew-space-2\)\);/, 'a fixed-size layout boundary')
+    assert.match(buttons, /class="moments-reading__row"[\s\S]*data-reading-key="latest"[\s\S]*data-reading-key="refresh"/, 'latest and refresh share the second row; refresh always shows')
+    assert.match(buttons, /\.moments-reading__row--single \.moments-reading__refresh \{\n {2}grid-column: 1 \/ -1;/, 'refresh fills the row without latest')
+    assert.match(scroll, /const jump = reach > 0 && Math\.abs\(element\.scrollTop - end\) > reach \* 2[\s\S]*if \(jump\)\n {6}element\.scrollTop = end \+/, 'long glides start one screen from the target')
+    assert.match(await read('components/Dock/Dock.vue'), /if \(props\.activatedPage === AppPage\.Moments\)\n {4}return false/, 'the Dock drops its back-to-top and refresh on Moments')
+  })
+  check('moments rail: search with a type/time filter menu; profile and live list flat on the rail', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const sidebar = await read('contentScripts/views/Moments/MomentsSidebar.vue')
+    const live = await read('contentScripts/views/Moments/MomentsLiveRow.vue')
+    const page = await read('contentScripts/views/Moments/Moments.vue')
+    const { matchesMomentSearch, getMomentSearchCutoff, isMomentSearchActive, EMPTY_MOMENT_SEARCH } = await import('../src/contentScripts/views/Moments/momentSearch')
+    const now = Date.UTC(2026, 9, 25)
+    const post = { isForward: false, isVideo: false, isPgc: false, isLive: false, isArticle: false, publishedAt: now / 1000 - 3 * 86_400 }
+    const text = () => 'Hello Bilibili World'
+    assert.equal(isMomentSearchActive(EMPTY_MOMENT_SEARCH), false)
+    assert.equal(matchesMomentSearch(post, { ...EMPTY_MOMENT_SEARCH, keyword: 'world  hello' }, text, 0), true, 'every word, any order, any case')
+    assert.equal(matchesMomentSearch(post, { ...EMPTY_MOMENT_SEARCH, keyword: 'world missing' }, text, 0), false)
+    const kinds = moment => ['original', 'forward', 'video', 'draw', 'live', 'article'].filter(kind => matchesMomentSearch(moment, { ...EMPTY_MOMENT_SEARCH, kind }, text, 0))
+    assert.deepEqual(kinds(post), ['original', 'draw'], 'an original text post is text and images')
+    assert.deepEqual(kinds({ ...post, isVideo: true }), ['original', 'video'])
+    assert.deepEqual(kinds({ ...post, isPgc: true }), ['original', 'video'], 'series count as video')
+    assert.deepEqual(kinds({ ...post, isLive: true }), ['original', 'live'])
+    assert.deepEqual(kinds({ ...post, isArticle: true }), ['original', 'article'])
+    assert.deepEqual(kinds({ ...post, isForward: true, isLive: true }), ['forward'], 'a repost is only a repost, whatever it quotes')
+    const week = { ...EMPTY_MOMENT_SEARCH, time: 'week' }
+    const day = { ...EMPTY_MOMENT_SEARCH, time: 'day' }
+    assert.equal(matchesMomentSearch(post, week, text, getMomentSearchCutoff(week, now)), true)
+    assert.equal(matchesMomentSearch(post, day, text, getMomentSearchCutoff(day, now)), false)
+    assert.match(sidebar, /<LibrarySearchField[\s\S]*<template #filter>\s*<LibraryFilterMenu :label="t\('moments\.search_filter'\)" :groups="filterGroups" @select="selectFilter" \/>/, 'the shared rail search field, with the shared funnel menu')
+    assert.match(sidebar, /key: 'kind', title: t\('moments\.search_type'\)[\s\S]*key: 'time', title: t\('moments\.search_time'\)/, 'type and time are titled groups of one menu')
+    assert.match(await read('components/LibraryFilterMenu.vue'), /section: group\.title,\s*kind: 'radio' as const,\s*closeOnSelect: false,/, 'the shared menu titles each group and keeps open on a choice')
+    assert.match(await read('components/ContextMenu.vue'), /v-if="option\.section && option\.section !== options\[index - 1\]\?\.section"/, 'ContextMenu titles a group where its section starts')
+    assert.match(page, /&& matchesMomentSearch\(moment, momentSearch\.value/, 'one predicate with the settings filters')
+    assert.match(page, /\[momentFilterPolicy, momentSearch\]/, 'a change re-filters the loaded posts')
+    assert.doesNotMatch(sidebar, /moments-sidebar__card|--bew-message-pinned-background/, 'no module backgrounds')
+    assert.match(sidebar, /\.moments-user-card \{\s*@include railSection\.flat;/, 'the profile sits flat between edge-to-edge hairlines')
+    assert.match(await read('styles/railSection.scss'), /@mixin flat\(\$top: true, \$bottom: true\) \{[^}]*margin-inline: calc\(-1 \* var\(--bew-sidebar-inline-padding\)\);\s*padding: var\(--bew-space-3\) var\(--bew-sidebar-inline-padding\);/)
+    assert.match(sidebar, /\.moments-user-card__avatar \{\n {2}@include contentCard\.media-frame;/, 'the profile avatar has the media hairline')
+    assert.match(live, /\.moments-live-row__avatar \{\n {2}@include contentCard\.media-frame;/, 'live avatars too')
+    assert.doesNotMatch(live.slice(live.indexOf('.moments-live-row__badge {')), /^\.moments-live-row__badge \{[^}]*background/, 'the live icon has no disc')
+    assert.match(live, /padding: var\(--bew-space-2\) var\(--bew-sidebar-label-inset\);/, 'live rows start and end on the rail content line')
+    assert.match(live, /border-radius: var\(--bew-thumb-radius\);\n {2}corner-shape: var\(--bew-corner-shape\);/, 'the live preview is one radius step below video covers')
+    assert.match(live, /<MomentVideoPreview\s+v-if="active" :url="url"/, 'the preview mounts before its stream URL, so its one scrim and ring cover the whole load')
+    assert.doesNotMatch(live, /LoadingRing|moments-live-row__pending|--bew-content-solid/, 'no second placeholder ring or surface')
+  })
+  check('capsules are 9999px with a light superellipse; nested squares share the shape; only true circles stay round', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../${path}`, import.meta.url)), 'utf8')
+    const variables = await read('src/styles/variables.scss')
+    assert.match(variables, /--bew-corner-shape-capsule: superellipse\(1\.1\);/, 'capsules take a light superellipse, not the squarer rounded-rectangle curve')
+    assert.match(variables, /--bew-pill-radius: var\(--bew-radius-full\);/)
+    assert.match(variables, /--bew-radius-full: 9999px;/, 'a 9999px radius, never 50%, so long capsules keep their straight edges')
+    assert.match(await read('unocss.config.ts'), /hasSmoothRadius \? 'var\(--bew-corner-shape\)' : hasCircleRadius \? 'var\(--bew-corner-shape-round\)' : 'var\(--bew-corner-shape-capsule\)'/, 'full-radius utilities are capsules; only 50% is round')
+    assert.match(await read('src/styles/sidebarSurface.scss'), /@mixin floating\(\$shape: capsule\)/)
+    assert.match(await read('src/styles/segmentControl.scss'), /border-radius: var\(--bew-control-item-radius\);\n\s*corner-shape: var\(--bew-corner-shape-capsule\);/, 'segment items nest in the track')
+    assert.match(await read('src/styles/segmentLiquidIndicator.scss'), /corner-shape: var\(--bew-corner-shape-capsule\);/)
+    const dock = await read('src/components/Dock/Dock.vue')
+    assert.match(dock, /\.dock-shell-surface \{[^}]*corner-shape: var\(--bew-corner-shape-capsule\);/, 'the Dock shell')
+    assert.match(dock, /\.dock-page-navigation__indicator \{\s*corner-shape: var\(--bew-corner-shape-capsule\);/, 'and its selection, concentric in the shell ends')
+    assert.match(await read('src/components/Radio.vue'), /border-radius: 50%;\n {4}\/\/ Nested[^\n]*\n {4}corner-shape: var\(--bew-corner-shape-capsule\);/, 'the switch thumb nests in its track')
+    assert.match(await read('src/components/TopBar/styles/index.scss'), /border-radius: var\(--bew-control-radius\);\n[^\n]*\n {6}corner-shape: var\(--bew-corner-shape-capsule\);/, 'top bar buttons nest in the tools capsule')
+    assert.match(await read('src/components/TopBar/components/TopBarLogo.vue'), /\.logo-circle \{\s*@include sidebarSurface\.floating\(round\);/, 'the logo circle stays a circle')
+    assert.match(await read('src/styles/main.scss'), /\.bew-shape-circle \{[^}]*corner-shape: var\(--bew-corner-shape-round\) !important;/)
+  })
+  check('library pages: flat rails, one funnel filter menu, strips under the rail glass, immersive heroes, covers without text, animated changes', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const [history, watchLater, favorites, favoritesLayout, filterPanel, sidebarItem, playAll, hero, grid, cardWindow, gridCard] = await Promise.all([
+      read('contentScripts/views/History/History.vue'),
+      read('contentScripts/views/WatchLater/WatchLater.vue'),
+      read('contentScripts/views/Favorites/FavoritesPage.vue'),
+      read('contentScripts/views/Favorites/favoritesLayout.scss'),
+      read('contentScripts/views/Favorites/FavoriteFilterPanel.vue'),
+      read('contentScripts/views/Favorites/FavoriteSidebarItem.vue'),
+      read('contentScripts/views/WatchLater/WatchLaterPlayAllCard.vue'),
+      read('components/LibraryHero.vue'),
+      read('components/VideoCardGrid.vue'),
+      read('composables/useCardWindow.ts'),
+      read('contentScripts/views/WatchLater/WatchLaterGridCard.vue'),
+    ])
+    // Flat rails: no module plates.
+    for (const [name, source] of [['filter panel', filterPanel], ['folder rows', sidebarItem], ['play all', playAll]])
+      assert.doesNotMatch(source, /--bew-message-pinned-background|--bew-library-filter-radius/, `${name}: no plate`)
+    assert.match(filterPanel, /\.favorite-filter \{\s*@include railSection\.flat;/)
+    // The open folder is a card after the portrait moment cards: its cover
+    // unfolds on top into the colour where it is cut, text in black or white.
+    assert.match(sidebarItem, /const tone = useImageTone\(\(\) => \(\{ portrait: toned\.value, image: props\.cover \}\)\)/)
+    assert.match(sidebarItem, /&\.is-toned \{\s*@include contentCard\.media-frame;\s*color: var\(--moment-tone-fg\);\s*background: var\(--moment-tone\);\s*> \* \{\s*@include toned-surface;/)
+    assert.match(sidebarItem, /\.favorite-sidebar-item__band \{\s*display: grid;\s*grid-template-rows: 0fr;/)
+    assert.doesNotMatch(sidebarItem, /ProgressiveBlur/, 'the row clips its smooth corners: the band fades by gradient only')
+    // One action row: Play All, icons, and a "more" menu instead of stacked buttons.
+    assert.match(sidebarItem, /\.favorite-sidebar-item__actions \{[^{]*display: flex;/)
+    assert.match(favorites, /@click="openFolderMenu\(\$event, getFolderMenuActions\(item\)\)"/)
+    assert.match(favorites, /<ContextMenu\s+v-if="folderMenu" :options="folderMenu\.actions"/)
+    assert.doesNotMatch(favorites, /class="favorite-folder-action (?:warning|danger)"/)
+    const dateRange = await read('components/LibraryDateRange.vue')
+    assert.match(dateRange, /\.library-date-range__section \{[^}]*@include railSection\.flat\(\$top: false\);/, 'it follows the tools hairline')
+    // The search and the button row under it end with an edge-to-edge hairline.
+    for (const source of [history, watchLater])
+      assert.match(source, /<div class="library-rail-tools library-rail-tools--ruled">/)
+    assert.match(await read('components/LibraryWorkspace.vue'), /\.library-rail-tools--ruled \{[^}]*max-width: none;[^}]*margin-inline: calc\(-1 \* var\(--bew-sidebar-inline-padding\)\);[^}]*border-bottom: var\(--bew-hairline\) solid var\(--bew-separator-color\);/)
+    // Bleeding sections lift the rail content's 100% cap, or their right end falls short.
+    assert.match(await read('components/LibraryWorkspace.vue'), /\.library-rail-content > \* \{[^}]*max-width: 100%;/)
+    assert.match(await read('styles/railSection.scss'), /@mixin flat\([^)]*\) \{[^}]*max-width: none;\s*margin-inline: calc\(-1 \* var\(--bew-sidebar-inline-padding\)\);/)
+    assert.match(dateRange, /\.library-date-range \{[^}]*max-width: none;/)
+    // It unfolds (a measured disclosure) and folds before unmounting; folded it
+    // takes no space, the rail gap before it included.
+    assert.match(dateRange, /useMeasuredDisclosure\(outer, inner, computed\(\(\) => props\.open\), \(\) => rendered\.value = false/)
+    assert.match(dateRange, /\.library-date-range \{[^}]*margin-top: calc\(-1 \* var\(--bew-sidebar-section-gap\)\);/)
+    for (const path of ['contentScripts/views/History/HistoryAdvancedFilters.vue', 'contentScripts/views/WatchLater/WatchLaterAdvancedFilters.vue'])
+      assert.equal(existsSync(fileURLToPath(new URL(`../src/${path}`, import.meta.url))), false, `${path} is replaced by the funnel menu`)
+    // One funnel menu; a custom date opens the flat range on the rail.
+    for (const [source, custom] of [[history, /:open="filters\.period === 'custom'"/], [watchLater, /:open="advancedFilters\.added === 'custom'"/]]) {
+      assert.match(source, /<template #filter>\s*<LibraryFilterMenu :label="t\('library_tools\.filters'\)" :groups="filterGroups"/)
+      assert.match(source, new RegExp(`<LibraryDateRange\\s+${custom.source}`))
+    }
+    // Strips under the rail glass, pinned and covered like the Moments up-list.
+    // The first unfiltered page holds the strips with skeletons of the same size.
+    assert.match(history, /<section v-if="historyDays\.length > 1 \|\| \(showSkeletons && !historyList\.length\)" class="history-day-strip"[\s\S]*?<LibraryBleedStrip/)
+    assert.match(history, /\.history-day-strip \{\s*@include bleedStrip\.bar\(/)
+    assert.match(history, /cardWindow\.offsetOf\(key\)/, 'a day outside the window is found from its row offset')
+    assert.match(cardWindow, /function offsetOf\(key: CardKey\)/)
+    assert.match(favorites, /<section v-if="showUploaderStrip \|\| uploaderStripPending" class="favorite-uploader-strip"[\s\S]*?<LibraryBleedStrip v-if="!showUploaderStrip"[\s\S]*?<SkeletonBlock width="var\(--favorite-uploader-tile\)"/)
+    assert.match(favoritesLayout, /\.favorite-uploader-strip \{[^}]*@include bleedStrip\.bar\(/)
+    assert.match(favorites, /mids: mid === undefined \|\| isStripUploader\(mid\) \? \[\] : \[mid\]/, 'an uploader is a one-tap filter, again to clear it')
+    // Immersive heroes; the hero never fades as a whole (its blur would stop).
+    assert.match(history, /<LibraryHero v-if="resumeItem && !batch\.managing\.value"/)
+    assert.match(watchLater, /<LibraryHero v-if="!batch\.managing\.value" :image="currentWatchLaterList\[0\]\?\.pic"[\s\S]*?<WatchLaterPlayAllCard/)
+    assert.match(favorites, /<LibraryHero :image="heroImage" :media-pending="heroMediaPending"/)
+    assert.match(watchLater, /:media-pending="isLoading && !currentWatchLaterList\.length"/)
+    // The cover band is held by a skeleton until its URL arrives, then fades in once.
+    assert.match(hero, /<div v-if="cover \|\| mediaPending" class="library-hero__media"/)
+    assert.match(hero, /watch\(cover, src => coverLoaded\.value = hasLoadedPicture\(src\)/)
+    assert.match(hero, /useImageTone\(\(\) => \(\{ portrait: Boolean\(props\.image\), image: props\.image \}\)\)/)
+    assert.match(hero, /\.library-hero-enter-from,\s*\.library-hero-leave-to \{\s*transform: scale\(0\.98\);\s*\.library-hero__surface \{\s*background-color: transparent;/)
+    assert.doesNotMatch(hero, /\.library-hero-(?:enter-from|leave-to)[^{]*\{\s*opacity/)
+    // Covers carry no text: times and labels move into the details.
+    for (const source of [history, watchLater])
+      assert.doesNotMatch(source, /bg="black opacity-60"|bg="white opacity-60"/)
+    assert.doesNotMatch(gridCard, /progress-label|media-gradient/)
+    // Cards that stay slide into place; keyed by the data, not the window.
+    assert.match(grid, /useLayoutMotion\(gridContainerRef, \(\) => props\.layoutMotion \? props\.items\.map/)
+    assert.match(favorites, /grid-layout="adaptive"\s*layout-motion/)
+  })
+  check('loading: a load of unknown count shows only the ring in the middle, never skeletons or progress text', async () => {
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const [fill, grid, indicator, favorites, filterPanel, history, watchLater, moments] = await Promise.all([
+      read('components/LoadingFill.vue'),
+      read('components/VideoCardGrid.vue'),
+      read('components/PageLoadingIndicator.vue'),
+      read('contentScripts/views/Favorites/FavoritesPage.vue'),
+      read('contentScripts/views/Favorites/FavoriteFilterPanel.vue'),
+      read('contentScripts/views/History/History.vue'),
+      read('contentScripts/views/WatchLater/WatchLater.vue'),
+      read('contentScripts/views/Moments/Moments.vue'),
+    ])
+    assert.match(fill, /<LoadingRing :loading="loading" size="var\(--bew-icon-size-xl\)" \/>/)
+    // The grid's indeterminate mode: the ring closes before results, empty or error.
+    assert.match(grid, /if \(props\.needToLoginFirst \|\| props\.indeterminate\)\s+return false/)
+    assert.match(grid, /&& !props\.indeterminate\s+&& props\.loading/)
+    assert.match(grid, /<LoadingFill v-else-if="pendingPresent" ref="pendingRef" :loading="pendingLoading" \/>\s*<Empty\s+v-else-if="showErrorState"/)
+    assert.doesNotMatch(indicator, /__label/, 'the tail ring has no visible text')
+    // Favorites filters: no scan counts, pause or continue; scrolling reads on.
+    assert.match(favorites, /:indeterminate="filterActive"/)
+    assert.doesNotMatch(favorites, /filter_status|favorite-filter-status|filterScan\.pause/)
+    assert.match(favorites, /if \(filterActive\.value\)\s+filterScan\.continueScan\(\)\s+else\s+void loadNextPage\(\)/)
+    assert.doesNotMatch(filterPanel, /option\.count[^}]*\}\}<\/span>\s*<\/button>\s*<\/div>\s*<p v-else class="bew-help">\s*\{\{ t\('favorites\.filter_uploader_empty'\)/, 'uploader counts would only cover the pages read so far')
+    assert.match(filterPanel, /<LoadingRing :loading="partitionsLoading"/)
+    // History and Watch Later: filtered reads take the ring; unfiltered pages keep skeletons.
+    assert.match(history, /const showSkeletons = computed\(\(\) => isLoading\.value && !filtersActive\.value\)/)
+    assert.match(history, /<LoadingFill v-if="pendingPhase !== 'idle'" ref="pendingRef" :loading="pendingLoading" \/>/)
+    assert.match(history, /<SmoothLoading v-if="filtersActive && historyList\.length" :show="isLoading" \/>/)
+    assert.match(watchLater, /const showSkeletons = computed\(\(\) => isLoading\.value && !isRefreshing\.value && !filtersActive\.value\)/)
+    assert.match(watchLater, /<LoadingFill v-if="pendingPhase !== 'idle'" ref="pendingRef" :loading="pendingLoading" \/>\s*<Empty v-else-if="hasNoMatches"/)
+    assert.doesNotMatch(watchLater, /watch-later-no-matches/, 'no matches sit under the head, not in place of the page')
+    // Moments: the tail ring closes before "no more" shows.
+    assert.match(moments, /<LoadingRing v-if="tailRingPhase !== 'idle'" :loading="tailRingLoading"/)
+    assert.match(moments, /\/\/ Nothing read so far matches: keep reading the filtered stream\.\s+void loadMoments\(\)/)
+  })
+  check('every static translation key used in src exists in all four locales', async () => {
+    const { spawnSync } = await import('node:child_process')
+    const { parse } = await import('yaml')
+    const root = fileURLToPath(new URL('..', import.meta.url))
+    const locales = Object.fromEntries(await Promise.all(['cmn-CN', 'cmn-TW', 'jyut', 'en'].map(async locale => [locale, parse(await readFile(`${root}src/_locales/${locale}.yml`, 'utf8'))])))
+    const has = (messages, key) => key.split('.').reduce((node, part) => (node && typeof node === 'object' ? node[part] : undefined), messages) !== undefined
+    const files = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', 'src'], { cwd: root }).stdout.toString().trim().split('\n').filter(file => /\.(?:vue|ts)$/.test(file) && existsSync(`${root}${file}`))
+    const missing = []
+    for (const file of files) {
+      const text = await readFile(`${root}${file}`, 'utf8')
+      for (const [, key] of text.matchAll(/(?<![\w.])(?:\$t|t|tc)\(\s*'([a-z_][\w-]*(?:\.[\w-]+)+)'/g)) {
+        for (const [locale, messages] of Object.entries(locales)) {
+          if (!has(messages, key))
+            missing.push(`${key} (${locale}) in ${file}`)
+        }
+      }
+    }
+    assert.deepEqual(missing, [])
+  })
+  check('type: every text is regular weight; emphasis is tone and size only', async () => {
+    const { spawnSync } = await import('node:child_process')
+    const { findFontWeightViolations } = await import('./fontWeightPolicy')
+    const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
+    const variables = await read('styles/variables.scss')
+    assert.deepEqual([...variables.matchAll(/^ {2}--bew-font-weight-(\w+):/gm)].map(match => match[1]), ['regular'])
+    assert.match(await read('styles/reset.css'), /b,\nstrong \{\n {2}font-weight: inherit;/)
+    const files = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', 'src'], { cwd: fileURLToPath(new URL('..', import.meta.url)) })
+      .stdout
+      .toString()
+      .trim()
+      .split('\n')
+      .filter(file => /\.(?:vue|scss|css|ts)$/.test(file))
+      .map(file => fileURLToPath(new URL(`../${file}`, import.meta.url)))
+      .filter(file => existsSync(file))
+      .filter(file => existsSync(file))
+    assert.deepEqual(await findFontWeightViolations(files), [])
   })
   check('truncated text: the end fades right to left (scroll-driven, only while overflowing); no ellipsis or line clamp', async () => {
     const { findTruncationViolations } = await import('./truncationPolicy')
@@ -1046,28 +1340,36 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     // "All moments" scrolls with the others.
     assert.match(moments, /class="moments-up-list__track">\s*<button[\s\S]{0,400}handleUpFilterChange\(''\)/)
     const section = moments.slice(moments.indexOf('.moments-up-list {'), moments.indexOf('.moments-page__initial-loading {'))
+    // The strip mechanics are shared with the library pages (bleedStrip.scss).
+    const strip = await read('styles/bleedStrip.scss')
     assert.doesNotMatch(section, /\.moments-up-list \{[^}]*z-index:/, 'stays in the page layer, under the fixed rail glass')
+    assert.doesNotMatch(strip, /z-index:/)
     // Scrolling down, the bar stays put: pinned at its own place (the content's
     // top padding), the feed (its own stacking context, later in the tree)
     // slides over it, and it fades from the cards touching its bottom edge to
     // them reaching its top edge, then stops taking input (user request).
     assert.match(workspace, /\.library-workspace__content \{[^}]*padding: calc\(var\(--bew-top-bar-height\) \+ var\(--bew-space-4\)\)/)
-    assert.match(section, /\.moments-up-list \{[^}]*--moments-up-list-height: calc\(var\(--bew-moments-up-tile-size\) \+ var\(--bew-space-2\) \+ var\(--bew-line-height-control\)\);[^}]*position: sticky;\s*top: calc\(var\(--bew-top-bar-height\) \+ var\(--bew-space-4\)\);\s*height: var\(--moments-up-list-height\);\s*margin-bottom: var\(--moments-up-list-gap\);/)
+    assert.match(section, /\.moments-up-list \{[^}]*--moments-up-list-height: calc\(var\(--bew-moments-up-tile-size\) \+ var\(--bew-space-2\) \+ var\(--bew-line-height-control\)\);[^}]*@include bleedStrip\.bar\(var\(--moments-up-list-height\), var\(--moments-up-list-gap\)\);/)
+    assert.match(strip, /@mixin bar\(\$height, \$gap: var\(--bew-space-8\)\) \{[^}]*position: sticky;\s*top: calc\(var\(--bew-top-bar-height\) \+ var\(--bew-space-4\)\);\s*height: \$height;\s*margin-bottom: \$gap;/)
     // At rest the names and a hovered tile's scale and shadow stay clear of the
     // feed: a 32px gap, and no margin collapsing through the box (the
     // scroller's -16px top margin would lift it and sticky push it back down
     // 16px onto the feed).
-    assert.match(section, /\.moments-up-list \{[^}]*--moments-up-list-gap: var\(--bew-space-8\);[^}]*display: flow-root;/)
-    assert.match(section, /\.moments-up-list__scroller \{[^}]*margin-block: calc\(-1 \* var\(--bew-space-4\)\);/)
-    assert.match(section, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.moments-up-list \{\s*animation: moments-up-list-cover linear both;\s*animation-timeline: --bew-page-scroll;\s*animation-range: var\(--moments-up-list-gap\) calc\(var\(--moments-up-list-gap\) \+ var\(--moments-up-list-height\)\);/)
+    assert.match(section, /\.moments-up-list \{[^}]*--moments-up-list-gap: var\(--bew-space-8\);/)
+    assert.match(strip, /@mixin bar[^}]*display: flow-root;/)
+    assert.match(strip, /@mixin scroller \{[^}]*margin-block: calc\(-1 \* var\(--bew-space-4\)\);/)
+    assert.match(strip, /@supports \(animation-timeline: scroll\(\)\) \{\s*animation: bew-bleed-strip-cover linear both;\s*animation-timeline: --bew-page-scroll;\s*animation-range: \$gap calc\(#\{\$gap\} \+ #\{\$height\}\);/)
     // The page-level loading skeleton places the bar and the feed the same way.
     const asyncLoading = await read('components/PageAsyncLoading.vue')
     assert.ok(asyncLoading.indexOf('class="bew-page-async-loading__moments-users"') < asyncLoading.indexOf('<MomentsContentLayout'))
     assert.match(asyncLoading, /\.bew-page-async-loading__moments-users \{[^}]*height: calc\(var\(--bew-moments-up-tile-size\) \+ var\(--bew-space-2\) \+ var\(--bew-line-height-control\)\);\s*margin-bottom: var\(--bew-space-8\);/)
     assert.match(asyncLoading, /<SkeletonBlock width="var\(--bew-moments-up-tile-size\)" height="var\(--bew-moments-up-tile-size\)" radius="media" \/>/)
-    assert.match(section, /@keyframes moments-up-list-cover \{\s*to \{\s*opacity: 0;\s*visibility: hidden;/)
-    assert.match(section, /\.moments-up-list__item \{[^}]*gap: var\(--bew-space-2\);/, 'the gap in the height formula')
-    assert.match(section, /\.moments-up-list__name \{[^}]*line-height: var\(--bew-line-height-control\);[^}]*@include truncateFade\.line;/, 'one name line')
+    assert.match(strip, /@keyframes bew-bleed-strip-cover \{\s*to \{\s*opacity: 0;\s*visibility: hidden;/)
+    assert.match(await read('styles/main.scss'), /@include bleedStrip\.global;/)
+    assert.match(section, /\.moments-up-list__item \{\s*@include bleedStrip\.tile\(var\(--bew-moments-up-tile-size\)\);/)
+    assert.match(strip, /@mixin tile\(\$size\) \{[^}]*gap: var\(--bew-space-2\);/, 'the gap in the height formula')
+    assert.match(section, /\.moments-up-list__name \{\s*@include bleedStrip\.tile-name;/)
+    assert.match(strip, /@mixin tile-name \{[^}]*line-height: var\(--bew-line-height-control\);[^}]*@include truncateFade\.line;/, 'one name line')
     assert.match(layout, /\.moments-content-layout \{[^}]*container-type: inline-size;/, 'the feed paints over the pinned bar')
 
     // Its sideways position is remembered: every branch of the save / restore.
@@ -1107,11 +1409,12 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(moments, /const upListScrollLeft = viewState\.ref\('upListScrollLeft', 0\)/)
     assert.match(moments, /upListRestorePending = true\s*upListResizeObserver = new ResizeObserver\(scheduleUpListStateUpdate\)/)
     assert.doesNotMatch(section, /\.moments-up-list \{[^}]*(?:border:|background:|padding:)/, 'no container')
-    assert.match(section, /--moments-up-list-bleed-start: calc\(var\(--bew-messages-sidebar-width\) \+ var\(--library-content-inline-padding\)\);/)
-    assert.match(section, /margin-inline: calc\(-1 \* var\(--moments-up-list-bleed-start\)\) calc\(-1 \* var\(--library-content-inline-padding\)\);/)
-    assert.match(section, /\.moments-up-list__item \{\s*@include contentCard\.bare;[^}]*align-items: flex-start;/, 'video card hover scale; names start at the tile edge')
-    assert.match(section, /\.moments-up-list__name \{[^}]*align-self: stretch;[^}]*text-align: start;/)
-    assert.match(section, /\.moments-up-list__avatar \{\s*@include contentCard\.media-frame;[^}]*width: var\(--bew-moments-up-tile-size\);[^}]*height: var\(--bew-moments-up-tile-size\);[^}]*border-radius: var\(--bew-media-radius\);/)
+    assert.match(strip, /--bew-bleed-strip-start: calc\(var\(--bew-messages-sidebar-width\) \+ var\(--library-content-inline-padding\)\);/)
+    assert.match(strip, /margin-inline: calc\(-1 \* var\(--bew-bleed-strip-start\)\) calc\(-1 \* var\(--library-content-inline-padding\)\);/)
+    assert.match(strip, /@mixin tile\(\$size\) \{\s*@include contentCard\.bare;[^}]*align-items: flex-start;/, 'video card hover scale; names start at the tile edge')
+    assert.match(strip, /@mixin tile-name \{[^}]*align-self: stretch;[^}]*text-align: start;/)
+    assert.match(section, /\.moments-up-list__avatar \{\s*@include bleedStrip\.tile-media\(var\(--bew-moments-up-tile-size\)\);/)
+    assert.match(strip, /@mixin tile-media\(\$size\) \{\s*@include contentCard\.media-frame;[^}]*width: \$size;[^}]*height: \$size;[^}]*border-radius: var\(--bew-media-radius\);/)
     assert.match(workspace, /--library-content-inline-padding: var\(--bew-page-inline-inset\);/)
     assert.match(moments, /upListElastic = createElasticWheelScroll\(scroller, upListTrackRef\.value\)/)
 

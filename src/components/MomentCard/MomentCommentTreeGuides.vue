@@ -94,7 +94,7 @@ onBeforeUnmount(() => {
 
   path {
     fill: none;
-    stroke: var(--bew-comment-tree-line-color);
+    stroke: var(--bew-separator-color);
     stroke-width: var(--bew-space-0-5);
     stroke-linecap: butt;
     stroke-linejoin: round;

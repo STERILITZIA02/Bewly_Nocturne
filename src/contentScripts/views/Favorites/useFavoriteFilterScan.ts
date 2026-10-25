@@ -30,6 +30,9 @@ interface ScanTask {
 }
 
 const FILTER_PAGE_SIZE = 40
+// A round reads at least this many pages and stops only once it has new
+// matches, so the grid always has something to scroll to before it asks for
+// more (the count is unknown; the page shows a ring, never progress text).
 const FILTER_AUTO_PAGE_BUDGET = 25
 const PARTITION_CONCURRENCY = 3
 const PARTITION_CACHE_LIMIT = 64
@@ -38,8 +41,6 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
   const applied = shallowRef<FavoriteFilterQuery>(EMPTY_FAVORITE_FILTER)
   const status = ref<FavoriteFilterScanStatus>('idle')
   const records = reactive<FavoriteFilterRecord[]>([])
-  const scannedPages = ref(0)
-  const scannedItems = ref(0)
   const partitions = shallowRef<FavoritePartitionOption[]>([])
   const partitionsLoading = ref(false)
   const partitionsFailed = ref(false)
@@ -57,8 +58,8 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
   let partitionGeneration = 0
   let partitionController: AbortController | undefined
   let roundBudget = FILTER_AUTO_PAGE_BUDGET
+  let roundStart = 0
   let predicate = compileFavoriteFilter(EMPTY_FAVORITE_FILTER, '')
-  let manualPause = false
 
   const active = computed(() => isFavoriteFilterActive(applied.value))
   const items = computed(() => records.map(record => record.item))
@@ -83,8 +84,6 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     records.length = 0
     recordKeys.clear()
     sourceByItem = new WeakMap()
-    scannedPages.value = 0
-    scannedItems.value = 0
   }
 
   function reset() {
@@ -93,7 +92,6 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     clearResults()
     tasks = []
     identity = ''
-    manualPause = false
     status.value = 'idle'
   }
 
@@ -101,8 +99,8 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     generation++
     cancelRead()
     clearResults()
-    manualPause = false
     roundBudget = FILTER_AUTO_PAGE_BUDGET
+    roundStart = 0
     identity = computeIdentity()
     predicate = compileFavoriteFilter(applied.value, dependencies.getNormalQuery())
     const tids = applied.value.tids.length ? applied.value.tids : [null]
@@ -122,11 +120,11 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
         status.value = 'complete'
         return
       }
-      if (manualPause || !pageVisible.value) {
+      if (!pageVisible.value) {
         status.value = 'paused'
         return
       }
-      if (roundBudget <= 0) {
+      if (roundBudget <= 0 && records.length > roundStart) {
         status.value = 'budget'
         return
       }
@@ -167,8 +165,6 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
       }
       const medias = Array.isArray(result.data.medias) ? result.data.medias.filter((item): item is FavoriteItem => item != null) : []
       roundBudget--
-      scannedPages.value++
-      scannedItems.value += medias.length
       if (result.data.has_more && !medias.length) {
         status.value = 'stalled'
         return
@@ -215,20 +211,11 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     }
     if (status.value === 'complete' || status.value === 'scanning')
       return
-    manualPause = false
     roundBudget = FILTER_AUTO_PAGE_BUDGET
+    roundStart = records.length
     generation++
     status.value = 'scanning'
     void pump(generation)
-  }
-
-  function pause() {
-    if (status.value !== 'scanning')
-      return
-    manualPause = true
-    generation++
-    cancelRead()
-    status.value = 'paused'
   }
 
   function getSourceId(item: FavoriteItem): number | undefined {
@@ -307,7 +294,7 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
   }
 
   watch(pageVisible, (visible) => {
-    if (visible && status.value === 'paused' && !manualPause)
+    if (visible && status.value === 'paused')
       continueScan()
   })
 
@@ -317,8 +304,6 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     status,
     items,
     records,
-    scannedPages,
-    scannedItems,
     partitions,
     partitionsLoading,
     partitionsFailed,
@@ -326,7 +311,6 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     refresh,
     reset,
     continueScan,
-    pause,
     getSourceId,
     getItemKey,
     applyResourceWrite,

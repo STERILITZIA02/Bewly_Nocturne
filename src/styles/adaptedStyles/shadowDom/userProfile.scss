@@ -3,7 +3,7 @@
   #wrap {
     box-sizing: border-box;
     overflow: hidden;
-    border: 1px solid var(--bew-surface-border-color);
+    border: var(--bew-hairline) solid var(--bew-edge-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     background: var(--bew-popover-surface-background-solid);
@@ -30,7 +30,7 @@
     corner-shape: var(--bew-corner-shape);
     font-family: inherit;
     font-size: var(--bew-font-size-control);
-    font-weight: var(--bew-font-weight-medium);
+    font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-control);
     transition:
       color var(--bew-duration-fast) var(--bew-ease-standard),

@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
+import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
+import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { settings } from '~/logic'
@@ -11,19 +14,25 @@ import { numFormatter } from '~/utils/dataFormatter'
 import type { MomentFilter } from './momentFeedTypes'
 import type { MomentsPortalLiveUser, MomentsPortalUser } from './momentPortal'
 import { getSidebarAvatarUrl } from './momentPortal'
+import type { MomentSearch } from './momentSearch'
+import { EMPTY_MOMENT_SEARCH, MOMENT_KINDS, MOMENT_TIME_RANGES } from './momentSearch'
 import MomentsLiveRow from './MomentsLiveRow.vue'
 import type { useMomentPreviews } from './useMomentPreviews'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: MomentFilter
   contentId: string
+  search?: MomentSearch
   loading?: boolean
   user?: MomentsPortalUser | null
   liveUsers?: MomentsPortalLiveUser[]
   liveCount?: number
   previews?: ReturnType<typeof useMomentPreviews>
-}>(), { user: null, liveUsers: () => [], liveCount: 0 })
-const emit = defineEmits<{ (event: 'update:modelValue', value: MomentFilter): void }>()
+}>(), { search: () => EMPTY_MOMENT_SEARCH, user: null, liveUsers: () => [], liveCount: 0 })
+const emit = defineEmits<{
+  (event: 'update:modelValue', value: MomentFilter): void
+  (event: 'search', value: MomentSearch): void
+}>()
 const { t } = useI18n()
 const options = computed(() => (['all', 'video', 'draw', 'pgc', 'article'] as const).map(value => ({ value, label: t(`moments.filter_${value}`) })))
 const stats = [
@@ -36,6 +45,25 @@ function select(value: string) {
   if (option)
     emit('update:modelValue', option.value)
 }
+
+// The keyword applies on Enter or the search button; the filters at once.
+const keyword = ref(props.search.keyword)
+watch(() => props.search.keyword, (value) => {
+  keyword.value = value
+})
+function submitKeyword() {
+  emit('search', { ...props.search, keyword: keyword.value.trim() })
+}
+const KIND_ICONS = { all: 'i-tabler:list', original: 'i-tabler:pencil', forward: 'i-tabler:repeat', video: 'i-tabler:video', draw: 'i-tabler:photo', live: 'i-tabler:broadcast', article: 'i-tabler:article' } as const
+const TIME_ICONS = { all: 'i-tabler:infinity', day: 'i-tabler:clock', week: 'i-tabler:calendar-week', month: 'i-tabler:calendar-month', year: 'i-tabler:calendar' } as const
+const filterActive = computed(() => props.search.kind !== 'all' || props.search.time !== 'all')
+const filterGroups = computed<LibraryFilterGroup[]>(() => [
+  { key: 'kind', title: t('moments.search_type'), value: props.search.kind, options: MOMENT_KINDS.map(kind => ({ value: kind, label: t(`moments.search_kind_${kind}`), icon: KIND_ICONS[kind] })) },
+  { key: 'time', title: t('moments.search_time'), value: props.search.time, options: MOMENT_TIME_RANGES.map(time => ({ value: time, label: t(`moments.search_time_${time}`), icon: TIME_ICONS[time] })) },
+])
+function selectFilter(key: string, value: string) {
+  emit('search', { ...props.search, keyword: keyword.value.trim(), [key]: value })
+}
 </script>
 
 <template>
@@ -44,11 +72,19 @@ function select(value: string) {
       hide-title :title="t('moments.moments')" :model-value="modelValue" :options="options" :content-id="contentId"
       @update:model-value="select"
     />
+    <LibrarySearchField
+      v-model="keyword" :label="t('moments.search_label')" :clearable="Boolean(search.keyword)" :filter-active="filterActive" clear-on-escape
+      @submit="submitKeyword" @clear="submitKeyword"
+    >
+      <template #filter>
+        <LibraryFilterMenu :label="t('moments.search_filter')" :groups="filterGroups" @select="selectFilter" />
+      </template>
+    </LibrarySearchField>
     <div
       v-if="settings.momentsSidebarShowUserCard || settings.momentsSidebarShowPublish || settings.momentsSidebarShowLive"
       class="moments-sidebar__modules"
     >
-      <article v-if="settings.momentsSidebarShowUserCard && (loading || user)" class="moments-sidebar__card moments-user-card" :aria-busy="loading">
+      <article v-if="settings.momentsSidebarShowUserCard && (loading || user)" class="moments-user-card" :aria-busy="loading">
         <template v-if="loading && !user">
           <div class="moments-user-card__profile" aria-hidden="true">
             <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-space-12)" radius="circle" />
@@ -66,7 +102,7 @@ function select(value: string) {
         </template>
         <template v-else-if="user">
           <a class="moments-user-card__profile" :href="`https://space.bilibili.com/${user.mid}`" target="_blank" rel="noopener noreferrer">
-            <img :src="getSidebarAvatarUrl(user.face)" :alt="user.name">
+            <span class="moments-user-card__avatar"><img :src="getSidebarAvatarUrl(user.face)" :alt="user.name"></span>
             <span class="moments-user-card__identity">
               <strong>{{ user.name }}</strong>
               <span class="moments-user-card__badges">
@@ -88,7 +124,7 @@ function select(value: string) {
         <span>{{ t('moments.publish') }}</span>
         <i i-tabler:external-link aria-hidden="true" />
       </a>
-      <section v-if="settings.momentsSidebarShowLive && (loading || liveUsers.length)" class="moments-sidebar__card moments-live-card" :aria-busy="loading">
+      <section v-if="settings.momentsSidebarShowLive && (loading || liveUsers.length)" class="moments-live-card" :aria-busy="loading">
         <header><strong>{{ t('moments.live_now') }}</strong><span v-if="!loading || liveUsers.length">{{ liveCount }}</span></header>
         <div class="moments-live-card__list">
           <template v-if="loading && !liveUsers.length">
@@ -98,7 +134,7 @@ function select(value: string) {
                 <SkeletonBlock width="70%" height="var(--bew-line-height-control)" />
                 <SkeletonBlock width="90%" height="var(--bew-line-height-caption)" />
               </div>
-              <SkeletonBlock width="var(--bew-space-6)" height="var(--bew-space-6)" radius="circle" />
+              <SkeletonBlock width="var(--bew-control-icon-size)" height="var(--bew-control-icon-size)" radius="circle" />
             </div>
           </template>
           <MomentsLiveRow v-for="liveUser in liveUsers" :key="liveUser.room_id" :user="liveUser" :previews="previews" />
@@ -109,10 +145,16 @@ function select(value: string) {
 </template>
 
 <style scoped lang="scss">
-@use "../../../styles/truncateFade";
+@use "../../../styles/contentCard";
+@use "../../../styles/railSection";
 @use "../../../styles/scrollEdgeFade";
+@use "../../../styles/truncateFade";
 
+// Flat on the rail glass: no module backgrounds. Text and avatars start on the
+// rail's content line (the wheel title, `--bew-sidebar-label-inset`), and the
+// trailing icons end the same distance from the right edge.
 .moments-sidebar {
+  --moments-rail-inset: var(--bew-sidebar-label-inset);
   height: 100%;
   min-height: 0;
 }
@@ -130,38 +172,42 @@ function select(value: string) {
     flex: 0 1 auto;
     // Keep one row reachable on exceptionally short windows; only then may
     // the outer rail scroll. Ordinary expansion stays inside the live list.
-    min-height: calc(
-      var(--bew-library-filter-padding) * 2 + var(--bew-line-height-control) + var(--bew-space-2) +
-        var(--bew-space-10) + var(--bew-space-4)
-    );
+    min-height: calc(var(--bew-line-height-control) + var(--bew-space-2) + var(--bew-space-10) + var(--bew-space-4));
   }
 }
-.moments-sidebar__card {
-  box-sizing: border-box;
-  min-width: 0;
-  padding: var(--bew-library-filter-padding);
-  border-radius: var(--bew-library-filter-radius);
-  corner-shape: var(--bew-corner-shape);
-  background: var(--bew-message-pinned-background);
+// The profile sits flat between two edge-to-edge hairlines.
+.moments-user-card {
+  @include railSection.flat;
 }
 .moments-user-card__profile {
   display: flex;
   align-items: center;
   gap: var(--bew-space-3);
   min-width: 0;
+  padding-inline: var(--moments-rail-inset);
   color: var(--bew-text-1);
   text-decoration: none;
   border-radius: var(--bew-interactive-radius);
-  > img {
-    width: var(--bew-space-12);
-    height: var(--bew-space-12);
-    flex: none;
-    object-fit: cover;
-    border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
-  }
   &:hover strong {
     color: var(--bew-theme-foreground);
+  }
+}
+// Avatars carry the media hairline drawn over the picture.
+.moments-user-card__avatar {
+  @include contentCard.media-frame;
+  position: relative;
+  flex: none;
+  width: var(--bew-space-12);
+  height: var(--bew-space-12);
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
+  > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+    corner-shape: inherit;
   }
 }
 .moments-user-card__identity {
@@ -173,7 +219,8 @@ function select(value: string) {
   > strong {
     font-size: var(--bew-font-size-title);
     line-height: var(--bew-line-height-title);
-    font-weight: var(--bew-font-weight-medium);
+    color: var(--bew-text-1);
+    font-weight: var(--bew-font-weight-regular);
     transition: color var(--bew-duration-fast) var(--bew-ease-standard);
     @include truncateFade.line;
   }
@@ -187,7 +234,7 @@ function select(value: string) {
     padding: var(--bew-space-0-5) var(--bew-space-1);
     border-radius: var(--bew-radius-tiny);
     font-size: var(--bew-font-size-caption);
-    font-weight: var(--bew-font-weight-medium);
+    font-weight: var(--bew-font-weight-regular);
     font-style: normal;
     line-height: var(--bew-line-height-caption);
   }
@@ -204,24 +251,25 @@ function select(value: string) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--bew-space-1);
-  margin-top: var(--bew-space-3);
+  margin-top: var(--bew-space-2);
 }
 .moments-user-card__stat {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   flex-direction: column;
   min-width: 0;
-  gap: var(--bew-space-1);
-  padding-block: var(--bew-space-1);
+  padding: var(--bew-space-1) var(--moments-rail-inset);
   color: var(--bew-text-1);
   text-decoration: none;
   border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
   transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
   strong {
     max-width: 100%;
     font-size: var(--bew-font-size-heading);
     line-height: var(--bew-line-height-heading);
-    font-weight: var(--bew-font-weight-semibold);
+    color: var(--bew-text-1);
+    font-weight: var(--bew-font-weight-regular);
     font-variant-numeric: tabular-nums;
     @include truncateFade.line;
   }
@@ -244,9 +292,14 @@ function select(value: string) {
     margin-inline-start: auto;
   }
 }
+// Spans the rail edge to edge (padded back in) so the list's hairlines can too.
 .moments-live-card {
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+  margin-inline: calc(-1 * var(--bew-sidebar-inline-padding));
+  padding-inline: var(--bew-sidebar-inline-padding);
   overflow: hidden;
 }
 .moments-live-card > header {
@@ -254,20 +307,28 @@ function select(value: string) {
   display: flex;
   align-items: center;
   gap: var(--bew-space-2);
-  padding-bottom: var(--bew-space-2);
+  padding: 0 var(--moments-rail-inset) var(--bew-space-2);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
   strong {
-    font-weight: var(--bew-font-weight-semibold);
+    color: var(--bew-text-1);
+    font-weight: var(--bew-font-weight-regular);
   }
+  // Ends where the rows' live icons and the publish link's icon end.
   > span {
+    margin-inline-start: auto;
     color: var(--bew-text-2);
     font-variant-numeric: tabular-nums;
   }
 }
+// A rail never fades (user-specified, see scrollEdgeFade.lines): its rows
+// carry live icons and playing previews. Edge to edge, padded back in.
 .moments-live-card__list {
-  @include scrollEdgeFade.vertical;
+  @include scrollEdgeFade.lines;
   display: grid;
+  box-sizing: border-box;
+  margin-inline: calc(-1 * var(--bew-sidebar-inline-padding));
+  padding-inline: var(--bew-sidebar-inline-padding);
   flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -284,14 +345,7 @@ function select(value: string) {
   gap: var(--bew-space-2);
   min-width: 0;
   min-height: calc(var(--bew-space-10) + var(--bew-space-4));
-  padding: var(--bew-space-2) var(--bew-space-1);
-  border-radius: var(--bew-interactive-radius);
-  color: var(--bew-text-1);
-  text-decoration: none;
-  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
-  &:hover {
-    background: var(--bew-fill-1);
-  }
+  padding: var(--bew-space-2) var(--moments-rail-inset);
 }
 .moments-live-card__info {
   display: flex;
@@ -306,7 +360,8 @@ function select(value: string) {
   strong {
     font-size: var(--bew-font-size-control);
     line-height: var(--bew-line-height-control);
-    font-weight: var(--bew-font-weight-medium);
+    color: var(--bew-text-1);
+    font-weight: var(--bew-font-weight-regular);
   }
   small {
     font-size: var(--bew-font-size-caption);

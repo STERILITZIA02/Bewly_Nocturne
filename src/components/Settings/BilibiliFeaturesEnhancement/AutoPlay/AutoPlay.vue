@@ -12,8 +12,29 @@ import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
 import SettingsItemSubgroup from '../../components/SettingsItemSubgroup.vue'
 
 const { t } = useI18n()
+const playOrder = computed({
+  get: () => settings.value.enableRandomPlay ? settings.value.defaultCustomPlayOrder : 'native',
+  set: (order: DefaultCustomPlayOrder | 'native') => {
+    settings.value = {
+      ...settings.value,
+      enableRandomPlay: order !== 'native',
+      ...(order === 'native' ? {} : { defaultCustomPlayOrder: order }),
+    }
+  },
+})
+const usesRandomOrder = computed(() => settings.value.enableRandomPlay && (
+  settings.value.enableCustomPlayOrderOverrides
+    ? Object.values(settings.value.customPlayOrderOverrides).some(order => (order === 'inherit' ? settings.value.defaultCustomPlayOrder : order) === 'random')
+    : settings.value.defaultCustomPlayOrder === 'random'
+))
+
+const singleVideoMode = computed({
+  get: () => settings.value.autoPlayRecommend === 'autoPlayWithRecommend' ? 'autoPlay' : settings.value.autoPlayRecommend,
+  set: (mode: AutoPlayMode) => { settings.value.autoPlayRecommend = mode },
+})
 
 const nativeAutoPlayModes: { label: string, value: AutoPlayMode }[] = [
+  { label: 'play_order_native', value: 'default' },
   { label: 'auto_play_mode_auto_play', value: 'autoPlay' },
   { label: 'auto_play_mode_auto_play_with_recommend', value: 'autoPlayWithRecommend' },
   { label: 'auto_play_mode_pause_at_end', value: 'pauseAtEnd' },
@@ -44,10 +65,10 @@ const customPlayOrderOverrideOptions = computed(() => [
 ])
 
 const customPlayOrderContextOptions = computed<{ label: string, value: CustomPlayOrderContext }[]>(() => [
-  { label: t('settings.auto_play_multipart'), value: 'multipart' },
-  { label: t('settings.auto_play_collection'), value: 'collection' },
-  { label: t('settings.auto_play_watch_later'), value: 'watchLater' },
-  { label: t('settings.auto_play_playlist'), value: 'playlist' },
+  { label: t('settings.play_order_multipart'), value: 'multipart' },
+  { label: t('settings.play_order_collection'), value: 'collection' },
+  { label: t('settings.play_order_watch_later'), value: 'watchLater' },
+  { label: t('settings.play_order_playlist'), value: 'playlist' },
 ])
 
 const collectedSeasonPlayAllModeOptions = computed(() => [
@@ -82,7 +103,14 @@ const randomPlayActivationModeOptions = computed(() => {
 
 <template>
   <div>
-    <SettingsItemGroup data-setting-id="settings.group_playback_end_behavior" :title="$t('settings.group_playback_end_behavior')">
+    <SettingsItemGroup data-setting-id="settings.group_playback_end_behavior" :title="$t('settings.group_playback_end_behavior')" :desc="$t('settings.playback_policy_priority')">
+      <SettingsItem
+        setting-id="settings.auto_exit_fullscreen_on_end" :title="t('settings.auto_exit_fullscreen_on_end')"
+        :desc="t('settings.auto_exit_fullscreen_on_end_desc')"
+        right-width="auto"
+      >
+        <Radio v-model="settings.autoExitFullscreenOnEnd" />
+      </SettingsItem>
       <SettingsItem setting-id="settings.auto_remove_watch_later_on_end" :title="$t('settings.auto_remove_watch_later_on_end')" :desc="$t('settings.auto_remove_watch_later_on_end_desc')" right-width="auto">
         <Radio v-model="settings.autoRemoveWatchLaterOnEnd" />
       </SettingsItem>
@@ -148,8 +176,8 @@ const randomPlayActivationModeOptions = computed(() => {
           right-width="auto"
         >
           <Select
-            v-model="settings.autoPlayRecommend"
-            :options="nativeAutoPlayModes.map(m => ({ label: $t(`settings.${m.label}`), value: m.value }))"
+            v-model="singleVideoMode"
+            :options="nativeAutoPlayModes.filter(m => m.value !== 'autoPlayWithRecommend').map(m => ({ label: $t(m.value === 'autoPlay' ? 'settings.single_video_auto_play' : `settings.${m.label}`), value: m.value }))"
             w="176px"
           />
         </SettingsItem>
@@ -158,24 +186,21 @@ const randomPlayActivationModeOptions = computed(() => {
 
     <SettingsItemGroup data-setting-id="settings.group_random_play" :title="t('settings.group_random_play')">
       <SettingsItem
-        setting-id="settings.enable_random_play" :title="t('settings.enable_random_play')"
-        :desc="t('settings.enable_random_play_desc')"
-        right-width="auto"
-      >
-        <Radio v-model="settings.enableRandomPlay" />
-      </SettingsItem>
-
-      <SettingsItem
-        v-if="settings.enableRandomPlay" setting-id="settings.default_custom_play_order"
+        setting-id="settings.default_custom_play_order"
         :title="t('settings.default_custom_play_order')"
         :desc="t('settings.default_custom_play_order_desc')"
         right-width="auto"
       >
-        <Select v-model="settings.defaultCustomPlayOrder" :options="defaultCustomPlayOrderOptions" w="160px" />
+        <Select v-model="playOrder" :options="[{ label: t('settings.play_order_native'), value: 'native' }, ...defaultCustomPlayOrderOptions]" w="160px" />
       </SettingsItem>
+    </SettingsItemGroup>
 
+    <SettingsItemGroup
+      v-if="settings.enableRandomPlay" data-setting-id="settings.custom_play_order_overrides"
+      :title="t('settings.custom_play_order_overrides')" collapsible :default-collapsed="!settings.enableCustomPlayOrderOverrides"
+    >
       <SettingsItem
-        v-if="settings.enableRandomPlay" setting-id="settings.enable_custom_play_order_overrides"
+        setting-id="settings.enable_custom_play_order_overrides"
         :title="t('settings.enable_custom_play_order_overrides')"
         :desc="t('settings.enable_custom_play_order_overrides_desc')"
         right-width="auto"
@@ -183,14 +208,11 @@ const randomPlayActivationModeOptions = computed(() => {
         <Radio v-model="settings.enableCustomPlayOrderOverrides" />
       </SettingsItem>
 
-      <SettingsItemSubgroup
-        v-if="settings.enableRandomPlay && settings.enableCustomPlayOrderOverrides" data-setting-id="settings.custom_play_order_overrides"
-        :title="t('settings.custom_play_order_overrides')"
-        :desc="t('settings.custom_play_order_overrides_desc')"
-      >
+      <template v-if="settings.enableCustomPlayOrderOverrides">
         <SettingsItem
           v-for="context in customPlayOrderContextOptions"
           :key="context.value"
+          :setting-id="`settings.custom_play_order_overrides.${context.value}`"
           :title="context.label"
           right-width="auto"
         >
@@ -200,11 +222,11 @@ const randomPlayActivationModeOptions = computed(() => {
             w="160px"
           />
         </SettingsItem>
-      </SettingsItemSubgroup>
+      </template>
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      v-if="settings.enableRandomPlay" data-setting-id="settings.group_random_play_settings"
+      v-if="usesRandomOrder" data-setting-id="settings.group_random_play_settings"
       :title="t('settings.group_random_play_settings')"
       :desc="t('settings.group_random_play_settings_desc')"
     >

@@ -9,7 +9,10 @@ import { useLayoutEditSettingValue } from '~/logic/layoutEdit'
 import { shouldUseWideMomentCardLayout, supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { createMomentColumnIndex } from '~/utils/momentColumnIndex'
 import { MOMENT_GRID_DIMENSIONS, resolveMomentCardWidth, resolveMomentGridColumnCount } from '~/utils/momentsLayout'
+import { isNotNewerMoment } from '~/utils/momentsReadPosition'
 import { isPortraitRatio, PORTRAIT_MAX_CLEAR_HEIGHT } from '~/utils/portraitMedia'
+import type { ScrollCardAnchor, ScrollPositionClaim } from '~/utils/scrollIntent'
+import { claimScrollCardAnchor, claimScrollPosition, ownsScrollPosition, resolveScrollCardAnchor } from '~/utils/scrollIntent'
 import { SUPPORTS_TEXT_AUTOSPACE } from '~/utils/textAutospace'
 import type { ViewportFrameReason, ViewportGeometry } from '~/utils/viewportGeometry'
 import { getLayoutHeight, getRemainingScroll, invalidateViewportGeometry, readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
@@ -18,6 +21,7 @@ interface LayoutHooks {
   onNearBottom: () => void
   onRecycle: (id: string) => void
   onViewportChange: (visible: ReadonlySet<string>, hidden: string[]) => void
+  onReadAnchor?: (anchor: { id: string, offset: number }) => void
 }
 /** Owns columns, measurements, visible ranges and their observers; never writes feed data. */
 export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHooks) {
@@ -75,6 +79,10 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   let attachedScrollViewport: HTMLElement | null = null
   /** Grid top within the scroll content; scrolling cannot change it. */
   let gridOffsetTop: number | undefined
+  let prependAnchor: ScrollCardAnchor | undefined
+  let anchorCommit = 0
+  let lastReadingInput = 0
+  let readingIntent: ScrollPositionClaim | undefined
   let cardMeasureObserver: ResizeObserver | undefined
   const measuredCardWidths = new WeakMap<HTMLElement, number>()
   const DESCRIPTION_LINES_PROPERTY = '--moment-card-description-lines'
@@ -390,7 +398,9 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   }
 
   function scheduleBottomRebalance() {
-  // 滚动过程中不重排，避免瀑布流突然上下跳动
+    if (prependAnchor)
+      return
+    // 滚动过程中不重排，避免瀑布流突然上下跳动
     if (rebalanceTimer)
       clearTimeout(rebalanceTimer)
     rebalanceTimer = setTimeout(() => {
@@ -471,7 +481,74 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     else
       gridOffsetTop = undefined
     updateVirtualColumns(geometry)
+    if (reason === 'scroll' && !document.hidden && scrollViewportRef.value) {
+      const claim = claimScrollPosition(scrollViewportRef.value)
+      if (claim.inputVersion !== lastReadingInput) {
+        lastReadingInput = claim.inputVersion
+        readingIntent = claim
+      }
+      if (!prependAnchor && readingIntent && ownsScrollPosition(scrollViewportRef.value, readingIntent)) {
+        const candidate = captureAnchor()?.candidates[0]
+        if (candidate)
+          hooks.onReadAnchor?.({ id: candidate.key, offset: candidate.offset })
+      }
+    }
     hooks.onNearBottom()
+  }
+
+  function captureAnchor(): ScrollCardAnchor | undefined {
+    const viewport = scrollViewportRef.value
+    if (!viewport)
+      return
+    const geometry = readViewportGeometry(viewport)
+    const top = getGridOffsetTop(geometry)
+    columnHeightIndex.sync(momentColumns.value, columnIndexKey())
+    const cards = columnHeightIndex.window(geometry.scrollTop - top, geometry.scrollTop - top + geometry.clientHeight)
+      .flatMap(column => column.items.map(item => ({ key: item.id, top: top + columnHeightIndex.offsetOf(item.id)! })))
+    return claimScrollCardAnchor(viewport, cards)
+  }
+
+  /** The scroll position that puts a laid-out card at the top of the viewport. */
+  function getCardScrollTop(id: string) {
+    const viewport = scrollViewportRef.value
+    if (!viewport)
+      return
+    columnHeightIndex.sync(momentColumns.value, columnIndexKey())
+    const offset = columnHeightIndex.offsetOf(id)
+    return offset === undefined ? undefined : getGridOffsetTop(readViewportGeometry(viewport)) + offset
+  }
+
+  function restoreAnchor(anchor: ScrollCardAnchor) {
+    prependAnchor = anchor
+    updateVirtualColumns()
+  }
+
+  function insertBefore(items: DisplayMoment[], targetId: string, anchor?: ScrollCardAnchor) {
+    if (!momentColumns.value.length) {
+      append(items, true)
+      return
+    }
+    columnHeightIndex.sync(momentColumns.value, columnIndexKey())
+    const prefixes = momentColumns.value.map((column) => {
+      const index = column.findIndex(item => isNotNewerMoment(item.id, targetId))
+      return index < 0 ? column.length : index
+    })
+    const additions = momentColumns.value.map(() => [] as DisplayMoment[])
+    const heights = momentColumns.value.map((column, index) => prefixes[index] < column.length
+      ? columnHeightIndex.offsetOf(column[prefixes[index]].id)!
+      : getColumnStackHeight(column))
+    for (const item of items) {
+      const column = findShortestColumnIndex(additions, heights)
+      additions[column].push(item)
+      heights[column] += getCardHeight(item) + gridGap
+    }
+    momentColumns.value = momentColumns.value.map((column, index) => additions[index].length
+      ? [...column.slice(0, prefixes[index]), ...additions[index], ...column.slice(prefixes[index])]
+      : column)
+    moments.value.forEach((item, index) => feedOrder.set(item.id, index))
+    nextFeedOrder = moments.value.length
+    prependAnchor = anchor
+    updateVirtualColumns()
   }
 
   function getGridOffsetTop(geometry: ViewportGeometry | undefined) {
@@ -496,12 +573,32 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     if (!geometry)
       gridOffsetTop = undefined
     const snapshot = geometry ?? (viewport ? readViewportGeometry(viewport) : undefined)
-    const scrollTop = snapshot?.scrollTop ?? 0
+    let scrollTop = snapshot?.scrollTop ?? 0
     const viewportHeight = snapshot?.clientHeight ?? window.innerHeight
     const offsetTop = getGridOffsetTop(snapshot)
+    columnHeightIndex.sync(momentColumns.value, columnIndexKey())
+    if (prependAnchor && viewport) {
+      const top = resolveScrollCardAnchor(viewport, prependAnchor, (id) => {
+        const offset = columnHeightIndex.offsetOf(id)
+        return offset === undefined ? undefined : offsetTop + offset
+      })
+      if (top === undefined) {
+        prependAnchor = undefined
+      }
+      else {
+        scrollTop = top
+        const anchor = prependAnchor
+        const commit = ++anchorCommit
+        void nextTick(() => {
+          if (active && !document.hidden && commit === anchorCommit && prependAnchor === anchor && ownsScrollPosition(viewport, anchor.position) && Math.abs(viewport.scrollTop - anchor.position.top) <= 1 && Math.abs(viewport.scrollTop - top) > 0.5) {
+            viewport.scrollTop = top
+            anchor.position.top = viewport.scrollTop
+          }
+        })
+      }
+    }
     const viewStart = scrollTop - OVERSCAN_PX
     const viewEnd = scrollTop + viewportHeight + OVERSCAN_PX
-    columnHeightIndex.sync(momentColumns.value, columnIndexKey())
     const next = columnHeightIndex.window(viewStart - offsetTop, viewEnd - offsetTop, interactiveCardIds)
     const previous = virtualColumns.value
     const changed = next.length !== previous.length || next.some((column, index) => {
@@ -845,6 +942,9 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     columnHeightIndex.sync([], gridCardWidth.value)
   }
   function reset(nextItems: DisplayMoment[] = []) {
+    prependAnchor = undefined
+    readingIntent = undefined
+    anchorCommit++
     interactiveCardIds.clear()
     movingDisclosureIds.clear()
     const ratios = new Map(nextItems.flatMap(item => coverRatios[item.id] ? [[item.id, coverRatios[item.id]] as const] : []))
@@ -969,7 +1069,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     if (card && commitCardHeight(id, Math.round(getLayoutHeight(card)), { force: true }))
       scheduleVirtualUpdate()
   }
-  return { layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad, append, remove, reset, clearColumns, updateMoment, setInteractionHeld, setDisclosureMotion, suspendRebalance(duration: number) {
+  return { captureAnchor, getCardScrollTop, restoreAnchor, insertBefore, layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad, append, remove, reset, clearColumns, updateMoment, setInteractionHeld, setDisclosureMotion, suspendRebalance(duration: number) {
     suppressBottomRebalanceUntil = Date.now() + duration
   } }
 }

@@ -69,7 +69,7 @@ html.bewly-design:is([data-bewly-native-site="live"], [data-bewly-native-site="l
   .link-navbar .showmore-link .more-tab-animation .slot-ctnr .more-tab-content {
     background: var(--bew-elevated-solid) !important;
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -82,7 +82,7 @@ html.bewly-design:is([data-bewly-native-site="live"], [data-bewly-native-site="l
   .side-bar-popup-cntr:has(> .follow-cntr) {
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -156,7 +156,7 @@ html.bewly-design:is([data-bewly-native-site="live"], [data-bewly-native-site="l
 
   .link-navbar .search-bar {
     background: var(--bew-content-alt-solid) !important;
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -266,7 +266,7 @@ html.bewly-design[data-bewly-native-site="live"] {
       corner-shape: var(--bew-corner-shape);
       font-size: var(--bew-font-size-control);
       line-height: var(--bew-line-height-control);
-      font-weight: var(--bew-font-weight-medium);
+      font-weight: var(--bew-font-weight-regular);
 
       .title {
         color: inherit;
@@ -312,7 +312,7 @@ html.bewly-design[data-bewly-native-site="live"] {
       corner-shape: var(--bew-corner-shape);
       font-size: var(--bew-font-size-control);
       line-height: var(--bew-line-height-control);
-      font-weight: var(--bew-font-weight-medium);
+      font-weight: var(--bew-font-weight-regular);
 
       > svg > g {
         // Keep the original switching arrows; their fixed white stroke was
@@ -416,7 +416,7 @@ html.bewly-design[data-bewly-native-site="live"] {
     padding: var(--bew-space-1) var(--bew-space-3);
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
     font-size: var(--bew-font-size-control);
@@ -611,7 +611,7 @@ html.bewly-design[data-bewly-native-site="live"] .live-room-app {
   .room-info-cntr {
     background-color: var(--bew-content-solid) !important;
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .head-info-section,
@@ -669,7 +669,7 @@ html.bewly-design[data-bewly-native-site="live"] .live-room-app {
   .chat-control-panel textarea.chat-input {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -744,7 +744,7 @@ html.bewly-design[data-bewly-native-site="show"] {
   .mallhome__list__card {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -801,14 +801,14 @@ html.bewly-design[data-bewly-native-site="show"] {
   .ticket-count {
     background-color: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .nav-header-search-bar {
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   .project-list-item-title,
@@ -1030,7 +1030,7 @@ html.bewly-design[data-bewly-native-site="merchandise-detail"] {
   .specification,
   .specification-item,
   .specification-item-label {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .image-view.default,
@@ -1085,13 +1085,13 @@ html.bewly-design[data-bewly-native-site="merchandise-detail"] {
 html.bewly-design[data-bewly-native-site="wallet"] {
   .pay-bcoin-index-wp,
   .pay-bcoin-record-wp {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .pay-bcoin-index-box {
-    border-bottom-color: var(--bew-border-color);
+    border-bottom-color: var(--bew-separator-color);
   }
 
   .pay-center-wrapper {
@@ -1118,7 +1118,7 @@ html.bewly-design[data-bewly-native-site="wallet"] {
   .pay-bcoin-record-content {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1127,7 +1127,7 @@ html.bewly-design[data-bewly-native-site="wallet"] {
   .left-nav-title {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .pay-bcoin-index-title {
@@ -1210,7 +1210,7 @@ html.bewly-design[data-bewly-native-site="wallet"] {
   :is(.el-input__inner, .el-picker-panel, .el-table, .el-table tr, .el-table td) {
     background-color: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .el-input__inner {
@@ -1227,7 +1227,7 @@ html.bewly-design[data-bewly-native-site="wallet"] {
   .el-table th {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-2);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .pay-bcoin-record-content {
@@ -1236,7 +1236,7 @@ html.bewly-design[data-bewly-native-site="wallet"] {
     }
 
     .el-table::before {
-      background-color: var(--bew-border-color);
+      background-color: var(--bew-separator-color);
     }
 
     .el-input__inner {
@@ -1258,7 +1258,7 @@ html.bewly-design[data-bewly-native-site="wallet"] {
 
   .el-date-table th {
     color: var(--bew-text-2);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .el-date-table td.disabled {
@@ -1336,7 +1336,7 @@ html.bewly-design[data-bewly-native-site="live-center"] {
   .loading-error-ctnr {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1385,7 +1385,7 @@ html.bewly-design[data-bewly-native-site="live-center"] {
   .link-input {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1393,7 +1393,7 @@ html.bewly-design[data-bewly-native-site="live-center"] {
   :is(.bl-button, .open-btn, .selector) {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1414,11 +1414,11 @@ html.bewly-design[data-bewly-native-site="live-center"] {
 
   .section-block .list {
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
 
     :is(th, td) {
       background: var(--bew-content-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .list-head > :is(th, td) {
@@ -1430,7 +1430,7 @@ html.bewly-design[data-bewly-native-site="live-center"] {
   .report-wrap .card-wrapper {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1473,7 +1473,7 @@ html.bewly-design[data-bewly-native-site="live-center"] {
     :is(.nav-item2-title, .nav-item3) {
       background: transparent;
       color: var(--bew-text-2);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
 
@@ -1546,7 +1546,7 @@ html.bewly-design[data-bewly-native-site="live-center"] {
     .menu-txt .download .down-item a {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
 
@@ -1574,7 +1574,7 @@ html.bewly-design[data-bewly-native-site="live-center"] {
       }
 
       .footer-img-item {
-        border-color: var(--bew-border-color);
+        border-color: var(--bew-separator-color);
       }
     }
   }
@@ -1671,7 +1671,7 @@ html.bewly-design[data-bewly-native-site="workshop"] {
   --el-bg-color-overlay: var(--bew-elevated-solid);
   --el-text-color-primary: var(--bew-text-1);
   --el-text-color-regular: var(--bew-text-2);
-  --el-border-color: var(--bew-border-color);
+  --el-border-color: var(--bew-separator-color);
 }
 
 html.bewly-design[data-bewly-native-site="manga"] {
@@ -1891,7 +1891,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
 
   div:has(> button[class*="_back-to-top_"]) {
     background: var(--bew-elevated-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -2064,7 +2064,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
         background: transparent;
 
         &::before {
-          background: var(--bew-border-color);
+          background: var(--bew-separator-color);
         }
       }
     }
@@ -2156,7 +2156,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
         // Native nested rules keep a black panel even when our theme is light.
         background: var(--bew-elevated-solid) !important;
         color: var(--bew-text-1);
-        border-color: var(--bew-border-color);
+        border-color: var(--bew-separator-color);
         border-radius: var(--bew-surface-radius) !important;
         corner-shape: var(--bew-corner-shape);
 
@@ -2193,7 +2193,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
     :is(.hover-tab, .dropbox-component .data-list) {
       background: var(--bew-elevated-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -2216,7 +2216,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
     :is(.date-selector, .feedback-type) .dropbox-component {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
 
@@ -2238,7 +2238,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
 
     :is(.monthly-card, .detail-card) {
       background-color: var(--bew-content-alt-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -2269,13 +2269,13 @@ html.bewly-design[data-bewly-native-site="manga"] {
     }
 
     :is(.a-divider, .divider) {
-      background-color: var(--bew-border-color);
+      background-color: var(--bew-separator-color);
     }
 
     .feedback-page :is(.manga-textbox, .feedback-content-input) {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -2283,7 +2283,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
     .feedback-page :is(input, textarea) {
       background: transparent;
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
 
       &::placeholder {
         color: var(--bew-text-3);
@@ -2300,7 +2300,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
       &:is(:disabled, .disabled) {
         background: var(--bew-content-alt-solid);
         color: var(--bew-text-3);
-        border-color: var(--bew-border-color);
+        border-color: var(--bew-separator-color);
       }
     }
 
@@ -2308,9 +2308,9 @@ html.bewly-design[data-bewly-native-site="manga"] {
       min-height: var(--bew-control-height);
       background: var(--bew-theme-surface);
       color: var(--bew-on-theme-surface);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     .renewal-btn:hover {
@@ -2320,7 +2320,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
     .error-hinter .manga-button {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -2417,7 +2417,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
   .header-info .manga-button.ghost {
     background: var(--bew-content-alt-solid) !important;
     color: var(--bew-text-1) !important;
-    border-color: var(--bew-border-color) !important;
+    border-color: var(--bew-separator-color) !important;
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -2563,14 +2563,14 @@ html.bewly-design[data-bewly-native-site="manga"] {
     }
 
     .border-bt {
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
     }
 
     .image-opt {
       background: var(--bew-switch-bg);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     .image-opt.active {
@@ -2582,7 +2582,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
     .image-opt .image-opt-slider {
       background: var(--bew-text-1);
       border-color: transparent;
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     .image-opt .image-opt-slider.active {
@@ -2594,7 +2594,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
   .reader-layout .action-bar-bottom :is(.zoomer, .page-slider) {
     background: var(--bew-elevated-solid) !important;
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   .reader-layout :is(.zoom-display, .progress-indicator) {
@@ -2620,7 +2620,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
   .reader-layout :is(.reader-setting, .episode-list, .episode-comment, .shortcuts-info) {
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -2628,9 +2628,9 @@ html.bewly-design[data-bewly-native-site="manga"] {
   .reader-layout :is(.action-bar-bottom, .floating-button) {
     background: var(--bew-elevated-solid) !important;
     color: var(--bew-text-1) !important;
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
   }
 
   .reader-layout .floating-button.circle {
@@ -2640,7 +2640,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
   .reader-layout :is(.action-button, .reader-setting .app-button, .episode-list .list-item) {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -2655,7 +2655,7 @@ html.bewly-design[data-bewly-native-site="game"] {
   .gc-header .nav-search input {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -2854,7 +2854,7 @@ html.bewly-design[data-bewly-native-site="game-detail"] {
   .bili-game-header-user-popper {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   .detail-download-area {
@@ -2917,7 +2917,7 @@ html.bewly-design[data-bewly-native-site="game-detail"] {
   .game-list .game-button {
     background: var(--bew-theme-surface);
     color: var(--bew-on-theme-surface);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3031,7 +3031,7 @@ html.bewly-design[data-bewly-native-site="love"] {
   .view-more-btn {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3056,7 +3056,7 @@ html.bewly-design[data-bewly-native-site="love"] {
   .charity-home .wrap,
   .bulletin-board .list {
     background: var(--bew-content-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3093,7 +3093,7 @@ html.bewly-design[data-bewly-native-site="love"] {
   .carousel-show {
     background-color: var(--bew-content-solid) !important;
     backdrop-filter: none;
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3133,7 +3133,7 @@ html.bewly-design[data-bewly-native-site="love"] {
     background: var(--bew-selected-bg);
     color: var(--bew-text-1);
     border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-round);
+    corner-shape: var(--bew-corner-shape-capsule);
 
     &.end {
       background: var(--bew-content-alt-solid);
@@ -3169,7 +3169,7 @@ html.bewly-design[data-bewly-native-site="love"] {
     .charity-button.hollow-white {
       background: var(--bew-content-alt-solid) !important;
       color: var(--bew-text-1) !important;
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
 
       &:hover {
         background: var(--bew-content-solid-hover) !important;
@@ -3203,7 +3203,7 @@ html.bewly-design[data-bewly-native-site="love"] {
       corner-shape: var(--bew-corner-shape);
       font-size: var(--bew-font-size-control);
       line-height: var(--bew-line-height-control);
-      font-weight: var(--bew-font-weight-medium);
+      font-weight: var(--bew-font-weight-regular);
 
       &:hover {
         background: var(--bew-theme-surface);
@@ -3242,7 +3242,7 @@ html.bewly-design[data-bewly-native-site="love"] {
       background: var(--bew-theme-surface);
       color: var(--bew-on-theme-surface);
       border-radius: var(--bew-pill-radius);
-      corner-shape: var(--bew-corner-shape-round);
+      corner-shape: var(--bew-corner-shape-capsule);
     }
 
     .unit-text-header > a {
@@ -3288,7 +3288,7 @@ html.bewly-design[data-bewly-native-site="love"] {
 
     .content-layout {
       background: var(--bew-content-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -3330,7 +3330,7 @@ html.bewly-design[data-bewly-native-site="love"] {
     .info-detail,
     .donator-list {
       background: var(--bew-content-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -3339,7 +3339,7 @@ html.bewly-design[data-bewly-native-site="love"] {
     .donator-list .list-header {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-surface-radius) var(--bew-surface-radius) 0 0;
       corner-shape: var(--bew-corner-shape);
     }
@@ -3353,7 +3353,7 @@ html.bewly-design[data-bewly-native-site="love"] {
     .el-input__inner {
       background: var(--bew-content-alt-solid);
       color: var(--bew-text-1);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -3384,14 +3384,14 @@ html.bewly-design.cheesePage {
   // redemption form. Only their known surfaces and reading states are mapped.
   .cheese-mine .wrap {
     background: var(--bew-content-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .cheese-mine .left {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-start-start-radius: inherit;
     border-end-start-radius: inherit;
     corner-shape: inherit;
@@ -3423,7 +3423,7 @@ html.bewly-design.cheesePage {
 
   .cheese-mine .tickets .nav {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3440,7 +3440,7 @@ html.bewly-design.cheesePage {
   .cheese-mine .exchange .code {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -3475,7 +3475,7 @@ html.bewly-design.cheesePage {
     background: var(--bew-content-solid);
     backdrop-filter: none;
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3493,7 +3493,7 @@ html.bewly-design.cheesePage {
     background: var(--bew-elevated-solid) !important;
     backdrop-filter: none !important;
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3564,7 +3564,7 @@ html.bewly-design.cheesePage {
   .edu-play-main-container :is(.right-box-rect, .discount-activity-package-card) {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
     backdrop-filter: none;
@@ -3583,7 +3583,7 @@ html.bewly-design.cheesePage {
 
   .season-catalogue .section-item {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3643,7 +3643,7 @@ html.bewly-design[data-bewly-native-site="article-drafts"] {
 
   .draft-list_header-input .vui_input-wrapper {
     background: var(--bew-content-alt-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3660,7 +3660,7 @@ html.bewly-design[data-bewly-native-site="article-drafts"] {
   .tooltip_content {
     background: var(--bew-elevated-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3679,7 +3679,7 @@ html.bewly-design[data-bewly-native-site="activities"] {
 
     #nav_searchform {
       background: var(--bew-content-alt-solid);
-      border-color: var(--bew-border-color);
+      border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
     }
@@ -3706,7 +3706,7 @@ html.bewly-design[data-bewly-native-site="activities"] {
   .act-list .pagelist .flip-left > span {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -3736,7 +3736,7 @@ html.bewly-design[data-bewly-native-site="activities"] {
   .act-list .pagelist .flip-right > input {
     background: var(--bew-content-alt-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3767,7 +3767,7 @@ html.bewly-design[data-bewly-native-site="activities"] {
   .act-list li {
     background: var(--bew-content-solid);
     color: var(--bew-text-2);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-surface-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3782,7 +3782,7 @@ html.bewly-design[data-bewly-native-site="activities"] {
 
   .list-view .tab-header {
     background: var(--bew-content-solid);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-start-start-radius: inherit;
     border-start-end-radius: inherit;
     corner-shape: inherit;
@@ -3817,7 +3817,7 @@ html.bewly-design[data-bewly-native-site="activities"] {
   .back-top {
     background: var(--bew-content-solid);
     color: var(--bew-text-1);
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }

@@ -57,7 +57,7 @@ defineExpose({ focus })
     :aria-disabled="disabled"
     :style="{ height, padding }"
     p="x-4"
-    rounded="$bew-interactive-radius" border="1 $bew-surface-border-color" box-border
+    rounded="$bew-interactive-radius" border="1 $bew-field-edge-color" box-border
     transition="border-color duration-300, background-color duration-300, box-shadow duration-300"
     bg="$bew-input-bg" flex="~ gap-2"
   >
@@ -95,10 +95,6 @@ defineExpose({ focus })
 </template>
 
 <style lang="scss" scoped>
-.b-input:focus-within {
-  border-color: var(--bew-focus-ring-color);
-}
-
 .prefix,
 .suffix {
   --uno: "flex items-center";

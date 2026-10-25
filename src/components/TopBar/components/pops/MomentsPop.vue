@@ -6,6 +6,7 @@ import ALink from '~/components/ALink.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
+import MomentReadMarker from '~/components/MomentReadMarker.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import { settings } from '~/logic'
@@ -14,7 +15,11 @@ import { createAccountLifetime } from '~/utils/accountLifetime'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { getUserID, scrollToTop } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
+import { keepMomentAnchorInterval } from '~/utils/momentsReadPosition'
 import { retiringListTransition } from '~/utils/motionPresence'
+import type { ScrollPositionClaim } from '~/utils/scrollIntent'
+import { claimScrollCardAnchor, claimScrollPosition, ownsScrollPosition, resolveScrollCardAnchor, scrollToPosition } from '~/utils/scrollIntent'
+import { readViewportGeometry } from '~/utils/viewportGeometry'
 import { updateOwnedWatchLater } from '~/utils/watchLater'
 
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
@@ -56,6 +61,60 @@ const momentTabs = computed((): MomentTab[] => {
 const selectedMomentTab = ref<MomentTab>(momentTabs.value[0])
 
 const momentsWrap = ref<HTMLElement>()
+let mounted = true
+let lastReadingInput = 0
+let readingIntent: ScrollPositionClaim | undefined
+let readVersion = 0
+const entryBoundary = shallowRef<{ id: string, local: boolean }>()
+const boundaryId = computed(() => {
+  const boundary = entryBoundary.value
+  if (!boundary)
+    return
+  const threshold = BigInt(boundary.id) - (boundary.local ? 0n : 1n)
+  return topBarStore.moments.find(item => item.dynamicId && BigInt(item.dynamicId) <= threshold)?.id_str
+})
+const gapBoundaryId = computed(() => topBarStore.momentNewerGap ? topBarStore.moments.find(item => item.dynamicId && BigInt(item.dynamicId) <= BigInt(topBarStore.momentNewerGap!.targetId))?.id_str : undefined)
+
+function captureAnchor() {
+  const wrap = momentsWrap.value
+  if (!wrap)
+    return
+  const geometry = readViewportGeometry(wrap)
+  const cards = Array.from(wrap.querySelectorAll<HTMLElement>('[data-moment-id]')).map(element => ({ key: element.dataset.momentId!, top: element.getBoundingClientRect().top - geometry.top + geometry.scrollTop }))
+  return claimScrollCardAnchor(wrap, cards)
+}
+function rememberReading() {
+  const wrap = momentsWrap.value
+  if (!wrap || selectedMomentTab.value.type !== 'video' || document.hidden)
+    return
+  const claim = claimScrollPosition(wrap)
+  if (claim.inputVersion !== lastReadingInput) {
+    lastReadingInput = claim.inputVersion
+    readingIntent = claim
+  }
+  if (!readingIntent || !ownsScrollPosition(wrap, readingIntent) || topBarStore.isLoadingNewerMoments)
+    return
+  const anchor = captureAnchor()?.candidates[0]
+  if (anchor)
+    topBarStore.momentReadingBookmark = { id: anchor.key, offset: anchor.offset }
+}
+
+async function getNewerData() {
+  const wrap = momentsWrap.value
+  if (!wrap || document.hidden || selectedMomentTab.value.type !== 'video')
+    return
+  const version = readVersion
+  const anchor = keepMomentAnchorInterval(captureAnchor(), topBarStore.momentNewerGap)
+  await topBarStore.getNewerTopBarMoments()
+  await nextTick()
+  if (!mounted || document.hidden || version !== readVersion || momentsWrap.value !== wrap || !anchor)
+    return
+  const geometry = readViewportGeometry(wrap)
+  const offsets = new Map(Array.from(wrap.querySelectorAll<HTMLElement>('[data-moment-id]')).map(element => [element.dataset.momentId!, element.getBoundingClientRect().top - geometry.top + geometry.scrollTop]))
+  const top = resolveScrollCardAnchor(wrap, anchor, id => offsets.get(id))
+  if (top !== undefined)
+    wrap.scrollTop = top
+}
 
 watch(() => selectedMomentTab.value.type, (newVal, oldVal) => {
   if (newVal === oldVal)
@@ -66,6 +125,10 @@ watch(() => selectedMomentTab.value.type, (newVal, oldVal) => {
 
   initData()
 })
+watch(() => settings.value.filterArticlesInMoments, () => {
+  if (selectedMomentTab.value.type === 'video')
+    void initData()
+}, { flush: 'sync' })
 
 // 使用 useOptimizedScroll 处理滚动加载
 function handleReachBottom() {
@@ -77,7 +140,7 @@ function handleReachBottom() {
 
 useOptimizedScroll(
   momentsWrap,
-  { onReachBottom: handleReachBottom },
+  { onReachBottom: handleReachBottom, onScroll: rememberReading },
   { bottomThreshold: 400, throttleDelay: 100 },
 )
 
@@ -90,10 +153,40 @@ function onClickTab(tab: MomentTab) {
   // 移除这里的 initData() 调用，因为 watch 已经会处理
 }
 
-function initData() {
+async function initData(start: 'automatic' | 'resume' | 'latest' = 'automatic') {
+  const version = ++readVersion
+  readingIntent = undefined
+  const type = selectedMomentTab.value.type
+  const wrap = momentsWrap.value
+  if (wrap)
+    scrollToPosition(wrap, 0)
+  const claim = wrap ? claimScrollPosition(wrap) : undefined
+  const bookmark = type === 'video' ? topBarStore.momentReadingBookmark : undefined
   void topBarStore.ensureWatchLaterState()
-  topBarStore.initMomentsData(selectedMomentTab.value.type)
+  await topBarStore.initMomentsData(type, start)
+  if (!mounted || version !== readVersion)
+    return
+  const boundary = bookmark?.id ?? topBarStore.momentEntrySnapshot?.oldestId
+  entryBoundary.value = type === 'video' && boundary ? { id: boundary, local: !!bookmark } : undefined
+  await nextTick()
+  if (!mounted || version !== readVersion || !wrap || !claim)
+    return
+  if (bookmark && (start === 'resume' || (start === 'automatic' && settings.value.momentsStartFromLastSeen))) {
+    const geometry = readViewportGeometry(wrap)
+    const card = wrap.querySelector<HTMLElement>(`[data-moment-id="${bookmark.id}"]`)
+    const top = resolveScrollCardAnchor(wrap, { position: claim, candidates: [{ key: bookmark.id, offset: bookmark.offset }] }, () => card ? card.getBoundingClientRect().top - geometry.top + geometry.scrollTop : undefined)
+    if (top !== undefined)
+      wrap.scrollTop = top
+  }
+  if (type === 'video' && !topBarStore.momentAtLatest && !document.hidden)
+    await getNewerData()
 }
+
+onBeforeUnmount(() => {
+  mounted = false
+  readVersion++
+  topBarStore.releaseMomentList()
+})
 
 function getData() {
   topBarStore.getMomentsData(selectedMomentTab.value.type)
@@ -166,17 +259,42 @@ defineExpose({
         variant="moments"
       />
 
+      <div v-if="selectedMomentTab.type === 'video'" class="moments-reading-actions">
+        <button v-if="topBarStore.momentReadingBookmark || topBarStore.momentEntrySnapshot?.oldestId" type="button" :disabled="topBarStore.isLoadingMoments || topBarStore.isLoadingNewerMoments" @click="initData('resume')">
+          {{ t(topBarStore.momentReadingBookmark ? 'moments.jump_to_last_seen' : 'moments.jump_to_video_boundary') }}
+        </button>
+        <button type="button" :disabled="topBarStore.isLoadingMoments || topBarStore.isLoadingNewerMoments" @click="initData('latest')">
+          {{ t('moments.jump_to_latest') }}
+        </button>
+        <button v-if="!topBarStore.momentAtLatest" type="button" :disabled="topBarStore.isLoadingMoments || topBarStore.isLoadingNewerMoments" @click="getNewerData">
+          {{ t('moments.load_newer') }}
+        </button>
+        <span v-if="topBarStore.momentNewerGap" class="bew-help" role="status">{{ t(`moments.join_${topBarStore.momentJoinStatus}`) }}</span>
+        <span v-if="topBarStore.visibleNewMomentsCount" class="bew-help">{{ t('moments.loaded_new_videos', { count: topBarStore.visibleNewMomentsCount }) }}</span>
+      </div>
+
       <Empty
-        v-else-if="!topBarStore.isLoadingMoments && topBarStore.moments.length === 0"
+        v-if="!topBarStore.isLoadingMoments && topBarStore.moments.length === 0"
+        :description="topBarStore.momentsPageFailed ? t('common.load_failed') : undefined"
         class="bew-popover__state"
       />
+      <div v-if="topBarStore.momentsPageFailed" class="moments-reading-actions">
+        <button type="button" :disabled="topBarStore.isLoadingMoments" @click="topBarStore.getTopBarMoments(selectedMomentTab.type, false, true)">
+          {{ t('moments.retry') }}
+        </button>
+      </div>
 
       <TransitionGroup name="list" v-bind="retiringListTransition">
         <article
           v-for="(moment, index) in topBarStore.moments"
           :key="moment.id_str"
+          :data-moment-id="moment.dynamicId"
           class="group popover-card"
         >
+          <MomentReadMarker v-if="moment.id_str === boundaryId" :label="t(entryBoundary?.local ? 'moments.local_bookmark' : 'moments.video_boundary')" />
+          <button v-if="moment.id_str === gapBoundaryId" type="button" class="popover-card__interactive" :disabled="topBarStore.isLoadingNewerMoments" @click="getNewerData">
+            {{ t('moments.continue_gap') }}
+          </button>
           <ALink
             class="popover-card__primary"
             :href="moment.link"
@@ -222,7 +340,6 @@ defineExpose({
                       :href="author.jump_url"
                       type="topBar"
                       class="popover-card__interactive"
-                      font-medium
                     >
                       {{ author.name }}
                     </ALink>
@@ -235,7 +352,6 @@ defineExpose({
                   :href="moment.authorJumpUrl"
                   type="topBar"
                   class="popover-card__interactive"
-                  font-medium
                 >
                   {{ moment.author }}
                 </ALink>
@@ -252,7 +368,6 @@ defineExpose({
                   <div
                     v-else
                     text="$bew-text-1"
-                    font="semibold"
                     flex="~"
                     items="center"
                   >
@@ -344,7 +459,7 @@ defineExpose({
 
 .moments-pop__authors a {
   min-width: 0;
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   @include truncateFade.line;
 }
 

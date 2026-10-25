@@ -8,7 +8,7 @@ import { settings } from '~/logic'
 import { getIframeMessageData, markIframeReadyForMessaging } from '~/utils/iframeMessage'
 import { releaseIframeMedia } from '~/utils/mediaResources'
 
-const props = defineProps<{ url: string, itemKey: string, title: string, active: boolean }>()
+const props = defineProps<{ url: string, itemKey: string, title: string, active: boolean, uiVisible: boolean }>()
 const emit = defineEmits<{ (event: 'action', action: 'next' | 'previous' | 'close' | 'ended'): void }>()
 const frame = ref<HTMLIFrameElement>()
 const layoutReady = ref(false)
@@ -27,16 +27,17 @@ function configure() {
     playbackId,
     targetUrl: props.url,
     active: props.active,
+    uiVisible: props.uiVisible,
     autoPlay: settings.value.immersiveAutoPlay,
     autoNext: settings.value.immersiveAutoNext,
     keyboard: settings.value.immersiveKeyboardSwitch,
     wheel: settings.value.immersiveWheelSwitch,
   })
 }
-watch([currentHref, () => props.active, () => settings.value.immersiveAutoPlay, () => settings.value.immersiveAutoNext, () => settings.value.immersiveKeyboardSwitch, () => settings.value.immersiveWheelSwitch], configure, { flush: 'post' })
+watch([currentHref, () => props.active, () => props.uiVisible, () => settings.value.immersiveAutoPlay, () => settings.value.immersiveAutoNext, () => settings.value.immersiveKeyboardSwitch, () => settings.value.immersiveWheelSwitch], configure, { flush: 'post' })
 function waitForLayout() {
   clearTimer()
-  if (props.active && !layoutReady.value) {
+  if (props.active && props.uiVisible && !layoutReady.value) {
     timer = setTimeout(() => {
       timer = undefined
       timedOut.value = true
@@ -51,6 +52,7 @@ watch(() => props.active, (active) => {
   }
   waitForLayout()
 }, { immediate: true, flush: 'sync' })
+watch(() => props.uiVisible, waitForLayout)
 useEventListener(window, 'message', (event) => {
   const data = getIframeMessageData(event, frame.value)
   if (!props.active || data?.type !== IMMERSIVE_EVENT || !channel.matches(data) || data.key !== props.itemKey || data.playbackId !== playbackId)
@@ -85,7 +87,7 @@ onBeforeUnmount(() => {
   releaseIframeMedia(frame.value ?? null)
 })
 function configureInactive() {
-  channel.send({ type: IMMERSIVE_CONFIG, key: props.itemKey, playbackId, targetUrl: props.url, active: false, autoPlay: false, autoNext: false, keyboard: false, wheel: false })
+  channel.send({ type: IMMERSIVE_CONFIG, key: props.itemKey, playbackId, targetUrl: props.url, active: false, uiVisible: false, autoPlay: false, autoNext: false, keyboard: false, wheel: false })
 }
 </script>
 

@@ -312,7 +312,7 @@ async function handleConfirm() {
           class="dialog__panel bew-shape-smooth-rect"
           :class="{ 'dialog__panel--borderless': !showBorder }"
         >
-          <div class="dialog__edge" aria-hidden="true" />
+          <div class="dialog__edge" :class="{ 'dialog__edge--glass': surfaceGlassEnabled }" aria-hidden="true" />
           <div class="dialog__clip">
             <div
               class="dialog__surface"
@@ -400,7 +400,7 @@ async function handleConfirm() {
                   <span
                     v-show="showShortcut"
                     text="xs $bew-text-2 lh-0" p="x-1" rounded="$bew-radius-tiny" bg="$bew-fill-1"
-                    border="1 $bew-border-color"
+                    border="hairline $bew-edge-color"
                     mix-blend-color-dodge
                   >
                     ESC
@@ -416,7 +416,7 @@ async function handleConfirm() {
                   <span
                     v-show="showShortcut"
                     text="xs $bew-text-2 lh-0" p="x-1" rounded="$bew-radius-tiny" bg="$bew-fill-1"
-                    border="1 $bew-border-color"
+                    border="hairline $bew-edge-color"
                     mix-blend-color-dodge
                   >
                     ENTER
@@ -479,11 +479,15 @@ async function handleConfirm() {
   z-index: 3;
   inset: 0;
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: inherit;
   corner-shape: inherit;
   box-shadow: var(--bew-shadow-4);
   pointer-events: none;
+}
+
+.dialog__edge--glass {
+  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
 }
 
 .dialog__panel--borderless .dialog__edge {

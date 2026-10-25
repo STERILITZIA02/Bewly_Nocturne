@@ -472,15 +472,6 @@ function isPlaylistHandoffEnabled(): boolean {
   return autoHandoffRadio?.checked === true
 }
 
-async function hasHigherPriorityEndPlaybackBehavior(): Promise<boolean> {
-  if (isLoopEnabled() || isAutoPlayEnabled() || isPlaylistHandoffEnabled()) {
-    return true
-  }
-
-  const { isRandomPlayActive } = await import('~/utils/randomPlay')
-  return isRandomPlayActive()
-}
-
 // 视频类型枚举
 export enum VideoType {
   MULTIPART = 'multipart', // 分P视频
@@ -575,6 +566,11 @@ export function detectCustomPlayListVideoType(videoType = detectVideoType()): Vi
 
 export function canCustomPlayHandleCurrentEnd(): boolean {
   const videoType = detectVideoType()
+  if (!settings.value.useBilibiliDefaultAutoPlay) {
+    const mode = getAutoPlayModeForVideoType(detectEndBehaviorVideoType(videoType))
+    if (mode === 'loop' || mode === 'pauseAtEnd')
+      return false
+  }
   return detectEndBehaviorVideoType(videoType) === detectCustomPlayListVideoType(videoType)
 }
 
@@ -841,6 +837,11 @@ interface NativeEndPlaybackSnapshot {
 let nativeEndPlaybackSnapshot: NativeEndPlaybackSnapshot | null = null
 let customEndPlaybackHandlerActive = false
 
+function hasHigherPriorityEndPlaybackBehavior(): boolean {
+  return isLoopEnabled() || isAutoPlayEnabled() || isPlaylistHandoffEnabled()
+    || (customEndPlaybackHandlerActive && canCustomPlayHandleCurrentEnd())
+}
+
 export function setCustomEndPlaybackHandlerActive(active: boolean): void {
   if (customEndPlaybackHandlerActive !== active)
     invalidatePendingEndPlaybackStateChanges()
@@ -899,7 +900,7 @@ export function getAutoPlayModeForVideoType(videoType = detectVideoType()): Auto
 }
 
 /** 关闭 B 站原生的续播行为，让自定义播放独占视频结束后的切集。 */
-export function disableNativeEndPlaybackBehavior(videoType = detectEndBehaviorVideoType()): void {
+function disableNativeEndPlaybackBehavior(videoType = detectEndBehaviorVideoType()): void {
   captureNativeEndPlaybackBehavior(videoType)
   setLoopState(false)
   if (usesPlaylistHandoff(videoType))
@@ -927,7 +928,11 @@ export function applyAutoPlayByVideoType() {
 
   const mode = getAutoPlayModeForVideoType(videoType)
 
-  nativeEndPlaybackSnapshot = null
+  if (mode === 'default') {
+    restoreNativeEndPlaybackBehavior()
+    return
+  }
+  captureNativeEndPlaybackBehavior(videoType)
 
   // 如果用户手动修改过自动播放状态,跳过自动应用
   if (userManuallyChangedAutoPlay) {
@@ -939,6 +944,7 @@ export function applyAutoPlayByVideoType() {
     switch (mode) {
       case 'autoPlay':
         setPlaylistHandoffMode(true)
+        setAutoPlayState(false)
         break
       case 'autoPlayWithRecommend':
         setPlaylistHandoffMode(true)
@@ -952,8 +958,7 @@ export function applyAutoPlayByVideoType() {
       case 'loop':
         setPlaylistHandoffMode(false)
         setAutoPlayState(false)
-        if (videoType === VideoType.MULTIPART || videoType === VideoType.COLLECTION)
-          setLoopState(true)
+        setLoopState(true)
         break
     }
     return
@@ -1286,7 +1291,7 @@ function checkAndCancelAutoPlayForRecommendation() {
   }
 }
 
-async function handleAutoExitFullscreenVideoEnded(generation: number) {
+function handleAutoExitFullscreenVideoEnded(generation: number) {
   if (generation !== autoExitFullscreenGeneration)
     return
   // 如果是互动视频，不处理（因为URL变化会由pushstate处理）
@@ -1307,9 +1312,7 @@ async function handleAutoExitFullscreenVideoEnded(generation: number) {
   // 非互动视频且开启了自动退出全屏
   if (settings.value.autoExitFullscreenOnEnd) {
     // 单集循环、随机播放、自动连播等播放行为优先级高于自动退出全屏
-    if (await hasHigherPriorityEndPlaybackBehavior())
-      return
-    if (generation !== autoExitFullscreenGeneration)
+    if (hasHigherPriorityEndPlaybackBehavior())
       return
 
     // 检查是否处于全屏状态
@@ -1362,7 +1365,7 @@ function attachAutoExitFullscreenListener() {
   const generation = autoExitFullscreenGeneration
   autoExitFullscreenVideo = video
   autoExitFullscreenEndedListener = () => {
-    void handleAutoExitFullscreenVideoEnded(generation)
+    handleAutoExitFullscreenVideoEnded(generation)
   }
   video.setAttribute('bewly-auto-exit-listener', 'true')
   video.addEventListener('ended', autoExitFullscreenEndedListener)

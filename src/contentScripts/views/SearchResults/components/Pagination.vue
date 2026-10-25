@@ -150,13 +150,13 @@ function goToNextPage() {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   background-color: var(--bew-elevated-1);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-body);
   cursor: pointer;
   transition:

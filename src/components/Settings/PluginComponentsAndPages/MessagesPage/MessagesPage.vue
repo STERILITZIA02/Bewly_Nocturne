@@ -20,6 +20,14 @@ import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
 import { useMessageServerSettings } from './useMessageServerSettings'
 
 const { t } = useI18n()
+const notificationCategories = [
+  ['showReplyNotificationReminder', 'settings.show_reply_notification_reminder'],
+  ['showAtNotificationReminder', 'settings.show_at_notification_reminder'],
+  ['showLikeNotificationReminder', 'settings.show_like_notification_reminder'],
+  ['showSystemNotificationReminder', 'settings.show_system_notification_reminder'],
+  ['showFollowedPrivateMessageUnreadCount', 'settings.show_followed_private_message_unread_count'],
+  ['showUnfollowedPrivateMessageUnreadCount', 'settings.show_unfollowed_private_message_unread_count'],
+] as const
 const topBarStore = useTopBarStore()
 const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
 let active = true
@@ -127,6 +135,11 @@ onScopeDispose(serverSettings.dispose)
 
 <template>
   <div>
+    <SettingsItemGroup data-setting-id="settings.notification_badge_categories" :title="$t('settings.notification_badge_categories')" :desc="$t('settings.notification_badge_categories_desc')">
+      <SettingsItem v-for="[key, label] in notificationCategories" :key="key" :title="$t(label)" :setting-id="label" right-width="auto">
+        <Radio v-model="settings[key]" />
+      </SettingsItem>
+    </SettingsItemGroup>
     <SettingsItemGroup data-setting-id="settings.messages_reading_behavior" :title="$t('settings.messages_reading_behavior')">
       <SettingsItem setting-id="messages.autoMarkRead" :title="$t('settings.messages_auto_mark_read')" :desc="$t('settings.messages_auto_mark_read_desc')" right-width="auto">
         <Radio v-model="settings.autoMarkPrivateMessagesRead" />
@@ -321,7 +334,7 @@ onScopeDispose(serverSettings.dispose)
   color: var(--bew-text-2);
   background: var(--bew-fill-1);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
 }
 
 .message-block-words-empty {

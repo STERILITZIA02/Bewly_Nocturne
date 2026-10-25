@@ -17,6 +17,7 @@ export interface FavoritePartitionOption {
 export interface FavoriteUploaderOption {
   mid: number
   name: string
+  face?: string
   count: number
 }
 
@@ -122,7 +123,7 @@ export function collectFavoriteUploaders(items: Iterable<FavoriteItem>, limit = 
     if (existing)
       existing.count++
     else
-      uploaders.set(mid, { mid, name: item.upper.name || String(mid), count: 1 })
+      uploaders.set(mid, { mid, name: item.upper.name || String(mid), face: item.upper.face || undefined, count: 1 })
   }
   return [...uploaders.values()].sort((a, b) => b.count - a.count || a.mid - b.mid).slice(0, limit)
 }

@@ -141,7 +141,7 @@
       .bili-mini-line,
       .bili-mini-tab-line,
       .bili-mini-tel .bili-mini-tel_right .line {
-        background-color: var(--bew-border-color);
+        background-color: var(--bew-separator-color);
       }
 
       .bili-mini-content-wp .login-scan-box,
@@ -162,12 +162,12 @@
       .bili-mini-tel,
       .bili-mini-code,
       .bili-mini-login-register-wrapper .register-btn {
-        border-color: var(--bew-border-color);
+        border-color: var(--bew-separator-color);
       }
 
       // & -> .el-select-dropdown
       &.el-popper[x-placement^="bottom"] .popper__arrow {
-        border-bottom-color: var(--bew-border-color);
+        border-bottom-color: var(--bew-separator-color);
       }
 
       // & -> .el-select-dropdown

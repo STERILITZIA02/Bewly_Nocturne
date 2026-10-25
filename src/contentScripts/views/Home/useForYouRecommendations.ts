@@ -26,9 +26,11 @@ import type { AppAuthSnapshot } from '~/utils/authProvider'
 import { captureAppAuth, ensureFreshAppAccessToken, isAppAccessTokenInvalidResponse, isAppAuthCurrent, refreshInvalidAppAccessToken, requestAppClient } from '~/utils/authProvider'
 import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
 import { debugLog } from '~/utils/debug'
+import { isAboveKnownCount } from '~/utils/filterRules'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 
 import type { NormalizedAppVideoItem } from './adapters/appRecommendationItem'
+import { completeAppLikeCounts } from './appRecommendationLikes'
 import { createForYouInitialDataCoordinator } from './forYouInitialData'
 import { createRecommendationFeed } from './recommendationFeed'
 import type { RecommendationDataState } from './recommendationState'
@@ -42,7 +44,7 @@ import { useWebRecommendationCursor } from './useWebRecommendationCursor'
 export function useForYouRecommendations(emit: {
   (event: 'beforeLoading'): void
   (event: 'afterLoading'): void
-}) {
+}, hasPlaybackConsumer: () => boolean = () => false) {
   const toast = useToast()
   const { t } = useI18n()
   const tabState = useHomeTabState()
@@ -63,7 +65,19 @@ export function useForYouRecommendations(emit: {
   const isWebRecommendationMode = computed(() => settings.value.recommendationMode !== 'app')
   const { refreshIdx, webFetchRow, webShowlistGroups, buildLastShowlistGroup, getLastShowlistFromGroups, getNoCookieStoredLastShowlist, getNoCookieNextFreshIdx, saveNoCookieRecommendationState } = useWebRecommendationCursor(tabState)
   const { filterFunc, appFilterFunc, hasActiveWebRecommendationFilter, hasActiveAppRecommendationFilter, hasActiveRecommendationFilter, requiresManualFilteredPaging, recommendationFilterSettingsSignature, resetFilteredFeedPagingState, recordFilteredFeedBatch } = useRecommendationFilters(tabState, isWebRecommendationMode)
+  const acceptedFilterSignature = tabState.ref('recommendationFilterSignature', recommendationFilterSettingsSignature.value)
   let requestVersion = 0
+  let appLikesController: AbortController | undefined
+  let suspendedAppLikes = false
+  let filterRefreshTimer: ReturnType<typeof setTimeout> | undefined
+  function invalidateRequests() {
+    requestVersion++
+    suspendedAppLikes = false
+    clearTimeout(filterRefreshTimer)
+    filterRefreshTimer = undefined
+    appLikesController?.abort()
+    appLikesController = undefined
+  }
   let loadedAccountId: AccountId = getCurrentAccountId()
   let isComponentActive = false
   const disposers: Array<() => void> = []
@@ -210,14 +224,40 @@ export function useForYouRecommendations(emit: {
   }
 
   watch(recommendationFilterSettingsSignature, () => {
+    invalidateRequests()
+    recommendationHistory.reset()
     resetFilteredFeedPagingState()
     consecutiveEmptyLoads.value = 0
     appConsecutiveEmptyLoads.value = 0
+    if (isComponentActive) {
+      // A threshold or keyword edit must not request a feed for every keystroke.
+      filterRefreshTimer = setTimeout(() => {
+        filterRefreshTimer = undefined
+        void initData()
+      }, 300)
+    }
   })
 
   // 监听页面可见性变化
-  function handleVisibilityChange() {
+  async function handleVisibilityChange() {
     isPageVisible.value = !document.hidden
+    if (!isPageVisible.value && !hasPlaybackConsumer() && appLikesController) {
+      suspendAppLikeReads()
+    }
+    else if (isPageVisible.value && suspendedAppLikes) {
+      suspendedAppLikes = false
+      const version = requestVersion
+      await getData('loadMore')
+      if (version === requestVersion && isComponentActive)
+        hasInitializedData.value = true
+    }
+  }
+
+  function suspendAppLikeReads() {
+    invalidateRequests()
+    suspendedAppLikes = true
+    isLoading.value = false
+    recommendationDataState.value = currentVideoList.value.length ? 'success' : 'idle'
   }
 
   let visibilityListenerAttached = false
@@ -249,6 +289,10 @@ export function useForYouRecommendations(emit: {
       if (recommendationDataState.value === 'loading')
         recommendationDataState.value = currentVideoList.value.length ? 'success' : 'idle'
     }
+    if (acceptedFilterSignature.value !== recommendationFilterSettingsSignature.value) {
+      hasInitializedData.value = false
+      recommendationHistory.reset()
+    }
     initPageAction()
     void initialDataCoordinator.ensure()
   })
@@ -256,7 +300,7 @@ export function useForYouRecommendations(emit: {
   onBeforeUnmount(() => {
     isComponentActive = false
     initialDataCoordinator.deactivate()
-    requestVersion++
+    invalidateRequests()
   })
 
   onUnmounted(() => {
@@ -333,17 +377,18 @@ export function useForYouRecommendations(emit: {
   // Home remounts the owner for this key. Invalidate synchronously before its
   // transition so an old response cannot publish during the retiring frame.
   watch(getRecommendationRequestIdentity, () => {
-    requestVersion++
+    invalidateRequests()
   }, { flush: 'sync' })
 
   async function initData() {
+    invalidateRequests()
     if (isWebRecommendationMode.value && isWebRiskCooldownActive()) {
       recommendationDataState.value = 'risk-control'
       notifyWebRiskCooldown()
       return
     }
 
-    requestVersion++
+    acceptedFilterSignature.value = recommendationFilterSettingsSignature.value
     const version = requestVersion
     const recommendationMode = settings.value.recommendationMode
     const accountId = loadedAccountId
@@ -450,6 +495,7 @@ export function useForYouRecommendations(emit: {
     // 如果正在递归加载中，跳过外部触发的加载请求
     if (
       !hasInitializedData.value
+      || filterRefreshTimer !== undefined
       || isLoading.value
       || noMoreContent.value
       || isRecursiveLoading.value
@@ -498,7 +544,7 @@ export function useForYouRecommendations(emit: {
   function restoreRecommendationSnapshot(snapshot: RecommendationSnapshot | null) {
     if (!snapshot || !tabState.isCurrent() || snapshot.requestIdentity !== getRecommendationRequestIdentity())
       return false
-    requestVersion++
+    invalidateRequests()
     isLoading.value = false
     isRecursiveLoading.value = false
     videoList.value = snapshot.videoList
@@ -902,6 +948,39 @@ export function useForYouRecommendations(emit: {
           const filterMatches = activeAppFilter ? await activeAppFilter(normalizedItems.map((item, index) => representable[index] ? item : null)) : null
           if (!isCurrentAppRequest())
             return
+          if (settings.value.enableFilterByLikeCount) {
+            if (!isPageVisible.value && !hasPlaybackConsumer()) {
+              suspendAppLikeReads()
+              return
+            }
+            const candidates = normalizedItems.flatMap((item, index) => {
+              if (!representable[index] || !filterMatches?.[index]
+                || getAppVideoKeys(item).some(key => appFeed.has(key) || recentShownKeys.has(key))) {
+                return []
+              }
+              const normalized = item as NormalizedAppVideoItem
+              return settings.value.disableFilterForFollowedUser && normalized.normalized.followed ? [] : [normalized]
+            })
+            const controller = new AbortController()
+            appLikesController = controller
+            try {
+              await completeAppLikeCounts(candidates, controller.signal)
+            }
+            finally {
+              controller.abort()
+              if (appLikesController === controller)
+                appLikesController = undefined
+            }
+            if (!isCurrentAppRequest())
+              return
+            normalizedItems.forEach((item, index) => {
+              if (!representable[index] || !filterMatches![index])
+                return
+              const normalized = (item as NormalizedAppVideoItem).normalized
+              if (!(settings.value.disableFilterForFollowedUser && normalized.followed))
+                filterMatches![index] = isAboveKnownCount(normalized.likeCount, settings.value.filterByLikeCount)
+            })
+          }
           appFeedIdx.value = idx + 1
           let filteredCandidateCount = 0
           let filteredKeptCount = 0

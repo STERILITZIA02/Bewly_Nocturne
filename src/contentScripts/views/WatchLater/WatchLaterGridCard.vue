@@ -57,10 +57,6 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
           :alt="item.title"
           loading="lazy"
         />
-        <span class="watch-later-grid-card__media-gradient" aria-hidden="true" />
-        <span class="watch-later-grid-card__progress-label">
-          {{ progressText }} / {{ durationText }}
-        </span>
       </ALink>
 
       <div class="watch-later-grid-card__actions">
@@ -118,6 +114,8 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
       >
         <span>{{ author.name }}</span>
       </a>
+      <!-- Times live in the details, not on the cover. -->
+      <span class="watch-later-grid-card__times">{{ progressText }} / {{ durationText }}</span>
     </div>
   </article>
 </template>
@@ -171,26 +169,6 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
 
 .watch-later-grid-card:hover .watch-later-grid-card__cover {
   transform: scale(1.025);
-}
-
-.watch-later-grid-card__media-gradient {
-  position: absolute;
-  inset: auto 0 0;
-  height: 48%;
-  background: linear-gradient(to top, rgb(0 0 0 / 68%), transparent);
-  pointer-events: none;
-}
-
-.watch-later-grid-card__progress-label {
-  font-variant-numeric: tabular-nums;
-  position: absolute;
-  right: var(--bew-space-2);
-  bottom: var(--bew-space-3);
-  color: white;
-  font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
-  line-height: var(--bew-line-height-caption);
-  text-shadow: 0 1px 3px rgb(0 0 0 / 72%);
 }
 
 .watch-later-grid-card__actions {
@@ -260,6 +238,10 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
   }
 }
 
+.watch-later-grid-card__times {
+  @include contentCard.video-subtitle;
+  font-variant-numeric: tabular-nums;
+}
 .watch-later-grid-card__owner {
   display: flex;
   min-width: 0;

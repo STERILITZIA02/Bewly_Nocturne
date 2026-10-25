@@ -22,7 +22,7 @@
   }
 
   & + & {
-    --uno: "mt-1 border-$bew-border-color";
+    --uno: "mt-1 border-$bew-separator-color";
   }
 }
 </style>

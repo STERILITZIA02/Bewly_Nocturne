@@ -29,7 +29,7 @@ withDefaults(defineProps<{
   color: var(--bew-text-1);
   background: var(--bew-elevated-solid);
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   box-shadow: var(--bew-shadow-2);
   backdrop-filter: none;
   &:hover {

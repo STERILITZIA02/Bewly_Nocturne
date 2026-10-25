@@ -84,9 +84,9 @@ const items = computed(() => props.options.map(item => ({ ...item, ariaLabel: it
   color: var(--bew-text-auto);
   background: var(--bew-wheel-text-active);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   font-variant-numeric: tabular-nums;
 }

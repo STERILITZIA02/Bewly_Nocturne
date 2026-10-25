@@ -9,14 +9,13 @@ import { i18n } from '~/utils/i18n'
 import { getPlaybackNavigationKey } from '~/utils/playbackTab'
 import { RANDOM_PLAY_UI_RETRY_MAX, shouldRetryRandomPlayVideo } from '~/utils/randomPlayRetry'
 
-import { applyAutoPlayByVideoType, canCustomPlayHandleCurrentEnd, detectCustomPlayListVideoType, detectVideoType, disableNativeEndPlaybackBehavior, getVideoElement, setCustomEndPlaybackHandlerActive, supportsCustomPlaybackForVideoType, VideoType } from './player'
+import { applyAutoPlayByVideoType, canCustomPlayHandleCurrentEnd, detectCustomPlayListVideoType, detectVideoType, getVideoElement, setCustomEndPlaybackHandlerActive, supportsCustomPlaybackForVideoType, VideoType } from './player'
 
 // 随机播放状态管理
 let isRandomPlayEnabled = false
 let isRandomPlayInitialized = false
 const visitedEpisodes = new Set<string>()
 let originalEndedListener: (() => void) | null = null
-let originalPauseListener: (() => void) | null = null
 let originalMediaListener: ((event?: Event) => void) | null = null
 const MEDIA_NAVIGATION_EVENTS = ['emptied', 'loadedmetadata', 'playing'] as const
 let listenerVideo: HTMLVideoElement | null = null
@@ -653,14 +652,11 @@ function invalidateVideoListenerRetry() {
 function detachRandomPlayVideoListeners() {
   if (listenerVideo && originalEndedListener)
     listenerVideo.removeEventListener('ended', originalEndedListener, true)
-  if (listenerVideo && originalPauseListener)
-    listenerVideo.removeEventListener('pause', originalPauseListener)
   if (listenerVideo && originalMediaListener) {
     for (const name of MEDIA_NAVIGATION_EVENTS)
       listenerVideo.removeEventListener(name, originalMediaListener)
   }
   originalEndedListener = null
-  originalPauseListener = null
   originalMediaListener = null
   listenerVideo?.removeAttribute('data-bewly-random-play-listener')
   listenerVideo = null
@@ -766,17 +762,7 @@ export function enableRandomPlay(): void {
     for (const name of MEDIA_NAVIGATION_EVENTS)
       video.addEventListener(name, markMediaNavigation)
     video.addEventListener('ended', randomPlayListener, true)
-    // 有些情况下pause事件可能更可靠
-    const randomPlayPauseListener = () => {
-      // 检查是否是播放结束（当前时间和总时间相近）
-      if (video.currentTime > 0 && video.duration > 0 && (video.duration - video.currentTime) < 1) {
-        randomPlayListener()
-      }
-    }
-    video.addEventListener('pause', randomPlayPauseListener)
-
     originalEndedListener = randomPlayListener
-    originalPauseListener = randomPlayPauseListener
     originalMediaListener = markMediaNavigation
   }
 
@@ -815,18 +801,13 @@ export function setRandomPlayEnabled(enabled: boolean): void {
   isRandomPlayEnabled = enabled
   setCustomEndPlaybackHandlerActive(enabled)
   if (enabled) {
-    disableNativeEndPlaybackBehavior()
+    applyAutoPlayByVideoType()
     enableRandomPlay()
   }
   else {
     disableRandomPlay()
     applyAutoPlayByVideoType()
   }
-}
-
-// 获取随机播放状态
-export function isRandomPlayActive(): boolean {
-  return isRandomPlayEnabled
 }
 
 export function applyRandomPlayActivationSettings(): void {
@@ -854,7 +835,7 @@ export function applyRandomPlayActivationSettings(): void {
       }
     }
     else {
-      setRandomPlayEnabled(false)
+      setRandomPlayEnabled(true)
     }
   }
   else {

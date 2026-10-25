@@ -392,7 +392,7 @@ const shouldShowDivider = computed(() => {
           <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
             <div
               v-if="shouldShowDivider"
-              w-2px h-16px bg="$bew-border-color" mx-1
+              w-2px h-16px bg="$bew-separator-color" mx-1
               rounded="$bew-radius-tiny"
             />
           </Transition>

@@ -50,7 +50,7 @@
   }
 
   .link-c .link {
-    border-color: var(--bew-border-color);
+    border-color: var(--bew-separator-color);
   }
 
   // Native desktop content has a 1244px minimum layout. Below that width plus
@@ -121,7 +121,7 @@
     }
 
     .channel-container .el-input__inner {
-      box-shadow: 0 0 0 1px var(--bew-border-color) inset;
+      box-shadow: 0 0 0 1px var(--bew-separator-color) inset;
     }
 
     .season-cover {

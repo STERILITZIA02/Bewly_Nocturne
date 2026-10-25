@@ -50,11 +50,11 @@ defineProps<{
   flex: none;
   padding-inline: var(--bew-space-2);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-text-2);
   background: var(--bew-fill-1);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
   white-space: nowrap;
 }

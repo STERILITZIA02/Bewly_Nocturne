@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, shallowReactive, shallowRef, watch } from 'vue'
 import { useToast } from 'vue-toastification'
 
 import {
@@ -49,8 +49,9 @@ import { i18n } from '~/utils/i18n'
 import { isIframeDocumentActive } from '~/utils/iframeActivity'
 import { getCSRF, isHomePage } from '~/utils/main'
 import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure, sendMessage } from '~/utils/messaging'
-import { countVisibleNewMomentItems } from '~/utils/momentFeedOrder'
 import { resolveStableMomentKey } from '~/utils/momentKey'
+import type { MomentGap, MomentJoinStatus, MomentUnreadSnapshot } from '~/utils/momentsReadPosition'
+import { dynamicId, fetchNewerMoments, MOMENTS_LATEST_OFFSET, parseMomentUnreadSnapshot } from '~/utils/momentsReadPosition'
 import { getNotificationBadgeCounts } from '~/utils/notificationBadge'
 import { reportStateTopicActive } from '~/utils/stateConsumer'
 import { updateOwnedWatchLater } from '~/utils/watchLater'
@@ -129,7 +130,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   let nextWatchLaterPage = 1
   let watchLaterListGeneration = 0
   // 添加 Moments 相关状态
-  const moments = reactive<any[]>([])
+  const moments = shallowReactive<any[]>([])
   const isLoadingMoments = ref<boolean>(false)
   const isLoadingMomentsCount = ref<boolean>(false)
   const noMoreMomentsContent = ref<boolean>(false)
@@ -139,6 +140,19 @@ export const useTopBarStore = defineStore('topBar', () => {
   const collaborativeVideoMap = new Map<string, { item: any, moment?: any }>()
   let momentsRequestGeneration = 0
   let momentsCountRequestGeneration = 0
+  const momentEntrySnapshot = shallowRef<MomentUnreadSnapshot>()
+  const momentNewerGap = shallowRef<MomentGap>()
+  const momentJoinStatus = ref<MomentJoinStatus>('connected')
+  const isLoadingNewerMoments = ref(false)
+  const momentsPageFailed = ref(false)
+  const momentReadingBookmark = shallowRef<{ id: string, offset: number }>()
+  const momentAtLatest = ref(true)
+  let momentNewestRawId = ''
+  let selectedMomentType = 'video'
+  let momentReadController: AbortController | undefined
+  const momentRawIds = new Set<string>()
+  const entryUnreadIds = new Set<string>()
+  const visibleNewMomentsCount = ref(0)
 
   // B币领取状态
   const privilegeInfo = reactive<PrivilegeInfo>({} as PrivilegeInfo)
@@ -218,6 +232,10 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   function resetAccountScopedState() {
+    momentReadingBookmark.value = undefined
+    momentEntrySnapshot.value = undefined
+    momentNewerGap.value = undefined
+    releaseMomentList()
     for (const resource of Object.keys(resourceVersions) as TopBarSharedResource[]) {
       resourceVersions[resource] = 0
       resourceRefreshIds[resource] = -1
@@ -494,7 +512,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   async function refreshVipRewardStatus(): Promise<boolean> {
     const accountId = userInfo.mid
     const version = resourceVersions.rewards
-    const shouldCheckBCoin = settings.value.showBCoinReceiveReminder
+    const shouldCheckBCoin = settings.value.showBCoinReceiveReminder || settings.value.autoReceiveBCoinCoupon
     const shouldCheckVipExp = settings.value.autoReceiveVipExp
     if (!isCurrentAccount(accountId))
       return false
@@ -581,7 +599,7 @@ export const useTopBarStore = defineStore('topBar', () => {
 
   // 自动领取B币
   async function autoReceiveBCoin(accountId = userInfo.mid, nextReceiveAt: number | null = null) {
-    if (settings.initializationState.value !== 'loaded' || !isCurrentAccount(accountId) || !hasBCoinToReceive.value) {
+    if (settings.initializationState.value !== 'loaded' || !isCurrentAccount(accountId) || !settings.value.autoReceiveBCoinCoupon || !hasBCoinToReceive.value) {
       return
     }
 
@@ -655,6 +673,16 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   // Moments Methods
+  async function readMomentEntrance() {
+    const accountId = getLocalLoginMid()
+    const generation = loginStateGeneration
+    if (!accountId || !canRefreshUi())
+      return
+    const response = await api.moment.getTopBarNewMomentsCount({})
+    if (getLocalLoginMid() === accountId && generation === loginStateGeneration)
+      return parseMomentUnreadSnapshot(response)
+  }
+
   async function getTopBarNewMomentsCount(selectedType: string = 'video'): Promise<boolean> {
     const accountId = userInfo.mid
     const version = resourceVersions.moments
@@ -665,19 +693,19 @@ export const useTopBarStore = defineStore('topBar', () => {
     isLoadingMomentsCount.value = true
     try {
       return await runTopBarSharedRefreshRequest('getTopBarNewMomentsCount', async () => {
-        const response = await api.moment.getMomentsUpdate({
-          type: selectedType,
-          update_baseline: '0',
-        })
+        const [response, entrance] = await Promise.all([
+          api.moment.getMomentsUpdate({ type: selectedType, update_baseline: '0' }),
+          readMomentEntrance(),
+        ])
         if (!isCurrentAccount(accountId) || requestGeneration !== momentsCountRequestGeneration || resourceVersions.moments !== version)
           return 'account-changed'
         if (response.code === -1)
           return 'network'
         if (response.code !== 0)
           return 'api-error'
-        if (!response.data || typeof response.data.update_num !== 'number')
+        if (!entrance || !response.data || !Number.isSafeInteger(response.data.update_num) || response.data.update_num < 0)
           return 'invalid-response'
-        newMomentsCount.value = response.data.update_num
+        newMomentsCount.value = Math.max(response.data.update_num, entrance.ids.length)
         return true
       })
     }
@@ -863,9 +891,21 @@ export const useTopBarStore = defineStore('topBar', () => {
     }
   }
 
-  function initMomentsData(selectedType: string) {
+  async function initMomentsData(selectedType: string, start: 'automatic' | 'resume' | 'latest' = 'automatic') {
     // 重置所有相关状态，并使之前分类的异步响应失效。
     momentsRequestGeneration++
+    const generation = momentsRequestGeneration
+    momentReadController?.abort()
+    selectedMomentType = selectedType
+    momentRawIds.clear()
+    entryUnreadIds.clear()
+    visibleNewMomentsCount.value = 0
+    momentNewestRawId = ''
+    momentNewerGap.value = undefined
+    momentJoinStatus.value = 'connected'
+    momentsPageFailed.value = false
+    momentAtLatest.value = true
+    isLoadingNewerMoments.value = false
     momentsCountRequestGeneration++
     isLoadingMomentsCount.value = false
     moments.splice(0) // 使用 splice 正确清空响应式数组
@@ -877,8 +917,84 @@ export const useTopBarStore = defineStore('topBar', () => {
     isLoadingMoments.value = false // 重置加载状态,防止卡住
     collaborativeVideoMap.clear()
 
-    // 获取初始数据
-    getMomentsData(selectedType)
+    if (selectedType === 'live') {
+      getTopBarLiveMoments()
+      return
+    }
+    isLoadingMoments.value = true
+    try {
+      const snapshot = start !== 'automatic' && momentEntrySnapshot.value ? momentEntrySnapshot.value : await readMomentEntrance()
+      if (generation !== momentsRequestGeneration)
+        return
+      momentEntrySnapshot.value = snapshot
+      snapshot?.ids.forEach(id => entryUnreadIds.add(id))
+      if (selectedType === 'video' && (start === 'resume' || (start === 'automatic' && settings.value.momentsStartFromLastSeen))) {
+        const bookmark = momentReadingBookmark.value
+        momentOffset.value = bookmark ? String(BigInt(bookmark.id) + 1n) : snapshot?.oldestId ?? ''
+        momentAtLatest.value = !momentOffset.value
+      }
+    }
+    catch {
+      if (generation !== momentsRequestGeneration)
+        return
+      momentEntrySnapshot.value = undefined
+    }
+    finally {
+      if (generation === momentsRequestGeneration)
+        isLoadingMoments.value = false
+    }
+    if (generation === momentsRequestGeneration)
+      await getTopBarMoments(selectedType, start === 'latest')
+  }
+
+  async function getNewerTopBarMoments() {
+    if (selectedMomentType !== 'video' || isLoadingMoments.value || isLoadingNewerMoments.value || momentAtLatest.value || !momentNewestRawId || !canRefreshUi())
+      return
+    const generation = momentsRequestGeneration
+    const accountId = userInfo.mid
+    const gap = momentNewerGap.value ?? { cursor: MOMENTS_LATEST_OFFSET, targetId: momentNewestRawId }
+    const controller = new AbortController()
+    momentReadController = controller
+    isLoadingNewerMoments.value = true
+    const current = () => !controller.signal.aborted && generation === momentsRequestGeneration && isCurrentAccount(accountId)
+    try {
+      const result = await fetchNewerMoments(async (offset) => {
+        const response = await api.moment.getTopBarMoments({ type: 'video', offset }, { signal: controller.signal })
+        if (!current() || response.code !== 0 || !Array.isArray(response.data?.items) || typeof response.data.has_more !== 'boolean')
+          throw new Error('Invalid Moments page')
+        return { items: response.data.items as any[], offset: response.data.offset, hasMore: Boolean(response.data.has_more) }
+      }, gap, item => item.id_str)
+      if (!current())
+        return
+      const items = result.items.filter(item => !momentRawIds.has(item.id_str))
+      items.forEach(item => momentRawIds.add(item.id_str))
+      acceptTopBarMoments(items, 'video', gap.targetId)
+      momentJoinStatus.value = result.status
+      momentNewerGap.value = result.gap
+      momentAtLatest.value = result.status === 'connected'
+      if (momentAtLatest.value && result.newestId)
+        momentNewestRawId = result.newestId
+    }
+    finally {
+      if (generation === momentsRequestGeneration)
+        isLoadingNewerMoments.value = false
+      if (momentReadController === controller)
+        momentReadController = undefined
+    }
+  }
+
+  function releaseMomentList() {
+    momentsRequestGeneration++
+    momentReadController?.abort()
+    momentReadController = undefined
+    moments.splice(0)
+    momentRawIds.clear()
+    entryUnreadIds.clear()
+    visibleNewMomentsCount.value = 0
+    momentEntrySnapshot.value = undefined
+    momentNewerGap.value = undefined
+    collaborativeVideoMap.clear()
+    isLoadingMoments.value = isLoadingNewerMoments.value = false
   }
 
   function getMomentsData(selectedType: string) {
@@ -888,133 +1004,138 @@ export const useTopBarStore = defineStore('topBar', () => {
       getTopBarLiveMoments()
   }
 
-  function getTopBarMoments(selectedType: string) {
-    const accountId = userInfo.mid
-    if (!isCurrentAccount(accountId) || isLoadingMoments.value || noMoreMomentsContent.value)
-      return
+  function acceptTopBarMoments(items: any[], selectedType: string, beforeId?: string) {
+    const accepted: any[] = []
 
-    const requestGeneration = momentsRequestGeneration
-    const requestOffset = momentOffset.value
-    const requestUpdateBaseline = momentUpdateBaseline.value
-    const isFirstPage = !requestOffset
-    isLoadingMoments.value = true
-    api.moment.getTopBarMoments({
-      type: selectedType,
-      update_baseline: momentUpdateBaseline.value || undefined,
-      offset: momentOffset.value || undefined,
-    })
-      .then((res: any) => {
-        if (res.code === 0 && isCurrentAccount(accountId) && requestGeneration === momentsRequestGeneration) {
-          const { has_more, offset, update_baseline } = res.data
-          const items = Array.isArray(res.data.items) ? res.data.items : []
+    // 添加新内容
+    if (items?.length) {
+      // 根据 selectedType 和设置过滤数据
+      // type: 8 是视频，type: 64 是专栏
+      let filteredItems = items
 
-          let addedMomentCount = 0
-          const existingMomentKeys = new Set(moments.map(moment => moment.id_str))
+      // 如果是视频类型，根据设置决定是否过滤专栏
+      if (selectedType === 'video') {
+        if (settings.value.filterArticlesInMoments) {
+          // 开启过滤专栏：只保留视频（type: 8）
+          filteredItems = items.filter((item: any) => item.type === 8)
+        }
+        else {
+          // 关闭过滤专栏：保留视频和专栏（type: 8 或 64）
+          filteredItems = items.filter((item: any) => item.type === 8 || item.type === 64)
+        }
+      }
 
-          // 添加新内容
-          if (items?.length) {
-            // 根据 selectedType 和设置过滤数据
-            // type: 8 是视频，type: 64 是专栏
-            let filteredItems = items
+      const latestVideoTimes = filteredItems
+        .filter((item: any) => item.type === 8)
+        .flatMap((item: any) => {
+          const time = parseTopBarPublicationTime(item.pub_time)
+          if (!time)
+            return []
 
-            // 如果是视频类型，根据设置决定是否过滤专栏
-            if (selectedType === 'video') {
-              if (settings.value.filterArticlesInMoments) {
-                // 开启过滤专栏：只保留视频（type: 8）
-                filteredItems = items.filter((item: any) => item.type === 8)
-              }
-              else {
-                // 关闭过滤专栏：保留视频和专栏（type: 8 或 64）
-                filteredItems = items.filter((item: any) => item.type === 8 || item.type === 64)
-              }
-            }
+          const authors = Array.isArray(item.authors) && item.authors.length > 0
+            ? item.authors
+            : [item.author]
+          return authors.map((author: any) => ({
+            mid: author?.mid,
+            time,
+          }))
+        })
+      void recordUploaderLatestVideoTimes(latestVideoTimes, 'topbar-pop')
 
-            const latestVideoTimes = filteredItems
-              .filter((item: any) => item.type === 8)
-              .flatMap((item: any) => {
-                const time = parseTopBarPublicationTime(item.pub_time)
-                if (!time)
-                  return []
+      // 联合投稿只会按 bvid 合并重复视频；专栏没有 bvid，会原位保留。
+      // 对完整过滤结果一次处理，避免先拆分类型再拼接破坏 API 时间顺序。
+      const processedItems = selectedType === 'video'
+        ? mergeCollaborativeVideos(filteredItems)
+        : filteredItems
 
-                const authors = Array.isArray(item.authors) && item.authors.length > 0
-                  ? item.authors
-                  : [item.author]
-                return authors.map((author: any) => ({
-                  mid: author?.mid,
-                  time,
-                }))
-              })
-            void recordUploaderLatestVideoTimes(latestVideoTimes, 'topbar-pop')
+      processedItems.forEach((item: any) => {
+        const idStr = resolveStableMomentKey(item, 'moment')
+        const momentItem = {
+          id_str: idStr,
+          dynamicId: item.id_str,
+          unread: item.bewlyUnread === true || entryUnreadIds.has(item.id_str),
+          type: selectedType,
+          title: item.title,
+          author: item.authors ? item.authors.map((a: any) => a.name).join(' / ') : item.author?.name,
+          authorFace: item.author?.face,
+          authorJumpUrl: item.author?.jump_url,
+          pubTime: item.pub_time,
+          cover: item.cover,
+          link: item.jump_url,
+          rid: item.rid,
+          watchLaterAid: item.type === 8 ? Number(item.rid) || undefined : undefined,
+          isCollaborative: !!item.authors,
+          authors: item.authors,
+        }
 
-            // 联合投稿只会按 bvid 合并重复视频；专栏没有 bvid，会原位保留。
-            // 对完整过滤结果一次处理，避免先拆分类型再拼接破坏 API 时间顺序。
-            const processedItems = selectedType === 'video'
-              ? mergeCollaborativeVideos(filteredItems)
-              : filteredItems
+        accepted.push(momentItem)
+        if (momentItem.unread)
+          visibleNewMomentsCount.value++
 
-            // 如果是第一次加载（offset为空），需要根据过滤和合并后的实际数量调整 newMomentsCount
-            // 因为过滤专栏和合并联合投稿会导致显示的条目数量少于原始的 update_num
-            if (isFirstPage && selectedType === 'video') {
-              newMomentsCount.value = countVisibleNewMomentItems(
-                items,
-                filteredItems,
-                newMomentsCount.value,
-                extractBvid,
-              )
-            }
-
-            processedItems.forEach((item: any) => {
-              const idStr = resolveStableMomentKey(item, 'moment')
-              if (existingMomentKeys.has(idStr))
-                return
-
-              existingMomentKeys.add(idStr)
-              addedMomentCount++
-              const momentItem = {
-                id_str: idStr,
-                type: selectedType,
-                title: item.title,
-                author: item.authors ? item.authors.map((a: any) => a.name).join(' / ') : item.author.name,
-                authorFace: item.author.face,
-                authorJumpUrl: item.author.jump_url,
-                pubTime: item.pub_time,
-                cover: item.cover,
-                link: item.jump_url,
-                rid: item.rid,
-                watchLaterAid: item.type === 8 ? Number(item.rid) || undefined : undefined,
-                isCollaborative: !!item.authors,
-                authors: item.authors,
-              }
-
-              moments.push(momentItem)
-
-              if (selectedType === 'video' && item.type === 8) {
-                const bvid = extractBvid(item)
-                if (!bvid)
-                  return
-                const entry = collaborativeVideoMap.get(bvid)
-                if (!entry)
-                  return
-                entry.moment = momentItem
-                updateMomentCollaborative(momentItem, entry.item)
-              }
-            })
-          }
-
-          const cursorAdvanced = offset !== requestOffset
-            || update_baseline !== requestUpdateBaseline
-          momentUpdateBaseline.value = update_baseline
-          momentOffset.value = offset
-          noMoreMomentsContent.value = !has_more
-            || items.length === 0
-            || (!cursorAdvanced && addedMomentCount === 0)
+        if (selectedType === 'video' && item.type === 8) {
+          const bvid = extractBvid(item)
+          if (!bvid)
+            return
+          const entry = collaborativeVideoMap.get(bvid)
+          if (!entry)
+            return
+          entry.moment = momentItem
+          updateMomentCollaborative(momentItem, entry.item)
         }
       })
-      .catch(error => reportRuntimeFailure('Failed to load TopBar moments', error))
-      .finally(() => {
-        if (requestGeneration === momentsRequestGeneration)
-          isLoadingMoments.value = false
-      })
+    }
+    if (beforeId) {
+      const index = moments.findIndex(item => dynamicId(item.dynamicId) && BigInt(item.dynamicId) <= BigInt(beforeId))
+      moments.splice(index < 0 ? moments.length : index, 0, ...accepted)
+    }
+    else {
+      moments.push(...accepted)
+    }
+  }
+
+  async function getTopBarMoments(selectedType: string, advanceRead = false, manual = false) {
+    const accountId = userInfo.mid
+    if (!isCurrentAccount(accountId) || isLoadingMoments.value || isLoadingNewerMoments.value || noMoreMomentsContent.value || (!manual && momentsPageFailed.value) || !canRefreshUi())
+      return
+    const requestGeneration = momentsRequestGeneration
+    const requestOffset = momentOffset.value
+    const controller = new AbortController()
+    momentReadController = controller
+    isLoadingMoments.value = true
+    try {
+      const res = await api.moment.getTopBarMoments({
+        type: selectedType,
+        update_baseline: momentUpdateBaseline.value || undefined,
+        offset: requestOffset || (!advanceRead && selectedType === 'video' ? MOMENTS_LATEST_OFFSET : ''),
+      }, { signal: controller.signal })
+      if (controller.signal.aborted || !isCurrentAccount(accountId) || requestGeneration !== momentsRequestGeneration)
+        return
+      if (res.code !== 0 || !Array.isArray(res.data?.items) || typeof res.data.has_more !== 'boolean' || res.data.items.some((item: any) => !dynamicId(item.id_str)))
+        throw new Error('Invalid Moments page')
+      const raw = res.data.items
+      const items = raw.filter((item: any) => !momentRawIds.has(item.id_str))
+      raw.forEach((item: any) => momentRawIds.add(item.id_str))
+      momentNewestRawId ||= raw[0]?.id_str ?? ''
+      acceptTopBarMoments(items, selectedType)
+      momentUpdateBaseline.value = res.data.update_baseline
+      momentOffset.value = res.data.offset
+      noMoreMomentsContent.value = !res.data.has_more
+      momentsPageFailed.value = Boolean(res.data.has_more && (!items.length || res.data.offset === requestOffset))
+      if (advanceRead)
+        void notifyMomentsRead()
+    }
+    catch (error) {
+      if (!controller.signal.aborted && requestGeneration === momentsRequestGeneration) {
+        momentsPageFailed.value = true
+        reportRuntimeFailure('Failed to load TopBar moments', error)
+      }
+    }
+    finally {
+      if (requestGeneration === momentsRequestGeneration)
+        isLoadingMoments.value = false
+      if (momentReadController === controller)
+        momentReadController = undefined
+    }
   }
 
   function extractBvid(item: any): string | null {
@@ -1065,12 +1186,14 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   function updateMomentCollaborative(moment: any, item: any) {
-    if (!Array.isArray(item.authors) || item.authors.length <= 1)
-      return
-
-    moment.isCollaborative = true
-    moment.authors = item.authors
-    moment.author = item.authors.map((a: any) => a.name).join(' / ')
+    if (Array.isArray(item.authors) && item.authors.length > 1) {
+      moment.isCollaborative = true
+      moment.authors = item.authors
+      moment.author = item.authors.map((a: any) => a.name).join(' / ')
+    }
+    const index = moments.findIndex(entry => entry.id_str === moment.id_str)
+    if (index >= 0)
+      moments[index] = { ...moment }
   }
 
   // 合并联合投稿视频的辅助函数（跨页合并）
@@ -1086,15 +1209,20 @@ export const useTopBarStore = defineStore('topBar', () => {
 
       const existingEntry = collaborativeVideoMap.get(bvid)
       if (!existingEntry) {
-        const storedItem = { ...item }
+        const storedItem = { ...item, bewlyUnread: entryUnreadIds.has(item.id_str) }
         collaborativeVideoMap.set(bvid, { item: storedItem })
         newItems.push(storedItem)
         return
       }
 
       mergeAuthors(existingEntry.item, item)
-      if (existingEntry.moment)
+      existingEntry.item.bewlyUnread ||= entryUnreadIds.has(item.id_str)
+      if (existingEntry.moment) {
+        if (!existingEntry.moment.unread && existingEntry.item.bewlyUnread)
+          visibleNewMomentsCount.value++
+        existingEntry.moment.unread = existingEntry.item.bewlyUnread
         updateMomentCollaborative(existingEntry.moment, existingEntry.item)
+      }
     })
 
     return newItems
@@ -1150,7 +1278,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   function isNewMoment(index: number) {
-    return index < newMomentsCount.value
+    return moments[index]?.unread === true
   }
 
   function closeAllPopups(exceptionKey?: string) {
@@ -1384,6 +1512,16 @@ export const useTopBarStore = defineStore('topBar', () => {
     })
   }
 
+  function notifyMomentsRead() {
+    momentsCountRequestGeneration++
+    isLoadingMomentsCount.value = false
+    const accountId = userInfo.mid
+    if (!isCurrentAccount(accountId) || sharedStateMessagingUnavailable)
+      return Promise.resolve()
+    return sendMessage<TopBarStateInvalidate>(TOP_BAR_STATE_MESSAGE.INVALIDATE, { accountId, resource: 'moments' })
+      .catch(error => reportRuntimeFailure('Failed to invalidate Moments count', error))
+  }
+
   // Popovers call this directly: like syncSharedData, a reloaded extension
   // stops shared messaging here instead of rejecting into the caller.
   function syncWatchLaterState(includeList = false): Promise<boolean> {
@@ -1545,6 +1683,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   async function setUiActive(active: boolean) {
     uiActive = active
     if (!canRefreshUi()) {
+      momentReadController?.abort()
       stopUpdateTimer()
       cancelLoginRead()
       // No display need: the broker keeps only a stale mark for this document;
@@ -1589,6 +1728,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     syncSharedData,
     syncUnreadMessageState,
     syncMomentsState,
+    notifyMomentsRead,
     syncWatchLaterState,
     ensureWatchLaterState,
     watchLaterInvalidationVersion,
@@ -1612,6 +1752,17 @@ export const useTopBarStore = defineStore('topBar', () => {
     initMomentsData,
     getMomentsData,
     isNewMoment,
+    readMomentEntrance,
+    momentEntrySnapshot,
+    momentNewerGap,
+    momentJoinStatus,
+    momentAtLatest,
+    momentReadingBookmark,
+    visibleNewMomentsCount,
+    isLoadingNewerMoments,
+    momentsPageFailed,
+    getNewerTopBarMoments,
+    releaseMomentList,
     getWatchLaterCount,
     getWatchLaterPreview,
     loadMoreWatchLaterList,

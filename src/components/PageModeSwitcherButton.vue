@@ -97,7 +97,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
   aspect-ratio: 1;
   padding: 0;
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   appearance: none;
   color: var(--bew-text-1);
   cursor: pointer;
@@ -147,7 +147,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
     --page-mode-icon-size: var(--bew-floating-control-icon-size);
     width: var(--bew-floating-control-size);
     height: var(--bew-floating-control-size);
-    border: 1px solid var(--bew-glass-border-color);
+    border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
     background: var(--bew-glass-tint);
     box-shadow: var(--bew-shadow-1);
     backdrop-filter: var(--bew-filter-glass-1);

@@ -583,10 +583,6 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     if (text.includes(`'${path}'`) && !modules[path])
       modules[path] = { default: await compileComponent(`../src/contentScripts/views/WatchLater/${name}.vue`) }
   }
-  for (const path of ['./HistoryAdvancedFilters.vue', '~/contentScripts/views/History/HistoryAdvancedFilters.vue']) {
-    if (text.includes(`'${path}'`) && !modules[path])
-      modules[path] = { default: await compileComponent('../src/contentScripts/views/History/HistoryAdvancedFilters.vue', { 'vue-i18n': modules['vue-i18n'] }) }
-  }
   if (text.includes('\'./HistoryDayToggle.vue\''))
     modules['./HistoryDayToggle.vue'] = { default: await compileComponent('../src/contentScripts/views/History/HistoryDayToggle.vue') }
   if (text.includes('\'./useHistoryDayMotion\''))
@@ -595,8 +591,6 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     modules['./useWatchLaterBatch'] = await import('../src/contentScripts/views/WatchLater/useWatchLaterBatch')
   if (text.includes('\'./WatchLaterSelectionOverlay.vue\'') && !modules['./WatchLaterSelectionOverlay.vue'])
     modules['./WatchLaterSelectionOverlay.vue'] = { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterSelectionOverlay.vue') }
-  if (text.includes('\'./WatchLaterAdvancedFilters.vue\'') && !modules['./WatchLaterAdvancedFilters.vue'])
-    modules['./WatchLaterAdvancedFilters.vue'] = { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterAdvancedFilters.vue', { 'vue-i18n': modules['vue-i18n'] }) }
   if (text.includes('\'./WatchLaterFilterSection.vue\'') && !modules['./WatchLaterFilterSection.vue'])
     modules['./WatchLaterFilterSection.vue'] = { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterFilterSection.vue') }
   if (text.includes('\'~/contentScripts/views/SearchResults/components/DatePicker.vue\'')) {
@@ -640,6 +634,25 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   if (text.includes('\'~/components/ChartRungs.vue\'')) {
     modules['~/components/ChartRungs.vue'] = { default: await compileComponent('../src/components/ChartRungs.vue') }
   }
+  // Image tone reads a CORS thumbnail; fixtures keep the surface's own colours.
+  if (text.includes('\'~/composables/useImageTone\'') && !modules['~/composables/useImageTone'])
+    modules['~/composables/useImageTone'] = { useImageTone: () => Vue.computed(() => undefined) }
+  if (text.includes('\'~/utils/pictureRevealMemory\'') && !modules['~/utils/pictureRevealMemory'])
+    modules['~/utils/pictureRevealMemory'] = await import('../src/utils/pictureRevealMemory')
+  // Library page heads and filters: light stand-ins that keep their slots.
+  const libraryStubs = {
+    LibraryHero: { props: ['image', 'label', 'mediaPending'], setup: (props, { slots }) => () => Vue.h('section', { 'class': 'library-hero', 'aria-label': props.label }, [slots.default?.(), slots.actions?.()]) },
+    LibraryBleedStrip: { props: ['label', 'compact'], setup: (props, { slots }) => () => Vue.h('div', { 'class': 'library-bleed-strip', 'role': 'group', 'aria-label': props.label }, slots.default?.()) },
+    LibraryFilterMenu: { props: ['label', 'groups', 'disabled'], emits: ['select'], render: () => null },
+    LibraryDateRange: { props: ['open', 'start', 'end', 'invalid', 'disabled', 'title'], emits: ['update'], render: () => null },
+    LoadingFill: { props: ['loading'], setup: props => () => Vue.h('div', { 'class': 'bew-loading-fill', 'role': 'status', 'aria-busy': props.loading }) },
+    SmoothLoading: { props: ['show', 'keepSpace', 'minHeight'], render: () => null },
+  }
+  for (const [name, stub] of Object.entries(libraryStubs)) {
+    const path = `~/components/${name}.vue`
+    if (text.includes(`'${path}'`) && !modules[path])
+      modules[path] = { default: stub }
+  }
   for (const name of ['LibraryWorkspace', 'LibrarySidebarHeading', 'LibrarySearchField', 'SidebarHeadingControl', 'SidebarSearchControl']) {
     for (const path of [`~/components/${name}.vue`, `./${name}.vue`]) {
       if (text.includes(`'${path}'`) && !modules[path]) {
@@ -653,6 +666,10 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   }
   if (text.includes('\'./momentPortal\'') && !modules['./momentPortal'])
     modules['./momentPortal'] = await import('../src/contentScripts/views/Moments/momentPortal')
+  if (text.includes('\'./momentSearch\'') && !modules['./momentSearch'])
+    modules['./momentSearch'] = await import('../src/contentScripts/views/Moments/momentSearch')
+  if (text.includes('\'~/components/ContextMenu.vue\'') && !modules['~/components/ContextMenu.vue'])
+    modules['~/components/ContextMenu.vue'] = { default: { props: ['options', 'anchor', 'trigger'], emits: ['select', 'close'], render: () => null } }
   if (text.includes('\'~/components/MomentPromotionBadge.vue\'') && !modules['~/components/MomentPromotionBadge.vue']) {
     modules['~/components/MomentPromotionBadge.vue'] = { default: await compileComponent('../src/components/MomentPromotionBadge.vue', {
       'vue-i18n': modules['vue-i18n'] ?? { useI18n: () => ({ t: key => key }) },
@@ -677,6 +694,14 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   for (const path of ['./MomentsContentLayout.vue', '~/contentScripts/views/Moments/MomentsContentLayout.vue']) {
     if (text.includes(`'${path}'`) && !modules[path])
       modules[path] = { default: await compileComponent('../src/contentScripts/views/Moments/MomentsContentLayout.vue') }
+  }
+  for (const path of ['./MomentsReadingActions.vue', '~/contentScripts/views/Moments/MomentsReadingActions.vue']) {
+    if (text.includes(`'${path}'`) && !modules[path]) {
+      modules[path] = { default: await compileComponent('../src/contentScripts/views/Moments/MomentsReadingActions.vue', {
+        '~/logic': modules['~/logic'] ?? { settings: Vue.ref({ disableFrostedGlass: false }) },
+        'vue-i18n': modules['vue-i18n'] ?? { useI18n: () => ({ t: key => key }) },
+      }) }
+    }
   }
   for (const path of ['./MomentsHotSearch.vue', '~/contentScripts/views/Moments/MomentsHotSearch.vue']) {
     if (text.includes(`'${path}'`) && !modules[path]) {
@@ -722,6 +747,12 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   }
   if (text.includes('\'~/utils/escapePriority\'') && !modules['~/utils/escapePriority'])
     modules['~/utils/escapePriority'] = await import('../src/utils/escapePriority')
+  if (text.includes('\'~/composables/useHomeTabState\'') && !modules['~/composables/useHomeTabState'])
+    modules['~/composables/useHomeTabState'] = await import('../src/composables/useHomeTabState')
+  if (text.includes('\'~/utils/momentsReadPosition\'') && !modules['~/utils/momentsReadPosition'])
+    modules['~/utils/momentsReadPosition'] = await import('../src/utils/momentsReadPosition')
+  if (text.includes('\'~/components/MomentReadMarker.vue\'') && !modules['~/components/MomentReadMarker.vue'])
+    modules['~/components/MomentReadMarker.vue'] = { default: await compileComponent('../src/components/MomentReadMarker.vue') }
   vm.runInNewContext(code, {
     ...Vue,
     exports,

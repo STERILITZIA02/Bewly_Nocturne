@@ -796,6 +796,9 @@ onBeforeUnmount(() => {
       :aria-label="primaryActionLabel"
       @click="openPrimaryDetail"
     />
+    <div v-if="$slots['reading-marker']" class="moment-card__reading-marker">
+      <slot name="reading-marker" />
+    </div>
     <div class="moment-card__surface" @click="handleSurfaceClick">
       <!-- Video and live covers, and an image post's images, fill the top of the
            card edge to edge; the bottom blends into the card through a short
@@ -1272,6 +1275,7 @@ onBeforeUnmount(() => {
 @use "../../styles/contentCard";
 @use "../../styles/breakpoints";
 @use "../../styles/momentDisclosure";
+@use "../../styles/imageTone" as *;
 .moment-card--preparing {
   visibility: hidden;
 }
@@ -1326,6 +1330,12 @@ onBeforeUnmount(() => {
   transition: box-shadow var(--bew-duration-moderate) var(--bew-ease-standard);
 }
 
+.moment-card__reading-marker {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .moment-card:hover .moment-card__surface {
     box-shadow: var(--bew-shadow-2);
@@ -1352,39 +1362,6 @@ onBeforeUnmount(() => {
 // or switching to an image with another, eases every derived colour, the
 // fade's gradient included. The fallbacks sit on the host and the overrides on
 // the surface: on one element they would refer to each other.
-$tone-transition:
-  --moment-tone var(--bew-duration-moderate) var(--bew-ease-standard),
-  --moment-tone-fg var(--bew-duration-moderate) var(--bew-ease-standard);
-
-@mixin toned-surface {
-  --bew-elevated-over-page: var(--moment-tone);
-  --bew-elevated-solid: color-mix(in srgb, var(--moment-tone-fg) 8%, var(--moment-tone));
-  --bew-neutral-fg: var(--moment-tone-fg);
-  --bew-text-1: var(--moment-tone-fg);
-  --bew-text-2: color-mix(in srgb, var(--moment-tone-fg) 80%, transparent);
-  --bew-text-3: color-mix(in srgb, var(--moment-tone-fg) 70%, transparent);
-  --bew-text-4: color-mix(in srgb, var(--moment-tone-fg) 50%, transparent);
-  --bew-fill-1: color-mix(in srgb, var(--moment-tone-fg) 6%, transparent);
-  --bew-fill-2: color-mix(in srgb, var(--moment-tone-fg) 10%, transparent);
-  --bew-fill-3: color-mix(in srgb, var(--moment-tone-fg) 15%, transparent);
-  --bew-fill-4: color-mix(in srgb, var(--moment-tone-fg) 22%, transparent);
-  --bew-border-color: color-mix(in srgb, var(--moment-tone-fg) 16%, transparent);
-  --bew-surface-border-color: color-mix(in srgb, var(--moment-tone-fg) 18%, transparent);
-  --bew-hover-bg: color-mix(in srgb, var(--moment-tone-fg) 8%, transparent);
-  --bew-selected-bg: color-mix(in srgb, var(--moment-tone-fg) 12%, transparent);
-  --bew-theme-foreground: var(--moment-tone-fg);
-  // Glass stays glass: the solid tint takes the tone, and the glass tint is it
-  // at the global glass opacity, as the shared tokens are built. Inherited
-  // tints were resolved against the page's solid tint, so all four are set.
-  --bew-glass-tint-solid: color-mix(in srgb, var(--moment-tone-fg) 10%, var(--moment-tone));
-  --bew-glass-tint-solid-hover: color-mix(in srgb, var(--moment-tone-fg) 7%, var(--bew-glass-tint-solid));
-  --bew-glass-tint: rgb(from var(--bew-glass-tint-solid) r g b / var(--bew-content-opacity));
-  --bew-glass-tint-hover: rgb(from var(--bew-glass-tint-solid-hover) r g b / var(--bew-content-opacity));
-  --bew-glass-border-color: var(--bew-surface-border-color);
-  color: var(--bew-text-1);
-  color-scheme: var(--moment-tone-scheme);
-}
-
 .moment-card--portrait-top {
   --moment-tone: var(--bew-elevated-over-page);
   --moment-tone-fg: var(--bew-neutral-fg);
@@ -1598,7 +1575,7 @@ $tone-transition:
   box-sizing: border-box;
   cursor: pointer;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
   white-space: nowrap;
@@ -1717,7 +1694,7 @@ $tone-transition:
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-title);
   line-height: var(--bew-line-height-title);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   transition: color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
@@ -1891,7 +1868,7 @@ $tone-transition:
   margin-bottom: var(--bew-space-1);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-title);
 }
 
@@ -1928,7 +1905,7 @@ $tone-transition:
   cursor: pointer;
   font: inherit;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
 }
 
@@ -2058,7 +2035,7 @@ $tone-transition:
     gap: var(--bew-space-2);
     min-width: 0;
     color: var(--bew-text-1);
-    font-weight: var(--bew-font-weight-medium);
+    font-weight: var(--bew-font-weight-regular);
     text-decoration: none;
     transition: color var(--bew-duration-fast) var(--bew-ease-standard);
   }
@@ -2157,7 +2134,7 @@ $tone-transition:
   align-items: center;
   gap: var(--bew-space-1);
   color: var(--bew-text-1);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
 }
 
 .moment-card__hot-comment-content {

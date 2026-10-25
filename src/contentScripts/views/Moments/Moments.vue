@@ -8,6 +8,8 @@ import Dialog from '~/components/Dialog.vue'
 import IconButton from '~/components/IconButton.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import Loading from '~/components/Loading.vue'
+import LoadingFill from '~/components/LoadingFill.vue'
+import LoadingRing from '~/components/LoadingRing.vue'
 import MomentCard from '~/components/MomentCard/MomentCard.vue'
 import MomentCardSkeleton from '~/components/MomentCard/MomentCardSkeleton.vue'
 import { createMomentDisclosureCache, MOMENT_DISCLOSURES, normalizeForwardCount } from '~/components/MomentCard/momentForwardContent'
@@ -15,9 +17,11 @@ import { createMomentForwardTransactions, MOMENT_FORWARD_TRANSACTIONS } from '~/
 import MomentReportDialog from '~/components/MomentCard/MomentReportDialog.vue'
 import type { DisplayMoment } from '~/components/MomentCard/types'
 import { getMomentSkeletonVariant } from '~/components/MomentCard/utils'
+import MomentReadMarker from '~/components/MomentReadMarker.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
+import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { useSourcePanelMotion } from '~/composables/useSourcePanelMotion'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
@@ -34,7 +38,9 @@ import { createElasticWheelScroll } from '~/utils/elasticScroll'
 import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/utils/messaging'
 import { createMomentCommentSessionCache, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
 import { resolveHorizontalScrollState } from '~/utils/momentsLayout'
-import type { ScrollPositionClaim } from '~/utils/scrollIntent'
+import type { MomentGap, MomentJoinStatus, MomentUnreadSnapshot } from '~/utils/momentsReadPosition'
+import { dynamicId, isNotNewerMoment, keepMomentAnchorInterval, MOMENTS_LATEST_OFFSET } from '~/utils/momentsReadPosition'
+import type { ScrollCardAnchor, ScrollPositionClaim } from '~/utils/scrollIntent'
 import { canRestoreScrollPosition, claimScrollPosition, scrollToPosition } from '~/utils/scrollIntent'
 import { getRemainingScroll, invalidateViewportGeometry, readViewportGeometry } from '~/utils/viewportGeometry'
 
@@ -44,7 +50,10 @@ import type { MomentFilter } from './momentFeedTypes'
 import type { MomentsPortalLiveUser, MomentsPortalUser } from './momentPortal'
 import { getSidebarAvatarUrl } from './momentPortal'
 import MomentsContentLayout from './MomentsContentLayout.vue'
+import type { MomentSearch } from './momentSearch'
+import { EMPTY_MOMENT_SEARCH, getMomentSearchCutoff, isMomentSearchActive, matchesMomentSearch } from './momentSearch'
 import MomentsHotSearch from './MomentsHotSearch.vue'
+import MomentsReadingActions from './MomentsReadingActions.vue'
 import MomentsSidebar from './MomentsSidebar.vue'
 import { useMomentActions } from './useMomentActions'
 import { useMomentDetail } from './useMomentDetail'
@@ -117,9 +126,11 @@ const previews = useMomentPreviews(getCurrentAccountId)
 const { hoveredMediaId, previewUrls, previewState, previewGeneration, handleMediaEnter, handleMediaLeave, bindPreviewVideo } = previews
 
 const momentLayout = useMomentLayout(moments, {
+  onReadAnchor: rememberMomentReading,
   onNearBottom: maybeLoadMoreNearBottom,
   onRecycle: previews.release,
   onViewportChange: (visible, hidden) => {
+    syncInteractionInView(visible)
     for (const id of hidden) {
       if (hoveredMediaId.value !== id)
         previews.release(id)
@@ -133,6 +144,8 @@ const details = useMomentDetail(getMomentImageRatio, () => previews.clear(), () 
 const imageViewerMotion = useSourcePanelMotion('.moment-image-viewer__stage', ':scope > .moment-image-viewer__surface, :scope > .moment-image-viewer__stage, :scope > button, :scope > .moment-image-viewer__toolbar')
 const { selectedMoment, detailFrameUrl, detailFrameLoaded, detailImageViewerRef, detailImageViewerOpen, detailImageViewerUrls, detailImageViewerIndex, detailImageViewerScale, detailImageViewerRotation, detailImageViewerDragging, isOpusDetailMoment, detailDialogHeight, detailDialogWidth, detailContentHeight, detailImageViewerUrl, detailImageViewerTransform, clearDetailFocusRetry, bindDetailIframe, resetDetailImageViewerTransform, setDetailImageViewerScale, showDetailImageViewerImage, openMomentImagePreview, closeDetailImageViewer, handleDetailImageViewerWheel, handleDetailImageViewerPointerDown, handleDetailImageViewerPointerMove, handleDetailImageViewerPointerEnd, handleDetailImageViewerDoubleClick, handleDetailImageViewerKeydown, openDetailFrameInNewTab, openMomentDetail, handleDetailIframeLoad, closeMomentDetail } = details
 const activeMomentFilter = viewState.ref<MomentFilter>('filter', 'all')
+/** The rail's search and filter; it narrows every category and uploader feed. */
+const momentSearch = viewState.shallowRef<MomentSearch>('search', EMPTY_MOMENT_SEARCH)
 const feedReader = createMomentFeedReader(mapMoment)
 const portalUser = viewState.ref<MomentsPortalUser | null>('portalUser', null)
 const portalLiveUsers = viewState.ref<MomentsPortalLiveUser[]>('portalLiveUsers', [])
@@ -168,9 +181,94 @@ const offset = viewState.ref('offset', '')
 const updateBaseline = viewState.ref('updateBaseline', '')
 /** 按 UP 主筛选时 feed/all 的 page，从 1 递增 */
 const momentsFeedPage = viewState.ref('page', 1)
+const entryUnread = viewState.shallowRef<MomentUnreadSnapshot | undefined>('entryUnread', undefined)
+const readingBookmark = viewState.shallowRef<{ id: string, offset: number, type: MomentFilter } | undefined>('readingBookmark', undefined)
+const newerGap = viewState.shallowRef<MomentGap | undefined>('newerGap', undefined)
+const newestRawId = viewState.ref('newestRawId', '')
+const atLatest = viewState.ref('atLatest', true)
+const joinStatus = viewState.ref<MomentJoinStatus>('joinStatus', 'connected')
+const loadingNewer = ref(false)
+const readingBoundary = viewState.shallowRef<{ id: string, local: boolean } | undefined>('readingBoundary', undefined)
+/** The card at the top of the reader's view, updated as they scroll; empty at the top of a fresh list. */
+const readingAnchorId = viewState.ref('readingAnchorId', '')
+/**
+ * The last card the reader worked with in this feed: opened, expanded, liked,
+ * commented on, forwarded, right-clicked, or rested the pointer on. `offset` is
+ * where its top sat in the view, so the jump restores the same view.
+ */
+const lastInteraction = viewState.shallowRef<{ id: string, offset: number, type: MomentFilter, host: string } | undefined>('lastInteraction', undefined)
+const interactionInView = ref(true)
+/** A plain flag: written every viewport frame, it triggers only when it flips. */
+function syncInteractionInView(visible: ReadonlySet<string>) {
+  interactionInView.value = !!lastInteraction.value && visible.has(lastInteraction.value.id)
+}
+const canResumeMoments = computed(() => !selectedHostMid.value && ['all', 'video'].includes(activeMomentFilter.value))
+const matchingBookmark = computed(() => readingBookmark.value?.type === activeMomentFilter.value ? readingBookmark.value : undefined)
+const boundaryId = computed(() => {
+  if (!canResumeMoments.value)
+    return
+  const boundary = readingBoundary.value?.id
+  const threshold = boundary && (readingBoundary.value?.local ? boundary : String(BigInt(boundary) - 1n))
+  return threshold ? moments.value.find(item => isNotNewerMoment(item.id, threshold))?.id : undefined
+})
+const gapBoundaryId = computed(() => newerGap.value ? moments.value.find(item => isNotNewerMoment(item.id, newerGap.value!.targetId))?.id : undefined)
+function rememberMomentReading(anchor: { id: string, offset: number }) {
+  if (!dynamicId(anchor.id))
+    return
+  readingAnchorId.value = anchor.id
+  if (!canResumeMoments.value)
+    return
+  readingBookmark.value = { ...anchor, type: activeMomentFilter.value }
+}
+/** The resume target for the next 'resume' load. */
+let pendingResume: { id: string, offset: number } | undefined
+/** The reader's position: the card at the top of the view, or the first card before any scrolling. */
+const readingPositionId = computed(() => readingAnchorId.value || moments.value[0]?.id || '')
+/** Latest is useful when the list does not start at the newest posts or the reader has scrolled away from them. */
+const showJumpToLatest = computed(() => moments.value.length > 0
+  && (!atLatest.value || readingPositionId.value !== moments.value[0]?.id))
 if (viewState.restored)
   feedReader.restore(moments.value, activeMomentFilter.value, selectedHostMid.value)
 const { handlePageRefresh, handleReachBottom, mainAppRef, scrollViewportRef } = useBewlyApp()
+const interactionTarget = computed(() => {
+  const target = lastInteraction.value
+  return target && target.type === activeMomentFilter.value && target.host === selectedHostMid.value ? target : undefined
+})
+function rememberInteraction(element: EventTarget | null) {
+  const id = element instanceof Element ? element.closest<HTMLElement>('[data-moment-id]')?.dataset.momentId : undefined
+  const viewport = scrollViewportRef.value
+  const top = id && dynamicId(id) ? momentLayout.getCardScrollTop(id) : undefined
+  if (!id || !viewport || top === undefined)
+    return
+  lastInteraction.value = { id, offset: top - viewport.scrollTop, type: activeMomentFilter.value, host: selectedHostMid.value }
+  interactionInView.value = true
+}
+/** Resting the pointer on a card counts once it stays there, without scrolling, for this long. */
+const HOVER_DWELL_MS = 600
+let hoverCard: Element | undefined
+let hoverTimer: ReturnType<typeof setTimeout> | undefined
+function handleGridPointerOver(event: PointerEvent) {
+  const card = event.pointerType === 'mouse' && event.target instanceof Element ? event.target.closest('[data-moment-id]') : null
+  if (!card || (card === hoverCard && hoverTimer))
+    return
+  hoverCard = card
+  clearTimeout(hoverTimer)
+  const scrollTop = scrollViewportRef.value?.scrollTop
+  hoverTimer = setTimeout(() => {
+    hoverTimer = undefined
+    // A card that only slid under a resting pointer while scrolling, or one already left, does not count.
+    if (card.matches(':hover') && scrollViewportRef.value?.scrollTop === scrollTop)
+      rememberInteraction(card)
+  }, HOVER_DWELL_MS)
+}
+// The template reads only these booleans: the reading position and the
+// in-view flag change as cards scroll past, and an object read there would
+// re-render the whole page during scrolling.
+/** Back to the last card worked with, while it is out of view and still reachable. */
+const showJumpToLastSeen = computed(() => {
+  const target = interactionTarget.value
+  return !!target && !interactionInView.value && (canResumeMoments.value || getMomentPositions().has(target.id))
+})
 
 const MAX_POST_LOAD_AUTOFILL_PAGES = 3
 // All-filtered batches yield before continuing; this is a one-shot continuation,
@@ -412,7 +510,7 @@ function getMomentFilterText(moment: DisplayMoment) {
 
 /** Filters affect page assembly, not whether scrolling can request the next page. */
 function hasActiveMomentFilters() {
-  return momentFilterPolicy.value.active
+  return momentFilterPolicy.value.active || isMomentSearchActive(momentSearch.value)
 }
 
 function requiresManualMomentPaging() {
@@ -422,6 +520,13 @@ function requiresManualMomentPaging() {
 function passesMomentSettings(moment: DisplayMoment) {
   const policy = momentFilterPolicy.value
   return policy.passes(moment, policy.keywords.length ? getMomentFilterText(moment) : '')
+    && matchesMomentSearch(moment, momentSearch.value, () => getMomentFilterText(moment), getMomentSearchCutoff(momentSearch.value))
+}
+
+function applyMomentSearch(next: MomentSearch) {
+  const current = momentSearch.value
+  if (next.keyword !== current.keyword || next.kind !== current.kind || next.time !== current.time)
+    momentSearch.value = next
 }
 
 async function reapplyMomentFiltersFromCache() {
@@ -433,11 +538,12 @@ async function reapplyMomentFiltersFromCache() {
     return false
 
   const requestToken = ++feedRequestToken
+  feedReader.cancel()
+  loadingNewer.value = false
   const requestType = activeMomentFilter.value
   const requestHostMid = selectedHostMid.value
   const filteredItems = sourceItems
     .filter(item => !isMomentDeleted(item.id) && passesMomentSettings(item))
-    .sort((a, b) => b.publishedAt - a.publishedAt)
 
   moments.value = []
   momentLayout.clearColumns()
@@ -458,6 +564,8 @@ async function reapplyMomentFiltersFromCache() {
     }
     return true
   }
+  // Nothing read so far matches: keep reading the filtered stream.
+  void loadMoments()
   return true
 }
 
@@ -576,8 +684,11 @@ function releaseVisibilityWaiters() {
 }
 
 useEventListener(document, 'visibilitychange', () => {
-  if (document.hidden)
+  if (document.hidden) {
+    if (loadingNewer.value)
+      feedReader.cancel()
     return
+  }
   releaseVisibilityWaiters()
   // Loads skip a hidden page; a list too short to scroll would otherwise stay
   // stuck until the user scrolled.
@@ -614,7 +725,7 @@ function clearMomentPresentationForRefresh(nextItems: DisplayMoment[]) {
   previews.clear()
 }
 
-async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = false) {
+async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = false, start: 'automatic' | 'resume' | 'latest' = 'automatic', advanceRead = false) {
   if (momentsExtensionContextInvalidated)
     return
   if (!reset && !manualPaging && document.hidden)
@@ -631,7 +742,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   // A failed request needs explicit retry; valid filtered pages continue normally.
   if (!reset && requiresManualMomentPaging() && !manualPaging)
     return
-  if ((!reset && isLoading.value) || (!reset && noMoreContent.value))
+  if ((!reset && (isLoading.value || loadingNewer.value)) || (!reset && noMoreContent.value))
     return
   // The settling batch runs its own follow-up check once its layout is known.
   if (!reset && !manualPaging && settlingLayoutCommit)
@@ -650,6 +761,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   let pageApplied = false
   let pageCommit = 0
   let paginationClaim: ScrollPositionClaim | undefined
+  let resumeAnchor: ScrollCardAnchor | undefined
+  const entryClaim = reset && scrollViewportRef.value ? claimScrollPosition(scrollViewportRef.value) : undefined
   const previousPagination = reset
     ? {
         offset: offset.value,
@@ -665,9 +778,42 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     updateBaseline.value = ''
     momentsFeedPage.value = 1
     noMoreContent.value = false
+    loadingNewer.value = false
+    newerGap.value = undefined
+    newestRawId.value = ''
+    atLatest.value = true
+    joinStatus.value = 'connected'
+    readingAnchorId.value = ''
   }
 
   try {
+    if (reset && canResumeMoments.value) {
+      if (!entryUnread.value || start === 'automatic') {
+        let snapshot: MomentUnreadSnapshot | undefined
+        try {
+          snapshot = await topBarStore.readMomentEntrance()
+        }
+        catch { /* Keep an unavailable boundary distinct from an empty one. */ }
+        if (!isFeedRequestCurrent(requestToken, requestType, requestHostMid))
+          return
+        entryUnread.value = snapshot
+      }
+      if (!isFeedRequestCurrent(requestToken, requestType, requestHostMid))
+        return
+      const resuming = start === 'resume' || (start === 'automatic' && settings.value.momentsStartFromLastSeen)
+      const requested = start === 'resume' ? pendingResume : undefined
+      pendingResume = undefined
+      const bookmark = resuming ? requested ?? matchingBookmark.value : undefined
+      if (resuming) {
+        offset.value = bookmark ? String(BigInt(bookmark.id) + 1n) : entryUnread.value?.oldestId ?? ''
+        atLatest.value = !offset.value
+        if (bookmark && entryClaim)
+          resumeAnchor = { position: entryClaim, candidates: [{ key: bookmark.id, offset: bookmark.offset }] }
+      }
+      // The marker shows the saved place in this window, else the server's video unread boundary.
+      const boundary = bookmark?.id ?? entryUnread.value?.oldestId
+      readingBoundary.value = boundary ? { id: boundary, local: !!bookmark } : undefined
+    }
     const response = await feedReader.read({
       reset,
       type: requestType,
@@ -676,6 +822,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
       updateBaseline: updateBaseline.value,
       page: momentsFeedPage.value,
       filtered: hasActiveMomentFilters(),
+      advanceRead: reset && advanceRead && canResumeMoments.value,
     }, () => isFeedRequestCurrent(requestToken, requestType, requestHostMid))
     if (!response || !isFeedRequestCurrent(requestToken, requestType, requestHostMid))
       return
@@ -684,12 +831,15 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
       return
     }
     const { rawItems, normalizedItems, nextOffset, nextUpdateBaseline, hasMore } = response
+    newestRawId.value ||= rawItems[0]?.id_str ?? ''
     momentsFeedPage.value = response.nextPage
 
     // The reader judges progress from the raw pages, before any filter drops
     // posts. An empty or repeated page means the feed has nothing further, so
     // it ends like the server's own end instead of waiting for a button.
-    const ended = !hasMore || response.stalled
+    // The feed is newest first: a page reaching past the time range ends the scan.
+    const cutoff = getMomentSearchCutoff(momentSearch.value)
+    const ended = !hasMore || (cutoff > 0 && (normalizedItems.at(-1)?.publishedAt ?? cutoff) < cutoff)
 
     void recordUploaderLatestVideoTimes(
       [
@@ -705,7 +855,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     )
     const items = normalizedItems
       .filter(passesMomentSettings)
-      .sort((a, b) => b.publishedAt - a.publishedAt)
     if (!reset && scrollViewportRef.value)
       paginationClaim = claimScrollPosition(scrollViewportRef.value)
     if (!reset)
@@ -714,11 +863,15 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
       clearMomentPresentationForRefresh(items)
     pageCommit = ++layoutCommit
     appendMoments(items)
+    if (resumeAnchor)
+      momentLayout.restoreAnchor(resumeAnchor)
 
     offset.value = nextOffset
     updateBaseline.value = nextUpdateBaseline
     noMoreContent.value = ended
-    feedRequestFailed.value = false
+    feedRequestFailed.value = response.stalled
+    if (reset && advanceRead && canResumeMoments.value)
+      void topBarStore.notifyMomentsRead()
     pageApplied = true
   }
   catch (error) {
@@ -771,6 +924,11 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   // Explicit jumps, other restores and user scrolling since the claim win.
   if (viewport && paginationClaim && canRestoreScrollPosition(viewport, paginationClaim))
     viewport.scrollTop = paginationClaim.top
+
+  if (reset && !atLatest.value && canResumeMoments.value && !document.hidden) {
+    void loadNewerMoments()
+    return
+  }
 
   if (!viewport || document.hidden || noMoreContent.value || requiresManualMomentPaging())
     return
@@ -838,8 +996,77 @@ async function loadMomentsPortal() {
 
 function refresh() {
   isInitialLoading.value = moments.value.length === 0
-  void loadMoments(true)
+  void loadMoments(true, 0, true, 'latest', true)
   void loadMomentsPortal()
+}
+
+async function jumpToLastSeen() {
+  const target = interactionTarget.value
+  const viewport = scrollViewportRef.value
+  if (!target || !viewport || isLoading.value || loadingNewer.value)
+    return
+  // A loaded card is only a glide away; otherwise the list restarts there.
+  const top = momentLayout.getCardScrollTop(target.id)
+  if (top !== undefined) {
+    void scrollToPosition(viewport, Math.max(0, top - target.offset), 'smooth')
+    return
+  }
+  pendingResume = { id: target.id, offset: target.offset }
+  prepareMomentListTransition()
+  await loadMoments(true, 0, true, 'resume')
+}
+
+/**
+ * Back to latest (merged with the Dock's back-to-top) and Refresh: glide to
+ * the top first, then load the newest posts, so the list is not replaced
+ * under a running glide.
+ */
+let returningToLatest = false
+async function returnToLatest() {
+  const viewport = scrollViewportRef.value
+  if (returningToLatest || !viewport)
+    return
+  returningToLatest = true
+  previews.clear()
+  await scrollToPosition(viewport, 0, 'smooth')
+  returningToLatest = false
+  refresh()
+}
+
+async function loadNewerMoments() {
+  if (!canResumeMoments.value || atLatest.value || !newestRawId.value || document.hidden || isLoading.value || loadingNewer.value)
+    return
+  const token = feedRequestToken
+  const type = activeMomentFilter.value
+  const host = selectedHostMid.value
+  const anchor = keepMomentAnchorInterval(momentLayout.captureAnchor(), newerGap.value)
+  const gap = newerGap.value ?? { cursor: MOMENTS_LATEST_OFFSET, targetId: newestRawId.value }
+  loadingNewer.value = true
+  try {
+    const result = await feedReader.readNewer(type, gap, () => isFeedRequestCurrent(token, type, host))
+    if (!result || !isFeedRequestCurrent(token, type, host))
+      return
+    void recordUploaderLatestVideoTimes(collectVideoPublicationTimes(result.rawItems), 'moments-page')
+    const positions = getMomentPositions()
+    const items = result.normalizedItems.filter(item => !positions.has(item.id) && !isMomentDeleted(item.id) && passesMomentSettings(item))
+    const insertion = moments.value.findIndex(item => isNotNewerMoment(item.id, gap.targetId))
+    const index = insertion < 0 ? moments.value.length : insertion
+    moments.value = [...moments.value.slice(0, index), ...items, ...moments.value.slice(index)]
+    newerGap.value = result.gap
+    joinStatus.value = result.status
+    atLatest.value = result.status === 'connected'
+    if (atLatest.value && result.newestId)
+      newestRawId.value = result.newestId
+    const commit = ++layoutCommit
+    momentLayout.insertBefore(items, gap.targetId, anchor)
+    await settleMomentLayout(commit, () => isFeedRequestCurrent(token, type, host))
+  }
+  finally {
+    if (isFeedRequestCurrent(token, type, host)) {
+      loadingNewer.value = false
+      maybeLoadMoreNearBottom()
+    }
+  }
 }
 
 function resetMomentsAccountState() {
@@ -847,6 +1074,14 @@ function resetMomentsAccountState() {
   momentActions.reset()
   previews.reset()
   closeMomentDetail()
+  entryUnread.value = undefined
+  readingBookmark.value = undefined
+  readingBoundary.value = undefined
+  lastInteraction.value = undefined
+  momentSearch.value = EMPTY_MOMENT_SEARCH
+  readingAnchorId.value = ''
+  newerGap.value = undefined
+  loadingNewer.value = false
   commentSessions.setAccount(commentAccountIdentity())
   commentSessions.clear()
   feedRequestToken++
@@ -894,7 +1129,8 @@ onMounted(() => {
       return
     void topBarStore.ensureWatchLaterState()
     if (!viewState.restored || (!moments.value.length && !noMoreContent.value)) {
-      refresh()
+      void loadMoments(true)
+      void loadMomentsPortal()
     }
     else {
       if (!portalLoaded.value)
@@ -918,13 +1154,16 @@ watch([
   if (topBarStore.isLogin && topBarStore.userInfo.mid)
     void topBarStore.ensureWatchLaterState()
   void ensureMomentsAccount().then((changed) => {
-    if (momentsMounted && changed)
-      refresh()
+    if (momentsMounted && changed) {
+      void loadMoments(true)
+      void loadMomentsPortal()
+    }
   })
 })
 
 onBeforeUnmount(() => {
   momentsMounted = false
+  clearTimeout(hoverTimer)
   layoutCommit++
   releaseVisibilityWaiters()
   clearTimeout(autoFillTimer)
@@ -960,6 +1199,24 @@ watch(isInitialLoading, async (loading) => {
   updateVirtualColumns()
 })
 
+// A load whose count is unknown (a search, or a filtered stream with nothing
+// shown yet) shows only the ring in the middle; the grid, empty and error
+// states wait for it to close. The tail ring closes before "no more" shows.
+const pendingRingRef = ref<{ $el: Element }>()
+const pendingRingLoading = computed(() => !moments.value.length
+  && (isInitialLoading.value ? isMomentSearchActive(momentSearch.value) : isLoading.value))
+const pendingRingPhase = useLoadingRingPhase(() => pendingRingLoading.value, () => pendingRingRef.value?.$el)
+const tailRingRef = ref<HTMLElement>()
+const tailRingLoading = computed(() => isLoading.value && moments.value.length > 0)
+const tailRingPhase = useLoadingRingPhase(() => tailRingLoading.value, () => tailRingRef.value)
+watch(() => pendingRingPhase.value === 'idle', async (idle) => {
+  if (!idle)
+    return
+  await nextTick()
+  updateGridColumnCount()
+  updateVirtualColumns()
+})
+
 watch([upListScrollerRef, upListTrackRef], async () => {
   await nextTick()
   setupUpListScrollerObserver()
@@ -977,7 +1234,7 @@ watch(
 )
 
 watch(
-  momentFilterPolicy,
+  [momentFilterPolicy, momentSearch],
   async () => {
     if (await reapplyMomentFiltersFromCache())
       return
@@ -1010,8 +1267,8 @@ function appendMoments(items: DisplayMoment[]) {
         <MomentsSidebar
           :model-value="activeMomentFilter" :content-id="contentId" :loading="isPortalLoading"
           :user="portalUser" :live-users="portalLiveUsers" :live-count="portalLiveCount"
-          :previews="previews"
-          @update:model-value="handleMomentFilterChange"
+          :previews="previews" :search="momentSearch"
+          @update:model-value="handleMomentFilterChange" @search="applyMomentSearch"
         />
       </template>
 
@@ -1120,9 +1377,19 @@ function appendMoments(items: DisplayMoment[]) {
       <MomentsContentLayout :sidebar-label="t('moments.hot_search_title')">
         <template #sidebar>
           <MomentsHotSearch />
+          <MomentsReadingActions
+            :jump="showJumpToLastSeen"
+            :latest="showJumpToLatest"
+            :busy="isLoading || loadingNewer"
+            :status="newerGap ? t(`moments.join_${joinStatus}`) : undefined"
+            @jump="jumpToLastSeen"
+            @latest="returnToLatest"
+            @refresh="returnToLatest"
+          />
         </template>
         <main :ref="el => momentsContentRef = (el as HTMLElement | null)" class="moments-content">
-          <div v-if="isInitialLoading" class="moments-page__initial-loading">
+          <LoadingFill v-if="pendingRingPhase !== 'idle'" ref="pendingRingRef" :loading="pendingRingLoading" />
+          <div v-else-if="isInitialLoading" class="moments-page__initial-loading">
             <div
               v-layout-editable="'moments-grid'"
               class="moments-skeleton-grid"
@@ -1144,7 +1411,7 @@ function appendMoments(items: DisplayMoment[]) {
           </div>
           <div v-else-if="feedRequestFailed && !moments.length" class="moments-page__empty moments-page__error bew-empty--fill" role="status">
             <p>{{ t('common.load_failed') }}</p>
-            <button type="button" :disabled="isLoading" @click="refresh">
+            <button type="button" :disabled="isLoading" @click="loadMoments(true, 0, true, atLatest ? 'latest' : 'resume')">
               {{ t('moments.retry') }}
             </button>
           </div>
@@ -1155,6 +1422,9 @@ function appendMoments(items: DisplayMoment[]) {
             class="moments-grid"
             data-layout-editable-id="moments-grid"
             :style="momentsGridStyle"
+            @click.capture="rememberInteraction($event.target)"
+            @contextmenu.capture="rememberInteraction($event.target)"
+            @pointerover="handleGridPointerOver"
           >
             <div v-for="(column, columnIndex) in virtualColumns" :key="columnIndex" class="moments-grid__column">
               <div v-if="column.topPad" class="moments-grid__spacer" :style="{ height: `${column.topPad}px` }" />
@@ -1191,18 +1461,25 @@ function appendMoments(items: DisplayMoment[]) {
                   @interaction-change="held => momentLayout.setInteractionHeld(moment.id, held)"
                   @request-delete="requestMomentDelete"
                   @request-report="requestMomentReport"
-                />
+                >
+                  <template v-if="moment.id === boundaryId || moment.id === gapBoundaryId" #reading-marker>
+                    <MomentReadMarker v-if="moment.id === boundaryId" :label="t(readingBoundary?.local ? 'moments.local_bookmark' : 'moments.video_boundary')" />
+                    <button v-if="moment.id === gapBoundaryId" type="button" class="moments-load-more" :disabled="loadingNewer" @click="loadNewerMoments">
+                      {{ t('moments.continue_gap') }}
+                    </button>
+                  </template>
+                </MomentCard>
               </template>
               <div v-if="column.bottomPad" class="moments-grid__spacer" :style="{ height: `${column.bottomPad}px` }" />
             </div>
           </div>
           <!-- An ended feed only says so; buttons are for failures. -->
           <div v-else-if="!isInitialLoading && !isLoading && (noMoreContent || feedRequestFailed)" class="moments-page__empty bew-empty--fill" role="status">
-            <p>{{ feedRequestFailed ? t('common.load_failed') : t('moments.empty') }}</p>
+            <p>{{ feedRequestFailed ? t('common.load_failed') : t(isMomentSearchActive(momentSearch) ? 'moments.search_empty' : 'moments.empty') }}</p>
             <button
               v-if="feedRequestFailed"
               :disabled="isLoading"
-              @click="refresh()"
+              @click="loadMoments(true, 0, true, atLatest ? 'latest' : 'resume')"
             >
               {{ t('moments.retry') }}
             </button>
@@ -1217,16 +1494,15 @@ function appendMoments(items: DisplayMoment[]) {
             {{ t('moments.retry') }}
           </button>
           <p
-            v-if="!isInitialLoading && (moments.length || isLoading)"
+            v-if="!isInitialLoading && pendingRingPhase === 'idle' && moments.length"
+            ref="tailRingRef"
             class="moments-page__loading"
-            :class="{ 'is-visible': isLoading || (noMoreContent && !feedRequestFailed) }"
-            :aria-hidden="!isLoading && !noMoreContent"
+            :class="{ 'is-visible': tailRingPhase !== 'idle' || (noMoreContent && !feedRequestFailed) }"
+            :aria-hidden="tailRingPhase === 'idle' && !noMoreContent"
+            :aria-busy="tailRingLoading"
             aria-live="polite"
           >
-            <template v-if="isLoading">
-              <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
-              {{ t('moments.loading_more') }}
-            </template>
+            <LoadingRing v-if="tailRingPhase !== 'idle'" :loading="tailRingLoading" size="var(--bew-icon-size-md)" :aria-label="t('common.loading')" />
             <template v-else-if="noMoreContent && !feedRequestFailed">
               {{ t('moments.no_more') }}
             </template>
@@ -1393,6 +1669,7 @@ function appendMoments(items: DisplayMoment[]) {
 @use "../../../styles/truncateFade";
 @use "../../../styles/breakpoints";
 @use "../../../styles/contentCard";
+@use "../../../styles/bleedStrip";
 
 .moments-page {
   min-width: 0;
@@ -1405,60 +1682,21 @@ function appendMoments(items: DisplayMoment[]) {
 // rail's glass out to the window edge, and its last tile stops under the
 // top-bar avatar's right edge. It stays in the page layer, below the fixed rail.
 .moments-up-list {
-  --moments-up-list-bleed-start: calc(var(--bew-messages-sidebar-width) + var(--library-content-inline-padding));
   // Tile, gap and one name line (the track's padding and the scroller's
   // negative margin cancel out).
   --moments-up-list-height: calc(var(--bew-moments-up-tile-size) + var(--bew-space-2) + var(--bew-line-height-control));
   // The feed starts this far below the names: room for a hovered tile's scale
   // and shadow, which the feed would otherwise cover.
   --moments-up-list-gap: var(--bew-space-8);
-  // Its own formatting context: the scroller's negative top margin must not
-  // collapse through and lift the box, or sticky would push it back down onto
-  // the feed.
-  display: flow-root;
-  // The bar stays where it is while the page scrolls (user request): pinned at
-  // its own place, the content's top padding. The feed after it, a stacking
-  // context of its own (container query), slides up over it.
-  position: sticky;
-  top: calc(var(--bew-top-bar-height) + var(--bew-space-4));
-  height: var(--moments-up-list-height);
-  margin-bottom: var(--moments-up-list-gap);
-}
-// It fades from when the first cards reach its bottom edge (scrolled by the
-// gap) until they reach its top edge, then stops taking input.
-// Without scroll timelines the cards simply cover it.
-@supports (animation-timeline: scroll()) {
-  .moments-up-list {
-    animation: moments-up-list-cover linear both;
-    animation-timeline: --bew-page-scroll;
-    animation-range: var(--moments-up-list-gap) calc(var(--moments-up-list-gap) + var(--moments-up-list-height));
-  }
-}
-@keyframes moments-up-list-cover {
-  to {
-    opacity: 0;
-    visibility: hidden;
-  }
+  // The bar stays where it is while the page scrolls (user request); the feed
+  // after it, a stacking context of its own (container query), slides over it.
+  @include bleedStrip.bar(var(--moments-up-list-height), var(--moments-up-list-gap));
 }
 .moments-up-list__scroller {
-  margin-inline: calc(-1 * var(--moments-up-list-bleed-start)) calc(-1 * var(--library-content-inline-padding));
-  // Room for the hover scale and cover shadow, which the scroller would clip.
-  margin-block: calc(-1 * var(--bew-space-4));
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-.moments-up-list__scroller::-webkit-scrollbar {
-  display: none;
+  @include bleedStrip.scroller;
 }
 .moments-up-list__track {
-  display: flex;
-  width: max-content;
-  gap: var(--bew-space-4);
-  box-sizing: content-box;
-  padding-block: var(--bew-space-4);
-  padding-inline: var(--moments-up-list-bleed-start) var(--library-content-inline-padding);
+  @include bleedStrip.track;
 }
 .moments-up-list__arrow {
   position: absolute;
@@ -1466,7 +1704,7 @@ function appendMoments(items: DisplayMoment[]) {
   z-index: 2;
   width: var(--bew-control-item-height);
   height: var(--bew-control-item-height);
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   color: var(--bew-text-1);
   background: var(--bew-elevated-solid);
   box-shadow: var(--bew-shadow-1);
@@ -1501,27 +1739,7 @@ function appendMoments(items: DisplayMoment[]) {
 }
 // Same hover scale as video cards (contentCard.bare).
 .moments-up-list__item {
-  @include contentCard.bare;
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--bew-space-2);
-  box-sizing: content-box;
-  width: var(--bew-moments-up-tile-size);
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  text-align: start;
-  text-decoration: none;
-}
-.moments-up-list__item:hover:not(:disabled) {
-  color: var(--bew-text-1);
-}
-.moments-up-list__item:focus-visible {
-  outline: var(--bew-focus-ring, 1px solid CanvasText);
-  outline-offset: var(--bew-space-0-5);
+  @include bleedStrip.tile(var(--bew-moments-up-tile-size));
 }
 .moments-up-list__item--active .moments-up-list__name {
   color: var(--bew-text-1);
@@ -1531,27 +1749,10 @@ function appendMoments(items: DisplayMoment[]) {
 }
 // Square tiles as tall as a video card cover, framed like one.
 .moments-up-list__avatar {
-  @include contentCard.media-frame;
-  position: relative;
-  display: block;
-  width: var(--bew-moments-up-tile-size);
-  height: var(--bew-moments-up-tile-size);
-  flex: 0 0 auto;
-  border-radius: var(--bew-media-radius);
-  corner-shape: var(--bew-corner-shape);
-  background: var(--bew-fill-1);
-  transition: box-shadow var(--bew-duration-moderate) var(--bew-ease-standard);
+  @include bleedStrip.tile-media(var(--bew-moments-up-tile-size));
 }
 .moments-up-list__item:hover:not(:disabled) .moments-up-list__avatar {
   box-shadow: var(--bew-shadow-2);
-}
-.moments-up-list__avatar > img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  corner-shape: inherit;
-  object-fit: cover;
 }
 .moments-up-list__avatar--all {
   display: grid;
@@ -1564,10 +1765,6 @@ function appendMoments(items: DisplayMoment[]) {
 }
 .moments-up-list__skeleton-tile {
   border-radius: var(--bew-media-radius);
-}
-.moments-up-list__item:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 .moments-up-list__all-icon {
   display: block;
@@ -1589,15 +1786,7 @@ function appendMoments(items: DisplayMoment[]) {
   box-sizing: border-box;
 }
 .moments-up-list__name {
-  display: block;
-  align-self: stretch;
-  max-width: 100%;
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
-  line-height: var(--bew-line-height-control);
-  text-align: start;
-  @include truncateFade.line;
+  @include bleedStrip.tile-name;
 }
 .moments-page__initial-loading {
   position: relative;
@@ -1619,7 +1808,7 @@ function appendMoments(items: DisplayMoment[]) {
   min-width: 0;
 }
 .moments-page__empty button:not(.b-button) {
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   min-height: var(--bew-control-height);
   border-radius: var(--bew-interactive-radius);
   background: var(--bew-elevated);
@@ -1629,7 +1818,7 @@ function appendMoments(items: DisplayMoment[]) {
   align-items: center;
   gap: var(--bew-space-2);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   cursor: pointer;
   transition:
@@ -1708,14 +1897,14 @@ function appendMoments(items: DisplayMoment[]) {
   height: var(--bew-control-height);
   margin: var(--bew-space-5) auto 0;
   padding: 0 var(--bew-space-4);
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-text-1);
   background: var(--bew-elevated);
   font: inherit;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   cursor: pointer;
   transition:
@@ -1761,7 +1950,7 @@ function appendMoments(items: DisplayMoment[]) {
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-surface-radius);
   overflow: hidden;
   background: var(--bew-bg);
@@ -1813,14 +2002,14 @@ function appendMoments(items: DisplayMoment[]) {
   padding: 0 var(--bew-space-3);
   border: 0;
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-text-1);
   background: var(--bew-elevated-solid);
   box-shadow: var(--bew-shadow-2);
   font-family: inherit;
   text-decoration: none;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   opacity: 0.92;
   cursor: pointer;
@@ -1946,7 +2135,7 @@ function appendMoments(items: DisplayMoment[]) {
   padding: var(--bew-space-2) var(--bew-space-3);
   border: 0;
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   background: rgb(0 0 0 / 58%);
   box-shadow: 0 8px 30px rgb(0 0 0 / 28%);
   transform: translateX(-50%);
@@ -1987,7 +2176,7 @@ function appendMoments(items: DisplayMoment[]) {
 .moments-load-more,
 .moment-detail-frame__open,
 .moment-image-viewer__toolbar {
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
 }
 
 @media (max-width: breakpoints.$grid-sm) {

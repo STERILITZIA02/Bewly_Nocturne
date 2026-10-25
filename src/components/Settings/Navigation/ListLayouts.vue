@@ -4,9 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { settings } from '~/logic'
 import type { WatchLaterLayoutMode } from '~/logic/storage'
 
-import SettingsItem from '../../components/SettingsItem.vue'
-import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
-import SettingsSegmentedControl from '../../components/SettingsSegmentedControl.vue'
+import SettingsItem from '../components/SettingsItem.vue'
+import SettingsItemGroup from '../components/SettingsItemGroup.vue'
+import SettingsSegmentedControl from '../components/SettingsSegmentedControl.vue'
 
 const { t } = useI18n()
 const layoutOptions = computed<{ label: string, value: WatchLaterLayoutMode }[]>(() => [
@@ -17,10 +17,7 @@ const layoutOptions = computed<{ label: string, value: WatchLaterLayoutMode }[]>
 
 <template>
   <div>
-    <SettingsItemGroup
-      data-setting-id="settings.group_watch_later_layout" :title="$t('settings.group_watch_later_layout')"
-      :desc="$t('settings.group_watch_later_layout_desc')"
-    >
+    <SettingsItemGroup>
       <SettingsItem
         setting-id="page.watchLater.layout"
         :title="$t('settings.watch_later_layout_mode')"
@@ -32,6 +29,9 @@ const layoutOptions = computed<{ label: string, value: WatchLaterLayoutMode }[]>
           :label="$t('settings.watch_later_layout_mode')"
           :options="layoutOptions"
         />
+      </SettingsItem>
+      <SettingsItem setting-id="settings.history_layout" :title="$t('settings.history_layout')" right-width="auto">
+        <SettingsSegmentedControl v-model="settings.historyLayout" :label="$t('settings.history_layout')" :options="layoutOptions" />
       </SettingsItem>
     </SettingsItemGroup>
   </div>

@@ -63,6 +63,44 @@
   }
 }
 
+// Left rails (user-specified) never fade: a mask dims their rows' icons and
+// washes out previews and covers at the edges. Instead, while more of the list
+// lies beyond an edge, a hairline closes that edge (`--bew-separator-color`),
+// driven by the element's own scroll timeline (no listener); a list that fits
+// has no active timeline and shows none. The element should span the rail edge
+// to edge (bleed over the rail padding and pad back in), like the rail's other
+// separators. An element with an animation of its own lists both itself (see
+// ConversationList.vue).
+$line-ramp: var(--bew-space-6);
+
+@mixin lines($top: true, $bottom: true) {
+  @if $top {
+    border-top: var(--bew-hairline) solid transparent;
+  }
+  @if $bottom {
+    border-bottom: var(--bew-hairline) solid transparent;
+  }
+  @supports (animation-timeline: scroll()) {
+    @if $top and $bottom {
+      animation:
+        bew-scroll-edge-line-top linear both,
+        bew-scroll-edge-line-bottom linear both;
+      animation-timeline: scroll(self), scroll(self);
+      animation-range:
+        0 $line-ramp,
+        calc(100% - #{$line-ramp}) 100%;
+    } @else if $top {
+      animation: bew-scroll-edge-line-top linear both;
+      animation-timeline: scroll(self);
+      animation-range: 0 $line-ramp;
+    } @else {
+      animation: bew-scroll-edge-line-bottom linear both;
+      animation-timeline: scroll(self);
+      animation-range: calc(100% - #{$line-ramp}) 100%;
+    }
+  }
+}
+
 // Global registration: @property only takes effect at document level, which the
 // host stylesheet provides; the keyframes must also exist in the shadow copy.
 @mixin global {
@@ -93,6 +131,24 @@
     }
     to {
       --bew-scroll-edge-bottom-clear: 1;
+    }
+  }
+
+  @keyframes bew-scroll-edge-line-top {
+    from {
+      border-top-color: transparent;
+    }
+    to {
+      border-top-color: var(--bew-separator-color);
+    }
+  }
+
+  @keyframes bew-scroll-edge-line-bottom {
+    from {
+      border-bottom-color: var(--bew-separator-color);
+    }
+    to {
+      border-bottom-color: transparent;
     }
   }
 

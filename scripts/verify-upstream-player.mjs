@@ -4,6 +4,57 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerUpstreamPlayerChecks(check) {
+  check('playback policies: pause and loop override custom order for every list; native and recommendation continuation stay distinct', async () => {
+    const VideoType = { MULTIPART: 'multipart', COLLECTION: 'collection', WATCH_LATER: 'watchLater', PLAYLIST: 'playlist', RECOMMEND: 'recommend' }
+    let type = VideoType.MULTIPART
+    const preferences = { useBilibiliDefaultAutoPlay: false }
+    const calls = []
+    const context = await loadSourceFunctions('../src/utils/player.ts', ['getAutoPlayModeForVideoType', 'canCustomPlayHandleCurrentEnd', 'usesPlaylistHandoff', 'applyAutoPlayByVideoType'], {
+      VideoType,
+      settings: { value: preferences },
+      detectVideoType: () => type,
+      detectEndBehaviorVideoType: () => type,
+      detectCustomPlayListVideoType: () => type,
+      isImmersiveFrame: () => false,
+      invalidatePendingEndPlaybackStateChanges() {},
+      userManuallyChangedAutoPlay: false,
+      customEndPlaybackHandlerActive: true,
+      captureNativeEndPlaybackBehavior() {},
+      restoreNativeEndPlaybackBehavior: () => calls.push(['restore']),
+      disableNativeEndPlaybackBehavior: () => calls.push(['custom']),
+      setLoopState: value => calls.push(['loop', value]),
+      setAutoPlayState: value => calls.push(['auto', value]),
+      setPlaylistHandoffMode: value => calls.push(['handoff', value]),
+    })
+    const fields = { multipart: 'autoPlayMultipart', collection: 'autoPlayCollection', watchLater: 'autoPlayWatchLater', playlist: 'autoPlayPlaylist', recommend: 'autoPlayRecommend' }
+    for (type of Object.values(VideoType)) {
+      for (const mode of ['loop', 'pauseAtEnd']) {
+        preferences[fields[type]] = mode
+        calls.length = 0
+        context.applyAutoPlayByVideoType()
+        assert.equal(context.canCustomPlayHandleCurrentEnd(), false)
+        assert.ok(calls.some(([key, value]) => key === 'loop' && value === (mode === 'loop')))
+        assert.equal(calls.some(([key]) => key === 'custom'), false)
+      }
+    }
+    type = VideoType.PLAYLIST
+    preferences.autoPlayPlaylist = 'autoPlay'
+    calls.length = 0
+    context.applyAutoPlayByVideoType()
+    assert.deepEqual(calls, [['custom']])
+    context.customEndPlaybackHandlerActive = false
+    calls.length = 0
+    context.applyAutoPlayByVideoType()
+    assert.deepEqual(calls, [['handoff', true], ['auto', false]])
+    preferences.autoPlayPlaylist = 'autoPlayWithRecommend'
+    calls.length = 0
+    context.applyAutoPlayByVideoType()
+    assert.deepEqual(calls, [['handoff', true], ['auto', true]])
+    preferences.useBilibiliDefaultAutoPlay = true
+    calls.length = 0
+    context.applyAutoPlayByVideoType()
+    assert.deepEqual(calls, [['restore']])
+  })
   check('player scroll: sending bar remains default; center mode and every delayed media/layout boundary are respected', async () => {
     const video = document.createElement('video')
     video.src = 'https://example.com/current.mp4'

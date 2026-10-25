@@ -1,4 +1,17 @@
 library_tools:
+  filters: Filter
+  filter_duration: Length
+  filter_watched: Watched
+  filter_device: Device
+  filter_progress: Progress
+  filter_added: Added
+  date_custom: Custom dates
+  date_range: Custom date range
+  days: Jump to a day
+  resume_at: 'Stopped at {time} of {total}'
+  video_count: '{count} videos'
+  uploaders: Uploaders in this folder
+  all_uploaders: All
   layout_list: List
   layout_grid: Grid
   search_scope: Search scope
@@ -171,7 +184,35 @@ player_screenshot:
   failed: Failed to capture screenshot
   video_unavailable: The current video frame is unavailable
 settings:
-  page_mode_desc: 'Use Bilibili pages, Bewly pages, or configure each page and the top bar separately.'
+  moments_start_from_last_seen: Resume when opening dynamics
+  moments_start_from_last_seen_desc: For All, Videos and the top bar video feed. Restores this window’s reading bookmark, or uses the server’s unread-video boundary. That boundary does not track reading across all post types.
+  parameters: Parameters
+  font_overrides: Font overrides
+  play_order_multipart: Multipart playback order
+  play_order_collection: Collection playback order
+  play_order_watch_later: Watch Later playback order
+  play_order_playlist: Favorites playback order
+  menu_playback: Playback
+  playback_layout: Layout
+  playback_controls: Controls
+  playback_behavior: Playback behavior
+  list_layouts: Lists and layout
+  list_layouts_desc: Set the default layouts for History and Watch Later.
+  search_results_effective_bewly: Currently using Bewly search results.
+  search_results_effective_bilibili: Currently using Bilibili search results.
+  search_results_controlled_by_mode: 'Currently using Bilibili search results, as selected in Page mode.'
+  video_card_context_menu_region_saving: Save
+  playback_policy_priority: Pause at end and repeat take priority. Otherwise an active custom order controls the next item; native behavior applies when it is inactive.
+  play_order_native: Use native
+  single_video_auto_play: Play recommendations
+  bcoin_mode: B Coin coupon collection
+  bcoin_remind: Remind only
+  bcoin_auto: Collect automatically
+  moments_preview_controls: Moment video preview controls
+  moments_preview_swipe: Seek in moment video previews
+  moments_preview_delay: Moment video preview delay
+  moments_preview_cover_only: Preview only over moment covers
+  page_mode_desc: 'Choose a page mode, or use Custom to choose each page and the top bar.'
   app_authorized: Authorized
   settings_data: Settings data
   page_mode: Page mode
@@ -183,7 +224,7 @@ settings:
   recommendation_mode_app_single: APP single column
   recommendation_mode_app_double: APP double column
   recommendation_mode_visible_options: Quick switch options
-  recommendation_mode_visible_options_desc: Controls shortcut visibility. The full menu stays available; APP columns only affect requests.
+  recommendation_mode_visible_options_desc: Click to show or hide; drag or use Alt + arrow keys to reorder. This changes shortcuts only. Choose any recommendation mode above.
   resume_from_preview_position: Open videos at the preview position
   resume_from_preview_position_desc: 'Adds the preview position to video links. Preview memory, history resume and existing link times are preserved when disabled.'
   show_dock_back_to_top: Show Back to top in Dock
@@ -248,9 +289,9 @@ settings:
   category_browsing_video_card_desc: Configure video card layout, previews, metadata, and link behavior.
   category_browsing_favorites_desc: Configure how favorite content is displayed and opened.
   category_navigation_link_opening_desc: Configure where top bar, video card, and search links open, including drawer behavior.
-  category_navigation_topbar_desc: Adjust top bar layout, components, channels, search, and notifications in one place.
+  category_navigation_topbar_desc: 'Configure top bar items, pinned channels and link behavior.'
   category_navigation_dock_desc: Configure Dock and sidebar position, visibility, and quick actions.
-  category_navigation_search_desc: Configure search appearance, suggestions, history, trending, and results.
+  category_navigation_search_desc: 'Configure search access, appearance, suggestions, history and results.'
   category_navigation_moments_desc: Configure the dynamic feed sidebar and how dynamic cards are opened.
   category_navigation_watch_later_page_desc: Configure the content layout of the Watch Later page.
   category_navigation_playback_page_desc: Configure the default video display mode and Bewly Playback Page interactions.
@@ -304,10 +345,10 @@ settings:
     network: Network connection failed
     invalid-response: Message settings cannot be read right now
     api-error: The operation failed. Try again.
-  category_playback_player_desc: Configure player mode, scrolling, danmaku, captions, and playback state.
+  category_playback_player_desc: 'Configure danmaku, subtitles, remembered preferences, loudness and screenshots.'
   category_playback_autoplay_desc: Configure autoplay and custom playback behavior.
   category_bilibili_comments_desc: Enhance user information and content displayed in comments.
-  category_bilibili_vip_desc: Configure reminders related to premium membership benefits.
+  category_bilibili_vip_desc: Configure reminders and automatic collection of Premium rewards.
   category_advanced_compatibility_desc: Configure compatibility with original pages, third-party extensions, and other pages.
   category_advanced_maintenance_desc: Export a backup, import settings, or restore Bewly Nocturne defaults.
   maintenance:
@@ -375,13 +416,13 @@ settings:
   group_video_page_actions: Video Page Features
   group_video_page_actions_desc: Tags only toggle the visibility of related controls on the video page and player toolbar.
   group_custom_auto_play_behavior: End-of-playback Behavior
-  group_custom_auto_play_behavior_desc: Set what happens for each video type when Bilibili's default behavior is disabled. “Play recommendations” continues with recommended videos.
+  group_custom_auto_play_behavior_desc: List autoplay stops at the end of the list. Autoplay with recommendations can continue into recommended videos.
   group_playback_end_behavior: End-of-playback Behavior
   group_video_type_end_behavior: Per-video-type Behavior
   group_playlist_start_behavior: Playlist Start
-  group_random_play: Custom Playback
+  group_random_play: List playback order
   group_random_play_settings: Random Playback Settings
-  group_random_play_settings_desc: Configure how Random starts when it is the effective custom playback default.
+  group_random_play_settings_desc: Applies to lists that use random order.
   group_topbar: Top Bar
   topbar_logo_and_channels: Logo settings
   topbar_logo_and_channels_desc: Choose the top bar Logo style and whether to show the home button in touch mode.
@@ -508,8 +549,8 @@ settings:
     By default, Bilibili will specifically handle Chinese punctuation to achieve
     left alignment. If you are using a custom font, it is recommended to remove
     the indent.
-  disable_frosted_glass_and_top_bar_gradient: Disable frosted glass and top bar gradient
-  disable_frosted_glass_and_top_bar_gradient_desc: Turn this on to use solid surfaces without frosted glass or the top bar gradient. Both effects are enabled by default.
+  disable_frosted_glass_and_top_bar_gradient: Frosted glass and top bar gradient
+  disable_frosted_glass_and_top_bar_gradient_desc: Use solid surfaces when off.
   frosted_glass_blur_intensity: Frosted glass blur intensity
   disable_shadow: Disable shadow
   link_opening_behavior_opt:
@@ -565,12 +606,12 @@ settings:
     bewly_widescreen_sidebar_position_desc: Choose which side of the video card holds comments, danmaku and recommendations
     bewly_widescreen_sidebar_position_left: Left
     bewly_widescreen_sidebar_position_right: Right
-  enable_video_preview: Enable video preview feature (if possible)
-  enable_video_ctrl_bar_on_video_card: Display the video control bar on the video card
-  video_preview_swipe_seek: Swipe to seek nearby
+  enable_video_preview: Video card hover preview
+  enable_video_ctrl_bar_on_video_card: Video card preview controls
+  video_preview_swipe_seek: Seek in video card previews
   video_preview_swipe_seek_desc: Press and drag horizontally on a video preview to seek backward or forward near the current position.
-  hover_video_card_delayed: Delayed video preview on hover over the video card
-  only_cover_video_preview: Preview videos only when hovering the cover
+  hover_video_card_delayed: Video card preview delay
+  only_cover_video_preview: Preview only over video card covers
   show_video_card_author_name: Show uploader name
   show_video_card_publish_time: Show publish time
   show_video_watched_badge: Show watch status on activity videos
@@ -581,9 +622,7 @@ settings:
     number: Number
     dot: Dot
     none: Do not show
-  show_bcoin_receive_reminder: VIP B-coin receive reminder
-  auto_receive_bcoin_coupon: Auto receive B-coin coupon
-  auto_receive_bcoin_coupon_desc: 'With claim reminders enabled, automatically claim available B Coin coupons when detected.'
+  auto_receive_bcoin_coupon_desc: Automatic collection claims available coupons without requiring reminders.
   auto_receive_bcoin_coupon_success: B-coin coupon received automatically
   auto_receive_bcoin_coupon_failed: 'Failed to receive B-coin coupon: {message}'
   auto_receive_bcoin_coupon_error: Unable to receive the B-coin coupon. Please try again later.
@@ -690,7 +729,7 @@ settings:
   enable_search_history: Enable search history
   enable_search_history_desc: When enabled, the search bar will record and display your search history. Disabling this will clear all history
   use_plugin_search_results_page: Use plugin search results page
-  use_plugin_search_results_page_desc: 'Use Bewly search results. Page mode takes precedence; in custom mode, set the search page to Bewly.'
+  use_plugin_search_results_page_desc: Use Bewly results unless the global or custom page mode selects Bilibili search.
   depersonalize_search_results: Depersonalized search
   depersonalize_search_results_desc: When enabled, search result requests are sent without login cookies.
   search_results_pagination_mode: Search results pagination mode
@@ -738,7 +777,7 @@ settings:
   filter_by_view_count_desc: Keep videos with more views than the set value.
   filter_by_view_count_unit: views
   filter_by_like_count: Filter by like count
-  filter_by_like_count_desc: 'For Web and Web guest recommendations: keep videos with more likes than the set value.'
+  filter_by_like_count_desc: Keep videos with more likes than the threshold. APP recommendations fetch candidate like counts when needed; unknown counts are not treated as zero.
   filter_by_like_count_unit: likes
   filter_by_duration: Filter by duration
   filter_by_duration_desc: Keep videos longer than the set duration.
@@ -780,7 +819,7 @@ settings:
   enable_version_reminder: New version reminders
   enable_version_reminder_desc: Show unacknowledged version updates on the extension home page; each version is shown only once.
   enable_following_inactive_blacklist: Move less active creators down
-  enable_following_inactive_blacklist_desc: Sort using activity dates from records loaded locally.
+  enable_following_inactive_blacklist_desc: Move less active creators down using locally known activity. Turning this off stops applying the list and preserves its records.
   following_inactive_days: Activity interval
   following_inactive_days_desc: 'Based on the latest known upload, or the follow date when no upload date is available.'
   preserve_for_you_state: Preserve "For You" pre-switch state
@@ -840,8 +879,8 @@ settings:
   history_layout: History layout
   history_layout_list: List grouped by date
   history_layout_grid: Grid grouped by date
-  notification_badge_categories: Notification badge categories
-  notification_badge_categories_desc: Affect counts in the top bar, Dock and notification menu only. These controls never mark messages read.
+  notification_badge_categories: Local notification badges
+  notification_badge_categories_desc: Choose which categories count toward the Dock badge. This does not change message delivery or read status.
   show_reply_notification_reminder: Show reply notifications
   show_at_notification_reminder: Show mention notifications
   show_system_notification_reminder: Show system notifications
@@ -853,8 +892,8 @@ settings:
   auto_exit_fullscreen_on_end: Auto exit fullscreen/webFullscreen when video ends
   auto_exit_fullscreen_on_end_desc: >
     When enabled, the player will automatically exit fullscreen mode when the video finishes playing and no single-loop, random-play, or auto-play behavior is active
-  use_bilibili_default_auto_play: Use Bilibili's default auto-play behavior
-  use_bilibili_default_auto_play_desc: 'Let Bilibili control what happens at the end, without the per-type settings below. An active custom playback order takes precedence.'
+  use_bilibili_default_auto_play: Use Bilibili end behavior
+  use_bilibili_default_auto_play_desc: Turn off to choose end behavior for each video type. List order is configured below.
   auto_play_watch_later: Watch Later
   auto_play_mode_default: Bilibili Default
   auto_play_mode_auto_play: Auto-play
@@ -869,10 +908,8 @@ settings:
   auto_play_recommend_desc: Choose auto-play behavior when video ends. "Play recommendations" continues with recommended videos after the current video ends.
   auto_play_playlist: Playlist Videos
   auto_play_playlist_desc: Choose auto-play behavior for playlist videos. "Play recommendations" continues with recommended videos after the current video ends.
-  enable_random_play: Enable custom playback for video collections
-  enable_random_play_desc: Add sequential, reverse, and random playback plus playlist editing to multi-part videos, collections, Watch Later, and playlists.
-  default_custom_play_order: Default custom playback option
-  default_custom_play_order_desc: Only controls the order selected by default in the player, not the switch state. Per-video-type defaults override it when enabled.
+  default_custom_play_order: Playback order
+  default_custom_play_order_desc: Sequential and reverse orders activate automatically and repeat within the list. Random order can be activated manually or automatically.
   enable_custom_play_order_overrides: Set custom playback defaults by video type
   enable_custom_play_order_overrides_desc: Choose a separate default custom playback option for each supported playback context.
   custom_play_order_overrides: Per-video-type defaults
@@ -1334,6 +1371,19 @@ dock:
   collapse_dock: Collapse Dock
   expand_dock: Expand Dock
 moments:
+  loaded_new_videos: '{count} new videos in this list'
+  jump_to_last_seen: Back to what you were reading
+  jump_to_video_boundary: Jump to unread-video boundary
+  jump_to_latest: Back to latest
+  refresh_moments: Refresh posts
+  load_newer: Load newer posts
+  local_bookmark: Reading bookmark in this window
+  video_boundary: Unread-video boundary
+  continue_gap: Continue filling this gap
+  join_budget: This section is not connected yet. Continue loading to fill the gap.
+  join_failed: Loading failed. Retry to connect this section.
+  join_stalled: The feed did not advance. You can retry.
+  join_ended: The feed ended before connecting to the previous list.
   vote_chart_unit: '1% per tick · Multiple-choice shares are independent'
   enter_live_room: "Enter {name}'s live room"
   promotion_advertisement: Ad
@@ -1396,6 +1446,23 @@ moments:
   followers: Followers
   moments: Posts
   publish: Publish a post
+  search_label: Search posts
+  search_filter: Filter posts
+  search_empty: No posts match
+  search_type: Type
+  search_time: Time
+  search_kind_all: All types
+  search_kind_original: Original
+  search_kind_forward: Reposts
+  search_kind_video: Videos
+  search_kind_draw: 'Text & images'
+  search_kind_live: Live
+  search_kind_article: Articles
+  search_time_all: Any time
+  search_time_day: Past day
+  search_time_week: Past week
+  search_time_month: Past month
+  search_time_year: Past year
   live_now: Live now
   live_badge: LIVE
   live_preview_unavailable: Preview unavailable
@@ -1411,7 +1478,6 @@ moments:
   initial_loading: Preparing posts and images…
   empty: No posts to show
   loading: Loading…
-  loading_more: Loading and preparing more posts…
   no_more: No more posts
   live_room: Live room
   video_playback: Video playback
@@ -1733,14 +1799,6 @@ favorites:
   filter_keyword_remove: 'Remove keyword {keyword}'
   filter_reset: Reset
   filter_apply: Apply
-  filter_pause: Pause
-  filter_continue: Continue scanning
-  filter_status_scanning: 'Scanning: {scanned} checked, {count} matched'
-  filter_status_paused: 'Scan paused, {count} matched'
-  filter_status_budget: '{scanned} checked, {count} matched; more remain'
-  filter_status_complete: 'Scan complete, {count} matched'
-  filter_status_failed: 'Scan failed, {count} matched so far'
-  filter_status_stalled: 'Pagination stopped advancing, {count} matched so far'
   saved_refresh_failed: 'Saved, but the list could not refresh. Please refresh to verify.'
   create_folder: Create folder
   folder_name: Name
@@ -1769,6 +1827,7 @@ favorites:
   order_published: Latest uploads
   subscription_filter: Subscription type
   manage_folders: Manage folders
+  folder_more: More actions
   subscription_all: All subscriptions
   subscription_seasons: Video collections
   subscription_folders: Favorite folders

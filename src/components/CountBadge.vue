@@ -15,12 +15,12 @@ const count = computed(() => Number.isFinite(props.count) ? Math.max(0, Math.flo
   height: var(--bew-space-5);
   padding-inline: var(--bew-space-1);
   border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  corner-shape: var(--bew-corner-shape-capsule);
   // Solid fallback for browsers without backdrop filtering.
   background: var(--bew-elevated-solid);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   white-space: nowrap;
   pointer-events: none;
 

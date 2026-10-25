@@ -5,26 +5,31 @@ import CloseButton from '~/components/CloseButton.vue'
 import IconButton from '~/components/IconButton.vue'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useHomeTabViewState } from '~/composables/useHomeTabState'
 import { settings } from '~/logic'
+import { parseDedeUserID } from '~/logic/loginStatus'
 import { getRecommendationRequestIdentity } from '~/logic/recommendationMode'
 import type { AppVideoElement, VideoElement } from '~/stores/forYouStore'
-import { DIALOG_FOCUS_OWNER, DIALOG_TELEPORT_TARGET, getDeepActiveElement, moveDialogTabFocus, ownsDialogKeyboard } from '~/utils/dialogFocus'
+import { DIALOG_FOCUS_OWNER, DIALOG_TELEPORT_TARGET, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard, restoreOverlayFocus } from '~/utils/dialogFocus'
 import { isBrowserFullscreenActive } from '~/utils/escapePriority'
 import { findImmersiveVideo, getImmersiveVideoUrl, getImmersiveWindow, IMMERSIVE_WINDOW_SIZE, isImmersiveInput } from '~/utils/immersiveRecommendation'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
-import { scrollToPosition } from '~/utils/scrollIntent'
+import type { ScrollPositionClaim } from '~/utils/scrollIntent'
+import { claimScrollPosition, ownsScrollPosition, scrollToPosition } from '~/utils/scrollIntent'
 
 import ImmersiveVideoFrame from './ImmersiveVideoFrame.vue'
 
 type Entry = VideoElement | AppVideoElement
-const props = defineProps<{ items: Entry[], initialIndex: number, loading: boolean, noMoreContent: boolean, requestFailed: boolean, trigger?: HTMLElement }>()
+const props = defineProps<{ items: Entry[], initialIndex: number, loading: boolean, noMoreContent: boolean, requestFailed: boolean, trigger?: HTMLElement, scrollClaim?: ScrollPositionClaim }>()
 const emit = defineEmits<{ (event: 'close'): void, (event: 'loadMore'): void }>()
 const app = useBewlyApp()
+const tabOwner = useHomeTabViewState()
 const page = app.activatedPage.value
 const homeTab = app.homeActivatedPage.value
 const requestIdentity = getRecommendationRequestIdentity()
+const accountId = parseDedeUserID(document.cookie)
 const viewport = app.scrollViewportRef.value
-const scrollTop = viewport?.scrollTop ?? 0
+const scrollClaim = props.scrollClaim ?? (viewport ? claimScrollPosition(viewport) : undefined)
 const focus = props.trigger ?? getDeepActiveElement(document)
 const root = ref<HTMLElement | null>(null)
 const sidebar = ref<HTMLElement | null>(null)
@@ -34,6 +39,15 @@ const index = ref(findImmersiveVideo(props.items, Math.max(0, props.initialIndex
 const windowStart = ref(index.value)
 const pendingNext = ref<{ key: string, automatic: boolean }>()
 let disposed = false
+let normalExit = false
+let originCurrent = true
+watch([app.activatedPage, app.homeActivatedPage, getRecommendationRequestIdentity, app.scrollViewportRef], () => {
+  originCurrent = false
+}, { flush: 'sync' })
+function close() {
+  normalExit = true
+  emit('close')
+}
 const dialogId = useId()
 provide(DIALOG_FOCUS_OWNER, dialogId)
 provide(DIALOG_TELEPORT_TARGET, root)
@@ -71,7 +85,7 @@ function select(entry: Entry, event?: MouseEvent) {
   }
 }
 function requestMore(forQueue = false, retry = false) {
-  if (disposed)
+  if (disposed || (!forQueue && !visible.value))
     return
   if (!forQueue && windowStart.value + IMMERSIVE_WINDOW_SIZE < props.items.length) {
     windowStart.value += Math.floor(IMMERSIVE_WINDOW_SIZE * 2 / 3)
@@ -103,7 +117,7 @@ function action(key: string, value: string) {
   else if (value === 'previous')
     previous()
   else if (value === 'close')
-    emit('close')
+    close()
 }
 watch([() => props.items, () => props.loading], () => {
   if (!pendingNext.value || pendingNext.value.key !== current.value?.uniqueId || props.loading
@@ -138,7 +152,7 @@ function keyboard(event: KeyboardEvent) {
     return
   if (event.key === 'Escape') {
     if (!event.repeat)
-      emit('close')
+      close()
   }
   else if (settings.value.immersiveKeyboardSwitch && ['ArrowUp', 'PageUp', 'w', 'W', 'ArrowDown', 'PageDown', 's', 'S'].includes(event.key)) {
     if (!event.repeat) {
@@ -161,12 +175,25 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposed = true
   pendingNext.value = undefined
+  const overlay = root.value
+  const active = getDeepActiveElement(document)
+  const ownedFocus = !active || active === document.body || !!overlay?.contains(active)
   unlockPageScroll()
   void nextTick(() => {
-    if (viewport?.isConnected)
-      scrollToPosition(viewport, scrollTop)
+    if (!normalExit || !originCurrent || (tabOwner && !tabOwner.isActiveTab()) || app.activatedPage.value !== page || app.homeActivatedPage.value !== homeTab
+      || requestIdentity !== getRecommendationRequestIdentity() || accountId !== parseDedeUserID(document.cookie) || app.scrollViewportRef.value !== viewport
+      || !ownedFocus || (viewport && scrollClaim && !ownsScrollPosition(viewport, scrollClaim))) {
+      return
+    }
+    const active = getDeepActiveElement(document)
+    if ((active && active !== document.body && active !== document.documentElement && active.isConnected && !overlay?.contains(active))
+      || (app.mainAppRef.value && getTopDialog(app.mainAppRef.value))) {
+      return
+    }
+    if (viewport?.isConnected && scrollClaim)
+      scrollToPosition(viewport, scrollClaim.top)
     if (focus instanceof HTMLElement && focus.isConnected)
-      focus.focus({ preventScroll: true })
+      restoreOverlayFocus(overlay, focus, false)
   })
 })
 </script>
@@ -194,7 +221,7 @@ onBeforeUnmount(() => {
         <IconButton :label="$t('settings.immersive_recommendations')" :aria-pressed="sidebarOpen" class="immersive-feed__button" @click="sidebarOpen = !sidebarOpen">
           <span class="i-tabler:layout-sidebar-right" aria-hidden="true" />
         </IconButton>
-        <CloseButton :label="$t('common.close')" @click="emit('close')" />
+        <CloseButton :label="$t('common.close')" @click="close" />
       </header>
       <div class="immersive-feed__body">
         <div class="immersive-feed__stage">
@@ -203,7 +230,8 @@ onBeforeUnmount(() => {
             :url="getImmersiveVideoUrl(frame.entry)!"
             :item-key="frame.entry.uniqueId"
             :title="frame.entry.displayData?.title || ''"
-            :active="frame.active && visible"
+            :active="frame.active"
+            :ui-visible="visible"
             @action="action(frame.entry.uniqueId, $event)"
           />
           <p v-if="!current" class="bew-help">
@@ -212,6 +240,7 @@ onBeforeUnmount(() => {
         </div>
         <aside v-if="sidebarOpen" ref="sidebar" class="immersive-feed__list" :aria-label="$t('settings.immersive_recommendations')">
           <VideoCardGrid
+            v-if="visible"
             :items="windowItems"
             grid-layout="oneColumn"
             :persist-state="false"
@@ -254,7 +283,7 @@ onBeforeUnmount(() => {
   gap: var(--bew-space-2);
   padding: var(--bew-space-2) var(--bew-space-4);
   background: var(--bew-elevated-solid);
-  border-bottom: 1px solid var(--bew-border-color);
+  border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
 
   .bew-subheading {
     flex: 1;
@@ -290,7 +319,7 @@ onBeforeUnmount(() => {
   padding: var(--bew-space-4);
   box-sizing: border-box;
   background: var(--bew-bg);
-  border-left: 1px solid var(--bew-border-color);
+  border-left: var(--bew-hairline) solid var(--bew-separator-color);
 }
 
 @media (max-width: 900px) {

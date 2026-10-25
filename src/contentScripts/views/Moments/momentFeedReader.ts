@@ -3,6 +3,8 @@ import type { DataItem, MomentResult } from '~/models/moment/moment'
 import api from '~/utils/api'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { resolveMomentHostFollowState } from '~/utils/momentHostFollowState'
+import type { MomentGap } from '~/utils/momentsReadPosition'
+import { fetchNewerMoments, isNotNewerMoment, MOMENTS_LATEST_OFFSET } from '~/utils/momentsReadPosition'
 
 import type { MomentFilter } from './momentFeedTypes'
 import { getMomentFeedApiType, isClientFilteredMomentType, keepsMomentItem } from './momentFeedTypes'
@@ -15,6 +17,7 @@ interface MomentFeedRead {
   updateBaseline: string
   page: number
   filtered: boolean
+  advanceRead?: boolean
 }
 const MOMENT_FEED_FEATURES = 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,onlyfansAssetsV2,forwardListHidden,ugcDelete,onlyfansQaCard'
 const FILTERED_MAX_REQUEST_PAGES = 2
@@ -25,6 +28,7 @@ export function createMomentFeedReader(
 ) {
   let loadedItems: DisplayMoment[] = []
   let loadedQuery = ''
+  const loadedIds = new Set<string>()
   /** Raw post ids the feed has returned for `loadedQuery`. */
   let seenRawIds = new Set<string>()
   let pendingRead: AbortController | undefined
@@ -39,11 +43,14 @@ export function createMomentFeedReader(
     const isCurrent = () => !controller.signal.aborted && isRequestCurrent()
     const requestType = request.type
     const apiType = getMomentFeedApiType(requestType)
+    const preservesVideoBoundary = apiType === 'all' || apiType === 'video'
+    const initialOffset = request.offset || (!request.advanceRead && preservesVideoBoundary ? MOMENTS_LATEST_OFFSET : '')
     // A client-side type drops much of each page, so it scans like other filters.
     const filtered = request.filtered || isClientFilteredMomentType(requestType)
     const requestHostMid = request.hostMid
     const key = queryKey(requestType, requestHostMid)
-    const seenIds = new Set(request.reset || loadedQuery !== key ? [] : seenRawIds)
+    const resetQuery = request.reset || loadedQuery !== key
+    const seenIds = new Set<string>()
     /**
      * Some feeds (uploader, series) leave the offset empty or unchanged, and
      * uploader feeds also page by number, so a page of unseen posts is
@@ -52,7 +59,7 @@ export function createMomentFeedReader(
     function pageAdvanced(pageItems: DataItem[], responseOffset: string, previousOffset: string) {
       let fresh = false
       for (const item of pageItems) {
-        if (!seenIds.has(item.id_str)) {
+        if (!seenIds.has(item.id_str) && (resetQuery || !seenRawIds.has(item.id_str))) {
           seenIds.add(item.id_str)
           fresh = true
         }
@@ -87,6 +94,8 @@ export function createMomentFeedReader(
         return false
       if (response.code !== 0)
         throw new Error(response.message || 'Moments request failed')
+      if (!Array.isArray(response.data?.items) || typeof response.data.has_more !== 'boolean')
+        throw new Error('Invalid Moments page')
       return true
     }
     try {
@@ -157,16 +166,16 @@ export function createMomentFeedReader(
       }
       else if (filtered) {
       // Filtered batches read at most two pages before yielding to the viewport.
-        let scanOffset = request.offset
+        let scanOffset = initialOffset
         let scanUpdateBaseline = request.updateBaseline
         let canContinue = true
         const scanned: DataItem[] = []
 
-        while (canContinue && filteredRequestPages < FILTERED_MAX_REQUEST_PAGES) {
+        while (canContinue && filteredRequestPages < (request.advanceRead ? 1 : FILTERED_MAX_REQUEST_PAGES)) {
           filteredRequestPages += 1
           const response = await api.moment.getMoments({
             type: apiType,
-            offset: scanOffset || undefined,
+            offset: scanOffset || ((!request.advanceRead || filteredRequestPages > 1) && preservesVideoBoundary ? MOMENTS_LATEST_OFFSET : ''),
             update_baseline: scanUpdateBaseline || undefined,
             features: MOMENT_FEED_FEATURES,
           }, readOptions) as MomentResult
@@ -192,7 +201,7 @@ export function createMomentFeedReader(
       else {
         const response = await api.moment.getMoments({
           type: apiType,
-          offset: request.offset || undefined,
+          offset: initialOffset,
           update_baseline: request.updateBaseline || undefined,
           features: MOMENT_FEED_FEATURES,
         }, readOptions) as MomentResult
@@ -208,16 +217,19 @@ export function createMomentFeedReader(
       if (!isCurrent())
         return
       const normalizedItems = rawItems.filter(item => keepsMomentItem(requestType, item)).map(mapMoment)
-      const previous = request.reset || loadedQuery !== key ? [] : loadedItems
-      const seen = new Set(previous.map(item => item.id))
-      loadedItems = [...previous, ...normalizedItems.filter((item) => {
-        if (seen.has(item.id))
-          return false
-        seen.add(item.id)
-        return true
-      })]
+      if (resetQuery) {
+        loadedItems = []
+        loadedIds.clear()
+        seenRawIds.clear()
+      }
+      for (const item of normalizedItems) {
+        if (!loadedIds.has(item.id)) {
+          loadedIds.add(item.id)
+          loadedItems.push(item)
+        }
+      }
       loadedQuery = key
-      seenRawIds = seenIds
+      seenIds.forEach(id => seenRawIds.add(id))
       return { rawItems, normalizedItems, hasMore, stalled, nextOffset, nextUpdateBaseline, nextPage: nextPageNumber }
     }
     finally {
@@ -227,13 +239,46 @@ export function createMomentFeedReader(
   }
   return {
     read,
+    cancel: () => pendingRead?.abort(),
+    async readNewer(type: MomentFilter, gap: MomentGap, isRequestCurrent: () => boolean) {
+      pendingRead?.abort()
+      const controller = new AbortController()
+      pendingRead = controller
+      const isCurrent = () => !controller.signal.aborted && isRequestCurrent()
+      try {
+        const result = await fetchNewerMoments(async (offset) => {
+          if (!isCurrent())
+            throw new Error('Retired Moments request')
+          const response = await api.moment.getMoments({ type: getMomentFeedApiType(type), offset, features: MOMENT_FEED_FEATURES }, { signal: controller.signal }) as MomentResult
+          if (!isCurrent() || response.code !== 0 || !Array.isArray(response.data?.items) || typeof response.data.has_more !== 'boolean')
+            throw new Error('Invalid Moments page')
+          return { items: response.data.items, offset: response.data.offset, hasMore: Boolean(response.data.has_more) }
+        }, gap, item => item.id_str)
+        if (!isCurrent())
+          return
+        const rawItems = result.items.filter(item => !seenRawIds.has(item.id_str))
+        rawItems.forEach(item => seenRawIds.add(item.id_str))
+        const normalizedItems = rawItems.filter(item => keepsMomentItem(type, item)).map(mapMoment).filter(item => !loadedIds.has(item.id))
+        normalizedItems.forEach(item => loadedIds.add(item.id))
+        const insertion = loadedItems.findIndex(item => isNotNewerMoment(item.id, gap.targetId))
+        loadedItems.splice(insertion < 0 ? loadedItems.length : insertion, 0, ...normalizedItems)
+        return { ...result, rawItems, normalizedItems }
+      }
+      finally {
+        if (pendingRead === controller)
+          pendingRead = undefined
+      }
+    },
     restore(items: DisplayMoment[], type: MomentFilter, hostMid: string) {
       loadedItems = items.slice()
+      loadedIds.clear()
+      items.forEach(item => loadedIds.add(item.id))
       loadedQuery = queryKey(type, hostMid)
     },
     getLoaded: (type: MomentFilter, hostMid: string) => loadedQuery === queryKey(type, hostMid) ? loadedItems : undefined,
     remove(id: string) {
       loadedItems = loadedItems.filter(item => item.id !== id)
+      loadedIds.delete(id)
     },
     updateMoment(id: string, patch: Partial<DisplayMoment>) {
       const index = loadedItems.findIndex(item => item.id === id)
@@ -247,6 +292,7 @@ export function createMomentFeedReader(
       pendingRead?.abort()
       pendingRead = undefined
       loadedItems = []
+      loadedIds.clear()
       loadedQuery = ''
       seenRawIds = new Set()
     },

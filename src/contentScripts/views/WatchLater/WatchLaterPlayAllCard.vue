@@ -68,17 +68,16 @@ function failCover(pic: string) {
 </template>
 
 <style scoped lang="scss">
+// Laid flat in the page hero (no plate of its own): the queue's stacked
+// covers and the play button.
 .watch-later-play-all-card {
   --queue-cover-width: calc(var(--bew-space-12) * 2 + var(--bew-space-4));
   display: flex;
   flex-direction: column;
+  width: min(100%, 320px);
   min-width: 0;
-  padding: var(--bew-space-2);
-  gap: var(--bew-space-2);
-  border-radius: var(--bew-library-filter-radius);
-  corner-shape: var(--bew-corner-shape);
+  gap: var(--bew-space-3);
   color: var(--bew-text-1);
-  background: var(--bew-fill-1);
 }
 .watch-later-play-all-card__preview {
   display: flex;
@@ -128,7 +127,7 @@ function failCover(pic: string) {
 .watch-later-play-all-card__remaining {
   flex: none;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
+  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
