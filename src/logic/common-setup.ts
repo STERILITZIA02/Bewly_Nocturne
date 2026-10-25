@@ -1,10 +1,12 @@
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import type { App } from 'vue'
 import Toast, { POSITION, TYPE } from 'vue-toastification'
 
 import { i18n } from '~/utils/i18n'
 
 const pinia = createPinia()
+// Native-page and iframe callbacks can run before the Vue app is mounted.
+setActivePinia(pinia)
 
 export function setupApp(app: App) {
   // Inject a globally available `$app` object in template
