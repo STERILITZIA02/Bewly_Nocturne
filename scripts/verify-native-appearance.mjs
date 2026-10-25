@@ -38,13 +38,13 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
     }
   })
 
-  check('native appearance: development manifest watcher includes the routing constants and regenerates through the existing command', async () => {
+  check('native appearance: manifest watcher reuses the Node runtime and TS loader without a platform shell', async () => {
     const calls = []
     let watched = []
     let changed
     await loadSourceModule('./prepare.ts', {
       'node:child_process': { execFileSync: (command, args) => calls.push({ command, args }) },
-      'node:process': { default: {} },
+      'node:process': { default: { execPath: 'C:\\Program Files\\nodejs\\node.exe', execArgv: ['--import', 'file:///C:/tool%20chain/loader.mjs'] } },
       'chokidar': { default: { watch: (paths) => {
         watched = paths
         return { on: (event, callback) => {
@@ -63,7 +63,10 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       changed(`/fixture/${path}`)
     }
     assert.equal(calls.length, 3)
-    assert.ok(calls.every(call => call.command === 'pnpm' && call.args.join(' ') === 'exec esno ./scripts/manifest.ts'))
+    for (const call of calls) {
+      assert.equal(call.command, 'C:\\Program Files\\nodejs\\node.exe')
+      assert.deepEqual(Array.from(call.args), ['--import', 'file:///C:/tool%20chain/loader.mjs', '/fixture/scripts/manifest.ts'])
+    }
   })
 
   check('native appearance: game catalogue keys retain native navigation and never take over adjacent business actions', async () => {

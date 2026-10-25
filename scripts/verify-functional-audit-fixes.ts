@@ -273,7 +273,7 @@ async function verifyPreferredFontScale() {
 }
 
 async function verifyHorizontalWheelBoundary() {
-  const context = await loadSourceFunctions('../src/components/HorizontalScrollView.vue', ['handleMouseScroll'], {})
+  const context = await loadSourceFunctions('../src/components/HorizontalScrollView.vue', ['handleMouseScroll'], { ...await import('../src/utils/wheelStep') })
   const element = { scrollLeft: 0, scrollWidth: 600, clientWidth: 200 }
   let prevented = false
   const wheel = (deltaY: number, deltaX = 0, ctrlKey = false) => {

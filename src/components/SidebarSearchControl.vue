@@ -37,7 +37,7 @@ function clear() {
   focus()
 }
 function escape(event: KeyboardEvent, enabled?: boolean) {
-  if (!enabled || event.isComposing)
+  if (!enabled || event.isComposing || event.keyCode === 229)
     return
   event.preventDefault()
   event.stopPropagation()
@@ -54,7 +54,7 @@ defineExpose({ focus })
     <input
       ref="input" v-model="value" type="text" inputmode="search" enterkeyhint="search"
       autocomplete="off" autocapitalize="off" autocorrect="off" :spellcheck="false" :aria-label="label"
-      @keydown.enter="!$event.isComposing && !$event.defaultPrevented && !submitDisabled && ($event.preventDefault(), emit('submit', $event))"
+      @keydown.enter="!$event.isComposing && $event.keyCode !== 229 && !$event.defaultPrevented && !submitDisabled && ($event.preventDefault(), emit('submit', $event))"
       @keydown.esc="escape($event, clearOnEscape)"
     >
     <button v-if="modelValue || clearable" type="button" :aria-label="t('library_tools.clear_search')" class="library-search-field__clear" @click="clear">

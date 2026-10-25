@@ -532,25 +532,32 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
 
   check('September scroll: intent versions survive zero movement and release on interruption/end', async () => {
     const { scrollToPosition, getScrollIntent, cancelScrollIntent } = await import('../src/utils/scrollIntent')
+    const previousMedia = window.matchMedia
+    window.matchMedia = () => ({ matches: false })
     const root = document.body.appendChild(document.createElement('div'))
     const calls = []
     root.scrollTop = 300
     root.scrollTo = options => calls.push(options)
-    scrollToPosition(root, 0, 'smooth')
-    const first = getScrollIntent(root)
-    assert.equal(first.active, true)
-    root.dispatchEvent(new Event('wheel'))
-    assert.equal(getScrollIntent(root).active, false)
-    assert.ok(getScrollIntent(root).version > first.version)
-    scrollToPosition(root, 0, 'smooth')
-    root.dispatchEvent(new Event('scrollend'))
-    assert.equal(getScrollIntent(root).active, false)
-    const before = getScrollIntent(root).version
-    scrollToPosition(root, root.scrollTop)
-    assert.ok(getScrollIntent(root).version > before, 'explicit zero-distance restore invalidates a queued old anchor')
-    assert.equal(calls.length, 2)
-    cancelScrollIntent(root)
-    root.remove()
+    try {
+      scrollToPosition(root, 0, 'smooth')
+      const first = getScrollIntent(root)
+      assert.equal(first.active, true)
+      root.dispatchEvent(new Event('wheel'))
+      assert.equal(getScrollIntent(root).active, false)
+      assert.ok(getScrollIntent(root).version > first.version)
+      scrollToPosition(root, 0, 'smooth')
+      root.dispatchEvent(new Event('scrollend'))
+      assert.equal(getScrollIntent(root).active, false)
+      const before = getScrollIntent(root).version
+      scrollToPosition(root, root.scrollTop)
+      assert.ok(getScrollIntent(root).version > before, 'explicit zero-distance restore invalidates a queued old anchor')
+      assert.equal(calls.length, 2)
+    }
+    finally {
+      cancelScrollIntent(root)
+      root.remove()
+      window.matchMedia = previousMedia
+    }
   })
 
   check('September relations serializer: only fids commas remain literal', async () => {

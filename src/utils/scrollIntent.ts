@@ -94,14 +94,19 @@ export function scrollToPosition(element: HTMLElement, top: number, behavior: Sc
   intents.set(element, state)
   if (element.scrollTop === top)
     return Promise.resolve()
+  if (behavior === 'smooth' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    behavior = 'instant'
   if (behavior !== 'smooth') {
     element.scrollTo({ top, behavior })
     return Promise.resolve()
   }
+  const end = Math.max(0, Math.min(top, element.scrollHeight - element.clientHeight))
+  // A clamped or subpixel no-op emits no scrollend in Chromium.
+  if (Math.abs(element.scrollTop - end) <= 1)
+    return Promise.resolve()
   return new Promise<void>((resolve) => {
     let timer: ReturnType<typeof setTimeout>
     const scrollTarget = element === element.ownerDocument.scrollingElement ? element.ownerDocument : element
-    const end = Math.max(0, Math.min(top, element.scrollHeight - element.clientHeight))
     // A long glide would lay out and paint every screen in between (each one
     // new cards in a windowed list): it starts one screen from the target.
     const reach = element.clientHeight

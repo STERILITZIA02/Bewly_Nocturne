@@ -671,7 +671,29 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(mediaStage, /function requestImage\(index: number\)[\s\S]*?imageElements\[next\]\?\.complete[\s\S]*?showImage\(next\)/)
     // Sideways trackpad swipes step once per gesture; vertical wheels pass on.
     assert.match(mediaStage, /createWheelStepper\(\{ oncePerGesture: true \}\)/)
-    assert.match(mediaStage, /function handleImageWheel\(event: WheelEvent\) \{\s*if \(images\.length < 2 \|\| Math\.abs\(event\.deltaX\) <= Math\.abs\(event\.deltaY\)\)/)
+    const { loadSourceFunctions } = await import('./sourceFunctionHarness.ts')
+    const { createWheelStepper } = await import('../src/utils/wheelStep')
+    const images = []
+    const wheel = await loadSourceFunctions('../src/components/MomentCard/MomentMediaStage.vue', ['handleImageWheel', 'handleThumbWheel'], {
+      images: ['a', 'b', 'c'],
+      requestedImage: { value: 0 },
+      imageStepper: createWheelStepper({ oncePerGesture: true }),
+      requestImage: index => images.push(index),
+      thumbElastic: { handleWheel: event => assert.equal(event.defaultPrevented, false, 'the elastic owner decides whether to consume the thumbnail event') },
+    })
+    for (const options of [{ deltaY: 60 }, { deltaX: 60, ctrlKey: true }]) {
+      const event = new window.WheelEvent('wheel', { cancelable: true, ...options })
+      wheel.handleImageWheel(event)
+      assert.equal(event.defaultPrevented, false)
+    }
+    assert.deepEqual(images, [])
+    const swipe = new window.WheelEvent('wheel', { deltaX: 60, cancelable: true })
+    wheel.handleImageWheel(swipe)
+    assert.equal(swipe.defaultPrevented, true)
+    assert.deepEqual(images, [1])
+    wheel.handleImageWheel(new window.WheelEvent('wheel', { deltaX: 60, cancelable: true }))
+    assert.deepEqual(images, [1], 'an inertial tail cannot switch another picture')
+    wheel.handleThumbWheel(new window.WheelEvent('wheel', { deltaX: 60, cancelable: true }))
     // The thumbnail strip: hairlines between thumbnails, a nested smaller
     // corner, shared elastic sideways scrolling.
     assert.match(mediaStage, /v-if="gallery && images\.length > 1"\s*ref="thumbScrollerRef"\s*class="moment-media__thumbs"/)
@@ -1258,7 +1280,6 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.deepEqual(await findTruncationViolations(files), [])
   })
   check('glass: one material (tint, opacity, blur, edge) for every glass surface; dark glass is tinted lower', async () => {
-    const { execFileSync, spawnSync } = await import('node:child_process')
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
     const variables = await read('styles/variables.scss')
     assert.match(variables, /--bew-glass-tint-solid: var\(--bew-neutral-raised\);/)
@@ -1266,13 +1287,13 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(variables, /:root\.dark \{[\s\S]*?--bew-glass-tint-solid: color-mix\(in srgb, var\(--bew-neutral-fg\) 6%, var\(--bew-neutral-bg\)\);/, 'dark glass sits below raised surfaces (8%)')
     for (const alias of ['--bew-sidebar-background: var(--bew-glass-tint);', '--bew-popover-surface-background: var(--bew-glass-tint);'])
       assert.ok(variables.includes(alias), alias)
-    const src = fileURLToPath(new URL('../src', import.meta.url))
-    assert.equal(spawnSync('grep', ['-rl', 'filter-glass-2', src]).stdout.toString(), '', 'dialogs use the same blur')
+    const sources = await Promise.all((await listStylePolicyFiles()).map(async file => ({ file, source: await readFile(file, 'utf8') })))
+    assert.deepEqual(sources.filter(({ source }) => source.includes('filter-glass-2')).map(({ file }) => file), [], 'dialogs use the same blur')
     // Every glass sample pairs the shared filter with the shared tint (media scrims excepted).
-    const files = execFileSync('grep', ['-rl', 'filter-glass-1', src]).toString().trim().split('\n').filter(file => !/variables\.scss|necessarySettingsWatchers|contentScriptRefreshPrompt|verticalVideoZoom|Moments\.vue|opusDetailDrawerLayout/.test(file))
+    const files = sources.filter(({ file, source }) => source.includes('filter-glass-1') && !/variables\.scss|necessarySettingsWatchers|contentScriptRefreshPrompt|verticalVideoZoom|Moments\.vue|opusDetailDrawerLayout/.test(file))
     const tint = /glass-tint|sidebar-background|popover-surface-background|count-badge-bg|dock-surface-background|b-search-bar-normal-color|danmaku-bar-bg|b-button-color/
-    for (const file of files) {
-      const lines = (await readFile(file, 'utf8')).split('\n')
+    for (const { file, source } of files) {
+      const lines = source.split('\n')
       lines.forEach((line, index) => {
         if (!line.includes('filter-glass-1') || /removeProperty|setProperty|@supports|: none|var\(--bew-filter-glass-1, blur/.test(line))
           return

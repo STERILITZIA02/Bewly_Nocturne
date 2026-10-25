@@ -2,6 +2,7 @@
 import type { Ref } from 'vue'
 
 import { settings } from '~/logic'
+import { normalizeWheelDelta } from '~/utils/wheelStep'
 
 const scrollListWrap = ref<HTMLElement>() as Ref<HTMLElement>
 const showScrollMask = ref<boolean>(true)
@@ -16,7 +17,7 @@ watch([() => settings.value.enableHorizontalScrolling, scrollListWrap], ([enable
 
 function handleMouseScroll(event: WheelEvent) {
   const element = event.currentTarget as HTMLElement
-  if (event.ctrlKey || Math.abs(event.deltaX) > Math.abs(event.deltaY))
+  if (event.ctrlKey || event.defaultPrevented || Math.abs(event.deltaX) > Math.abs(event.deltaY))
     return
   const maxScrollLeft = element.scrollWidth - element.clientWidth
   if (maxScrollLeft <= 0 || event.deltaY === 0
@@ -26,7 +27,7 @@ function handleMouseScroll(event: WheelEvent) {
   }
 
   event.preventDefault()
-  element.scrollLeft += event.deltaY
+  element.scrollLeft += normalizeWheelDelta(event.deltaY, event.deltaMode, element.clientWidth)
 }
 
 defineExpose({ getScrollElement: () => scrollListWrap.value })

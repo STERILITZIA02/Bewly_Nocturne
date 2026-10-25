@@ -16,7 +16,7 @@ const rules: Array<[RegExp, string]> = [
 export async function findRadiusViolations(files: string[]) {
   const violations: string[] = []
   for (const file of files) {
-    if (file.endsWith('styles/variables.scss'))
+    if (file.replaceAll('\\', '/').endsWith('styles/variables.scss'))
       continue
     const lines = (await readFile(file, 'utf8')).split('\n')
     lines.forEach((line, index) => {

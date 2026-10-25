@@ -16,7 +16,7 @@ const rules: Array<[RegExp, string]> = [
 export async function findTruncationViolations(files: string[]) {
   const violations: string[] = []
   for (const file of files) {
-    if (EXEMPT.test(file))
+    if (EXEMPT.test(file.replaceAll('\\', '/')))
       continue
     const lines = (await readFile(file, 'utf8')).split('\n')
     lines.forEach((line, index) => {

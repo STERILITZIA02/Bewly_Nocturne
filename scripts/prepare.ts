@@ -8,7 +8,8 @@ import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributors
 import { isDev, isSafari, r } from './utils'
 
 function writeManifest() {
-  execFileSync('pnpm', ['exec', 'esno', './scripts/manifest.ts'], { stdio: 'inherit' })
+  // Reuse the current Node/TS loader; Windows cannot exec pnpm's .cmd shim.
+  execFileSync(process.execPath, [...process.execArgv, r('scripts/manifest.ts')], { stdio: 'inherit' })
 }
 
 async function prepare() {

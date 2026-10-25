@@ -5,6 +5,10 @@ const GESTURE_GAP = 180
 /** Minimum time (ms) between steps within one continuous gesture. */
 const STEP_COOLDOWN = 220
 
+export function normalizeWheelDelta(delta: number, deltaMode: number, pageSize: number) {
+  return delta * (deltaMode === 1 ? 16 : deltaMode === 2 ? pageSize : 1)
+}
+
 /**
  * Turns wheel and trackpad deltas into discrete steps. Continuous gestures can
  * advance again after a cooldown (unless `oncePerGesture`), reversing starts a
@@ -37,7 +41,7 @@ export function createWheelStepper({ oncePerGesture = false } = {}) {
     }
     lastTime = time
     lastDirection = direction
-    distance += delta * (deltaMode === 1 ? 16 : deltaMode === 2 ? 120 : 1)
+    distance += normalizeWheelDelta(delta, deltaMode, 120)
     if (Math.abs(distance) < STEP_DISTANCE || time - lastCommit < STEP_COOLDOWN || (oncePerGesture && committed))
       return 0
     distance = 0

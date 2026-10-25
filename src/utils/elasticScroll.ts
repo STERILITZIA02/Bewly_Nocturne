@@ -1,5 +1,6 @@
 import { holdAnimation } from './motionPriority'
 import { getMotionDuration } from './motionTiming'
+import { normalizeWheelDelta } from './wheelStep'
 
 /** The furthest (px) content can be pulled past an edge. */
 const STRETCH_LIMIT = 160
@@ -27,6 +28,7 @@ export function createElasticWheelScroll(scroller: HTMLElement, content: HTMLEle
   let stretch = 0
   let releaseTimer: ReturnType<typeof setTimeout> | undefined
   let settle: Animation | undefined
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
   function render() {
     content.style.translate = stretch ? `${-rubberBand(stretch)}px 0` : ''
@@ -39,7 +41,7 @@ export function createElasticWheelScroll(scroller: HTMLElement, content: HTMLEle
     const from = -rubberBand(stretch)
     stretch = 0
     render()
-    if (typeof content.animate !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    if (typeof content.animate !== 'function' || reducedMotion.matches)
       return
     const style = getComputedStyle(content)
     settle = content.animate([{ translate: `${from}px 0` }, { translate: '0 0' }], {
@@ -60,15 +62,20 @@ export function createElasticWheelScroll(scroller: HTMLElement, content: HTMLEle
   }
 
   function handleWheel(event: WheelEvent) {
-    const max = scroller.scrollWidth - scroller.clientWidth
+    if (event.ctrlKey || event.defaultPrevented)
+      return
+    const width = scroller.clientWidth
+    const max = scroller.scrollWidth - width
     if (max <= 0)
       return
-    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroller.clientWidth : 1
-    const delta = (Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.deltaY) * unit
+    const delta = normalizeWheelDelta(Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.deltaY, event.deltaMode, width)
     if (!delta)
       return
     event.preventDefault()
     interruptSettle()
+    const left = scroller.scrollLeft
+    if (reducedMotion.matches)
+      stretch = 0
 
     let remaining = delta
     // Moving back toward the content first undoes the stretch.
@@ -78,15 +85,16 @@ export function createElasticWheelScroll(scroller: HTMLElement, content: HTMLEle
       stretch = remaining ? 0 : next
     }
     if (remaining) {
-      const target = scroller.scrollLeft + remaining
+      const target = left + remaining
       const clamped = Math.min(max, Math.max(0, target))
-      if (clamped !== scroller.scrollLeft)
+      if (clamped !== left)
         scroller.scrollLeft = clamped
-      stretch += target - clamped
+      if (!reducedMotion.matches)
+        stretch += target - clamped
     }
     render()
     clearTimeout(releaseTimer)
-    releaseTimer = setTimeout(release, RELEASE_DELAY)
+    releaseTimer = stretch ? setTimeout(release, RELEASE_DELAY) : undefined
   }
 
   function dispose() {

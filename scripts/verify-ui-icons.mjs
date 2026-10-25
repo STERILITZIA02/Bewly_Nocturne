@@ -21,7 +21,7 @@ const ICONIFY_VUE_ALLOWED = new Set([
 async function inspect(path) {
   const text = await readFile(path, 'utf8')
   if (text.includes('from \'@iconify/vue\''))
-    assert.ok(ICONIFY_VUE_ALLOWED.has(relative(root, path)), `${path}: use an UnoCSS i-tabler:* class instead of @iconify/vue`)
+    assert.ok(ICONIFY_VUE_ALLOWED.has(relative(root, path).replaceAll('\\', '/')), `${path}: use an UnoCSS i-tabler:* class instead of @iconify/vue`)
   assert.doesNotMatch(text, /(?:mingcute|solar|line-md|ph|mdi|fluent):[a-z0-9-]+/, `${path}: mixed functional icon family`)
   for (const match of text.matchAll(/\btabler:([a-z0-9-]+)/g)) {
     assert.ok(collection.icons[match[1]] || collection.aliases?.[match[1]], `${path}: missing Tabler icon ${match[1]}`)
