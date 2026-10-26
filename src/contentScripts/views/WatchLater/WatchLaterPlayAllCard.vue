@@ -31,6 +31,13 @@ function failCover(pic: string) {
 
 <template>
   <div class="watch-later-play-all-card">
+    <Button
+      type="primary" center round class="watch-later-play-all-card__play"
+      :disabled="disabled"
+      @click="emit('play')"
+    >
+      <i i-tabler:player-play aria-hidden="true" />{{ t('common.play_all') }}
+    </Button>
     <span class="watch-later-play-all-card__preview" aria-hidden="true">
       <span class="watch-later-play-all-card__covers" :style="{ '--cover-gaps': stackCount - 1, '--cover-steps': Math.max(stackCount - 1, 1) }">
         <template v-if="covers.length">
@@ -57,24 +64,16 @@ function failCover(pic: string) {
       </span>
       <span v-if="remaining && (!loading || covers.length)" class="watch-later-play-all-card__remaining">⋯ +{{ remaining }}</span>
     </span>
-    <Button
-      type="primary" block center round class="watch-later-play-all-card__play"
-      :disabled="disabled"
-      @click="emit('play')"
-    >
-      <i i-tabler:player-play aria-hidden="true" />{{ t('common.play_all') }}
-    </Button>
   </div>
 </template>
 
 <style scoped lang="scss">
-// Laid flat in the page hero (no plate of its own): the queue's stacked
-// covers and the play button.
+// The hero's action row (no plate of its own): the play button, then the
+// queue's next covers stacked at the button's height.
 .watch-later-play-all-card {
-  --queue-cover-width: calc(var(--bew-space-12) * 2 + var(--bew-space-4));
+  --queue-cover-width: calc(var(--bew-space-12) + var(--bew-space-6));
   display: flex;
-  flex-direction: column;
-  width: min(100%, 320px);
+  align-items: center;
   min-width: 0;
   gap: var(--bew-space-3);
   color: var(--bew-text-1);
@@ -84,12 +83,13 @@ function failCover(pic: string) {
   align-items: center;
   justify-content: flex-start;
   gap: var(--bew-space-2);
-  width: 100%;
+  flex: 0 1 auto;
   min-width: 0;
 }
 .watch-later-play-all-card__covers {
   position: relative;
-  flex: 1 1 calc(var(--queue-cover-width) + var(--cover-gaps) * var(--bew-space-4));
+  flex: 0 1 calc(var(--queue-cover-width) + var(--cover-gaps) * var(--bew-space-3));
+  width: calc(var(--queue-cover-width) + var(--cover-gaps) * var(--bew-space-3));
   min-width: 0;
   height: calc(var(--queue-cover-width) * 9 / 16);
 }
@@ -104,8 +104,7 @@ function failCover(pic: string) {
   aspect-ratio: 16 / 9;
   overflow: hidden;
   border: 0;
-  // The 12px cover radius + 8px inset follows the filter card's 20px contour.
-  border-radius: var(--bew-surface-radius);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   color: var(--bew-text-1);
   background: var(--bew-content-solid);
@@ -134,6 +133,7 @@ function failCover(pic: string) {
 }
 .b-button.watch-later-play-all-card__play {
   --b-button-border-width: 0;
+  flex: none;
   i {
     width: var(--bew-control-icon-size);
     height: var(--bew-control-icon-size);

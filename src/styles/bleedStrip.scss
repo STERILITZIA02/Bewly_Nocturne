@@ -11,8 +11,10 @@
 // the content after it (a later stacking context) slides up over it, and it
 // fades from when that content reaches its bottom edge until it reaches its
 // top edge, then stops taking input. `$height` is the strip's own height and
-// `$gap` the space between it and the content.
-@mixin bar($height, $gap: var(--bew-space-8)) {
+// `$gap` the space between it and the content. `$start` is how far the page
+// scrolls before it pins (zero at the top of the content; the library hero
+// pins once the strip above it is covered), so it fades only once pinned.
+@mixin bar($height, $gap: var(--bew-space-8), $start: 0px) {
   // Its own formatting context: the scroller's negative top margin must not
   // collapse through and lift the box, or sticky would push it back down.
   display: flow-root;
@@ -24,7 +26,7 @@
   @supports (animation-timeline: scroll()) {
     animation: bew-bleed-strip-cover linear both;
     animation-timeline: --bew-page-scroll;
-    animation-range: $gap calc(#{$gap} + #{$height});
+    animation-range: calc(#{$start} + #{$gap}) calc(#{$start} + #{$gap} + #{$height});
   }
 }
 

@@ -17,19 +17,23 @@ const { t } = useI18n()
         <img v-if="info.upper.face" :src="removeHttpFromUrl(`${info.upper.face}@64w_64h_1c.webp`)" alt="" loading="lazy">
         <span><small>{{ t('favorites.folder_creator') }}</small><span>{{ info.upper.name }}</span></span>
       </a>
-      <button type="button" :disabled="pending" :aria-busy="pending" :aria-pressed="info.like_state === 1" @click="emit('like')">
-        <span i-tabler:thumb-up />{{ t(info.like_state === 1 ? 'favorites.folder_unlike' : 'favorites.folder_like') }}<span>{{ info.cnt_info.thumb_up }}</span>
-      </button>
-      <button type="button" :disabled="own || pending" :aria-busy="!own && pending" :aria-pressed="!own && info.fav_state === 1" @click="!own && emit('subscribe')">
-        <span :class="!own && info.fav_state === 1 ? 'i-tabler:star-filled' : 'i-tabler:star'" />{{ t(!own && info.fav_state === 1 ? 'favorites.unfavorite' : 'favorites.folder_collect') }}<span>{{ info.cnt_info.collect }}</span>
-      </button>
-      <button type="button" @click="emit('share')">
-        <span i-tabler:share />{{ t('favorites.folder_share') }}
-      </button>
+      <div class="favorite-folder-social__buttons">
+        <button type="button" :disabled="pending" :aria-busy="pending" :aria-pressed="info.like_state === 1" @click="emit('like')">
+          <span i-tabler:thumb-up />{{ t(info.like_state === 1 ? 'favorites.folder_unlike' : 'favorites.folder_like') }}<span>{{ info.cnt_info.thumb_up }}</span>
+        </button>
+        <button type="button" :disabled="own || pending" :aria-busy="!own && pending" :aria-pressed="!own && info.fav_state === 1" @click="!own && emit('subscribe')">
+          <span :class="!own && info.fav_state === 1 ? 'i-tabler:star-filled' : 'i-tabler:star'" />{{ t(!own && info.fav_state === 1 ? 'favorites.unfavorite' : 'favorites.folder_collect') }}<span>{{ info.cnt_info.collect }}</span>
+        </button>
+        <button type="button" @click="emit('share')">
+          <span i-tabler:share />{{ t('favorites.folder_share') }}
+        </button>
+      </div>
     </template>
     <template v-else-if="loading">
-      <SkeletonBlock width="8em" height="var(--bew-control-height)" />
-      <SkeletonBlock v-for="index in 3" :key="index" width="5em" height="var(--bew-control-height)" />
+      <SkeletonBlock width="8em" height="var(--bew-space-8)" />
+      <div class="favorite-folder-social__buttons">
+        <SkeletonBlock v-for="index in 3" :key="index" width="5em" height="var(--bew-control-height)" radius="full" />
+      </div>
     </template>
     <button v-else-if="failed" type="button" @click="emit('retry')">
       {{ t('common.operation.refresh') }}
@@ -40,11 +44,17 @@ const { t } = useI18n()
 <style scoped lang="scss">
 @use "../../../styles/truncateFade";
 .favorite-folder-social {
+  // In the hero's action area: who made the folder, then what to do with it.
+  display: grid;
+  justify-items: start;
+  gap: var(--bew-space-3);
+  min-width: 0;
+}
+.favorite-folder-social__buttons {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--bew-space-2);
-  margin-bottom: var(--bew-space-4);
   button {
     display: inline-flex;
     align-items: center;
@@ -89,7 +99,6 @@ const { t } = useI18n()
   gap: var(--bew-space-2);
   max-width: 100%;
   min-height: var(--bew-control-height);
-  margin-inline-end: var(--bew-space-2);
   color: var(--bew-text-1);
   text-decoration: none;
   border-radius: var(--bew-interactive-radius);
@@ -119,7 +128,7 @@ const { t } = useI18n()
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .favorite-folder-social button {
+  .favorite-folder-social__buttons button {
     transition: none;
   }
 }

@@ -1,18 +1,20 @@
 import { onRouteChange } from '~/composables/useRouteState'
 import { BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_PLAYER_CONTEXT } from '~/constants/globalEvents'
 import type { ImmersiveConfig } from '~/constants/immersive'
-import { IMMERSIVE_CONFIG, IMMERSIVE_EVENT, IMMERSIVE_MAIN_ACTIVITY } from '~/constants/immersive'
+import { IMMERSIVE_CONFIG, IMMERSIVE_EVENT, IMMERSIVE_RECOMMENDATIONS } from '~/constants/immersive'
 import { isBewlyPlaybackLayoutReady } from '~/utils/bewlyWidescreen'
 import { hasIframeEscapePriorityState, isBrowserFullscreenActive } from '~/utils/escapePriority'
 import { isIframeDocumentActive, isImmersiveFrame, setIframeDocumentActive } from '~/utils/iframeActivity'
 import type { createIframeDocumentClient, IframeDocumentBinding } from '~/utils/iframeDocument'
 import { getParentMessageData } from '~/utils/iframeMessage'
-import { isImmersiveInput } from '~/utils/immersiveRecommendation'
-import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
-import { resolvePgcEpisodeVideoIds } from '~/utils/pgcEpisode'
+import type { ImmersiveRailWindow } from '~/utils/immersivePlayback'
+import { immersiveRail } from '~/utils/immersivePlayback'
+import { IMMERSIVE_WINDOW_SIZE, isImmersiveInput } from '~/utils/immersiveRecommendation'
 import { getPlaybackNavigationKey, parsePlaybackTabUrl } from '~/utils/playbackTab'
+import { createImmersiveEndPlaybackPolicy } from '~/utils/player'
 import { getPlayerModeContainer, getPlayerRoot, getVideoElement, isPlayerAdvertisement } from '~/utils/playerMedia'
-import { isNativeVideoComponentReady, readNativePlaybackEpisodeId, readNativeQualityState, readVideoPageMetadata, VIDEO_COMPONENT_CHANGED, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
+import type { NativePlaybackUnit } from '~/utils/videoMetadataBridge'
+import { getNativePlaybackUnitKey, readNativeMediaSnapshot, readNativeQualityState, readVideoPageMetadata, VIDEO_COMPONENT_CHANGED, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
 import { createWheelStepper } from '~/utils/wheelStep'
 
 import { hasPlayerMediaMutation, observePlayerDom } from './playerDomLifecycle'
@@ -30,7 +32,14 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
   let generation = 0
   let endGeneration = 0
   let playAttempted = false
+  let playRetries = 0
   let playbackStarted = false
+  let unit: NativePlaybackUnit | undefined
+  let unitKey = ''
+  let boundary = false
+  let endOwned = false
+  let state = 'requesting'
+  let endPolicy: ReturnType<typeof createImmersiveEndPlaybackPolicy> | undefined
   let endedReported = false
   let lastStatus = ''
   let disposed = false
@@ -43,15 +52,17 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
     if (config?.active && !disposed)
       client.send({ type: IMMERSIVE_EVENT, key: config.key, playbackId: config.playbackId, action, navigation, ...extra })
   }
-  function releaseMediaBinding(pause: boolean) {
+  function releaseMediaBinding(reset: boolean) {
     generation++
     mediaCleanup?.()
     mediaCleanup = undefined
-    if (pause) {
-      media?.pause()
+    if (reset) {
       media = null
       source = navigation = ''
+      unit = undefined
+      unitKey = ''
       playAttempted = playbackStarted = endedReported = false
+      playRetries = 0
     }
   }
   function gate(active: boolean) {
@@ -65,20 +76,21 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
       playerCleanup?.()
       playerCleanup = undefined
       player = null
+      endPolicy?.dispose()
+      endPolicy = undefined
+      immersiveRail.value = null
       window.removeEventListener(VIDEO_COMPONENT_CHANGED, sync)
       window.removeEventListener(VIDEO_METADATA_CHANGED, sync)
       window.removeEventListener(IFRAME_PLAYER_CONTEXT, status)
     }
-    const channelId = getPageBridgeChannelId()
-    if (channelId)
-      window.dispatchEvent(new CustomEvent(IMMERSIVE_MAIN_ACTIVITY, { detail: JSON.stringify({ channelId, href: location.href, active, autoPlay: config?.autoPlay === true }) }))
     setIframeDocumentActive(active)
     if (wasActive !== active)
       activityChanged(active)
     if (active) {
+      endPolicy ??= createImmersiveEndPlaybackPolicy()
       if (!stopDom) {
         stopDom = observePlayerDom((records) => {
-          if (!records || hasPlayerMediaMutation(records))
+          if (!records || hasPlayerMediaMutation(records) || records.some(record => record.target instanceof Element && record.target.closest('.auto-play, .continuous-btn, .bpx-player-ctrl-setting')))
             sync()
         })
         stopRoute = onRouteChange(sync)
@@ -96,57 +108,52 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
       return
     const layoutReady = isBewlyPlaybackLayoutReady()
     const playing = !!media && !media.paused && !media.ended
-    const value = JSON.stringify([navigation, layoutReady, playing])
+    const value = JSON.stringify([navigation, layoutReady, playing, state])
     if (value !== lastStatus) {
       lastStatus = value
-      send('status', { layoutReady, playing })
+      send('status', { layoutReady, playing, state })
     }
   }
   function tryPlay() {
-    const expected = config ? parsePlaybackTabUrl(config.targetUrl) : undefined
-    const metadata = media && isNativeVideoComponentReady(media) === true ? readVideoPageMetadata() : null
-    if (config?.active && expected && metadata
-      && (('bvid' in expected && expected.bvid !== metadata.bvid) || ('aid' in expected && expected.aid !== metadata.aid))) {
-      media?.pause()
-      if (!endedReported) {
-        endedReported = true
-        send('close')
-      }
-      return
-    }
-    if (config?.active && config.autoPlay && media?.readyState && !playAttempted
-      && isNativeVideoComponentReady(media) === true) {
+    if (config?.active && config.autoPlay && unit && media?.readyState && !playAttempted && !playbackStarted) {
       playAttempted = true
-      void media.play().catch(() => status())
+      state = 'requesting'
+      const video = media
+      const attemptedUnit = unitKey
+      const attemptedPlayback = config.playbackId
+      void video.play().catch((error: unknown) => {
+        if (media !== video || unitKey !== attemptedUnit || config?.playbackId !== attemptedPlayback || !config?.active || playbackStarted)
+          return
+        const name = error instanceof DOMException ? error.name : ''
+        state = name === 'NotAllowedError' ? 'gesture' : name === 'AbortError' ? 'buffering' : 'error'
+        // Only a later native readiness event may retry an interrupted initial
+        // request. A denied gesture and an already played unit never autoplay.
+        if (name === 'AbortError' && playRetries++ < 1)
+          playAttempted = false
+        status()
+      })
     }
   }
-  async function ended() {
+  function ended() {
     const video = media
     const version = generation
     const endVersion = endGeneration
     const key = config?.key
     const playbackId = config?.playbackId
+    const endedUnit = unitKey
     const isCurrent = () => !disposed && config?.active && config.autoNext && config.key === key && config.playbackId === playbackId
       && generation === version && endGeneration === endVersion && video === media && video === getVideoElement()
       && navigation === getPlaybackNavigationKey(location.href) && source === (video?.currentSrc || video?.getAttribute('src') || '')
-      && video?.ended
+      && video?.ended && !video.seeking && !video.error && unitKey === endedUnit
     const quality = video ? readNativeQualityState(video) : undefined
     if (!isCurrent() || !playbackStarted || endedReported || !video || isPlayerAdvertisement(video)
-      || isNativeVideoComponentReady(video) !== true || (quality?.ready && quality.preview)) {
+      || !unit || !quality?.ready || quality.preview || !Number.isFinite(video.duration) || video.currentTime < video.duration - 0.5) {
       return
     }
-    const target = parsePlaybackTabUrl(location.href)
-    let atEnd = false
-    if (target && ('bvid' in target || 'aid' in target)) {
-      const metadata = readVideoPageMetadata()
-      atEnd = !!metadata && Number(new URL(location.href).searchParams.get('p') || 1) >= metadata.pageCount
-    }
-    else if (target && ('epid' in target || 'seasonId' in target)) {
-      const episode = readNativePlaybackEpisodeId(video)
-      const ids = episode ? await resolvePgcEpisodeVideoIds(episode) : undefined
-      atEnd = ids?.hasNextEpisode === false
-    }
-    if (atEnd && isCurrent()) {
+    const snapshot = readNativeMediaSnapshot(video)
+    if (!snapshot?.unit || getNativePlaybackUnitKey(snapshot.unit) !== endedUnit)
+      return
+    if (boundary && endOwned && endPolicy?.allowsAdvance() && isCurrent()) {
       endedReported = true
       send('ended')
     }
@@ -194,30 +201,52 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
     const next = getVideoElement()
     const nextNavigation = getPlaybackNavigationKey(location.href)
     const nextSource = next?.currentSrc || next?.getAttribute('src') || ''
+    const snapshot = next ? readNativeMediaSnapshot(next) : undefined
+    const nextUnit = snapshot?.unit
+    const nextUnitKey = nextUnit ? getNativePlaybackUnitKey(nextUnit) : ''
     const navigationChanged = nextNavigation !== navigation
     const mediaChanged = next !== media
-    if (mediaChanged || navigationChanged || nextSource !== source || (next && !mediaCleanup)) {
+    const unitChanged = !!nextUnitKey && nextUnitKey !== unitKey
+    if (mediaChanged || navigationChanged || unitChanged || nextSource !== source || (next && !mediaCleanup)) {
       generation++
       mediaCleanup?.()
-      if (media && media !== next)
-        media.pause()
       media = next
       navigation = nextNavigation
       source = nextSource
-      if (navigationChanged) {
+      if (unitChanged) {
+        unit = nextUnit
+        unitKey = nextUnitKey
         playAttempted = playbackStarted = endedReported = false
+        playRetries = 0
+        state = 'requesting'
+        const expected = parsePlaybackTabUrl(config.targetUrl)
+        const sameTarget = expected && (('bvid' in expected && expected.bvid === unit?.bvid)
+          || ('aid' in expected && expected.aid === unit?.aid)
+          || ('epid' in expected && expected.epid === unit?.episodeId)
+          || ('seasonId' in expected && expected.seasonId === unit?.seasonId))
+        send('navigation', { href: sameTarget ? '' : location.href })
       }
-      else if (mediaChanged) {
-        playbackStarted = false
-      }
-      playbackStarted ||= !!next && !next.paused && !next.ended && isNativeVideoComponentReady(next) === true
+      playbackStarted ||= !!nextUnit && !!next && !next.paused && !next.ended
       if (media) {
         const current = media
         const version = generation
         const update = (event: Event) => {
           if (media === current && generation === version) {
-            if (event.type === 'playing')
+            if (event.type === 'playing') {
               playbackStarted = true
+              state = 'playing'
+            }
+            else if (event.type === 'error' && current.error) {
+              state = 'error'
+            }
+            else if (['waiting', 'stalled', 'emptied'].includes(event.type)) {
+              state = 'buffering'
+            }
+            else if (event.type === 'pause' && !current.ended) {
+              // Paused is an observed state, not a user-intent latch: BTR may
+              // pause internally and owns its subsequent recovery.
+              state = current.readyState < 3 ? 'buffering' : 'paused'
+            }
             sync()
           }
         }
@@ -225,7 +254,7 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
           if (event.target === current && media === current && generation === version)
             void ended()
         }
-        const events = ['loadedmetadata', 'emptied', 'playing', 'pause', 'error'] as const
+        const events = ['loadedmetadata', 'canplay', 'emptied', 'playing', 'pause', 'waiting', 'stalled', 'error'] as const
         events.forEach(name => current.addEventListener(name, update))
         current.addEventListener('ended', onEnded)
         mediaCleanup = () => {
@@ -251,13 +280,31 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
         }
       }
     }
-    if (!config?.active)
-      media?.pause()
-    tryPlay()
+    // An EP is one episode; an SS entry resolves to its current episode, never
+    // an inferred season end based on a possibly partial section response.
+    const metadata = nextUnit && !nextUnit.episodeId ? readVideoPageMetadata() : null
+    boundary = !!nextUnit && (!!nextUnit.episodeId || (!!metadata && nextUnit.page === metadata.pageCount))
+    endOwned = !!nextUnit && endPolicy?.sync(boundary, !!metadata && metadata.pageCount > 1) === true
+    if (nextUnit)
+      tryPlay()
+    else if (!playbackStarted)
+      state = 'unknown'
     status()
   }
   function receive(event: MessageEvent) {
-    const data = getParentMessageData(event, [IMMERSIVE_CONFIG])
+    const data = getParentMessageData(event, [IMMERSIVE_CONFIG, IMMERSIVE_RECOMMENDATIONS])
+    if (data?.type === IMMERSIVE_RECOMMENDATIONS) {
+      const value = data.window as ImmersiveRailWindow | undefined
+      if (!config?.active || !client.matches(data) || data.key !== config.key || data.playbackId !== config.playbackId
+        || !value || !Number.isSafeInteger(value.revision) || (immersiveRail.value && value.revision < immersiveRail.value.window.revision)
+        || !Array.isArray(value.items) || value.items.length > IMMERSIVE_WINDOW_SIZE
+        || !value.items.every(item => typeof item?.uniqueId === 'string' && typeof item.displayData?.title === 'string' && typeof item.displayData.cover === 'string')
+        || !['loading', 'hasMore', 'failed'].every(key => typeof (value as unknown as Record<string, unknown>)[key] === 'boolean')) {
+        return
+      }
+      immersiveRail.value = { window: value, visible: config.uiVisible, action: (action, selectedKey) => send(action, { selectedKey, revision: value.revision }) }
+      return
+    }
     if (!data || !client.matches(data) || typeof data.key !== 'string' || typeof data.targetUrl !== 'string' || !parsePlaybackTabUrl(data.targetUrl)
       || !Number.isSafeInteger(data.playbackId) || Number(data.playbackId) < 0 || (config && Number(data.playbackId) < config.playbackId)
       || !['active', 'uiVisible', 'autoPlay', 'autoNext', 'keyboard', 'wheel'].every(key => typeof data[key] === 'boolean')) {
@@ -270,6 +317,8 @@ export function setupImmersiveFrame(client: ReturnType<typeof createIframeDocume
     if (config?.autoNext && data.autoNext === false)
       endGeneration++
     config = data as unknown as ImmersiveConfig & IframeDocumentBinding
+    if (immersiveRail.value)
+      immersiveRail.value = { ...immersiveRail.value, visible: config.uiVisible }
     lastStatus = ''
     gate(config.active)
     if (activating && config.uiVisible && player && !document.hidden) {

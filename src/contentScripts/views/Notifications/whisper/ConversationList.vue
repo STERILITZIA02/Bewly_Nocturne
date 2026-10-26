@@ -2,6 +2,8 @@
 import { useI18n } from 'vue-i18n'
 
 import Button from '~/components/Button.vue'
+import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
+import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import { usePageViewState } from '~/composables/usePageViewState'
 
@@ -50,7 +52,14 @@ const filter = viewState.ref<PrivateSessionFilter>('filter', 'all')
 const typeFilter = defineModel<PrivateSessionTypeFilter>('typeFilter', { default: 'all' })
 const query = defineModel<string>('query', { default: '' })
 const filters: PrivateSessionFilter[] = ['all', 'unread', 'pinned']
-const typeFilters: PrivateSessionTypeFilter[] = ['all', 'user', 'official-assistant', 'other']
+const TYPE_FILTER_ICONS: Record<PrivateSessionTypeFilter, string> = { 'all': 'i-tabler:messages', 'user': 'i-tabler:user', 'official-assistant': 'i-tabler:robot', 'other': 'i-tabler:dots-circle-horizontal' }
+// The conversation type sits behind the search field's funnel, like every rail filter.
+const typeFilterGroups = computed<LibraryFilterGroup[]>(() => [{
+  key: 'type',
+  title: t('notifications.whisper.type_filter_label'),
+  value: typeFilter.value,
+  options: (Object.keys(TYPE_FILTER_ICONS) as PrivateSessionTypeFilter[]).map(value => ({ value, label: t(`notifications.whisper.type_filters.${value}`), icon: TYPE_FILTER_ICONS[value] })),
+}])
 const itemsRef = ref<HTMLElement | null>(null)
 const searchInputRef = ref<InstanceType<typeof LibrarySearchField> | null>(null)
 const sentinelRef = ref<HTMLElement | null>(null)
@@ -267,11 +276,7 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
         @submit="event => submitSearch(event ? (event.shiftKey ? -1 : 1) : undefined)"
       >
         <template #filter>
-          <select v-model="typeFilter" name="conversation-type" :aria-label="t('notifications.whisper.type_filter_label')">
-            <option v-for="typeFilterId in typeFilters" :key="typeFilterId" :value="typeFilterId">
-              {{ t(`notifications.whisper.type_filters.${typeFilterId}`) }}
-            </option>
-          </select>
+          <LibraryFilterMenu :label="t('notifications.whisper.type_filter_label')" :groups="typeFilterGroups" @select="(_, value) => typeFilter = value as PrivateSessionTypeFilter" />
         </template>
       </LibrarySearchField>
       <div v-if="normalizedQuery" class="bew-segment-control bew-segment-control--static bew-segment-control--secondary conversation-list__filters">
@@ -406,8 +411,7 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
   border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
 }
 
-.conversation-list__search-heading,
-.conversation-list__history-results {
+.conversation-list__search-heading {
   padding: var(--bew-space-3);
 }
 .conversation-list__search-heading {
@@ -458,6 +462,11 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
   flex: 1 1 auto;
   min-height: 0;
   padding: var(--bew-space-1);
+}
+// Message results scroll in their own list, which starts at the tools'
+// hairline (one line, user-specified).
+.conversation-list__history-results {
+  padding-top: 0;
 }
 
 .conversation-list__items--empty {

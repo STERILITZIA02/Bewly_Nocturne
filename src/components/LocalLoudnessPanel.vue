@@ -2,9 +2,13 @@
 import { computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import Button from '~/components/Button.vue'
 import Dialog from '~/components/Dialog.vue'
 import LocalLoudnessPreferences from '~/components/LocalLoudnessPreferences.vue'
-import { localLoudnessPanelOpen, localLoudnessSamples, localLoudnessState, notifyLocalLoudnessPanel } from '~/composables/useLocalLoudness'
+import Slider from '~/components/Slider.vue'
+import { audioDelayMs, audioDelayState, localLoudnessPanelOpen, localLoudnessSamples, localLoudnessState, notifyLocalLoudnessPanel, setAudioDelay } from '~/composables/useLocalLoudness'
+import { playerAdjustment, resetPlayerAdjustment } from '~/composables/usePlayerAdjustment'
+import { settings } from '~/logic'
 import { LOCAL_LOUDNESS_SAMPLE_LIMIT } from '~/utils/localLoudnessProtocol'
 
 const { t } = useI18n()
@@ -21,14 +25,47 @@ onUnmounted(closing)
 
 <template>
   <Dialog
-    :title="t('local_loudness.title')" width="480px" :show-footer="false" :frosted-glass="false" @before-close="notifyLocalLoudnessPanel(false)"
+    :title="t(settings.playerAdjustmentEnabled ? 'player_adjustment.title' : 'local_loudness.title')" width="480px" :show-footer="false" :frosted-glass="false" @before-close="notifyLocalLoudnessPanel(false)"
     @close="closing"
   >
-    <LocalLoudnessPreferences />
-    <div class="loudness-status" role="status">
+    <section v-if="settings.playerAdjustmentEnabled" class="player-adjustment">
+      <div class="player-adjustment__buttons">
+        <Button type="secondary" :disabled="!playerAdjustment.available" @click="playerAdjustment.rotation = (playerAdjustment.rotation + 270) % 360">
+          <span i-tabler:rotate-2 />{{ t('player_adjustment.rotate_left') }}
+        </Button>
+        <Button type="secondary" :disabled="!playerAdjustment.available" @click="playerAdjustment.rotation = (playerAdjustment.rotation + 90) % 360">
+          <span i-tabler:rotate-clockwise-2 />{{ t('player_adjustment.rotate_right') }}
+        </Button>
+        <Button type="secondary" :disabled="!playerAdjustment.available" :aria-pressed="playerAdjustment.horizontal" @click="playerAdjustment.horizontal = !playerAdjustment.horizontal">
+          {{ t('player_adjustment.horizontal') }}
+        </Button>
+        <Button type="secondary" :disabled="!playerAdjustment.available" :aria-pressed="playerAdjustment.vertical" @click="playerAdjustment.vertical = !playerAdjustment.vertical">
+          {{ t('player_adjustment.vertical') }}
+        </Button>
+        <Button type="secondary" @click="resetPlayerAdjustment">
+          {{ t('player_adjustment.reset') }}
+        </Button>
+      </div>
+      <p class="bew-help">
+        {{ t('player_adjustment.picture_note') }}
+      </p>
+      <label>{{ t('player_adjustment.delay') }}</label>
+      <Slider
+        :model-value="audioDelayMs" :min="0" :max="1000" :step="10" :label="`${audioDelayMs} ms`"
+        :accessible-label="t('player_adjustment.delay')" :disabled="!playerAdjustment.available" @update:model-value="setAudioDelay"
+      />
+      <p class="bew-help">
+        {{ t('player_adjustment.delay_note') }}
+      </p>
+      <p v-if="audioDelayMs" class="bew-help" role="status">
+        {{ t(`local_loudness.state.${audioDelayState}`) }}
+      </p>
+    </section>
+    <LocalLoudnessPreferences v-if="settings.localLoudnessEnabled" />
+    <div v-if="settings.localLoudnessEnabled" class="loudness-status" role="status">
       {{ t(`local_loudness.state.${localLoudnessState}`) }}
     </div>
-    <figure class="loudness-curve">
+    <figure v-if="settings.localLoudnessEnabled" class="loudness-curve">
       <figcaption>{{ t('local_loudness.curve') }}<span v-if="current"> · {{ current.gainDb.toFixed(1) }} dB</span></figcaption>
       <div class="loudness-plot">
         <svg viewBox="0 0 360 140" role="img" :aria-label="`${t('local_loudness.curve')}${current ? ` · ${current.gainDb.toFixed(1)} dB` : ''}`">
@@ -40,7 +77,7 @@ onUnmounted(closing)
         <span v-for="gain in [6, 0, -18]" :key="gain" class="loudness-scale" :style="{ top: `${y(gain) / 140 * 100}%` }" aria-hidden="true">{{ gain > 0 ? '+' : '' }}{{ gain }}</span>
       </div>
     </figure>
-    <p class="loudness-note">
+    <p v-if="settings.localLoudnessEnabled" class="loudness-note">
       {{ t('local_loudness.limits') }}
     </p>
   </Dialog>
@@ -48,6 +85,22 @@ onUnmounted(closing)
 
 <style scoped lang="scss">
 @use "../styles/dataChart";
+.player-adjustment {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-3);
+  margin-bottom: var(--bew-space-4);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  p {
+    margin: 0;
+  }
+}
+.player-adjustment__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bew-space-2);
+}
 .loudness-status,
 .loudness-note,
 figcaption {

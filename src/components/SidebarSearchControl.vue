@@ -150,14 +150,6 @@ defineExpose({ focus })
   height: var(--bew-icon-size-sm);
   pointer-events: none;
 }
-.library-search-field__filter :deep(select) {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-}
 .library-search-field__filter:is(:hover, :focus-within, :active),
 .library-search-field__filter--active {
   color: var(--bew-message-icon-hover);

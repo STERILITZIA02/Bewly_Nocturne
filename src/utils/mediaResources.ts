@@ -7,7 +7,7 @@ export function releaseElementImages(root: Element | null) {
   })
 }
 
-/** Release a media element owned by a preview or a closing iframe. */
+/** Release a media element owned by a preview. */
 export function releaseMediaElement(media: HTMLMediaElement) {
   media.pause()
   media.srcObject = null
@@ -24,18 +24,7 @@ export function releaseMediaElement(media: HTMLMediaElement) {
 export function releaseIframeMedia(iframe: HTMLIFrameElement | null) {
   if (!iframe)
     return
-  try {
-    iframe.contentDocument?.querySelectorAll<HTMLMediaElement>('video, audio').forEach((media) => {
-      try {
-        releaseMediaElement(media)
-      }
-      catch {
-        // A player already tearing down must not prevent other players from stopping.
-      }
-    })
-  }
-  catch {
-    // Cross-origin documents are released through navigation below.
-  }
+  // The document owns its native player (and any MSE adapter). Mutating its
+  // sources first can start a recovery request while the frame is being closed.
   iframe.src = 'about:blank'
 }

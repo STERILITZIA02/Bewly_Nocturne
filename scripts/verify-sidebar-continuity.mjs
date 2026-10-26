@@ -669,31 +669,36 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(mediaStage, /:class="\{ 'is-layer': imageLayers\.includes\(imageIndex\) \}"\s*:style="\{ zIndex: imageLayers\.indexOf\(imageIndex\) \+ 1 \}"/)
     assert.doesNotMatch(card + mediaStage, /is-fading-in|is-previous|moment-card-image-in|previousImage|imageSwitched/)
     assert.match(mediaStage, /function requestImage\(index: number\)[\s\S]*?imageElements\[next\]\?\.complete[\s\S]*?showImage\(next\)/)
-    // Sideways trackpad swipes step once per gesture; vertical wheels pass on.
-    assert.match(mediaStage, /createWheelStepper\(\{ oncePerGesture: true \}\)/)
+    // Sideways trackpad and touch swipes step once per gesture; vertical wheels
+    // pass on. One helper (utils/sideSwipe) serves the pictures and the library heroes.
+    assert.match(mediaStage, /const imageSwipe = createSideSwipe\(direction => requestImage\(requestedImage\.value \+ direction\), \(\) => images\.length > 1\)/)
+    assert.match(mediaStage, /@wheel="imageSwipe\.wheel"/)
+    const { createSideSwipe } = await import('../src/utils/sideSwipe')
     const { loadSourceFunctions } = await import('./sourceFunctionHarness.ts')
-    const { createWheelStepper } = await import('../src/utils/wheelStep')
-    const images = []
-    const wheel = await loadSourceFunctions('../src/components/MomentCard/MomentMediaStage.vue', ['handleImageWheel', 'handleThumbWheel'], {
-      images: ['a', 'b', 'c'],
-      requestedImage: { value: 0 },
-      imageStepper: createWheelStepper({ oncePerGesture: true }),
-      requestImage: index => images.push(index),
-      thumbElastic: { handleWheel: event => assert.equal(event.defaultPrevented, false, 'the elastic owner decides whether to consume the thumbnail event') },
-    })
+    const steps = []
+    const swipe = createSideSwipe(direction => steps.push(direction))
     for (const options of [{ deltaY: 60 }, { deltaX: 60, ctrlKey: true }]) {
       const event = new window.WheelEvent('wheel', { cancelable: true, ...options })
-      wheel.handleImageWheel(event)
+      swipe.wheel(event)
       assert.equal(event.defaultPrevented, false)
     }
-    assert.deepEqual(images, [])
-    const swipe = new window.WheelEvent('wheel', { deltaX: 60, cancelable: true })
-    wheel.handleImageWheel(swipe)
-    assert.equal(swipe.defaultPrevented, true)
-    assert.deepEqual(images, [1])
-    wheel.handleImageWheel(new window.WheelEvent('wheel', { deltaX: 60, cancelable: true }))
-    assert.deepEqual(images, [1], 'an inertial tail cannot switch another picture')
-    wheel.handleThumbWheel(new window.WheelEvent('wheel', { deltaX: 60, cancelable: true }))
+    assert.deepEqual(steps, [])
+    const sideways = new window.WheelEvent('wheel', { deltaX: 60, cancelable: true })
+    swipe.wheel(sideways)
+    assert.equal(sideways.defaultPrevented, true)
+    assert.deepEqual(steps, [1])
+    swipe.wheel(new window.WheelEvent('wheel', { deltaX: 60, cancelable: true }))
+    assert.deepEqual(steps, [1], 'an inertial tail cannot step again')
+    const touch = (type, x, y = 0) => Object.assign(new window.Event(type), { pointerType: 'touch', pointerId: 1, clientX: x, clientY: y })
+    swipe.pointerdown(touch('pointerdown', 200))
+    swipe.pointerup(touch('pointerup', 100))
+    assert.deepEqual(steps, [1, 1], 'a leftward touch swipe moves to the next')
+    assert.equal(swipe.consumeClick(), true, 'the click a swipe ends in is swallowed once')
+    assert.equal(swipe.consumeClick(), false)
+    const thumbs = await loadSourceFunctions('../src/components/MomentCard/MomentMediaStage.vue', ['handleThumbWheel'], {
+      thumbElastic: { handleWheel: event => assert.equal(event.defaultPrevented, false, 'the elastic owner decides whether to consume the thumbnail event') },
+    })
+    thumbs.handleThumbWheel(new window.WheelEvent('wheel', { deltaX: 60, cancelable: true }))
     // The thumbnail strip: hairlines between thumbnails, a nested smaller
     // corner, shared elastic sideways scrolling.
     assert.match(mediaStage, /v-if="gallery && images\.length > 1"\s*ref="thumbScrollerRef"\s*class="moment-media__thumbs"/)
@@ -707,7 +712,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(portrait, /export const PORTRAIT_MAX_CLEAR_HEIGHT = 1\.2/)
     assert.match(mediaStage, /\? Math\.max\(1 \/ PORTRAIT_MAX_CLEAR_HEIGHT, ratio\)/)
     assert.match(mediaStage, /\.moment-media--portrait \.moment-media__cover--images \{\s*box-sizing: content-box;\s*padding-bottom: var\(--moment-media-fade\);/)
-    assert.match(toneComposable, /const band = \[getMomentThumbnailUrl\(image, 64\), Math\.max\(0, shown - 0\.15\), shown\] as const/)
+    assert.match(toneComposable, /: \[getMomentThumbnailUrl\(image, 64\), Math\.max\(0, shown - 0\.15\), shown, 'rows'\]/)
     assert.match(card, /@use "\.\.\/\.\.\/styles\/imageTone" as \*;/, 'the tone mixins are shared (library heroes use them too)')
     assert.match((await readFile(fileURLToPath(new URL('../src/styles/imageTone.scss', import.meta.url)), 'utf8')), /@mixin toned-surface \{[\s\S]*?--bew-elevated-over-page: var\(--moment-tone\);[\s\S]*?--bew-text-1: var\(--moment-tone-fg\);[\s\S]*?color: var\(--bew-text-1\);/)
     assert.match(card, /\.moment-card--portrait-top \.moment-card__surface \{\s*@include toned-surface;/)
@@ -936,6 +941,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.equal(tone.peekImageBandTone('u', 0.85, 1), undefined, 'not read yet')
     assert.equal(await tone.readImageBandTone('u', 0.85, 1), null, 'no image in this runtime: no tone')
     assert.equal(tone.peekImageBandTone('u', 0.85, 1), null, 'settled reads are known at once')
+    assert.equal(tone.peekImageBandTone('u', 0.85, 1, 'columns'), undefined, 'a side band (the hero cover\'s left edge) is its own read')
     for (let index = 0; index < 200; index++)
       await tone.readImageBandTone(`fill-${index}`, 0, 1)
     assert.equal(tone.peekImageBandTone('u', 0.85, 1), undefined, 'evicted with its promise')
@@ -1079,7 +1085,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.equal(matchesMomentSearch(post, day, text, getMomentSearchCutoff(day, now)), false)
     assert.match(sidebar, /<LibrarySearchField[\s\S]*<template #filter>\s*<LibraryFilterMenu :label="t\('moments\.search_filter'\)" :groups="filterGroups" @select="selectFilter" \/>/, 'the shared rail search field, with the shared funnel menu')
     assert.match(sidebar, /key: 'kind', title: t\('moments\.search_type'\)[\s\S]*key: 'time', title: t\('moments\.search_time'\)/, 'type and time are titled groups of one menu')
-    assert.match(await read('components/LibraryFilterMenu.vue'), /section: group\.title,\s*kind: 'radio' as const,\s*closeOnSelect: false,/, 'the shared menu titles each group and keeps open on a choice')
+    assert.match(await read('components/LibraryFilterMenu.vue'), /section: group\.title[^}]*\}[\s\S]*kind: 'radio', closeOnSelect: false/, 'the shared menu titles each group and keeps open on a choice')
     assert.match(await read('components/ContextMenu.vue'), /v-if="option\.section && option\.section !== options\[index - 1\]\?\.section"/, 'ContextMenu titles a group where its section starts')
     assert.match(page, /&& matchesMomentSearch\(moment, momentSearch\.value/, 'one predicate with the settings filters')
     assert.match(page, /\[momentFilterPolicy, momentSearch\]/, 'a change re-filters the loaded posts')
@@ -1114,23 +1120,34 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
   })
   check('library pages: flat rails, one funnel filter menu, strips under the rail glass, immersive heroes, covers without text, animated changes', async () => {
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
-    const [history, watchLater, favorites, favoritesLayout, filterPanel, sidebarItem, playAll, hero, grid, cardWindow, gridCard] = await Promise.all([
+    const [history, watchLater, favorites, favoritesLayout, sidebarItem, playAll, hero, grid, gridCard] = await Promise.all([
       read('contentScripts/views/History/History.vue'),
       read('contentScripts/views/WatchLater/WatchLater.vue'),
       read('contentScripts/views/Favorites/FavoritesPage.vue'),
       read('contentScripts/views/Favorites/favoritesLayout.scss'),
-      read('contentScripts/views/Favorites/FavoriteFilterPanel.vue'),
       read('contentScripts/views/Favorites/FavoriteSidebarItem.vue'),
       read('contentScripts/views/WatchLater/WatchLaterPlayAllCard.vue'),
       read('components/LibraryHero.vue'),
       read('components/VideoCardGrid.vue'),
-      read('composables/useCardWindow.ts'),
       read('contentScripts/views/WatchLater/WatchLaterGridCard.vue'),
     ])
     // Flat rails: no module plates.
-    for (const [name, source] of [['filter panel', filterPanel], ['folder rows', sidebarItem], ['play all', playAll]])
+    for (const [name, source] of [['folder rows', sidebarItem], ['play all', playAll]])
       assert.doesNotMatch(source, /--bew-message-pinned-background|--bew-library-filter-radius/, `${name}: no plate`)
-    assert.match(filterPanel, /\.favorite-filter \{\s*@include railSection\.flat;/)
+    // Every rail filters from its search field's funnel (the Moments menu):
+    // the Favorites title keyword is the search text, the uploader the strip
+    // over the content, scope and partition the menu; no panel, no <select>.
+    for (const path of ['contentScripts/views/Favorites/FavoriteFilterPanel.vue', 'contentScripts/views/WatchLater/WatchLaterFilterSection.vue'])
+      assert.equal(existsSync(fileURLToPath(new URL(`../src/${path}`, import.meta.url))), false, `${path} is replaced by the funnel menu`)
+    assert.doesNotMatch(await read('contentScripts/views/Favorites/favoriteFilter.ts'), /keywords/)
+    assert.match(favorites, /<LibraryFilterMenu\s+:label="t\('library_tools\.filters'\)" :groups="filterGroups"[^>]*@open="requestPartitions" @select="selectRailFilter"/)
+    assert.match(favorites, /\{ key: 'scope', title: t\('library_tools\.search_scope'\)/)
+    assert.match(favorites, /\{ key: 'partition', title: t\('favorites\.filter_partition'\)/)
+    assert.match(favorites, /pending: filterScan\.partitionsLoading\.value && !partitions\.length/, 'partitions still loading ring in the menu')
+    const conversations = await read('contentScripts/views/Notifications/whisper/ConversationList.vue')
+    assert.match(conversations, /<LibraryFilterMenu :label="t\('notifications\.whisper\.type_filter_label'\)" :groups="typeFilterGroups"/)
+    for (const [name, source] of [['favorites', favorites], ['conversations', conversations], ['search field', await read('components/SidebarSearchControl.vue')]])
+      assert.doesNotMatch(source, /<select|deep\(select\)/, `${name}: no native select behind the funnel`)
     // The open folder is a card after the portrait moment cards: its cover
     // unfolds on top into the colour where it is cut, text in black or white.
     assert.match(sidebarItem, /const tone = useImageTone\(\(\) => \(\{ portrait: toned\.value, image: props\.cover \}\)\)/)
@@ -1147,6 +1164,24 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     // The search and the button row under it end with an edge-to-edge hairline.
     for (const source of [history, watchLater])
       assert.match(source, /<div class="library-rail-tools library-rail-tools--ruled">/)
+    assert.match(favorites, /<div class="library-rail-tools library-rail-tools--ruled favorite-rail-tools">/)
+    // History rows (user-specified): one group per interval, a heading over a
+    // strip of shared video cards; the interval button swaps for its choices
+    // like batch management, and deleting is in the card menu.
+    assert.match(history, /const historyGroups = computed\(\(\) => groupHistoryItems\(sortedHistory\.value, interval\.value\)\)/)
+    assert.match(history, /<HistoryGroupRow[\s\S]*?<VideoCard\s+:video="getHistoryVideo\(item\)" :menu-item="item" :get-menu-extra-groups="getHistoryMenuGroups"/)
+    assert.match(history, /<template v-if="hasWatchProgress\(item\)" #coverBottom>/)
+    assert.match(history, /<Transition name="page-fade" mode="out-in" v-bind="retiringTransition">\s*<div\s+v-if="choosingInterval" key="intervals"[\s\S]*?role="radiogroup"[\s\S]*?<Button\s+v-else key="interval"/)
+    assert.match(history, /function selectInterval\(value: HistoryGroupInterval\) \{\s*choosingInterval\.value = false/)
+    assert.match(history, /v-if="batch\.managing\.value" key="selection"/)
+    assert.doesNotMatch(history, /SettingsSegmentedControl|historyLayout/, 'rows replace the list and grid layouts')
+    const groupRow = await read('contentScripts/views/History/HistoryGroupRow.vue')
+    assert.match(groupRow, /useMeasuredDisclosure\(outer, inner, expanded/)
+    assert.match(groupRow, /<LibraryBleedStrip v-if="rendered \|\| expanded" :label="label">/)
+    assert.match(groupRow, /overflow: visible clip;[\s\S]*&\.is-settled \{\s*overflow: visible;/, 'folding clips only vertically, and only while it moves')
+    assert.match(await read('components/VideoCard/components/VideoCardCover.vue'), /<div v-if="\$slots\.coverBottom" class="video-card-cover__bottom">/)
+    assert.match(await read('components/PageAsyncLoading.vue'), /<HistoryGroupSkeleton v-if="page === AppPage\.History" \/>/)
+    assert.match(await read('components/PageAsyncLoading.vue'), /<div class="library-rail-tools library-rail-tools--ruled">/)
     assert.match(await read('components/LibraryWorkspace.vue'), /\.library-rail-tools--ruled \{[^}]*max-width: none;[^}]*margin-inline: calc\(-1 \* var\(--bew-sidebar-inline-padding\)\);[^}]*border-bottom: var\(--bew-hairline\) solid var\(--bew-separator-color\);/)
     // Bleeding sections lift the rail content's 100% cap, or their right end falls short.
     assert.match(await read('components/LibraryWorkspace.vue'), /\.library-rail-content > \* \{[^}]*max-width: 100%;/)
@@ -1165,23 +1200,103 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     }
     // Strips under the rail glass, pinned and covered like the Moments up-list.
     // The first unfiltered page holds the strips with skeletons of the same size.
-    assert.match(history, /<section v-if="historyDays\.length > 1 \|\| \(showSkeletons && !historyList\.length\)" class="history-day-strip"[\s\S]*?<LibraryBleedStrip/)
+    assert.match(history, /const showDayStrip = computed\(\(\) => historyDays\.value\.length > 1 \|\| \(showSkeletons\.value && !historyList\.length\)\)/)
+    assert.match(history, /<section v-if="showDayStrip" class="history-day-strip"[\s\S]*?<LibraryBleedStrip/)
     assert.match(history, /\.history-day-strip \{\s*@include bleedStrip\.bar\(/)
-    assert.match(history, /cardWindow\.offsetOf\(key\)/, 'a day outside the window is found from its row offset')
-    assert.match(cardWindow, /function offsetOf\(key: CardKey\)/)
+    // A day starts the list at its first group, like choosing it in the hero.
+    assert.match(history, /function jumpToDay\(dayKey: string\) \{[\s\S]*?selectStartGroup\(group\.key\)/)
     assert.match(favorites, /<section v-if="showUploaderStrip \|\| uploaderStripPending" class="favorite-uploader-strip"[\s\S]*?<LibraryBleedStrip v-if="!showUploaderStrip"[\s\S]*?<SkeletonBlock width="var\(--favorite-uploader-tile\)"/)
     assert.match(favoritesLayout, /\.favorite-uploader-strip \{[^}]*@include bleedStrip\.bar\(/)
     assert.match(favorites, /mids: mid === undefined \|\| isStripUploader\(mid\) \? \[\] : \[mid\]/, 'an uploader is a one-tap filter, again to clear it')
     // Immersive heroes; the hero never fades as a whole (its blur would stop).
-    assert.match(history, /<LibraryHero v-if="resumeItem && !batch\.managing\.value"/)
-    assert.match(watchLater, /<LibraryHero v-if="!batch\.managing\.value" :image="currentWatchLaterList\[0\]\?\.pic"[\s\S]*?<WatchLaterPlayAllCard/)
-    assert.match(favorites, /<LibraryHero :image="heroImage" :media-pending="heroMediaPending"/)
+    assert.match(history, /<LibraryHeroCarousel\s+v-if="showHero && !batch\.managing\.value" :items="heroItems" :current="heroKey"/)
+    assert.match(watchLater, /<LibraryHeroCarousel v-if="!batch\.managing\.value" :items="\[\{ key: 'queue'[\s\S]*?<LibraryHero\s+:image="currentWatchLaterList\[0\]\?\.pic"[\s\S]*?<WatchLaterPlayAllCard/)
+    assert.match(favorites, /<LibraryHeroCarousel\s+:items="heroItems" :current="heroKey"[\s\S]*?<LibraryHero v-bind="getHeroCard/)
+    // A row of cards (user-specified): the current one about 85% wide, the next
+    // peeking; a peek or a sideways swipe selects it, and the page follows.
+    const carousel = await read('components/LibraryHeroCarousel.vue')
+    assert.match(carousel, /--carousel-slide: 85cqi;/)
+    assert.match(carousel, /<template v-if="Math\.abs\(itemIndex - index\) <= LIBRARY_HERO_RENDER_RADIUS">/, 'a few cards each side stay mounted')
+    assert.match(await read('constants/library.ts'), /export const LIBRARY_HERO_RENDER_RADIUS = 2/)
+    // The order (and Watch Later's list / grid) are groups of the funnel menu
+    // (user-specified), not a row of buttons under the search field.
+    assert.match(history, /\{ key: 'sort', title: t\('library_tools\.filter_sort'\), value: sortOrder\.value/)
+    assert.match(watchLater, /\{ key: 'sort', title: t\('library_tools\.filter_sort'\), value: sortOrder\.value/)
+    assert.match(watchLater, /\.\.\.settings\.value\.enableGridLayoutSwitcher\s*\? \[\{ key: 'layout', title: t\('library_tools\.filter_layout'\), value: settings\.value\.watchLaterLayoutMode/)
+    assert.match(watchLater, /else if \(key === 'layout'\) \{\s*settings\.value\.watchLaterLayoutMode = value/)
+    for (const source of [history, watchLater]) {
+      assert.match(source, /const filterActive = computed\(\(\) => has\w+Filters\([^)]*\) \|\| sortOrder\.value !== 'newest'\)/, 'the funnel lights for the oldest-first order')
+      assert.doesNotMatch(source, /SettingsSegmentedControl|-sort-button|layout-switcher/)
+    }
+    assert.match(history, /groups\.slice\(Math\.max\(0, index - LIBRARY_HERO_RENDER_RADIUS\), index \+ LIBRARY_HERO_RENDER_RADIUS \+ 1\)/, 'history builds the rendered cards only')
+    assert.match(favorites, /distance <= LIBRARY_HERO_RENDER_RADIUS \+ 1[\s\S]*?loadFolderCover\(folder\.id, 'hero'\)/, 'the hero reads covers a card past what it renders, in its own lane')
+    assert.match(carousel, /class="library-hero-carousel__peek"[\s\S]*?@click="selectPeek\(itemIndex\)"/)
+    assert.match(carousel, /A scrim\s+\/\/ dims it: the card's own opacity would stop its progressive blur\./)
+    assert.match(favorites, /function selectHeroItem\(key: string\) \{[\s\S]*?if \(folder\)\s+changeCategory\(folder\)\s+else if \(season\)\s+changeSeason\(season\)/, 'the hero opens a folder the way the rail does')
+    // History: choosing a period starts the list below at it (no scrolling),
+    // the rows fading over once the hero has slid.
+    assert.match(history, /@select="selectStartGroup"/)
+    assert.match(history, /const start = showHero\.value \? groups\.findIndex\(group => group\.key === startGroupKey\.value\) : -1\s*return start > 0 \? groups\.slice\(start\) : groups/)
+    assert.match(history, /keys: computed\(\(\) => shownGroups\.value\.map\(group => `group:\$\{group\.key\}`\)\)/)
+    assert.match(history, /<div :key="`\$\{interval\}:\$\{startGroupKey \?\? ''\}`" ref="historyContainer" class="history-groups">/)
+    assert.doesNotMatch(history, /new IntersectionObserver|jumpToGroup/)
+    // Motion first, then content: the row slides (registered), then selects.
+    assert.match(carousel, /holdAnimation\(animation\)\s*void animation\.finished\.then\(async \(\) => \{\s*finish\(\)/)
+    // Stepless: the row follows the gesture (written once a frame, directly on
+    // the track, no inherited variable), then settles on the neighbour only
+    // past halfway, else back.
+    assert.match(carousel, /current\.frame = requestAnimationFrame\(\(\) => \{[\s\S]*?element\.style\.transform = `translateX\(\$\{current\.base - resisted\}px\)`/)
+    assert.match(carousel, /const direction = Math\.abs\(current\.offset\) > current\.step \/ 2 \? Math\.sign\(current\.offset\) : 0/)
+    assert.match(carousel, /touch-action: pan-y;/)
+    assert.doesNotMatch(carousel, /createSideSwipe|createWheelStepper/, 'no steps per gesture')
+    // A switch keeps the cards: one LibraryHero per slide; only what changes fades.
+    assert.match(favorites, /<LibraryHero v-bind="getHeroCard\(item\.key, current\)">/)
+    assert.match(favorites, /const image = \(folder && folderCovers\[folder\.id\]\) \|\| season\?\.cover \|\| heroImage\.value/, 'the cover it had as a neighbour stays')
+    assert.match(hero, /<Transition name="library-hero-swap">\s*<div v-if="\$slots\.actions" class="library-hero__actions">/)
+    assert.match(carousel, /class="library-hero-carousel__peek" :class="\{ 'is-hidden': itemIndex === index \}"/)
+    assert.match(favorites, /<Transition name="page-fade" mode="out-in" v-bind="retiringTransition">\s*<Empty\s+v-if="!filterActive && favoriteView === 'season'[\s\S]*?<VideoCardGrid\s+v-else\s+:key="favoriteGridStateKey"/, 'a new folder\'s grid fades in after the old one')
+    assert.match(favorites, /<LibraryBleedStrip v-else :key="`uploaders:\$\{currentFolderId\}`"/)
+    assert.doesNotMatch(carousel, /transition: transform var\(--bew-duration-moderate\) var\(--bew-ease-standard\);\s*\}\s*\.library-hero-carousel__slide/, 'the slide is the one registered animation, not a CSS transition')
+    // Under the rail glass like the strips.
+    assert.match(carousel, /\.library-hero-carousel__viewport \{[^}]*margin-inline: calc\(-1 \* var\(--bew-bleed-strip-start\)\) calc\(-1 \* var\(--library-content-inline-padding\)\);/)
+    assert.match(carousel, /padding-inline-start: var\(--bew-bleed-strip-start\);/)
+    // Loading keeps the row's shape: the next card is held too.
+    assert.match(await read('components/PageAsyncLoading.vue'), /<LibraryHeroSkeleton v-if="\[AppPage\.Favorites, AppPage\.History, AppPage\.WatchLater\]\.includes\(page\)" :single="page === AppPage\.WatchLater" \/>/)
+    assert.match(history, /<LibraryHeroSkeleton v-else-if="showSkeletons && !historyList\.length && !batch\.managing\.value" class="history-hero" \/>/)
+    assert.match(favorites, /return \[\{ key: 'current', label: selectedContentTitle\.value \}, \{ key: 'loading', label: '' \}\]/)
+    assert.match(favorites, /mediaPending: Boolean\(folder && folderCovers\[folder\.id\] === undefined\)/)
+    // Side by side (user-specified): the info on the left, laid out alike on
+    // every page through the hero's own eyebrow / title / meta, the actions
+    // along the bottom; the cover on the right gives the colour of its left edge.
+    assert.match(hero, /<div class="library-hero__body">[\s\S]*?<\/div>\s*<div v-if="cover \|\| mediaPending" class="library-hero__media"/, 'the info comes before the cover')
+    assert.match(hero, /<ProgressiveBlur v-if="cover && !settings\.disableFrostedGlass" edge="left"/)
+    assert.match(hero, /background: linear-gradient\(to right, var\(--moment-tone\), transparent\);/)
+    assert.match(hero, /object-position: left center;/, 'a taller card keeps the sampled edge in place')
+    assert.match(hero, /\.library-hero__body \{\s*display: flex;\s*flex: 0 0 max\(30%, 240px\);/, 'the info takes about 30% of the card')
+    // Pinned and covered like the strips, fading only once it is pinned: the
+    // range starts after the scroll that brings it to the top (the strip above).
+    assert.match(await read('styles/bleedStrip.scss'), /@mixin bar\(\$height, \$gap: var\(--bew-space-8\), \$start: 0px\) \{[\s\S]*?animation-range: calc\(#\{\$start\} \+ #\{\$gap\}\) calc\(#\{\$start\} \+ #\{\$gap\} \+ #\{\$height\}\);/)
+    assert.match(carousel, /@include bleedStrip\.bar\(\s*var\(--bew-library-hero-height\),\s*var\(--library-hero-gap, var\(--bew-space-6\)\),\s*var\(--library-hero-pin, 0px\)\s*\);/)
+    assert.match(history, /:style="showDayStrip \? \{ '--library-hero-pin': 'calc\(var\(--bew-control-height\) \+ var\(--bew-space-6\) \* 2\)' \} : undefined"/)
+    assert.match(favorites, /:style="showUploaderStrip \|\| uploaderStripPending \? \{ '--library-hero-pin': 'calc\(var\(--bew-library-uploader-tile-size\) \+ var\(--bew-space-2\) \+ var\(--bew-line-height-control\) \+ var\(--bew-space-6\)\)' \} : undefined"/)
+    assert.match(favorites, /\/\/ Positioned and later: it slides up over the pinned hero\.\s*position: relative;/)
+    for (const source of [history, watchLater, favoritesLayout])
+      assert.doesNotMatch(source, /\.(?:history|watch-later|favorites)-hero \{\s*position: relative;/, 'a page must not undo the hero\'s pin')
+    assert.match(hero, /\.library-hero__media \{\s*position: relative;\s*flex: 1 1 0;/, 'the cover takes the rest')
+    assert.match(await read('styles/variables.scss'), /--bew-library-hero-height: calc\(\s*clamp\(160px, 22vw, 260px\) \+ var\(--bew-space-4\) \* 2 \+ var\(--bew-line-height-heading\) \* 2\s*\);/, 'the hero keeps its earlier height and shape')
+    assert.match(hero, /\.library-hero__body \{[^}]*flex-direction: column;\s*justify-content: space-between;/)
+    assert.match(history, /eyebrow: groupLabel\(group\),\s*title: item\.show_title \|\| item\.title,/)
+    assert.match(watchLater, /:title="t\('watch_later\.title'\)" :meta="t\('library_tools\.video_count'/)
+    assert.match(favorites, /title: selectedContentTitle\.value, meta: heroMeta\.value/)
+    for (const source of [history, watchLater, favorites, favoritesLayout])
+      assert.doesNotMatch(source, /(?:history|watch-later)-hero__(?:eyebrow|title|meta)|favorites-main-heading/, 'pages do not restyle the hero text')
     assert.match(watchLater, /:media-pending="isLoading && !currentWatchLaterList\.length"/)
     // The cover band is held by a skeleton until its URL arrives, then fades in once.
     assert.match(hero, /<div v-if="cover \|\| mediaPending" class="library-hero__media"/)
     assert.match(hero, /watch\(cover, src => coverLoaded\.value = hasLoadedPicture\(src\)/)
-    assert.match(hero, /useImageTone\(\(\) => \(\{ portrait: Boolean\(props\.image\), image: props\.image \}\)\)/)
-    assert.match(hero, /\.library-hero-enter-from,\s*\.library-hero-leave-to \{\s*transform: scale\(0\.98\);\s*\.library-hero__surface \{\s*background-color: transparent;/)
+    assert.match(hero, /useImageTone\(\(\) => \(\{ portrait: Boolean\(props\.image\), image: props\.image, edge: 'left' \}\)\)/)
+    assert.match(hero, /\.library-hero-enter-from,\s*\.library-hero-leave-to \{\s*\.library-hero__surface \{\s*background-color: transparent;/)
+    assert.match(carousel, /\.library-hero-enter-from,\s*\.library-hero-leave-to \{\s*transform: scale\(0\.98\);\s*\}/, 'the row scales while each card fades its layers')
     assert.doesNotMatch(hero, /\.library-hero-(?:enter-from|leave-to)[^{]*\{\s*opacity/)
     // Covers carry no text: times and labels move into the details.
     for (const source of [history, watchLater])
@@ -1193,12 +1308,11 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
   })
   check('loading: a load of unknown count shows only the ring in the middle, never skeletons or progress text', async () => {
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
-    const [fill, grid, indicator, favorites, filterPanel, history, watchLater, moments] = await Promise.all([
+    const [fill, grid, indicator, favorites, history, watchLater, moments] = await Promise.all([
       read('components/LoadingFill.vue'),
       read('components/VideoCardGrid.vue'),
       read('components/PageLoadingIndicator.vue'),
       read('contentScripts/views/Favorites/FavoritesPage.vue'),
-      read('contentScripts/views/Favorites/FavoriteFilterPanel.vue'),
       read('contentScripts/views/History/History.vue'),
       read('contentScripts/views/WatchLater/WatchLater.vue'),
       read('contentScripts/views/Moments/Moments.vue'),
@@ -1213,8 +1327,6 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(favorites, /:indeterminate="filterActive"/)
     assert.doesNotMatch(favorites, /filter_status|favorite-filter-status|filterScan\.pause/)
     assert.match(favorites, /if \(filterActive\.value\)\s+filterScan\.continueScan\(\)\s+else\s+void loadNextPage\(\)/)
-    assert.doesNotMatch(filterPanel, /option\.count[^}]*\}\}<\/span>\s*<\/button>\s*<\/div>\s*<p v-else class="bew-help">\s*\{\{ t\('favorites\.filter_uploader_empty'\)/, 'uploader counts would only cover the pages read so far')
-    assert.match(filterPanel, /<LoadingRing :loading="partitionsLoading"/)
     // History and Watch Later: filtered reads take the ring; unfiltered pages keep skeletons.
     assert.match(history, /const showSkeletons = computed\(\(\) => isLoading\.value && !filtersActive\.value\)/)
     assert.match(history, /<LoadingFill v-if="pendingPhase !== 'idle'" ref="pendingRef" :loading="pendingLoading" \/>/)
@@ -1371,7 +1483,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     // them reaching its top edge, then stops taking input (user request).
     assert.match(workspace, /\.library-workspace__content \{[^}]*padding: calc\(var\(--bew-top-bar-height\) \+ var\(--bew-space-4\)\)/)
     assert.match(section, /\.moments-up-list \{[^}]*--moments-up-list-height: calc\(var\(--bew-moments-up-tile-size\) \+ var\(--bew-space-2\) \+ var\(--bew-line-height-control\)\);[^}]*@include bleedStrip\.bar\(var\(--moments-up-list-height\), var\(--moments-up-list-gap\)\);/)
-    assert.match(strip, /@mixin bar\(\$height, \$gap: var\(--bew-space-8\)\) \{[^}]*position: sticky;\s*top: calc\(var\(--bew-top-bar-height\) \+ var\(--bew-space-4\)\);\s*height: \$height;\s*margin-bottom: \$gap;/)
+    assert.match(strip, /@mixin bar\(\$height, \$gap: var\(--bew-space-8\), \$start: 0px\) \{[^}]*position: sticky;\s*top: calc\(var\(--bew-top-bar-height\) \+ var\(--bew-space-4\)\);\s*height: \$height;\s*margin-bottom: \$gap;/)
     // At rest the names and a hovered tile's scale and shadow stay clear of the
     // feed: a 32px gap, and no margin collapsing through the box (the
     // scroller's -16px top margin would lift it and sticky push it back down
@@ -1379,7 +1491,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(section, /\.moments-up-list \{[^}]*--moments-up-list-gap: var\(--bew-space-8\);/)
     assert.match(strip, /@mixin bar[^}]*display: flow-root;/)
     assert.match(strip, /@mixin scroller \{[^}]*margin-block: calc\(-1 \* var\(--bew-space-4\)\);/)
-    assert.match(strip, /@supports \(animation-timeline: scroll\(\)\) \{\s*animation: bew-bleed-strip-cover linear both;\s*animation-timeline: --bew-page-scroll;\s*animation-range: \$gap calc\(#\{\$gap\} \+ #\{\$height\}\);/)
+    assert.match(strip, /@supports \(animation-timeline: scroll\(\)\) \{\s*animation: bew-bleed-strip-cover linear both;\s*animation-timeline: --bew-page-scroll;\s*animation-range: calc\(#\{\$start\} \+ #\{\$gap\}\) calc\(#\{\$start\} \+ #\{\$gap\} \+ #\{\$height\}\);/)
     // The page-level loading skeleton places the bar and the feed the same way.
     const asyncLoading = await read('components/PageAsyncLoading.vue')
     assert.ok(asyncLoading.indexOf('class="bew-page-async-loading__moments-users"') < asyncLoading.indexOf('<MomentsContentLayout'))

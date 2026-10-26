@@ -145,12 +145,15 @@
   --bew-moments-up-tile-size: calc(var(--bew-video-card-min-width) * 21 / 40);
   // The Favorites uploader strip's tiles (the page and its loading skeleton).
   --bew-library-uploader-tile-size: calc(var(--bew-space-12) + var(--bew-space-6));
+  // A library page's head (info on the left, the cover on the right) keeps the
+  // height it had stacked: the cover band plus the padding and a two-line title.
+  --bew-library-hero-height: calc(
+    clamp(160px, 22vw, 260px) + var(--bew-space-4) * 2 + var(--bew-line-height-heading) * 2
+  );
   --bew-moments-hot-search-compact-max-height: 240px;
   --bew-moments-hot-search-max-height: calc(
     100dvh - var(--bew-top-bar-height) - var(--bew-space-4) - var(--bew-space-6)
   );
-  --bew-history-timeline-gutter: var(--bew-space-6);
-  --bew-history-timeline-node: var(--bew-space-2);
   --bew-history-timeline-color: var(--bew-wheel-text-active);
   // Keep the outer contour offset by the actual inset from the inner controls.
   --bew-library-filter-radius: calc(var(--bew-interactive-radius) + var(--bew-library-filter-padding));
@@ -207,7 +210,6 @@
   --bew-moment-forward-picker-max-height: 320px;
   --bew-moment-forward-picker-state-min-height: 112px;
   --bew-widescreen-episode-max-height: 560px;
-  --bew-history-cover-width: clamp(144px, 18vw, 200px);
   --bew-media-search-max-width: 1920px;
   --bew-media-result-cover-width: 160px;
   --bew-media-episode-control-width: 240px;

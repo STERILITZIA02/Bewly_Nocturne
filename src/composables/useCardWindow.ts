@@ -484,11 +484,5 @@ export function useCardWindow(options: {
     slots.clear()
     measurements.clear()
   })
-  /** The laid-out top of a key's row inside the container, while windowed. */
-  function offsetOf(key: CardKey) {
-    const index = indices.get(key)
-    return active && index !== undefined ? metrics.offset(Math.floor(index / options.columns.value)) : undefined
-  }
-
-  return { ranges, loadingRange, setElement, captureSnapshot, offsetOf }
+  return { ranges, loadingRange, setElement, captureSnapshot }
 }

@@ -4,7 +4,6 @@ import Empty from '~/components/Empty.vue'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import type { GridLayoutType } from '~/logic'
-import { settings } from '~/logic'
 import { getRecommendationRequestIdentity } from '~/logic/recommendationMode'
 import type { AppVideoElement, VideoElement } from '~/stores/forYouStore'
 import { findImmersiveVideo } from '~/utils/immersiveRecommendation'
@@ -19,7 +18,7 @@ const emit = defineEmits<{
   (e: 'afterLoading'): void
 }>()
 const immersiveOpen = ref(false)
-const { currentVideoList, isLoading, noMoreContent, needToLoginFirst, appAuthorizationRequired, requestFailed, recommendationEmptyDescription, isWebRecommendationMode, requiresManualFilteredPaging, retryRecommendation, jumpToLoginPage, handleLoadMore, handleManualLoadMore, handleAppAuthorization, initData, undoRefresh, goForward, canGoBack, canGoForward } = useForYouRecommendations(emit, () => immersiveOpen.value)
+const { currentVideoList, feedGeneration, recommendationDataState, isLoading, noMoreContent, needToLoginFirst, appAuthorizationRequired, requestFailed, recommendationEmptyDescription, isWebRecommendationMode, requiresManualFilteredPaging, retryRecommendation, jumpToLoginPage, handleLoadMore, handleManualLoadMore, handleAppAuthorization, initData, undoRefresh, goForward, canGoBack, canGoForward } = useForYouRecommendations(emit, () => immersiveOpen.value)
 const ImmersiveFeed = defineAsyncComponent(() => import('./ImmersiveFeed.vue'))
 const root = ref<HTMLElement>()
 const immersiveStartIndex = ref(0)
@@ -40,7 +39,7 @@ function startImmersive(trigger: HTMLElement) {
   immersiveTrigger.value = trigger
   immersiveOpen.value = true
 }
-watch([getRecommendationRequestIdentity, () => settings.value.showImmersiveModeEntry], () => immersiveOpen.value = false, { flush: 'sync' })
+watch(getRecommendationRequestIdentity, () => immersiveOpen.value = false, { flush: 'sync' })
 defineExpose({ initData, undoRefresh, goForward, canGoBack, canGoForward, startImmersive })
 </script>
 
@@ -67,6 +66,9 @@ defineExpose({ initData, undoRefresh, goForward, canGoBack, canGoForward, startI
       v-if="immersiveOpen"
       :items="currentVideoList"
       :initial-index="immersiveStartIndex"
+      :feed-generation="feedGeneration"
+      :paging-state="recommendationDataState"
+      :manual-paging="requiresManualFilteredPaging"
       :trigger="immersiveTrigger"
       :scroll-claim="immersiveScrollClaim"
       :loading="isLoading"
@@ -80,7 +82,7 @@ defineExpose({ initData, undoRefresh, goForward, canGoBack, canGoForward, startI
       v-if="requiresManualFilteredPaging && !isLoading && !noMoreContent"
       class="filtered-feed-load-more"
     >
-      <Button type="secondary" @click="handleManualLoadMore">
+      <Button type="secondary" @click="handleManualLoadMore()">
         <template #left>
           <span i-tabler-arrow-down />
         </template>

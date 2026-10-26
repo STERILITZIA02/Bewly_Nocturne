@@ -2,12 +2,11 @@
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 
-defineProps<{ history?: boolean }>()
 const { textStyle } = useVideoCardSharedStyles()
 </script>
 
 <template>
-  <article class="library-video-skeleton" :class="{ 'library-video-skeleton--history': history }" :style="textStyle" aria-hidden="true">
+  <article class="library-video-skeleton" :style="textStyle" aria-hidden="true">
     <SkeletonBlock class="library-video-skeleton__cover" height="auto" radius="media" />
     <div class="library-video-skeleton__details">
       <div class="library-video-skeleton__title">
@@ -16,9 +15,6 @@ const { textStyle } = useVideoCardSharedStyles()
       </div>
       <div class="library-video-skeleton__author">
         <SkeletonBlock width="45%" height="var(--bew-author-line-height)" />
-      </div>
-      <div v-if="history" class="library-video-skeleton__time">
-        <SkeletonBlock width="60%" height="var(--bew-line-height-control)" />
       </div>
     </div>
   </article>
@@ -52,13 +48,5 @@ const { textStyle } = useVideoCardSharedStyles()
   display: flex;
   align-items: center;
   gap: var(--bew-space-2);
-}
-.library-video-skeleton__time {
-  display: flex;
-  align-items: center;
-  min-height: var(--bew-control-height-sm);
-}
-.library-video-skeleton--history {
-  padding: var(--bew-space-3);
 }
 </style>

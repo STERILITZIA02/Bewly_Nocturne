@@ -976,7 +976,7 @@ function verifyDockReorderPolicy() {
 }
 
 function verifyPageSettingsPayload() {
-  const readingAndAudio = { commentReplyBatchPages: 5, enableCommentReplyTreeContainer: false, commentReplyTreeContainerHeight: 480, localLoudnessEnabled: false, localLoudnessTarget: -18, localLoudnessStrength: 75 }
+  const readingAndAudio = { playerAdjustmentEnabled: true, commentReplyBatchPages: 5, enableCommentReplyTreeContainer: false, commentReplyTreeContainerHeight: 480, localLoudnessEnabled: false, localLoudnessTarget: -18, localLoudnessStrength: 75 }
   const value = {
     ...readingAndAudio,
     adjustCommentImageHeight: true,
@@ -2244,7 +2244,9 @@ async function verifyP2AccessibilityAndLocales() {
   for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Escape'])
     assert.match(contextMenu, new RegExp(`case '${key}'`))
 
-  assert.match(history, /<IconButton[\s\S]{0,160}:label="\$t\('common\.operation\.delete'\)"/)
+  // Removing one record is in the shared card menu, not a button on the card.
+  assert.match(history, /key: 'history:remove', name: t\('history\.remove_from_history'\)/)
+  assert.doesNotMatch(history, /history-list-card__delete/)
   assert.doesNotMatch(history, /common\.remove/)
 
   const localeKeySets = [en, cn, tw, yue].map(collectLocaleKeys)

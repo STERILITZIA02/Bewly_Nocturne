@@ -492,6 +492,9 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   const exports = {}
   const modules = {
     'vue': Vue,
+    '~/composables/useCardRemoval': await import('../src/composables/useCardRemoval'),
+    '~/utils/immersivePlayback': await import('../src/utils/immersivePlayback'),
+    '~/utils/accountLifetime': await import('../src/utils/accountLifetime'),
     '~/components/VideoCard/utils': await import('../src/components/VideoCard/utils'),
     '~/composables/useSidebarHost': await import('../src/composables/useSidebarHost'),
     '~/composables/usePageViewState': await import('../src/composables/usePageViewState'),
@@ -562,6 +565,17 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/composables/useGlassPanelMotion': await import('../src/composables/useGlassPanelMotion'),
     ...mocks,
   }
+  if (file.endsWith('/VideoCardGrid.vue')) {
+    modules['~/stores/topBarStore'] ??= { useTopBarStore: () => ({ isLogin: false, userInfo: { mid: 0 } }) }
+    modules['~/utils/main'] ??= { getUserID: () => '' }
+    modules['~/utils/watchLater'] ??= await loadSourceModule('../src/utils/watchLater.ts', {
+      '~/logic/watchLaterState': { findWatchLaterEntry: () => undefined },
+      '~/utils/api': { default: {} },
+      '~/utils/main': { ...modules['~/utils/main'], getCSRF: () => '' },
+      '~/utils/pgcEpisode': {},
+      '~/utils/watchLaterWrite': await import('../src/utils/watchLaterWrite'),
+    })
+  }
   if (text.includes('\'~/composables/useVideoCardSharedStyles\'') && !modules['~/composables/useVideoCardSharedStyles']) {
     modules['~/composables/useVideoCardSharedStyles'] = await loadSourceModule('../src/composables/useVideoCardSharedStyles.ts', {
       'vue': Vue,
@@ -578,21 +592,25 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   }
   if (text.includes('\'~/composables/useLibraryBatchSelection\''))
     modules['~/composables/useLibraryBatchSelection'] = await import('../src/composables/useLibraryBatchSelection')
-  for (const name of ['WatchLaterSelectionOverlay', 'WatchLaterFilterSection']) {
+  for (const name of ['WatchLaterSelectionOverlay']) {
     const path = `~/contentScripts/views/WatchLater/${name}.vue`
     if (text.includes(`'${path}'`) && !modules[path])
       modules[path] = { default: await compileComponent(`../src/contentScripts/views/WatchLater/${name}.vue`) }
   }
   if (text.includes('\'./HistoryDayToggle.vue\''))
     modules['./HistoryDayToggle.vue'] = { default: await compileComponent('../src/contentScripts/views/History/HistoryDayToggle.vue') }
-  if (text.includes('\'./useHistoryDayMotion\''))
-    modules['./useHistoryDayMotion'] = await import('../src/contentScripts/views/History/useHistoryDayMotion')
+  if (text.includes('\'./historyGroups\''))
+    modules['./historyGroups'] = await import('../src/contentScripts/views/History/historyGroups')
+  if (text.includes('\'~/composables/useMeasuredDisclosure\'') && !modules['~/composables/useMeasuredDisclosure'])
+    modules['~/composables/useMeasuredDisclosure'] = await import('../src/composables/useMeasuredDisclosure')
+  if (text.includes('\'./HistoryGroupRow.vue\'') && !modules['./HistoryGroupRow.vue'])
+    modules['./HistoryGroupRow.vue'] = { default: await compileComponent('../src/contentScripts/views/History/HistoryGroupRow.vue') }
+  if (text.includes('\'./HistoryGroupSkeleton.vue\'') && !modules['./HistoryGroupSkeleton.vue'])
+    modules['./HistoryGroupSkeleton.vue'] = { default: { props: ['rows', 'cards'], setup: props => () => Vue.h('div', { 'class': 'history-group-skeleton', 'data-bew-skeleton': '', 'data-rows': props.rows ?? 2 }) } }
   if (text.includes('\'./useWatchLaterBatch\'') && !modules['./useWatchLaterBatch'])
     modules['./useWatchLaterBatch'] = await import('../src/contentScripts/views/WatchLater/useWatchLaterBatch')
   if (text.includes('\'./WatchLaterSelectionOverlay.vue\'') && !modules['./WatchLaterSelectionOverlay.vue'])
     modules['./WatchLaterSelectionOverlay.vue'] = { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterSelectionOverlay.vue') }
-  if (text.includes('\'./WatchLaterFilterSection.vue\'') && !modules['./WatchLaterFilterSection.vue'])
-    modules['./WatchLaterFilterSection.vue'] = { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterFilterSection.vue') }
   if (text.includes('\'~/contentScripts/views/SearchResults/components/DatePicker.vue\'')) {
     modules['~/contentScripts/views/SearchResults/components/DatePicker.vue'] = { default: await compileComponent('../src/contentScripts/views/SearchResults/components/DatePicker.vue', {
       'vue-i18n': modules['vue-i18n'],
@@ -641,9 +659,19 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     modules['~/utils/pictureRevealMemory'] = await import('../src/utils/pictureRevealMemory')
   // Library page heads and filters: light stand-ins that keep their slots.
   const libraryStubs = {
-    LibraryHero: { props: ['image', 'label', 'mediaPending'], setup: (props, { slots }) => () => Vue.h('section', { 'class': 'library-hero', 'aria-label': props.label }, [slots.default?.(), slots.actions?.()]) },
+    LibraryHero: { props: ['image', 'label', 'mediaPending', 'eyebrow', 'title', 'meta'], setup: (props, { slots }) => () => Vue.h('section', { 'class': 'library-hero', 'aria-label': props.label }, [props.eyebrow, Vue.h('h2', slots.title?.() ?? props.title), props.meta, slots.default?.(), slots.actions?.()]) },
+    LibraryHeroCarousel: { props: ['items', 'current', 'label', 'disabled'], emits: ['select'], setup: (props, { slots, emit }) => () => Vue.h('section', { 'class': 'library-hero-carousel', 'aria-label': props.label }, props.items.map(item => Vue.h('div', { 'class': 'library-hero-carousel__slide', 'data-key': item.key }, [
+      slots.default?.({ item, current: item.key === props.current }),
+      item.key === props.current ? null : Vue.h('button', { class: 'library-hero-carousel__peek', onClick: () => emit('select', item.key) }),
+    ]))) },
     LibraryBleedStrip: { props: ['label', 'compact'], setup: (props, { slots }) => () => Vue.h('div', { 'class': 'library-bleed-strip', 'role': 'group', 'aria-label': props.label }, slots.default?.()) },
-    LibraryFilterMenu: { props: ['label', 'groups', 'disabled'], emits: ['select'], render: () => null },
+    // Every option as a button, so a test can choose it as from the open menu.
+    LibraryFilterMenu: { props: ['label', 'groups', 'disabled'], emits: ['select'], setup: (props, { emit }) => () => Vue.h('div', { class: 'library-filter-menu-stub' }, props.groups.flatMap(group => group.options.map(option => Vue.h('button', {
+      'type': 'button',
+      'data-filter': `${group.key}:${option.value}`,
+      'aria-checked': String(group.value === option.value),
+      'onClick': () => emit('select', group.key, option.value),
+    }, option.label)))) },
     LibraryDateRange: { props: ['open', 'start', 'end', 'invalid', 'disabled', 'title'], emits: ['update'], render: () => null },
     LoadingFill: { props: ['loading'], setup: props => () => Vue.h('div', { 'class': 'bew-loading-fill', 'role': 'status', 'aria-busy': props.loading }) },
     SmoothLoading: { props: ['show', 'keepSpace', 'minHeight'], render: () => null },

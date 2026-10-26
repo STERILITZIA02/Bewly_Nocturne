@@ -5,11 +5,11 @@ import { canReadMediaAudio, readNativeLoudnessState } from './localLoudnessCompa
 import { disposeLoudnessNode, prepareLoudnessNode } from './localLoudnessGraph'
 import type { trackMediaSourceOwnership } from './mediaSourceOwnership'
 
-interface OwnedGraph { source: MediaElementAudioSourceNode, node?: AudioWorkletNode, owner?: AbortController, connected: boolean }
+interface OwnedGraph { source: MediaElementAudioSourceNode, node?: AudioWorkletNode, delay?: DelayNode, owner?: AbortController, connected: boolean }
 interface MediaSession { video: HTMLVideoElement, token: string, source: string, abort: AbortController, failed: boolean }
 
 /** One current media owner; historical media are weakly held only for bypass. */
-export function createLocalLoudnessController(report: (token: string, state: LocalLoudnessState, measurement?: LocalLoudnessMeasurement) => void, ownership: ReturnType<typeof trackMediaSourceOwnership>) {
+export function createLocalLoudnessController(report: (token: string, state: LocalLoudnessState, measurement?: LocalLoudnessMeasurement, delayState?: LocalLoudnessState) => void, ownership: ReturnType<typeof trackMediaSourceOwnership>) {
   const graphs = new WeakMap<HTMLMediaElement, OwnedGraph>()
   const outputs = new Set<OwnedGraph>()
   let context: AudioContext | undefined
@@ -21,6 +21,8 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
   let suspended = false
   let disposed = false
   let state: LocalLoudnessState = 'off'
+  let delayMs = 0
+  const processing = () => config.enabled || delayMs > 0
   let enabledListeners: AbortController | undefined
   let bypassListeners: AbortController | undefined
   function handleConflict(media: HTMLMediaElement) {
@@ -36,23 +38,28 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
 
   function status(next: LocalLoudnessState, sample?: LocalLoudnessMeasurement) {
     state = next
-    report(session?.token ?? '', next, sample)
+    report(session?.token ?? '', config.enabled ? next : 'off', sample, delayMs ? next : 'off')
   }
   function bypass(graph: OwnedGraph) {
     // Connect the dry path before removing DSP. Capturing a media element cannot
     // be undone, so disable must retain this owned output instead of closing it.
-    if (!graph.connected || graph.node)
+    if (!graph.connected || graph.node || graph.delay)
       graph.source.connect(graph.source.context.destination)
     graph.connected = true
     outputs.add(graph)
+    graph.owner?.abort()
+    graph.owner = undefined
     if (graph.node) {
-      graph.owner?.abort()
-      graph.owner = undefined
       const node = graph.node
       graph.source.disconnect(node)
       graph.node = undefined
       disposeLoudnessNode(node)
     }
+    else if (graph.delay) {
+      graph.source.disconnect(graph.delay)
+    }
+    graph.delay?.disconnect()
+    graph.delay = undefined
   }
   function releaseOutput(graph: OwnedGraph) {
     graph.owner?.abort()
@@ -63,6 +70,8 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
       disposeLoudnessNode(graph.node)
       graph.node = undefined
     }
+    graph.delay?.disconnect()
+    graph.delay = undefined
     outputs.delete(graph)
   }
   function retireOutputs(current?: HTMLMediaElement) {
@@ -86,9 +95,9 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
       return
     const { video } = session
     const graph = graphs.get(video)
-    if (!graph?.node)
+    if (!graph || (!graph.node && !graph.delay))
       return
-    graph.node.port.postMessage({ type: 'configure', target: config.target, strength: config.strength / 100, volume: video.volume, active: !video.paused && !video.muted && !video.seeking && !video.ended, report: panel && !document.hidden })
+    graph.node?.port.postMessage({ type: 'configure', target: config.target, strength: config.strength / 100, volume: video.volume, active: !video.paused && !video.muted && !video.seeking && !video.ended, report: panel && !document.hidden })
     status(video.paused || video.muted || video.seeking || video.ended ? 'paused' : 'active')
   }
   function recoverPlay(event: Event) {
@@ -120,7 +129,7 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
     }
   }
   function compatibility(video: HTMLVideoElement): LocalLoudnessState | undefined {
-    if (!globalThis.isSecureContext || !globalThis.AudioContext || !globalThis.AudioWorkletNode || !ownership.available())
+    if (!globalThis.isSecureContext || !globalThis.AudioContext || (config.enabled && !globalThis.AudioWorkletNode) || !ownership.available())
       return 'unsupported'
     const native = readNativeLoudnessState(video.closest('.bpx-player-container, .bilibili-player'))
     if (native !== 'off')
@@ -129,7 +138,7 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
       return 'source-in-use'
   }
   async function reconcile() {
-    if (disposed || suspended || !config.enabled || !session || preparation)
+    if (disposed || suspended || !processing() || !session || preparation)
       return
     const current = session
     const { video } = current
@@ -147,7 +156,7 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
       status(incompatible)
       return
     }
-    if (graphs.get(video)?.node) {
+    if (graphs.get(video)?.node || graphs.get(video)?.delay) {
       configure()
       return
     }
@@ -162,7 +171,8 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
     preparation = owner
     const src = video.currentSrc
     let node: AudioWorkletNode | undefined
-    const valid = () => !owner.signal.aborted && !disposed && !suspended && config.enabled && session === current && video.isConnected && video.currentSrc === src
+    let delay: DelayNode | undefined
+    const valid = () => !owner.signal.aborted && !disposed && !suspended && processing() && session === current && video.isConnected && video.currentSrc === src
     try {
       if (!context) {
         context = new AudioContext()
@@ -178,16 +188,18 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
         status('gesture')
         return
       }
-      node = await prepareLoudnessNode(context, config, video.volume, owner.signal, (sample) => {
-        if (valid() && panel && !document.hidden && !video.paused)
-          status('active', sample)
-      }, () => {
-        if (!valid())
-          return
-        current.failed = true
-        stopProcessing()
-        status('error')
-      })
+      if (config.enabled) {
+        node = await prepareLoudnessNode(context, config, video.volume, owner.signal, (sample) => {
+          if (valid() && panel && !document.hidden && !video.paused)
+            status('active', sample)
+        }, () => {
+          if (!valid())
+            return
+          current.failed = true
+          stopProcessing()
+          status('error')
+        })
+      }
       if (!valid())
         return
       const reason = compatibility(video)
@@ -195,7 +207,12 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
         status(reason)
         return
       }
-      node.connect(context.destination)
+      if (delayMs) {
+        delay = context.createDelay(1)
+        delay.delayTime.value = delayMs / 1000
+        delay.connect(context.destination)
+      }
+      node?.connect(delay ?? context.destination)
       let graph = graphs.get(video)
       if (!graph) {
         const source = ownership.capture(context, video)
@@ -205,11 +222,13 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
         installBypassLifetime()
       }
       bypass(graph)
-      graph.source.connect(node)
+      graph.source.connect(node ?? delay!)
       graph.source.disconnect(context.destination)
       graph.node = node
+      graph.delay = delay
       graph.owner = owner
       node = undefined
+      delay = undefined
       configure()
     }
     catch {
@@ -222,9 +241,10 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
     finally {
       if (node)
         disposeLoudnessNode(node)
+      delay?.disconnect()
       if (preparation === owner)
         preparation = undefined
-      if (context && !captured && (disposed || !config.enabled || current.failed)) {
+      if (context && !captured && (disposed || !processing() || current.failed)) {
         void context.close().catch(() => {})
         context = undefined
       }
@@ -241,8 +261,8 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
     }
     if (session.video.paused || session.video.muted || session.video.seeking || session.video.ended) {
       stopProcessing()
-      if (!session.failed || !config.enabled)
-        status(config.enabled ? 'paused' : 'off')
+      if (!session.failed || !processing())
+        status(processing() ? 'paused' : 'off')
       return
     }
     const graph = graphs.get(session.video)
@@ -281,6 +301,8 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
         return
       }
       stopProcessing()
+      delayMs = 0
+      setEnabledListeners(config.enabled)
       session?.abort.abort()
       retireOutputs(video)
       session = video ? { video, token, source: video.currentSrc, abort: new AbortController(), failed: false } : undefined
@@ -288,15 +310,17 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
         for (const name of ['play', 'playing', 'pause', 'volumechange', 'seeking', 'seeked', 'emptied', 'loadedmetadata', 'loadeddata', 'ended'])
           video!.addEventListener(name, onMediaEvent, { signal: session.abort.signal })
       }
-      status(config.enabled ? 'waiting' : 'off')
+      status(processing() ? 'waiting' : 'off')
       void reconcile()
     },
     update(next: LocalLoudnessConfig) {
       const changed = next.enabled !== config.enabled
       config = next
-      if (changed)
-        setEnabledListeners(next.enabled)
-      if (!next.enabled) {
+      if (changed) {
+        stopProcessing()
+        setEnabledListeners(processing())
+      }
+      if (!processing()) {
         stopProcessing()
         status('off')
         if (!captured && context) {
@@ -309,6 +333,26 @@ export function createLocalLoudnessController(report: (token: string, state: Loc
           session.failed = false
         configure()
         void reconcile()
+      }
+    },
+    setDelay(milliseconds: number) {
+      if (disposed || delayMs === milliseconds)
+        return
+      const wasProcessing = processing()
+      delayMs = milliseconds
+      if (wasProcessing !== processing())
+        setEnabledListeners(processing())
+      const graph = session && graphs.get(session.video)
+      if (milliseconds > 0 && graph?.delay)
+        graph.delay.delayTime.setValueAtTime(milliseconds / 1000, graph.source.context.currentTime)
+      else stopProcessing()
+      if (processing()) {
+        if (session)
+          session.failed = false
+        void reconcile()
+      }
+      else {
+        status('off')
       }
     },
     showPanel(visible: boolean) {

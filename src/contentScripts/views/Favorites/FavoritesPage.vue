@@ -10,7 +10,10 @@ import Dialog from '~/components/Dialog.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import LibraryBleedStrip from '~/components/LibraryBleedStrip.vue'
+import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
+import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
 import LibraryHero from '~/components/LibraryHero.vue'
+import LibraryHeroCarousel from '~/components/LibraryHeroCarousel.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
@@ -21,8 +24,10 @@ import Tooltip from '~/components/Tooltip.vue'
 import type { FavoriteResource } from '~/components/TopBar/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useCardRemoval } from '~/composables/useCardRemoval'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { usePageViewState } from '~/composables/usePageViewState'
+import { LIBRARY_HERO_RENDER_RADIUS } from '~/constants/library'
 import { settings } from '~/logic'
 import type { Media as FavoriteItem } from '~/models/video/favorite'
 import type { List as CategoryItem } from '~/models/video/favoriteCategory'
@@ -31,18 +36,19 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { isFavoriteFolderPrivate } from '~/utils/favoriteFolder'
-import { getFavoriteResourceKey, getFavoriteSourceKey } from '~/utils/favoriteResource'
+import { getFavoriteResourceKey, getFavoriteSourceKey, isPlayableFavoriteVideo } from '~/utils/favoriteResource'
 import {
   FAVORITE_FOLDER_PAGE_SIZE,
   FAVORITE_SEASON_PAGE_SIZE,
   resolveFavoriteSeasonPlayAllUrl,
 } from '~/utils/favoriteSeason'
 import { getCSRF, getUserID, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
+import { retiringTransition } from '~/utils/motionPresence'
+import { captureVideoFavoriteRemoval } from '~/utils/videoFavoriteSelection'
 
 import { transformFavoriteArticle, transformFavoriteItem } from './favoriteAdapters'
 import type { FavoriteFilterQuery } from './favoriteFilter'
 import { collectFavoriteUploaders, EMPTY_FAVORITE_FILTER, normalizeFavoriteFilterQuery } from './favoriteFilter'
-import FavoriteFilterPanel from './FavoriteFilterPanel.vue'
 import FavoriteFolderEditor from './FavoriteFolderEditor.vue'
 import FavoriteFolderSocial from './FavoriteFolderSocial.vue'
 import FavoriteResourceActions from './FavoriteResourceActions.vue'
@@ -105,6 +111,11 @@ function selectStripUploader(mid?: number) {
 // The hero's cover: the folder's own, else its first item's.
 const heroImage = computed(() => folderInfo.value?.cover || visibleResources.value[0]?.cover || '')
 const ownFolder = computed(() => Boolean(folderInfo.value && String(folderInfo.value.mid || folderInfo.value.upper.mid) === String(accountId.value)))
+const removals = useCardRemoval<FavoriteResource>({
+  items: () => (filterActive.value ? filterScan.items.value : visibleResources.value) as FavoriteResource[],
+  key: item => filterActive.value ? filterScan.getItemKey(item as unknown as FavoriteItem) : getFavoriteResourceKey(item),
+  scope: () => JSON.stringify([accountId.value, contentVersion.value, favoriteView.value, selectedCategory.value?.id, selectedSeason.value?.id, keyword.value, searchScope.value, videoOrder.value, filterScan.applied.value]),
+})
 
 const isResolvingSeasonPlayAll = ref<boolean>(false)
 const isBatchManaging = ref<boolean>(false)
@@ -158,6 +169,10 @@ const selectedContentCount = computed(() => {
   return selectedCategory.value?.media_count ?? 0
 })
 
+// The hero's meta line: how many videos (or, for the other favorites, items).
+const heroMeta = computed(() => selectedContentCount.value === undefined
+  ? undefined
+  : t(favoriteView.value === 'article' ? 'library_tools.item_count' : 'library_tools.video_count', { count: selectedContentCount.value }))
 const isInitialSidebarLoading = computed(() => favoriteView.value === 'video'
   ? categoryState.loading && !favoriteCategories.length
   : favoriteView.value === 'season' && subscriptionState.loading && !collectedFavoriteSeasons.length)
@@ -168,6 +183,70 @@ const uploaderStripPending = computed(() => favoriteView.value === 'video' && !f
 // Until the folder or its first page arrives, the cover band is held.
 const heroMediaPending = computed(() => favoriteView.value !== 'article' && !heroImage.value
   && (isInitialSidebarLoading.value || folderInfoLoading.value || ((isLoading.value || isFullPageLoading.value) && !visibleResources.value.length)))
+// The hero row (user-specified): the folders, or the collected subscriptions,
+// that the rail lists, with the open one as the current card; a peeking card
+// or a sideways swipe opens its neighbour the way the rail does, so the rail,
+// strip, grid and hero all follow. Other views have one card.
+const heroItems = computed(() => {
+  // While the folders load, the next card is held too, so the row keeps its shape.
+  if (isInitialSidebarLoading.value && favoriteView.value !== 'article')
+    return [{ key: 'current', label: selectedContentTitle.value }, { key: 'loading', label: '' }]
+  if (favoriteView.value === 'video' && searchScope.value === 'current' && selectedCategory.value)
+    return favoriteCategories.map(item => ({ key: `folder:${item.id}`, label: item.title }))
+  if (favoriteView.value === 'season' && selectedSeason.value && visibleSubscriptions.value.length)
+    return visibleSubscriptions.value.map(item => ({ key: `season:${getFavoriteSourceKey(item)}`, label: item.title }))
+  return [{ key: 'current', label: selectedContentTitle.value }]
+})
+const heroKey = computed(() => {
+  if (heroItems.value[0]?.key.startsWith('folder:'))
+    return `folder:${selectedCategory.value!.id}`
+  if (heroItems.value[0]?.key.startsWith('season:'))
+    return `season:${getFavoriteSourceKey(selectedSeason.value!)}`
+  return 'current'
+})
+const heroSwitchDisabled = computed(() => isInitialSidebarLoading.value || isSidebarOperating.value || isBatchManaging.value || sidebarManageSection.value !== null)
+function findHeroItem(key: string) {
+  if (key.startsWith('folder:'))
+    return { folder: favoriteCategories.find(item => `folder:${item.id}` === key) }
+  return { season: visibleSubscriptions.value.find(item => `season:${getFavoriteSourceKey(item)}` === key) }
+}
+// A card: its cover (a folder's own, read like the rail's), title and count.
+// The current card adds the folder's details; its cover stays the one it had
+// as a neighbour while it is known, so switching does not reload it.
+function getHeroCard(key: string, current: boolean) {
+  if (key === 'loading')
+    return { label: '', mediaPending: true }
+  const { folder, season } = key === 'current' ? {} : findHeroItem(key)
+  const item = folder ?? season
+  if (current) {
+    const image = (folder && folderCovers[folder.id]) || season?.cover || heroImage.value
+    return { label: selectedContentTitle.value, image, mediaPending: !image && heroMediaPending.value, title: selectedContentTitle.value, meta: heroMeta.value }
+  }
+  return item
+    ? { label: item.title, image: folder ? folderCovers[folder.id] : season!.cover, mediaPending: Boolean(folder && folderCovers[folder.id] === undefined), title: item.title, meta: t('library_tools.video_count', { count: item.media_count }) }
+    : { label: '' }
+}
+// The hero reads covers one card further than it renders, nearest first, so a
+// card that comes into the row has its cover already.
+watch([heroItems, heroKey], () => {
+  const index = heroItems.value.findIndex(item => item.key === heroKey.value)
+  for (let distance = 1; distance <= LIBRARY_HERO_RENDER_RADIUS + 1; distance++) {
+    for (const neighbor of [heroItems.value[index + distance], heroItems.value[index - distance]]) {
+      const folder = neighbor && findHeroItem(neighbor.key).folder
+      if (folder)
+        loadFolderCover(folder.id, 'hero')
+    }
+  }
+}, { immediate: true })
+function selectHeroItem(key: string) {
+  if (heroSwitchDisabled.value)
+    return
+  const { folder, season } = findHeroItem(key)
+  if (folder)
+    changeCategory(folder)
+  else if (season)
+    changeSeason(season)
+}
 const favoriteGridStateKey = computed(() => `${accountId.value}:${favoriteView.value === 'season' && selectedSeason.value
   ? getFavoriteSourceKey(selectedSeason.value)
   : `folder:${selectedCategory.value?.id ?? ''}`}:${contentVersion.value}`)
@@ -252,17 +331,60 @@ const isAllSeasonsSelected = computed(() => {
   return visibleSubscriptions.value.length > 0
     && visibleSubscriptions.value.every(item => selectedSeasonKeys.value.includes(getFavoriteSourceKey(item)))
 })
-// 搜索范围选项
-const searchScopeOptions = computed(() => [
-  {
-    label: t('favorites.search_current_folder'),
-    value: 'current' as const,
-  },
-  {
-    label: t('favorites.search_all_folders'),
-    value: 'all' as const,
-  },
-])
+// Every view filters from the search field's funnel, as on the other rails:
+// videos by search scope and partition (the uploader is the strip over the
+// content), subscriptions by type, the other favorites by search field.
+const filterGroups = computed<LibraryFilterGroup[]>(() => {
+  if (favoriteView.value === 'video') {
+    const partitions = filterScan.partitions.value
+    const tid = filterScan.applied.value.tids[0]
+    return [
+      { key: 'scope', title: t('library_tools.search_scope'), value: searchScope.value, options: [
+        { value: 'current', label: t('favorites.search_current_folder'), icon: 'i-tabler:folder' },
+        { value: 'all', label: t('favorites.search_all_folders'), icon: 'i-tabler:folders' },
+      ] },
+      { key: 'partition', title: t('favorites.filter_partition'), value: tid === undefined ? 'all' : String(tid), options: [
+        { value: 'all', label: t('favorites.filter_partition_all'), icon: 'i-tabler:category', pending: filterScan.partitionsLoading.value && !partitions.length },
+        ...partitions.map(option => ({ value: String(option.tid), label: option.name, icon: 'i-tabler:tag' })),
+        ...(filterScan.partitionsFailed.value && !filterScan.partitionsLoading.value ? [{ value: 'retry', label: t('favorites.filter_partition_retry'), icon: 'i-tabler:refresh', action: true }] : []),
+      ] },
+    ]
+  }
+  if (favoriteView.value === 'season') {
+    return [{ key: 'subscription', title: t('favorites.subscription_filter'), value: subscriptionFilter.value, options: [
+      { value: 'all', label: t('favorites.subscription_all'), icon: 'i-tabler:list' },
+      { value: 'season', label: t('favorites.subscription_seasons'), icon: 'i-tabler:stack-2' },
+      { value: 'folder', label: t('favorites.subscription_folders'), icon: 'i-tabler:folder' },
+    ] }]
+  }
+  const article = otherFavoriteType.value === 'article'
+  return [{ key: 'field', title: t('library_tools.search_scope'), value: otherSearchScope.value, options: [
+    { value: 'all', label: t('favorites.search_all_fields'), icon: 'i-tabler:list-search' },
+    { value: 'title', label: t(article ? 'favorites.search_content_only' : 'favorites.search_title_only'), icon: 'i-tabler:heading' },
+    { value: 'detail', label: t(article ? 'favorites.search_author_only' : 'favorites.search_description_only'), icon: article ? 'i-tabler:user' : 'i-tabler:align-left' },
+  ] }]
+})
+const railFilterActive = computed(() => favoriteView.value === 'video'
+  ? searchScope.value === 'all' || filterScan.applied.value.tids.length > 0
+  : favoriteView.value === 'season' ? subscriptionFilter.value !== 'all' : otherSearchScope.value !== 'all')
+function selectRailFilter(key: string, value: string) {
+  if (key === 'scope') {
+    selectSearchScope(value)
+  }
+  else if (key === 'partition' && value === 'retry') {
+    retryPartitions()
+  }
+  else if (key === 'partition') {
+    applyFavoriteFilter({ ...filterScan.applied.value, tids: value === 'all' ? [] : [Number(value)] })
+  }
+  else if (key === 'subscription' && subscriptionFilter.value !== value) {
+    subscriptionFilter.value = value as typeof subscriptionFilter.value
+    handleSubscriptionFilterChange()
+  }
+  else if (key === 'field') {
+    otherSearchScope.value = value as typeof otherSearchScope.value
+  }
+}
 
 onMounted(() => {
   initPageAction()
@@ -672,7 +794,35 @@ async function handleUnfavorite(resource: FavoriteResource) {
     : searchScope.value === 'current' ? selectedCategory.value?.id : undefined
   if (!sourceId)
     return
-  await runResourceWrite({ kind: 'delete', sourceId, resourceKeys: [getFavoriteResourceKey(resource)] }, true)
+  if (resource.type !== 2 || !favoriteCategories.some(folder => folder.id === sourceId)) {
+    await runResourceWrite({ kind: 'delete', sourceId, resourceKeys: [getFavoriteResourceKey(resource)] }, true)
+    return
+  }
+  const owner = data.capture()
+  const version = contentVersion.value
+  removals.begin(resource, { restorable: isPlayableFavoriteVideo(resource), ...captureVideoFavoriteRemoval({ aid: resource.id }, sourceId, {
+    account: () => getUserID() === String(accountId.value) ? accountId.value : null,
+    csrf: getCSRF,
+    resolveAid: async () => resource.id,
+    read: (rid, account, signal) => api.favorite.getFavoriteCategories({ up_mid: String(account), rid, type: 2 }, { signal }),
+    write: command => api.favorite.updateVideoFavorites(command),
+    changed: () => topBarStore.notifyFavoritesChanged(),
+  }, owner.isCurrent, async (added) => {
+    if (!owner.isCurrent() || version !== contentVersion.value)
+      return
+    if (added) {
+      await loadSelectedContent()
+      if (filterActive.value)
+        filterScan.refresh()
+    }
+    else {
+      const command = { kind: 'delete' as const, sourceId, resourceKeys: [getFavoriteResourceKey(resource)] }
+      data.applyResourceWrite(command, version)
+      filterScan.applyResourceWrite(command)
+      selectedResourceKeys.value = selectedResourceKeys.value.filter(key => !command.resourceKeys.includes(key))
+    }
+    filterScan.invalidatePartitions()
+  }) })
 }
 
 function getFavoriteMenuGroups(resource: FavoriteResource) {
@@ -686,8 +836,16 @@ function applyFavoriteFilter(query: FavoriteFilterQuery) {
   filterScan.apply(normalizeFavoriteFilterQuery(query))
 }
 
+// Partitions are read (from the per-folder cache once read) when the funnel
+// menu opens on the video view, then follow the scope while it is in use.
 function requestPartitions() {
+  if (favoriteView.value !== 'video')
+    return
   partitionsRequested.value = true
+  void filterScan.loadPartitions()
+}
+function retryPartitions() {
+  filterScan.invalidatePartitions()
   void filterScan.loadPartitions()
 }
 
@@ -713,7 +871,7 @@ watch(() => [favoriteView.value, searchScope.value, selectedCategory.value?.id, 
   if (partitionsRequested.value && favoriteView.value === 'video')
     void filterScan.loadPartitions()
 })
-let filterRestorePending = restoredFilter.mids.length + restoredFilter.tids.length + restoredFilter.keywords.length > 0
+let filterRestorePending = restoredFilter.mids.length + restoredFilter.tids.length > 0
 watch(() => categoryState.loaded, (loaded) => {
   if (!loaded || !filterRestorePending)
     return
@@ -775,46 +933,55 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   <LibraryWorkspace v-if="getCSRF()" :label="t('topbar.favorites')">
     <main class="favorites-old-main">
       <section v-if="showUploaderStrip || uploaderStripPending" class="favorite-uploader-strip" :aria-label="t('library_tools.uploaders')" :aria-busy="!showUploaderStrip">
-        <LibraryBleedStrip v-if="!showUploaderStrip" :label="t('library_tools.uploaders')">
-          <span v-for="index in 10" :key="index" class="favorite-uploader-strip__item favorite-uploader-strip__item--skeleton" data-bew-skeleton-group aria-hidden="true">
-            <SkeletonBlock width="var(--favorite-uploader-tile)" height="var(--favorite-uploader-tile)" radius="media" />
-            <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
-          </span>
-        </LibraryBleedStrip>
-        <LibraryBleedStrip v-else :label="t('library_tools.uploaders')">
-          <button
-            type="button" class="favorite-uploader-strip__item" :aria-pressed="!filterScan.applied.value.mids.length"
-            :disabled="isBatchOperating" @click="selectStripUploader()"
-          >
-            <span class="favorite-uploader-strip__avatar favorite-uploader-strip__avatar--all" aria-hidden="true"><i i-tabler:users /></span>
-            <span class="favorite-uploader-strip__name">{{ t('library_tools.all_uploaders') }}</span>
-          </button>
-          <button
-            v-for="uploader in filterUploaders" :key="uploader.mid" type="button" class="favorite-uploader-strip__item"
-            :aria-pressed="isStripUploader(uploader.mid)" :title="uploader.name" :disabled="isBatchOperating" @click="selectStripUploader(uploader.mid)"
-          >
-            <span class="favorite-uploader-strip__avatar" aria-hidden="true">
-              <img v-if="uploader.face" :src="removeHttpFromUrl(`${uploader.face}@160w_160h_1c.webp`)" alt="" loading="lazy" decoding="async">
+        <!-- The uploaders of a new folder fade in over its skeletons. -->
+        <Transition name="page-fade" mode="out-in" v-bind="retiringTransition">
+          <LibraryBleedStrip v-if="!showUploaderStrip" key="pending" :label="t('library_tools.uploaders')">
+            <span v-for="index in 10" :key="index" class="favorite-uploader-strip__item favorite-uploader-strip__item--skeleton" data-bew-skeleton-group aria-hidden="true">
+              <SkeletonBlock width="var(--favorite-uploader-tile)" height="var(--favorite-uploader-tile)" radius="media" />
+              <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
             </span>
-            <span class="favorite-uploader-strip__name">{{ uploader.name }}</span>
-          </button>
-        </LibraryBleedStrip>
+          </LibraryBleedStrip>
+          <LibraryBleedStrip v-else :key="`uploaders:${currentFolderId}`" :label="t('library_tools.uploaders')">
+            <button
+              type="button" class="favorite-uploader-strip__item" :aria-pressed="!filterScan.applied.value.mids.length"
+              :disabled="isBatchOperating" @click="selectStripUploader()"
+            >
+              <span class="favorite-uploader-strip__avatar favorite-uploader-strip__avatar--all" aria-hidden="true"><i i-tabler:users /></span>
+              <span class="favorite-uploader-strip__name">{{ t('library_tools.all_uploaders') }}</span>
+            </button>
+            <button
+              v-for="uploader in filterUploaders" :key="uploader.mid" type="button" class="favorite-uploader-strip__item"
+              :aria-pressed="isStripUploader(uploader.mid)" :title="uploader.name" :disabled="isBatchOperating" @click="selectStripUploader(uploader.mid)"
+            >
+              <span class="favorite-uploader-strip__avatar" aria-hidden="true">
+                <img v-if="uploader.face" :src="removeHttpFromUrl(`${uploader.face}@160w_160h_1c.webp`)" alt="" loading="lazy" decoding="async">
+              </span>
+              <span class="favorite-uploader-strip__name">{{ uploader.name }}</span>
+            </button>
+          </LibraryBleedStrip>
+        </Transition>
       </section>
-      <LibraryHero :image="heroImage" :media-pending="heroMediaPending" :label="selectedContentTitle" class="favorites-hero">
-        <h3 class="bew-page-heading favorites-main-heading">
-          <SkeletonBlock v-if="isInitialSidebarLoading" width="12em" height="1lh" />
-          <template v-else>
-            {{ selectedContentTitle }}<template v-if="selectedContentCount !== undefined">
-              ({{ selectedContentCount }})
+      <LibraryHeroCarousel
+        :items="heroItems" :current="heroKey" :label="selectedContentTitle" :disabled="heroSwitchDisabled" class="favorites-hero"
+        :style="showUploaderStrip || uploaderStripPending ? { '--library-hero-pin': 'calc(var(--bew-library-uploader-tile-size) + var(--bew-space-2) + var(--bew-line-height-control) + var(--bew-space-6))' } : undefined"
+        @select="selectHeroItem"
+      >
+        <!-- One card per slide, kept across a switch: only its actions change. -->
+        <template #default="{ item, current }">
+          <LibraryHero v-bind="getHeroCard(item.key, current)">
+            <template v-if="current && isInitialSidebarLoading" #title>
+              <SkeletonBlock width="12em" height="1lh" />
             </template>
-          </template>
-        </h3>
-        <FavoriteFolderSocial
-          v-if="currentFolderId" :info="folderInfo" :own="ownFolder" :pending="isSidebarOperating" :loading="folderInfoLoading"
-          :failed="folderInfoFailed"
-          @like="folders.interact('like')" @subscribe="folders.interact('subscribe')" @share="shareFolder" @retry="folders.refreshInfo"
-        />
-      </LibraryHero>
+            <template v-if="current && currentFolderId" #actions>
+              <FavoriteFolderSocial
+                :info="folderInfo" :own="ownFolder" :pending="isSidebarOperating" :loading="folderInfoLoading"
+                :failed="folderInfoFailed"
+                @like="folders.interact('like')" @subscribe="folders.interact('subscribe')" @share="shareFolder" @retry="folders.refreshInfo"
+              />
+            </template>
+          </LibraryHero>
+        </template>
+      </LibraryHeroCarousel>
 
       <Empty
         v-if="bootstrapFailed" text-only fill :description="t('common.load_failed')" :action-label="t('common.operation.refresh')"
@@ -851,47 +1018,53 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
           :description="t('favorites.global_search_hint')"
         />
 
-        <Empty v-if="!filterActive && favoriteView === 'season' && keyword.trim() && !visibleResources.length && noMoreContent && !isLoading && failedContentPage === null && stalledContentPage === null" text-only fill :description="t('library_tools.no_matches')" role="status" />
-        <VideoCardGrid
-          v-else
-          :key="favoriteGridStateKey"
-          text-only-states
-          :state-key="favoriteGridStateKey"
-          :items="filterActive ? filterScan.items.value : visibleResources"
-          :transform-item="transformFavoriteItem"
-          :get-item-key="filterActive ? filterScan.getItemKey : getFavoriteResourceKey"
-          grid-layout="adaptive"
-          layout-motion
-          :initial-skeleton-count="favoriteView === 'season' && selectedSeason?.type === 21 ? FAVORITE_SEASON_PAGE_SIZE : FAVORITE_FOLDER_PAGE_SIZE"
-          disable-content-visibility
-          :indeterminate="filterActive"
-          :loading="filterActive ? filterStatus === 'scanning' : isLoading || isFullPageLoading"
-          :no-more-content="filterActive ? filterStatus === 'complete' : noMoreContent"
-          :request-failed="filterActive ? filterStatus === 'failed' || filterStatus === 'stalled' : failedContentPage !== null || stalledContentPage !== null"
-          :empty-description="$t(keyword.trim() || filterActive ? 'library_tools.no_matches' : 'common.no_data')"
-          :context-menu="favoriteView === 'video' && (searchScope === 'current' || filterActive) && !isBatchManaging"
-          :get-menu-extra-groups="getFavoriteMenuGroups"
-          :hide-author="favoriteView === 'season' && selectedSeason?.type === 21"
-          :card-click-handler="isBatchManaging ? handleFavoriteCardClick : undefined"
-          :cover-top-left-always-visible="isBatchManaging"
-          enable-row-padding
-          @refresh="handleFavoriteGridRefresh"
-          @load-more="handleFavoriteGridLoadMore"
-        >
-          <template v-if="favoriteView === 'video' && isBatchManaging" #coverTopLeft="{ item }">
-            <button
-              class="favorite-card-action"
-              :class="{ selected: isSelectedFavoriteResource(item) }"
-              :aria-label="t('favorites.batch_select_item')"
-              :aria-pressed="isSelectedFavoriteResource(item)"
-              @click.prevent.stop="toggleFavoriteResourceSelection(item)"
-            >
-              <Tooltip :content="$t('favorites.batch_select_item')" placement="bottom-left" type="dark">
-                <div :class="isSelectedFavoriteResource(item) ? 'i-tabler:checkbox' : 'i-tabler:square'" />
-              </Tooltip>
-            </button>
-          </template>
-        </VideoCardGrid>
+        <!-- A new folder's grid fades in once the old one has faded out. -->
+        <Transition name="page-fade" mode="out-in" v-bind="retiringTransition">
+          <Empty
+            v-if="!filterActive && favoriteView === 'season' && keyword.trim() && !visibleResources.length && noMoreContent && !isLoading && failedContentPage === null && stalledContentPage === null" text-only fill :description="t('library_tools.no_matches')" role="status"
+          />
+          <VideoCardGrid
+            v-else
+            :key="favoriteGridStateKey"
+            text-only-states
+            :state-key="favoriteGridStateKey"
+            :items="removals.displayItems.value"
+            :transform-item="transformFavoriteItem"
+            :get-item-key="filterActive ? filterScan.getItemKey : getFavoriteResourceKey"
+            grid-layout="adaptive"
+            layout-motion
+            :initial-skeleton-count="favoriteView === 'season' && selectedSeason?.type === 21 ? FAVORITE_SEASON_PAGE_SIZE : FAVORITE_FOLDER_PAGE_SIZE"
+            disable-content-visibility
+            :indeterminate="filterActive"
+            :loading="filterActive ? filterStatus === 'scanning' : isLoading || isFullPageLoading"
+            :no-more-content="filterActive ? filterStatus === 'complete' : noMoreContent"
+            :request-failed="filterActive ? filterStatus === 'failed' || filterStatus === 'stalled' : failedContentPage !== null || stalledContentPage !== null"
+            :empty-description="$t(keyword.trim() || filterActive ? 'library_tools.no_matches' : 'common.no_data')"
+            :context-menu="favoriteView === 'video' && (searchScope === 'current' || filterActive) && !isBatchManaging"
+            :get-menu-extra-groups="getFavoriteMenuGroups"
+            :get-removal="removals.get"
+            :hide-author="favoriteView === 'season' && selectedSeason?.type === 21"
+            :card-click-handler="isBatchManaging ? handleFavoriteCardClick : undefined"
+            :cover-top-left-always-visible="isBatchManaging"
+            enable-row-padding
+            @refresh="handleFavoriteGridRefresh"
+            @load-more="handleFavoriteGridLoadMore"
+          >
+            <template v-if="favoriteView === 'video' && isBatchManaging" #coverTopLeft="{ item }">
+              <button
+                class="favorite-card-action"
+                :class="{ selected: isSelectedFavoriteResource(item) }"
+                :aria-label="t('favorites.batch_select_item')"
+                :aria-pressed="isSelectedFavoriteResource(item)"
+                @click.prevent.stop="toggleFavoriteResourceSelection(item)"
+              >
+                <Tooltip :content="$t('favorites.batch_select_item')" placement="bottom-left" type="dark">
+                  <div :class="isSelectedFavoriteResource(item) ? 'i-tabler:checkbox' : 'i-tabler:square'" />
+                </Tooltip>
+              </button>
+            </template>
+          </VideoCardGrid>
+        </Transition>
       </template>
 
       <FavoriteFolderEditor
@@ -939,36 +1112,17 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
           :title="t('topbar.favorites')" :model-value="favoriteView" :options="favoriteViewOptions" :content-id="contentId"
           @update:model-value="selectRailFavoriteView"
         />
-        <div class="library-rail-tools favorite-rail-tools">
+        <div class="library-rail-tools library-rail-tools--ruled favorite-rail-tools">
           <LibrarySearchField
-            v-model="keyword" :label="favoriteView === 'video' ? (searchScope === 'all' ? t('favorites.global_search_placeholder') : t('favorites.search_placeholder')) : t(`favorites.search_${favoriteView}`)" :submit-disabled="favoriteView === 'video' && searchScope === 'all' && !keyword.trim()" :aria-busy="isLoading"
+            v-model="keyword" :filter-active="railFilterActive" :label="favoriteView === 'video' ? (searchScope === 'all' ? t('favorites.global_search_placeholder') : t('favorites.search_placeholder')) : t(`favorites.search_${favoriteView}`)" :submit-disabled="favoriteView === 'video' && searchScope === 'all' && !keyword.trim()" :aria-busy="isLoading"
             @submit="handleSearch"
             @clear="handleSearch"
           >
-            <!-- Video filtering lives in the collapsible panel below, not behind the search icon. -->
-            <template v-if="favoriteView !== 'video'" #filter>
-              <select v-if="favoriteView === 'season'" v-model="subscriptionFilter" :aria-label="t('favorites.subscription_filter')" @change="handleSubscriptionFilterChange">
-                <option value="all">
-                  {{ t('favorites.subscription_all') }}
-                </option>
-                <option value="season">
-                  {{ t('favorites.subscription_seasons') }}
-                </option>
-                <option value="folder">
-                  {{ t('favorites.subscription_folders') }}
-                </option>
-              </select>
-              <select v-else v-model="otherSearchScope" :aria-label="t('library_tools.search_scope')">
-                <option value="all">
-                  {{ t('favorites.search_all_fields') }}
-                </option>
-                <option value="title">
-                  {{ t(otherFavoriteType === 'article' ? 'favorites.search_content_only' : 'favorites.search_title_only') }}
-                </option>
-                <option value="detail">
-                  {{ t(otherFavoriteType === 'article' ? 'favorites.search_author_only' : 'favorites.search_description_only') }}
-                </option>
-              </select>
+            <template #filter>
+              <LibraryFilterMenu
+                :label="t('library_tools.filters')" :groups="filterGroups" :disabled="isBatchOperating || isInitialSidebarLoading"
+                @open="requestPartitions" @select="selectRailFilter"
+              />
             </template>
           </LibrarySearchField>
           <div v-if="favoriteView === 'video'" class="favorite-rail-toolbar">
@@ -986,14 +1140,6 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               </IconButton>
             </Tooltip>
           </div>
-          <FavoriteFilterPanel
-            v-if="favoriteView === 'video'"
-            :scope="searchScope" :scope-options="searchScopeOptions" :applied="filterScan.applied.value"
-            :uploaders="filterUploaders" :partitions="filterScan.partitions.value" :partitions-loading="filterScan.partitionsLoading.value"
-            :partitions-failed="filterScan.partitionsFailed.value" :disabled="isBatchOperating || isInitialSidebarLoading"
-            @scope="selectSearchScope" @load-partitions="requestPartitions"
-            @apply="applyFavoriteFilter" @retry-partitions="filterScan.invalidatePartitions(); filterScan.loadPartitions()"
-          />
           <div v-if="isManagingFolder" class="sidebar-manage-bar">
             <button class="sidebar-manage-select" :aria-pressed="isAllFoldersSelected" :disabled="isSidebarOperating" @click="toggleSelectAllFolders">
               <span :class="isAllFoldersSelected ? 'i-tabler:checkbox' : 'i-tabler:square'" />
@@ -1151,7 +1297,6 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 @use "../../../styles/truncateFade";
 @use "../../../styles/breakpoints";
 @use "../../../styles/sidebarSurface";
-@use "../../../styles/scrollEdgeFade";
 @use "./favoritesLayout";
 
 .favorites-sidebar-content {
@@ -1314,22 +1459,27 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  // The rail's section gap moves inside the nav, so a list can take it into
+  // its scroll (below) and rows scroll right up to the tools' hairline.
+  margin-top: calc(-1 * var(--bew-sidebar-section-gap));
+  padding-top: var(--bew-sidebar-section-gap);
   // Clips only vertically, so the folder list can reach the rail edges.
   overflow: visible clip;
 }
 
 .category-list {
   @include sidebarSurface.vertical-scroll;
-  // A rail never fades; its bottom is the screen edge, which needs no line.
-  // Edge to edge like the rail's separators, its rows padded back in.
-  @include scrollEdgeFade.lines($bottom: false);
+  // A rail never fades, and it draws no edge lines: the tools' hairline above
+  // closes its top (one line, user-specified) and its bottom is the screen
+  // edge. Edge to edge like the rail's separators, its rows padded back in.
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   gap: var(--bew-space-1);
   min-height: 0;
-  margin: 0 calc(-1 * var(--bew-sidebar-inline-padding));
-  padding: 0 var(--bew-sidebar-inline-padding);
+  // Starts at the hairline; the gap above the first row scrolls with it.
+  margin: calc(-1 * var(--bew-sidebar-section-gap)) calc(-1 * var(--bew-sidebar-inline-padding)) 0;
+  padding: var(--bew-sidebar-section-gap) var(--bew-sidebar-inline-padding) 0;
   list-style: none;
 }
 
@@ -1403,6 +1553,8 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
 .article-favorites-content,
 .favorites-old-main > :deep(.video-card-grid-root) {
+  // Positioned and later: it slides up over the pinned hero.
+  position: relative;
   margin-top: var(--bew-space-3);
 }
 

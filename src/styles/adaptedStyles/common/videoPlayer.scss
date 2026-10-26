@@ -131,6 +131,25 @@
   }
 }
 
+@keyframes bewly-player-control-feedback {
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :is(.bewly-video-screenshot-control, .bewly-local-loudness-control, .bewly-widescreen-fill-toggle):focus-visible
+    > .bpx-player-ctrl-btn-icon {
+    animation: bewly-player-control-feedback var(--bew-duration-moderate) var(--bew-ease-in-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    :is(.bewly-video-screenshot-control, .bewly-local-loudness-control, .bewly-widescreen-fill-toggle):hover
+      > .bpx-player-ctrl-btn-icon {
+      animation: bewly-player-control-feedback var(--bew-duration-moderate) var(--bew-ease-in-out);
+    }
+  }
+}
+
 .bewly-design {
   .bpx-player-toast-row .bpx-player-toast-item {
     --bpx-toast-fn-color: var(--bew-theme-color);

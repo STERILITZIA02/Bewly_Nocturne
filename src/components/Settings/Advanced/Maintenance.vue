@@ -36,7 +36,7 @@ const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   searchBarLinkOpenMode: ['currentTab', 'currentTabIfNotHomepage', 'currentTabIfHomepage', 'newTab', 'background'],
   topBarLogoStyle: ['icon', 'brand'],
   momentsGridColumns: ['1', '2', '3'],
-  historyLayout: ['list', 'grid'],
+  historyGroupInterval: ['hour', 'period', 'day'],
   momentsCardOpenMode: ['dialog', 'newTab', 'background'],
   dockCollapseMode: ['button', 'hidden', 'automatic'],
   dockPosition: DOCK_POSITIONS,

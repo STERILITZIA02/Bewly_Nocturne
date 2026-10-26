@@ -3,7 +3,7 @@ import { shallowRef } from 'vue'
 import type { MomentCommentItem } from '~/components/MomentCard/commentUtils'
 import { normalizeMomentComment } from '~/components/MomentCard/commentUtils'
 import { getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
-import RESET_BEWLY_CSS from '~/styles/reset.css?raw'
+import { createPlaybackAppHost } from '~/utils/bewlyWidescreen/appHost'
 import { COMMENT_COMPOSER_HEIGHT_PROPERTY, COMMENT_COMPOSER_HOST_CLASS } from '~/utils/bewlyWidescreen/constants'
 import { EXTERNAL_COMMENT_COMPOSER_ATTRIBUTE, parseCommentListParams, toCommentComposerReply } from '~/utils/commentComposerBridge'
 import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
@@ -26,30 +26,6 @@ export const playbackCommentComposer = shallowRef<PlaybackCommentComposerContext
 /** The latest native "reply" click handed over by MAIN. */
 export const playbackCommentReplyRequest = shallowRef<PlaybackCommentReplyRequest | null>(null)
 
-const BEWLY_HOST_ID = 'bewly'
-const contentScriptGlobal = globalThis as typeof globalThis & { __BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__?: string }
-
-/** Copies the theme the app host carries (classes and custom properties). */
-function mirrorAppHostTheme(host: HTMLElement) {
-  const source = document.getElementById(BEWLY_HOST_ID)
-  const classes = [COMMENT_COMPOSER_HOST_CLASS, ...Array.from(source?.classList ?? [])]
-  if (host.className !== classes.join(' '))
-    host.className = classes.join(' ')
-  const keep = new Set<string>()
-  for (const name of source ? Array.from(source.style) : []) {
-    if (!name.startsWith('--'))
-      continue
-    keep.add(name)
-    const value = source!.style.getPropertyValue(name)
-    if (host.style.getPropertyValue(name) !== value)
-      host.style.setProperty(name, value)
-  }
-  for (const name of Array.from(host.style)) {
-    if (name.startsWith('--') && !keep.has(name))
-      host.style.removeProperty(name)
-  }
-}
-
 /**
  * Docks the app's comment composer at the bottom of the playback page's
  * comment column. The host sits beside the panels, outside the scroller, so
@@ -61,15 +37,7 @@ function mirrorAppHostTheme(host: HTMLElement) {
  * hand over native "reply" clicks.
  */
 export function setupPlaybackCommentComposer(panel: HTMLElement) {
-  const host = document.createElement('div')
-  host.className = COMMENT_COMPOSER_HOST_CLASS
-  const shadow = host.attachShadow({ mode: 'open' })
-  const resetStyle = document.createElement('style')
-  resetStyle.textContent = RESET_BEWLY_CSS
-  const style = document.createElement('style')
-  style.textContent = contentScriptGlobal.__BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__ ?? ''
-  const mount = document.createElement('div')
-  shadow.append(resetStyle, style, mount)
+  const { host, mount, dispose: disposeHost } = createPlaybackAppHost(COMMENT_COMPOSER_HOST_CLASS)
   panel.setAttribute(EXTERNAL_COMMENT_COMPOSER_ATTRIBUTE, '')
 
   const dock = panel.parentElement ?? panel
@@ -101,22 +69,6 @@ export function setupPlaybackCommentComposer(panel: HTMLElement) {
   const panelObserver = new MutationObserver(syncPanel)
   panelObserver.observe(panel, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-params'] })
 
-  let themeSource: HTMLElement | null = null
-  const themeObserver = new MutationObserver(() => mirrorAppHostTheme(host))
-  const bindTheme = () => {
-    const source = document.getElementById(BEWLY_HOST_ID)
-    if (source !== themeSource) {
-      themeObserver.disconnect()
-      themeSource = source
-      if (source)
-        themeObserver.observe(source, { attributes: true, attributeFilter: ['class', 'style'] })
-    }
-    mirrorAppHostTheme(host)
-  }
-  // The app mounts at idle and may be remounted; follow its host.
-  const appHostObserver = new MutationObserver(bindTheme)
-  appHostObserver.observe(document.body, { childList: true })
-
   const receive = (event: MessageEvent) => {
     const channelId = getPageBridgeChannelId()
     const origin = getPageBridgeTargetOrigin()
@@ -131,7 +83,6 @@ export function setupPlaybackCommentComposer(panel: HTMLElement) {
   }
   window.addEventListener('message', receive)
 
-  bindTheme()
   syncPanel()
 
   return () => {
@@ -139,10 +90,8 @@ export function setupPlaybackCommentComposer(panel: HTMLElement) {
     heightObserver.disconnect()
     panel.style.removeProperty(COMMENT_COMPOSER_HEIGHT_PROPERTY)
     panelObserver.disconnect()
-    themeObserver.disconnect()
-    appHostObserver.disconnect()
     panel.removeAttribute(EXTERNAL_COMMENT_COMPOSER_ATTRIBUTE)
-    host.remove()
+    disposeHost()
     if (playbackCommentComposer.value?.mount === mount) {
       playbackCommentComposer.value = null
       playbackCommentReplyRequest.value = null

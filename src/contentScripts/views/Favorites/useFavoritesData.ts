@@ -688,14 +688,15 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     subscriptionFilter,
     folderCovers: folderCoverLoader.covers,
     setFolderCover: folderCoverLoader.seed,
-    loadFolderCover(id: number) {
+    // `hero`: for the hero row, in its own lane (see the loader).
+    loadFolderCover(id: number, lane?: 'hero') {
       const folder = favoriteCategories.find(item => item.id === id)
       if (!folder)
         return
       // Empty folders can have a user-uploaded cover too.
       if (favoriteView.value === 'video' && selectedCategory.value?.id === id && isLoading.value)
         return
-      folderCoverLoader.load(id)
+      folderCoverLoader.load(id, lane)
     },
     collectedFavoriteSeasons,
     favoriteResources,

@@ -5,7 +5,6 @@ import { matchesFavoriteQuery } from './favoriteSearch'
 export interface FavoriteFilterQuery {
   mids: number[]
   tids: number[]
-  keywords: string[]
 }
 
 export interface FavoritePartitionOption {
@@ -27,36 +26,27 @@ export interface FavoriteFilterRecord {
   tid: number | null
 }
 
-export const EMPTY_FAVORITE_FILTER: FavoriteFilterQuery = Object.freeze({ mids: [], tids: [], keywords: [] }) as FavoriteFilterQuery
-export const FAVORITE_FILTER_KEYWORD_LIMIT = 10
-export const FAVORITE_FILTER_KEYWORD_LENGTH = 40
-
-export function normalizeFavoriteFilterKeyword(value: string): string {
-  return value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, ' ').trim()
-}
+// The search field's text is the title condition; the funnel adds a partition
+// and the uploader strip an uploader.
+export const EMPTY_FAVORITE_FILTER: FavoriteFilterQuery = Object.freeze({ mids: [], tids: [] }) as FavoriteFilterQuery
 
 function uniqueSortedIds(values: readonly unknown[]): number[] {
   return [...new Set(values.map(Number).filter(value => Number.isSafeInteger(value) && value !== 0))].sort((a, b) => a - b)
 }
 
 export function normalizeFavoriteFilterQuery(value: Partial<FavoriteFilterQuery> | null | undefined): FavoriteFilterQuery {
-  const keywords = [...new Set((value?.keywords ?? [])
-    .map(keyword => normalizeFavoriteFilterKeyword(String(keyword)).slice(0, FAVORITE_FILTER_KEYWORD_LENGTH))
-    .filter(Boolean))]
-    .slice(0, FAVORITE_FILTER_KEYWORD_LIMIT)
   return {
     mids: uniqueSortedIds(value?.mids ?? []).filter(mid => mid > 0),
     tids: uniqueSortedIds(value?.tids ?? []),
-    keywords,
   }
 }
 
 export function isFavoriteFilterActive(query: FavoriteFilterQuery): boolean {
-  return query.mids.length > 0 || query.tids.length > 0 || query.keywords.length > 0
+  return query.mids.length > 0 || query.tids.length > 0
 }
 
 export function getFavoriteFilterKey(query: FavoriteFilterQuery): string {
-  return JSON.stringify([query.mids, query.tids, query.keywords])
+  return JSON.stringify([query.mids, query.tids])
 }
 
 export function isSameFavoriteFilter(left: FavoriteFilterQuery, right: FavoriteFilterQuery): boolean {
@@ -66,18 +56,12 @@ export function isSameFavoriteFilter(left: FavoriteFilterQuery, right: FavoriteF
 export function compileFavoriteFilter(query: FavoriteFilterQuery, normalQuery: string) {
   const mids = new Set(query.mids)
   const tids = new Set(query.tids)
-  const keywords = query.keywords
   const searchText = normalQuery.trim()
   return (record: FavoriteFilterRecord): boolean => {
     if (mids.size && !mids.has(Number(record.item.upper?.mid)))
       return false
     if (tids.size && (record.tid === null || !tids.has(record.tid)))
       return false
-    if (keywords.length) {
-      const title = normalizeFavoriteFilterKeyword(record.item.title ?? '')
-      if (!keywords.some(keyword => title.includes(keyword)))
-        return false
-    }
     return !searchText || matchesFavoriteQuery(searchText, record.item.title, record.item.upper?.name)
   }
 }

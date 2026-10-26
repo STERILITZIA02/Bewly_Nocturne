@@ -40,6 +40,8 @@ export type DrawerEscapeBehavior = 'immediate' | 'secondPress'
 
 export type VideoCardFontSizeSetting = 'xs' | 'sm' | 'base' | 'lg'
 export type WatchLaterLayoutMode = 'list' | 'grid'
+/** How watch history is split into rows: an hour, a third of a day (8 hours) or a day. */
+export type HistoryGroupInterval = 'hour' | 'period' | 'day'
 export type TopBarLogoStyle = 'icon' | 'brand'
 export type AutoPlayMode = 'default' | 'autoPlay' | 'autoPlayWithRecommend' | 'pauseAtEnd' | 'loop'
 export type RandomPlayOrder = 'sequential' | 'reverse' | 'random'
@@ -219,7 +221,7 @@ export interface Settings {
   filterArticlesInMoments: boolean
   originalMomentsShowUserCard: boolean
   originalMomentsUseBewlyFilters: boolean
-  historyLayout: 'list' | 'grid'
+  historyGroupInterval: HistoryGroupInterval
   originalMomentsShowLiveList: boolean
   originalMomentsShowCommunityCenter: boolean
   originalMomentsShowHotSearch: boolean
@@ -310,6 +312,8 @@ export interface Settings {
   immersiveKeyboardSwitch: boolean
   immersiveAutoPlay: boolean
   immersiveAutoNext: boolean
+  playerAdjustmentEnabled: boolean
+  showPlayerAdjustmentButton: boolean
   immersivePreloadNext: boolean
   autoSwitchRecommendationMode: boolean
 
@@ -506,7 +510,7 @@ export const originalSettings: Settings = {
   filterArticlesInMoments: true,
   originalMomentsShowUserCard: true,
   originalMomentsUseBewlyFilters: false,
-  historyLayout: 'list',
+  historyGroupInterval: 'day',
   originalMomentsShowLiveList: true,
   originalMomentsShowCommunityCenter: true,
   originalMomentsShowHotSearch: true,
@@ -589,6 +593,8 @@ export const originalSettings: Settings = {
   immersiveKeyboardSwitch: true,
   immersiveAutoPlay: true,
   immersiveAutoNext: true,
+  playerAdjustmentEnabled: true,
+  showPlayerAdjustmentButton: true,
   immersivePreloadNext: false,
   autoSwitchRecommendationMode: true,
 
@@ -749,14 +755,14 @@ function normalizeSettings(value: Settings) {
 
   // Missing category switches preserve Nocturne's existing reminders. They
   // change badge presentation only, never the server's read/unread state.
-  for (const field of ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount', 'rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters', 'showImmersiveModeEntry', 'immersiveWheelSwitch', 'immersiveKeyboardSwitch', 'immersiveAutoPlay', 'immersiveAutoNext', 'immersivePreloadNext', 'resumeFromPreviewPosition', 'showDockBackToTop', 'showSearchIdentitySwitcher'] as const) {
+  for (const field of ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount', 'rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters', 'playerAdjustmentEnabled', 'showPlayerAdjustmentButton', 'showImmersiveModeEntry', 'immersiveWheelSwitch', 'immersiveKeyboardSwitch', 'immersiveAutoPlay', 'immersiveAutoNext', 'immersivePreloadNext', 'resumeFromPreviewPosition', 'showDockBackToTop', 'showSearchIdentitySwitcher'] as const) {
     if (typeof record[field] !== 'boolean')
       record[field] = originalSettings[field]
   }
   if (record.savedVideoQuality !== null && (!Number.isSafeInteger(record.savedVideoQuality) || record.savedVideoQuality < 0))
     record.savedVideoQuality = null
-  if (record.historyLayout !== 'list' && record.historyLayout !== 'grid')
-    record.historyLayout = 'list'
+  if (record.historyGroupInterval !== 'hour' && record.historyGroupInterval !== 'period' && record.historyGroupInterval !== 'day')
+    record.historyGroupInterval = 'day'
 
   Reflect.deleteProperty(record, 'detectCommentShadowBan')
   Reflect.deleteProperty(record, 'homeTabsPosition')

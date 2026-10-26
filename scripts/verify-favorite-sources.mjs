@@ -689,6 +689,30 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
     assert.deepEqual({ ...loader.covers }, {})
   })
 
+  check('favorite folder covers: the hero lane never waits behind the rail', async () => {
+    const { createFavoriteFolderCoverLoader } = await import('../src/contentScripts/views/Favorites/favoriteFolderCovers')
+    const calls = []
+    const loader = createFavoriteFolderCoverLoader((id) => {
+      const task = deferred()
+      calls.push({ id, ...task })
+      return task.promise
+    })
+    loader.load(1)
+    loader.load(2)
+    loader.load(3)
+    loader.load(3, 'hero')
+    loader.load(1, 'hero')
+    assert.deepEqual(calls.map(call => call.id), [1, 3], 'the hero takes a waiting cover over at once; one in flight is not read twice')
+    calls[0].resolve('one')
+    calls[1].resolve('three')
+    await flush()
+    assert.deepEqual(calls.map(call => call.id), [1, 3, 2])
+    calls[2].resolve('two')
+    await flush()
+    assert.deepEqual({ ...loader.covers }, { 1: 'one', 2: 'two', 3: 'three' })
+    loader.dispose()
+  })
+
   check('favorite sidebar: single-click selection, isolated actions and inert collapsed panels', async () => {
     let onIntersect
     let stopped = false

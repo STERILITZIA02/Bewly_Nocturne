@@ -77,7 +77,21 @@ interface NativeFavoriteFolder { id: string, original: boolean, count?: number, 
 interface NativeFavoriteDialog { aid: number, folders: NativeFavoriteFolder[] }
 type NativeQualityState = { ready: false } | { ready: true, quality: number, actualQuality: number, preview: boolean }
 
-function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quality') {
+export interface NativePlaybackUnit {
+  aid: number
+  bvid?: string
+  cid: number
+  page: number
+  episodeId?: number
+  seasonId?: number
+}
+
+export interface NativeMediaSnapshot {
+  unit?: NativePlaybackUnit
+  btr: { installed: boolean, ownsMedia: boolean }
+}
+
+function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quality' | 'playback') {
   const channelId = getPageBridgeChannelId()
   const href = location.href
   if (!channelId || !node.isConnected)
@@ -97,6 +111,26 @@ function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quali
   }
   finally { node.removeEventListener(VIDEO_COMPONENT_RESPONSE, receive) }
   return response
+}
+
+/** Source URLs are intentionally absent: MSE replacement does not change a unit. */
+export function readNativeMediaSnapshot(video: HTMLVideoElement): NativeMediaSnapshot | undefined {
+  const data = readComponentSnapshot(video, 'playback')
+  const btr = data?.btr as NativeMediaSnapshot['btr'] | undefined
+  const unit = data?.unit as NativePlaybackUnit | undefined
+  if (!btr || typeof btr.installed !== 'boolean' || typeof btr.ownsMedia !== 'boolean')
+    return
+  if (unit && (!Number.isSafeInteger(unit.aid) || unit.aid <= 0 || !Number.isSafeInteger(unit.cid) || unit.cid <= 0
+    || !Number.isSafeInteger(unit.page) || unit.page < 1
+    || (unit.bvid !== undefined && !/^BV[0-9a-z]{10}$/i.test(unit.bvid))
+    || [unit.episodeId, unit.seasonId].some(id => id !== undefined && (!Number.isSafeInteger(id) || id <= 0)))) {
+    return
+  }
+  return { unit, btr }
+}
+
+export function getNativePlaybackUnitKey(unit: NativePlaybackUnit) {
+  return `${unit.aid}:${unit.cid}:${unit.episodeId ?? ''}`
 }
 
 export function readNativeQualityState(video: HTMLElement): NativeQualityState | undefined {

@@ -94,7 +94,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     const categoryKeys = ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount']
     const newSwitches = ['rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters']
     const old = { ...defaults, videoPlayerModeOverrides: { multipart: 'widescreen', collection: 'default', bangumi: 'inherit', watchLater: 'inherit', playlist: 'inherit' } }
-    for (const key of [...categoryKeys, ...newSwitches, 'savedVideoQuality', 'historyLayout'])
+    for (const key of [...categoryKeys, ...newSwitches, 'savedVideoQuality', 'historyGroupInterval'])
       delete old[key]
     normalize(old)
     for (const key of categoryKeys)
@@ -103,7 +103,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       assert.equal(old[key], false)
     assert.equal(old.showLikeNotificationReminder, false)
     assert.equal(old.savedVideoQuality, null)
-    assert.equal(old.historyLayout, 'list')
+    assert.equal(old.historyGroupInterval, 'day')
     for (const [value, expected] of [['left', 'bottom'], ['bottom', 'bottom'], ['right', 'right'], ['invalid', 'bottom']]) {
       const legacy = { ...old, dockPosition: value, showHomeButtonInTouchMode: true }
       normalize(legacy)
@@ -112,10 +112,10 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     }
     assert.equal(old.videoPlayerModeOverrides.multipart, 'widescreen')
     assert.equal(old.videoPlayerModeOverrides.momentsDialog, 'inherit')
-    const invalid = { ...old, savedVideoQuality: -1, historyLayout: 'broken', showReplyNotificationReminder: 'false', originalMomentsUseBewlyFilters: 1 }
+    const invalid = { ...old, savedVideoQuality: -1, historyGroupInterval: 'broken', showReplyNotificationReminder: 'false', originalMomentsUseBewlyFilters: 1 }
     normalize(invalid)
     assert.equal(invalid.savedVideoQuality, null)
-    assert.equal(invalid.historyLayout, 'list')
+    assert.equal(invalid.historyGroupInterval, 'day')
     assert.equal(invalid.showReplyNotificationReminder, true)
     assert.equal(invalid.originalMomentsUseBewlyFilters, false)
 
@@ -176,13 +176,13 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       await flush()
     }
     try {
-      await importValues({ ...retired, savedVideoQuality: 64, historyLayout: 'grid', rememberVideoQuality: true, showUnfollowedPrivateMessageUnreadCount: false, videoPlayerModeOverrides: { multipart: 'default', collection: 'widescreen', bangumi: 'inherit', watchLater: 'inherit', playlist: 'inherit' } })
+      await importValues({ ...retired, savedVideoQuality: 64, historyGroupInterval: 'hour', rememberVideoQuality: true, showUnfollowedPrivateMessageUnreadCount: false, videoPlayerModeOverrides: { multipart: 'default', collection: 'widescreen', bangumi: 'inherit', watchLater: 'inherit', playlist: 'inherit' } })
       assert.equal(settings.value.savedVideoQuality, 64)
-      assert.equal(settings.value.historyLayout, 'grid')
+      assert.equal(settings.value.historyGroupInterval, 'hour')
       assert.equal(settings.value.showUnfollowedPrivateMessageUnreadCount, false)
       assert.equal(settings.value.videoPlayerModeOverrides.collection, 'widescreen')
       assert.equal(settings.value.videoPlayerModeOverrides.momentsDialog, 'inherit')
-      await importValues({ savedVideoQuality: '80', historyLayout: 'unknown', rememberVideoQuality: 'true', videoPlayerModeOverrides: { unknown: 'default' } })
+      await importValues({ savedVideoQuality: '80', historyGroupInterval: 'unknown', rememberVideoQuality: 'true', videoPlayerModeOverrides: { unknown: 'default' } })
       assert.equal(imported.length, 1)
       assert.equal(notifications.at(-1), 'settings.maintenance.import_no_matches')
       await importValues({ videoPlayerModeOverrides: { momentsDialog: 'bewlyWidescreen' } })
@@ -213,7 +213,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       assert.equal(settings.value.commentReplyTreeContainerHeight, 600)
       assert.equal(isSettingsCloudSyncField('localLoudnessEnabled'), false)
       assert.equal(isSettingsCloudSyncField('localLoudnessTarget'), true)
-      for (const key of [...categoryKeys, ...newSwitches, 'historyLayout', 'videoPlayerModeOverrides'])
+      for (const key of [...categoryKeys, ...newSwitches, 'historyGroupInterval', 'videoPlayerModeOverrides'])
         assert.equal(isSettingsCloudSyncField(key), true)
     }
     finally {
@@ -223,35 +223,27 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     }
   })
 
-  check('maintenance 10 model: dates and incomplete grid rows share stable, aligned metric slots across layout changes', async () => {
-    const { createHistoryWindow } = await import('../src/contentScripts/views/History/historyWindow')
-    const item = id => ({ kid: id, view_at: id, history: { business: 'archive', oid: id } })
-    const groups = [{ key: 'a', label: 'A', items: [1, 2, 3, 4].map(item) }, { key: 'b', label: 'B', items: [5, 6].map(item) }]
-    const list = createHistoryWindow(groups, 1)
-    for (const columns of [2, 3, 5]) {
-      const grid = createHistoryWindow(groups, columns)
-      assert.equal(grid.length % columns, 0)
-      assert.deepEqual(grid.filter(cell => cell.kind === 'item').map(cell => cell.key), list.filter(cell => cell.kind === 'item').map(cell => cell.key))
-      grid.forEach((cell, index) => {
-        if (cell.kind === 'heading')
-          assert.equal(index % columns, 0)
-      })
-      assert.equal(new Set(grid.map(cell => cell.key)).size, grid.length)
-      const collapsed = createHistoryWindow(groups, columns, new Set(['a']))
-      assert.equal(collapsed.length % columns, 0)
-      assert.equal(collapsed.filter(cell => cell.kind === 'heading').length, 2)
-      assert.equal(collapsed.find(cell => cell.kind === 'heading').expanded, false)
-      assert.deepEqual(collapsed.filter(cell => cell.kind === 'item').map(cell => cell.item.kid), [5, 6])
-    }
-    const duplicate = createHistoryWindow([{ key: 'a', label: 'A', items: [item(1), item(1)] }], 3)
-    assert.equal(new Set(duplicate.map(cell => cell.key)).size, duplicate.length)
+  check('maintenance 10 model: history groups by the hour, eight hours or the day, in the order records reach them', async () => {
+    const { groupHistoryItems, historyGroupHours } = await import('../src/contentScripts/views/History/historyGroups')
+    const at = (day, hour, minute = 0) => new Date(2026, 9, day, hour, minute).getTime() / 1000
+    const item = (id, viewAt) => ({ kid: id, view_at: viewAt, history: { business: 'archive', oid: id } })
+    const items = [item(1, at(25, 23, 30)), item(2, at(25, 17)), item(3, at(25, 9)), item(4, at(25, 8, 59)), item(5, at(24, 7)), item(6, Number.NaN)]
+    const keys = interval => groupHistoryItems(items, interval).map(group => [group.key, group.items.map(record => record.kid)])
+    assert.deepEqual(keys('day'), [['2026-10-25', [1, 2, 3, 4]], ['2026-10-24', [5]], ['unknown', [6]]])
+    assert.deepEqual(keys('period'), [['2026-10-25T16', [1, 2]], ['2026-10-25T8', [3, 4]], ['2026-10-24T0', [5]], ['unknown', [6]]])
+    assert.deepEqual(keys('hour'), [['2026-10-25T23', [1]], ['2026-10-25T17', [2]], ['2026-10-25T9', [3]], ['2026-10-25T8', [4]], ['2026-10-24T7', [5]], ['unknown', [6]]])
+    const [evening] = groupHistoryItems(items, 'period')
+    assert.equal(evening.dayKey, '2026-10-25')
+    assert.equal(historyGroupHours(evening), '16:00–24:00')
+    assert.equal(historyGroupHours(groupHistoryItems(items, 'day')[0]), '', 'a day heading is the date alone')
+    assert.equal(groupHistoryItems(items, 'day').at(-1).start, null)
   })
 
-  check('maintenance 10 component: actual History uses one bounded window for 1000 grouped records, preserves focus and reuses search/delete ownership', async () => {
+  check('maintenance 10 component: actual History windows 1000 records as group rows, regroups without reading, and deletes from the card menu', async () => {
     const root = document.body.appendChild(document.createElement('section'))
     root.style.overflowY = 'auto'
     Object.defineProperties(root, { clientWidth: { value: 1200 }, clientHeight: { value: 700 }, scrollHeight: { value: 400000 } })
-    const settings = Vue.ref({ historyLayout: 'list', enableGridLayoutSwitcher: true })
+    const settings = Vue.ref({ historyGroupInterval: 'day', enableGridLayoutSwitcher: true })
     const records = Array.from({ length: 1000 }, (_, index) => ({
       kid: index + 1,
       title: `Video ${index + 1}`,
@@ -318,53 +310,43 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       }
     }
     globalThis.ResizeObserver = window.ResizeObserver = Observer
+    // Folding a group is a measured disclosure; reduced motion makes it settle at once.
+    const previousMatchMedia = window.matchMedia
+    window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} })
     const box = (top, height, width = 1200) => ({ x: 0, y: top, top, bottom: top + height, left: 0, right: width, width, height, toJSON: () => ({}) })
-    // JSDOM has no grid layout. This boundary supplies independent, fixed CSS
-    // row geometry; the real component/window still owns all ranges and anchors.
+    // JSDOM has no layout. This boundary supplies fixed row geometry (a heading
+    // over a strip of cards, or the heading alone when folded); the real
+    // component and window still own all ranges and anchors.
     HTMLElement.prototype.getBoundingClientRect = function () {
       if (this === root)
         return box(0, 700)
       if (this.classList.contains('history-groups'))
         return box(60 - root.scrollTop, 200000)
-      if (this.classList.contains('history-list-card') || this.classList.contains('history-day-heading')) {
-        const grid = settings.value.historyLayout === 'grid'
-        // Same rule as getAdaptiveGridColumnCount: 320px minimum covers in a 1200px root.
-        const columns = grid ? Math.max(1, Math.floor((1200 + 16) / (320 + 16))) : 1
-        const gap = grid ? 16 : 8
+      if (this.classList.contains('history-group')) {
         let top = 60 - root.scrollTop
-        let column = 0
         for (const sibling of this.parentElement.children) {
-          const heading = sibling.classList.contains('history-day-heading')
-          const spacer = sibling.style.gridColumn === '1 / -1'
-          const card = sibling.classList.contains('history-list-card')
-          const height = heading ? (sibling.classList.contains('history-day-heading--first') ? (grid ? 28 : 32) : grid ? 36 : 48) : spacer ? Number.parseFloat(sibling.style.height) || 0 : grid ? 320 : 140
-          if ((heading || spacer) && column) {
-            top += (grid ? 320 : 140) + gap
-            column = 0
-          }
+          const group = sibling.classList.contains('history-group')
+          const height = group ? (sibling.querySelector('[aria-expanded="false"]') ? 28 : 328) : Number.parseFloat(sibling.style.height) || 0
           if (sibling === this)
-            return box(top, height, grid && card ? 1200 / columns : 1200)
-          if (heading || spacer) {
-            top += height + gap
-          }
-          else if (card && ++column === columns) {
-            top += height + gap
-            column = 0
-          }
+            return box(top, height)
+          top += height + 24
         }
       }
       return rectangles.call(this)
     }
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 1200 })
     const blank = { render: () => null }
-    const picture = { props: ['src'], setup: props => () => Vue.h('picture', { 'data-picture-source': props.src }) }
+    // The shared card is covered by its own tests; this stand-in shows its link
+    // and runs the page's menu item the way the card menu does.
+    const card = { props: ['video', 'menuItem', 'getMenuExtraGroups', 'showWatchLater'], setup: (props, { slots, attrs }) => () => Vue.h('article', { ...attrs, 'class': 'video-card-stub', 'data-href': props.video.url }, [
+      slots.coverBottom?.(),
+      Vue.h('button', { class: 'video-card-stub__remove', onClick: () => props.getMenuExtraGroups(props.menuItem)[0][0].run() }, props.getMenuExtraGroups(props.menuItem)[0][0].name),
+    ]) }
     const progress = await import('../src/utils/playbackProgress')
     const page = await compileComponent('../src/contentScripts/views/History/History.vue', {
       'vue-i18n': { useI18n: () => ({ t: key => key, locale: Vue.ref('en') }) },
       'vue-toastification': { useToast: () => ({ error: error => assert.fail(String(error)) }) },
-      '~/components/VideoListSkeleton.vue': { default: await compileComponent('../src/components/VideoListSkeleton.vue') },
-      '~/components/LazyPicture.vue': { default: picture },
-      '~/components/Settings/components/SettingsSegmentedControl.vue': { default: blank },
+      '~/components/VideoCard/VideoCard.vue': { default: card },
       '~/composables/useAppProvider': { useBewlyApp: () => provider },
       '~/composables/useConfirmDialog': { useConfirmDialog: () => ({ confirm: async () => false }) },
       '~/composables/useCardWindow': { ...realWindow, useCardWindow: (options) => {
@@ -382,7 +364,6 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       '~/utils/locale': await import('../src/utils/locale'),
       '~/utils/main': { getCSRF: () => 'fixture', getUserID: () => '1', removeHttpFromUrl: value => value },
       '~/utils/videoVisitHistory': { getVideoProgressPercentage: (_identity, value, duration) => progress.normalizePlaybackProgress(value, duration), clearVideoVisitHistory() {}, removeVideoVisitHistory() {} },
-      './historyWindow': await import('../src/contentScripts/views/History/historyWindow'),
       './useHistoryTimeline': timelineSource,
     })
     const IconButton = await compileComponent('../src/components/IconButton.vue')
@@ -406,14 +387,8 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     try {
       app.mount(root)
       await settle()
-      assert.equal(root.querySelectorAll('.video-list-skeleton__row').length, 5)
-      assert.equal(root.querySelectorAll('.history-list-card').length, 0)
-      settings.value.historyLayout = 'grid'
-      await settle()
-      assert.equal(root.querySelectorAll('.video-list-skeleton__row').length, 0)
-      assert.equal(root.querySelectorAll('.library-video-skeleton--history').length, 6)
-      assert.ok(root.querySelector('.library-video-skeleton__author [data-bew-skeleton]'))
-      settings.value.historyLayout = 'list'
+      assert.ok(root.querySelector('.history-group-skeleton'), 'groups load as skeleton rows')
+      assert.equal(root.querySelectorAll('.video-card-stub').length, 0)
       initialRead.resolve()
       await settle()
       assert.equal(root.querySelectorAll('[data-bew-skeleton]').length, 0, 'settled loading placeholders unmount')
@@ -421,33 +396,34 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
         await provider.handleReachBottom.value()
       await settle()
       assert.equal(timeline.historyList.length, 1000)
-      assert.equal(windowCount, 1, 'dates never instantiate independent list controllers')
-      assert.ok(root.querySelectorAll('.history-list-card').length < 150)
-      assert.ok(root.querySelector('.history-day-heading'))
-      assert.match(root.querySelector('.history-list-card__overlay').getAttribute('href'), /p=2/)
-      root.scrollTop = 8000
-      root.dispatchEvent(new Event('scroll'))
+      assert.equal(windowCount, 1, 'groups never instantiate independent list controllers')
+      assert.ok(root.querySelectorAll('.history-group').length < 25, 'rows outside the window are released')
+      assert.ok(root.querySelector('.history-day-toggle'))
+      assert.match(root.querySelector('.video-card-stub').dataset.href, /p=2/)
+      assert.ok(root.querySelector('.video-card-stub [data-progress]'), 'the watched line sits on the cover')
+      // Choosing a period in the hero starts the list below at it, from loaded pages.
+      const firstHeading = root.querySelector('.history-day-toggle').textContent
+      const readsBeforeStart = reads.length
+      root.querySelector('.library-hero-carousel__peek').click()
       await settle()
-      const visible = Array.from(root.querySelectorAll('.history-list-card')).find(element => element.getBoundingClientRect().top >= 0)
-      const key = visible.dataset.historyKey
-      const focused = visible.querySelector('.history-list-card__delete')
-      focused.focus()
+      assert.notEqual(root.querySelector('.history-day-toggle').textContent, firstHeading, 'the list starts at the chosen period')
+      assert.equal(reads.length, readsBeforeStart, 'starting at a loaded period reads nothing')
+      root.querySelectorAll('.library-hero-carousel__peek')[0].click()
+      await settle()
+      assert.equal(root.querySelector('.history-day-toggle').textContent, firstHeading, 'the previous card brings the earlier periods back')
       const before = reads.length
-      settings.value.historyLayout = 'grid'
+      settings.value.historyGroupInterval = 'hour'
       await settle()
+      assert.equal(reads.length, before, 'regrouping reuses loaded history')
       assert.equal(windowCount, 1)
-      assert.equal(reads.length, before, 'view changes do not duplicate history reads')
-      assert.equal(Array.from(root.querySelectorAll('[data-history-key]')).find(element => element.dataset.historyKey === key), visible)
-      assert.equal(document.activeElement, focused)
-      assert.ok(root.querySelectorAll('.history-list-card').length < 250)
+      assert.match(root.querySelector('.history-day-toggle').textContent, /\d\d:00–\d\d:00/, 'part-day groups add their hours')
+      settings.value.historyGroupInterval = 'day'
       await settle()
-      assert.equal(document.activeElement, focused)
-      focused.click()
+      assert.equal(root.querySelector('.history-list-card__delete'), null, 'cards carry no delete button')
+      root.querySelector('.video-card-stub__remove').click()
       await settle()
-      assert.equal(writes.length, 1)
+      assert.equal(writes.length, 1, 'the card menu item reaches the existing delete transport')
       assert.equal(timeline.historyList.length, 999)
-      assert.equal(document.activeElement.classList.contains('history-list-card__delete'), true)
-      assert.notEqual(document.activeElement.closest('[data-history-key]').dataset.historyKey, key)
       const search = root.querySelector('.library-search-field input')
       search.value = 'needle'
       search.dispatchEvent(new Event('input', { bubbles: true }))
@@ -473,14 +449,15 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       assert.deepEqual(reads.at(-1), ['history', 0], 'sidebar refresh restarts the history cursor without reloading the document')
       assert.equal(timeline.historyList[0].title, 'Latest history result')
       const readsBeforeSort = reads.length
-      root.querySelector('.history-sort-button').click()
+      assert.equal(root.querySelector('[data-filter="sort:newest"]').getAttribute('aria-checked'), 'true', 'the order is a group of the funnel menu')
+      root.querySelector('[data-filter="sort:oldest"]').click()
       await settle()
       assert.equal(reads.length, readsBeforeSort, 'sorting reuses loaded history')
-      assert.equal(root.querySelector('.history-sort-button').dataset.sortOrder, 'oldest')
+      assert.equal(root.querySelector('[data-filter="sort:oldest"]').getAttribute('aria-checked'), 'true')
       root.querySelector('[role="switch"]').click()
       await settle()
       assert.equal(root.querySelectorAll('.watch-later-selection input').length, 20)
-      assert.ok(root.querySelector('.history-list-card__content').hasAttribute('inert'))
+      assert.ok(root.querySelector('.video-card-stub').hasAttribute('inert'))
       const checkbox = root.querySelector('.watch-later-selection input')
       checkbox.checked = true
       checkbox.dispatchEvent(new Event('change', { bubbles: true }))
@@ -498,12 +475,12 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       heading.click()
       await settle()
       assert.equal(root.querySelector('.history-day-toggle').getAttribute('aria-expanded'), 'false')
-      assert.equal(root.querySelectorAll('.history-list-card').length, 0)
+      assert.equal(root.querySelectorAll('.video-card-stub').length, 0)
       assert.equal(timeline.historyList.length, remaining, 'collapsing only changes presentation')
       assert.ok(sentinelChecks > beforeCollapseChecks, 'collapsing rechecks the existing bottom sentinel')
       root.querySelector('.history-day-toggle').click()
       await settle()
-      assert.equal(root.querySelectorAll('.history-list-card').length, remaining)
+      assert.equal(root.querySelectorAll('.video-card-stub').length, remaining)
       const beforeAutomatic = reads.length
       await provider.handleReachBottom.value()
       await settle()
@@ -522,6 +499,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       if (clientWidth)
         Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidth)
       else delete HTMLElement.prototype.clientWidth
+      window.matchMedia = previousMatchMedia
       globalThis.ResizeObserver = previousResize
       if (previousWindowResize)
         window.ResizeObserver = previousWindowResize

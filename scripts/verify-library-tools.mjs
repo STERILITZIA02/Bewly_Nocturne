@@ -7,51 +7,41 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerLibraryToolChecks(check, { Vue, compileComponent, flush }) {
-  check('Favorites filter: collapsed sections hold scope and conditions; scope applies at once and partitions load on first open', async () => {
-    const Panel = await compileComponent('../src/contentScripts/views/Favorites/FavoriteFilterPanel.vue', {
-      'vue-i18n': { useI18n: () => ({ t: key => key }) },
-      '~/components/TagRemoveButton.vue': { default: { render: () => null } },
-      '~/contentScripts/views/WatchLater/WatchLaterFilterSection.vue': { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterFilterSection.vue', {}, { globals: { sessionStorage: window.sessionStorage } }) },
+  check('rail filter menu: titled single-choice groups, a pending option rings, an action option runs, and opening is reported', async () => {
+    const shown = []
+    const Menu = await compileComponent('../src/components/LibraryFilterMenu.vue', {
+      '~/components/ContextMenu.vue': { default: { props: ['options', 'anchor', 'trigger'], emits: ['select', 'close'], setup(props, { emit }) {
+        shown.push({ props, emit })
+        return () => null
+      } } },
     })
-    window.sessionStorage.clear()
-    const scopes = []
-    const loads = []
-    const scope = Vue.ref('current')
+    const events = []
     const host = document.body.appendChild(document.createElement('div'))
-    const app = Vue.createApp({ setup: () => () => Vue.h(Panel, {
-      applied: { mids: [], tids: [], keywords: [] },
-      uploaders: [],
-      partitions: [],
-      partitionsLoading: false,
-      partitionsFailed: false,
-      scope: scope.value,
-      scopeOptions: [{ value: 'current', label: 'Current' }, { value: 'all', label: 'All' }],
-      onScope: (value) => {
-        scopes.push(value)
-        scope.value = value
-      },
-      onLoadPartitions: () => loads.push(true),
+    const app = Vue.createApp({ setup: () => () => Vue.h(Menu, {
+      label: 'Filters',
+      groups: [
+        { key: 'scope', title: 'Scope', value: 'current', options: [{ value: 'current', label: 'Current', icon: 'i-a' }, { value: 'all', label: 'All', icon: 'i-b' }] },
+        { key: 'partition', title: 'Partition', value: 'all', options: [{ value: 'all', label: 'All', icon: 'i-c', pending: true }, { value: 'retry', label: 'Retry', icon: 'i-d', action: true }] },
+      ],
+      onOpen: () => events.push(['open']),
+      onSelect: (key, value) => events.push([key, value]),
     }) })
     app.mount(host)
     try {
+      host.querySelector('button').click()
       await flush()
-      const group = host.querySelector('[aria-label="library_tools.search_scope"]')
-      assert.ok(group, 'scope is part of the filter panel')
-      const [current, all] = group.querySelectorAll('button')
-      assert.equal(current.getAttribute('aria-pressed'), 'true')
-      current.click()
-      all.click()
-      await flush()
-      assert.deepEqual(scopes, ['all'], 'only a different scope emits')
-      assert.equal(group.querySelectorAll('button')[1].getAttribute('aria-pressed'), 'true')
-      const toggles = [...host.querySelectorAll('.watch-later-filter-section h2 button')]
-      assert.deepEqual(toggles.map(button => button.getAttribute('aria-expanded')), ['false', 'false', 'false', 'false'], 'every section starts collapsed like the other library sidebars')
-      assert.equal(host.querySelector('.favorite-filter__actions'), null, 'apply/reset appear only with a pending or applied condition')
-      assert.deepEqual(loads, [], 'partitions are not scanned before their section opens')
-      toggles[2].click()
-      await flush()
-      assert.deepEqual(loads, [true])
-      assert.equal(window.sessionStorage.getItem('bewly-library-filter-section:favorites:partition'), '1')
+      assert.deepEqual(events, [['open']])
+      const options = shown.at(-1).props.options
+      assert.deepEqual(options.map(option => [option.value, option.section, option.kind, option.checked]), [
+        ['scope:current', 'Scope', 'radio', true],
+        ['scope:all', 'Scope', 'radio', false],
+        ['partition:all', 'Partition', 'radio', true],
+        ['partition:retry', 'Partition', undefined, undefined],
+      ])
+      assert.equal(options[2].pending, true, 'a group still loading rings in its check')
+      assert.ok(options.every(option => option.closeOnSelect === false), 'the menu stays open while choices apply')
+      shown.at(-1).emit('select', 'partition:retry')
+      assert.deepEqual(events.at(-1), ['partition', 'retry'])
     }
     finally {
       app.unmount()
@@ -81,7 +71,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     }
     assert.equal(scan.pause, undefined)
     assert.equal(scan.scannedItems, undefined, 'no progress counts to show')
-    scan.apply({ mids: [7], tids: [], keywords: [] })
+    scan.apply({ mids: [7], tids: [] })
     await settle()
     assert.equal(scan.status.value, 'budget')
     assert.equal(reads.length, 27, 'past the page budget until the first match, so the grid is never left empty')
@@ -353,73 +343,6 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     finally {
       app.unmount()
       host.remove()
-    }
-  })
-  check('history fold motion reverses from the displayed frame and releases animations on reduced motion or unmount', async () => {
-    const { useHistoryDayMotion } = await import('../src/contentScripts/views/History/useHistoryDayMotion')
-    const root = document.body.appendChild(document.createElement('div'))
-    const row = root.appendChild(document.createElement('div'))
-    row.dataset.historyCell = 'date:next'
-    row.style.opacity = '1'
-    let top = 300
-    row.getBoundingClientRect = () => ({ top, bottom: top + 28, left: 0, right: 100, width: 100, height: 28 })
-    const animations = []
-    const animate = (frames) => {
-      let resolve, reject
-      const finished = new Promise((yes, no) => {
-        resolve = yes
-        reject = no
-      })
-      const animation = { frames, finished, cancelled: false, cancel() {
-        this.cancelled = true
-        reject(new Error('cancelled'))
-      }, finish: () => resolve() }
-      animations.push(animation)
-      return animation
-    }
-    root.animate = row.animate = animate
-    const matchMedia = window.matchMedia
-    let reduced = false
-    window.matchMedia = () => ({ matches: reduced })
-    let motion
-    const host = document.body.appendChild(document.createElement('div'))
-    const app = Vue.createApp({ setup() {
-      motion = useHistoryDayMotion(Vue.ref(root))
-      return () => null
-    } })
-    let mounted = true
-    app.mount(host)
-    try {
-      const closing = motion.run(() => top = 100)
-      await flush()
-      assert.equal(animations[0].frames[0].transform, 'translate(0px, 200px)')
-      top = 180 // Mid-flight visual geometry, not the old 100px destination.
-      const opening = motion.run(() => top = 300)
-      await flush()
-      assert.equal(animations[0].cancelled, true)
-      assert.equal(animations[1].frames[0].transform, 'translate(0px, -120px)')
-      animations[1].finish()
-      await Promise.all([closing, opening])
-      assert.equal(motion.active.value, false)
-      reduced = true
-      await motion.run(() => top = 100)
-      assert.equal(animations.length, 2)
-      reduced = false
-      await motion.run(() => top = 300, true)
-      assert.equal(animations.length, 2, 'keyboard toggles do not wait for motion')
-      const leaving = motion.run(() => top = 100)
-      await flush()
-      app.unmount()
-      mounted = false
-      await leaving
-      assert.equal(animations[2].cancelled, true)
-    }
-    finally {
-      if (mounted)
-        app.unmount()
-      root.remove()
-      host.remove()
-      window.matchMedia = matchMedia
     }
   })
   check('history advanced filters compose device, duration and inclusive calendar bounds without mutating sort input', () => {

@@ -232,7 +232,6 @@ async function verifySharedVideoStyles() {
   for (const [path, title, details, coverGap] of [
     ['../src/components/VideoCard/components/VideoCardInfo.vue', '.video-card-info-title', '.video-card-info', '.video-card-info'],
     ['../src/contentScripts/views/WatchLater/WatchLaterGridCard.vue', '.watch-later-grid-card__title', '.watch-later-grid-card__body', '.watch-later-grid-card'],
-    ['../src/contentScripts/views/History/History.vue', '.history-list-card__title', '.history-list-card--grid .history-list-card__details', '.history-list-card--grid .history-list-card__content'],
   ]) {
     const url = new URL(path, import.meta.url)
     const source = await readFile(url, 'utf8')
@@ -245,6 +244,10 @@ async function verifySharedVideoStyles() {
     assert.match(rule(details), /gap: var\(--bew-space-1\)/, `${path}: consistent title/uploader gap`)
     assert.match(rule(coverGap), /(?:margin-top|gap): var\(--bew-space-3\)/, `${path}: cover gap exceeds text gap`)
   }
+  // History rows render the shared video card itself, not a look-alike.
+  const history = await readFile(new URL('../src/contentScripts/views/History/History.vue', import.meta.url), 'utf8')
+  assert.match(history, /<VideoCard\s+:video="getHistoryVideo\(item\)"/)
+  assert.doesNotMatch(history, /history-list-card/)
 }
 
 async function verifyPreferredFontScale() {

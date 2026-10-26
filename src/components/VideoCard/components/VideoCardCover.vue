@@ -525,6 +525,10 @@ onBeforeUnmount(() => {
         >
           {{ video?.badge?.text }}
         </div>
+        <!-- A mark along the bottom edge, such as History's watched line. -->
+        <div v-if="$slots.coverBottom" class="video-card-cover__bottom">
+          <slot name="coverBottom" />
+        </div>
       </template>
     </template>
   </div>
@@ -536,6 +540,21 @@ onBeforeUnmount(() => {
 .video-card-cover {
   @include contentCard.media-frame;
   transition: box-shadow var(--bew-duration-moderate) var(--bew-ease-standard);
+}
+
+.video-card-cover__bottom {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  border-radius: inherit;
+  corner-shape: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  > * {
+    flex: 1;
+  }
 }
 
 .video-card-overlay-transition {

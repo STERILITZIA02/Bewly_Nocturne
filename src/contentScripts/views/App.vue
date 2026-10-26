@@ -70,6 +70,7 @@ import { cancelScrollIntent, scrollToPosition } from '~/utils/scrollIntent'
 import type { ViewportFrameReason, ViewportGeometry } from '~/utils/viewportGeometry'
 import { invalidateViewportGeometry, readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
 
+import ImmersivePlaybackRail from './ImmersivePlaybackRail.vue'
 import { setupNecessarySettingsWatchers } from './necessarySettingsWatchers'
 import PlaybackCommentComposer from './PlaybackCommentComposer.vue'
 import PlaybackRailTabsIndicator from './PlaybackRailTabsIndicator.vue'
@@ -1033,6 +1034,7 @@ onBeforeUnmount(stopUrlCleaner)
     <LocalLoudnessPanel v-if="localLoudnessPanelOpen" />
     <PlaybackCommentComposer v-if="!isInIframe()" />
     <PlaybackRailTabsIndicator />
+    <ImmersivePlaybackRail />
 
     <!-- Keep the static overlay removal before resolving a caller's request. -->
     <ConfirmDialog

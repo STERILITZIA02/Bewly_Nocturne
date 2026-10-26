@@ -1,6 +1,7 @@
 import { watch } from 'vue'
 
-import { localLoudnessPanelOpen, localLoudnessState, notifyLocalLoudnessPanel, observeLocalLoudnessState, setLocalLoudnessMediaToken } from '~/composables/useLocalLoudness'
+import { audioDelayMs, localLoudnessPanelOpen, localLoudnessState, notifyLocalLoudnessPanel, observeLocalLoudnessState, setAudioDelay, setLocalAudioConfiguration, setLocalLoudnessMediaToken } from '~/composables/useLocalLoudness'
+import { bindPlayerAdjustment, observePlayerAdjustment } from '~/composables/usePlayerAdjustment'
 import { onRouteChange } from '~/composables/useRouteState'
 import { settings } from '~/logic'
 import { i18n } from '~/utils/i18n'
@@ -8,7 +9,7 @@ import { LOCAL_LOUDNESS_BIND, LOCAL_LOUDNESS_BIND_REQUEST } from '~/utils/localL
 import { isVideoPlaybackPage } from '~/utils/main'
 import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { getPlayerRoot, getVideoElement } from '~/utils/playerMedia'
-import { parseVideoMetadataEvent } from '~/utils/videoMetadataBridge'
+import { getNativePlaybackUnitKey, parseVideoMetadataEvent, readNativeMediaSnapshot, VIDEO_COMPONENT_CHANGED, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
 
 import { registerPlayerControlFit } from './playerControlFit'
 import { createPlayerControlTooltip, updatePlayerControlTooltip } from './playerControlTooltip'
@@ -21,15 +22,19 @@ export function setupLocalLoudnessControl() {
   let button: HTMLElement | undefined
   let media: HTMLVideoElement | null = null
   let token = ''
-  let href = ''
+  let unit = ''
+  let configuration = 0
   const stopState = observeLocalLoudnessState()
-  const label = () => String(i18n.global.t('local_loudness.title', settings.value.language))
+  const stopAdjustment = observePlayerAdjustment()
+  const label = () => String(i18n.global.t(settings.value.playerAdjustmentEnabled ? 'player_adjustment.title' : 'local_loudness.title', settings.value.language))
   function bind(clear = false) {
     const channelId = getPageBridgeChannelId()
     if (!channelId || !token)
       return
     const target = clear ? document : media
-    target?.dispatchEvent(new CustomEvent(LOCAL_LOUDNESS_BIND, { bubbles: true, detail: JSON.stringify({ channelId, token, href: location.href, clear }) }))
+    target?.dispatchEvent(new CustomEvent(LOCAL_LOUDNESS_BIND, { bubbles: true, detail: JSON.stringify({ channelId, token, unit, href: location.href, configuration, clear }) }))
+    if (!clear && audioDelayMs.value)
+      setAudioDelay(audioDelayMs.value)
     notifyLocalLoudnessPanel()
   }
   function removeButton() {
@@ -43,22 +48,30 @@ export function setupLocalLoudnessControl() {
     localLoudnessPanelOpen.value = true
   }
   function sync(records?: MutationRecord[]) {
-    if (!settings.value.localLoudnessEnabled || !isVideoPlaybackPage(location.href))
+    if ((!settings.value.localLoudnessEnabled && !settings.value.playerAdjustmentEnabled) || !isVideoPlaybackPage(location.href))
       return
     if (records && button?.isConnected && media?.isConnected && !hasPlayerMediaMutation(records))
       return
     const video = getVideoElement()
-    if (media !== video || href !== location.href) {
+    const snapshot = video instanceof HTMLVideoElement ? readNativeMediaSnapshot(video) : undefined
+    const nextUnit = snapshot?.unit ? getNativePlaybackUnitKey(snapshot.unit) : ''
+    bindPlayerAdjustment(video instanceof HTMLVideoElement ? video : null, nextUnit, settings.value.playerAdjustmentEnabled)
+    if (nextUnit && (media !== video || unit !== nextUnit)) {
       bind(true)
       media = video instanceof HTMLVideoElement ? video : null
-      href = location.href
+      unit = nextUnit
       token = media ? crypto.randomUUID() : ''
       setLocalLoudnessMediaToken(token)
     }
-    bind()
+    if (nextUnit)
+      bind()
     if (!media)
       localLoudnessState.value = video ? 'unsupported' : 'waiting'
     const bar = getPlayerRoot()?.querySelector('.bpx-player-control-bottom-right')
+    if (!settings.value.showPlayerAdjustmentButton) {
+      removeButton()
+      return
+    }
     if (button?.parentElement === bar)
       return
     removeButton()
@@ -95,20 +108,36 @@ export function setupLocalLoudnessControl() {
     setLocalLoudnessMediaToken('')
   }
   function update() {
-    clear()
-    if (!settings.value.localLoudnessEnabled || !isVideoPlaybackPage(location.href))
+    if ((!settings.value.localLoudnessEnabled && !settings.value.playerAdjustmentEnabled) || !isVideoPlaybackPage(location.href)) {
+      localLoudnessPanelOpen.value = false
+      bindPlayerAdjustment(null, '', false)
+      clear()
       return
+    }
+    if (events) {
+      sync()
+      return
+    }
     events = new AbortController()
     window.addEventListener(LOCAL_LOUDNESS_BIND_REQUEST, (event) => {
       const data = parseVideoMetadataEvent(event)
-      if (data && data.channelId === getPageBridgeChannelId() && data.href === location.href)
+      if (data && data.channelId === getPageBridgeChannelId() && data.href === location.href && Number.isSafeInteger(data.configuration)) {
+        configuration = Number(data.configuration)
+        setLocalAudioConfiguration(configuration)
         sync()
+      }
     }, { signal: events.signal })
     for (const name of ['loadedmetadata', 'loadeddata', 'play'])
       document.addEventListener(name, () => sync(), { capture: true, signal: events.signal })
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden)
+        sync()
+    }, { signal: events.signal })
     stopPlayer = observePlayerDom(sync)
+    window.addEventListener(VIDEO_COMPONENT_CHANGED, () => sync(), { signal: events.signal })
+    window.addEventListener(VIDEO_METADATA_CHANGED, () => sync(), { signal: events.signal })
   }
-  const stopSettings = watch(() => settings.value.localLoudnessEnabled, update, { immediate: true, flush: 'post' })
+  const stopSettings = watch(() => [settings.value.localLoudnessEnabled, settings.value.playerAdjustmentEnabled, settings.value.showPlayerAdjustmentButton], update, { immediate: true, flush: 'post' })
   const stopRoute = onRouteChange(() => {
     localLoudnessPanelOpen.value = false
     update()
@@ -129,5 +158,6 @@ export function setupLocalLoudnessControl() {
     localLoudnessPanelOpen.value = false
     clear()
     stopState()
+    stopAdjustment()
   }
 }

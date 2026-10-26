@@ -3,16 +3,22 @@ import { useEventListener } from '@vueuse/core'
 
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
-import { IMMERSIVE_CONFIG, IMMERSIVE_EVENT, IMMERSIVE_FRAME_NAME, IMMERSIVE_PRELOAD_NAME } from '~/constants/immersive'
+import { IMMERSIVE_CONFIG, IMMERSIVE_EVENT, IMMERSIVE_FRAME_NAME, IMMERSIVE_RECOMMENDATIONS } from '~/constants/immersive'
 import { settings } from '~/logic'
 import { getIframeMessageData, markIframeReadyForMessaging } from '~/utils/iframeMessage'
+import type { ImmersiveRailWindow } from '~/utils/immersivePlayback'
 import { releaseIframeMedia } from '~/utils/mediaResources'
 
-const props = defineProps<{ url: string, itemKey: string, title: string, active: boolean, uiVisible: boolean }>()
-const emit = defineEmits<{ (event: 'action', action: 'next' | 'previous' | 'close' | 'ended'): void }>()
+const props = defineProps<{ url: string, itemKey: string, title: string, active: boolean, uiVisible: boolean, recommendations: ImmersiveRailWindow }>()
+const emit = defineEmits<{
+  (event: 'action', value: { key: string, action: 'next' | 'previous' | 'close' | 'ended' }): void
+  (event: 'railAction', action: { action: string, key?: string, revision?: number }): void
+  (event: 'navigation', href: string): void
+}>()
 const frame = ref<HTMLIFrameElement>()
 const layoutReady = ref(false)
 const timedOut = ref(false)
+const playbackState = ref('requesting')
 let timer: ReturnType<typeof setTimeout> | undefined
 let playbackId = 0
 const { currentHref, channel } = useIframeDocumentHost(frame, () => true)
@@ -33,6 +39,8 @@ function configure() {
     keyboard: settings.value.immersiveKeyboardSwitch,
     wheel: settings.value.immersiveWheelSwitch,
   })
+  if (props.uiVisible)
+    channel.send({ type: IMMERSIVE_RECOMMENDATIONS, key: props.itemKey, playbackId, window: props.recommendations })
 }
 watch([currentHref, () => props.active, () => props.uiVisible, () => settings.value.immersiveAutoPlay, () => settings.value.immersiveAutoNext, () => settings.value.immersiveKeyboardSwitch, () => settings.value.immersiveWheelSwitch], configure, { flush: 'post' })
 function waitForLayout() {
@@ -53,6 +61,7 @@ watch(() => props.active, (active) => {
   waitForLayout()
 }, { immediate: true, flush: 'sync' })
 watch(() => props.uiVisible, waitForLayout)
+watch(() => props.recommendations, configure, { flush: 'post' })
 useEventListener(window, 'message', (event) => {
   const data = getIframeMessageData(event, frame.value)
   if (!props.active || data?.type !== IMMERSIVE_EVENT || !channel.matches(data) || data.key !== props.itemKey || data.playbackId !== playbackId)
@@ -62,6 +71,8 @@ useEventListener(window, 'message', (event) => {
     return
   }
   if (data.action === 'status' && typeof data.layoutReady === 'boolean' && typeof data.playing === 'boolean') {
+    if (typeof data.state === 'string')
+      playbackState.value = data.state
     const previous = layoutReady.value
     layoutReady.value = data.layoutReady
     if (data.layoutReady)
@@ -69,9 +80,15 @@ useEventListener(window, 'message', (event) => {
     else if (previous && !timedOut.value)
       waitForLayout()
   }
+  else if (data.action === 'navigation' && typeof data.href === 'string') {
+    emit('navigation', data.href)
+  }
+  else if (data.action === 'select' || data.action === 'more') {
+    emit('railAction', { action: data.action, key: typeof data.selectedKey === 'string' ? data.selectedKey : undefined, revision: Number(data.revision) })
+  }
   else if (['next', 'previous', 'close'].includes(String(data.action))
     || (data.action === 'ended' && settings.value.immersiveAutoNext)) {
-    emit('action', data.action as 'next' | 'previous' | 'close' | 'ended')
+    emit('action', { key: props.itemKey, action: data.action as 'next' | 'previous' | 'close' | 'ended' })
   }
 })
 function loaded() {
@@ -93,11 +110,10 @@ function configureInactive() {
 
 <template>
   <div v-show="active" class="immersive-frame" :inert="!active || undefined" :aria-hidden="!active || undefined">
-    <!-- A prepared document retains its permission policy; MAIN gates playback until activation. -->
     <iframe
       ref="frame"
       :src="url"
-      :name="active ? IMMERSIVE_FRAME_NAME : IMMERSIVE_PRELOAD_NAME"
+      :name="IMMERSIVE_FRAME_NAME"
       :title="title"
       :tabindex="active ? 0 : -1"
       allow="autoplay; fullscreen; picture-in-picture; clipboard-write"
@@ -108,6 +124,9 @@ function configureInactive() {
     </div>
     <p v-if="timedOut && !layoutReady" class="immersive-frame__notice" role="status">
       {{ $t('settings.immersive_native_pending') }}
+    </p>
+    <p v-else-if="['gesture', 'error', 'unknown'].includes(playbackState)" class="immersive-frame__notice" role="status">
+      {{ $t(`settings.immersive_playback_${playbackState}`) }}
     </p>
   </div>
 </template>
