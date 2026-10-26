@@ -189,7 +189,7 @@ const topBarGlobalTitleKeys = [
 
 const entries: SettingsSearchEntry[] = [
   ...createEntries(autoPlayRoute, ['settings.play_order_multipart', 'settings.play_order_collection', 'settings.play_order_watch_later', 'settings.play_order_playlist'], { keywordKeys: ['settings.custom_play_order_inherit', 'settings.random_play_order_sequential', 'settings.random_play_order_reverse', 'settings.random_play_order_random'] }),
-  ...createEntries(watchLaterPageRoute, ['settings.history_layout']),
+  ...createEntries(watchLaterPageRoute, ['settings.history_group_interval']),
   ...createEntries(searchPageRoute, ['settings.show_standalone_search_page', 'settings.search_bar_link_opening_behavior'], { keywordKeys: linkOpeningOptionKeys }),
   ...createEntries(messagesPageRoute, ['settings.notification_badge_categories', 'settings.show_like_notification_reminder', 'settings.show_reply_notification_reminder', 'settings.show_at_notification_reminder', 'settings.show_system_notification_reminder', 'settings.show_followed_private_message_unread_count', 'settings.show_unfollowed_private_message_unread_count']),
   ...createEntries(autoPlayRoute, ['settings.auto_exit_fullscreen_on_end']),
@@ -483,6 +483,9 @@ const entries: SettingsSearchEntry[] = [
     'local_loudness.target',
     'local_loudness.strength',
   ]),
+  ...createEntries(playerRoute, ['player_adjustment.enable', 'player_adjustment.show_button'], {
+    keywordKeys: ['player_adjustment.rotate_left', 'player_adjustment.horizontal', 'player_adjustment.vertical', 'player_adjustment.delay'],
+  }),
   ...createEntries(playbackPageRoute, [
     'settings.group_player_display_mode',
     'settings.video_player_mode.bewly_widescreen_sidebar_position',

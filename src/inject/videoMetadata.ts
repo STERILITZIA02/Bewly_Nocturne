@@ -179,6 +179,7 @@ export function setupVideoMetadataBridge(channelId: string) {
       let ready: boolean | undefined
       let episodeId: number | undefined
       let qualityState
+      let unit
       try {
         if (typeof player?.mediaElement === 'function') {
           ready = player.mediaElement() === node
@@ -198,6 +199,31 @@ export function setupVideoMetadataBridge(channelId: string) {
         }
       }
       catch { /* The native player can be disposing between navigation and this synchronous probe. */ }
+      if (request.playback === true && ready === true) {
+        try {
+          const manifest = player?.getManifest?.()
+          const identity = parseVideoPageIdentity(location.href)
+          const url = new URL(location.href)
+          const page = Number(url.searchParams.get('p') || 1)
+          const season = /^\/bangumi\/play\/ss(\d+)/.exec(getBilibiliLogicalPathname())?.[1]
+          const matches = identity
+            ? (identity.aid ? identity.aid === manifest?.aid : identity.bvid === manifest?.bvid)
+            && (manifest?.p ?? 1) === page && (!url.searchParams.has('cid') || Number(url.searchParams.get('cid')) === manifest?.cid)
+            : episode ? Number(episode) === manifest?.episodeId : !!season && Number(season) === manifest?.seasonId
+          if (matches && Number.isSafeInteger(manifest?.aid) && manifest!.aid! > 0
+            && Number.isSafeInteger(manifest?.cid) && manifest!.cid! > 0) {
+            unit = { aid: manifest!.aid, bvid: manifest!.bvid, cid: manifest!.cid, page: manifest!.p ?? 1, episodeId: manifest!.episodeId, seasonId: manifest!.seasonId }
+          }
+        }
+        catch { /* A navigation may retire the manifest before the media node. */ }
+      }
+      const btr = request.playback === true
+        ? {
+            installed: document.documentElement.hasAttribute('data-btr-userscript')
+              || (window as Window & { __biliThreadRipper0901Installed?: boolean }).__biliThreadRipper0901Installed === true,
+            ownsMedia: !!node.closest('[data-btr-mse-active="true"]'),
+          }
+        : undefined
       if (request.quality === true) {
         try {
           const manifest = player?.getManifest?.()
@@ -221,7 +247,7 @@ export function setupVideoMetadataBridge(channelId: string) {
         catch { /* Optional native APIs cannot change the component-ready contract. */ }
       }
       node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
-        detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, ready, episodeId, qualityState }),
+        detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, ready, episodeId, qualityState, unit, btr }),
       }))
       return
     }

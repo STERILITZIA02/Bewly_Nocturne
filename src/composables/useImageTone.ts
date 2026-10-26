@@ -2,23 +2,25 @@ import type { CSSProperties } from 'vue'
 import { computed, shallowRef, watch } from 'vue'
 
 import { getMomentThumbnailUrl } from '~/components/MomentCard/utils'
-import type { ImageTone } from '~/utils/imageTone'
+import type { ImageBandAxis, ImageTone } from '~/utils/imageTone'
 import { peekImageBandTone, readImageBandTone, registerToneProperties } from '~/utils/imageTone'
 import { isPortraitRatio, PORTRAIT_MAX_CLEAR_HEIGHT } from '~/utils/portraitMedia'
 
 /**
  * Below a portrait picture a moment surface takes the colour of the picture
- * just above where it is cut, with black or white text on it. Returns the
- * inline tone colours for the surface's host; the last colour stays until the
- * next one is read, and one read before applies from the first render.
+ * just above where it is cut, with black or white text on it; beside a
+ * picture (`edge: 'left'`, the picture on the right) it takes the colour of
+ * the picture's left edge. Returns the inline tone colours for the surface's
+ * host; the last colour stays until the next one is read, and one read before
+ * applies from the first render.
  */
-export function useImageTone(source: () => { portrait: boolean, image?: string, ratio?: number | null }) {
+export function useImageTone(source: () => { portrait: boolean, image?: string, ratio?: number | null, edge?: 'bottom' | 'left' }) {
   registerToneProperties()
   const tone = shallowRef<ImageTone | null>(null)
   watch(() => {
-    const { portrait, image, ratio } = source()
-    return [portrait, image, ratio] as const
-  }, async ([portrait, image, ratio], _previous, onCleanup) => {
+    const { portrait, image, ratio, edge } = source()
+    return [portrait, image, ratio, edge] as const
+  }, async ([portrait, image, ratio, edge], _previous, onCleanup) => {
     if (!portrait || !image) {
       tone.value = null
       return
@@ -26,7 +28,9 @@ export function useImageTone(source: () => { portrait: boolean, image?: string, 
     let current = true
     onCleanup(() => current = false)
     const shown = isPortraitRatio(ratio) ? Math.min(1, PORTRAIT_MAX_CLEAR_HEIGHT * ratio!) : 1
-    const band = [getMomentThumbnailUrl(image, 64), Math.max(0, shown - 0.15), shown] as const
+    const band: [string, number, number, ImageBandAxis] = edge === 'left'
+      ? [getMomentThumbnailUrl(image, 64), 0, 0.15, 'columns']
+      : [getMomentThumbnailUrl(image, 64), Math.max(0, shown - 0.15), shown, 'rows']
     const known = peekImageBandTone(...band)
     if (known) {
       tone.value = known

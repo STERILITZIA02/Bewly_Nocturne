@@ -14,7 +14,6 @@ import { createCommentReplyReadingController, getCommentReplyGuideCoordinates } 
 import { updateCommentSendButton } from '~/inject/commentSendButton'
 import { sortPlaybackDanmakuListBySender } from '~/inject/danmakuSenderOrder'
 import { EXTERNAL_COMPOSER_COMMENT_BOX_CSS, EXTERNAL_COMPOSER_HEADER_CSS, insertExternalComposerReply, patchExternalComposerReply } from '~/inject/externalCommentComposer'
-import { setupImmersiveMediaGate } from '~/inject/immersiveMediaGate'
 import { syncNativeCommentContinuation } from '~/inject/nativeCommentContinuation'
 import { wakeNativeCommentLists } from '~/inject/nativeCommentWake'
 import { patchNativeUserProfile } from '~/inject/nativeUserProfile'
@@ -71,7 +70,6 @@ if (isElectronEnv) {
   console.warn('[Bewly Nocturne] Detected Electron environment, extension disabled.')
 }
 else if (shouldInitializePageScript) {
-  setupImmersiveMediaGate(pageBridgeChannelId)
   setupVideoMetadataBridge(pageBridgeChannelId)
   // Audio is independent of comment renderers and remains dormant until opted in.
   let loudness: ReturnType<typeof setupLocalLoudnessBridge> | undefined

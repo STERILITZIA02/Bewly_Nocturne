@@ -55,6 +55,14 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 
 <template>
   <div>
+    <SettingsItemGroup :title="t('player_adjustment.title')">
+      <SettingsItem setting-id="player_adjustment.enable" :title="t('player_adjustment.enable')" :desc="t('player_adjustment.description')" right-width="auto">
+        <Radio v-model="settings.playerAdjustmentEnabled" />
+      </SettingsItem>
+      <SettingsItem setting-id="player_adjustment.show_button" :title="t('player_adjustment.show_button')" :desc="t('player_adjustment.show_button_description')" right-width="auto">
+        <Radio v-model="settings.showPlayerAdjustmentButton" />
+      </SettingsItem>
+    </SettingsItemGroup>
     <SettingsItemGroup data-setting-id="local_loudness.title" :title="t('local_loudness.title')">
       <LocalLoudnessPreferences />
     </SettingsItemGroup>

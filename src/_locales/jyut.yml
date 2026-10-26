@@ -5,11 +5,15 @@ library_tools:
   filter_device: 裝置
   filter_progress: 進度
   filter_added: 加入時間
+  filter_sort: 排序
+  filter_layout: 版面
   date_custom: 自訂日期
   date_range: 自訂日期範圍
   days: 跳去某日
   resume_at: '睇到 {time} / {total}'
   video_count: '{count} 條片'
+  item_count: '{count} 項'
+  switch_to: '轉去 {name}'
   uploaders: 呢個收藏夾嘅 UP 主
   all_uploaders: 全部
   layout_list: 清單
@@ -183,7 +187,42 @@ player_screenshot:
   saved: 截圖已儲存
   failed: 截圖失敗
   video_unavailable: 而家嘅影片畫面用唔到
+card_removal:
+  verify_failed: 暫時確認唔到結果，請再核對。
+  watchLater: 移出稍後再睇？
+  favorite: 喺呢個收藏夾取消收藏？
+  confirm: 移除
+  removing: 移除中
+  removed: 已移除
+  restore: 重新加入
+  restoring: 重新加入中
+  verify: 結果仲未確認
+  reconcile: 核對結果
+player_adjustment:
+  title: 畫面同聲音調整
+  enable: 啟用臨時畫面同聲音調整
+  description: 旋轉、鏡像同聲音延後只影響目前播放單元。關閉會重設呢啲調整，響度均衡獨立控制。
+  show_button: 顯示播放器調節入口
+  show_button_description: 隱藏入口唔會重設調整。空間唔夠時，入口會收埋喺播放器嘅更多選單。
+  rotate_left: 向左轉
+  rotate_right: 向右轉
+  horizontal: 水平鏡像
+  vertical: 垂直鏡像
+  reset: 重設
+  picture_note: 截圖仍然儲存原始影片畫格。子母畫面跟瀏覽器實際支援嘅畫面。
+  delay: 聲音延後
+  delay_note: 只修正聲音快過畫面嘅固定偏移，唔會自動同步影音或者修復動態緩衝。音源處理唔到就保留原聲。
 settings:
+  immersive_queue_filtered: 呢輪結果已經被篩走，可以繼續搵
+  immersive_queue_stalled: 呢輪冇新內容，可以再試
+  immersive_scope: 普通稿件按分 P 設定播放；EP 播一集，SS 播進入嗰時解析出嘅選集。
+  immersive_queue_loading: 搵緊下一條
+  immersive_queue_continue: 呢輪未搵到播得嘅內容，可以繼續搵
+  immersive_queue_failed: 下一條讀取失敗，請再試
+  immersive_queue_ended: 推薦隊列已經到底
+  immersive_playback_gesture: 請喺原生播放器撳播放
+  immersive_playback_error: 播放未成功，請用原生重試或者手動切換
+  immersive_playback_unknown: 確認緊播放單元；可以操作原生播放器或者手動切換
   moments_start_from_last_seen: 進入動態時自動接住睇
   moments_start_from_last_seen_desc: 適用於全部動態、影片投稿同頂欄影片動態。優先返去本視窗嘅閱讀書籤，否則定位到伺服器影片未讀分界；分界唔代表所有類型嘅閱讀位置。
   parameters: 參數
@@ -718,7 +757,7 @@ settings:
   immersive_autoplay: 切換後自動播放
   immersive_auto_next: 播完自動去下一條推介
   immersive_preload: 預先載入下一條
-  immersive_preload_desc: 切換前準備下一條，只保留一條。準備頁唔會播放，亦唔計入擴充功能觀看紀錄。
+  immersive_preload_desc: 提早準備下一條嘅封面同已有資訊。切換之後先載入原站播放頁。
   immersive_previous: 上一條推介
   immersive_next: 下一條推介
   immersive_recommendations: 推介側欄
@@ -836,9 +875,7 @@ settings:
   show_widescreen_idle_progress_desc: 只顯示主影片播放進度，唔會改控制列顯隱，亦唔可以拖動。
   original_moments_use_bewly_filters: 原生動態使用現有過濾規則
   original_moments_use_bewly_filters_desc: 只過濾原生動態列表，沿用下面嘅規則；關閉後會還原本功能隱藏嘅內容。
-  history_layout: 觀看記錄版面
-  history_layout_list: 按日期分組列表
-  history_layout_grid: 按日期分組網格
+  history_group_interval: 觀看記錄分組
   notification_badge_categories: 本機通知徽章
   notification_badge_categories_desc: 揀計入 Dock 未讀數嘅訊息類別；唔會改變 B 站接收規則或者已讀狀態。
   show_reply_notification_reminder: 顯示回覆提醒
@@ -1711,6 +1748,11 @@ anime:
       sat: 週六
       sun: 週日
 history:
+  group_hour: 每個鐘
+  group_period: 每 8 個鐘
+  group_day: 每日
+  group_button: '分組：{interval}'
+  remove_from_history: 喺觀看記錄刪除
   refresh: 重新整理紀錄
   sort_newest: 最近睇過（已載入紀錄）
   sort_oldest: 最早睇過（已載入紀錄）
@@ -1731,6 +1773,7 @@ history:
   all_history: 全部紀錄
   media: 劇集 / 影視
   continue_watching: 繼續睇
+  watch_again: 再睇一次
   unknown_date: 日期不明
   clear_failed: 清空歷史記錄失敗，請再試
   title: 收睇記錄
@@ -1749,18 +1792,9 @@ history:
     係咪要開返收睇記錄呀？
     你確定要開返收睇記錄？
 favorites:
-  filter_title: 篩選
-  filter_title_active: '篩選（{count} 項條件）'
-  filter_uploader: UP 主
-  filter_uploader_empty: 載入收藏之後可以按 UP 主篩選
   filter_partition: 分區
-  filter_partition_empty: 而家範圍未有分區資料
+  filter_partition_all: 全部分區
   filter_partition_retry: 重新讀取分區
-  filter_keywords: 標題關鍵字
-  filter_keywords_placeholder: 輸入完撳 Enter 加入
-  filter_keyword_remove: '移除關鍵字 {keyword}'
-  filter_reset: 重設
-  filter_apply: 套用
   saved_refresh_failed: 已儲存，但列表更新失敗，請重新整理查看
   create_folder: 新增收藏夾
   folder_name: 名稱
@@ -1852,7 +1886,7 @@ favorites:
   delete_folders_failed: 收藏夾刪除失敗，請稍後再試
   unfav_seasons_confirm: 確定取消收藏已選嘅 {count} 個合集嗎？
   unfav_seasons_failed: '{count} 個合集取消收藏失敗'
-  search_all_folders: 全部
+  search_all_folders: 全部收藏夾
   search_current_folder: 目前收藏夾
   search_placeholder: 搜尋目前收藏
 version_reminder:

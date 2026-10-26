@@ -21,6 +21,7 @@ export interface PageSettingsPayload {
   localLoudnessEnabled: boolean
   localLoudnessTarget: number
   localLoudnessStrength: number
+  playerAdjustmentEnabled: boolean
   enableCleanShareLink: boolean
   enableCommentReplyTreeDisplay: boolean
   language: PageSettingsLanguage
@@ -85,6 +86,7 @@ export function createPageSettingsPayload(value: unknown): PageSettingsPayload |
     localLoudnessEnabled: value.localLoudnessEnabled,
     localLoudnessTarget: Number(value.localLoudnessTarget),
     localLoudnessStrength: Number(value.localLoudnessStrength),
+    playerAdjustmentEnabled: value.playerAdjustmentEnabled === true,
     enableCleanShareLink: value.enableCleanShareLink,
     enableCommentReplyTreeDisplay: value.enableCommentReplyTreeDisplay,
     language: value.language,

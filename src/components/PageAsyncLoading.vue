@@ -4,6 +4,7 @@ import { computed, inject, ref } from 'vue'
 
 import BangumiCardSkeleton from '~/components/BangumiCard/BangumiCardSkeleton.vue'
 import LibraryBleedStrip from '~/components/LibraryBleedStrip.vue'
+import LibraryHeroSkeleton from '~/components/LibraryHeroSkeleton.vue'
 import LibraryVideoGridSkeleton from '~/components/LibraryVideoGridSkeleton.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import MomentCardSkeleton from '~/components/MomentCard/MomentCardSkeleton.vue'
@@ -16,6 +17,7 @@ import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useGridLayout } from '~/composables/useGridLayout'
 import AnimeTimeTableSkeleton from '~/contentScripts/views/Anime/components/AnimeTimeTableSkeleton.vue'
 import FavoriteSidebarSkeleton from '~/contentScripts/views/Favorites/FavoriteSidebarSkeleton.vue'
+import HistoryGroupSkeleton from '~/contentScripts/views/History/HistoryGroupSkeleton.vue'
 import MomentsContentLayout from '~/contentScripts/views/Moments/MomentsContentLayout.vue'
 import MomentsHotSearch from '~/contentScripts/views/Moments/MomentsHotSearch.vue'
 import MomentsSidebar from '~/contentScripts/views/Moments/MomentsSidebar.vue'
@@ -79,17 +81,11 @@ const emptyItems: never[] = []
             <SkeletonBlock v-if="page === AppPage.WatchLater" width="var(--bew-space-10)" height="var(--bew-space-6)" radius="full" />
             <SkeletonBlock v-if="page !== AppPage.WatchLater" width="40%" height="var(--bew-line-height-control)" />
           </div>
-          <div class="library-rail-tools" :class="{ 'library-rail-tools--ruled': page !== AppPage.Favorites }">
+          <div class="library-rail-tools library-rail-tools--ruled">
             <SkeletonBlock height="var(--bew-control-height)" radius="full" />
             <div v-if="page === AppPage.Favorites" class="bew-page-async-loading__favorite-order bew-segment-control--track">
               <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-item-height)" radius="full" />
               <SkeletonBlock width="var(--bew-control-item-height)" height="var(--bew-control-item-height)" radius="circle" />
-            </div>
-            <div v-if="page === AppPage.WatchLater || page === AppPage.History" class="bew-page-async-loading__watch-toolbar" :class="{ 'bew-page-async-loading__watch-toolbar--sort-only': !settings.enableGridLayoutSwitcher }">
-              <div v-if="settings.enableGridLayoutSwitcher" class="bew-page-async-loading__rail-layout bew-segment-control--track">
-                <SkeletonBlock v-for="index in 2" :key="index" width="100%" height="var(--bew-control-item-height)" radius="full" />
-              </div>
-              <SkeletonBlock class="bew-page-async-loading__sort" width="var(--bew-control-height)" height="var(--bew-control-height)" radius="circle" />
             </div>
           </div>
           <FavoriteSidebarSkeleton v-if="page === AppPage.Favorites" />
@@ -120,13 +116,11 @@ const emptyItems: never[] = []
           </template>
         </LibraryBleedStrip>
       </section>
-      <!-- The library heads are heroes: a cover band over the title and actions. -->
-      <SkeletonBlock
-        v-if="page === AppPage.Favorites || page === AppPage.WatchLater" class="bew-page-async-loading__hero" width="100%"
-        height="calc(clamp(160px, 22vw, 260px) + var(--bew-space-4) * 2 + var(--bew-line-height-heading) * 2)" radius="media"
-      />
-      <VideoListSkeleton v-if="(page === AppPage.History && settings.historyLayout === 'list') || (page === AppPage.WatchLater && settings.watchLaterLayoutMode === 'list')" :class="{ 'history-timeline-skeleton': page === AppPage.History }" :count="5" :history="page === AppPage.History" :action-count="page === AppPage.WatchLater ? 3 : 1" />
-      <LibraryVideoGridSkeleton v-else-if="page === AppPage.History || page === AppPage.WatchLater" :history="page === AppPage.History" />
+      <!-- The library heads are rows of hero cards, the next one peeking (one for Watch Later). -->
+      <LibraryHeroSkeleton v-if="[AppPage.Favorites, AppPage.History, AppPage.WatchLater].includes(page)" :single="page === AppPage.WatchLater" />
+      <HistoryGroupSkeleton v-if="page === AppPage.History" />
+      <VideoListSkeleton v-else-if="page === AppPage.WatchLater && settings.watchLaterLayoutMode === 'list'" :count="5" :action-count="3" />
+      <LibraryVideoGridSkeleton v-else-if="page === AppPage.WatchLater" />
       <VideoCardGrid
         v-else :items="emptyItems" :transform-item="() => undefined" :get-item-key="(_, index) => index ?? 0" grid-layout="adaptive"
         :loading="true" :persist-state="false" :initial-skeleton-count="12" disable-content-visibility
@@ -137,8 +131,9 @@ const emptyItems: never[] = []
         <SkeletonBlock width="180px" height="var(--bew-line-height-heading)" />
         <SkeletonBlock width="min(100%, 300px)" height="var(--bew-control-height)" radius="control" />
       </div>
-      <VideoListSkeleton v-if="(page === AppPage.History && settings.historyLayout === 'list') || (page === AppPage.WatchLater && settings.watchLaterLayoutMode === 'list')" :class="{ 'history-timeline-skeleton': page === AppPage.History }" :count="5" :history="page === AppPage.History" :action-count="page === AppPage.WatchLater ? 3 : 1" />
-      <LibraryVideoGridSkeleton v-else-if="page === AppPage.History || page === AppPage.WatchLater" :history="page === AppPage.History" />
+      <HistoryGroupSkeleton v-if="page === AppPage.History" />
+      <VideoListSkeleton v-else-if="page === AppPage.WatchLater && settings.watchLaterLayoutMode === 'list'" :count="5" :action-count="3" />
+      <LibraryVideoGridSkeleton v-else-if="page === AppPage.WatchLater" />
       <div v-else-if="page === AppPage.Anime" class="bew-page-async-loading__anime">
         <AnimeTimeTableSkeleton />
         <div :class="gridClass">
@@ -159,7 +154,6 @@ const emptyItems: never[] = []
 </template>
 
 <style scoped lang="scss">
-@use "../contentScripts/views/History/historyTimeline";
 @use "../styles/bleedStrip";
 
 .bew-page-async-loading__favorite-order {
@@ -188,29 +182,6 @@ const emptyItems: never[] = []
 }
 .bew-page-async-loading__rail-heading--wheel-only {
   padding-block-start: 0;
-}
-.bew-page-async-loading__watch-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 60%) minmax(0, 1fr);
-  align-items: center;
-  .bew-page-async-loading__rail-layout {
-    grid-column: 2;
-  }
-}
-.bew-page-async-loading__sort {
-  grid-column: 3;
-  margin-inline-start: var(--bew-space-1);
-}
-.bew-page-async-loading__watch-toolbar--sort-only .bew-page-async-loading__sort {
-  grid-column: 2;
-  justify-self: center;
-  margin: 0;
-}
-.bew-page-async-loading__rail-layout {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--bew-control-gap);
-  padding: var(--bew-control-padding);
 }
 .bew-page-async-loading {
   width: 100%;
@@ -273,9 +244,6 @@ const emptyItems: never[] = []
   flex: none;
   flex-direction: column;
   gap: var(--bew-space-2);
-}
-.bew-page-async-loading__hero {
-  margin-bottom: var(--bew-space-6);
 }
 .bew-page-async-loading__sidebar {
   display: grid;

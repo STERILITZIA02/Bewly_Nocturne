@@ -7,6 +7,9 @@ export interface ImageTone {
   foreground: string
 }
 
+/** A band of rows (along the bottom of a picture) or of columns (along a side). */
+export type ImageBandAxis = 'rows' | 'columns'
+
 const SAMPLE_WIDTH = 16
 const CACHE_LIMIT = 200
 const tones = new Map<string, Promise<ImageTone | null>>()
@@ -16,7 +19,7 @@ function toHex(value: number) {
   return Math.round(value).toString(16).padStart(2, '0')
 }
 
-async function sampleBand(url: string, top: number, bottom: number): Promise<ImageTone | null> {
+async function sampleBand(url: string, start: number, end: number, axis: ImageBandAxis): Promise<ImageTone | null> {
   try {
     // Bilibili's image CDN answers CORS requests, so a separate anonymous
     // copy can be read back from a canvas.
@@ -30,9 +33,12 @@ async function sampleBand(url: string, top: number, bottom: number): Promise<Ima
     if (!context)
       return null
     context.drawImage(image, 0, 0, SAMPLE_WIDTH, height)
-    const start = Math.min(height - 1, Math.floor(top * height))
-    const end = Math.max(start + 1, Math.min(height, Math.ceil(bottom * height)))
-    const { data } = context.getImageData(0, start, SAMPLE_WIDTH, end - start)
+    const size = axis === 'rows' ? height : SAMPLE_WIDTH
+    const first = Math.min(size - 1, Math.floor(start * size))
+    const last = Math.max(first + 1, Math.min(size, Math.ceil(end * size)))
+    const { data } = axis === 'rows'
+      ? context.getImageData(0, first, SAMPLE_WIDTH, last - first)
+      : context.getImageData(first, 0, last - first, height)
     let r = 0
     let g = 0
     let b = 0
@@ -73,15 +79,15 @@ export function registerToneProperties() {
 }
 
 /**
- * The average colour of a horizontal band of a picture (`top` and `bottom` are
- * fractions of its height from the top) and the black or white text that reads
- * on it. Pass a small rendition of the image; results are cached per band.
+ * The average colour of a band of a picture and the black or white text that
+ * reads on it. `start` and `end` are fractions from the top (rows) or from the
+ * left (columns). Pass a small rendition of the image; results are cached per band.
  */
-export function readImageBandTone(url: string, top: number, bottom: number) {
-  const key = getBandKey(url, top, bottom)
+export function readImageBandTone(url: string, start: number, end: number, axis: ImageBandAxis = 'rows') {
+  const key = getBandKey(url, start, end, axis)
   let tone = tones.get(key)
   if (!tone) {
-    tone = sampleBand(url, top, bottom)
+    tone = sampleBand(url, start, end, axis)
     tones.set(key, tone)
     void tone.then((value) => {
       if (tones.has(key))
@@ -100,10 +106,10 @@ export function readImageBandTone(url: string, top: number, bottom: number) {
  * A band already read, without waiting: a card shown again starts in its
  * colour instead of easing into it.
  */
-export function peekImageBandTone(url: string, top: number, bottom: number) {
-  return settledTones.get(getBandKey(url, top, bottom))
+export function peekImageBandTone(url: string, start: number, end: number, axis: ImageBandAxis = 'rows') {
+  return settledTones.get(getBandKey(url, start, end, axis))
 }
 
-function getBandKey(url: string, top: number, bottom: number) {
-  return `${url}|${top.toFixed(2)}|${bottom.toFixed(2)}`
+function getBandKey(url: string, start: number, end: number, axis: ImageBandAxis) {
+  return `${url}|${axis}|${start.toFixed(2)}|${end.toFixed(2)}`
 }

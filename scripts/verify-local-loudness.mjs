@@ -42,18 +42,77 @@ function render(dsp, rate, channels, seconds, signal, offset = 0) {
 }
 
 export function registerLocalLoudnessChecks(check, { Vue, flush }) {
+  check('player adjustments: source changes retain the unit transform; new CID and disable remove only the owned additive effect', async () => {
+    const effects = []
+    const animations = []
+    const delays = []
+    const module = await loadSourceModule('../src/composables/usePlayerAdjustment.ts', {
+      'vue': Vue,
+      '~/utils/viewportGeometry': { invalidateViewportGeometry() {}, subscribeViewportFrame: () => () => {} },
+      './useLocalLoudness': { setAudioDelay: value => delays.push(value) },
+    }, { KeyframeEffect: class {
+      constructor(target, frames, options) {
+        this.target = target
+        this.frames = frames
+        this.options = options
+        effects.push(this)
+      }
+
+      setKeyframes(frames) { this.frames = frames }
+    }, Animation: class {
+      constructor(effect) {
+        this.effect = effect
+        animations.push(this)
+      }
+
+      cancel() { this.cancelled = true }
+    } })
+    const video = document.body.appendChild(document.createElement('video'))
+    video.style.transform = 'scaleX(-1)'
+    Object.defineProperties(video, { videoWidth: { value: 1920 }, videoHeight: { value: 1080 }, clientWidth: { value: 960 }, clientHeight: { value: 540 } })
+    const scope = Vue.effectScope()
+    const stop = scope.run(() => module.observePlayerAdjustment())
+    try {
+      module.bindPlayerAdjustment(video, '1:2:', true)
+      module.playerAdjustment.rotation = 90
+      await flush()
+      assert.equal(effects.at(-1).options.composite, 'add')
+      assert.match(effects.at(-1).frames[0].transform, /rotate\(90deg\) scale\(0\.5625/)
+      const active = animations.at(-1)
+      video.src = 'blob:btr-retry'
+      module.bindPlayerAdjustment(video, '1:2:', true)
+      assert.equal(animations.at(-1), active)
+      assert.equal(module.playerAdjustment.rotation, 90)
+      module.bindPlayerAdjustment(video, '1:3:', true)
+      assert.equal(active.cancelled, true)
+      assert.equal(module.playerAdjustment.rotation, 0)
+      assert.equal(video.style.transform, 'scaleX(-1)')
+      module.playerAdjustment.horizontal = true
+      await flush()
+      module.bindPlayerAdjustment(null, '', false)
+      assert.equal(animations.at(-1).cancelled, true)
+      assert.equal(video.style.transform, 'scaleX(-1)')
+      assert.equal(delays.at(-1), 0)
+    }
+    finally {
+      stop()
+      scope.stop()
+      video.remove()
+    }
+  })
   check('local loudness control: shared player discovery/fit is dormant when off and keeps an accessible unsupported-media panel entry', async () => {
     const player = document.body.appendChild(document.createElement('section'))
     player.innerHTML = '<bwp-video></bwp-video><div class="bpx-player-control-bottom-right"></div>'
     const protocol = await import('../src/utils/localLoudnessProtocol')
-    const settings = Vue.ref({ localLoudnessEnabled: false, language: 'en' })
-    const ui = { localLoudnessPanelOpen: Vue.ref(false), localLoudnessState: Vue.ref('off'), notifyLocalLoudnessPanel() {}, observeLocalLoudnessState: () => () => {}, setLocalLoudnessMediaToken() {} }
+    const settings = Vue.ref({ localLoudnessEnabled: false, playerAdjustmentEnabled: false, showPlayerAdjustmentButton: true, language: 'en' })
+    const ui = { audioDelayMs: Vue.ref(0), setAudioDelay() {}, setLocalAudioConfiguration() {}, localLoudnessPanelOpen: Vue.ref(false), localLoudnessState: Vue.ref('off'), notifyLocalLoudnessPanel() {}, observeLocalLoudnessState: () => () => {}, setLocalLoudnessMediaToken() {} }
     let discoveries = 0
     let active = 0
     let fit
     const control = await loadSourceModule('../src/contentScripts/localLoudnessControl.ts', {
       'vue': Vue,
       '~/composables/useLocalLoudness': ui,
+      '~/composables/usePlayerAdjustment': { bindPlayerAdjustment() {}, observePlayerAdjustment: () => () => {} },
       '~/composables/useRouteState': { onRouteChange: () => () => {} },
       '~/logic': { settings },
       '~/utils/i18n': { i18n: { global: { t: key => key } } },
@@ -118,12 +177,12 @@ export function registerLocalLoudnessChecks(check, { Vue, flush }) {
       } },
     }, { location: window.location, CustomEvent, HTMLVideoElement: window.HTMLVideoElement })
     const bridge = source.setupLocalLoudnessBridge('channel')
-    const bind = (token, extra = {}) => media.dispatchEvent(new CustomEvent(protocol.LOCAL_LOUDNESS_BIND, { bubbles: true, detail: JSON.stringify({ token, channelId: 'channel', href: window.location.href, ...extra }) }))
+    const bind = (token, extra = {}) => media.dispatchEvent(new CustomEvent(protocol.LOCAL_LOUDNESS_BIND, { bubbles: true, detail: JSON.stringify({ token, unit: '1:2:', configuration: 0, channelId: 'channel', href: window.location.href, ...extra }) }))
     try {
-      bridge.update({ localLoudnessEnabled: false, localLoudnessTarget: -18, localLoudnessStrength: 75 })
+      bridge.update({ localLoudnessEnabled: false, playerAdjustmentEnabled: false, localLoudnessTarget: -18, localLoudnessStrength: 75 })
       bind('old')
       assert.equal(created, 0)
-      bridge.update({ localLoudnessEnabled: true, localLoudnessTarget: -18, localLoudnessStrength: 75 })
+      bridge.update({ localLoudnessEnabled: true, playerAdjustmentEnabled: false, localLoudnessTarget: -18, localLoudnessStrength: 75 })
       assert.equal(created, 0, 'enabled preference without a valid media does not create an empty controller')
       bind('one')
       assert.equal(created, 1)
@@ -208,10 +267,21 @@ export function registerLocalLoudnessChecks(check, { Vue, flush }) {
     }
     class Context {
       state = 'suspended'
+      currentTime = 0
+      delays = []
       destination = new Node()
       audioWorklet = { addModule: () => moduleGate ?? Promise.resolve() }
       constructor() { contexts.push(this) }
       createMediaElementSource(media) { return new Source(this, { mediaElement: media }) }
+      createDelay() {
+        const delay = new Node()
+        delay.delayTime = { value: 0, setValueAtTime(value) {
+          this.value = value
+        } }
+        this.delays.push(delay)
+        return delay
+      }
+
       resume() {
         if (allowResume) {
           this.state = 'running'
@@ -303,6 +373,44 @@ export function registerLocalLoudnessChecks(check, { Vue, flush }) {
       },
     }
   }
+
+  check('local loudness delay: one source/output serves delay and DSP; BTR source replacement preserves the offset while pause discards the tail', async () => {
+    const fixture = await engineFixture()
+    const { controller, media, contexts, nodes } = fixture
+    try {
+      controller.bind(media, 'unit-1')
+      controller.setDelay(0)
+      assert.equal(contexts.length, 0)
+      controller.setDelay(250)
+      await fixture.settle()
+      assert.equal(fixture.count(), 1)
+      assert.equal(nodes.length, 0, 'delay alone does not start the loudness worklet')
+      assert.equal(contexts[0].delays.at(-1).delayTime.value, 0.25)
+      assert.equal(fixture.source().connections.size, 1)
+      controller.update({ enabled: true, target: -18, strength: 75 })
+      await fixture.settle()
+      assert.equal(fixture.count(), 1)
+      assert.equal(fixture.source().connections.has(nodes.at(-1)), true)
+      media.currentSrc = 'blob:btr-new-mse'
+      media.dispatchEvent(new Event('loadedmetadata'))
+      await fixture.settle()
+      assert.equal(fixture.count(), 1)
+      assert.equal(contexts[0].delays.at(-1).delayTime.value, 0.25)
+      const delay = contexts[0].delays.at(-1)
+      media.paused = true
+      media.dispatchEvent(new Event('pause'))
+      assert.equal(delay.connections.size, 0, 'no delayed tail remains audible after pause')
+      media.paused = false
+      media.dispatchEvent(new Event('playing'))
+      await fixture.settle()
+      assert.equal(contexts[0].delays.at(-1).delayTime.value, 0.25)
+      controller.setDelay(0)
+      await fixture.settle()
+      assert.equal(fixture.source().connections.has(nodes.at(-1)), true, 'clearing delay leaves independent loudness processing enabled')
+      assert.equal(fixture.count(), 1)
+    }
+    finally { fixture.close() }
+  })
 
   check('local loudness ownership: dormant creates no context; repeated toggles reuse one source and errors restore bypass before disposal', async () => {
     const fixture = await engineFixture()
@@ -452,7 +560,7 @@ export function registerLocalLoudnessChecks(check, { Vue, flush }) {
     const protocol = await import('../src/utils/localLoudnessProtocol')
     const ui = await loadSourceModule('../src/composables/useLocalLoudness.ts', { vue: Vue, '~/utils/localLoudnessProtocol': protocol, '~/utils/pageBridgeChannel': { getPageBridgeChannelId: () => 'channel' }, '~/utils/videoMetadataBridge': await import('../src/utils/videoMetadataBridge') }, { location: window.location, CustomEvent })
     const stop = ui.observeLocalLoudnessState()
-    const send = (token = 'one') => window.dispatchEvent(new CustomEvent(protocol.LOCAL_LOUDNESS_STATE, { detail: JSON.stringify({ channelId: 'channel', token, href: window.location.href, state: 'active', measurement: { loudness: -18, gainDb: 3, peakReductionDb: 0 } }) }))
+    const send = (token = 'one') => window.dispatchEvent(new CustomEvent(protocol.LOCAL_LOUDNESS_STATE, { detail: JSON.stringify({ channelId: 'channel', token, configuration: 0, href: window.location.href, state: 'active', measurement: { loudness: -18, gainDb: 3, peakReductionDb: 0 } }) }))
     try {
       ui.setLocalLoudnessMediaToken('one')
       ui.localLoudnessPanelOpen.value = true

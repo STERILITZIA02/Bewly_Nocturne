@@ -5,11 +5,15 @@ library_tools:
   filter_device: Device
   filter_progress: Progress
   filter_added: Added
+  filter_sort: Sort
+  filter_layout: Layout
   date_custom: Custom dates
   date_range: Custom date range
   days: Jump to a day
   resume_at: 'Stopped at {time} of {total}'
   video_count: '{count} videos'
+  item_count: '{count} items'
+  switch_to: 'Switch to {name}'
   uploaders: Uploaders in this folder
   all_uploaders: All
   layout_list: List
@@ -183,7 +187,42 @@ player_screenshot:
   saved: Screenshot saved
   failed: Failed to capture screenshot
   video_unavailable: The current video frame is unavailable
+card_removal:
+  verify_failed: The result could not be verified. Check again.
+  watchLater: Remove from Watch Later?
+  favorite: Remove from this folder?
+  confirm: Remove
+  removing: Removing
+  removed: Removed
+  restore: Add again
+  restoring: Adding again
+  verify: Result not yet confirmed
+  reconcile: Check result
+player_adjustment:
+  title: Picture and sound
+  enable: Enable temporary picture and sound adjustments
+  description: 'Rotation, mirroring and audio delay apply to the current playback unit. Turning this off resets them; loudness balancing remains independent.'
+  show_button: Show player adjustment control
+  show_button_description: 'Hiding the control keeps your adjustments. When space is limited, the control moves to the player’s More menu.'
+  rotate_left: Rotate left
+  rotate_right: Rotate right
+  horizontal: Mirror horizontally
+  vertical: Mirror vertically
+  reset: Reset
+  picture_note: Screenshots still save the original video frame. Picture-in-picture follows browser support.
+  delay: Audio delay
+  delay_note: Corrects a fixed offset when sound leads the picture. It does not automatically synchronize playback or fix buffering. Unsupported audio stays unchanged.
 settings:
+  immersive_queue_filtered: This batch was filtered out. You can continue searching.
+  immersive_queue_stalled: This batch added no new items. You can try again.
+  immersive_scope: Videos follow the multipart policy. EP plays one episode; SS plays the episode resolved on entry.
+  immersive_queue_loading: Looking for the next video
+  immersive_queue_continue: No playable item found in this batch. You can continue searching.
+  immersive_queue_failed: Could not load the next video. Try again.
+  immersive_queue_ended: End of the recommendation queue
+  immersive_playback_gesture: Press Play in the native player
+  immersive_playback_error: Playback did not start. Use the native retry control or choose another video.
+  immersive_playback_unknown: Checking the playback unit. Native controls and manual navigation remain available.
   moments_start_from_last_seen: Resume when opening dynamics
   moments_start_from_last_seen_desc: For All, Videos and the top bar video feed. Restores this window’s reading bookmark, or uses the server’s unread-video boundary. That boundary does not track reading across all post types.
   parameters: Parameters
@@ -743,7 +782,7 @@ settings:
   immersive_autoplay: Start playback after switching
   immersive_auto_next: Play the next recommendation when finished
   immersive_preload: Preload the next video
-  immersive_preload_desc: Prepare at most one next page. Preparation does not play media or add an extension watch record.
+  immersive_preload_desc: Prepare the next cover and available metadata. The native playback page loads only when selected.
   immersive_previous: Previous recommendation
   immersive_next: Next recommendation
   immersive_recommendations: Recommendations sidebar
@@ -876,9 +915,7 @@ settings:
   show_widescreen_idle_progress_desc: Display main-video progress without revealing the controls or adding a seek action.
   original_moments_use_bewly_filters: Apply existing filters to the native Moments feed
   original_moments_use_bewly_filters_desc: Use the rules below only in the native feed. Turning this off restores content hidden by this feature.
-  history_layout: History layout
-  history_layout_list: List grouped by date
-  history_layout_grid: Grid grouped by date
+  history_group_interval: History grouping
   notification_badge_categories: Local notification badges
   notification_badge_categories_desc: Choose which categories count toward the Dock badge. This does not change message delivery or read status.
   show_reply_notification_reminder: Show reply notifications
@@ -1749,6 +1786,11 @@ anime:
       sat: SAT
       sun: SUN
 history:
+  group_hour: Hourly
+  group_period: Every 8 hours
+  group_day: Daily
+  group_button: 'Group: {interval}'
+  remove_from_history: Remove from history
   refresh: Refresh history
   sort_newest: Most recently watched (loaded records)
   sort_oldest: Earliest watched (loaded records)
@@ -1769,6 +1811,7 @@ history:
   all_history: All history
   media: Series / Films
   continue_watching: Continue watching
+  watch_again: Watch again
   unknown_date: Unknown date
   clear_failed: Could not clear watch history. Please retry.
   title: Watch History
@@ -1787,18 +1830,9 @@ history:
   turn_on_watch_history: Turn on watch history
   turn_on_watch_history_confirm: Turn on watch history? Are you sure you want to turn on watch history?
 favorites:
-  filter_title: Filter
-  filter_title_active: 'Filter ({count} conditions)'
-  filter_uploader: Uploaders
-  filter_uploader_empty: Uploaders appear after favorites load
   filter_partition: Categories
-  filter_partition_empty: No category data in this scope
+  filter_partition_all: All categories
   filter_partition_retry: Reload categories
-  filter_keywords: Title keywords
-  filter_keywords_placeholder: Type and press Enter to add
-  filter_keyword_remove: 'Remove keyword {keyword}'
-  filter_reset: Reset
-  filter_apply: Apply
   saved_refresh_failed: 'Saved, but the list could not refresh. Please refresh to verify.'
   create_folder: Create folder
   folder_name: Name
@@ -1892,8 +1926,8 @@ favorites:
   delete_folders_failed: Failed to delete folders, please try again later
   unfav_seasons_confirm: Unfavorite the {count} selected seasons?
   unfav_seasons_failed: Failed to unfavorite {count} seasons
-  search_all_folders: all
-  search_current_folder: current
+  search_all_folders: All folders
+  search_current_folder: Current folder
   search_placeholder: Search for current favorites
 version_reminder:
   trigger: What's new

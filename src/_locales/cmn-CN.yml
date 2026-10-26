@@ -5,11 +5,15 @@ library_tools:
   filter_device: 设备
   filter_progress: 进度
   filter_added: 添加时间
+  filter_sort: 排序
+  filter_layout: 布局
   date_custom: 自定义日期
   date_range: 自定义日期范围
   days: 按日期跳转
   resume_at: '看到 {time} / {total}'
   video_count: '{count} 个视频'
+  item_count: '{count} 项'
+  switch_to: '切换到 {name}'
   uploaders: 本收藏夹的 UP 主
   all_uploaders: 全部
   layout_list: 列表
@@ -183,7 +187,42 @@ player_screenshot:
   saved: 截图已保存
   failed: 截图失败
   video_unavailable: 当前视频画面不可用
+card_removal:
+  verify_failed: 暂时无法确认结果，请再次核对。
+  watchLater: 移出稍后再看？
+  favorite: 从此收藏夹取消收藏？
+  confirm: 移除
+  removing: 正在移除
+  removed: 已移除
+  restore: 重新加入
+  restoring: 正在重新加入
+  verify: 结果尚未确认
+  reconcile: 核对结果
+player_adjustment:
+  title: 画面与声音调整
+  enable: 启用临时画面与声音调整
+  description: 旋转、镜像和声音延后只作用于当前播放单元。关闭后重置这些调整，响度均衡独立控制。
+  show_button: 显示播放器调节入口
+  show_button_description: 隐藏入口不会重置调整。空间不足时，入口收进播放器的更多菜单。
+  rotate_left: 向左旋转
+  rotate_right: 向右旋转
+  horizontal: 水平镜像
+  vertical: 垂直镜像
+  reset: 重置
+  picture_note: 截图仍保存原始视频帧。画中画使用浏览器实际支持的画面。
+  delay: 声音延后
+  delay_note: 仅修正声音领先的固定偏移，不会自动同步音画或修复动态缓冲。音源不可处理时保留原声。
 settings:
+  immersive_queue_filtered: 本轮结果已被过滤，可以继续查找
+  immersive_queue_stalled: 本轮没有新内容，可以重试
+  immersive_scope: 普通稿件按分 P 策略播放；EP 播放一集，SS 播放进入时解析出的选集。
+  immersive_queue_loading: 正在寻找下一条
+  immersive_queue_continue: 本轮未找到可播条目，可以继续查找
+  immersive_queue_failed: 下一条读取失败，请重试
+  immersive_queue_ended: 推荐队列已到末尾
+  immersive_playback_gesture: 请在原生播放器中点击播放
+  immersive_playback_error: 播放未成功，请使用原生重试或手动切换
+  immersive_playback_unknown: 正在确认播放单元；可操作原生播放器或手动切换
   moments_start_from_last_seen: 进入动态时自动续读
   moments_start_from_last_seen_desc: 用于全部动态、视频投稿和顶栏视频动态。优先恢复本窗口的阅读书签，否则定位到服务端视频未读分界；分界不代表所有类型的阅读位置。
   parameters: 参数
@@ -618,9 +657,7 @@ settings:
   show_widescreen_idle_progress_desc: 仅显示主视频播放进度，不改变控制栏显隐或提供拖动操作。
   original_moments_use_bewly_filters: 原生动态使用现有过滤规则
   original_moments_use_bewly_filters_desc: 仅过滤原生动态信息流，沿用下方规则；关闭后恢复本功能隐藏的内容。
-  history_layout: 历史记录布局
-  history_layout_list: 日期分组列表
-  history_layout_grid: 日期分组网格
+  history_group_interval: 观看历史分组
   notification_badge_categories: 本地通知角标
   notification_badge_categories_desc: 选择计入 Dock 未读数的消息类别；不改变 B 站接收规则或已读状态。
   show_reply_notification_reminder: 显示回复提醒
@@ -824,7 +861,7 @@ settings:
   immersive_autoplay: 切换后自动开播
   immersive_auto_next: 播完自动进入下一条推荐
   immersive_preload: 预加载下一条
-  immersive_preload_desc: 切换前准备下一条，仅保留一条。准备页不播放，也不计入扩展观看记录。
+  immersive_preload_desc: 提前准备下一条的封面与已有信息。切换后才加载原站播放页。
   immersive_previous: 上一条推荐
   immersive_next: 下一条推荐
   immersive_recommendations: 推荐侧栏
@@ -1711,6 +1748,11 @@ anime:
       sat: 周六
       sun: 周日
 history:
+  group_hour: 每小时
+  group_period: 每 8 小时
+  group_day: 每天
+  group_button: '分组：{interval}'
+  remove_from_history: 从观看历史中删除
   refresh: 刷新历史
   sort_newest: 最近观看（已载入记录）
   sort_oldest: 最早观看（已载入记录）
@@ -1731,6 +1773,7 @@ history:
   all_history: 全部历史
   media: 剧集 / 影视
   continue_watching: 继续观看
+  watch_again: 再看一遍
   unknown_date: 日期未知
   clear_failed: 清空历史记录失败，请重试
   clear_all_watch_history: 清除所有观看历史
@@ -1749,18 +1792,9 @@ history:
     要开启观看历史吗？
     你确定要开启观看历史吗？
 favorites:
-  filter_title: 筛选
-  filter_title_active: '筛选（{count} 项条件）'
-  filter_uploader: UP 主
-  filter_uploader_empty: 加载收藏后可按 UP 主筛选
   filter_partition: 分区
-  filter_partition_empty: 当前范围暂无分区信息
+  filter_partition_all: 全部分区
   filter_partition_retry: 重新读取分区
-  filter_keywords: 标题关键词
-  filter_keywords_placeholder: 输入后按 Enter 添加
-  filter_keyword_remove: '移除关键词 {keyword}'
-  filter_reset: 重置
-  filter_apply: 应用
   saved_refresh_failed: 已保存，但列表刷新失败，请刷新查看
   create_folder: 新建收藏夹
   folder_name: 名称
@@ -1828,8 +1862,8 @@ favorites:
   batch_unfavorite_confirm: |-
     要取消收藏已选的 {count} 个视频吗？
     该操作无法撤销，你确定要取消收藏这些视频吗？
-  search_current_folder: 当前
-  search_all_folders: 全部
+  search_current_folder: 当前收藏夹
+  search_all_folders: 全部收藏夹
   search_placeholder: 搜索当前收藏夹
   global_search_placeholder: 搜索全部收藏夹
   global_search_hint: 请输入关键词以搜索全部收藏夹

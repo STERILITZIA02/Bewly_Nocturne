@@ -5,6 +5,43 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerImmersiveAndControlChecks(check, { Vue, flush, compileComponent }) {
+  check('immersive end policy: native parts continue, the boundary has one owner, loops and later native user choices win', async () => {
+    const root = document.body.appendChild(document.createElement('section'))
+    root.innerHTML = '<div class="auto-play"><button class="switch-btn on"></button></div><div class="bpx-player-ctrl-setting-loop"><input type="checkbox"></div><div class="bpx-player-ctrl-setting-handoff"><input type="radio" name="handoff" value="0" checked><input type="radio" name="handoff" value="1"><input type="radio" name="handoff" value="2"></div>'
+    const button = root.querySelector('button')
+    button.onclick = () => button.classList.toggle('on')
+    const events = new Map()
+    const settings = { value: { useBilibiliDefaultAutoPlay: false, autoPlayMultipart: 'autoPlay' } }
+    const module = await loadSourceFunctions('../src/utils/player.ts', ['createImmersiveEndPlaybackPolicy', 'isLoopEnabled', 'isAutoPlayEnabled', 'isPlaylistHandoffEnabled', 'findAutoPlaySwitchButton'], {
+      settings,
+      _videoClassTag: { autoPlaySwitchOn: '.auto-play .switch-btn.on' },
+      document: { querySelector: selector => root.querySelector(selector), addEventListener: (type, callback) => events.set(type, callback), removeEventListener: type => events.delete(type) },
+      HTMLElement,
+      Element,
+      Event,
+    })
+    const policy = module.createImmersiveEndPlaybackPolicy()
+    try {
+      assert.equal(policy.sync(false, true), false)
+      assert.equal(root.querySelector('[value="0"]').checked, true, 'recommendation policy must not disable internal parts')
+      assert.equal(button.classList.contains('on'), false)
+      assert.equal(policy.sync(true, true), true)
+      assert.equal(root.querySelector('[value="2"]').checked, true)
+      root.querySelector('input[type="checkbox"]').checked = true
+      events.get('change')({ isTrusted: true, target: root.querySelector('input[type="checkbox"]') })
+      assert.equal(policy.sync(true, true), false)
+      assert.equal(policy.allowsAdvance(), false)
+      const userChoice = root.querySelector('[value="1"]')
+      userChoice.click()
+      events.get('click')({ isTrusted: true, target: userChoice })
+      policy.dispose()
+      assert.equal(userChoice.checked, true, 'exit preserves a newer native selection')
+      assert.equal(root.querySelector('input[type="checkbox"]').checked, true)
+      assert.equal(button.classList.contains('on'), true, 'only the untouched borrowed recommendation switch is restored')
+      assert.equal(events.size, 0)
+    }
+    finally { root.remove() }
+  })
   check('immersive exit: late restoration belongs to its original page, account, scroll intent and focus owner', async () => {
     const blank = { render: () => null }
     for (const change of ['none', 'page', 'tab', 'account', 'scroll', 'focus']) {
@@ -32,7 +69,7 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       }, { renderTemplate: false })
       Component.render = () => null
       let state
-      const app = Vue.createApp({ render: () => Vue.h(Component, { items: [], initialIndex: 0, loading: false, noMoreContent: true, requestFailed: false, trigger, ref: value => state = value?.$?.setupState }) })
+      const app = Vue.createApp({ render: () => Vue.h(Component, { items: [], feedGeneration: 0, pagingState: 'success', manualPaging: false, initialIndex: 0, loading: false, noMoreContent: true, requestFailed: false, trigger, ref: value => state = value?.$?.setupState }) })
       app.mount(host)
       state.root = overlay
       button.focus()
@@ -300,7 +337,7 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
     }
   })
 
-  check('batch two: immersive recommendations keep one canonical queue, a bounded virtual sidebar and at most one reusable preparation page', async () => {
+  check('batch two: immersive recommendations keep a stable selected resource, a bounded native rail and no second playback document', async () => {
     const helpers = await import('../src/utils/immersiveRecommendation')
     const settings = Vue.reactive({ immersivePreloadNext: false, immersiveAutoNext: true, immersiveKeyboardSwitch: true })
     const items = Array.from({ length: 1000 }, (_, index) => ({ uniqueId: String(index), isAdvertisement: false, displayData: { id: index + 1, aid: index + 1, title: String(index), threePointV2: [] } }))
@@ -318,12 +355,16 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
     const instances = new Map()
     const button = { inheritAttrs: false, props: ['label'], setup: (props, { slots, attrs }) => () => Vue.h('button', { ...attrs, 'aria-label': props.label }, slots.default?.()) }
     const frame = {
-      props: ['itemKey', 'url', 'active'],
-      emits: ['action'],
+      props: ['itemKey', 'url', 'active', 'recommendations'],
+      emits: ['action', 'railAction'],
       setup(props, { emit }) {
         instances.set(props.itemKey, Vue.getCurrentInstance().uid)
-        messages.set(props.itemKey, action => emit('action', action))
-        return () => Vue.h('div', { class: 'fixture-frame', 'data-key': props.itemKey, 'data-active': props.active })
+        messages.set(props.itemKey, action => emit('action', { key: props.itemKey, action }))
+        loadMore = () => emit('railAction', { action: 'more', revision: props.recommendations.revision })
+        return () => {
+          sidebarItems = props.recommendations.items
+          return Vue.h('div', { class: 'fixture-frame', 'data-key': props.itemKey, 'data-active': props.active })
+        }
       },
     }
     const grid = {
@@ -348,7 +389,7 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       '~/utils/immersiveRecommendation': helpers,
       '~/utils/pageScrollLock': { lockPageScroll() {}, unlockPageScroll() {} },
     })
-    const props = Vue.reactive({ items, initialIndex: 1, loading: false, noMoreContent: false, requestFailed: false, trigger })
+    const props = Vue.reactive({ items, feedGeneration: 0, pagingState: 'success', manualPaging: false, initialIndex: 1, loading: false, noMoreContent: false, requestFailed: false, trigger })
     const app = Vue.createApp({ render: () => Vue.h(Component, { ...props, onLoadMore: () => loads++ }) })
     app.config.globalProperties.$t = key => key
     const initialHref = window.location.href
@@ -365,12 +406,12 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       assert.ok(sidebarItems.length <= 48)
       settings.immersivePreloadNext = true
       await flush()
-      assert.equal(surface.querySelectorAll('.fixture-frame').length, 2)
+      assert.equal(surface.querySelectorAll('.fixture-frame').length, 1)
       assert.equal(surface.querySelectorAll('[data-active="true"]').length, 1)
-      const prepared = instances.get('2')
+      const previousInstance = instances.get('1')
       surface.querySelector('[aria-label="settings.immersive_next"]').click()
       await flush()
-      assert.equal(instances.get('2'), prepared, 'promotion reuses the single prepared document')
+      assert.notEqual(instances.get('2'), previousInstance, 'the next playback document starts only after selection')
       assert.equal(surface.querySelector('[data-active="true"]').dataset.key, '2')
       oldAction('ended')
       await flush()
@@ -378,6 +419,13 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       settings.immersivePreloadNext = false
       await flush()
       assert.equal(surface.querySelectorAll('.fixture-frame').length, 1)
+      const playing = instances.get('2')
+      props.items = [...props.items].reverse().map(item => ({ ...item }))
+      await flush()
+      assert.equal(instances.get('2'), playing, 'sorting and replacing objects cannot replace the selected session')
+      props.items = props.items.filter(item => item.uniqueId !== '2')
+      await flush()
+      assert.equal(surface.querySelector('[data-active="true"]').dataset.key, '2', 'a filtered current item keeps playing outside the projection')
       assert.equal(window.location.href, initialHref)
       assert.equal(window.history.state, initialState)
       const staleLoad = loadMore
@@ -416,7 +464,7 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       '~/utils/pageScrollLock': { lockPageScroll() {}, unlockPageScroll() {} },
     }, { renderTemplate: false })
     Component.render = () => null
-    const props = Vue.reactive({ items: entries.slice(0, 3), initialIndex: 2, loading: false, noMoreContent: false, requestFailed: false })
+    const props = Vue.reactive({ items: entries.slice(0, 3), feedGeneration: 0, pagingState: 'success', manualPaging: false, initialIndex: 2, loading: false, noMoreContent: false, requestFailed: false })
     let state
     let requests = 0
     const app = Vue.createApp({ render: () => Vue.h(Component, { ...props, onLoadMore: () => requests++, ref: value => state = value?.$?.setupState }) })
@@ -452,7 +500,7 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
     }
   })
 
-  check('batch two: preparation iframe is inactive and layout readiness does not wait for playback; old document events are rejected', async () => {
+  check('batch two: layout readiness does not wait for playback; old document events are rejected and visibility preserves the session', async () => {
     const constants = await import('../src/constants/immersive')
     const settings = Vue.ref({ immersiveAutoPlay: true, immersiveAutoNext: true, immersiveKeyboardSwitch: true, immersiveWheelSwitch: true })
     const commands = []
@@ -472,9 +520,9 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       timers.set(++id, callback)
       return id
     }, clearTimeout: key => timers.delete(key) } })
-    const props = Vue.reactive({ active: false, uiVisible: true, itemKey: 'one', title: 'One', url: 'https://www.bilibili.com/video/av1' })
+    const props = Vue.reactive({ active: false, uiVisible: true, itemKey: 'one', title: 'One', url: 'https://www.bilibili.com/video/av1', recommendations: { revision: 1, items: [], currentKey: 'one', loading: false, hasMore: false, failed: false } })
     const host = document.body.appendChild(document.createElement('div'))
-    const app = Vue.createApp({ render: () => Vue.h(Component, { ...props, onAction: value => actions.push(value) }) })
+    const app = Vue.createApp({ render: () => Vue.h(Component, { ...props, onAction: value => actions.push(value.action) }) })
     app.config.globalProperties.$t = key => key
     app.mount(host)
     const message = (action, extra = {}) => window.dispatchEvent(new window.MessageEvent('message', { data: { type: constants.IMMERSIVE_EVENT, key: 'one', playbackId: commands.at(-1)?.playbackId, token: 'current', action, ...extra } }))
@@ -482,7 +530,7 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       await flush()
       const iframe = host.querySelector('iframe')
       assert.equal(iframe.tabIndex, -1)
-      assert.equal(iframe.name, constants.IMMERSIVE_PRELOAD_NAME)
+      assert.equal(iframe.name, constants.IMMERSIVE_FRAME_NAME)
       const policy = iframe.getAttribute('allow')
       assert.match(policy, /autoplay;/)
       assert.match(policy, /(?:^|;)\s*fullscreen(?:;|$)/)
@@ -490,11 +538,11 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       assert.equal(iframe.parentElement.style.display, 'none')
       currentHref.value = props.url
       await flush()
-      assert.equal(commands.at(-1).active, false)
+      assert.equal(commands.findLast(item => item.type === constants.IMMERSIVE_CONFIG).active, false)
       props.active = true
       await flush()
-      assert.equal(commands.at(-1).active, true)
-      assert.equal(iframe.getAttribute('allow'), policy, 'promotion reuses the navigation policy instead of locking autoplay off')
+      assert.equal(commands.findLast(item => item.type === constants.IMMERSIVE_CONFIG).active, true)
+      assert.equal(iframe.getAttribute('allow'), policy, 'the native playback policy is unchanged')
       assert.ok(host.querySelector('.immersive-frame__loading'))
       message('status', { layoutReady: true, playing: false })
       await flush()
@@ -545,7 +593,6 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
     const unrelated = document.body.appendChild(document.createElement('video'))
     let selected = video
     let metadata = { aid: 1, bvid: 'BV1fYes6xEmq', pageCount: 2, isCollection: false }
-    let episodeResult = Promise.resolve({ hasNextEpisode: false })
     const location = { href: 'https://www.bilibili.com/video/av1?p=1' }
     let route
     let dom
@@ -566,6 +613,8 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
     for (const media of [video, unrelated]) {
       Object.defineProperty(media, 'ended', { configurable: true, value: true })
       Object.defineProperty(media, 'readyState', { configurable: true, value: 4 })
+      Object.defineProperty(media, 'duration', { configurable: true, value: 100 })
+      media.currentTime = 100
       media.pause = () => {}
       media.play = () => {
         playRequests++
@@ -589,10 +638,15 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       '~/utils/iframeMessage': { getParentMessageData: event => event.data },
       '~/utils/immersiveRecommendation': await import('../src/utils/immersiveRecommendation'),
       '~/utils/pageBridgeChannel': { getPageBridgeChannelId: () => 'bridge' },
-      '~/utils/pgcEpisode': { resolvePgcEpisodeVideoIds: () => episodeResult },
+      '~/utils/immersivePlayback': { immersiveRail: Vue.shallowRef(null) },
+      '~/utils/player': { createImmersiveEndPlaybackPolicy: () => ({ sync: () => true, allowsAdvance: () => true, dispose() {} }) },
       '~/utils/playbackTab': await import('../src/utils/playbackTab'),
       '~/utils/playerMedia': { getVideoElement: () => selected, getPlayerRoot: () => root, getPlayerModeContainer: () => root, isPlayerAdvertisement: () => false },
-      '~/utils/videoMetadataBridge': { ...(await import('../src/utils/videoMetadataBridge')), isNativeVideoComponentReady: () => true, readVideoPageMetadata: () => metadata, readNativeQualityState: () => ({ ready: true, preview: false }), readNativePlaybackEpisodeId: () => Number(/ep(\d+)/.exec(location.href)?.[1]) },
+      '~/utils/videoMetadataBridge': { ...(await import('../src/utils/videoMetadataBridge')), readVideoPageMetadata: () => metadata, readNativeQualityState: () => ({ ready: true, preview: false }), readNativeMediaSnapshot: () => {
+        const page = Number(new URL(location.href).searchParams.get('p') || 1)
+        const episodeId = Number(/ep(\d+)/.exec(location.href)?.[1]) || undefined
+        return { unit: { aid: metadata?.aid ?? episodeId, bvid: metadata?.bvid, cid: episodeId ?? page, page, episodeId }, btr: { installed: true, ownsMedia: true } }
+      } },
       '~/utils/wheelStep': await import('../src/utils/wheelStep'),
       './playerDomLifecycle': { observePlayerDom: (callback) => {
         subscriptions++
@@ -676,47 +730,22 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       unrelated.dispatchEvent(new Event('ended'))
       await flush()
       assert.equal(sent.length, count)
-      let finishEpisode
-      episodeResult = new Promise(resolve => finishEpisode = resolve)
       metadata = null
       location.href = 'https://www.bilibili.com/bangumi/play/ep99'
       route()
       configure({ targetUrl: 'https://www.bilibili.com/bangumi/play/ss10' })
-      finish(unrelated)
       const beforeEpisodeEnd = sent.filter(data => data.action === 'ended').length
+      finish(unrelated)
+      assert.equal(sent.filter(data => data.action === 'ended').length, beforeEpisodeEnd + 1, 'SS resolves to its current episode, not a partial section end')
+      const oldEpisodeEnded = listeners.at(-1)
       location.href = 'https://www.bilibili.com/bangumi/play/ep100'
       route()
-      finishEpisode({ hasNextEpisode: false })
-      await flush()
-      assert.equal(sent.filter(data => data.action === 'ended').length, beforeEpisodeEnd, 'an old EP lookup cannot advance the new episode session')
-      episodeResult = Promise.resolve({ hasNextEpisode: true })
-      finish(unrelated)
-      await flush()
-      assert.equal(sent.filter(data => data.action === 'ended').length, beforeEpisodeEnd, 'native episode continuation retains the same recommendation')
-      let finishLate
-      episodeResult = new Promise(resolve => finishLate = resolve)
-      finish(unrelated)
-      binding()
-      configure({ targetUrl: 'https://www.bilibili.com/bangumi/play/ss10' })
-      finishLate({ hasNextEpisode: false })
-      await flush()
-      assert.equal(sent.filter(data => data.action === 'ended').length, beforeEpisodeEnd, 'a late ending lookup cannot cross a reactivated document session')
-      episodeResult = Promise.resolve({ hasNextEpisode: false })
+      oldEpisodeEnded({ target: video })
       unrelated.dispatchEvent(new Event('ended'))
-      await flush()
-      assert.equal(sent.filter(data => data.action === 'ended').length, beforeEpisodeEnd, 'an already-ended preparation media must actually play in its new session')
-      let finishCancelled
-      episodeResult = new Promise(resolve => finishCancelled = resolve)
-      finish(unrelated)
-      configure({ targetUrl: 'https://www.bilibili.com/bangumi/play/ss10', autoNext: false })
-      configure({ targetUrl: 'https://www.bilibili.com/bangumi/play/ss10', autoNext: true })
-      finishCancelled({ hasNextEpisode: false })
-      await flush()
-      assert.equal(sent.filter(data => data.action === 'ended').length, beforeEpisodeEnd, 'disabling automatic next cancels a pending episode lookup even if enabled again')
-      episodeResult = Promise.resolve({ hasNextEpisode: false })
+      assert.equal(sent.filter(data => data.action === 'ended').length, beforeEpisodeEnd + 1, 'new units must actually play; old ended callbacks cannot advance them')
       finish(unrelated)
       await flush()
-      assert.equal(sent.filter(data => data.action === 'ended').length, beforeEpisodeEnd + 1)
+      assert.equal(sent.filter(data => data.action === 'ended').length, beforeEpisodeEnd + 2)
       const endedCount = sent.filter(data => data.action === 'ended').length
       metadata = { aid: 77, bvid: 'BVforeign', pageCount: 1 }
       location.href = 'https://www.bilibili.com/video/av77'
@@ -724,7 +753,8 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
       route()
       await flush()
       assert.equal(sent.filter(data => data.action === 'ended').length, endedCount, 'foreign manuscript navigation is not a recommendation queue end event')
-      assert.equal(sent.some(data => data.action === 'close'), true)
+      assert.equal(sent.some(data => data.action === 'close'), false)
+      assert.equal(sent.findLast(data => data.action === 'navigation').href, location.href, 'native external navigation is reported without closing playback or forging a queue item')
     }
     finally {
       stop()
@@ -734,65 +764,21 @@ export function registerImmersiveAndControlChecks(check, { Vue, flush, compileCo
     }
   })
 
-  check('batch two: inactive document activity suppresses native play and extension history until an authenticated activation', async () => {
+  check('batch two: native frame disposal leaves media sources to their document and no global playback gate is installed', async () => {
+    const source = await readFile(new URL('../src/contentScripts/immersiveFrame.ts', import.meta.url), 'utf8')
+    const main = await readFile(new URL('../src/inject/index.ts', import.meta.url), 'utf8')
+    assert.doesNotMatch(source + main, /HTMLMediaElement\.prototype\.play|setupImmersiveMediaGate|querySelectorAll\(['"]video, audio/)
+    const resources = await import('../src/utils/mediaResources')
+    const frame = { src: 'native', get contentDocument() {
+      assert.fail('native media must not be enumerated during disposal')
+    } }
+    resources.releaseIframeMedia(frame)
+    assert.equal(frame.src, 'about:blank')
     const constants = await import('../src/constants/immersive')
-    const listeners = new Map()
-    const media = document.createElement('video')
-    let plays = 0
-    let pauses = 0
-    const prototype = window.HTMLMediaElement.prototype
-    const originalPlay = prototype.play
-    const originalPause = prototype.pause
-    prototype.play = function () {
-      plays++
-      return Promise.resolve()
-    }
-    prototype.pause = function () {
-      pauses++
-    }
-    const module = await loadSourceModule('../src/inject/immersiveMediaGate.ts', {
-      '~/utils/iframeActivity': { isImmersiveFrame: () => true },
-      '~/utils/videoMetadataBridge': { parseVideoMetadataEvent: event => JSON.parse(event.detail) },
-    }, { window: { addEventListener: (name, callback) => listeners.set(name, callback), removeEventListener: name => listeners.delete(name) }, location: { href: 'https://www.bilibili.com/video/av1' }, HTMLMediaElement: window.HTMLMediaElement })
-    module.setupImmersiveMediaGate('bridge')
-    const activate = (active, autoPlay, channelId = 'bridge') => listeners.get(constants.IMMERSIVE_MAIN_ACTIVITY)({ detail: JSON.stringify({ channelId, href: 'https://www.bilibili.com/video/av1', active, autoPlay }) })
-    try {
-      await assert.rejects(media.play(), { name: 'NotAllowedError' })
-      assert.equal(plays, 0)
-      activate(true, true, 'stale')
-      await assert.rejects(media.play(), { name: 'NotAllowedError' })
-      assert.equal(plays, 0)
-      activate(true, false)
-      await assert.rejects(media.play(), { name: 'NotAllowedError' })
-      assert.equal(plays, 0, 'the entry gesture does not silently enable native autoplay')
-      const controls = document.createElement('div')
-      controls.className = 'bpx-player-control-wrap'
-      const quality = document.createElement('button')
-      listeners.get('pointerdown')({ type: 'pointerdown', isTrusted: true, composedPath: () => [quality, controls] })
-      await assert.rejects(media.play(), { name: 'NotAllowedError' })
-      const play = document.createElement('button')
-      play.className = 'bpx-player-ctrl-play'
-      listeners.get('pointerdown')({ type: 'pointerdown', isTrusted: true, composedPath: () => [play, controls] })
-      await media.play()
-      assert.equal(plays, 1, 'only an actual native play gesture enables playback when automatic start is off')
-      activate(true, true)
-      await media.play()
-      assert.equal(plays, 2)
-      activate(false, true)
-      await assert.rejects(media.play(), { name: 'NotAllowedError' })
-      assert.equal(plays, 2)
-      listeners.get('play')({ target: media })
-      assert.ok(pauses > 0)
-      const activity = await loadSourceModule('../src/utils/iframeActivity.ts', {}, { window: { parent: {}, name: constants.IMMERSIVE_PRELOAD_NAME, dispatchEvent() {} } })
-      assert.equal(activity.isIframeDocumentActive(), false)
-      const history = await loadSourceFunctions('../src/utils/videoVisitHistory.ts', ['recordVideoVisit', 'recordVideoWatchProgress'], { isIframeDocumentActive: activity.isIframeDocumentActive, record: () => assert.fail('inactive history write') })
-      assert.equal(history.recordVideoVisit({ aid: 1 }), false)
-      assert.equal(history.recordVideoWatchProgress({ aid: 1 }, 10, 20, false, 'epoch'), false)
-    }
-    finally {
-      listeners.get('pagehide')({ persisted: false })
-      prototype.play = originalPlay
-      prototype.pause = originalPause
-    }
+    const activity = await loadSourceModule('../src/utils/iframeActivity.ts', {}, { window: { parent: {}, name: constants.IMMERSIVE_FRAME_NAME, dispatchEvent() {} } })
+    assert.equal(activity.isIframeDocumentActive(), false)
+    const history = await loadSourceFunctions('../src/utils/videoVisitHistory.ts', ['recordVideoVisit', 'recordVideoWatchProgress'], { isIframeDocumentActive: activity.isIframeDocumentActive, record: () => assert.fail('unbound document history write') })
+    assert.equal(history.recordVideoVisit({ aid: 1 }), false)
+    assert.equal(history.recordVideoWatchProgress({ aid: 1 }, 10, 20, false, 'epoch'), false)
   })
 }

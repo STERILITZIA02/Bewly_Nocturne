@@ -596,11 +596,8 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     // more lies beyond it; a bottom at the screen edge has none.
     const rails = {
       'src/components/LibraryWorkspace.vue': ['.library-workspace__rail-scroll', '($bottom: false)'],
-      'src/contentScripts/views/Favorites/FavoritesPage.vue': ['.category-list {', '($bottom: false)'],
-      'src/contentScripts/views/Notifications/whisper/PrivateHistorySearchResults.vue': ['.private-history-results__list', '($bottom: false)'],
       'src/contentScripts/views/Home/following/FollowingSidebar.vue': ['.following-sidebar__scroll', '($bottom: false)'],
       'src/contentScripts/views/Moments/MomentsSidebar.vue': ['.moments-live-card__list {', ';'],
-      'src/contentScripts/views/Favorites/FavoriteFilterPanel.vue': ['.favorite-filter__chips', ';'],
     }
     for (const [file, [selector, args]] of Object.entries(rails)) {
       const source = await readFile(file, 'utf8')
@@ -609,6 +606,23 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
       assert.ok(source.slice(start, source.indexOf('}', start)).includes(`@include scrollEdgeFade.lines${args}`), `${file}: ${selector} closes its edges with hairlines`)
       assert.doesNotMatch(source, /scrollEdgeFade\.vertical/, `${file}: no fade in a rail`)
     }
+    // A list right under a standing hairline draws no top line (two would
+    // stack) and starts at that hairline, so its rows are cut there, not a
+    // gap below it (user-specified).
+    const favoritesSource = await readFile('src/contentScripts/views/Favorites/FavoritesPage.vue', 'utf8')
+    const ruleOf = (source, selector) => {
+      const start = source.indexOf(selector)
+      assert.ok(start >= 0, selector)
+      return source.slice(start, source.indexOf('}', start))
+    }
+    const categoryList = ruleOf(favoritesSource, '.category-list {')
+    assert.doesNotMatch(categoryList, /scrollEdgeFade\.lines/, 'the folder list adds no line under the tools\' hairline')
+    assert.match(ruleOf(favoritesSource, '.favorites-sidebar-content .favorites-old-nav {'), /margin-top: calc\(-1 \* var\(--bew-sidebar-section-gap\)\);\s*padding-top: var\(--bew-sidebar-section-gap\);/, 'the rail gap moves into the nav')
+    assert.match(categoryList, /margin: calc\(-1 \* var\(--bew-sidebar-section-gap\)\) calc\(-1 \* var\(--bew-sidebar-inline-padding\)\) 0;\s*padding: var\(--bew-sidebar-section-gap\) var\(--bew-sidebar-inline-padding\) 0;/, 'the folder list scrolls up to the hairline')
+    const historyResults = await readFile('src/contentScripts/views/Notifications/whisper/PrivateHistorySearchResults.vue', 'utf8')
+    assert.doesNotMatch(ruleOf(historyResults, '.private-history-results__list {'), /scrollEdgeFade\.lines/, 'message results add no line under the tools\' hairline')
+    const conversationList = await readFile('src/contentScripts/views/Notifications/whisper/ConversationList.vue', 'utf8')
+    assert.match(conversationList, /\.conversation-list__items \{\s*flex: 1 1 auto;\s*min-height: 0;\s*padding: var\(--bew-space-1\);\s*\}[\s\S]*?\.conversation-list__history-results \{\s*padding-top: 0;/, 'message results start at the tools\' hairline')
     const linesCss = compileString('@use "scrollEdgeFade"; @include scrollEdgeFade.global; .x { @include scrollEdgeFade.lines($bottom: false); }', { loadPaths: ['src/styles'] }).css
     assert.match(linesCss, /@keyframes bew-scroll-edge-line-top \{\s*from \{\s*border-top-color: transparent;\s*\}\s*to \{\s*border-top-color: var\(--bew-separator-color\);/)
     assert.match(linesCss, /\.x \{\s*border-top: var\(--bew-hairline\) solid transparent;\s*\}/)

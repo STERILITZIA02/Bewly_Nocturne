@@ -11,7 +11,7 @@ import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { hasLoadedPicture, rememberLoadedPicture } from '~/utils/pictureRevealMemory'
 import { isPortraitRatio, PORTRAIT_MAX_CLEAR_HEIGHT } from '~/utils/portraitMedia'
-import { createWheelStepper } from '~/utils/wheelStep'
+import { createSideSwipe } from '~/utils/sideSwipe'
 
 import { getMomentThumbnailSrcset, getMomentThumbnailUrl } from './utils'
 
@@ -86,9 +86,9 @@ const imageFades = new Map<number, Animation>()
 const imageElements: Array<HTMLImageElement | null> = []
 const imageButtons: Array<HTMLButtonElement | null> = []
 const thumbScrollerRef = ref<HTMLElement | null>(null)
-const imageStepper = createWheelStepper({ oncePerGesture: true })
-let swipeStart: { id: number, x: number, y: number } | undefined
-let swipeStepped = false
+// A sideways trackpad or touch swipe moves one image per gesture; vertical
+// wheels keep scrolling the page.
+const imageSwipe = createSideSwipe(direction => requestImage(requestedImage.value + direction), () => images.length > 1)
 let thumbElastic: ReturnType<typeof createElasticWheelScroll> | undefined
 
 watch(shownImage, index => emit('shown', index), { immediate: true })
@@ -178,38 +178,9 @@ function handleImageLoad(index: number, event: Event) {
 }
 
 function handleImageClick(index: number, event: MouseEvent) {
-  if (swipeStepped) {
-    swipeStepped = false
+  if (imageSwipe.consumeClick())
     return
-  }
   emit('preview', index, event.currentTarget as HTMLElement)
-}
-
-// A sideways trackpad swipe moves one image per gesture; vertical wheels keep
-// scrolling the page.
-function handleImageWheel(event: WheelEvent) {
-  if (event.ctrlKey || event.defaultPrevented || images.length < 2 || Math.abs(event.deltaX) <= Math.abs(event.deltaY))
-    return
-  event.preventDefault()
-  const direction = imageStepper.step(event.deltaX, event.deltaMode, event.timeStamp)
-  if (direction)
-    requestImage(requestedImage.value + direction)
-}
-
-function handleImagePointerDown(event: PointerEvent) {
-  swipeStart = event.pointerType === 'touch' ? { id: event.pointerId, x: event.clientX, y: event.clientY } : undefined
-}
-
-function handleImagePointerUp(event: PointerEvent) {
-  const start = swipeStart
-  swipeStart = undefined
-  if (!start || start.id !== event.pointerId || images.length < 2)
-    return
-  const dx = event.clientX - start.x
-  if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(event.clientY - start.y))
-    return
-  swipeStepped = true
-  requestImage(requestedImage.value + (dx < 0 ? 1 : -1))
 }
 
 function handleImageKeydown(event: KeyboardEvent) {
@@ -272,10 +243,10 @@ function getImageLabel(index: number) {
         v-if="gallery"
         class="moment-media__cover moment-media__cover--images"
         :style="{ '--moment-media-ratio': imageBoxRatio }"
-        @wheel="handleImageWheel"
-        @pointerdown="handleImagePointerDown"
-        @pointerup="handleImagePointerUp"
-        @pointercancel="swipeStart = undefined"
+        @wheel="imageSwipe.wheel"
+        @pointerdown="imageSwipe.pointerdown"
+        @pointerup="imageSwipe.pointerup"
+        @pointercancel="imageSwipe.pointercancel"
         @keydown="handleImageKeydown"
       >
         <template v-for="(image, imageIndex) in images" :key="image">

@@ -19,7 +19,7 @@ export type WatchLaterMutationOwner = ReturnType<ReturnType<typeof createAccount
 interface WatchLaterMembership {
   isLogin: boolean
   userInfo: { mid?: number }
-  ensureWatchLaterState: () => Promise<boolean>
+  ensureWatchLaterState: (force?: boolean) => Promise<boolean>
   isInWatchLater: (aid: number) => boolean | undefined
   commitWatchLaterMutation: (aid: number, added: boolean, accountId: number, update?: WatchLaterUpdate) => Promise<unknown>
 }
@@ -34,7 +34,7 @@ const pendingRemovals = new Map<string, Promise<WatchLaterMutationResult>>()
 /** One submitted operation; only the store owns membership and successful reconciliation. */
 export async function updateOwnedWatchLater(
   target: WatchLaterIdentity,
-  action: 'toggle' | 'remove' | 'removeIfPresent',
+  action: 'toggle' | 'add' | 'remove' | 'removeIfPresent',
   owner: WatchLaterMutationOwner,
   membership: WatchLaterMembership,
   resolveAid: (target: WatchLaterIdentity) => Promise<number | undefined> = resolveWatchLaterAid,
@@ -68,7 +68,7 @@ export async function updateOwnedWatchLater(
     if (action === 'removeIfPresent' && !membership.isInWatchLater(aid))
       return { status: 'cancelled' }
   }
-  const added = action === 'toggle' && !membership.isInWatchLater(aid)
+  const added = action === 'add' || (action === 'toggle' && !membership.isInWatchLater(aid))
   if (!canSubmit())
     return { status: 'cancelled' }
   const key = `${accountId}:${csrf}:${aid}`
@@ -95,6 +95,28 @@ export async function updateOwnedWatchLater(
   finally {
     if (pendingRemovals.get(key) === write)
       pendingRemovals.delete(key)
+  }
+}
+
+/** Explicit remove/add intent with a read-before-retry boundary after transport failure. */
+export function captureWatchLaterRemoval(aid: number, owner: WatchLaterMutationOwner, membership: WatchLaterMembership & { syncWatchLaterState: (force?: boolean) => Promise<unknown> }, accepted: (added: boolean) => void | Promise<void> = () => {}) {
+  const csrf = getCSRF()
+  return {
+    current: () => owner.isCurrent() && !!csrf && getCSRF() === csrf,
+    async write(added: boolean, current: () => boolean) {
+      try {
+        const result = await updateOwnedWatchLater({ aid }, added ? 'add' : 'remove', { accountId: owner.accountId, isCurrent: current }, membership)
+        return result.status === 'unavailable' ? 'failed' as const : result.status
+      }
+      catch { return 'unknown' as const }
+    },
+    async read() {
+      if (!await membership.ensureWatchLaterState(true))
+        return
+      await membership.syncWatchLaterState(true)
+      return owner.isCurrent() ? membership.isInWatchLater(aid) : undefined
+    },
+    accepted,
   }
 }
 

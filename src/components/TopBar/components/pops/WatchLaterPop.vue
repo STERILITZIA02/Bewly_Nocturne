@@ -5,6 +5,7 @@ import { useToast } from 'vue-toastification'
 
 import ALink from '~/components/ALink.vue'
 import Button from '~/components/Button.vue'
+import CardRemovalPanel from '~/components/CardRemovalPanel.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import Picture from '~/components/Picture.vue'
@@ -12,6 +13,7 @@ import Progress from '~/components/Progress.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useCardRemoval } from '~/composables/useCardRemoval'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import { settings } from '~/logic'
 import type { List as WatchLaterItem } from '~/models/video/watchLater'
@@ -26,6 +28,7 @@ import { getUserID, removeHttpFromUrl } from '~/utils/main'
 import { retiringListTransition } from '~/utils/motionPresence'
 import { openLinkInBackground } from '~/utils/tabs'
 import { getVideoPlaybackProgress, getVideoProgressPercentage } from '~/utils/videoVisitHistory'
+import { captureWatchLaterRemoval } from '~/utils/watchLater'
 import { getWatchLaterAuthor, getWatchLaterPlaybackUrl } from '~/utils/watchLaterList'
 
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
@@ -50,6 +53,10 @@ const actionLifetime = createAccountLifetime(() => {
   return getUserID() === String(accountId) ? accountId : null
 })
 onScopeDispose(() => actionLifetime.dispose())
+const removals = useCardRemoval({ items: () => watchLaterList.value, key: (item: WatchLaterItem) => String(item.aid), scope: () => String(topBarStore.userInfo.mid) })
+function confirmRemoval(item: WatchLaterItem) {
+  removals.begin(item, { restorable: !!getWatchLaterPlaybackUrl(item), ...captureWatchLaterRemoval(item.aid, actionLifetime.capture(), topBarStore) })
+}
 watch(() => topBarStore.userInfo.mid, () => {
   actionLifetime.invalidate()
   pendingActions.clear()
@@ -191,28 +198,29 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
       class="bew-popover__body bew-popover__scroll bew-popover__list watch-later-pop__scroll"
     >
       <PopoverListSkeleton
-        v-if="isLoadingWatchLater && watchLaterList.length === 0"
+        v-if="isLoadingWatchLater && removals.displayItems.value.length === 0"
       />
 
       <Empty
-        v-if="!isLoadingWatchLater && watchLaterList.length === 0"
+        v-if="!isLoadingWatchLater && removals.displayItems.value.length === 0"
         class="bew-popover__state"
       />
 
       <!-- watchlater -->
       <TransitionGroup name="list" v-bind="retiringListTransition">
         <article
-          v-for="item in watchLaterList"
+          v-for="item in removals.displayItems.value"
           :key="item.aid"
           class="group popover-card"
         >
           <ALink
             class="popover-card__primary"
+            :inert="!!removals.get(item) || undefined"
             :href="getWatchLaterPlaybackUrl(item, true)"
             :aria-label="item.title"
             type="topBar"
           />
-          <section class="popover-card__content" flex="~ gap-4 items-start">
+          <section class="popover-card__content" :inert="!!removals.get(item) || undefined" flex="~ gap-4 items-start">
             <!-- Video cover, live cover, ariticle cover -->
             <div
               class="popover-card__media watch-later-pop__media aspect-video"
@@ -241,7 +249,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
                 class="popover-card__interactive popover-card-action popover-card__overlay-action popover-card__overlay-action--danger watch-later-pop__remove"
                 :label="$t('common.operation.delete')"
                 :disabled="pendingActions.has(item.aid)"
-                @click.stop.prevent="deleteWatchLaterItem(item.aid, $event)"
+                @click.stop.prevent="confirmRemoval(item)"
               >
                 <i i-tabler:x />
               </IconButton>
@@ -314,6 +322,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
               </Button>
             </div>
           </section>
+          <CardRemovalPanel v-if="removals.get(item)" :state="removals.get(item)!" kind="watchLater" />
         </article>
       </TransitionGroup>
 

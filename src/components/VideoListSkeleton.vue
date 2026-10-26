@@ -4,7 +4,6 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 withDefaults(defineProps<{
   count?: number
   actionCount?: number
-  history?: boolean
 }>(), {
   count: 4,
   actionCount: 1,
@@ -12,23 +11,22 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <div class="video-list-skeleton" :class="{ 'video-list-skeleton--history': history }" aria-hidden="true">
-    <SkeletonBlock v-if="history" width="112px" height="var(--bew-line-height-title)" />
+  <div class="video-list-skeleton" aria-hidden="true">
     <article v-for="index in count" :key="index" class="video-list-skeleton__row">
-      <div :class="history ? 'bew-history-row' : 'video-list-skeleton__item'">
+      <div class="video-list-skeleton__item">
         <SkeletonBlock class="video-list-skeleton__cover" height="auto" radius="media" />
         <div class="video-list-skeleton__content">
           <div class="video-list-skeleton__title">
-            <SkeletonBlock width="88%" :height="history ? 'var(--bew-font-size-title)' : 'var(--bew-font-size-heading)'" />
-            <SkeletonBlock width="68%" :height="history ? 'var(--bew-font-size-title)' : 'var(--bew-font-size-heading)'" />
+            <SkeletonBlock width="88%" height="var(--bew-font-size-heading)" />
+            <SkeletonBlock width="68%" height="var(--bew-font-size-heading)" />
           </div>
           <div class="video-list-skeleton__author">
-            <SkeletonBlock :width="history ? '24px' : '30px'" :height="history ? '24px' : '30px'" radius="circle" />
+            <SkeletonBlock width="30px" height="30px" radius="circle" />
             <SkeletonBlock width="112px" height="var(--bew-line-height-control)" />
           </div>
           <SkeletonBlock class="video-list-skeleton__meta" width="136px" height="var(--bew-line-height-control)" />
         </div>
-        <div v-if="!history" class="video-list-skeleton__actions">
+        <div class="video-list-skeleton__actions">
           <SkeletonBlock
             v-for="action in actionCount"
             :key="action"
@@ -44,7 +42,6 @@ withDefaults(defineProps<{
 
 <style scoped lang="scss">
 @use "../styles/breakpoints";
-@use "../styles/videoList";
 
 .video-list-skeleton {
   display: grid;
@@ -60,26 +57,6 @@ withDefaults(defineProps<{
 .video-list-skeleton__meta {
   --uno: "mt-2";
 }
-.video-list-skeleton--history {
-  gap: var(--bew-space-2);
-
-  > .bew-skeleton-block {
-    margin-bottom: var(--bew-space-1);
-  }
-
-  .video-list-skeleton__cover {
-    width: 100% !important;
-  }
-
-  .video-list-skeleton__title {
-    grid-template-rows: repeat(2, var(--bew-line-height-title));
-  }
-
-  .video-list-skeleton__author {
-    margin-top: var(--bew-space-2);
-  }
-}
-
 .video-list-skeleton__item {
   --uno: "gap-6 p-2 m-1";
   display: flex;

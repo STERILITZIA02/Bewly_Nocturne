@@ -261,6 +261,10 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       fixture.store.member = true
       fixture.member.resolve(true)
       await flush()
+      await first
+      assert.equal(fixture.sends.length, 0, 'membership reads lead to confirmation, never an implicit removal')
+      const removing = fixture.card.watchLaterRemoval.value.run()
+      await flush()
       assert.equal(fixture.sends.length, 1)
       assert.equal(fixture.sends[0].action, 'removeFromWatchLater')
       fixture.store.member = false
@@ -271,7 +275,7 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       fixture.store.userInfo.mid = 2
       fixture.setCookie('2')
       fixture.write.resolve({ code: 0 })
-      await first
+      await removing
       assert.equal(fixture.sends.length, 1)
       assert.equal(fixture.commits.length, 0, 'account 2 must not receive account 1 completion')
       assert.deepEqual(fixture.errors, [])

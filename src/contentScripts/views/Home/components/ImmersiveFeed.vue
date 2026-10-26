@@ -3,7 +3,7 @@ import { useEventListener } from '@vueuse/core'
 
 import CloseButton from '~/components/CloseButton.vue'
 import IconButton from '~/components/IconButton.vue'
-import VideoCardGrid from '~/components/VideoCardGrid.vue'
+import LazyPicture from '~/components/LazyPicture.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useHomeTabViewState } from '~/composables/useHomeTabState'
 import { settings } from '~/logic'
@@ -12,6 +12,7 @@ import { getRecommendationRequestIdentity } from '~/logic/recommendationMode'
 import type { AppVideoElement, VideoElement } from '~/stores/forYouStore'
 import { DIALOG_FOCUS_OWNER, DIALOG_TELEPORT_TARGET, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard, restoreOverlayFocus } from '~/utils/dialogFocus'
 import { isBrowserFullscreenActive } from '~/utils/escapePriority'
+import type { ImmersiveRailWindow } from '~/utils/immersivePlayback'
 import { findImmersiveVideo, getImmersiveVideoUrl, getImmersiveWindow, IMMERSIVE_WINDOW_SIZE, isImmersiveInput } from '~/utils/immersiveRecommendation'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
 import type { ScrollPositionClaim } from '~/utils/scrollIntent'
@@ -20,8 +21,8 @@ import { claimScrollPosition, ownsScrollPosition, scrollToPosition } from '~/uti
 import ImmersiveVideoFrame from './ImmersiveVideoFrame.vue'
 
 type Entry = VideoElement | AppVideoElement
-const props = defineProps<{ items: Entry[], initialIndex: number, loading: boolean, noMoreContent: boolean, requestFailed: boolean, trigger?: HTMLElement, scrollClaim?: ScrollPositionClaim }>()
-const emit = defineEmits<{ (event: 'close'): void, (event: 'loadMore'): void }>()
+const props = defineProps<{ items: Entry[], initialIndex: number, feedGeneration: number, pagingState: string, manualPaging: boolean, loading: boolean, noMoreContent: boolean, requestFailed: boolean, trigger?: HTMLElement, scrollClaim?: ScrollPositionClaim }>()
+const emit = defineEmits<{ (event: 'close'): void, (event: 'loadMore', retry: boolean): void }>()
 const app = useBewlyApp()
 const tabOwner = useHomeTabViewState()
 const page = app.activatedPage.value
@@ -32,12 +33,15 @@ const viewport = app.scrollViewportRef.value
 const scrollClaim = props.scrollClaim ?? (viewport ? claimScrollPosition(viewport) : undefined)
 const focus = props.trigger ?? getDeepActiveElement(document)
 const root = ref<HTMLElement | null>(null)
-const sidebar = ref<HTMLElement | null>(null)
-const sidebarOpen = ref(true)
 const visible = ref(!document.hidden)
-const index = ref(findImmersiveVideo(props.items, Math.max(0, props.initialIndex), 1))
-const windowStart = ref(index.value)
-const pendingNext = ref<{ key: string, automatic: boolean }>()
+const current = shallowRef(props.items[findImmersiveVideo(props.items, Math.max(0, props.initialIndex), 1)])
+const index = computed(() => props.items.findIndex(item => item.uniqueId === current.value?.uniqueId))
+let lastPosition = Math.max(0, index.value)
+let successorKey = props.items[lastPosition + 1]?.uniqueId
+let predecessorKey = props.items[lastPosition - 1]?.uniqueId
+const windowStart = ref(lastPosition)
+const pendingNext = ref<{ key: string, automatic: boolean, pages: number, length: number, state: 'loading' | 'continue' | 'filtered' | 'stalled' | 'failed' | 'ended' }>()
+const externalTarget = ref('')
 let disposed = false
 let normalExit = false
 let originCurrent = true
@@ -51,37 +55,36 @@ function close() {
 const dialogId = useId()
 provide(DIALOG_FOCUS_OWNER, dialogId)
 provide(DIALOG_TELEPORT_TARGET, root)
-provide('BEWLY_APP', { ...app, scrollViewportRef: sidebar })
-const current = computed(() => props.items[index.value])
-const nextIndex = computed(() => findImmersiveVideo(props.items, index.value + 1, 1))
-const previousIndex = computed(() => findImmersiveVideo(props.items, index.value - 1, -1))
-const windowItems = computed(() => getImmersiveWindow(props.items, windowStart.value))
-watch(index, () => {
-  windowStart.value = index.value
-  void nextTick(() => {
-    if (app.activatedPage.value !== page || app.homeActivatedPage.value !== homeTab || requestIdentity !== getRecommendationRequestIdentity())
-      return
-    if (!disposed && sidebar.value)
-      scrollToPosition(sidebar.value, 0)
-  })
-}, { flush: 'sync' })
-const frames = computed(() => {
-  const currentItem = current.value
-  if (!currentItem)
-    return []
-  const result = [{ entry: currentItem, active: true }]
-  if (settings.value.immersivePreloadNext && nextIndex.value >= 0)
-    result.push({ entry: props.items[nextIndex.value], active: false })
-  return result
+const queuePosition = computed(() => {
+  if (index.value >= 0)
+    return index.value
+  const successor = props.items.findIndex(item => item.uniqueId === successorKey)
+  if (successor >= 0)
+    return successor
+  const predecessor = props.items.findIndex(item => item.uniqueId === predecessorKey)
+  return predecessor >= 0 ? predecessor + 1 : Math.min(lastPosition, props.items.length)
 })
-function select(entry: Entry, event?: MouseEvent) {
-  if (event && (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey))
-    return
-  event?.preventDefault()
-  const target = props.items.indexOf(entry)
-  if (target >= 0 && getImmersiveVideoUrl(entry)) {
+const nextIndex = computed(() => findImmersiveVideo(props.items, queuePosition.value + (index.value >= 0 ? 1 : 0), 1))
+const previousIndex = computed(() => findImmersiveVideo(props.items, queuePosition.value - 1, -1))
+const windowItems = computed(() => getImmersiveWindow(props.items, windowStart.value))
+let railRevision = 0
+const railWindow = computed<ImmersiveRailWindow>(previous => !visible.value && previous
+  ? previous
+  : ({
+      revision: ++railRevision,
+      items: windowItems.value.map(entry => ({ uniqueId: entry.uniqueId, displayData: entry.displayData! })),
+      currentKey: externalTarget.value ? '' : current.value?.uniqueId ?? '',
+      loading: props.loading,
+      hasMore: !props.noMoreContent || windowStart.value + IMMERSIVE_WINDOW_SIZE < props.items.length,
+      failed: props.requestFailed,
+    }))
+function select(entry: Entry) {
+  if (getImmersiveVideoUrl(entry)) {
     pendingNext.value = undefined
-    index.value = target
+    current.value = entry
+    externalTarget.value = ''
+    lastPosition = Math.max(0, props.items.findIndex(item => item.uniqueId === entry.uniqueId))
+    windowStart.value = lastPosition
   }
 }
 function requestMore(forQueue = false, retry = false) {
@@ -91,23 +94,23 @@ function requestMore(forQueue = false, retry = false) {
     windowStart.value += Math.floor(IMMERSIVE_WINDOW_SIZE * 2 / 3)
     return
   }
-  if (!props.loading && !props.noMoreContent && (!props.requestFailed || retry))
-    emit('loadMore')
+  if (!props.loading && (!props.noMoreContent || (retry && props.requestFailed)) && (!props.requestFailed || retry))
+    emit('loadMore', retry)
 }
 function next(automatic = false) {
   if (nextIndex.value >= 0) {
     pendingNext.value = undefined
-    index.value = nextIndex.value
+    select(props.items[nextIndex.value])
   }
-  else if (!props.noMoreContent && !props.requestFailed && current.value) {
-    pendingNext.value = { key: current.value.uniqueId, automatic }
+  else if (current.value) {
+    pendingNext.value = { key: current.value.uniqueId, automatic, pages: 0, length: props.items.length, state: props.requestFailed ? 'failed' : props.noMoreContent ? 'ended' : 'loading' }
     requestMore(true)
   }
 }
 function previous() {
   pendingNext.value = undefined
   if (previousIndex.value >= 0)
-    index.value = previousIndex.value
+    select(props.items[previousIndex.value])
 }
 function action(key: string, value: string) {
   if (disposed || current.value?.uniqueId !== key)
@@ -126,20 +129,54 @@ watch([() => props.items, () => props.loading], () => {
   }
   if (nextIndex.value >= 0) {
     pendingNext.value = undefined
-    index.value = nextIndex.value
+    select(props.items[nextIndex.value])
   }
   else {
-    pendingNext.value = undefined
+    const pending = pendingNext.value
+    pending.pages++
+    pending.state = props.requestFailed
+      ? 'failed'
+      : props.noMoreContent
+        ? 'ended'
+        : props.manualPaging || props.pagingState === 'filtered-empty' ? 'filtered' : props.items.length === pending.length ? 'stalled' : 'continue'
+    pending.length = props.items.length
+    if (pending.state === 'continue' && pending.pages < 3 && !props.manualPaging) {
+      pending.state = 'loading'
+      requestMore(true)
+    }
   }
-})
+}, { flush: 'post' })
 watch(() => settings.value.immersiveAutoNext, (enabled) => {
   if (!enabled && pendingNext.value?.automatic)
     pendingNext.value = undefined
 })
-watch(() => props.items, (items, previousItems) => {
-  if (previousItems.length && items[0] !== previousItems[0])
-    emit('close')
+watch([index, () => props.items], ([position, items]) => {
+  if (position >= 0) {
+    lastPosition = position
+    successorKey = items[position + 1]?.uniqueId
+    predecessorKey = items[position - 1]?.uniqueId
+  }
 }, { flush: 'sync' })
+watch(() => props.feedGeneration, () => emit('close'), { flush: 'sync' })
+function railAction(value: { action: string, key?: string, revision?: number }) {
+  if (value.revision !== railWindow.value.revision)
+    return
+  if (value.action === 'select') {
+    const entry = props.items.find(item => item.uniqueId === value.key)
+    if (entry)
+      select(entry)
+  }
+  else if (value.action === 'more') {
+    requestMore(false, true)
+  }
+}
+function continueNext() {
+  if (pendingNext.value) {
+    pendingNext.value.pages = 0
+    pendingNext.value.state = 'loading'
+    requestMore(true, true)
+  }
+}
 function keyboard(event: KeyboardEvent) {
   if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey || !root.value || !ownsDialogKeyboard(root.value, event))
     return
@@ -211,56 +248,41 @@ onBeforeUnmount(() => {
       @keydown="keyboard"
     >
       <header class="immersive-feed__toolbar">
-        <span class="bew-subheading">{{ $t('settings.immersive_mode') }}</span>
+        <span class="bew-subheading" :title="$t('settings.immersive_scope')">{{ $t('settings.immersive_mode') }}</span>
         <IconButton :label="$t('settings.immersive_previous')" :disabled="previousIndex < 0" class="immersive-feed__button" @click="previous">
           <span class="i-tabler:player-skip-back" aria-hidden="true" />
         </IconButton>
         <IconButton :label="$t('settings.immersive_next')" :disabled="nextIndex < 0 && noMoreContent" class="immersive-feed__button" @click="next()">
           <span class="i-tabler:player-skip-forward" aria-hidden="true" />
         </IconButton>
-        <IconButton :label="$t('settings.immersive_recommendations')" :aria-pressed="sidebarOpen" class="immersive-feed__button" @click="sidebarOpen = !sidebarOpen">
-          <span class="i-tabler:layout-sidebar-right" aria-hidden="true" />
-        </IconButton>
         <CloseButton :label="$t('common.close')" @click="close" />
       </header>
       <div class="immersive-feed__body">
         <div class="immersive-feed__stage">
           <ImmersiveVideoFrame
-            v-for="frame in frames" :key="frame.entry.uniqueId"
-            :url="getImmersiveVideoUrl(frame.entry)!"
-            :item-key="frame.entry.uniqueId"
-            :title="frame.entry.displayData?.title || ''"
-            :active="frame.active"
+            v-if="current" :key="current.uniqueId"
+            :url="getImmersiveVideoUrl(current)!"
+            :item-key="current.uniqueId"
+            :title="current.displayData?.title || ''"
+            :active="true"
             :ui-visible="visible"
-            @action="action(frame.entry.uniqueId, $event)"
+            :recommendations="railWindow"
+            @action="action($event.key, $event.action)"
+            @rail-action="railAction"
+            @navigation="externalTarget = $event"
           />
           <p v-if="!current" class="bew-help">
             {{ $t('common.no_data') }}
           </p>
         </div>
-        <aside v-if="sidebarOpen" ref="sidebar" class="immersive-feed__list" :aria-label="$t('settings.immersive_recommendations')">
-          <VideoCardGrid
-            v-if="visible"
-            :items="windowItems"
-            grid-layout="oneColumn"
-            :persist-state="false"
-            :show-preview="false"
-            :loading="loading"
-            :no-more-content="noMoreContent && windowStart + IMMERSIVE_WINDOW_SIZE >= items.length"
-            :request-failed="requestFailed"
-            :transform-item="(item: Entry) => item.displayData"
-            :get-item-key="(item: Entry) => item.uniqueId"
-            :card-click-handler="select"
-            text-only-states
-            @load-more="requestMore()"
-            @refresh="requestMore(false, true)"
-          >
-            <template #afterCard="{ item }">
-              <span v-if="item.uniqueId === current?.uniqueId" class="bew-help">{{ $t('settings.immersive_current') }}</span>
-            </template>
-          </VideoCardGrid>
-        </aside>
       </div>
+      <div v-if="pendingNext" class="immersive-feed__pending" role="status">
+        <span>{{ $t(`settings.immersive_queue_${pendingNext.state}`) }}</span>
+        <button v-if="!['loading', 'ended'].includes(pendingNext.state)" type="button" @click="continueNext">
+          {{ $t('common.load_more') }}
+        </button>
+      </div>
+      <LazyPicture v-if="settings.immersivePreloadNext && visible && nextIndex >= 0" class="immersive-feed__poster-preload" :src="items[nextIndex].displayData?.cover || ''" alt="" />
     </section>
   </Teleport>
 </template>
@@ -312,21 +334,18 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.immersive-feed__list {
-  flex: 0 0 clamp(280px, 26vw, 384px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: var(--bew-space-4);
-  box-sizing: border-box;
-  background: var(--bew-bg);
-  border-left: var(--bew-hairline) solid var(--bew-separator-color);
+.immersive-feed__pending {
+  display: flex;
+  justify-content: center;
+  gap: var(--bew-space-3);
+  padding: var(--bew-space-2);
+  font-size: var(--bew-font-size-callout);
 }
-
-@media (max-width: 900px) {
-  .immersive-feed__list {
-    position: absolute;
-    inset: var(--bew-control-height) 0 0 auto;
-    width: min(384px, 80vw);
-  }
+.immersive-feed__poster-preload {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 </style>

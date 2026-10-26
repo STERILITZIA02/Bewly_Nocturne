@@ -966,6 +966,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
         getVideoPlaybackProgress: (_identity, progress, duration) => ({ progress, duration }),
       },
       '~/components/WatchLater/OpenTabsDialog.vue': { default: blank },
+      '~/components/CardRemovalPanel.vue': { default: await compileComponent('../src/components/CardRemovalPanel.vue') },
       '@vueuse/core': { useDateFormat: () => Vue.ref('date'), useResizeObserver() {} },
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       '~/components/IconButton.vue': { default: { props: ['label'], setup: (props, { slots }) => () => Vue.h('button', { 'aria-label': props.label }, slots.default?.()) } },
@@ -996,7 +997,10 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       '~/utils/playbackProgress': await import('../src/utils/playbackProgress'),
       '~/utils/tabs': {},
-      '~/utils/watchLater': { updateOwnedWatchLater: () => {
+      '~/utils/watchLater': { captureWatchLaterRemoval: (_aid, owner, _membership, accepted) => ({ current: owner.isCurrent, read: async () => true, accepted, write: async () => {
+        writeRequests++
+        return (await pending.promise).status
+      } }), updateOwnedWatchLater: () => {
         writeRequests++
         return pending.promise
       } },
@@ -1034,9 +1038,9 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       app.mount(root)
       await settle()
       assert.equal(root.querySelector('.library-sidebar-heading__count').textContent, '500', 'the sidebar shows the authoritative queue total')
-      root.querySelector('.watch-later-sort-button').click()
+      root.querySelector('[data-filter="sort:oldest"]').click()
       await settle()
-      assert.equal(root.querySelector('.watch-later-sort-button').getAttribute('aria-label'), 'watch_later.sort_oldest')
+      assert.equal(root.querySelector('[data-filter="sort:oldest"]').getAttribute('aria-checked'), 'true', 'the order is a group of the funnel menu')
       assert.equal(libraryReads, 1, 'oldest-first loads the complete queue rather than reversing the first page')
       const search = root.querySelector('.library-search-field input')
       search.value = 'Video 500'
@@ -1096,6 +1100,10 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       const first = root.querySelector('.watch-later-list-card')
       first.querySelector('a').focus()
       first.querySelector('[aria-label="watch_later.remove_from_watch_later"]').click()
+      assert.equal(writeRequests, 0, 'single removal first opens the card confirmation')
+      await flush()
+      first.querySelector('.card-removal button:last-child').click()
+      await flush()
       assert.equal(writeRequests, 1)
       root.scrollTop = 19000
       root.dispatchEvent(new Event('scroll'))
@@ -1104,12 +1112,12 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       assert.equal(root.querySelector('.watch-later-list-card'), first)
       pending.resolve({ status: 'cancelled' })
       await flush()
-      first.querySelector('a').blur()
+      first.querySelector('.card-removal').blur()
       root.scrollTop++
       root.dispatchEvent(new Event('scroll'))
       await settle()
       assert.equal(first.isConnected, false)
-      Array.from(root.querySelectorAll('.library-workspace__rail [role="radio"]')).find(button => button.textContent.trim() === 'library_tools.layout_grid').click()
+      root.querySelector('[data-filter="layout:grid"]').click()
       root.scrollTop = 0
       await settle()
       assert.ok(root.querySelectorAll('[data-grid-aid]').length > 0)

@@ -479,20 +479,17 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
     }
   })
 
-  check('loading: real list skeleton renders history gutters and the requested action count', async () => {
+  check('loading: real list skeleton renders the requested action count', async () => {
     const SkeletonBlock = await compileComponent('../src/components/SkeletonBlock.vue')
     const List = await compileComponent('../src/components/VideoListSkeleton.vue', { '~/components/SkeletonBlock.vue': { default: SkeletonBlock } })
     const host = document.body.appendChild(document.createElement('div'))
-    const props = Vue.reactive({ history: true, actionCount: 1, count: 3 })
+    const props = Vue.reactive({ actionCount: 1, count: 3 })
     const app = Vue.createApp({ setup: () => () => Vue.h(List, props) })
     try {
       app.mount(host)
-      assert.equal(host.querySelectorAll('.bew-history-row').length, 3)
-      assert.equal(host.querySelectorAll('.video-list-skeleton__actions [data-bew-skeleton]').length, 0)
-      props.history = false
+      assert.equal(host.querySelectorAll('.video-list-skeleton__actions [data-bew-skeleton]').length, 3)
       props.actionCount = 3
       await flush()
-      assert.equal(host.querySelectorAll('.bew-history-row').length, 0)
       assert.equal(host.querySelectorAll('.video-list-skeleton__actions [data-bew-skeleton]').length, 9)
       app.unmount()
       assert.equal(host.querySelectorAll('[data-bew-skeleton]').length, 0)

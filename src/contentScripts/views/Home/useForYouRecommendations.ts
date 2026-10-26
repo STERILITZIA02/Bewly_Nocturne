@@ -67,6 +67,7 @@ export function useForYouRecommendations(emit: {
   const { filterFunc, appFilterFunc, hasActiveWebRecommendationFilter, hasActiveAppRecommendationFilter, hasActiveRecommendationFilter, requiresManualFilteredPaging, recommendationFilterSettingsSignature, resetFilteredFeedPagingState, recordFilteredFeedBatch } = useRecommendationFilters(tabState, isWebRecommendationMode)
   const acceptedFilterSignature = tabState.ref('recommendationFilterSignature', recommendationFilterSettingsSignature.value)
   let requestVersion = 0
+  const feedGeneration = ref(0)
   let appLikesController: AbortController | undefined
   let suspendedAppLikes = false
   let filterRefreshTimer: ReturnType<typeof setTimeout> | undefined
@@ -233,7 +234,7 @@ export function useForYouRecommendations(emit: {
       // A threshold or keyword edit must not request a feed for every keystroke.
       filterRefreshTimer = setTimeout(() => {
         filterRefreshTimer = undefined
-        void initData()
+        void initData(true)
       }, 300)
     }
   })
@@ -380,8 +381,10 @@ export function useForYouRecommendations(emit: {
     invalidateRequests()
   }, { flush: 'sync' })
 
-  async function initData() {
+  async function initData(preservePlayback = false) {
     invalidateRequests()
+    if (!preservePlayback)
+      feedGeneration.value = requestVersion
     if (isWebRecommendationMode.value && isWebRiskCooldownActive()) {
       recommendationDataState.value = 'risk-control'
       notifyWebRiskCooldown()
@@ -518,7 +521,12 @@ export function useForYouRecommendations(emit: {
     loadMore()
   }
 
-  function handleManualLoadMore() {
+  function handleManualLoadMore(retry = false) {
+    if (retry && requestFailed.value && !isLoading.value) {
+      resetWebRiskCooldown()
+      noMoreContent.value = false
+      recommendationDataState.value = 'idle'
+    }
     loadMore(true)
   }
 
@@ -545,6 +553,7 @@ export function useForYouRecommendations(emit: {
     if (!snapshot || !tabState.isCurrent() || snapshot.requestIdentity !== getRecommendationRequestIdentity())
       return false
     invalidateRequests()
+    feedGeneration.value = requestVersion
     isLoading.value = false
     isRecursiveLoading.value = false
     videoList.value = snapshot.videoList
@@ -1121,5 +1130,5 @@ export function useForYouRecommendations(emit: {
 
   // 修改 defineExpose，暴露重置方法和撤销方法
 
-  return { currentVideoList, isLoading, noMoreContent, needToLoginFirst, appAuthorizationRequired, requestFailed, recommendationEmptyDescription, isWebRecommendationMode, requiresManualFilteredPaging, retryRecommendation, jumpToLoginPage, handleLoadMore, handleManualLoadMore, handleAppAuthorization, initData, undoRefresh: () => tabState.isCurrent() && restoreRecommendationSnapshot(recommendationHistory.undo(captureRecommendationSnapshot())), goForward: () => tabState.isCurrent() && restoreRecommendationSnapshot(recommendationHistory.redo(captureRecommendationSnapshot())), canGoBack: () => recommendationHistory.canUndo.value, canGoForward: () => recommendationHistory.canRedo.value }
+  return { currentVideoList, feedGeneration, recommendationDataState, isLoading, noMoreContent, needToLoginFirst, appAuthorizationRequired, requestFailed, recommendationEmptyDescription, isWebRecommendationMode, requiresManualFilteredPaging, retryRecommendation, jumpToLoginPage, handleLoadMore, handleManualLoadMore, handleAppAuthorization, initData, undoRefresh: () => tabState.isCurrent() && restoreRecommendationSnapshot(recommendationHistory.undo(captureRecommendationSnapshot())), goForward: () => tabState.isCurrent() && restoreRecommendationSnapshot(recommendationHistory.redo(captureRecommendationSnapshot())), canGoBack: () => recommendationHistory.canUndo.value, canGoForward: () => recommendationHistory.canRedo.value }
 }

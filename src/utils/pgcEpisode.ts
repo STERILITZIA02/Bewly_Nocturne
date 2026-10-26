@@ -3,7 +3,6 @@ import api from '~/utils/api'
 export interface PgcEpisodeVideoIds {
   aid: number
   bvid?: string
-  hasNextEpisode?: boolean
 }
 
 // Public ID metadata is cheap to reload; a long-lived tab must not retain every
@@ -20,13 +19,12 @@ export function findPgcEpisodeVideoIds(result: any, epid: number): PgcEpisodeVid
       : []),
   ]
   for (const episodes of groups) {
-    const index = episodes.findIndex((episode: any) => Number(episode?.id ?? episode?.ep_id) === epid)
-    if (index < 0)
+    const episode = episodes.find((episode: any) => Number(episode?.id ?? episode?.ep_id) === epid)
+    if (!episode)
       continue
-    const episode = episodes[index]
     const aid = Number(episode?.aid)
     if (Number.isSafeInteger(aid) && aid > 0)
-      return { aid, bvid: typeof episode?.bvid === 'string' && episode.bvid ? episode.bvid : undefined, hasNextEpisode: index < episodes.length - 1 }
+      return { aid, bvid: typeof episode?.bvid === 'string' && episode.bvid ? episode.bvid : undefined }
   }
 }
 

@@ -5,16 +5,11 @@
   min-width: 0;
 }
 
-.favorites-main-heading {
-  margin: 0;
-  color: var(--bew-text-1);
-}
-
-// The folder's head (user-specified): its cover across the top, then the title,
-// creator and actions on the cover's colour.
+// The folder's head (user-specified): title, creator and actions on the left,
+// on the colour of the cover's left edge, and the cover on the right.
 .favorites-hero {
-  position: relative;
-  margin-bottom: var(--bew-space-6);
+  // The grid after it adds its own top margin.
+  --library-hero-gap: calc(var(--bew-space-6) + var(--bew-space-3));
 }
 
 // This folder's uploaders over the content, each a one-tap filter; pinned like

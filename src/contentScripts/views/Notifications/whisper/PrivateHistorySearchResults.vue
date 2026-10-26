@@ -48,7 +48,7 @@ function formatTime(timestamp: number) {
 
 <template>
   <section ref="root" class="private-history-results" :aria-label="t('notifications.whisper.search.messages')" @keydown="moveFocus">
-    <Button v-if="!state.query" type="tertiary" :disabled="!query.trim()" @click="emit('search')">
+    <Button v-if="!state.query" type="tertiary" class="private-history-results__start" :disabled="!query.trim()" @click="emit('search')">
       {{ t('notifications.whisper.search.start') }}
     </Button>
     <template v-else>
@@ -127,7 +127,6 @@ function formatTime(timestamp: number) {
 <style scoped lang="scss">
 @use "../../../../styles/truncateFade";
 @use "../../../../styles/sidebarSurface";
-@use "../../../../styles/scrollEdgeFade";
 .private-history-results {
   display: flex;
   flex-direction: column;
@@ -138,17 +137,20 @@ function formatTime(timestamp: number) {
 }
 .private-history-results__list {
   @include sidebarSurface.vertical-scroll;
-  // A rail never fades; its bottom is the screen edge, which needs no line.
-  // It bleeds over its pane's 12px padding so the line spans the rail.
-  @include scrollEdgeFade.lines($bottom: false);
+  // A rail never fades, and it draws no edge lines: it starts at the tools'
+  // hairline, which closes its top (one line, user-specified), and the
+  // controls sit under it. The space above the first result scrolls with it.
   margin-inline: calc(-1 * var(--bew-space-3));
-  padding-inline: var(--bew-space-3);
+  padding: var(--bew-space-1) var(--bew-space-3) 0;
   display: grid;
   align-content: start;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   gap: var(--bew-space-2);
+}
+.private-history-results__start {
+  margin-top: var(--bew-space-1);
 }
 .private-history-results__controls {
   display: grid;

@@ -17,6 +17,13 @@ export function globalComponentFixture(path: string, vue: typeof import('vue')) 
 /** Executes the complete production module; only its external dependencies are substituted. */
 export async function loadSourceModule(file: string, imports: Record<string, unknown>, globals: Record<string, unknown> = {}) {
   const source = await readFile(new URL(file, import.meta.url), 'utf8')
+  if (source.includes('from \'~/composables/useCardRemoval\'') && !('~/composables/useCardRemoval' in imports))
+    imports = { '~/composables/useCardRemoval': await import('../src/composables/useCardRemoval'), ...imports }
+  if (source.includes('from \'~/utils/bewlyWidescreen/appHost\'') && !('~/utils/bewlyWidescreen/appHost' in imports)) {
+    imports = { '~/utils/bewlyWidescreen/appHost': await loadSourceModule('../src/utils/bewlyWidescreen/appHost.ts', {
+      '~/styles/reset.css?raw': imports['~/styles/reset.css?raw'] ?? { default: '' },
+    }, globals), ...imports }
+  }
   if (source.includes('from \'~/utils/iframeDrawerHistory\''))
     imports = { '~/utils/iframeDrawerHistory': await import('../src/utils/iframeDrawerHistory'), ...imports }
   if (source.includes('from \'./privateConversationRoute\''))

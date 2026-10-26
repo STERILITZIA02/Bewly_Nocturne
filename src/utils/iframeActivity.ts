@@ -1,8 +1,8 @@
-import { IFRAME_ACTIVITY_CHANGE, IMMERSIVE_FRAME_NAME, IMMERSIVE_PRELOAD_NAME } from '~/constants/immersive'
+import { IFRAME_ACTIVITY_CHANGE, IMMERSIVE_FRAME_NAME } from '~/constants/immersive'
 
 export function isImmersiveFrame() {
   return typeof window !== 'undefined' && window.parent !== window
-    && [IMMERSIVE_FRAME_NAME, IMMERSIVE_PRELOAD_NAME].includes(window.name)
+    && window.name === IMMERSIVE_FRAME_NAME
 }
 
 let active = !isImmersiveFrame()

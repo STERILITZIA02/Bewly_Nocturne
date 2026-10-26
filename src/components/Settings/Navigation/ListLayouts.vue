@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import { settings } from '~/logic'
-import type { WatchLaterLayoutMode } from '~/logic/storage'
+import type { HistoryGroupInterval, WatchLaterLayoutMode } from '~/logic/storage'
 
 import SettingsItem from '../components/SettingsItem.vue'
 import SettingsItemGroup from '../components/SettingsItemGroup.vue'
@@ -13,6 +13,7 @@ const layoutOptions = computed<{ label: string, value: WatchLaterLayoutMode }[]>
   { label: t('watch_later.layout_list'), value: 'list' },
   { label: t('watch_later.layout_grid'), value: 'grid' },
 ])
+const historyGroupOptions = computed<{ label: string, value: HistoryGroupInterval }[]>(() => (['hour', 'period', 'day'] as const).map(value => ({ label: t(`history.group_${value}`), value })))
 </script>
 
 <template>
@@ -30,8 +31,8 @@ const layoutOptions = computed<{ label: string, value: WatchLaterLayoutMode }[]>
           :options="layoutOptions"
         />
       </SettingsItem>
-      <SettingsItem setting-id="settings.history_layout" :title="$t('settings.history_layout')" right-width="auto">
-        <SettingsSegmentedControl v-model="settings.historyLayout" :label="$t('settings.history_layout')" :options="layoutOptions" />
+      <SettingsItem setting-id="settings.history_group_interval" :title="$t('settings.history_group_interval')" right-width="auto">
+        <SettingsSegmentedControl v-model="settings.historyGroupInterval" :label="$t('settings.history_group_interval')" :options="historyGroupOptions" />
       </SettingsItem>
     </SettingsItemGroup>
   </div>

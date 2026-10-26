@@ -5,6 +5,7 @@ import { useToast } from 'vue-toastification'
 
 import ALink from '~/components/ALink.vue'
 import Button from '~/components/Button.vue'
+import CardRemovalPanel from '~/components/CardRemovalPanel.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
@@ -12,6 +13,7 @@ import LibraryDateRange from '~/components/LibraryDateRange.vue'
 import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
 import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
 import LibraryHero from '~/components/LibraryHero.vue'
+import LibraryHeroCarousel from '~/components/LibraryHeroCarousel.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryVideoCardSkeleton from '~/components/LibraryVideoCardSkeleton.vue'
@@ -19,12 +21,12 @@ import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import LoadingFill from '~/components/LoadingFill.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 import Progress from '~/components/Progress.vue'
-import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
 import SmoothLoading from '~/components/SmoothLoading.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import OpenTabsDialog from '~/components/WatchLater/OpenTabsDialog.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useCardRemoval } from '~/composables/useCardRemoval'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useGridLayout } from '~/composables/useGridLayout'
@@ -46,7 +48,7 @@ import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { retiringListTransition, retiringTransition } from '~/utils/motionPresence'
 import { openLinkInBackground } from '~/utils/tabs'
 import { getVideoPlaybackProgress, getVideoProgressPercentage, getVideoWatchState } from '~/utils/videoVisitHistory'
-import { updateOwnedWatchLater } from '~/utils/watchLater'
+import { captureWatchLaterRemoval, updateOwnedWatchLater } from '~/utils/watchLater'
 import { getWatchLaterAuthor, getWatchLaterPlaybackUrl, mergeWatchLaterItemsByAid, normalizeWatchLaterItem } from '~/utils/watchLaterList'
 
 import { useWatchLaterBatch } from './useWatchLaterBatch'
@@ -83,24 +85,39 @@ const DURATIONS = ['all', 'short', 'medium', 'long', 'extraLong'] as const
 const PROGRESS_ICONS = { all: 'i-tabler:list', unstarted: 'i-tabler:eye-off' } as const
 const ADDED_ICONS = { all: 'i-tabler:infinity', custom: 'i-tabler:calendar-cog' } as const
 const DURATION_ICONS = { all: 'i-tabler:clock', short: 'i-tabler:clock-hour-2', medium: 'i-tabler:clock-hour-5', long: 'i-tabler:clock-hour-8', extraLong: 'i-tabler:clock-hour-11' } as const
+const SORT_ORDERS = ['newest', 'oldest'] as const
+const SORT_ICONS = { newest: 'i-tabler:sort-descending', oldest: 'i-tabler:sort-ascending' } as const
+const LAYOUTS = ['list', 'grid'] as const
+const LAYOUT_ICONS = { list: 'i-tabler:list-details', grid: 'i-tabler:layout-grid' } as const
 const filterGroups = computed<LibraryFilterGroup[]>(() => [
   { key: 'progress', title: t('library_tools.filter_progress'), value: advancedFilters.value.progress, options: PROGRESS.map(value => ({ value, label: t(`watch_later.filters.progress_${value}`), icon: PROGRESS_ICONS[value] })) },
   { key: 'added', title: t('library_tools.filter_added'), value: advancedFilters.value.added, options: ADDED.map(value => ({ value, label: t(value === 'all' ? 'history.filters.period_all' : 'library_tools.date_custom'), icon: ADDED_ICONS[value] })) },
   { key: 'duration', title: t('library_tools.filter_duration'), value: advancedFilters.value.duration, options: DURATIONS.map(value => ({ value, label: t(`watch_later.filters.duration_${value}`), icon: DURATION_ICONS[value] })) },
+  { key: 'sort', title: t('library_tools.filter_sort'), value: sortOrder.value, options: SORT_ORDERS.map(value => ({ value, label: t(`watch_later.sort_${value}`), icon: SORT_ICONS[value] })) },
+  ...settings.value.enableGridLayoutSwitcher
+    ? [{ key: 'layout', title: t('library_tools.filter_layout'), value: settings.value.watchLaterLayoutMode, options: LAYOUTS.map(value => ({ value, label: t(`library_tools.layout_${value}`), icon: LAYOUT_ICONS[value] })) }]
+    : [],
 ])
+// The funnel lights for any filter, and for the oldest-first order too; the
+// layout is a preference, not a condition.
+const filterActive = computed(() => hasWatchLaterFilters(advancedFilters.value) || sortOrder.value !== 'newest')
 function selectFilter(key: string, value: string) {
-  advancedFilters.value = key === 'added' && value === 'all'
-    ? { ...advancedFilters.value, added: 'all', startDate: '', endDate: '' }
-    : { ...advancedFilters.value, [key]: value } as WatchLaterFilters
+  if (key === 'sort') {
+    sortOrder.value = value as WatchLaterSortOrder
+  }
+  else if (key === 'layout') {
+    settings.value.watchLaterLayoutMode = value as typeof LAYOUTS[number]
+  }
+  else {
+    advancedFilters.value = key === 'added' && value === 'all'
+      ? { ...advancedFilters.value, added: 'all', startDate: '', endDate: '' }
+      : { ...advancedFilters.value, [key]: value } as WatchLaterFilters
+  }
 }
 function updateFilterDate(key: 'startDate' | 'endDate', value: string) {
   advancedFilters.value = { ...advancedFilters.value, [key]: value }
 }
 const invalidRange = computed(() => watchLaterAddedBounds(advancedFilters.value) === null)
-const layoutOptions = computed(() => [
-  { label: t('library_tools.layout_list'), value: 'list' as const },
-  { label: t('library_tools.layout_grid'), value: 'grid' as const },
-])
 const watchLaterCount = computed(() => topBarStore.watchLaterCount ?? 0)
 const pendingAction = shallowRef<{ accountId: number, aid: number } | null>(null)
 const { handlePageRefresh, handleReachBottom, haveScrollbar, scrollViewportRef } = useBewlyApp()
@@ -112,6 +129,11 @@ const watchLaterLayoutMode = useLayoutEditSettingValue(
 )
 const { gridClass: watchLaterGridClass } = useGridLayout(() => 'adaptive')
 const cardContainer = ref<HTMLElement | null>(null)
+const removals = useCardRemoval({
+  items: () => filteredItems.value,
+  key: (item: VideoItem) => String(item.aid),
+  scope: () => JSON.stringify([getCurrentAccountId(), searchQuery.value, advancedFilters.value, sortOrder.value]),
+})
 const cardColumns = ref(1)
 const cardWidth = ref(0)
 const cardGap = ref(0)
@@ -127,7 +149,7 @@ useResizeObserver(cardContainer, () => {
 const cardWindow = useCardWindow({
   root: scrollViewportRef,
   container: cardContainer,
-  keys: computed(() => filteredItems.value.map(item => item.aid)),
+  keys: computed(() => removals.displayItems.value.map(item => item.aid)),
   columns: cardColumns,
   gap: cardGap,
   enabled: computed(() => currentWatchLaterList.value.length > CARD_WINDOW_THRESHOLD),
@@ -137,7 +159,7 @@ const cardWindow = useCardWindow({
 })
 const renderedRows = computed(() => cardWindow.ranges.value.flatMap<{ key: string, height: number | undefined, items: VideoItem[] }>(range => range.height !== undefined
   ? [{ key: `spacer:${range.start}`, height: range.height, items: [] as VideoItem[] }]
-  : filteredItems.value.slice(range.start, range.end).map(item => ({ key: String(item.aid), height: undefined, items: [item] }))))
+  : removals.displayItems.value.slice(range.start, range.end).map(item => ({ key: String(item.aid), height: undefined, items: [item] }))))
 let requestGeneration = 0
 let loadedAccountId: number | null = null
 let watchLaterExtensionContextInvalidated = false
@@ -700,7 +722,15 @@ function playInWatchLater(item: VideoItem) {
 }
 
 function remove(item: VideoItem) {
-  void deleteWatchLaterItem(item.aid)
+  const owner = actionLifetime.capture()
+  removals.begin(item, { restorable: !!getWatchLaterPlaybackUrl(item), ...captureWatchLaterRemoval(item.aid, owner, topBarStore, async (added) => {
+    if (!owner.isCurrent())
+      return
+    if (added)
+      await refreshViewHead()
+    else
+      currentWatchLaterList.value = currentWatchLaterList.value.filter(entry => entry.aid !== item.aid)
+  }) })
 }
 
 function isItemActionPending(): boolean {
@@ -709,11 +739,11 @@ function isItemActionPending(): boolean {
 // Filtering waits for the whole queue, so the number of matches is unknown
 // until it arrives: the ring, never skeletons. No matches show under the head.
 const pendingRef = ref<{ $el: Element }>()
-const pendingLoading = computed(() => filtersActive.value && isLoading.value && !filteredItems.value.length)
+const pendingLoading = computed(() => filtersActive.value && isLoading.value && !removals.displayItems.value.length)
 const pendingPhase = useLoadingRingPhase(() => pendingLoading.value, () => pendingRef.value?.$el)
 const showSkeletons = computed(() => isLoading.value && !isRefreshing.value && !filtersActive.value)
-const hasNoMatches = computed(() => filtersActive.value && watchLaterCount.value > 0 && !isLoading.value && !filteredItems.value.length && !requestFailed.value)
-useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredItems.value.map(item => item.aid).join(',')}`)
+const hasNoMatches = computed(() => filtersActive.value && watchLaterCount.value > 0 && !isLoading.value && !removals.displayItems.value.length && !requestFailed.value)
+useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${removals.displayItems.value.map(item => item.aid).join(',')}`)
 </script>
 
 <template>
@@ -727,25 +757,27 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
         {{ t('common.load_more') }}
       </Button>
       <Empty
-        v-if="requestFailed && !isLoading && currentWatchLaterList.length === 0" text-only fill :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')"
+        v-if="requestFailed && !isLoading && removals.displayItems.value.length === 0" text-only fill :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')"
         @action="retryWatchLaterRequest"
       />
-      <Empty v-else-if="watchLaterCount === 0 && (!isLoading || isRefreshing)" text-only fill :description="$t('common.no_data')" role="status" />
+      <Empty v-else-if="watchLaterCount === 0 && !removals.displayItems.value.length && (!isLoading || isRefreshing)" text-only fill :description="$t('common.no_data')" role="status" />
       <template v-else>
-        <!-- The queue's head: the first cover across the top, the stacked queue and Play All. -->
+        <!-- The queue's head, one card pinned and covered like the other library heads:
+             the first cover, the count, Play All and the stacked queue. -->
         <Transition name="library-hero" :duration="300">
-          <LibraryHero v-if="!batch.managing.value" :image="currentWatchLaterList[0]?.pic" :media-pending="isLoading && !currentWatchLaterList.length" :label="t('watch_later.title')" class="watch-later-hero">
-            <h2 class="watch-later-hero__title">
-              {{ t('watch_later.title') }}
-            </h2>
-            <span class="watch-later-hero__meta">{{ t('library_tools.video_count', { count: watchLaterCount }) }}</span>
-            <template #actions>
-              <WatchLaterPlayAllCard
-                :items="currentWatchLaterList" :total="watchLaterCount" :loading="isLoading" :disabled="watchLaterCount === 0"
-                @play="handlePlayAll"
-              />
-            </template>
-          </LibraryHero>
+          <LibraryHeroCarousel v-if="!batch.managing.value" :items="[{ key: 'queue', label: t('watch_later.title') }]" current="queue" :label="t('watch_later.title')" class="watch-later-hero">
+            <LibraryHero
+              :image="currentWatchLaterList[0]?.pic" :media-pending="isLoading && !currentWatchLaterList.length" :label="t('watch_later.title')"
+              :title="t('watch_later.title')" :meta="t('library_tools.video_count', { count: watchLaterCount })"
+            >
+              <template #actions>
+                <WatchLaterPlayAllCard
+                  :items="currentWatchLaterList" :total="watchLaterCount" :loading="isLoading" :disabled="watchLaterCount === 0"
+                  @play="handlePlayAll"
+                />
+              </template>
+            </LibraryHero>
+          </LibraryHeroCarousel>
         </Transition>
         <LoadingFill v-if="pendingPhase !== 'idle'" ref="pendingRef" :loading="pendingLoading" />
         <Empty v-else-if="hasNoMatches" text-only fill :description="t('library_tools.no_matches')" role="status" />
@@ -768,14 +800,14 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                 flex cursor-pointer
               >
                 <ALink
-                  :inert="batch.managing.value ? true : undefined"
+                  :inert="batch.managing.value || !!removals.get(item) ? true : undefined"
                   class="watch-later-list-card__overlay"
                   :href="getWatchLaterPlaybackUrl(item)"
                   type="videoCard"
                   :aria-label="item.title"
                 />
                 <section
-                  :inert="batch.managing.value ? true : undefined"
+                  :inert="batch.managing.value || !!removals.get(item) ? true : undefined"
                   class="watch-later-list-card__content"
                   rounded="$bew-thumb-radius"
                   flex="~ gap-6 col md:col lg:row items-start"
@@ -913,6 +945,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                     </div>
                   </div>
                 </section>
+                <CardRemovalPanel v-if="removals.get(item)" :state="removals.get(item)!" kind="watchLater" />
                 <WatchLaterSelectionOverlay
                   v-if="batch.managing.value" :label="item.title" :selected="batch.selected.value.has(item.aid)"
                   :disabled="isLoading || batch.busy.value" @toggle="batch.toggle(item.aid)"
@@ -934,13 +967,14 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                 <div v-for="item in row.items" :key="item.aid" :ref="element => cardWindow.setElement(item.aid, element)" :data-motion-key="item.aid" class="watch-later-grid-slot">
                   <WatchLaterGridCard
                     :key="item.aid"
-                    :inert="batch.managing.value ? true : undefined"
+                    :inert="batch.managing.value || !!removals.get(item) ? true : undefined"
                     :item="item"
                     :disabled="isItemActionPending()"
                     @play-and-remove="playAndRemove"
                     @play-in-watch-later="playInWatchLater"
                     @remove="remove"
                   />
+                  <CardRemovalPanel v-if="removals.get(item)" :state="removals.get(item)!" kind="watchLater" />
                   <WatchLaterSelectionOverlay
                     v-if="batch.managing.value" :label="item.title" :selected="batch.selected.value.has(item.aid)"
                     :disabled="isLoading || batch.busy.value" @toggle="batch.toggle(item.aid)"
@@ -973,25 +1007,11 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
         <LibrarySidebarHeading :title="t('watch_later.title')" :content-id="contentId" :count="watchLaterCount" />
         <fieldset class="watch-later-controls library-rail-content" :disabled="isItemActionPending()" :aria-label="t('watch_later.title')">
           <div class="library-rail-tools library-rail-tools--ruled">
-            <LibrarySearchField v-model="searchQuery" :label="t('library_tools.watch_later_search')" :filter-active="hasWatchLaterFilters(advancedFilters)">
+            <LibrarySearchField v-model="searchQuery" :label="t('library_tools.watch_later_search')" :filter-active="filterActive">
               <template #filter>
                 <LibraryFilterMenu :label="t('library_tools.filters')" :groups="filterGroups" :disabled="isItemActionPending()" @select="selectFilter" />
               </template>
             </LibrarySearchField>
-            <div class="watch-later-layout-switcher" :class="{ 'watch-later-layout-switcher--sort-only': !settings.enableGridLayoutSwitcher }">
-              <SettingsSegmentedControl
-                v-if="settings.enableGridLayoutSwitcher" v-model="settings.watchLaterLayoutMode" class="library-rail-segments bew-segment-control--secondary"
-                :options="layoutOptions" :label="t('settings.watch_later_layout_mode')"
-              />
-              <Tooltip class="watch-later-sort" :content="t(`watch_later.sort_${sortOrder}`)" placement="bottom" teleport>
-                <IconButton
-                  class="watch-later-sort-button" :label="t(`watch_later.sort_${sortOrder}`)" :data-sort-order="sortOrder"
-                  @click="sortOrder = sortOrder === 'newest' ? 'oldest' : 'newest'"
-                >
-                  <i :class="sortOrder === 'newest' ? 'i-tabler:sort-descending' : 'i-tabler:sort-ascending'" aria-hidden="true" />
-                </IconButton>
-              </Tooltip>
-            </div>
           </div>
           <LibraryDateRange
             :open="advancedFilters.added === 'custom'" :title="t('library_tools.date_range')" :start="advancedFilters.startDate" :end="advancedFilters.endDate"
@@ -1086,40 +1106,6 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
 .watch-later-action--danger {
   --bew-library-action-foreground: var(--bew-error-foreground);
 }
-.watch-later-layout-switcher {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 60%) minmax(0, 1fr);
-  align-items: center;
-  min-width: 0;
-
-  .library-rail-segments {
-    grid-column: 2;
-    width: 100%;
-    min-width: 0;
-  }
-}
-.watch-later-sort {
-  grid-column: 3;
-  justify-self: start;
-  margin-inline-start: var(--bew-space-1);
-}
-.watch-later-layout-switcher--sort-only .watch-later-sort {
-  grid-column: 2;
-  justify-self: center;
-  margin: 0;
-}
-.watch-later-sort-button {
-  width: var(--bew-control-height);
-  height: var(--bew-control-height);
-  color: var(--bew-text-1);
-
-  i {
-    font-size: var(--bew-control-icon-size);
-  }
-  &:is(:hover, :focus-visible):not(:disabled) {
-    color: var(--bew-message-icon-hover);
-  }
-}
 .watch-later-list-card__progress {
   position: absolute;
   inset: auto 0 0;
@@ -1127,23 +1113,6 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
 .watch-later-list-card__times {
   margin: 0 0 var(--bew-space-1);
   color: var(--bew-text-3);
-  font-size: var(--bew-font-size-callout);
-  line-height: var(--bew-line-height-callout);
-  font-variant-numeric: tabular-nums;
-}
-.watch-later-hero {
-  position: relative;
-  margin-bottom: var(--bew-space-6);
-}
-.watch-later-hero__title {
-  margin: 0;
-  color: var(--bew-text-1);
-  font-size: var(--bew-font-size-display);
-  font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-display);
-}
-.watch-later-hero__meta {
-  color: var(--bew-text-2);
   font-size: var(--bew-font-size-callout);
   line-height: var(--bew-line-height-callout);
   font-variant-numeric: tabular-nums;
