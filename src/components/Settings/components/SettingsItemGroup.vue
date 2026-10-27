@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { useMotionValue } from '~/composables/useMotionValue'
+import { holdMotion } from '~/utils/motionPriority'
+import { getMotionDuration } from '~/utils/motionTiming'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
+
 const props = withDefaults(defineProps<{
   title?: string
   desc?: string
@@ -13,6 +18,19 @@ const props = withDefaults(defineProps<{
 })
 
 const collapsed = ref(props.defaultCollapsed)
+const requestedCollapsed = props.collapsible
+  ? useMotionValue(() => collapsed.value, (value) => {
+      collapsed.value = value
+    })
+  : collapsed
+let releaseMotion: (() => void) | undefined
+function toggle(event: MouseEvent) {
+  const previous = releaseMotion
+  releaseMotion = holdMotion(prefersReducedMotion() ? 0 : getMotionDuration(getComputedStyle(event.currentTarget as HTMLElement), '--bew-duration-normal'))
+  previous?.()
+  requestedCollapsed.value = !requestedCollapsed.value
+}
+onScopeDispose(() => releaseMotion?.())
 </script>
 
 <template>
@@ -21,11 +39,11 @@ const collapsed = ref(props.defaultCollapsed)
       v-if="collapsible"
       type="button"
       class="group-heading"
-      :aria-expanded="!collapsed"
-      @click="collapsed = !collapsed"
+      :aria-expanded="!requestedCollapsed"
+      @click="toggle"
     >
       <span>
-        <span class="group-title bew-section-label">
+        <span class="group-title">
           <i v-if="icon" :class="icon" />
           {{ title }}
         </span>
@@ -40,11 +58,11 @@ const collapsed = ref(props.defaultCollapsed)
       <i
         i-tabler:chevron-down
         class="collapse-icon"
-        :class="{ collapsed }"
+        :class="{ collapsed: requestedCollapsed }"
       />
     </button>
     <template v-else-if="title || desc">
-      <p class="group-title bew-section-label">
+      <p class="group-title">
         <i v-if="icon" :class="icon" />
         {{ title }}
       </p>
@@ -53,27 +71,42 @@ const collapsed = ref(props.defaultCollapsed)
       </p>
     </template>
 
-    <main
-      v-show="!collapsed"
-      class="group-panel"
-    >
-      <slot />
-    </main>
+    <Transition name="page-fade" :css="collapsible">
+      <main v-show="!collapsed" class="group-panel" :inert="requestedCollapsed || undefined">
+        <slot />
+      </main>
+    </Transition>
   </div>
 </template>
 
 <style lang="scss" scoped>
+// Groups are flat sections of the page (user-specified, after Claude Code):
+// a title over rows ruled by hairlines, space between groups, no card.
 .b-settings-item-group + .b-settings-item-group {
-  --uno: "mt-6";
+  margin-top: var(--bew-space-8);
+}
+
+.group-title {
+  margin: 0;
+  color: var(--bew-text-1);
+  font-size: var(--bew-font-size-subheading);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-line-height-subheading);
+}
+
+.group-title + .bew-help,
+.group-heading .bew-help {
+  margin-top: var(--bew-space-1);
 }
 
 .group-panel {
-  margin: var(--bew-space-2) calc(0px - var(--bew-space-4)) 0;
-  padding-inline: var(--bew-space-4);
-  padding-inline-start: calc(var(--bew-space-4) + var(--bew-settings-level-indent));
-  background: var(--bew-content-solid);
-  border-radius: var(--bew-surface-radius);
-  corner-shape: var(--bew-corner-shape);
+  margin-top: var(--bew-space-2);
+  padding-inline-start: var(--bew-settings-level-indent);
+}
+
+// An untitled group starts the page: its rows begin at once.
+.b-settings-item-group > .group-panel:first-child {
+  margin-top: 0;
 }
 
 .group-heading {
@@ -125,5 +158,10 @@ const collapsed = ref(props.defaultCollapsed)
 
 .bew-help.warning-desc {
   color: var(--bew-warning-color);
+}
+@media (prefers-reduced-motion: reduce) {
+  .collapse-icon {
+    transition: none;
+  }
 }
 </style>

@@ -47,6 +47,7 @@ import { resolveEffectiveTopBarSource } from '../src/utils/effectiveTopBarSource
 import { getFavoriteFolderEditedAttr, isFavoriteFolderPrivate } from '../src/utils/favoriteFolder'
 import { compileFilterRules, normalizeImportedFilterRules } from '../src/utils/filterRules'
 import { computeFloatingMenuPosition } from '../src/utils/floatingMenu'
+import { getListGridColumnCount } from '../src/utils/gridLayout'
 import { isIframeDrawerHost } from '../src/utils/iframeDrawerHost'
 import { shouldContinueIframeFocusRetry } from '../src/utils/iframeFocusRetryPolicy'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '../src/utils/iframeMessage'
@@ -77,7 +78,6 @@ import {
   resolveSettingsCloudSyncEnableDecision,
   SETTINGS_CLOUD_SYNC_SCHEMA_VERSION,
 } from '../src/utils/settingsCloudSyncProtocol'
-import { normalizeVideoCardCoverRatio } from '../src/utils/videoCardLayout'
 import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributorsCache'
 import { playbackFunctions, readPlaybackSource } from './playbackSource'
 import { FAVORITES_SOURCE_FILES, FOR_YOU_SOURCE_FILES, MOMENTS_SOURCE_FILES, readSourceFiles } from './refactoredSources'
@@ -3589,10 +3589,11 @@ function verifyUpstreamReliabilityPolicies() {
     resolveStableMomentKey({ title: 'same', desc: 'second', pub_time: 'now' }, 'moment'),
   )
 
-  assert.equal(normalizeVideoCardCoverRatio(undefined, 40), 40)
-  assert.equal(normalizeVideoCardCoverRatio(29, 40), 30)
-  assert.equal(normalizeVideoCardCoverRatio(73, 40), 70)
-  assert.equal(normalizeVideoCardCoverRatio(47, 40), 45)
+  assert.equal(getListGridColumnCount('oneColumn', 1200, 20), 1)
+  assert.equal(getListGridColumnCount('twoColumns', 659, 20), 1)
+  assert.equal(getListGridColumnCount('twoColumns', 660, 20), 2)
+  assert.equal(getListGridColumnCount('twoColumns', 660, 24), 1)
+  assert.equal(getListGridColumnCount('twoColumns', 664, 24), 2)
 }
 
 async function verifyUpstreamReliabilityContracts() {
@@ -3727,9 +3728,7 @@ async function verifyUpstreamReliabilityContracts() {
   // Covers carry no view/like/danmaku/duration overlay (album-art presentation).
   assert.doesNotMatch(videoCardCover, /video-card-cover-stats|cover-stat-/)
   assert.match(topBarStyles, /\.right-side-item \.login \{[\s\S]{0,400}height: var\(--bew-control-height\);/)
-  assert.match(storage, /videoCardCoverRatioOneColumn: 50/)
-  assert.match(storage, /record\.videoCardCoverRatioOneColumn = normalizeVideoCardCoverRatio/)
-  assert.match(storage, /record\.videoCardCoverRatioTwoColumns = normalizeVideoCardCoverRatio/)
+  assert.doesNotMatch(storage, /videoCardCoverRatio(?:One|Two)Column|autoSwitchListLayout/)
 
   assert.match(adaptedStyles, /const revision = \+\+styleSetupRevision/)
   assert.match(adaptedStyles, /revision === styleSetupRevision && window\.location\.href === currentUrl/)

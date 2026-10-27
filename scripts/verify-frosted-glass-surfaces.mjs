@@ -103,13 +103,12 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
     }
   })
 
-  check('frosted surfaces: Dialogs keep one frosted owner and nested surfaces stay solid', async () => {
+  check('modal windows: Dialogs are solid windows ruled by hairlines, nested or not', async () => {
     const settings = Vue.ref({ disableFrostedGlass: false })
     const host = document.body.appendChild(document.createElement('div'))
     const Dialog = await compileComponent('../src/components/Dialog.vue', {
       '~/components/Button.vue': { default: { render: () => Vue.h('button') } },
       '~/components/CloseButton.vue': { default: { render: () => Vue.h('button') } },
-      '~/components/PanelTopBlur.vue': { default: { props: ['enabled'], setup: props => () => Vue.h('span', { 'data-top-blur': String(props.enabled) }) } },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ mainAppRef: Vue.ref(host) }) },
       '~/logic': { settings },
       '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
@@ -125,19 +124,38 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
       await flush()
       const surfaces = host.querySelectorAll('.dialog__surface')
       assert.equal(surfaces.length, 2)
-      assert.equal(surfaces[0].style.backdropFilter, 'var(--bew-filter-glass-1)')
-      assert.equal(surfaces[1].style.backdropFilter, 'none')
-      assert.match(surfaces[1].style.backgroundColor, /bew-glass-tint-solid/)
-      assert.equal(host.querySelectorAll('[data-top-blur]').length, 0, 'ordinary and nested dialogs have no top blur')
-      settings.value.disableFrostedGlass = true
-      await flush()
-      assert.equal(surfaces[0].style.backdropFilter, 'none')
-      assert.match(surfaces[0].style.backgroundColor, /bew-glass-tint-solid/)
+      // Paint comes from the shared window style, never an inline glass.
+      for (const surface of surfaces)
+        assert.equal(surface.getAttribute('style'), null)
+      assert.equal(host.querySelectorAll('.dialog__header').length, 2)
       assert.deepEqual([...host.querySelectorAll('input')].map(input => input.value), ['outer draft', 'inner draft'])
     }
     finally {
       app.unmount()
       host.remove()
     }
+    const read = file => readFile(new URL(`../src/${file}`, import.meta.url), 'utf8')
+    const [dialog, confirm, settingsWindow, windowStyle] = await Promise.all([
+      read('components/Dialog.vue'),
+      read('components/ConfirmDialog.vue'),
+      read('components/Settings/Settings.vue'),
+      read('styles/modalWindow.scss'),
+    ])
+    assert.match(windowStyle, /@mixin fill \{\s*background: var\(--bew-elevated-solid\);/)
+    assert.match(windowStyle, /@mixin header \{[^}]*border-bottom: var\(--bew-hairline\) solid var\(--bew-separator-color\);/)
+    assert.match(windowStyle, /@mixin footer \{[^}]*border-top: var\(--bew-hairline\) solid var\(--bew-separator-color\);/)
+    for (const source of [dialog, confirm, settingsWindow]) {
+      assert.match(source, /@include modalWindow\.header;/)
+      assert.doesNotMatch(source, /backdrop-filter|backdropFilter|glass-tint|text-shadow|GLASS_SURFACE_CONTEXT/)
+    }
+    assert.match(dialog, /@include modalWindow\.footer;/)
+    assert.match(confirm, /@include modalWindow\.surface;/)
+    // Every modal dims the page with the one backdrop token, light and dark.
+    assert.match(windowStyle, /@mixin backdrop \{\s*background: var\(--bew-modal-backdrop\);/)
+    for (const source of [dialog, confirm, settingsWindow])
+      assert.match(source, /@include modalWindow\.backdrop;/)
+    const variables = await read('styles/variables.scss')
+    assert.equal((variables.match(/--bew-modal-backdrop: rgb\(0 0 0 \/ \d+%\);/g) ?? []).length, 2)
+    assert.doesNotMatch(dialog, /frostedGlass/)
   })
 }

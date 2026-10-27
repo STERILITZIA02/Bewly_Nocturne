@@ -480,8 +480,8 @@ defineExpose({ refresh })
     >
       <!-- Feed scroll-edge gradient blur; geometry and layering unchanged. -->
       <template v-if="view !== 'whisper'">
-        <ProgressiveBlur class="whisper-workspace__feed-edge whisper-workspace__feed-edge--top" edge="top" />
-        <ProgressiveBlur class="whisper-workspace__feed-edge whisper-workspace__feed-edge--bottom" edge="bottom" />
+        <ProgressiveBlur class="whisper-workspace__feed-edge whisper-workspace__feed-edge--top" edge="top" sample-within=".whisper-workspace__detail" />
+        <ProgressiveBlur class="whisper-workspace__feed-edge whisper-workspace__feed-edge--bottom" edge="bottom" sample-within=".whisper-workspace__detail" />
       </template>
       <Transition mode="out-in" v-bind="outletTransition">
         <div :key="view" class="whisper-workspace__outlet-page">

@@ -8,6 +8,7 @@ import AutoImport from 'unplugin-auto-import/vite'
 import type { UserConfig } from 'vite'
 import { defineConfig } from 'vite'
 
+import { inlineMotionStyles } from './scripts/contentStyleSplit.ts'
 import { buildCommit, isDev, isSafari, port, r } from './scripts/utils.ts'
 // import { MV3Hmr } from './vite-mv3-hmr'
 
@@ -55,6 +56,7 @@ export const sharedConfig: UserConfig = {
   },
   plugins: [
     Vue(),
+    inlineMotionStyles(),
 
     AutoImport({
       imports: [

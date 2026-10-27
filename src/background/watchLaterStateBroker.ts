@@ -24,12 +24,16 @@ interface Entry extends PersistedEntry {
   countRead?: Promise<WatchLaterSnapshot>
   writeQueue: Promise<unknown>
   membershipRetryAt?: number
+  reads?: Map<string, { promise: Promise<ReadResult>, controller: AbortController, consumers: number }>
 }
 const MAX_AGE = 5 * 60_000
 
 /** The only extension-side membership writer. Tabs receive versioned projections. */
 export function createWatchLaterStateBroker(dependencies: Dependencies) {
   const entries = new Map<number, Entry>()
+  // Concurrent consumers of the same response may commit it before each other.
+  // This receipt distinguishes that read-only revision from an intervening write.
+  const readCommits = new WeakMap<ReadResult, WatchLaterSnapshot>()
   let loaded: Promise<void> | undefined
 
   const accountKey = (accountId: number) => `${dependencies.storageKey}:${accountId}`
@@ -105,6 +109,9 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
     const previous = entry.snapshot
     const snapshot = { ...applyWatchLaterChange(previous, change), revision: previous.revision + 1 }
     entry.snapshot = snapshot
+    for (const read of entry.reads?.values() ?? [])
+      read.controller.abort()
+    entry.reads?.clear()
     if (change.type === 'clear' || change.type === 'invalidate')
       entry.confirmed = []
     if (change.type !== 'invalidate') {
@@ -126,6 +133,31 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
     }
     await dependencies.broadcast(update)
     return update
+  }
+
+  async function readSource<T extends ReadResult>(entry: Entry, query: string, run: (signal: AbortSignal) => Promise<T>, signal: AbortSignal): Promise<T> {
+    signal.throwIfAborted()
+    const reads = entry.reads ??= new Map()
+    const key = `${entry.snapshot.epoch}:${entry.snapshot.revision}:${query}`
+    let task = reads.get(key)
+    if (!task || task.controller.signal.aborted) {
+      const controller = new AbortController()
+      const created = { controller, consumers: 0, promise: Promise.resolve<ReadResult>({ code: -1 }) }
+      created.promise = withRequestDeadline(run, { signal: controller.signal }).finally(() => {
+        if (reads.get(key) === created)
+          reads.delete(key)
+      })
+      reads.set(key, created)
+      task = created
+    }
+    task.consumers++
+    try {
+      return await waitWithSignal(task.promise, signal) as T
+    }
+    finally {
+      if (--task.consumers === 0 && reads.get(key) === task)
+        task.controller.abort()
+    }
   }
 
   function read(accountId: number | undefined, full: boolean, force = false): Promise<WatchLaterSnapshot> {
@@ -150,7 +182,15 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
         for (let attempt = 0; attempt < 2; attempt++) {
           await waitWithSignal(requireAccount(account.accountId, account.csrf), signal)
           const version = entry.snapshot.revision
-          const response = await dependencies.read(full, signal)
+          let response: ReadResult
+          try {
+            response = await readSource(entry, full ? 'full' : 'page:1:1', signal => dependencies.read(full, signal), signal)
+          }
+          catch (error) {
+            if (!signal.aborted && version !== entry.snapshot.revision && attempt === 0)
+              continue
+            throw error
+          }
           await waitWithSignal(requireAccount(account.accountId, account.csrf), signal)
           signal.throwIfAborted()
           if (response.code !== 0 || !response.data || !Number.isSafeInteger(response.data.count)
@@ -158,7 +198,7 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
             throw new Error(response.message || 'Watch Later read failed')
           }
           if (!full) {
-            if (version !== entry.snapshot.revision)
+            if (version !== entry.snapshot.revision && readCommits.get(response) !== entry.snapshot)
               continue
             const count = response.data.count!
             if (entry.confirmed.length && entry.snapshot.countUpdatedAt && count !== entry.snapshot.count) {
@@ -172,7 +212,8 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
             const complete = entry.snapshot.complete && count === entry.snapshot.entries.length
             const previous = entry.snapshot
             const entries = complete || count === previous.count ? previous.entries : []
-            entry.snapshot = { ...previous, count, countUpdatedAt: Date.now(), revision: version + 1, complete, entries, updatedAt: complete ? previous.updatedAt : 0 }
+            entry.snapshot = { ...previous, count, countUpdatedAt: Date.now(), revision: previous.revision + 1, complete, entries, updatedAt: complete ? previous.updatedAt : 0 }
+            readCommits.set(response, entry.snapshot)
             await persist(account.accountId)
             signal.throwIfAborted()
             // A count needs no member list on the wire: consumers keep theirs.
@@ -180,7 +221,7 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
               type: 'count',
               accountId: previous.accountId,
               epoch: previous.epoch,
-              baseRevision: version,
+              baseRevision: previous.revision,
               revision: entry.snapshot.revision,
               count,
               countUpdatedAt: entry.snapshot.countUpdatedAt,
@@ -217,13 +258,14 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
               disagreed = true
               return true
             })
-            if (entry.snapshot.revision !== version && !entry.confirmed.length)
+            if (entry.snapshot.revision !== version && !entry.confirmed.length && readCommits.get(response) !== entry.snapshot)
               snapshot.complete = false
             entry.snapshot = { ...snapshot, revision: entry.snapshot.revision + 1 }
             if ((!snapshot.complete || disagreed) && attempt === 0)
               continue
             if (!snapshot.complete || disagreed)
               throw new Error('Watch Later membership is awaiting server reconciliation')
+            readCommits.set(response, entry.snapshot)
           }
           const snapshot = entry.snapshot
           await persist(account.accountId)
@@ -252,7 +294,7 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
   return {
     readMembership: (accountId?: number, force = false) => read(accountId, true, force),
     readCount: (accountId?: number, force = false) => read(accountId, false, force),
-    readPage<T extends ReadResult>(accountId: number | undefined, run: (signal: AbortSignal) => Promise<T>, options?: ReadRequestOptions): Promise<T> {
+    readPage<T extends ReadResult>(accountId: number | undefined, query: string, run: (signal: AbortSignal) => Promise<T>, options?: ReadRequestOptions): Promise<T> {
       return withRequestDeadline(async (signal) => {
         const account = await waitWithSignal(requireAccount(accountId), signal)
         const entry = await waitWithSignal(getEntry(account.accountId), signal)
@@ -260,7 +302,15 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
           await waitWithSignal(entry.writeQueue.catch(() => {}), signal)
           await waitWithSignal(requireAccount(account.accountId, account.csrf), signal)
           const revision = entry.snapshot.revision
-          const result = await run(signal)
+          let result: T
+          try {
+            result = await readSource(entry, query, run, signal)
+          }
+          catch (error) {
+            if (!signal.aborted && revision !== entry.snapshot.revision && attempt === 0)
+              continue
+            throw error
+          }
           await waitWithSignal(requireAccount(account.accountId, account.csrf), signal)
           signal.throwIfAborted()
           const count = result.data?.count
@@ -273,7 +323,7 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
             ? page.some(item => item.aid === change.entry.aid)
             : change.type === 'clear' && page.some(item => !added.has(item.aid)))
           || (entry.confirmed.length > 0 && entry.snapshot.countUpdatedAt > 0 && count !== entry.snapshot.count)
-          if (entry.sending || revision !== entry.snapshot.revision || contradictsWrite) {
+          if (entry.sending || (revision !== entry.snapshot.revision && readCommits.get(result) !== entry.snapshot) || contradictsWrite) {
             if (attempt === 0)
               continue
             // A shortened page would silently skip the shifted page boundary.
@@ -297,6 +347,7 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
             || items.some((item, index) => item.aid !== previous.entries[index]?.aid || item.bvid !== previous.entries[index]?.bvid || item.epid !== previous.entries[index]?.epid)
           const snapshot = { ...previous, entries: items, count: count!, complete, countUpdatedAt: Date.now(), updatedAt: wholePage ? Date.now() : complete ? previous.updatedAt : 0, revision: previous.revision + Number(changed) }
           entry.snapshot = snapshot
+          readCommits.set(result, snapshot)
           await persist(account.accountId)
           const sameMembers = items.length === previous.entries.length
             && items.every((item, index) => item.aid === previous.entries[index]?.aid && item.bvid === previous.entries[index]?.bvid && item.epid === previous.entries[index]?.epid)
@@ -307,7 +358,12 @@ export function createWatchLaterStateBroker(dependencies: Dependencies) {
           else if (changed) {
             await dependencies.broadcast({ type: 'snapshot', snapshot })
           }
-          return result
+          if (entry.sending || (entry.snapshot.revision !== snapshot.revision && readCommits.get(result) !== entry.snapshot)) {
+            if (attempt === 0)
+              continue
+            throw new Error('Watch Later page changed before delivery')
+          }
+          return { ...result, watchLaterRead: { accountId: entry.snapshot.accountId, epoch: entry.snapshot.epoch, revision: entry.snapshot.revision } }
         }
         throw new Error('Watch Later page changed during read')
       }, options)

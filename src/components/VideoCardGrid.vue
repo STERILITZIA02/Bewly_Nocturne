@@ -19,16 +19,15 @@ import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { useUserRelations } from '~/composables/useUserRelations'
 import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
-import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
+import { VIDEO_CARD_COVER_ASPECT_RATIO, VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
-import { originalSettings, settings } from '~/logic'
+import { settings } from '~/logic'
 import { isLayoutEditing } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import { getAdaptiveGridColumnCount, getListGridColumnCount } from '~/utils/gridLayout'
 import { getUserID } from '~/utils/main'
 import emitter from '~/utils/mitt'
-import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
 import { getRemainingScroll, readViewportGeometry } from '~/utils/viewportGeometry'
 import { captureWatchLaterRemoval } from '~/utils/watchLater'
 
@@ -255,6 +254,7 @@ const isLoadMoreSentinelIntersecting = ref(false)
 const reachedLoadMoreDuringLoading = ref(false)
 const gridContainerWidth = ref(0)
 const cardGap = ref(0)
+const cardColumnGap = ref(0)
 const bewlyApp = inject<BewlyAppProvider | undefined>('BEWLY_APP', undefined)
 const tabState = props.persistState ? useHomeTabViewState() : undefined
 interface GridSnapshot {
@@ -678,43 +678,22 @@ const isHorizontal = computed(() => {
   return props.gridLayout !== 'adaptive'
 })
 
-// A configurable breakpoint cannot be expressed with a CSS container query
-// value, so the measured container width toggles the single-column class.
+// Windowing and CSS use the same decision from the existing geometry sample.
 const isAutoSwitchSingleColumn = computed(() => {
-  if (props.gridLayout !== 'twoColumns' || !settings.value.autoSwitchListLayout)
+  if (props.gridLayout !== 'twoColumns')
     return false
 
-  const width = gridContainerWidth.value || gridContainerRef.value?.clientWidth || 0
+  const width = gridContainerWidth.value
   if (!width)
     return false
 
   return getListGridColumnCount(
     props.gridLayout,
     width,
-    true,
-    settings.value.autoSwitchListLayoutBreakpoint,
+    cardColumnGap.value,
   ) === 1
 })
 
-const horizontalCoverLayout = computed(() => {
-  const useOneColumnRatio = props.gridLayout === 'oneColumn' || isAutoSwitchSingleColumn.value
-  const fallback = useOneColumnRatio
-    ? originalSettings.videoCardCoverRatioOneColumn
-    : originalSettings.videoCardCoverRatioTwoColumns
-  const value = useOneColumnRatio
-    ? settings.value.videoCardCoverRatioOneColumn
-    : settings.value.videoCardCoverRatioTwoColumns
-  const ratio = normalizeVideoCardCoverRatio(value, fallback)
-
-  return {
-    ratio,
-    preserveOriginalMaxWidth: ratio === fallback,
-  }
-})
-
-// Skeleton and real cards share these variables, so their cover geometry stays
-// identical while loading. Default values retain the former equal split and
-// 400px cap; choosing a custom ratio explicitly releases that cap.
 const renderedGridClass = computed(() => [
   ...gridClass.value,
   ...(isAutoSwitchSingleColumn.value ? ['bew-grid-list-auto-switch-single'] : []),
@@ -738,12 +717,11 @@ function normalizePositiveInt(value: unknown, fallback: number): number {
 
 function getCurrentColumnCount(layout: GridLayoutType, width: number): number {
   if (layout === 'adaptive')
-    return getAdaptiveGridColumnCount(width, cardGap.value)
+    return getAdaptiveGridColumnCount(width, cardColumnGap.value)
   return getListGridColumnCount(
     layout,
     width,
-    settings.value.autoSwitchListLayout,
-    settings.value.autoSwitchListLayoutBreakpoint,
+    cardColumnGap.value,
   )
 }
 
@@ -820,7 +798,7 @@ function setupGridResizeObserver() {
 }
 
 /**
- * Real track width and row gap form one layout snapshot. It is refreshed on
+ * Track width and both gaps form one layout snapshot. It is refreshed on
  * container resize and layout-class changes, never inside a computed.
  */
 function measureGridGeometry(width?: number) {
@@ -828,11 +806,15 @@ function measureGridGeometry(width?: number) {
   if (!container)
     return
   const nextWidth = Math.max(1, width ?? (container.clientWidth || window.innerWidth))
+  const style = getComputedStyle(container)
+  const rowGap = Number.parseFloat(style.rowGap) || 0
+  const columnGap = Number.parseFloat(style.columnGap) || 0
   if (Math.abs(nextWidth - gridContainerWidth.value) > 0.5)
     gridContainerWidth.value = nextWidth
-  const gap = Number.parseFloat(getComputedStyle(container).rowGap) || 0
-  if (gap !== cardGap.value)
-    cardGap.value = gap
+  if (rowGap !== cardGap.value)
+    cardGap.value = rowGap
+  if (columnGap !== cardColumnGap.value)
+    cardColumnGap.value = columnGap
 }
 
 watch(gridContainerRef, () => {
@@ -924,8 +906,8 @@ watch([isHorizontal, () => props.gridLayout], () => nextTick(() => measureGridGe
 const cardKeys = computed(() => displayItems.value.map(getUniqueKey))
 const estimatedCardHeight = computed(() => {
   const columns = cardColumns.value
-  const width = Math.max(1, (gridContainerWidth.value || window.innerWidth) - cardGap.value * (columns - 1)) / columns
-  const cover = isHorizontal.value ? width * horizontalCoverLayout.value.ratio / 100 : width
+  const width = Math.max(1, (gridContainerWidth.value || window.innerWidth) - cardColumnGap.value * (columns - 1)) / columns
+  const cover = isHorizontal.value ? Math.min(width / 2, VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH) : width
   // Estimates only seed unmeasured rows; one shared measurement index owns actual geometry.
   return isHorizontal.value ? Math.max(cover / VIDEO_CARD_COVER_ASPECT_RATIO, 130) + 16 : cover / VIDEO_CARD_COVER_ASPECT_RATIO + 110
 })
@@ -935,21 +917,18 @@ const gridContainerStyle = computed(() => ({
   ...(props.disableContentVisibility || recycleCards.value
     ? {}
     : {
-        '--video-card-intrinsic-width': `${Math.round(Math.max(1, (gridContainerWidth.value || window.innerWidth) - cardGap.value * (cardColumns.value - 1)) / cardColumns.value)}px`,
+        '--video-card-intrinsic-width': `${Math.round(Math.max(1, (gridContainerWidth.value || window.innerWidth) - cardColumnGap.value * (cardColumns.value - 1)) / cardColumns.value)}px`,
         '--video-card-intrinsic-height': `${Math.round(estimatedCardHeight.value)}px`,
       }),
-  '--video-card-cover-flex': horizontalCoverLayout.value.ratio,
-  '--video-card-info-flex': 100 - horizontalCoverLayout.value.ratio,
-  '--video-card-cover-max-width': horizontalCoverLayout.value.preserveOriginalMaxWidth ? '400px' : 'none',
 }))
 
 const cardLayoutKey = computed(() => [
   props.gridLayout,
   settings.value.videoCardTitleFontSize,
   settings.value.videoCardAuthorFontSize,
+  settings.value.interfaceFontSize,
   settings.value.showVideoCardAuthorName,
   settings.value.showVideoCardPublishTime,
-  horizontalCoverLayout.value.ratio,
   props.hideAuthor,
 ].join(':'))
 const cardWindow = useCardWindow({

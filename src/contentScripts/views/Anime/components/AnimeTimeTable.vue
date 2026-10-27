@@ -10,6 +10,7 @@ import type { Result as TimetableItem, TimetableResult } from '~/models/anime/ti
 import api from '~/utils/api'
 import { removeHttpFromUrl } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 
 import AnimeTimeTableSkeleton from './AnimeTimeTableSkeleton.vue'
 
@@ -35,7 +36,7 @@ useEventListener(scrollViewport, 'scroll', updateScrollBounds, { passive: true }
 useResizeObserver(scrollViewport, updateScrollBounds)
 
 function scrollHorizontally(left: number, behavior: ScrollBehavior) {
-  scrollViewport.value?.scrollTo({ left, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : behavior })
+  scrollViewport.value?.scrollTo({ left, behavior: prefersReducedMotion() ? 'auto' : behavior })
 }
 function scrollToToday(behavior: ScrollBehavior = 'smooth') {
   const viewport = scrollViewport.value

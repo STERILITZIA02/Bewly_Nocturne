@@ -80,6 +80,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 | 浮层定位 | `useAnchoredPopoverPosition`、`useFloatingMenuPosition` |
 | 展开收起 | `useMeasuredDisclosure` + `momentDisclosure.scss` |
 | 分段控件与滚筒 | `segmentControl.scss` + `LiquidSegmentIndicator.vue`、`WheelSelector.vue` |
+| 设置窗口的导航栏 | `settingsNav.scss`（一级分类栏与二级页面栏共用的栏、行与组标题） |
 | 加载反馈 | `SkeletonBlock.vue`、`LoadingRing.vue`、`useLoadingRingPhase`、`LoadingFill.vue`（数量未知时居中的圆环）、`SmoothLoading.vue`（列表尾部的圆环） |
 | 输入框 | `composer.scss`、`useComposerPicker`、`MomentReplyComposer.vue`、`sendButton.scss` |
 | 卡片与网格 | `contentCard.scss`、`useCardWindow`、`useGridLayout`、`WindowedMasonryGrid.vue`、`cardRowMetrics.ts` |
@@ -92,7 +93,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 | 文字截断（右端渐隐） | `truncateFade.scss`（`line` / `lines(n)` / `reveal`，全局类 `.keep-one-line` / `.keep-two-lines`） |
 | 横向滚动的滚轮接管与两端弹性 | `utils/elasticScroll.ts` |
 | 横向一步一切换（触控板每个手势一步、触屏横滑） | `utils/sideSwipe.ts` 的 `createSideSwipe`（动态图片；资料库头图是无级拖动，见资料库） |
-| 按钮与弹窗 | `IconButton`、`CloseButton`、`TagRemoveButton`、`Dialog`、`ConfirmDialog` / `useConfirmDialog`、`ContextMenu` |
+| 按钮与弹窗 | `IconButton`、`CloseButton`、`TagRemoveButton`、`Dialog`、`ConfirmDialog` / `useConfirmDialog`、`ContextMenu`；弹窗窗口的表面、顶栏与底栏用 `modalWindow.scss` |
 | 列表视图状态 | `useHomeTabState`、`usePageViewState` |
 | 图片 | `imageLoadQueue.ts`、`LazyPicture.vue` |
 | 扩展消息与共享状态 | `utils/messaging.ts`、`background/stateConsumers.ts` |
@@ -134,7 +135,7 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 ### 圆角
 
 - 以视频封面 16px 为锚点（用户指定）：刻度只有六档加全圆，`--bew-radius-xs/sm/md/lg/xl/2xl/full` = 4/8/12/16/24/32/9999px，只在 `variables.scss` 里用来定义角色 token。组件只用角色 token：`--bew-radius-tiny` 4（骨架条、文字标签、小状态块）、`--bew-interactive-radius` 8（按钮、菜单项、列表行、输入框、浮层内小图）、`--bew-thumb-radius` 12（约 80–240px 宽的中等缩略图、评论树弯角）、`--bew-media-radius` 16（视频封面、动态图片 / 视频等大媒体）、`--bew-surface-radius` 16（卡片、面板、浮层、菜单）、`--bew-modal-radius` 24（弹窗、设置）、`--bew-shell-radius` 32（Composer 等大外壳）、`--bew-pill-radius` 全圆（胶囊、徽标、顶栏主控件）；真实圆形用 `50%`。分段控件的 `--bew-control-radius` / `--bew-control-item-radius` / `--bew-liquid-indicator-radius` 是组件参数，默认 pill，变体可改。
-- 其他圆角只能由同心公式得出（子圆角 + 统一内距）：`--bew-library-filter-radius`（interactive + 8 内距 = 16）、头像面板右上角、按高度一半算的胶囊（Dock 外壳、设置导航、私信输入栏）。浮层与菜单的内距 `--bew-popover-padding` 为 8，8px 的项与 16px 的浮层同心；内距不小于外圆角时（如弹窗正文）不必同心。
+- 其他圆角只能由同心公式得出（子圆角 + 统一内距）：`--bew-library-filter-radius`（interactive + 8 内距 = 16）、头像面板右上角、按高度一半算的胶囊（Dock 外壳、私信输入栏）。浮层与菜单的内距 `--bew-popover-padding` 为 8，8px 的项与 16px 的浮层同心；内距不小于外圆角时（如弹窗正文）不必同心。
 - 不写刻度名、已退役的旧名（`--bew-radius`、`card / panel / popover / video-cover / moment-media / badge / composer` 等 radius）、字面量（`var()` 回退值、0、50%、inherit 除外）或 UnoCSS 原始圆角类（`rounded-full`、`rounded-8` 等，用 `rounded-$bew-*-radius`）。`scripts/radiusPolicy.ts` 扫描 `src` 约束，`pnpm test` 运行。
 - 平滑圆角：普通圆角矩形用 `--bew-corner-shape: superellipse(1.7)`（保留 `border-radius` 回退，组件里不写别的数值）。全圆角胶囊接近 Apple Music 搜索栏的长胶囊（用户指定）：半径固定 `--bew-pill-radius`（9999px，两端尺寸由控件高度决定，中间上下直边保留，不随宽度拉伸；长条不用 `50%`，那会变成椭圆），形状 `--bew-corner-shape-capsule` 为轻度的 `superellipse(1.1)`（用户给的参考：高 56px、圆角 28px 即半高、`superellipse(1.1)`、`border-box`；9999px 会被钳到半高，与之等价）（只比 round 略收，两端柔和过渡到直边，不做偏方的 squircle；`pnpm preview:capsule` 与 round 及 1.2 / 1.3 并排对比、可用滑块微调），包括 Dock 外壳、顶栏工具胶囊、搜索框、分段控件、Switch 轨道、徽标与按钮胶囊、原生页适配里的胶囊。嵌在胶囊端部的方形元素（Dock 按钮与选中滑块、分段项与滑块、顶栏胶囊内的按钮、搜索框内的按钮、Switch 滑块）用同一形状，保持同心嵌套。只有真实圆形用 `--bew-corner-shape-round`：头像、圆点、色块、独立的圆形按钮（小电视圆、头像圆用 `sidebarSurface.floating(round)`，模板里用 `.bew-shape-circle`）。UnoCSS 的平滑圆角规则：全圆角（pill / 控件参数）取胶囊形状，`50%` 取圆形。
 - 同一容器四角来自同一 token；局部直角只用于明确的拼接结构。子元素共享裁切轮廓时用 `inherit`，不用 `calc(父圆角 - 任意像素)` 猜。
@@ -158,11 +159,11 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 ### 材质与玻璃
 
 - 毛玻璃默认开启，服从全局模糊强度。`disableFrostedGlass` 是唯一开关，开启后同时关闭毛玻璃与普通顶栏渐变并改用实色 token；不恢复 `enableFrostedGlass`、`enableTopBarGradient`、`alwaysUseTransparentTopBar` 等旧状态。
-- 玻璃之上不再叠玻璃：玻璃内的文本、按钮、选项、搜索框、菜单用实色或无滤镜表面，实色背景不加 backdrop-filter，也不用低模糊代替移除。只有延伸到原玻璃边界之外的覆盖层才可有独立玻璃（Teleport 本身不算理由）。嵌套判断用 `useGlassPanelMotion.ts` 的 `GLASS_SURFACE_CONTEXT`。唯一额外例外：`CountBadge.vue` 的未读胶囊可叠在 Dock 与顶栏玻璃上（复用全局滤镜与实色降级）。
-- 所有毛玻璃只有一种材质（用户指定）：色调 `--bew-glass-tint`（实色降级 `--bew-glass-tint-solid`，悬停 `-hover`）、不透明度 `--bew-content-opacity`、模糊 `--bew-filter-glass-1`（Dialog 也用它，`--bew-filter-glass-2` 已删除）、边框是更粗更亮的玻璃唇边 `--bew-glass-edge-width`（各密度都是 1px，即高清屏上发丝线的两倍）+ `--bew-glass-edge-color`（浅色白 70%、深色白 26%，用户指定，模拟玻璃边缘折射的高光；关闭毛玻璃时退回普通发丝线外缘，高对比模式下用 `--bew-edge-color`）。左侧持久侧栏（`PersistentSidebar`、资料库与私信侧栏）及其折叠成的小电视圆保持普通外缘 `--bew-hairline` + `--bew-edge-color`（用户指定）；顶栏与首页的搜索框（`SearchBar` 的输入框，铺满玻璃胶囊）用玻璃唇边；Dock 选中项的滑块用普通发丝线外缘（`--bew-hairline` + `--bew-edge-color`，即分段滑块默认的 `--bew-segment-item-active-shadow`，用户指定）。浮动的玻璃控件（Dock、顶栏与首页搜索框、顶栏右侧胶囊、小电视圆、头像圆与资料面板）共用同一阴影 `--bew-glass-shadow`（= shadow-2），不在宿主里另配阴影或边框颜色，阴影按层级。浅色色调为 raised 白，深色 / OLED 为前景 6% 混底色（低于 raised 的 8%，让暗色玻璃更暗）。侧栏、小电视圆、顶栏胶囊（`--bew-sidebar-background*` 是别名）、浮层（`--bew-popover-surface-background`）、Dock、搜索框、侧栏按钮、设置、Dialog、Composer、私信、播放页控制栏、原生页适配的玻璃栏、刷新提示都用它，不在组件里另配玻璃色调；图片查看器等媒体遮罩是深色遮罩，不算玻璃色调。普通毛玻璃用于：Dock、播放页底部控制栏、独立搜索框、顶栏浮层、侧栏按钮、私信导航、设置窗口、外侧纵向导航、普通 Dialog。设置内的输入框、内嵌菜单和嵌套 Dialog 用实色。
+- 玻璃之上不再叠玻璃：玻璃内的文本、按钮、选项、搜索框、菜单用实色或无滤镜表面，实色背景不加 backdrop-filter，也不用低模糊代替移除。只有延伸到原玻璃边界之外的覆盖层才可有独立玻璃（Teleport 本身不算理由）。唯一额外例外：`CountBadge.vue` 的未读胶囊可叠在 Dock 与顶栏玻璃上（复用全局滤镜与实色降级）。
+- 所有毛玻璃只有一种材质（用户指定）：色调 `--bew-glass-tint`（实色降级 `--bew-glass-tint-solid`，悬停 `-hover`）、不透明度 `--bew-content-opacity`、模糊 `--bew-filter-glass-1`（`--bew-filter-glass-2` 已删除）、边框是更粗更亮的玻璃唇边 `--bew-glass-edge-width`（各密度都是 1px，即高清屏上发丝线的两倍）+ `--bew-glass-edge-color`（浅色白 70%、深色白 26%，用户指定，模拟玻璃边缘折射的高光；关闭毛玻璃时退回普通发丝线外缘，高对比模式下用 `--bew-edge-color`）。左侧持久侧栏（`PersistentSidebar`、资料库与私信侧栏）及其折叠成的小电视圆保持普通外缘 `--bew-hairline` + `--bew-edge-color`（用户指定）；顶栏与首页的搜索框（`SearchBar` 的输入框，铺满玻璃胶囊）用玻璃唇边；Dock 选中项的滑块用普通发丝线外缘（`--bew-hairline` + `--bew-edge-color`，即分段滑块默认的 `--bew-segment-item-active-shadow`，用户指定）。浮动的玻璃控件（Dock、顶栏与首页搜索框、顶栏右侧胶囊、小电视圆、头像圆与资料面板）共用同一阴影 `--bew-glass-shadow`（= shadow-2），不在宿主里另配阴影或边框颜色，阴影按层级。浅色色调为 raised 白，深色 / OLED 为前景 6% 混底色（低于 raised 的 8%，让暗色玻璃更暗）。侧栏、小电视圆、顶栏胶囊（`--bew-sidebar-background*` 是别名）、浮层（`--bew-popover-surface-background`）、Dock、搜索框、侧栏按钮、Composer、私信、播放页控制栏、原生页适配的玻璃栏、刷新提示都用它，不在组件里另配玻璃色调；图片查看器等媒体遮罩是深色遮罩，不算玻璃色调。普通毛玻璃用于：Dock、播放页底部控制栏、独立搜索框、顶栏浮层、侧栏按钮、私信导航。弹窗窗口（设置、`Dialog`、`ConfirmDialog`）都是实色（见“浮层与弹窗”），其中的输入框与内嵌菜单也是实色。
 - 液态玻璃已完整移除：没有 SVG 位移 / 色散 / 折射层、`vLiquidGlass`、`LiquidGlassSurface.vue`、“悬浮表面材质”设置或 `@wxperia/liquid-glass-vue`，不恢复。`enableDockLiquidGlass`、`dockLiquidGlass*` 只在退役字段表中。`LiquidSegmentIndicator` 是纯几何滑块（实色选中表面，不采样背景），不受影响。
-- 渐变模糊只用 `ProgressiveBlur.vue`（`utils/progressiveBlur.ts`）：五层 backdrop 模糊半径逐层翻倍、遮罩窗口逐层向强端收缩，强度默认取 `--bew-glass-blur-radius`（随全局模糊强度，关闭毛玻璃时不渲染），淡入淡出用组件的 `visible`（祖先降不透明度会让模糊失效）。它不能放在 backdrop root 里（祖先有 `backdrop-filter` / `filter` / `mask`）：那样各层只看得到祖先自身的绘制、看不到后面的页面，带区会显出矩形；宿主是玻璃时把玻璃移到背景层（如 `.context-menu-container::before`、`.settings-content__surface`），渐变层祖先也不能同时使用平滑圆角与 `overflow: hidden/clip/auto/scroll`：Chromium 会丢弃子层的渐变遮罩，绘成矩形带；让背景、滚动列表与各模糊层各自裁切，保留平滑圆角。开发构建会检查 backdrop root（含透明度、clip-path、混合与 will-change）及这种圆角裁切并在控制台警告；所有调用方都用组件，不直接调用层生成函数或淡化整组祖先。不给渐变模糊加饱和度，叠在玻璃上会给带区染色。禁止单层 `backdrop-filter` 配渐变 / 径向遮罩：那只是清晰图和定强模糊图按比例混合，会留下矩形或椭圆边界。`pnpm verify:style-invalidation` 用 `scripts/maskedBlurPolicy.ts` 扫描所有样式（按元素合并 BEM 修饰类与伪元素）和内联 `backdropFilter` + `maskImage`，只放行该组件的层。
-- 保留的模糊：设置窗口的 `PanelTopBlur.vue`、会话与通知主内容区的滚动边缘模糊，位置、尺寸、强度与层级不改，实现统一为 `ProgressiveBlur`。顶栏没有渐进模糊或雾色层（用户要求移除，不恢复）。其他弹窗没有顶部模糊。设置装饰层不绘制背景或边框、不承担裁切，遮罩在边界前衰减，清晰边框在模糊层上方单独绘制。
+- 渐变模糊只用 `ProgressiveBlur.vue`（`utils/progressiveBlur.ts`）：五层 backdrop 模糊半径逐层翻倍、遮罩窗口逐层向强端收缩，强度默认取 `--bew-glass-blur-radius`（随全局模糊强度，关闭毛玻璃时不渲染），淡入淡出用组件的 `visible`（祖先降不透明度会让模糊失效）。模糊层与所需取样内容之间不能隔着 backdrop root（祖先有 `backdrop-filter` / `filter` / `mask` / `opacity < 1`）：它会截断向该祖先外部的取样；若来源内容本就在同一祖先内（如通知列表和边缘模糊一起做页面淡入），则仍能正确取样。内部取样的调用方用 `sample-within` 明确包含全部来源内容的最近祖先，开发检查只在到达该边界前检查 backdrop root，圆角裁切检查仍遍历完整祖先链；需要外部背景的悬停模糊不指定边界，保持完整检查。宿主是玻璃时把玻璃移到背景层（如 `.context-menu-container::before`），渐变层祖先也不能同时使用平滑圆角与 `overflow: hidden/clip/auto/scroll`：Chromium 会丢弃子层的渐变遮罩，绘成矩形带；让背景、滚动列表与各模糊层各自裁切，保留平滑圆角。开发构建会检查 backdrop root（含透明度、clip-path、混合与 will-change）及这种圆角裁切并在控制台警告；所有调用方都用组件，不直接调用层生成函数或淡化整组祖先。不给渐变模糊加饱和度，叠在玻璃上会给带区染色。禁止单层 `backdrop-filter` 配渐变 / 径向遮罩：那只是清晰图和定强模糊图按比例混合，会留下矩形或椭圆边界。`pnpm verify:style-invalidation` 用 `scripts/maskedBlurPolicy.ts` 扫描所有样式（按元素合并 BEM 修饰类与伪元素）和内联 `backdropFilter` + `maskImage`，只放行该组件的层。
+- 保留的模糊：会话与通知主内容区的滚动边缘模糊，位置、尺寸、强度与层级不改，实现统一为 `ProgressiveBlur`。顶栏没有渐进模糊或雾色层（用户要求移除，不恢复）。设置窗口与其他弹窗都没有顶部模糊（设置的 `PanelTopBlur.vue` 已删除，用户要求）。
 - 卡片与面板内的纵向滚动列表用 `styles/scrollEdgeFade.scss` 的 `vertical` mixin（`.bew-scroll-edge-fade`）：只在该方向还有内容时渐隐，由 scroll-driven 动画驱动，不加监听；遮罩只放在不绘制玻璃的滚动元素上。边缘本就是屏幕边缘或底部有固定输入栏时用 `vertical($bottom: false)` / `.bew-scroll-edge-fade--no-bottom`，状态相关时设 `--bew-scroll-edge-bottom-off: 1`。
 - 左侧栏不用渐隐（用户指定：遮罩会让边缘行的图标变暗、把封面与预览洗成白色渐变）：资料库 / 动态 / 消息 / 首页关注侧栏里的滚动层（`LibraryWorkspace` 侧栏滚动层、直播列表、收藏筛选的选项区与私信搜索结果）用同一文件的 `lines` mixin，只在该方向还有内容时在上 / 下缘显示 `--bew-separator-color` 发丝线，同样由元素自身的滚动时间线驱动，放得下时没有线；底边是屏幕边缘时 `lines($bottom: false)`。紧接在常驻分隔线下方的滚动层（`--ruled` 工具区下的收藏夹 / 订阅列表、私信工具区下的会话列表与消息搜索结果）不画顶线，只保留上方那一条，并且滚动上沿就在这条线上（用户指定）：中间的侧栏间距或内距放进滚动层的上内距（收藏页由 nav 把 `--bew-sidebar-section-gap` 收进来、列表以负外边距接走），内容滚到线处才被截断，不在线下方留一截空白。滚动层左右通到侧栏边缘（负外边距抵消侧栏内距再内收），祖先只做纵向裁切（`overflow: visible clip`）；自带动画的滚动层把它与 `bew-scroll-edge-line-*` 写在同一个 `animation` 列表里。
 - 玻璃内的实色控件可以无边框，保留必要的分隔线。
@@ -184,8 +185,9 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 
 - 同类 Pop（顶栏搜索、设置搜索、搜索筛选）默认与触发控件等宽，用实色 `.bew-popover-surface`；伸出顶栏边界的固定 `.bew-popover` 可有独立玻璃，其内部仍是实色。
 - Pop 与视口或所属面板至少留 8px；结果数量会变的 Pop 按下方可用空间限制 `max-height`，内部滚动并 `overscroll-behavior: contain`。
+- 弹窗窗口（用户指定，仿 Claude Code 设置，设置窗口、`Dialog`、`ConfirmDialog` 一致）共用 `styles/modalWindow.scss`：一个实色窗口（`fill` = `--bew-elevated-solid`，`edge` = 发丝线 `--bew-edge-color` + `--bew-modal-radius` + `--bew-shadow-4`），用 `--bew-separator-color` 发丝线分成顶栏（标题 subheading 字号、可选说明、右端关闭，高为控件高 + 上下 8px）、内容与可选的底栏（操作按钮靠右），内容与标题从 `$inset`（20px）开始；没有毛玻璃、顶部模糊、文字光晕或内容遮罩。窗口打开时页面统一变暗（用户指定）：三者的遮罩都用 `backdrop` mixin 的 `--bew-modal-backdrop`（浅色黑 36%，深色与 OLED 黑 56%），随窗口动效淡入淡出，点击遮罩关闭。`Dialog` 的外缘画在可滚动内容之上（`.dialog__edge`），`show-border=false` 只去掉细线；`content-flush` 让 iframe、图片贴边。弹窗里的输入框用内嵌的 `--bew-input-bg`，不用窗口自身的颜色。`Dialog` 不再有 `frostedGlass` 参数，也没有玻璃嵌套判断（`GLASS_SURFACE_CONTEXT` 已删除）。
 - 居中弹窗与确认框用 `useSourcePanelMotion` / `useGlassPanelMotion`：从本次触发控件缩放进入，关闭沿原路返回并提前淡出；App 捕获本次激活来源，无来源时居中轻缩放。只动画 transform 与独立绘制层 opacity，玻璃祖先不淡化，中途取消从当前状态继续，离场 inert、结束后恢复焦点。菜单与日期选择器保持锚定。图片查看器离场结束前保留当前图像与缩放。
-- 设置页从 Dock 设置按钮的 `DOMRect` 展开并保留 KeepAlive，只动画最外层面板，遮罩独立淡入淡出，不缩放顶部模糊层。
+- 设置页从 Dock 设置按钮的 `DOMRect` 展开并保留 KeepAlive，只缩放最外层窗口，遮罩、窗口表面、顶栏与各栏淡入淡出（`useSettingsMotion`）。
 - 左下新版本提示与重载提示共用 `--bew-surface-radius` + round。顶栏登录按钮用实色主题背景与 `--bew-on-theme-color`。
 - 头像悬停资料卡保留原生 `bili-user-profile` 与关注逻辑，经 MAIN world 既有 Lit 桥注入 `userProfile.scss`：surface 圆角，control 高度按钮，已关注 / 发消息为中性，未关注为实心主题色；从头像锚点轻缩放淡入。发消息用原生 UID 构建 Bewly 私信深链在新标签页打开，目标会话按 ID 单独读取，新联系人用临时入口，不伪造历史。
 
@@ -351,8 +353,8 @@ Bewly_Nocturne：基于 BewlyCat 维护的 bilibili 浏览器扩展（Vue 3 + TS
 
 - 当前设置结构以 `src/logic/storage.ts` 默认值为准。视觉设置搜索目录与四套 locale 与实际入口同步，共享文案（如 `common.close`）不改回硬编码。
 - 通用页分“常规 / APP 授权 / 设置数据”；授权入口不依赖推荐模式，云同步、导入、导出与重置在设置数据。设置搜索按 `data-setting-id` 定位，沿用布局编辑描述的 ID；条件子项提供稳定的父控件目标，不在搜索时修改用户设置。
-- 左侧 Dock 收起时为胶囊，展开时为 `--bew-modal-radius` 平滑圆角矩形，表面用 `--bew-elevated-alt` + `--bew-filter-glass-1` + `--bew-edge-color`。二级纵向导航选中态为主题实色 + `--bew-on-theme-color`。
-- 通用页保留面包屑中唯一的页标题，正文直接是说明与分组。内存节省相关项集中在“通用 → 内存节省”，各自保留原 key。
+- 窗口结构（用户指定，仿 Claude Code 设置）：一个实色窗口（`.settings-window__surface` 与顶栏用 `modalWindow.scss`，与其他弹窗一致；没有毛玻璃、没有顶部模糊或内容遮罩），用 `--bew-separator-color` 发丝线分成区域：顶栏横跨全宽，标题是到当前页面的路径“设置 › 分类 › 页面”（用户指定；当前一级用 text-1，前面的用 text-2，过长时各级右端渐隐；页面一级由 `SettingsCategoryLayout` 经注入的 `setSettingsPageTitle` 上报，换分类时清空、新页面出现时淡入），右端是关闭；其下依次是一级分类栏、竖线、二级页面栏、竖线、页面内容，各自独立滚动。搜索框固定在一级分类栏顶部（用户指定），图标与各行图标对齐，结果浮层从搜索框左缘向右展开；分类列表在它下面单独滚动。两栏导航共用 `styles/settingsNav.scss`（`column` / `row` / `group-label`）：平铺在窗口表面，行常态透明，悬停 `--bew-hover-bg`，当前项 `--bew-selected-bg` 且图标提亮到 text-1，不用主题色；分类之间用间距分组，不画线。二级页面栏由 `SettingsCategoryLayout` 渲染，在内容滚动层里 sticky 并与之等高（滚动层是 size 容器，`100cqh`），随分类切换一起淡出淡入；没有子页面的分类（视觉风格、关于）内容占满两栏。页面顶部是 `SettingsSectionHeading` 的标题（heading 字号）与说明，分组（`SettingsItemGroup`）是平铺的段落：subheading 标题、发丝线分隔的行、组间 32px，没有卡片底色或边框。窄窗口按窗口容器宽度变化：≤820px 一级栏只剩图标，搜索框也收成图标，使用时在原位展开到 240px 并盖住相邻一栏（仍在分类栏的流里，下面的行不移动）；内容区 ≤520px 时二级页面改为内容上方换行排列。没有面包屑。
+- 内存节省相关项集中在“通用 → 内存节省”，各自保留原 key。
 - 播放设置集中在“播放 → 布局 / 控件 / 播放行为”，复用原有页面模块。明确的播完暂停和单集循环优先于自定义顺序；单视频只保留一个连播推荐选项。自定义顺序关闭或不适用时由原生结束策略处理，暂停事件不当作播放完成。
 - 搜索入口形态、打开方式和结果行为集中在“Bewly 页面 → 搜索”；稍后再看布局与观看历史分组间隔在“列表与布局”。消息页同时呈现本地角标与 B 站接收规则，后者继续独立读写服务端。普通卡片与动态预览保留独立配置，标题明确作用范围。毛玻璃 UI 正向表达，底层仍只有 `disableFrostedGlass`。
 

@@ -20,13 +20,13 @@ import type { VideoInfo } from '~/models/video/videoInfo'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { stopAdaptedStyles } from '~/styles/adaptedStyles'
 import RESET_BEWLY_CSS from '~/styles/reset.css?raw'
+import { applyAppearanceStyle } from '~/utils/appearance'
 import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyPlaybackLayoutReady, isBewlyPlaybackNavigationPending, isBewlyWidescreenActive, isBewlyWidescreenEngaged, prepareBewlyPlaybackPageNavigation, prepareBewlyWidescreenLoading, refreshBewlyPlaybackPageNavigation } from '~/utils/bewlyWidescreen'
 import { shouldSuppressWidescreenAutoEntry } from '~/utils/bewlyWidescreenPolicy'
 import { isConfirmedLiveEmbeddedFrame } from '~/utils/bilibiliLiveContext'
 import { getBilibiliLogicalPathname, toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, restoreOriginalBilibiliTopBarParent, restorePreparedOriginalBilibiliTopBars } from '~/utils/bilibiliTopBar'
 import { readBrowserFontScale } from '~/utils/browserFontScale'
-import { resolveDarkModeBaseColor } from '~/utils/darkModeTint'
 import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveIframeEscapeAction } from '~/utils/drawerEscape'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
@@ -49,6 +49,7 @@ import { getPlayerModeContainer, getPlayerModeControl, getPlayerModeReadiness, h
 import type { PlayerModeApplication } from '~/utils/playerModeApplication'
 import { createPlayerModeApplication } from '~/utils/playerModeApplication'
 import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, isNativePlaylistEditing, resetRandomPlayInitialization, syncRandomPlayOrder, syncRandomPlayUI } from '~/utils/randomPlay'
+import { applyMotionPreference } from '~/utils/reducedMotion'
 import { getPluginSearchResultsUrl, openSearchResults, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { canStartSettingsDependentBoot, shouldShowBewlyBootOverlay } from '~/utils/settingsBootPolicy'
 import { SVG_ICONS } from '~/utils/svgIcons'
@@ -1687,11 +1688,12 @@ else if (shouldInitializeContentScript) {
     if (import.meta.env.DEV)
       container.dataset.bewlyPhase = 'mounting'
     container.dataset.bewlyRuntimeUrl = browser.runtime.getURL('')
-    container.classList.toggle('dark', document.documentElement.classList.contains('dark'))
-    container.classList.toggle('oled-dark', document.documentElement.classList.contains('oled-dark'))
-
-    // 立即设置Shadow DOM容器的基准颜色，确保Vue组件能够访问到正确的CSS变量
-    container.style.setProperty('--bew-dark-base-color', resolveDarkModeBaseColor(settings.value))
+    const appearance = useDark()
+    container.classList.toggle('dark', appearance.isDark.value)
+    container.classList.toggle('oled-dark', appearance.isOledDark.value)
+    container.style.setProperty('--bew-dark-base-color', appearance.darkModeBaseColor.value)
+    applyAppearanceStyle(container, appearance.appearanceStyle.value)
+    applyMotionPreference(container, appearance.motionPreference.value)
     // Resolve OS/browser text scaling once; the default adds no style writes.
     const fontScale = readBrowserFontScale()
     if (fontScale !== 1) {

@@ -38,7 +38,7 @@ const topBarStore = useTopBarStore()
 const { openIframeDrawer } = useBewlyApp()
 const { t } = useI18n()
 const toast = useToast()
-const { watchLaterList, isLoadingWatchLater, watchLaterCount } = storeToRefs(topBarStore)
+const { watchLaterList, isLoadingWatchLater, watchLaterCount, watchLaterPageState } = storeToRefs(topBarStore)
 const viewAllUrl = computed((): string => {
   return 'https://www.bilibili.com/watchlater/list'
 })
@@ -202,8 +202,14 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
       />
 
       <Empty
-        v-if="!isLoadingWatchLater && removals.displayItems.value.length === 0"
+        v-if="!isLoadingWatchLater && removals.displayItems.value.length === 0 && watchLaterPageState !== 'failed' && watchLaterPageState !== 'stalled'"
         class="bew-popover__state"
+      />
+
+      <Empty
+        v-if="!isLoadingWatchLater && (watchLaterPageState === 'failed' || watchLaterPageState === 'stalled')" text-only
+        :description="t(watchLaterPageState === 'stalled' ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="t('common.retry')"
+        @action="topBarStore.loadMoreWatchLaterList(true)"
       />
 
       <!-- watchlater -->

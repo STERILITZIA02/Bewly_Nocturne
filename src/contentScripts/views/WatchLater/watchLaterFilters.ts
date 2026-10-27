@@ -1,4 +1,5 @@
 import type { List as VideoItem } from '~/models/video/watchLater'
+import { parseLocalCalendarDate } from '~/utils/localDate'
 import type { VideoWatchState } from '~/utils/videoVisitRecord'
 import { getWatchLaterAuthor } from '~/utils/watchLaterList'
 
@@ -20,21 +21,11 @@ export function hasWatchLaterFilters(filters: WatchLaterFilters): boolean {
   return filters.progress !== 'all' || filters.added !== 'all' || filters.duration !== 'all'
 }
 
-function parseLocalDate(value: string): Date | undefined {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (!match)
-    return
-  const [, year, month, day] = match.map(Number)
-  const date = new Date(year, month - 1, day)
-  if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day)
-    return date
-}
-
 export function watchLaterAddedBounds(filters: Pick<WatchLaterFilters, 'added' | 'startDate' | 'endDate'>): { start: number, end: number } | null {
   if (filters.added === 'all')
     return { start: -Infinity, end: Infinity }
-  const start = filters.startDate ? parseLocalDate(filters.startDate) : undefined
-  const end = filters.endDate ? parseLocalDate(filters.endDate) : undefined
+  const start = filters.startDate ? parseLocalCalendarDate(filters.startDate) : undefined
+  const end = filters.endDate ? parseLocalCalendarDate(filters.endDate) : undefined
   if ((filters.startDate && !start) || (filters.endDate && !end) || (start && end && start > end))
     return null
     // Calendar days, not 24-hour offsets: local DST boundaries can be shorter/longer.

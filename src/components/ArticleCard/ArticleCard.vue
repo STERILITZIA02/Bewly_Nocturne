@@ -143,7 +143,7 @@ function formatDate(timestamp: number | string | undefined) {
       >
     </div>
     <div v-if="coverFill && cover" class="article-cover-transition" aria-hidden="true">
-      <ProgressiveBlur class="article-cover-transition__blur" edge="left" />
+      <ProgressiveBlur class="article-cover-transition__blur" edge="left" sample-within=".article-card" />
       <div class="article-cover-transition__wash" />
     </div>
   </ALink>

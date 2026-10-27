@@ -51,6 +51,7 @@ library_tools:
   image_navigation: 圖片檢視區域，可捲動查看，放大後可拖曳
   load_more_videos: 繼續載入影片
 common:
+  pagination_stalled: 清單未能繼續載入，請重試。
   advertisement: 廣告
   clear_selection: 清空已選
   favorite_folder_full: 此收藏夾已滿，無法新增目前影片
@@ -316,7 +317,6 @@ settings:
     located: 已定位到此設定
   category_general_desc: 設定語言、互動版面與抽屜行為。
   category_appearance_desc: 設定毛玻璃、主題顏色、字型與其他頁面的適配。
-  breadcrumb: 設定位置
   group_interaction_layout: 互動與版面
   home_grid_layout: 首頁影片版面
   home_grid_layout_desc: 調整首頁影片內容的自適應網格或清單欄數。
@@ -404,7 +404,93 @@ settings:
     reset_title: 還原預設設定
     reset_desc: 此區域的操作會影響所有 Bewly Nocturne 設定。
     reset_warning: 還原後無法復原，目前的語言設定將會保留。
-  menu_appearance: 外觀
+  menu_appearance: 視覺風格
+  visual_style:
+    motion_system: 跟隨系統
+    motion_on: 開啟
+    motion_off: 關閉
+    preset_pair: 連動主題的淺色與深色版本；缺少的版本維持原樣。
+    preset_single: 預設只套用至目前編輯的配色。
+    choose_color: 選擇預設顏色
+    title: 視覺風格
+    description: 統一設定顯示模式、配色、字體與介面材質。
+    palette: 主題與配色
+    preset: 主題
+    custom: 自訂
+    automatic: 自動
+    accent: 強調色
+    editing_mode: 編輯配色
+    editing_mode_desc: 切換要編輯的配色，不改變目前的顯示模式。
+    separate_accent: 淺色與深色個別編輯
+    separate_accent_desc: 開啟後分別選擇主題與強調色，切換顯示模式時自動使用對應配色。
+    dark_surface: 深色背景
+    dark_surface_desc: OLED 使用純黑頁面背景，播放頁保留一般深色表面。
+    tint: 深色色調
+    background: 背景
+    background_desc: 作為表面基色，卡片、浮層與輸入框由它統一衍生。顏色會配合目前的淺色或深色模式。
+    foreground: 前景
+    foreground_desc: 用於文字與中性控制項，顯示時自動維持與背景的對比。
+    contrast: 層次對比
+    contrast_desc: 提高次要文字與輪廓的對比度。0 維持原有層次。
+    preview: 文字與表面預覽
+    preview_secondary: 次要資訊
+    reset_colors: 恢復 Nocturne 配色
+    advanced: 進階
+    interface_font_size: 介面基礎字級
+    interface_font_size_desc: 等比例調整現有文字層級，並保留系統與瀏覽器的文字縮放。
+    shadows: 介面陰影
+    motion: 減少動態效果
+    motion_desc: 減少介面位移與縮放，保留必要的狀態回饋。
+    schedule_start: 淺色模式開始時間
+    schedule_end: 淺色模式結束時間
+    invalid_color: '請輸入有效的十六進位顏色，例如 #2b2b2b。'
+    import: 匯入視覺風格
+    export: 匯出視覺風格
+    copy: 複製視覺風格
+    copied: 已複製視覺風格
+    imported: 已匯入視覺風格
+    import_failed: 無法匯入，請選擇有效的 Nocturne 視覺風格檔案。
+    presets:
+      absolutely: 绝对
+      ayu: 暖砂
+      catppuccin: 猫布奇诺
+      codex: Codex
+      dracula: 德古拉
+      everforest: 常青森林
+      github: GitHub
+      gruvbox: 復古暖色
+      linear: 線性
+      lobster: 龍蝦
+      material: 材質
+      matrix: 矩陣
+      monokai: 莫诺凯
+      night_owl: 夜梟
+      nord: 北境
+      notion: Notion
+      og: 初代
+      one: 一號
+      oscurange: 暗橙
+      proof: 校樣
+      raycast: Raycast
+      rose_pine: 玫瑰松
+      sentry: 哨兵
+      solarized: 日照
+      temple: 神殿
+      tokyo_night: 東京之夜
+      vercel: Vercel
+      vscode_plus: VS Code 增強
+      xcode: Xcode
+      chatgpt: ChatGPT
+      nocturne: Nocturne
+      graphite: 石墨
+      paper: 暖紙
+      sage: 鼠尾草
+      slate: 岩藍
+    surface:
+      neutral: 標準深色
+      tinted: 柔和色調
+      custom: 自訂背景
+      oled: OLED 純黑
   menu_compatibility: 相容性
   menu_about: 關於
   experimental: 實驗性
@@ -600,15 +686,6 @@ settings:
   block_top_search_page_ads: 封鎖 Bilibili 搜尋頁上方的廣告
 
   # Video Card Grid Settings
-  group_video_card_grid: 影片卡片網格
-  group_video_card_grid_desc: 封面至少 320×180，能放下幾欄就放幾欄，視窗變寬時卡片隨之變大。
-  auto_switch_list_layout: 根據影片卡片區域寬度自動切換單雙列
-  auto_switch_list_layout_desc: 開啟後，雙列模式會在影片卡片區域寬度小於設定寬度時自動切換為單列。
-  auto_switch_list_layout_breakpoint: 切換寬度
-  video_card_cover_ratio: 封面占比
-  video_card_cover_ratio_desc: 分別設定單列與雙列橫向影片卡片中封面所占的寬度。
-  video_card_cover_ratio_one_column: 單列版型
-  video_card_cover_ratio_two_columns: 雙列版型
   grid_columns: 顯示
   video_card_title_font_size: 標題字級
   video_card_title_font_size_desc: 控制影片卡片標題的字級。
@@ -699,7 +776,7 @@ settings:
   back_to_top_and_refresh_buttons_are_separated: 分離回到頂部列和重新整理按鈕
   sidebar_position: 側邊欄位置
   auto_hide_sidebar: 自動隱藏側邊欄
-  theme: 主題
+  theme: 顯示模式
   theme_opt:
     light: 淺色
     dark: 深色

@@ -182,8 +182,11 @@ async function main() {
     [{ 'corner-shape': 'superellipse(1)', 'overflow-y': 'hidden', 'border-top-left-radius': '12px' }, undefined],
     [{ 'corner-shape': 'superellipse(1.7)', 'overflow-y': 'visible', 'border-top-left-radius': '12px' }, undefined],
     [{ 'will-change': 'transform', 'opacity': '1' }, undefined],
-  ] as const)
-    assert.equal(getProgressiveBlurAncestorIssue({ getPropertyValue: property => (values as Record<string, string>)[property] ?? '' }), expected)
+  ] as const) {
+    const style = { getPropertyValue: (property: string) => (values as Record<string, string>)[property] ?? '' }
+    assert.equal(getProgressiveBlurAncestorIssue(style), expected)
+    assert.equal(getProgressiveBlurAncestorIssue(style, true), expected === 'corner-shape + overflow clipping' ? expected : undefined, 'a backdrop root containing the sample is valid; rounded clipping is still checked')
+  }
   for (const edge of ['top', 'bottom', 'left', 'right', 'center'] as const) {
     const layers = createProgressiveBlurLayers(edge)
     assert.equal(layers.length, PROGRESSIVE_BLUR_LAYER_COUNT)

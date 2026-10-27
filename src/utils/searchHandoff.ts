@@ -1,3 +1,5 @@
+import { prefersReducedMotion } from '~/utils/reducedMotion'
+
 import { holdAnimation } from './motionPriority'
 import { getMotionDuration } from './motionTiming'
 
@@ -21,7 +23,7 @@ export function arriveSearchAt(element: HTMLElement) {
   const from = departure
   departure = undefined
   if (!from || performance.now() - from.time > HANDOFF_WINDOW_MS || typeof element.animate !== 'function'
-    || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    || prefersReducedMotion()) {
     return
   }
   const to = element.getBoundingClientRect()

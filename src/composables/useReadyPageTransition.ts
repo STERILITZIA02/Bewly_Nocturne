@@ -4,6 +4,7 @@ import { nextTick, onScopeDispose, watch } from 'vue'
 import { restoreRetiringElement, retiringTransition } from '~/utils/motionPresence'
 import { afterMotion, getMotionRemaining } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 
 interface ReadyPageTransitionOptions {
   onStart?: () => void
@@ -39,7 +40,7 @@ export function useReadyPageTransition<T>(source: () => T, prepare: (component: 
     if (!(element instanceof HTMLElement) || typeof element.animate !== 'function')
       return
     const style = getComputedStyle(element)
-    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    const reduced = prefersReducedMotion()
     const duration = reduced ? (entering ? 70 : 30) : Math.max(minDuration, getMotionDuration(style, entering ? '--bew-page-enter-duration' : '--bew-page-exit-duration', entering ? 150 : 60))
     const easing = style.getPropertyValue(entering ? '--bew-ease-out' : '--bew-ease-in').trim() || (entering ? 'ease-out' : 'ease-in')
     try {
@@ -150,7 +151,7 @@ export function useReadyPageTransition<T>(source: () => T, prepare: (component: 
     onEnter: (element, done) => {
       enterAnimation?.cancel()
       options.onEnter?.(element)
-      const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+      const reduced = prefersReducedMotion()
       const rise = !reduced && options.rise?.() === true
       const animation = animate(element, rise
         ? [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }]

@@ -1,4 +1,5 @@
 import { LOADING_RING_ARC } from '~/utils/loadingRing'
+import { reducedMotionCss } from '~/utils/reducedMotion'
 
 // The shared ring (styles/loadingRing.scss) drawn as a mask: the same 3/4 arc
 // with round caps, so the native spinner needs no DOM of ours.
@@ -50,9 +51,5 @@ export const COMMENT_SPINNER_RING_CSS = `
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    :host-context(#bewly-widescreen-root) #spinner::before {
-      animation: none;
-    }
-  }
+  ${reducedMotionCss(':host-context(#bewly-widescreen-root) #spinner::before', 'animation:none;', 'native-shadow')}
 `

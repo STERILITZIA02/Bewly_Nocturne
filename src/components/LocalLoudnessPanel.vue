@@ -25,7 +25,7 @@ onUnmounted(closing)
 
 <template>
   <Dialog
-    :title="t(settings.playerAdjustmentEnabled ? 'player_adjustment.title' : 'local_loudness.title')" width="480px" :show-footer="false" :frosted-glass="false" @before-close="notifyLocalLoudnessPanel(false)"
+    :title="t(settings.playerAdjustmentEnabled ? 'player_adjustment.title' : 'local_loudness.title')" width="480px" :show-footer="false" @before-close="notifyLocalLoudnessPanel(false)"
     @close="closing"
   >
     <section v-if="settings.playerAdjustmentEnabled" class="player-adjustment">

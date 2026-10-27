@@ -1,0 +1,14 @@
+// The runtime palette and the settings previews share the same pigment recipes.
+@mixin pigments($dark: false, $prefix: "--bew-neutral", $custom: "--bew-custom") {
+  @if $dark {
+    #{$prefix}-bg: var(#{$custom}-background, #141414);
+    #{$prefix}-fg: var(#{$custom}-foreground, #ebebeb);
+    @supports (color: oklch(from white l c h)) {
+      #{$prefix}-bg: var(#{$custom}-background, oklch(from var(--bew-dark-base-color) 0.19 min(c, 0.03) h));
+      #{$prefix}-fg: var(#{$custom}-foreground, oklch(from var(--bew-dark-base-color) 0.94 min(c, 0.006) h));
+    }
+  } @else {
+    #{$prefix}-bg: var(#{$custom}-background, #fff);
+    #{$prefix}-fg: var(#{$custom}-foreground, #171717);
+  }
+}

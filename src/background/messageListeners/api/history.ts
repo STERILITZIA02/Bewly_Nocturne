@@ -12,6 +12,8 @@ const API_HISTORY = {
       ps: 20,
       type: '',
       view_at: 0,
+      max: 0,
+      business: '',
     },
     afterHandle: AHS.J_D,
   },

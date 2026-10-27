@@ -34,7 +34,7 @@ export interface VideoHistoryWriteDelta { records: VideoVisitHistory, removed: s
 export type VideoHistoryCommand
   = | { type: 'read' }
     | { type: 'clear', epoch: string }
-    | { type: 'remove', epoch: string, identity: VideoIdentity }
+    | { type: 'remove', epoch: string, identities: VideoIdentity[] }
     | { type: 'migrate', epoch: string, source: string, records: Record<string, unknown> }
     | { type: 'record', epoch: string, baseRevision: number, operationId: string, edits: VideoHistoryEdit[] }
 export type VideoHistoryUpdate

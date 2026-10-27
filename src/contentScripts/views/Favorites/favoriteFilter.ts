@@ -1,4 +1,5 @@
 import type { Media as FavoriteItem } from '~/models/video/favorite'
+import { getFavoriteResourceKey } from '~/utils/favoriteResource'
 
 import { matchesFavoriteQuery } from './favoriteSearch'
 
@@ -76,14 +77,18 @@ export function parseFavoritePartitions(response: unknown): FavoritePartitionOpt
   const value = response as { code?: unknown, data?: unknown }
   if (value.code !== 0 || (value.data !== null && !Array.isArray(value.data)))
     return null
-  return (value.data ?? []).flatMap((entry) => {
+  const partitions: FavoritePartitionOption[] = []
+  for (const entry of value.data ?? []) {
+    if (!entry || typeof entry !== 'object')
+      return null
     const record = entry as { tid?: unknown, name?: unknown, count?: unknown }
     const tid = Number(record.tid)
     const count = Number(record.count)
     if (!Number.isSafeInteger(tid) || tid === 0 || typeof record.name !== 'string' || !Number.isSafeInteger(count) || count < 0)
-      return []
-    return [{ tid, name: record.name, count }]
-  })
+      return null
+    partitions.push({ tid, name: record.name, count })
+  }
+  return partitions
 }
 
 export function mergeFavoritePartitions(groups: readonly FavoritePartitionOption[][]): FavoritePartitionOption[] {
@@ -99,7 +104,12 @@ export function mergeFavoritePartitions(groups: readonly FavoritePartitionOption
 
 export function collectFavoriteUploaders(items: Iterable<FavoriteItem>, limit = 60): FavoriteUploaderOption[] {
   const uploaders = new Map<number, FavoriteUploaderOption>()
+  const resources = new Set<string>()
   for (const item of items) {
+    const key = getFavoriteResourceKey(item)
+    if (resources.has(key))
+      continue
+    resources.add(key)
     const mid = Number(item.upper?.mid)
     if (!Number.isSafeInteger(mid) || mid <= 0)
       continue

@@ -10,7 +10,6 @@ import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useHomeTabState } from '~/composables/useHomeTabState'
 import type { GridLayoutType } from '~/logic'
-import { settings } from '~/logic'
 import type { List as RankingVideoItem, RankingResult } from '~/models/video/ranking'
 import type { List as RankingPgcItem, RankingPgcResult } from '~/models/video/rankingPgc'
 import api from '~/utils/api'
@@ -81,25 +80,26 @@ const PgcList = tabState.shallowRef<RankingPgcItem[]>('pgcList', [])
 const noMoreContent = tabState.ref<boolean>('noMoreContent', true) // 排行榜没有分页
 const rankingGridRef = ref<HTMLElement | null>(null)
 const rankingGridWidth = ref(0)
+const rankingGridGap = ref(0)
 let rankingGridResizeObserver: ResizeObserver | null = null
 let requestGeneration = 0
 let isComponentActive = false
 let resizeListenerAttached = false
 
 const isRankingAutoSwitchSingleColumn = computed(() => {
-  if (props.gridLayout !== 'twoColumns' || !settings.value.autoSwitchListLayout || !rankingGridWidth.value)
+  if (props.gridLayout !== 'twoColumns' || !rankingGridWidth.value)
     return false
 
   return getListGridColumnCount(
     props.gridLayout,
     rankingGridWidth.value,
-    true,
-    settings.value.autoSwitchListLayoutBreakpoint,
+    rankingGridGap.value,
   ) === 1
 })
 
 function updateRankingGridWidth() {
   rankingGridWidth.value = rankingGridRef.value?.clientWidth || 0
+  rankingGridGap.value = rankingGridRef.value ? Number.parseFloat(getComputedStyle(rankingGridRef.value).columnGap) || 0 : 0
 }
 
 function cleanupRankingGridResizeObserver() {
@@ -338,7 +338,6 @@ defineExpose({ initData })
             'grid-adaptive-bangumi': gridLayout === 'adaptive',
             'grid-two-columns': gridLayout === 'twoColumns',
             'grid-one-column': gridLayout === 'oneColumn',
-            'grid-list-auto-switch': gridLayout === 'twoColumns' && settings.autoSwitchListLayout,
             'grid-list-auto-switch-single': isRankingAutoSwitchSingleColumn,
           }"
         >

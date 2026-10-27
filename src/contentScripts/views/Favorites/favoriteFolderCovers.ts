@@ -10,7 +10,7 @@ type CoverLane = 'rail' | 'hero'
 export function createFavoriteFolderCoverLoader(fetchCover: (id: number, signal: AbortSignal) => Promise<string>) {
   const covers = reactive<Record<number, string>>({})
   const requested = new Set<number>()
-  const lanes: Record<CoverLane, { queue: number[], running: boolean, controller?: AbortController }> = {
+  const lanes: Record<CoverLane, { queue: number[], running: boolean, controller?: AbortController, current?: number }> = {
     rail: { queue: [], running: false },
     hero: { queue: [], running: false },
   }
@@ -31,9 +31,10 @@ export function createFavoriteFolderCoverLoader(fetchCover: (id: number, signal:
         if (Object.hasOwn(covers, id))
           continue
         lane.controller = new AbortController()
+        lane.current = id
         try {
           const cover = await fetchCover(id, lane.controller.signal)
-          if (owner === generation && !disposed && !Object.hasOwn(covers, id))
+          if (owner === generation && !disposed && !lane.controller.signal.aborted && !Object.hasOwn(covers, id))
             covers[id] = cover
         }
         catch {
@@ -45,6 +46,7 @@ export function createFavoriteFolderCoverLoader(fetchCover: (id: number, signal:
       if (owner === generation) {
         lane.running = false
         lane.controller = undefined
+        lane.current = undefined
       }
     }
   }
@@ -64,6 +66,17 @@ export function createFavoriteFolderCoverLoader(fetchCover: (id: number, signal:
 
   return {
     covers,
+    invalidate(ids: readonly number[]) {
+      for (const id of ids) {
+        delete covers[id]
+        requested.delete(id)
+      }
+      for (const lane of Object.values(lanes)) {
+        lane.queue = lane.queue.filter(id => !ids.includes(id))
+        if (lane.current !== undefined && ids.includes(lane.current))
+          lane.controller?.abort()
+      }
+    },
     load(id: number, name: CoverLane = 'rail') {
       if (disposed || Object.hasOwn(covers, id))
         return

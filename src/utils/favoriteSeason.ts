@@ -145,8 +145,9 @@ export function mergeFavoriteSeasonPage(input: {
   const noProgress = input.pn > 1 && added === 0 && !replace
   const countMismatch = count !== undefined && medias.length !== count
   const end = input.hasMore === false || (input.hasMore === undefined
-    && (replace || (count !== undefined && medias.length >= count) || input.pageMedias.length < pageSize))
+    && (replace || (count !== undefined && medias.length >= count)))
   const stalled = (end && countMismatch)
+    || (noProgress && input.pageMedias.length > 0)
     || (input.hasMore === true && (noProgress || (count !== undefined && medias.length >= count)))
     || (!end && (noProgress || input.pageMedias.length === 0))
     || (count === undefined && input.hasMore === undefined && input.pageMedias.length > pageSize)

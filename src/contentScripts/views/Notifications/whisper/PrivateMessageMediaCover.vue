@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import ALink from '~/components/ALink.vue'
 import MomentVideoPreview from '~/components/MomentCard/MomentVideoPreview.vue'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 
 import type { MomentPreviewMedia } from '../../Moments/useMomentPreviews'
 import { privateMessagePreviewsKey } from './usePrivateMessagePreviews'
@@ -27,7 +28,7 @@ function leave() {
 }
 
 function enter(event: MouseEvent) {
-  if (!bvid.value || !previews || event.buttons || window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  if (!bvid.value || !previews || event.buttons || prefersReducedMotion())
     return
   void previews.handleMediaEnter(media.value, event)
   if (!observer && root.value && typeof IntersectionObserver !== 'undefined') {

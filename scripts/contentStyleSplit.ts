@@ -13,6 +13,12 @@
  * match, keeping the original rule order (and therefore the cascade).
  */
 
+import type { Plugin } from 'vite'
+
+import { splitCssSelectors } from '../src/utils/cssSelectors.ts'
+import type { MotionStyleScope } from '../src/utils/reducedMotion.ts'
+import { motionScopeSelector } from '../src/utils/reducedMotion.ts'
+
 interface Block {
   /** Text before `{` (selector list or at-rule prelude), or a full statement. */
   prelude: string
@@ -94,27 +100,6 @@ function findBlockEnd(css: string, open: number) {
   return css.length
 }
 
-function splitSelectorList(prelude: string) {
-  const selectors: string[] = []
-  let depth = 0
-  let start = 0
-  for (let index = 0; index < prelude.length; index++) {
-    const char = prelude[index]
-    if (char === '(' || char === '[') {
-      depth++
-    }
-    else if (char === ')' || char === ']') {
-      depth--
-    }
-    else if (char === ',' && depth === 0) {
-      selectors.push(prelude.slice(start, index).trim())
-      start = index + 1
-    }
-  }
-  selectors.push(prelude.slice(start).trim())
-  return selectors.filter(Boolean)
-}
-
 export function isShadowOnlySelector(selector: string) {
   return /:host\b/.test(selector) || /\[data-v-[\w-]+\]/.test(selector)
 }
@@ -142,7 +127,7 @@ function filterBlocks(blocks: Block[], keepSelector: (selector: string) => boole
       }
       continue
     }
-    const selectors = splitSelectorList(block.prelude).filter(keepSelector)
+    const selectors = splitCssSelectors(block.prelude).filter(keepSelector)
     if (selectors.length)
       output += `${selectors.join(',')}{${block.body}}\n`
   }
@@ -152,7 +137,74 @@ function filterBlocks(blocks: Block[], keepSelector: (selector: string) => boole
 export function splitContentStyles(css: string) {
   const blocks = parseBlocks(css)
   return {
-    host: filterBlocks(blocks, selector => !isShadowOnlySelector(selector)),
-    shadow: filterBlocks(blocks, selector => !isHostOnlySelector(selector)),
+    host: applyMotionPreferenceRules(filterBlocks(blocks, selector => !isShadowOnlySelector(selector)), 'host'),
+    shadow: applyMotionPreferenceRules(filterBlocks(blocks, selector => !isHostOnlySelector(selector)), 'shadow'),
+  }
+}
+
+function gateMotionRules(css: string, gate: string, scope: MotionStyleScope): string {
+  return parseBlocks(css).map((block) => {
+    if (block.body === undefined)
+      return block.prelude
+    if (NESTED_AT_RULES.test(block.prelude))
+      return `${block.prelude}{${gateMotionRules(block.body, gate, scope)}}`
+    if (block.prelude.startsWith('@'))
+      return `${block.prelude}{${block.body}}`
+    const selectors = splitCssSelectors(block.prelude).map(selector => motionScopeSelector(selector, gate, scope))
+    return `${selectors.join(',')}{${block.body}}`
+  }).join('\n')
+}
+
+/** Reuse the authored reduced-motion rules; no runtime stylesheet scanning or global animation reset. */
+export function applyMotionPreferenceRules(css: string, scope: MotionStyleScope): string {
+  return parseBlocks(css).map((block) => {
+    if (block.body === undefined)
+      return block.prelude
+    const motion = /^@media\s*\(\s*prefers-reduced-motion\s*:\s*(reduce|no-preference)\s*\)$/i.exec(block.prelude)
+    if (motion) {
+      const reduced = motion[1] === 'reduce'
+      const system = gateMotionRules(block.body, `:not([data-bew-motion="${reduced ? 'full' : 'reduce'}"])`, scope)
+      const forced = gateMotionRules(block.body, `[data-bew-motion="${reduced ? 'reduce' : 'full'}"]`, scope)
+      // Native Shadow roots without :host-context retain their original OS policy.
+      // Nocturne's own hosts carry the preference attribute and use the override.
+      const fallback = scope === 'universal' || scope === 'native-shadow'
+        ? `@supports not selector(:host-context(*)){${block.prelude}{${gateMotionRules(block.body, ':not([data-bew-motion])', 'shadow')}}}`
+        : ''
+      return `${block.prelude}{${system}}\n${forced}\n${fallback}`
+    }
+    const body = NESTED_AT_RULES.test(block.prelude) ? applyMotionPreferenceRules(block.body, scope) : block.body
+    return `${block.prelude}{${body}}`
+  }).join('\n')
+}
+
+/** Vite's ?inline styles also serve native Shadow roots; transform their CSS payload at build time. */
+export function inlineMotionStyles(): Plugin {
+  return {
+    name: 'bewly-inline-motion-preference',
+    enforce: 'post',
+    transform: {
+      filter: { id: /\.(?:css|scss)\?inline$/ },
+      handler(code) {
+        if (!code.includes('prefers-reduced-motion'))
+          return
+        const ast = this.parse(code)
+        const edits: { start: number, end: number, text: string }[] = []
+        for (const statement of ast.body) {
+          const values = statement.type === 'VariableDeclaration'
+            ? statement.declarations.map(item => item.init)
+            : statement.type === 'ExportDefaultDeclaration' ? [statement.declaration] : []
+          for (const value of values) {
+            if (value?.type === 'Literal' && typeof value.value === 'string' && value.value.includes('prefers-reduced-motion'))
+              edits.push({ start: value.start, end: value.end, text: JSON.stringify(applyMotionPreferenceRules(value.value, 'universal')) })
+          }
+        }
+        if (!edits.length)
+          return
+        let result = code
+        for (const edit of edits.sort((a, b) => b.start - a.start))
+          result = result.slice(0, edit.start) + edit.text + result.slice(edit.end)
+        return { code: result, map: null }
+      },
+    },
   }
 }

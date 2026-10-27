@@ -1,6 +1,7 @@
-import { computed, reactive, ref, shallowRef, toRaw, watch } from 'vue'
+import { computed, ref, shallowReactive, shallowRef, toRaw, watch } from 'vue'
 
 import type { FavoritesResult, Media as FavoriteItem } from '~/models/video/favorite'
+import { withRequestDeadline } from '~/utils/abort'
 import type { AccountId } from '~/utils/accountScope'
 import type api from '~/utils/api'
 import { getFavoriteResourceKey } from '~/utils/favoriteResource'
@@ -8,12 +9,12 @@ import { getFavoriteResourceKey } from '~/utils/favoriteResource'
 import type { FavoriteFilterQuery, FavoriteFilterRecord, FavoritePartitionOption } from './favoriteFilter'
 import { compileFavoriteFilter, EMPTY_FAVORITE_FILTER, getFavoriteFilterKey, getFavoriteFilterRecordKey, isFavoriteFilterActive, mergeFavoritePartitions, parseFavoritePartitions } from './favoriteFilter'
 import type { FavoriteVideoOrder } from './otherFavorites'
-import type { FavoriteWrite } from './useFavoriteWrites'
 
 export type FavoriteFilterScanStatus = 'idle' | 'scanning' | 'paused' | 'budget' | 'complete' | 'failed' | 'stalled'
 
 interface FavoriteFilterScanDependencies {
   api: Pick<typeof api.favorite, 'getFavoriteResources' | 'getFavoritePartitions'>
+  invalidatePage: (params: Parameters<typeof api.favorite.getFavoriteResources>[0]) => void
   getAccountId: () => AccountId
   getSourceIds: () => number[]
   getScope: () => 'current' | 'all'
@@ -27,6 +28,9 @@ interface ScanTask {
   tid: number | null
   page: number
   done: boolean
+  pages: Map<number, string[]>
+  keys: Set<string>
+  repairThrough?: number
 }
 
 const FILTER_PAGE_SIZE = 40
@@ -40,11 +44,11 @@ const PARTITION_CACHE_LIMIT = 64
 export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependencies) {
   const applied = shallowRef<FavoriteFilterQuery>(EMPTY_FAVORITE_FILTER)
   const status = ref<FavoriteFilterScanStatus>('idle')
-  const records = reactive<FavoriteFilterRecord[]>([])
+  const records = shallowReactive<FavoriteFilterRecord[]>([])
   const partitions = shallowRef<FavoritePartitionOption[]>([])
   const partitionsLoading = ref(false)
   const partitionsFailed = ref(false)
-  const recordKeys = new Map<string, number>()
+  const recordKeys = new Set<string>()
   let sourceByItem = new WeakMap<object, number>()
   const partitionCache = new Map<string, FavoritePartitionOption[]>()
   const pageVisible = ref(typeof document === 'undefined' || !document.hidden)
@@ -57,6 +61,10 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
   let controller: AbortController | undefined
   let partitionGeneration = 0
   let partitionController: AbortController | undefined
+  let partitionTask: { key: string, promise: Promise<void> } | undefined
+  let partitionResultKey = ''
+  let partitionsRequested = false
+  let disposed = false
   let roundBudget = FILTER_AUTO_PAGE_BUDGET
   let roundStart = 0
   let predicate = compileFavoriteFilter(EMPTY_FAVORITE_FILTER, '')
@@ -104,7 +112,7 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     identity = computeIdentity()
     predicate = compileFavoriteFilter(applied.value, dependencies.getNormalQuery())
     const tids = applied.value.tids.length ? applied.value.tids : [null]
-    tasks = dependencies.getSourceIds().flatMap(sourceId => tids.map(tid => ({ sourceId, tid, page: 0, done: false })))
+    tasks = dependencies.getSourceIds().flatMap(sourceId => tids.map(tid => ({ sourceId, tid, page: 0, done: false, pages: new Map(), keys: new Set() })))
     status.value = tasks.length ? 'scanning' : 'complete'
     void pump(generation)
   }
@@ -134,19 +142,44 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
         status.value = 'failed'
         return
       }
-      const page = task.page + 1
+      let page = task.page + 1
+      const repairFrom = task.repairThrough === undefined ? undefined : page
       const read = controller = new AbortController()
       let result: FavoritesResult
+      const repairedItems: FavoriteItem[] = []
+      const repairedPages = new Map<number, string[]>()
+      const sourceKeys = repairFrom === undefined ? task.keys : new Set([...task.pages].filter(([pn]) => pn < page).flatMap(([, keys]) => keys))
       try {
-        result = await dependencies.api.getFavoriteResources({
-          media_id: task.sourceId,
-          pn: page,
-          ps: FILTER_PAGE_SIZE,
-          keyword: '',
-          type: 0,
-          order: dependencies.getOrder(),
-          tid: task.tid ?? 0,
-        }, { signal: read.signal })
+        do {
+          const params = {
+            media_id: task.sourceId,
+            pn: page,
+            ps: FILTER_PAGE_SIZE,
+            keyword: '',
+            type: 0,
+            order: dependencies.getOrder(),
+            tid: task.tid ?? 0,
+          }
+          result = await dependencies.api.getFavoriteResources(params, { signal: read.signal })
+          if (!isCurrent(version))
+            return
+          if (result.code !== 0 || !result.data || typeof result.data.has_more !== 'boolean' || (result.data.medias !== null && !Array.isArray(result.data.medias)))
+            throw new Error('favorite-filter-page-unavailable')
+          const raw = result.data.medias ?? []
+          const keys = raw.map(getFavoriteResourceKey)
+          const newKeys = keys.filter(key => !sourceKeys.has(key))
+          if ((raw.length > 0 && !newKeys.length) || (!raw.length && result.data.has_more)) {
+            dependencies.invalidatePage(params)
+            status.value = 'stalled'
+            return
+          }
+          keys.forEach(key => sourceKeys.add(key))
+          repairedItems.push(...raw)
+          repairedPages.set(page, keys)
+          if (!result.data.has_more || page >= (task.repairThrough ?? page))
+            break
+          page++
+        } while (isCurrent(version))
       }
       catch {
         if (isCurrent(version))
@@ -163,30 +196,52 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
         status.value = 'failed'
         return
       }
-      const medias = Array.isArray(result.data.medias) ? result.data.medias.filter((item): item is FavoriteItem => item != null) : []
+      const medias = repairedItems
       roundBudget--
       if (result.data.has_more && !medias.length) {
         status.value = 'stalled'
         return
       }
+      if (repairFrom !== undefined) {
+        const stale = new Set([...task.pages].filter(([pn]) => pn >= repairFrom).flatMap(([, keys]) => keys))
+        for (let index = records.length - 1; index >= 0; index--) {
+          const record = records[index]
+          if (record.sourceId === task.sourceId && record.tid === task.tid && stale.has(getFavoriteResourceKey(record.item))) {
+            recordKeys.delete(getFavoriteFilterRecordKey(record.sourceId, getFavoriteResourceKey(record.item)))
+            records.splice(index, 1)
+          }
+        }
+        for (const pn of task.pages.keys()) {
+          if (pn >= repairFrom)
+            task.pages.delete(pn)
+        }
+        task.repairThrough = undefined
+      }
+      const taskIndex = tasks.indexOf(task)
+      let insertAt = repairFrom === undefined ? records.length : records.findIndex(record => tasks.findIndex(entry => entry.sourceId === record.sourceId && entry.tid === record.tid) > taskIndex)
+      if (insertAt < 0)
+        insertAt = records.length
       for (const item of medias) {
         const record: FavoriteFilterRecord = { item, sourceId: task.sourceId, tid: task.tid }
         if (!predicate(record))
           continue
         const key = getFavoriteFilterRecordKey(task.sourceId, getFavoriteResourceKey(item))
-        const index = recordKeys.get(key)
-        if (index === undefined) {
-          recordKeys.set(key, records.length)
+        if (!recordKeys.has(key)) {
+          recordKeys.add(key)
           sourceByItem.set(item, task.sourceId)
-          records.push(record)
+          records.splice(insertAt++, 0, record)
         }
       }
       task.page = page
+      task.keys = sourceKeys
+      repairedPages.forEach((keys, pn) => task.pages.set(pn, keys))
       task.done = !result.data.has_more
     }
   }
 
   function apply(query: FavoriteFilterQuery) {
+    if (getFavoriteFilterKey(query) === getFavoriteFilterKey(applied.value) && identity === computeIdentity())
+      return
     applied.value = query
     if (!isFavoriteFilterActive(query)) {
       reset()
@@ -215,7 +270,7 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     roundStart = records.length
     generation++
     status.value = 'scanning'
-    void pump(generation)
+    return pump(generation)
   }
 
   function getSourceId(item: FavoriteItem): number | undefined {
@@ -227,51 +282,111 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     return sourceId === undefined ? getFavoriteResourceKey(item) : getFavoriteFilterRecordKey(sourceId, getFavoriteResourceKey(item))
   }
 
-  function applyResourceWrite(command: Extract<FavoriteWrite, { sourceId: number }>) {
-    if (command.kind === 'copy' || !records.length)
+  function applyResourceWrite(command: { kind: 'delete' | 'move' | 'copy' | 'restore' | 'clean', sourceId: number, targetId?: number, resourceKeys: readonly string[] }) {
+    const affected = new Set([...(command.kind !== 'copy' ? [command.sourceId] : []), ...(command.targetId ? [command.targetId] : [])])
+    invalidatePartitions([...affected])
+    if (!tasks.some(task => affected.has(task.sourceId)))
       return
+    generation++
+    cancelRead()
     const keys = new Set(command.resourceKeys)
+    const removes = command.kind === 'delete' || command.kind === 'move'
     for (let index = records.length - 1; index >= 0; index--) {
       const record = records[index]
-      if (record.sourceId === command.sourceId && keys.has(getFavoriteResourceKey(record.item)))
+      if (removes && record.sourceId === command.sourceId && keys.has(getFavoriteResourceKey(record.item))) {
+        recordKeys.delete(getFavoriteFilterRecordKey(record.sourceId, getFavoriteResourceKey(record.item)))
         records.splice(index, 1)
+      }
     }
-    recordKeys.clear()
-    records.forEach((record, index) => recordKeys.set(getFavoriteFilterRecordKey(record.sourceId, getFavoriteResourceKey(record.item)), index))
+    for (const task of tasks) {
+      if (!affected.has(task.sourceId))
+        continue
+      const firstAffected = removes && task.sourceId === command.sourceId
+        ? [...task.pages].find(([, pageKeys]) => pageKeys.some(key => keys.has(key)))?.[0] ?? 1
+        : 1
+      task.repairThrough = Math.max(task.repairThrough ?? 1, task.page, 1)
+      task.page = Math.min(task.page, firstAffected - 1)
+      task.done = false
+    }
+    roundBudget = FILTER_AUTO_PAGE_BUDGET
+    roundStart = records.length
+    status.value = 'paused'
+    return continueScan()
   }
 
-  async function loadPartitions() {
-    const accountId = dependencies.getAccountId()
-    const sourceIds = dependencies.getSourceIds()
-    const version = ++partitionGeneration
-    partitionController?.abort()
-    const read = partitionController = new AbortController()
-    if (accountId === null || !sourceIds.length) {
-      partitions.value = []
+  function invalidateSources(sourceIds = dependencies.getSourceIds()) {
+    invalidatePartitions(sourceIds)
+    const affected = new Set(sourceIds)
+    if (!tasks.some(task => affected.has(task.sourceId)))
       return
+    generation++
+    cancelRead()
+    for (const task of tasks) {
+      if (!affected.has(task.sourceId))
+        continue
+      task.repairThrough = Math.max(task.repairThrough ?? 1, task.page, 1)
+      task.page = 0
+      task.done = false
+    }
+    status.value = 'paused'
+    continueScan()
+  }
+
+  function partitionIdentity() {
+    return JSON.stringify([dependencies.getAccountId(), dependencies.isActive(), dependencies.getScope(), [...new Set(dependencies.getSourceIds())].sort((a, b) => a - b)])
+  }
+
+  function cancelPartitions() {
+    partitionGeneration++
+    partitionController?.abort()
+    partitionController = undefined
+    partitionTask = undefined
+    partitionResultKey = ''
+    partitionsLoading.value = false
+    partitionsFailed.value = false
+  }
+
+  function loadPartitions(): Promise<void> {
+    partitionsRequested = true
+    const key = partitionIdentity()
+    if (partitionTask?.key === key)
+      return partitionTask.promise
+    if (partitionResultKey === key)
+      return Promise.resolve()
+    cancelPartitions()
+    const accountId = dependencies.getAccountId()
+    const sourceIds = [...new Set(dependencies.getSourceIds())]
+    const version = partitionGeneration
+    const read = partitionController = new AbortController()
+    if (disposed || !dependencies.isActive() || accountId === null || !sourceIds.length) {
+      partitions.value = []
+      partitionController = undefined
+      return Promise.resolve()
     }
     partitionsLoading.value = true
-    partitionsFailed.value = false
     const groups: FavoritePartitionOption[][] = []
     let failed = false
     const queue = [...sourceIds]
-    const worker = async () => {
-      while (queue.length && !read.signal.aborted) {
+    const current = () => !disposed && version === partitionGeneration && key === partitionIdentity()
+    const worker = async (signal: AbortSignal) => {
+      while (queue.length && !signal.aborted && current()) {
         const sourceId = queue.shift()!
-        const key = `${accountId}:${sourceId}`
-        const cached = partitionCache.get(key)
+        const cacheKey = `${accountId}:${sourceId}`
+        const cached = partitionCache.get(cacheKey)
         if (cached) {
           groups.push(cached)
           continue
         }
         try {
-          const parsed = parseFavoritePartitions(await dependencies.api.getFavoritePartitions({ up_mid: String(accountId), media_id: sourceId }, { signal: read.signal }))
+          const parsed = parseFavoritePartitions(await dependencies.api.getFavoritePartitions({ up_mid: String(accountId), media_id: sourceId }, { signal }))
+          if (!current() || signal.aborted)
+            return
           if (!parsed) {
             failed = true
             continue
           }
-          partitionCache.delete(key)
-          partitionCache.set(key, parsed)
+          partitionCache.delete(cacheKey)
+          partitionCache.set(cacheKey, parsed)
           while (partitionCache.size > PARTITION_CACHE_LIMIT)
             partitionCache.delete(partitionCache.keys().next().value!)
           groups.push(parsed)
@@ -281,16 +396,58 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
         }
       }
     }
-    await Promise.all(Array.from({ length: Math.min(PARTITION_CONCURRENCY, sourceIds.length) }, worker))
-    if (version !== partitionGeneration || accountId !== dependencies.getAccountId())
-      return
-    partitions.value = mergeFavoritePartitions(groups)
-    partitionsFailed.value = failed
-    partitionsLoading.value = false
+    const promise = (async () => {
+      try {
+        await withRequestDeadline(signal => Promise.all(Array.from({ length: Math.min(PARTITION_CONCURRENCY, sourceIds.length) }, () => worker(signal))), { signal: read.signal })
+      }
+      catch {
+        failed = true
+      }
+      finally {
+        if (current()) {
+          partitions.value = mergeFavoritePartitions(groups)
+          partitionsFailed.value = failed
+          partitionsLoading.value = false
+          partitionResultKey = key
+          partitionController = undefined
+          partitionTask = undefined
+        }
+      }
+    })()
+    partitionTask = { key, promise }
+    return promise
   }
 
-  function invalidatePartitions() {
-    partitionCache.clear()
+  function invalidatePartitions(sourceIds?: readonly number[]) {
+    cancelPartitions()
+    if (sourceIds) {
+      const account = dependencies.getAccountId()
+      for (const id of sourceIds)
+        partitionCache.delete(`${account}:${id}`)
+    }
+    else {
+      partitionCache.clear()
+    }
+    if (partitionsRequested && !disposed)
+      void loadPartitions()
+  }
+
+  let partitionAccount = dependencies.getAccountId()
+  const stopPartitions = watch(partitionIdentity, () => {
+    if (partitionAccount !== dependencies.getAccountId()) {
+      partitionAccount = dependencies.getAccountId()
+      partitionCache.clear()
+    }
+    cancelPartitions()
+    partitions.value = []
+    if (partitionsRequested)
+      void loadPartitions()
+  }, { flush: 'post' })
+
+  function retryPartitions() {
+    // Successful sources stay cached; only missing/failed sources need another read.
+    partitionResultKey = ''
+    return loadPartitions()
   }
 
   watch(pageVisible, (visible) => {
@@ -303,23 +460,23 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     active,
     status,
     items,
-    records,
     partitions,
     partitionsLoading,
     partitionsFailed,
     apply,
     refresh,
-    reset,
     continueScan,
     getSourceId,
     getItemKey,
     applyResourceWrite,
+    invalidateSources,
     loadPartitions,
-    invalidatePartitions,
+    retryPartitions,
     dispose() {
+      disposed = true
+      stopPartitions()
       reset()
-      partitionGeneration++
-      partitionController?.abort()
+      cancelPartitions()
       partitionCache.clear()
       if (typeof document !== 'undefined')
         document.removeEventListener('visibilitychange', updateVisibility)

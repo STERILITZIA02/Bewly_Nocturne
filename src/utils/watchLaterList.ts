@@ -59,10 +59,15 @@ export function getWatchLaterAuthor(item: WatchLaterItem): Author {
 
 export function mergeWatchLaterItemsByAid<T extends { aid: number }>(existing: T[], incoming: T[]): T[] {
   const seen = new Set<number>()
-  return [...existing, ...incoming].filter((item) => {
+  const result: T[] = []
+  let unchanged = true
+  for (let index = 0; index < existing.length + incoming.length; index++) {
+    const item = index < existing.length ? existing[index] : incoming[index - existing.length]
     if (!Number.isFinite(item.aid) || seen.has(item.aid))
-      return false
+      continue
     seen.add(item.aid)
-    return true
-  })
+    unchanged &&= existing[result.length] === item
+    result.push(item)
+  }
+  return unchanged && result.length === existing.length ? existing : result
 }

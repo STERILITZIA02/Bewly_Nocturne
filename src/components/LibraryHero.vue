@@ -60,7 +60,7 @@ const tone = useImageTone(() => ({ portrait: Boolean(props.image), image: props.
           @load="handleCoverLoad"
         >
         <SkeletonBlock v-else class="library-hero__skeleton" height="100%" radius="media" />
-        <ProgressiveBlur v-if="cover && !settings.disableFrostedGlass" edge="left" class="library-hero__blur" />
+        <ProgressiveBlur v-if="cover && !settings.disableFrostedGlass" edge="left" class="library-hero__blur" sample-within=".library-hero" />
       </div>
     </div>
   </section>

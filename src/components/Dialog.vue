@@ -6,11 +6,9 @@ import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
-import { GLASS_SURFACE_CONTEXT } from '~/composables/useGlassPanelMotion'
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { usePanelTrigger } from '~/composables/usePanelOrigin'
 import { useSourcePanelMotion } from '~/composables/useSourcePanelMotion'
-import { settings } from '~/logic'
 import { DIALOG_FOCUS_OWNER, DIALOG_TELEPORT_TARGET, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard, restoreOverlayFocus } from '~/utils/dialogFocus'
 import { resolveDialogKeyboardAction } from '~/utils/dialogKeyboard'
 
@@ -18,7 +16,6 @@ const props = withDefaults(defineProps<{
   title?: string
   desc?: string
   center?: boolean
-  frostedGlass?: boolean
   appendToBewlyBody?: boolean
   width?: string | number
   maxWidth?: string | number
@@ -32,7 +29,7 @@ const props = withDefaults(defineProps<{
   contentFlush?: boolean
   /** 是否显示对话框顶栏 */
   showHeader?: boolean
-  /** 是否显示边框和边缘光 */
+  /** 是否显示外缘细线 */
   showBorder?: boolean
   showFooter?: boolean
   centerFooter?: boolean
@@ -44,7 +41,6 @@ const props = withDefaults(defineProps<{
 }>(), {
   preventCloseWhenLoading: true,
   closeOnConfirm: true,
-  frostedGlass: true,
   showHeader: true,
   showBorder: true,
   showFooter: true,
@@ -171,10 +167,6 @@ const dialogContentHeight = computed(() => {
 const dialogContentMaxHeight = computed(() => {
   return typeof props.contentMaxHeight === 'number' ? `${props.contentMaxHeight}px` : props.contentMaxHeight || 'auto'
 })
-const frostedGlassEnabled = computed(() => !settings.value.disableFrostedGlass && props.frostedGlass !== false)
-const parentGlass = inject(GLASS_SURFACE_CONTEXT, undefined)
-const surfaceGlassEnabled = computed(() => frostedGlassEnabled.value && !parentGlass?.value)
-provide(GLASS_SURFACE_CONTEXT, computed(() => Boolean(parentGlass?.value) || surfaceGlassEnabled.value))
 const dialogPanelStyle = computed(() => {
   const topAligned = dialogTopOffset.value !== undefined
   return {
@@ -185,13 +177,6 @@ const dialogPanelStyle = computed(() => {
     top: topAligned ? `max(var(--bew-space-2), ${dialogTopOffset.value})` : '50%',
     left: '50%',
     transform: topAligned ? 'translateX(-50%)' : 'translate(-50%, -50%)',
-  }
-})
-const dialogSurfaceStyle = computed(() => {
-  return {
-    backdropFilter: surfaceGlassEnabled.value ? 'var(--bew-filter-glass-1)' : 'none',
-    WebkitBackdropFilter: surfaceGlassEnabled.value ? 'var(--bew-filter-glass-1)' : 'none',
-    backgroundColor: surfaceGlassEnabled.value ? 'var(--bew-glass-tint)' : 'var(--bew-glass-tint-solid)',
   }
 })
 
@@ -290,12 +275,7 @@ async function handleConfirm() {
         pos="fixed top-0 left-0" w-full h-full
         pointer-events-auto
       >
-        <div
-          class="dialog__backdrop"
-          bg="black opacity-40 dark:opacity-40"
-          pos="absolute top-0 left-0" w-full h-full z-0
-          @click="handleClose"
-        />
+        <div class="dialog__backdrop" @click="handleClose" />
         <slot name="floating-actions" />
         <div
           ref="panelRef"
@@ -312,13 +292,11 @@ async function handleConfirm() {
           class="dialog__panel bew-shape-smooth-rect"
           :class="{ 'dialog__panel--borderless': !showBorder }"
         >
-          <div class="dialog__edge" :class="{ 'dialog__edge--glass': surfaceGlassEnabled }" aria-hidden="true" />
+          <!-- One solid window ruled by hairlines (user-specified, after the
+               settings window): header, content, footer. No glass. -->
+          <div class="dialog__edge" aria-hidden="true" />
           <div class="dialog__clip">
-            <div
-              class="dialog__surface"
-              :style="dialogSurfaceStyle"
-              aria-hidden="true"
-            />
+            <div class="dialog__surface" aria-hidden="true" />
 
             <!-- loading masking -->
             <Transition name="fade">
@@ -335,16 +313,7 @@ async function handleConfirm() {
               </div>
             </Transition>
 
-            <header
-              v-if="showHeader"
-              class="dialog__header"
-              style="
-              text-shadow: 0 0 10px var(--bew-elevated-solid), 0 0 15px var(--bew-elevated-solid)
-            "
-              pos="sticky top-0 left-0" w-full h-70px px-8 flex
-              items-center justify-between
-              z-1
-            >
+            <header v-if="showHeader" class="dialog__header">
               <div
                 class="dialog__heading"
                 :style="{ textAlign: center ? 'center' : 'left' }"
@@ -352,12 +321,12 @@ async function handleConfirm() {
               >
                 <div :id="titleId">
                   <slot name="title">
-                    <p class="dialog__title bew-subheading">
+                    <p class="dialog__title">
                       {{ title }}
                     </p>
                   </slot>
                 </div>
-                <p class="dialog__description bew-help">
+                <p v-if="desc || $slots.desc" class="dialog__description bew-help">
                   <slot name="desc">
                     {{ desc }}
                   </slot>
@@ -373,26 +342,16 @@ async function handleConfirm() {
             </header>
 
             <main
-              :style="{
-                height: dialogContentHeight,
-                maxHeight: dialogContentMaxHeight,
-                flex: '1 1 auto',
-                minHeight: '0',
-                ...(contentFlush
-                  ? { padding: '0' }
-                  : { paddingBottom: !showFooter ? '1.5rem' : '0.5rem' }),
-              }"
-              :p="contentFlush ? undefined : 'x-8 y-2'"
-              relative
-              :overflow="contentFlush ? 'hidden' : 'x-hidden y-overlay'"
+              class="dialog__body"
+              :class="{ 'dialog__body--flush': contentFlush }"
+              :style="{ height: dialogContentHeight, maxHeight: dialogContentMaxHeight }"
             >
-              <!-- <div h-80px mt--8 /> -->
               <slot />
             </main>
             <footer
               v-if="showFooter"
+              class="dialog__footer"
               :style="{ justifyContent: centerFooter || center ? 'center' : 'flex-end' }"
-              flex="~ gap-2" p="x-8 t-2 b-6"
             >
               <Button type="tertiary" @click="handleClose">
                 <div>
@@ -432,6 +391,8 @@ async function handleConfirm() {
 </template>
 
 <style lang="scss" scoped>
+@use "../styles/modalWindow";
+
 .dialog__loading-status {
   display: grid;
   place-items: center;
@@ -448,6 +409,13 @@ async function handleConfirm() {
 
 .dialog--critical-dialog {
   z-index: var(--bew-z-critical-dialog);
+}
+
+.dialog__backdrop {
+  @include modalWindow.backdrop;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
 
 .dialog__panel {
@@ -474,25 +442,18 @@ async function handleConfirm() {
   isolation: isolate;
 }
 
+// The edge sits above the clipped content, so scrolling never paints over it.
 .dialog__edge {
+  @include modalWindow.edge;
   position: absolute;
   z-index: 3;
   inset: 0;
   box-sizing: border-box;
-  border: var(--bew-hairline) solid var(--bew-edge-color);
-  border-radius: inherit;
-  corner-shape: inherit;
-  box-shadow: var(--bew-shadow-4);
   pointer-events: none;
-}
-
-.dialog__edge--glass {
-  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
 }
 
 .dialog__panel--borderless .dialog__edge {
   border: 0;
-  box-shadow: var(--bew-shadow-4);
 }
 
 .dialog__surface,
@@ -502,6 +463,7 @@ async function handleConfirm() {
 }
 
 .dialog__surface {
+  @include modalWindow.fill;
   position: absolute;
   inset: 0;
   z-index: -1;
@@ -510,29 +472,17 @@ async function handleConfirm() {
 }
 
 .dialog__header {
-  box-sizing: border-box;
-  flex-shrink: 0;
-  border-top-left-radius: inherit;
-  border-top-right-radius: inherit;
-  corner-shape: inherit;
-}
-
-.dialog__clip > footer {
-  flex-shrink: 0;
+  @include modalWindow.header;
+  position: relative;
+  z-index: 1;
 }
 
 .dialog__title {
-  margin: 0;
+  @include modalWindow.title;
 }
 
 .dialog__description {
   margin: var(--bew-space-0-5) 0 0;
-}
-
-.dialog__heading,
-.dialog__close {
-  position: relative;
-  z-index: 1;
 }
 
 .dialog__heading {
@@ -540,7 +490,23 @@ async function handleConfirm() {
   flex: 1;
 }
 
-.dialog__close {
-  margin-left: var(--bew-space-8);
+.dialog__body {
+  @include modalWindow.body;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+// Edge-to-edge content (an iframe, an image) under the header.
+.dialog__body--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.dialog__footer {
+  @include modalWindow.footer;
 }
 </style>

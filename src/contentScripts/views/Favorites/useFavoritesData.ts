@@ -11,7 +11,6 @@ import type api from '~/utils/api'
 import { getFavoriteFolderEditedAttr } from '~/utils/favoriteFolder'
 import { getFavoriteResourceKey, getFavoriteSourceKey } from '~/utils/favoriteResource'
 import {
-  FAVORITE_FOLDER_PAGE_SIZE,
   FAVORITE_SUBSCRIPTIONS_PAGE_SIZE,
   fetchFavoriteSeasonPage,
   mergeFavoriteSeasonPage,
@@ -19,10 +18,10 @@ import {
 
 import { getFavoriteArticleCover } from './favoriteAdapters'
 import { createFavoriteFolderCoverLoader } from './favoriteFolderCovers'
+import { createFavoriteReads } from './favoriteReads'
 import { filterFavoriteItems, matchesFavoriteQuery } from './favoriteSearch'
 import type { FavoriteVideoOrder, OtherFavoriteItem, OtherFavoriteKind, OtherFavoriteSearchScope, SubscriptionFilter } from './otherFavorites'
 import { matchesSubscriptionType, OTHER_FAVORITE_PAGE_SIZE, parseOtherFavoritePage } from './otherFavorites'
-import type { FavoriteWrite } from './useFavoriteWrites'
 
 export type FavoriteView = 'video' | 'season' | 'article'
 
@@ -35,9 +34,14 @@ interface FavoritesDataDependencies {
 
 export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   const { t, haveScrollbar } = dependencies
+  const reader = createFavoriteReads(dependencies.api, dependencies.getAccountId)
+  const reads = reader.reads
   const lifetime = createAccountLifetime(dependencies.getAccountId)
   let viewAccount = dependencies.getAccountId()
   const contentVersion = ref(0)
+  let readGeneration = 0
+  const resourcePages = new Map<number, string[]>()
+  let repair: { from: number, through: number } | undefined
   let contentController = new AbortController()
   let categoryController: AbortController | undefined
   let subscriptionController: AbortController | undefined
@@ -49,7 +53,6 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   let stalledArticleStart: { page: number, length: number } | undefined
   const categoryState = reactive({ loading: false, failed: false, loaded: false })
   const subscriptionState = reactive({ loading: false, failed: false, loaded: false, hasMore: true, page: 0 })
-  const resourceIndex = new Map<string, number>()
   const FAVORITE_ARTICLE_PAGE_SIZE = 20
   const favoriteCategories = reactive<CategoryItem[]>([])
   const collectedFavoriteSeasons = reactive<CollectedFavoriteSeason[]>([])
@@ -68,10 +71,10 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     const owner = lifetime.capture()
     if (!owner.isCurrent() || !favoriteCategories.some(item => item.id === id))
       throw new Error('inactive-favorite-folder')
-    const result: FavoritesResult = await dependencies.api.getFavoriteResources({ media_id: id, pn: 1, ps: 1 }, { signal })
-    if (!owner.isCurrent() || result.code !== 0 || !result.data?.info || !favoriteCategories.some(item => item.id === id))
+    const cover = await reader.cover(id, signal)
+    if (!owner.isCurrent() || !favoriteCategories.some(item => item.id === id))
       throw new Error('unavailable-favorite-cover')
-    return result.data.info.cover || ''
+    return cover
   })
   const favoriteView = ref<FavoriteView>('video')
   const selectedCategory = ref<CategoryItem>()
@@ -132,6 +135,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   }, { flush: 'post' })
 
   async function initData() {
+    reader.invalidate()
     if (!lifetime.capture().isCurrent()) {
       isFullPageLoading.value = false
       return
@@ -172,7 +176,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     categoryState.failed = false
     const current = () => owner.isCurrent() && version === categoriesVersion
     try {
-      const res: FavoritesCategoryResult = await dependencies.api.getFavoriteCategories({ up_mid: String(owner.accountId) }, { signal: controller.signal })
+      const res: FavoritesCategoryResult = await reads.getFavoriteCategories({ up_mid: String(owner.accountId) }, { signal: controller.signal })
       if (!current())
         return
       if (res.code !== 0 || !res.data)
@@ -182,6 +186,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       if (selectedId)
         selectedCategory.value = favoriteCategories.find(folder => folder.id === selectedId)
       categoryState.loaded = true
+      categoriesDirty = false
       if (favoriteView.value === 'video' && !selectedCategory.value) {
         selectedCategory.value = favoriteCategories[0]
         void loadSelectedContent()
@@ -255,6 +260,9 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   }
 
   function resetContentState() {
+    readGeneration++
+    resourcePages.clear()
+    repair = undefined
     contentController.abort()
     contentController = new AbortController()
     stalledMediaStart = undefined
@@ -267,7 +275,6 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     failedContentPage.value = null
     stalledContentPage.value = null
     favoriteResources.length = 0
-    resourceIndex.clear()
     favoriteArticles.length = 0
     articleIds.clear()
     articleFavoriteOffset.value = ''
@@ -278,7 +285,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     noMoreContent.value = false
     isLoading.value = false
     isFullPageLoading.value = true
-    return contentVersion.value
+    return readGeneration
   }
 
   function loadSelectedContent() {
@@ -306,9 +313,11 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       return
     if ((favoriteView.value === 'video' && (!selectedCategory.value || (searchScope.value === 'all' && !keyword.value.trim()))) || (favoriteView.value === 'season' && !selectedSeason.value))
       return loadSelectedContent()
+    reader.invalidate(favoriteView.value === 'video' && searchScope.value === 'current' ? [selectedCategory.value!.id] : undefined)
     contentController.abort()
     contentController = new AbortController()
-    const version = ++contentVersion.value
+    const version = ++readGeneration
+    repair = undefined
     stalledMediaStart = undefined
     stalledArticleStart = undefined
     stalledOtherStart = undefined
@@ -319,16 +328,16 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     if (isLoading.value || noMoreContent.value || failedContentPage.value !== null || stalledContentPage.value !== null)
       return false
 
-    return loadActiveContent(currentPageNum.value + 1, contentVersion.value)
+    return loadActiveContent(currentPageNum.value + 1, readGeneration)
   }
 
   function retryFavoriteContent() {
     if (isLoading.value)
       return
     if (failedContentPage.value !== null)
-      return loadActiveContent(failedContentPage.value, contentVersion.value)
+      return loadActiveContent(failedContentPage.value, readGeneration)
     else if (stalledContentPage.value !== null)
-      return loadActiveContent(stalledContentPage.value, contentVersion.value)
+      return loadActiveContent(stalledContentPage.value, readGeneration)
     else
       return loadSelectedContent()
   }
@@ -345,7 +354,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
 
     try {
       if (categoriesDirty && favoriteView.value === 'video') {
-        const response = await dependencies.api.getFavoriteCategories({ up_mid: String(viewAccount) }, { signal: contentController.signal })
+        const response = await reads.getFavoriteCategories({ up_mid: String(viewAccount) }, { signal: contentController.signal })
         if (!isRequestCurrent(requestVersion))
           return false
         if (response.code !== 0)
@@ -370,7 +379,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
         const mediaId = searchScope.value === 'all'
           ? favoriteCategories[0]?.id ?? selectedCategory.value!.id
           : selectedCategory.value!.id
-        await getFavoriteResources(mediaId, pn, keyword.value, searchScope.value === 'all' ? 1 : 0, requestVersion)
+        pn = await getFavoriteResources(mediaId, pn, keyword.value, searchScope.value === 'all' ? 1 : 0, requestVersion)
       }
       if (!isRequestCurrent(requestVersion))
         return false
@@ -410,9 +419,46 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     pn: number,
     keyword = '' as string,
     type = 0 as number,
-    requestVersion = contentVersion.value,
+    requestVersion = readGeneration,
   ) {
-    const res: FavoritesResult = await dependencies.api.getFavoriteResources({
+    if (repair) {
+      const boundary = repair
+      const prefixKeys = new Set([...resourcePages].filter(([page]) => page < boundary.from).flatMap(([, keys]) => keys))
+      let draft = favoriteResources.filter(item => prefixKeys.has(getFavoriteResourceKey(item)))
+      const pages = new Map<number, string[]>()
+      let lastPage = boundary.from - 1
+      let complete = false
+      for (let page = boundary.from; page <= boundary.through; page++) {
+        const result: FavoritesResult = await reads.getFavoriteResources({ media_id, pn: page, keyword, type, order: videoOrder.value }, { signal: contentController.signal })
+        if (!isRequestCurrent(requestVersion))
+          return pn
+        if (result.code !== 0 || !result.data || typeof result.data.has_more !== 'boolean' || (result.data.medias !== null && !Array.isArray(result.data.medias)))
+          throw new Error(result.message || t('common.load_failed'))
+        const incoming = result.data.medias ?? []
+        const merged = mergeFavoriteSeasonPage({ sourceType: 11, pn: page, pageMedias: incoming, previousMedias: draft, hasMore: result.data.has_more })
+        if (merged.stalled) {
+          reader.forgetResources({ media_id, pn: page, keyword, type, order: videoOrder.value })
+          stalledContentPage.value = boundary.from
+          return pn
+        }
+        draft = merged.medias
+        pages.set(page, incoming.map(getFavoriteResourceKey))
+        lastPage = page
+        complete = merged.complete
+        if (complete)
+          break
+      }
+      favoriteResources.splice(0, favoriteResources.length, ...draft)
+      for (const page of resourcePages.keys()) {
+        if (page >= boundary.from)
+          resourcePages.delete(page)
+      }
+      pages.forEach((keys, page) => resourcePages.set(page, keys))
+      noMoreContent.value = complete
+      repair = undefined
+      return lastPage
+    }
+    const res: FavoritesResult = await reads.getFavoriteResources({
       media_id,
       pn,
       keyword,
@@ -421,9 +467,9 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     }, { signal: contentController.signal })
 
     if (!isRequestCurrent(requestVersion))
-      return
+      return pn
 
-    if (res.code !== 0 || !res.data)
+    if (res.code !== 0 || !res.data || typeof res.data.has_more !== 'boolean' || (res.data.medias !== null && !Array.isArray(res.data.medias)))
       throw new Error(res.message || t('common.load_failed'))
 
     const pageItems = Array.isArray(res.data.medias)
@@ -434,6 +480,15 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       folderCoverLoader.seed(media_id, res.data.info.cover || '')
     }
     applyMediaPage({ sourceType: 11, pn, pageMedias: pageItems, previousMedias: favoriteResources, mediaCount: keyword.trim() || type === 1 ? undefined : res.data.info?.media_count, hasMore: res.data.has_more }, requestVersion)
+    if (stalledContentPage.value === null) {
+      if (pn === 1)
+        resourcePages.clear()
+      resourcePages.set(pn, pageItems.map(getFavoriteResourceKey))
+    }
+    else {
+      reader.forgetResources({ media_id, pn, keyword, type, order: videoOrder.value })
+    }
+    return pn
   }
 
   function applyMediaPage(input: Parameters<typeof mergeFavoriteSeasonPage>[0], version: number) {
@@ -448,15 +503,8 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     stalledMediaStart = merged.stalled ? { page: input.pn, length: pageStartLength } : undefined
     for (const { index, item } of merged.changed)
       favoriteResources[index] = item
-    if (input.pn === 1 || merged.replace) {
+    if (input.pn === 1 || merged.replace)
       favoriteResources.length = merged.medias.length
-      resourceIndex.clear()
-      favoriteResources.forEach((item, index) => resourceIndex.set(getFavoriteResourceKey(item), index))
-    }
-    else {
-      for (const { index, item } of merged.changed)
-        resourceIndex.set(getFavoriteResourceKey(item), index)
-    }
     loadedSeasonComplete.value = merged.complete
     noMoreContent.value = merged.complete
     stalledContentPage.value = merged.stalled ? input.pn : null
@@ -465,7 +513,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   async function getFavoriteSeasonResources(
     source: FavoriteSource,
     pn: number,
-    requestVersion = contentVersion.value,
+    requestVersion = readGeneration,
   ) {
     const page = await fetchFavoriteSeasonPage(source, pn, dependencies.api, undefined, { signal: contentController.signal })
     if (!isRequestCurrent(requestVersion) || !selectedSeason.value || getFavoriteSourceKey(source) !== getFavoriteSourceKey(selectedSeason.value))
@@ -489,7 +537,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
 
   async function getFavoriteArticles(
     pn: number,
-    requestVersion = contentVersion.value,
+    requestVersion = readGeneration,
   ) {
     const res: FavoriteArticlesResult = await dependencies.api.getFavoriteArticles({
       page: pn,
@@ -585,9 +633,10 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   }
 
   function isRequestCurrent(version: number) {
-    return lifetime.capture().isCurrent() && viewAccount === dependencies.getAccountId() && version === contentVersion.value
+    return lifetime.capture().isCurrent() && viewAccount === dependencies.getAccountId() && version === readGeneration
   }
   function resetAccount() {
+    reader.invalidate()
     categoryController?.abort()
     subscriptionController?.abort()
     lifetime.invalidate()
@@ -614,34 +663,51 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     searchScope.value = 'current'
     categoriesDirty = false
   }
-  function applyResourceWrite(command: Extract<FavoriteWrite, { sourceId: number }>, version: number) {
+  function reconnectResourcePages(firstAffected: number) {
+    readGeneration++
+    contentController.abort()
+    contentController = new AbortController()
+    isLoading.value = isFullPageLoading.value = false
+    failedContentPage.value = stalledContentPage.value = null
+    repair = { from: Math.min(repair?.from ?? firstAffected, firstAffected), through: Math.max(repair?.through ?? 1, currentPageNum.value, 1) }
+    currentPageNum.value = repair.from - 1
+    noMoreContent.value = false
+  }
+  function applyResourceWrite(command: { kind: 'delete' | 'move' | 'copy' | 'restore' | 'clean', sourceId: number, targetId?: number, resourceKeys: readonly string[] }) {
+    const affected = [...command.kind !== 'copy' ? [command.sourceId] : [], ...command.targetId ? [command.targetId] : []]
+    reader.invalidate(affected)
+    folderCoverLoader.invalidate(affected)
     stalledMediaStart = undefined
     categoriesDirty = true
     categoriesVersion++
     categoryState.loading = false
-    if (version !== contentVersion.value)
-      return
     const keys = new Set(command.resourceKeys)
-    if (command.kind !== 'copy') {
+    const sourceVisible = favoriteView.value === 'video' && (searchScope.value === 'all' || selectedCategory.value?.id === command.sourceId)
+    const targetVisible = favoriteView.value === 'video' && command.targetId !== undefined && (searchScope.value === 'all' || selectedCategory.value?.id === command.targetId)
+    const removes = command.kind === 'delete' || command.kind === 'move'
+    if ((sourceVisible && command.kind !== 'copy') || targetVisible) {
+      const firstAffected = removes && !targetVisible && searchScope.value === 'current'
+        ? [...resourcePages].find(([, pageKeys]) => pageKeys.some(key => keys.has(key)))?.[0] ?? 1
+        : 1
+      reconnectResourcePages(firstAffected)
+    }
+    if (removes && sourceVisible && searchScope.value === 'current') {
       for (let index = favoriteResources.length - 1; index >= 0; index--) {
         if (keys.has(getFavoriteResourceKey(favoriteResources[index])))
           favoriteResources.splice(index, 1)
       }
-      resourceIndex.clear()
-      favoriteResources.forEach((item, index) => resourceIndex.set(getFavoriteResourceKey(item), index))
-      const source = favoriteCategories.find(item => item.id === command.sourceId)
-      if (source)
-        source.media_count = Math.max(0, source.media_count - keys.size)
-      // Offset pagination shifts after deletion/move. Re-read the last partial
-      // page so the next request cannot skip videos pulled into the gap.
-      currentPageNum.value = Math.floor(favoriteResources.length / FAVORITE_FOLDER_PAGE_SIZE)
-      noMoreContent.value = false
     }
+    const source = favoriteCategories.find(item => item.id === command.sourceId)
+    if (source && removes)
+      source.media_count = Math.max(0, source.media_count - keys.size)
     if (command.targetId) {
       const target = favoriteCategories.find(item => item.id === command.targetId)
       if (target)
         target.media_count += keys.size
     }
+    if (source && command.kind === 'restore')
+      source.media_count += keys.size
+    return repair !== undefined
   }
   function applyFolderEdit(folderId: number, title: string, isPublic: boolean) {
     const folder = favoriteCategories.find(item => item.id === folderId)
@@ -651,6 +717,8 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     }
   }
   function removeFolders(ids: readonly number[]) {
+    reader.invalidate(ids)
+    folderCoverLoader.invalidate(ids)
     for (let index = favoriteCategories.length - 1; index >= 0; index--) {
       if (ids.includes(favoriteCategories[index].id))
         favoriteCategories.splice(index, 1)
@@ -662,6 +730,9 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     }
   }
   function removeSeasons(sources: readonly FavoriteSource[]) {
+    const folderIds = sources.filter(source => source.type === 11).map(source => source.id)
+    if (folderIds.length)
+      reader.invalidate(folderIds)
     stalledSubscriptionStart = undefined
     const keys = new Set(sources.map(getFavoriteSourceKey))
     subscriptionsVersion++
@@ -679,6 +750,21 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     }
   }
   return {
+    reads,
+    invalidateReads: reader.invalidate,
+    invalidateResourcePage: reader.forgetResources,
+    invalidateResourceSources(sourceIds?: readonly number[]) {
+      reader.invalidate(sourceIds)
+      folderCoverLoader.invalidate(sourceIds ?? favoriteCategories.map(folder => folder.id))
+      categoriesDirty = true
+      categoriesVersion++
+      categoryState.loading = false
+      const sourceId = selectedCategory.value?.id
+      if (favoriteView.value !== 'video' || !sourceId || (searchScope.value === 'current' && sourceIds && !sourceIds.includes(sourceId)))
+        return false
+      reconnectResourcePages(1)
+      return true
+    },
     favoriteCategories,
     otherFavoriteType,
     otherSearchScope,
@@ -738,6 +824,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     removeFolders,
     removeSeasons,
     dispose() {
+      reader.dispose()
       if (typeof document !== 'undefined')
         document.removeEventListener('visibilitychange', updateVisibility)
       contentController.abort()
@@ -746,6 +833,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       stopSearch()
       folderCoverLoader.dispose()
       contentVersion.value++
+      readGeneration++
       lifetime.dispose()
     },
   }

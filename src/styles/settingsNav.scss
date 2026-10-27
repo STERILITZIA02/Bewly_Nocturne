@@ -1,0 +1,94 @@
+@use "truncateFade";
+
+// The settings window's navigation columns (user-specified, after Claude
+// Code): flat columns on the window's solid surface, divided from what follows
+// by a hairline; a row fills only when hovered or current. The primary column
+// (Settings.vue) and the secondary one (SettingsCategoryLayout) share these.
+
+// A row's content (its icon) starts this far in from the column edge: the
+// column's own inset plus the row's. The window's header title lines up with it.
+$column-inset: var(--bew-space-2);
+$row-inset: var(--bew-space-3);
+
+@mixin column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-1);
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--bew-space-3) $column-inset;
+  border-inline-end: var(--bew-hairline) solid var(--bew-separator-color);
+}
+
+// The part of a column that scrolls: the whole column (the pages), or only
+// the rows under a pinned search field (the categories).
+@mixin scroller {
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+// A row: icon and label. `$current` is the selector that marks the open one.
+@mixin row($current) {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-2);
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--bew-space-8);
+  padding: var(--bew-space-1) $row-inset;
+  color: var(--bew-text-1);
+  text-align: left;
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-line-height-control);
+  background: transparent;
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
+  cursor: pointer;
+  transition:
+    background-color var(--bew-duration-fast) var(--bew-ease-standard),
+    color var(--bew-duration-fast) var(--bew-ease-standard);
+
+  // The icon is quieter than the label until the row is open.
+  > .settings-nav-icon {
+    flex: 0 0 auto;
+    width: var(--bew-icon-size-sm);
+    height: var(--bew-icon-size-sm);
+    color: var(--bew-text-2);
+    transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+  }
+  > .settings-nav-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    @include truncateFade.line;
+  }
+
+  &:is(:hover, :focus-visible):not(#{$current}) {
+    background: var(--bew-hover-bg);
+  }
+  &:focus-visible {
+    outline: none;
+  }
+  &#{$current} {
+    background: var(--bew-selected-bg);
+    > .settings-nav-icon {
+      color: var(--bew-text-1);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    > .settings-nav-icon {
+      transition: none;
+    }
+  }
+}
+
+// A group title over its rows, lined up with the row labels.
+@mixin group-label {
+  padding: 0 $row-inset var(--bew-space-1);
+}

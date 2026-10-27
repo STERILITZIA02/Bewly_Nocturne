@@ -16,7 +16,7 @@ import { postMessageToIframe } from '~/utils/iframeMessage'
 import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { cleanBilibiliShareText, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
 import { getTextAutospaceCss, SUPPORTS_TEXT_AUTOSPACE } from '~/utils/textAutospace'
-import { applyThemeColorTokens, getThemeColorTokens, readThemeContrastSurfaces, syncNativeNeutralRgb } from '~/utils/themeColor'
+import { syncThemeColors } from '~/utils/themeColor'
 import { invalidateViewportGeometry } from '~/utils/viewportGeometry'
 
 function isFestivalPage(): boolean {
@@ -27,7 +27,7 @@ export function setupNecessarySettingsWatchers(scrollViewportRef: Ref<HTMLElemen
   const settingsStore = useSettingsStore()
   const currentLocationHref = useCurrentLocationHref()
   const iframePageActive = useIframePageActive()
-  const { isDark, isOledDark, darkModeBaseColor } = useDark()
+  const { isDark, isOledDark, darkModeBaseColor, accentColor, appearanceStyle } = useDark()
   let effectiveTopBarSource: EffectiveTopBarSource = 'bewly'
 
   let stopNativeKeyboard: (() => void) | undefined
@@ -67,6 +67,10 @@ export function setupNecessarySettingsWatchers(scrollViewportRef: Ref<HTMLElemen
       stopNativeKeyboard = setupNativePageKeyboard(root, page)
   }, { immediate: true })
   onScopeDispose(() => stopNativeKeyboard?.())
+
+  watch(() => settings.value.interfaceFontSize, () => {
+    invalidateViewportGeometry(scrollViewportRef.value)
+  }, { flush: 'post' })
 
   watch(() => settings.value.textAutospaceMode, async (mode, _, onCleanup) => {
     if (mode === 'default' || !SUPPORTS_TEXT_AUTOSPACE)
@@ -330,15 +334,9 @@ export function setupNecessarySettingsWatchers(scrollViewportRef: Ref<HTMLElemen
   }, { immediate: true })
 
   watch(
-    [() => settings.value.themeColor, isDark, isOledDark, darkModeBaseColor, () => settings.value.adaptToOtherPageStyles],
+    [accentColor, () => appearanceStyle.value['--bew-custom-background'], () => appearanceStyle.value['--bew-custom-foreground'], isDark, isOledDark, darkModeBaseColor, () => settings.value.adaptToOtherPageStyles],
     () => {
-      syncNativeNeutralRgb(document.documentElement)
-      const bewlyElement = document.querySelector('#bewly') as HTMLElement | null
-      const surfaces = readThemeContrastSurfaces(bewlyElement ?? document.documentElement)
-      const themeTokens = getThemeColorTokens(settings.value.themeColor, isDark.value, surfaces)
-      const targets = [document.documentElement, bewlyElement].filter((element): element is HTMLElement => Boolean(element))
-
-      targets.forEach(element => applyThemeColorTokens(element, themeTokens))
+      syncThemeColors(document.documentElement, document.getElementById('bewly'), accentColor.value, isDark.value)
     },
     { immediate: true, flush: 'post' },
   )

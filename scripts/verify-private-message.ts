@@ -2891,9 +2891,12 @@ verify('message settings live in the global Bewly settings page and the old sect
   assert.ok(workspaceSource.includes('settings.privateMessageDensity'))
   assert.ok(conversationListSource.includes('showOfficialAssistants'))
   assert.ok(conversationListSource.includes('conversation-list--compact'))
-  assert.ok(settingsCategorySource.includes('color: var(--bew-text-1)'))
-  assert.ok(settingsCategorySource.includes('background: var(--bew-selected-bg)'))
-  assert.equal(settingsCategorySource.includes('color: var(--bew-theme-foreground)'), false)
+  // Both settings navigation columns share one neutral row style.
+  const settingsNavSource = await readFile(new URL('../src/styles/settingsNav.scss', import.meta.url), 'utf8')
+  assert.ok(settingsCategorySource.includes('@include settingsNav.row(".active")'))
+  assert.ok(settingsNavSource.includes('color: var(--bew-text-1)'))
+  assert.ok(settingsNavSource.includes('background: var(--bew-selected-bg)'))
+  assert.equal(settingsNavSource.includes('--bew-theme-foreground'), false)
   assert.ok(notificationsSource.includes('lastPrivateConversationRoute'))
   assert.ok(notificationsSource.includes('privateMessageMobileOpenMode'))
   for (const localeSource of localeSources) {
@@ -2994,19 +2997,16 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(appProviderSource.includes(`page: 'messages'`))
   assert.ok(appSource.includes('settingsNavigationRequest'))
   assert.ok(settingsSource.includes('navigationRequest'))
-  const primarySelectedStyle = settingsSource.slice(
-    settingsSource.indexOf('.menu-item-activated'),
-    settingsSource.indexOf('.settings-primary-navigation__list'),
-  )
-  assert.ok(primarySelectedStyle.includes('background: var(--bew-selected-bg)'))
-  assert.ok(primarySelectedStyle.includes('color: var(--bew-text-1)'))
-  assert.equal(primarySelectedStyle.includes('--bew-theme-color-auto'), false)
-  assert.equal(primarySelectedStyle.includes('--bew-text-auto'), false)
+  // The primary column's current category uses the shared neutral row.
+  const settingsNavStyle = await readFile(new URL('../src/styles/settingsNav.scss', import.meta.url), 'utf8')
+  assert.ok(settingsSource.includes('@include settingsNav.row(".menu-item-activated")'))
+  assert.ok(settingsNavStyle.includes('background: var(--bew-selected-bg)'))
+  assert.equal(settingsNavStyle.includes('--bew-theme-color-auto'), false)
+  assert.equal(settingsNavStyle.includes('--bew-text-auto'), false)
   assert.equal(messagesPageSource.includes('SettingsSectionHeading'), false)
   assert.equal(messagesPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'), false)
   assert.ok(messagesPageSource.includes('useMessageServerSettings'))
-  assert.ok(settingsCategorySource.includes('color: var(--bew-text-1)'))
-  assert.ok(settingsCategorySource.includes('background: var(--bew-selected-bg)'))
+  assert.ok(settingsCategorySource.includes('@include settingsNav.row(".active")'))
 
   const workspaceLayoutStyle = workspaceSource.slice(
     workspaceSource.indexOf('.whisper-workspace {'),

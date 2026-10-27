@@ -1,4 +1,5 @@
 @use "./breakpoints";
+@use "./appearancePalette";
 
 .library-workspace__rail {
   --bew-sidebar-text: var(--bew-text-1);
@@ -17,29 +18,31 @@
   // 15/20 and 17/22 headings, 22/26 display, 26/32 large display.
   // The user's OS/browser preference scales every role together.
   --bew-font-scale: 1;
-  --bew-font-size-caption: calc(11px * var(--bew-font-scale));
-  --bew-font-size-callout: calc(12px * var(--bew-font-scale));
-  --bew-font-size-control: calc(13px * var(--bew-font-scale));
+  --bew-interface-scale: 1;
+  --bew-effective-font-scale: calc(var(--bew-font-scale) * var(--bew-interface-scale));
+  --bew-font-size-caption: calc(11px * var(--bew-effective-font-scale));
+  --bew-font-size-callout: calc(12px * var(--bew-effective-font-scale));
+  --bew-font-size-control: calc(13px * var(--bew-effective-font-scale));
   --bew-font-size-ui: var(--bew-font-size-control);
-  --bew-font-size-body: calc(13px * var(--bew-font-scale));
+  --bew-font-size-body: calc(13px * var(--bew-effective-font-scale));
   --bew-font-size-title: var(--bew-font-size-body);
-  --bew-font-size-subheading: calc(15px * var(--bew-font-scale));
-  --bew-font-size-heading: calc(17px * var(--bew-font-scale));
+  --bew-font-size-subheading: calc(15px * var(--bew-effective-font-scale));
+  --bew-font-size-heading: calc(17px * var(--bew-effective-font-scale));
   // Rare display text and large numerals are not part of the interface text scale.
-  --bew-font-size-display: calc(22px * var(--bew-font-scale));
+  --bew-font-size-display: calc(22px * var(--bew-effective-font-scale));
   --bew-font-size-data: var(--bew-font-size-display);
-  --bew-font-size-data-emphasis: calc(26px * var(--bew-font-scale));
-  --bew-line-height-caption: calc(14px * var(--bew-font-scale));
-  --bew-line-height-callout: calc(15px * var(--bew-font-scale));
-  --bew-line-height-control: calc(16px * var(--bew-font-scale));
+  --bew-font-size-data-emphasis: calc(26px * var(--bew-effective-font-scale));
+  --bew-line-height-caption: calc(14px * var(--bew-effective-font-scale));
+  --bew-line-height-callout: calc(15px * var(--bew-effective-font-scale));
+  --bew-line-height-control: calc(16px * var(--bew-effective-font-scale));
   --bew-line-height-ui: var(--bew-line-height-control);
   --bew-line-height-help: var(--bew-line-height-callout);
-  --bew-line-height-body: calc(16px * var(--bew-font-scale));
+  --bew-line-height-body: calc(16px * var(--bew-effective-font-scale));
   --bew-line-height-title: var(--bew-line-height-body);
-  --bew-line-height-subheading: calc(20px * var(--bew-font-scale));
-  --bew-line-height-heading: calc(22px * var(--bew-font-scale));
-  --bew-line-height-display: calc(26px * var(--bew-font-scale));
-  --bew-line-height-data: calc(32px * var(--bew-font-scale));
+  --bew-line-height-subheading: calc(20px * var(--bew-effective-font-scale));
+  --bew-line-height-heading: calc(22px * var(--bew-effective-font-scale));
+  --bew-line-height-display: calc(26px * var(--bew-effective-font-scale));
+  --bew-line-height-data: calc(32px * var(--bew-effective-font-scale));
   --bew-font-weight-regular: 400;
   // Section headings are emphasized; content and control labels stay regular.
   --bew-label-weight: var(--bew-font-weight-regular);
@@ -125,6 +128,7 @@
   // 320x168 minimum: 14/15 of the former 16:9 height, with integer dimensions.
   // Keep aligned with the video cover constants in constants/layout.ts.
   --bew-video-card-min-width: 320px;
+  --bew-video-card-horizontal-cover-max-width: 400px;
   --bew-video-cover-aspect-ratio: 40 / 21;
   --bew-card-inset: var(--bew-space-4);
   --bew-card-stack-gap: var(--bew-space-3);
@@ -138,6 +142,9 @@
   --bew-card-sample-min-width: calc(var(--bew-space-10) * 4);
   --bew-cover-overlay-inset: var(--bew-space-2);
   --bew-cover-scrim: rgb(0 0 0 / 56%);
+  // Behind a modal window (settings, Dialog, ConfirmDialog): the page dims
+  // evenly so the window reads as the one thing to act on (user-specified).
+  --bew-modal-backdrop: rgb(0 0 0 / 36%);
   --bew-layout-sidebar-width: 200px;
   --bew-library-filter-padding: var(--bew-space-2);
   --bew-moments-hot-search-width: clamp(240px, 18vw, 300px);
@@ -163,7 +170,7 @@
   --bew-messages-sidebar-width: var(--bew-sidebar-base-width);
   --bew-message-composer-min-width: 256px;
   --bew-message-input-height: calc(var(--bew-control-height) + var(--bew-space-2));
-  --bew-message-icon-hover: #000;
+  --bew-message-icon-hover: var(--bew-custom-foreground, #000);
   --bew-message-pinned-background: var(--bew-neutral-bg);
   --bew-message-pinned-hover-background: var(--bew-neutral-bg);
   --bew-message-composer-rest-height: calc(var(--bew-control-height) + var(--bew-space-2) * 3 + 2px);
@@ -307,7 +314,7 @@
   --bew-dock-control-icon-size: 18px;
   --bew-dock-control-icon-size-lg: 22px;
   --bew-dock-navigation-active-bg: var(--bew-fill-3);
-  --bew-dock-navigation-active-color: hsl(0 0% 0%);
+  --bew-dock-navigation-active-color: var(--bew-custom-foreground, #000);
   // #endregion
 
   // Search and logo stay one step larger (still full capsule/circle)
@@ -504,8 +511,8 @@
 
   // The only theme-dependent neutral pigments. All reading surfaces, text,
   // fills and borders below derive from this pair (sRGB amounts are predictable).
-  --bew-neutral-bg: #fff;
-  --bew-neutral-fg: #171717;
+  @include appearancePalette.pigments;
+  --bew-oled-foreground: #ebebeb;
   --bew-neutral-canvas: color-mix(in srgb, var(--bew-neutral-fg) 4%, var(--bew-neutral-bg));
   --bew-neutral-surface: var(--bew-neutral-bg);
   --bew-neutral-raised: var(--bew-neutral-bg);
@@ -524,8 +531,9 @@
   --bew-text-1: var(--bew-neutral-fg);
   // Native label hierarchy: primary content, secondary details, supporting
   // information, then disabled/placeholder. Reading levels retain contrast.
-  --bew-text-2: color-mix(in srgb, var(--bew-neutral-fg) 70%, transparent);
-  --bew-text-3: color-mix(in srgb, var(--bew-neutral-fg) 64%, transparent);
+  --bew-contrast-boost: 0%;
+  --bew-text-2: color-mix(in srgb, var(--bew-neutral-fg) calc(70% + var(--bew-contrast-boost)), transparent);
+  --bew-text-3: color-mix(in srgb, var(--bew-neutral-fg) calc(64% + var(--bew-contrast-boost)), transparent);
   // Disabled/placeholder only; never use this level for reading content.
   --bew-text-4: color-mix(in srgb, var(--bew-neutral-fg) 38%, transparent);
 
@@ -588,9 +596,9 @@
   // device pixel); fields keep 1px. Keep 11.5–20.5% so lines stay quieter than
   // text; dark mode, where shadows barely read, gives edges more weight.
   --bew-hairline: 1px;
-  --bew-separator-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  --bew-separator-color: color-mix(in srgb, var(--bew-neutral-fg) calc(12% + var(--bew-contrast-boost)), transparent);
   --un-default-border-color: var(--bew-separator-color);
-  --bew-edge-color: color-mix(in srgb, var(--bew-neutral-fg) 14%, transparent);
+  --bew-edge-color: color-mix(in srgb, var(--bew-neutral-fg) calc(14% + var(--bew-contrast-boost)), transparent);
   // Album-art hairline (Apple Music): drawn over covers, so it is tuned for
   // arbitrary images rather than the neutral canvas.
   --bew-media-edge-color: rgb(0 0 0 / 14%);
@@ -603,8 +611,12 @@
   --bew-glass-shadow: var(--bew-shadow-2);
   --bew-input-bg: var(--bew-neutral-inset);
   --bew-input-bg-hover: color-mix(in srgb, var(--bew-neutral-fg) 3%, var(--bew-neutral-inset));
-  --bew-field-edge-color: color-mix(in srgb, var(--bew-neutral-fg) 18%, transparent);
-  --bew-field-edge-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 20.5%, transparent);
+  --bew-field-edge-color: color-mix(in srgb, var(--bew-neutral-fg) calc(18% + var(--bew-contrast-boost)), transparent);
+  --bew-field-edge-color-hover: color-mix(
+    in srgb,
+    var(--bew-neutral-fg) calc(20.5% + var(--bew-contrast-boost)),
+    transparent
+  );
   --bew-switch-bg: var(--bew-fill-3);
   --bew-switch-thumb-active: var(--bew-on-theme-color);
   --bew-ip-tag-bg: var(--bew-fill-1);
@@ -644,6 +656,8 @@
   --bew-success-foreground: color-mix(in srgb, var(--bew-success-color) 80%, white);
   --bew-warning-foreground: var(--bew-warning-color);
   --bew-error-foreground: color-mix(in srgb, var(--bew-error-color) 84%, white);
+  // A dark page needs more dimming to set the raised window apart.
+  --bew-modal-backdrop: rgb(0 0 0 / 56%);
 
   // 深色模式基准颜色（通过 JS 动态设置）
   --bew-dark-base-color: #2b2b2b;
@@ -654,21 +668,25 @@
   // The rail is lighter than solid content here, so a solid selected plate would
   // sink below it; lift the rail instead.
   --bew-sidebar-selected-bg: var(--bew-fill-3);
-  --bew-wheel-text-active: #fff;
-  --bew-message-icon-hover: #fff;
+  --bew-wheel-text-active: var(--bew-custom-foreground, #fff);
+  --bew-message-icon-hover: var(--bew-custom-foreground, #fff);
   --bew-message-pinned-background: color-mix(in srgb, var(--bew-neutral-bg) 24%, transparent);
   --bew-message-pinned-hover-background: color-mix(in srgb, var(--bew-neutral-bg) 36%, transparent);
-  --bew-wheel-text: rgb(255 255 255 / 67%);
-  --bew-dock-navigation-active-color: hsl(0 0% 100%);
+  --bew-wheel-text: rgb(from var(--bew-custom-foreground, #fff) r g b / 67%);
+  --bew-dock-navigation-active-color: var(--bew-custom-foreground, #fff);
 
   // Dark and OLED: shadows barely read, so surface edges carry the layering.
-  --bew-separator-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
-  --bew-edge-color: color-mix(in srgb, var(--bew-neutral-fg) 16%, transparent);
+  --bew-separator-color: color-mix(in srgb, var(--bew-neutral-fg) calc(12% + var(--bew-contrast-boost)), transparent);
+  --bew-edge-color: color-mix(in srgb, var(--bew-neutral-fg) calc(16% + var(--bew-contrast-boost)), transparent);
   // A light rim on artwork, brighter than surface edges (dark and OLED).
   --bew-media-edge-color: rgb(255 255 255 / 22%);
   --bew-glass-edge-color: rgb(255 255 255 / 26%);
-  --bew-field-edge-color: color-mix(in srgb, var(--bew-neutral-fg) 18%, transparent);
-  --bew-field-edge-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 20.5%, transparent);
+  --bew-field-edge-color: color-mix(in srgb, var(--bew-neutral-fg) calc(18% + var(--bew-contrast-boost)), transparent);
+  --bew-field-edge-color-hover: color-mix(
+    in srgb,
+    var(--bew-neutral-fg) calc(20.5% + var(--bew-contrast-boost)),
+    transparent
+  );
 
   // #region shadow
   --bew-shadow-1: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);
@@ -685,9 +703,8 @@
 
   --bew-theme-color-auto: var(--bew-text-1);
 
-  --bew-neutral-bg: #141414;
-  --bew-neutral-fg: #ebebeb;
-  --bew-text-3: color-mix(in srgb, var(--bew-neutral-fg) 60%, transparent);
+  @include appearancePalette.pigments($dark: true);
+  --bew-text-3: color-mix(in srgb, var(--bew-neutral-fg) calc(60% + var(--bew-contrast-boost)), transparent);
   --bew-neutral-canvas: var(--bew-neutral-bg);
   // Calibrated by role: quiet reading surfaces, distinct overlays, recessed fields.
   // These amounts reproduce the approved visual balance, not equal numeric steps.
@@ -706,21 +723,11 @@
   --bew-surface-inset-bg: color-mix(in srgb, var(--bew-neutral-bg) 20%, transparent);
 }
 
-@supports (color: oklch(from white l c h)) {
-  :host(.dark),
-  :root.dark {
-    // resolveDarkModeBaseColor supplies an achromatic source unless tint is on.
-    // Tint changes only the source pair; every descendant uses the same recipes.
-    --bew-neutral-bg: oklch(from var(--bew-dark-base-color) 0.19 min(c, 0.03) h);
-    --bew-neutral-fg: oklch(from var(--bew-dark-base-color) 0.94 min(c, 0.006) h);
-  }
-}
-
 :host(.dark.oled-dark),
 :root.dark.oled-dark {
   --bew-sidebar-action-hover: color-mix(in srgb, var(--bew-neutral-fg) 10%, transparent);
   --bew-neutral-bg: #000;
-  --bew-neutral-fg: #ebebeb;
+  --bew-neutral-fg: var(--bew-custom-foreground, var(--bew-oled-foreground));
   // Pure-black canvases need their own low-light balance, not the dark-mode ramp.
   --bew-neutral-surface: color-mix(in srgb, var(--bew-neutral-fg) 4%, var(--bew-neutral-bg));
   --bew-neutral-raised: color-mix(in srgb, var(--bew-neutral-fg) 9%, var(--bew-neutral-bg));

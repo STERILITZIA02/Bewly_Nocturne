@@ -1,5 +1,6 @@
 import { getMotionDuration } from '~/utils/motionTiming'
 import { buildPrivateConversationUrl } from '~/utils/privateConversationRoute'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 
 interface ProfileElement extends HTMLElement {
   uid?: string
@@ -52,7 +53,7 @@ export function patchNativeUserProfile(constructor: unknown) {
         visible.call(this, show)
         return
       }
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const reduced = prefersReducedMotion()
       const bounds = panel.getBoundingClientRect()
       const anchor = this.lastShowEl?.getBoundingClientRect()
       panel.style.transformOrigin = anchor

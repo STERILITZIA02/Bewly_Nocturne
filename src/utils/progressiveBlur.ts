@@ -12,11 +12,11 @@
  * This is the only place allowed to pair backdropFilter with a mask
  * (enforced by scripts/maskedBlurPolicy.ts).
  *
- * The layers must not sit inside a backdrop root (an ancestor with
- * backdrop-filter, filter or mask): they would then see only that ancestor's
- * own paint, not the page behind it, and the band would show as a rectangle.
- * Put a glass surface on a background layer beside the content instead
- * (see `.context-menu-container::before`, `.settings-content__surface`).
+ * A backdrop root cuts off sampling outside its subtree. It is only a problem
+ * between these layers and their sampled content; fading a whole page together
+ * with its scroll-edge blur does not exclude the page's own content.
+ * Keep glass on a sibling paint layer when the sample comes from behind it
+ * (see `.context-menu-container::before`).
  * A superellipse overflow clip on an ancestor also makes Chromium discard the
  * masks. Let the surface, scrolling content and blur layers clip themselves.
  */
@@ -30,20 +30,23 @@ const BACKDROP_ROOT_PROPERTIES = ['backdrop-filter', 'filter', 'mask-image', 'ma
 const BACKDROP_ROOT_WILL_CHANGE = new Set([...BACKDROP_ROOT_PROPERTIES, 'mask', 'mask-border', 'opacity', 'mix-blend-mode'])
 
 /** Development integration check; no observers or per-frame style reads. */
-export function getProgressiveBlurAncestorIssue(style: Pick<CSSStyleDeclaration, 'getPropertyValue'>) {
+export function getProgressiveBlurAncestorIssue(style: Pick<CSSStyleDeclaration, 'getPropertyValue'>, containsSample = false) {
   const read = (property: string) => style.getPropertyValue(property).trim()
-  for (const property of BACKDROP_ROOT_PROPERTIES) {
-    const value = read(property)
-    if (value && value !== 'none')
-      return property
+  if (!containsSample) {
+    for (const property of BACKDROP_ROOT_PROPERTIES) {
+      const value = read(property)
+      if (value && value !== 'none')
+        return property
+    }
+    if (Number.parseFloat(read('opacity')) < 1)
+      return 'opacity'
+    if (read('mix-blend-mode') && read('mix-blend-mode') !== 'normal')
+      return 'mix-blend-mode'
+    if (read('will-change').split(',').some(value => BACKDROP_ROOT_WILL_CHANGE.has(value.trim())))
+      return 'will-change'
   }
-  if (Number.parseFloat(read('opacity')) < 1)
-    return 'opacity'
-  if (read('mix-blend-mode') && read('mix-blend-mode') !== 'normal')
-    return 'mix-blend-mode'
-  if (read('will-change').split(',').some(value => BACKDROP_ROOT_WILL_CHANGE.has(value.trim())))
-    return 'will-change'
 
+  // Chromium's rounded clipping issue is independent of where the sample lives.
   const shape = read('corner-shape')
   const clips = ['overflow-x', 'overflow-y'].some(property => /^(?:hidden|clip|auto|scroll)$/.test(read(property)))
   const rounded = ['top-left', 'top-right', 'bottom-left', 'bottom-right'].some(corner => Number.parseFloat(read(`border-${corner}-radius`)) > 0)

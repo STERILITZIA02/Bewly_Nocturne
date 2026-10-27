@@ -51,6 +51,7 @@ library_tools:
   image_navigation: Image viewer. Scroll to explore or drag when zoomed in.
   load_more_videos: Load more videos
 common:
+  pagination_stalled: The list did not advance. Retry to continue.
   advertisement: Advertisement
   clear_selection: Clear selection
   favorite_folder_full: This folder is full and cannot accept the current video
@@ -316,7 +317,6 @@ settings:
     located: Setting located
   category_general_desc: Configure language, interaction, and drawer behavior.
   category_appearance_desc: Configure frosted glass, theme colors, fonts, and page style adaptation.
-  breadcrumb: Settings location
   group_interaction_layout: Interaction & Layout
   home_grid_layout: Home video layout
   home_grid_layout_desc: Choose an adaptive grid or a one- or two-column list for Home videos.
@@ -404,7 +404,93 @@ settings:
     reset_title: Restore default settings
     reset_desc: Actions in this section affect all Bewly Nocturne settings.
     reset_warning: This cannot be undone. Your current language will be preserved.
-  menu_appearance: Appearance
+  menu_appearance: Visual style
+  visual_style:
+    motion_system: System
+    motion_on: On
+    motion_off: Off
+    preset_pair: Apply the available light and dark variants together; keep any missing variant unchanged.
+    preset_single: Presets apply only to the palette being edited.
+    choose_color: Choose a preset color
+    title: Visual style
+    description: 'Manage display mode, colors, typography, and surface materials in one place.'
+    palette: Theme and colors
+    preset: Theme
+    custom: Custom
+    automatic: Automatic
+    accent: Accent
+    editing_mode: Edit palette
+    editing_mode_desc: Choose the palette to edit without changing the display mode.
+    separate_accent: Edit light and dark separately
+    separate_accent_desc: Choose a theme and accent for each mode. The matching palette follows the display mode.
+    dark_surface: Dark background
+    dark_surface_desc: OLED uses a pure black page background. Playback pages keep their standard dark surfaces.
+    tint: Dark tint
+    background: Background
+    background_desc: 'The base for cards, overlays, and fields. Colors are adjusted to fit the light or dark mode.'
+    foreground: Foreground
+    foreground_desc: Used for text and neutral controls. Displayed colors maintain contrast with the background.
+    contrast: Hierarchy contrast
+    contrast_desc: Increase contrast for secondary text and outlines. 0 keeps the original hierarchy.
+    preview: Text and surface preview
+    preview_secondary: Secondary information
+    reset_colors: Restore Nocturne colors
+    advanced: Advanced
+    interface_font_size: Interface base font size
+    interface_font_size_desc: Scale the existing text hierarchy while retaining system and browser text scaling.
+    shadows: Interface shadows
+    motion: Reduce motion
+    motion_desc: Reduce movement and scaling while keeping essential state feedback.
+    schedule_start: Light mode start time
+    schedule_end: Light mode end time
+    invalid_color: 'Enter a valid hexadecimal color, such as #2b2b2b.'
+    import: Import visual style
+    export: Export visual style
+    copy: Copy visual style
+    copied: Visual style copied
+    imported: Visual style imported
+    import_failed: Unable to import. Choose a valid Nocturne visual style file.
+    presets:
+      absolutely: Absolutely
+      ayu: Ayu
+      catppuccin: Catppuccin
+      codex: Codex
+      dracula: Dracula
+      everforest: Everforest
+      github: GitHub
+      gruvbox: Gruvbox
+      linear: Linear
+      lobster: Lobster
+      material: Material
+      matrix: Matrix
+      monokai: Monokai
+      night_owl: Night Owl
+      nord: Nord
+      notion: Notion
+      og: OG
+      one: One
+      oscurange: Oscurange
+      proof: Proof
+      raycast: Raycast
+      rose_pine: Rose Pine
+      sentry: Sentry
+      solarized: Solarized
+      temple: Temple
+      tokyo_night: Tokyo Night
+      vercel: Vercel
+      vscode_plus: VS Code Plus
+      xcode: Xcode
+      chatgpt: ChatGPT
+      nocturne: Nocturne
+      graphite: Graphite
+      paper: Warm paper
+      sage: Sage
+      slate: Slate
+    surface:
+      neutral: Standard dark
+      tinted: Soft tint
+      custom: Custom background
+      oled: OLED black
   menu_compatibility: Compatibility
   menu_about: About
   experimental: Experimental
@@ -672,15 +758,6 @@ settings:
   show_like_notification_reminder_desc: When enabled, likes are included in the top bar notifications badge count.
 
   # Video Card Grid Settings
-  group_video_card_grid: Video Card Grid
-  group_video_card_grid_desc: Covers are at least 320×180; as many columns as fit are shown, and cards grow as the window widens.
-  auto_switch_list_layout: Automatically switch list columns based on video grid width
-  auto_switch_list_layout_desc: When enabled, two-column mode switches to one column when the video grid is narrower than the configured width.
-  auto_switch_list_layout_breakpoint: Switch at
-  video_card_cover_ratio: Cover width
-  video_card_cover_ratio_desc: Set the cover width separately for one-column and two-column horizontal video cards.
-  video_card_cover_ratio_one_column: One-column layout
-  video_card_cover_ratio_two_columns: Two-column layout
   grid_columns: Show
   video_card_title_font_size: Title Font Size
   video_card_title_font_size_desc: Controls the font size of the video card title.
@@ -729,7 +806,7 @@ settings:
   back_to_top_and_refresh_buttons_are_separated: Separate Back to Top and Refresh Buttons
   sidebar_position: Sidebar position
   auto_hide_sidebar: Automatically hide the sidebar
-  theme: Theme
+  theme: Display mode
   theme_opt:
     light: Light
     dark: Dark

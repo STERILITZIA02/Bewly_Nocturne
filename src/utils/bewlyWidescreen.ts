@@ -1,5 +1,6 @@
 import { watch } from 'vue'
 
+import { useDark } from '~/composables/useDark'
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
 import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS, BEWLY_WIDESCREEN_MANUAL_TOGGLE } from '~/constants/globalEvents'
 import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
@@ -130,13 +131,9 @@ function stopWidescreenLanguageWatch() {
 }
 
 function setupWidescreenSettingsWatchers(currentState: BewlyWidescreenState) {
+  const { isDark, isOledDark, darkModeBaseColor, appearanceStyle } = useDark()
   const stopThemeWatch = watch(
-    () => [
-      settings.value.themeColor,
-      settings.value.darkModeBaseColor,
-      settings.value.enableDarkModeTint,
-      settings.value.enableOledDarkMode,
-    ] as const,
+    [isDark, isOledDark, darkModeBaseColor, appearanceStyle],
     () => syncActionAnimationTheme(currentState),
     { flush: 'post' },
   )

@@ -119,6 +119,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
+@use "../styles/modalWindow";
+
 .bew-confirm-dialog {
   position: fixed;
   inset: 0;
@@ -127,12 +129,15 @@ onBeforeUnmount(() => {
 }
 
 .bew-confirm-dialog__backdrop {
+  @include modalWindow.backdrop;
   position: absolute;
   inset: 0;
-  background: rgb(0 0 0 / 40%);
 }
 
+// The same solid window as Dialog and the settings: header, message and
+// actions ruled by hairlines (user-specified).
 .bew-confirm-dialog__panel {
+  @include modalWindow.surface;
   --bew-panel-enter-duration: var(--bew-duration-moderate);
   --bew-panel-leave-duration: var(--bew-duration-moderate);
   position: absolute;
@@ -140,39 +145,26 @@ onBeforeUnmount(() => {
   left: 50%;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   width: var(--bew-layout-dialog-width);
   max-width: calc(100vw - var(--bew-space-8));
   max-height: calc(100dvh - var(--bew-space-8));
   overflow: hidden;
-  background: var(--bew-elevated-alt-solid);
-  box-sizing: border-box;
-  border: var(--bew-hairline) solid var(--bew-edge-color);
-  border-radius: var(--bew-modal-radius);
-  corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-4);
   transform: translate(-50%, -50%);
 }
 
 .bew-confirm-dialog__header {
-  display: flex;
-  flex: 0 0 auto;
-  gap: var(--bew-space-4);
-  align-items: center;
-  justify-content: space-between;
-  min-height: 70px;
-  padding: 0 var(--bew-space-8);
+  @include modalWindow.header;
 }
 
 .bew-confirm-dialog__title {
-  margin: 0;
-  font-size: var(--bew-font-size-title);
-  color: var(--bew-text-1);
-  font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-title);
+  @include modalWindow.title;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .bew-confirm-dialog__body {
-  padding: var(--bew-space-2) var(--bew-space-8);
+  @include modalWindow.body;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -187,10 +179,6 @@ onBeforeUnmount(() => {
 }
 
 .bew-confirm-dialog__footer {
-  display: flex;
-  flex: 0 0 auto;
-  gap: var(--bew-space-2);
-  justify-content: flex-end;
-  padding: var(--bew-space-2) var(--bew-space-8) var(--bew-space-6);
+  @include modalWindow.footer;
 }
 </style>

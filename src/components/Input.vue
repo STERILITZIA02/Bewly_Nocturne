@@ -12,6 +12,8 @@ interface Props {
   placeholder?: string
   disabled?: boolean
   ariaInvalid?: boolean
+  accessibleLabel?: string
+  inputmode?: 'text' | 'numeric' | 'decimal'
 }
 const props = withDefaults(defineProps<Props>(), { size: 'medium' })
 
@@ -79,7 +81,9 @@ defineExpose({ focus })
       :placeholder="placeholder"
       :disabled="disabled"
       :aria-invalid="ariaInvalid"
-      :aria-labelledby="fieldLabelId"
+      :aria-label="accessibleLabel"
+      :aria-labelledby="accessibleLabel ? undefined : fieldLabelId"
+      :inputmode="inputmode"
       w-inherit min-w-0 h-inherit
       outline-none flex-1 bg-transparent
       @keydown.enter="handleEnter"

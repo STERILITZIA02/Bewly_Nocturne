@@ -31,13 +31,14 @@ import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindo
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useGridLayout } from '~/composables/useGridLayout'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
+import { useLibraryBatchSelection } from '~/composables/useLibraryBatchSelection'
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
 import { LIBRARY_AUTOFILL_PAGE_LIMIT } from '~/constants/library'
 import { settings } from '~/logic'
 import { isLayoutEditing, useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
-import { applyWatchLaterUpdate } from '~/logic/watchLaterState'
+import { applyWatchLaterUpdate, captureWatchLaterReadGeneration, isWatchLaterReadCurrent } from '~/logic/watchLaterState'
 import type { List as VideoItem, WatchLaterResult } from '~/models/video/watchLater'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { createAccountLifetime } from '~/utils/accountLifetime'
@@ -51,7 +52,6 @@ import { getVideoPlaybackProgress, getVideoProgressPercentage, getVideoWatchStat
 import { captureWatchLaterRemoval, updateOwnedWatchLater } from '~/utils/watchLater'
 import { getWatchLaterAuthor, getWatchLaterPlaybackUrl, mergeWatchLaterItemsByAid, normalizeWatchLaterItem } from '~/utils/watchLaterList'
 
-import { useWatchLaterBatch } from './useWatchLaterBatch'
 import { useWatchLaterBulkAction } from './useWatchLaterBulkAction'
 import type { WatchLaterFilters, WatchLaterSortOrder } from './watchLaterFilters'
 import { createWatchLaterFilters, filterWatchLaterItems, hasWatchLaterFilters, sortWatchLaterItems, watchLaterAddedBounds } from './watchLaterFilters'
@@ -72,12 +72,14 @@ const isRefreshing = ref(false)
 const refreshFailed = ref(false)
 const noMoreContent = viewState.ref('noMoreContent', false)
 const requestFailed = ref(false)
-const currentWatchLaterList = viewState.ref<VideoItem[]>('items', [])
+const requestStalled = ref(false)
+const currentWatchLaterList = viewState.shallowRef<VideoItem[]>('items', [])
 const searchQuery = viewState.ref('query', '')
 const advancedFilters = viewState.ref('filters', createWatchLaterFilters())
 const sortOrder = viewState.ref<WatchLaterSortOrder>('sort', 'newest')
 const filtersActive = computed(() => Boolean(searchQuery.value.trim() || hasWatchLaterFilters(advancedFilters.value)))
-const filteredItems = computed(() => sortWatchLaterItems(filterWatchLaterItems(currentWatchLaterList.value, searchQuery.value, advancedFilters.value.progress, advancedFilters.value.duration, item => getVideoWatchState({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }), advancedFilters.value), sortOrder.value))
+const sortedItems = computed(() => sortWatchLaterItems(currentWatchLaterList.value, sortOrder.value))
+const filteredItems = computed(() => filterWatchLaterItems(sortedItems.value, searchQuery.value, advancedFilters.value.progress, advancedFilters.value.duration, item => getVideoWatchState({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }), advancedFilters.value))
 // The filter behind the search field's funnel; a custom date opens the range on the rail.
 const PROGRESS = ['all', 'unstarted'] as const
 const ADDED = ['all', 'custom'] as const
@@ -122,6 +124,7 @@ const watchLaterCount = computed(() => topBarStore.watchLaterCount ?? 0)
 const pendingAction = shallowRef<{ accountId: number, aid: number } | null>(null)
 const { handlePageRefresh, handleReachBottom, haveScrollbar, scrollViewportRef } = useBewlyApp()
 const pageNum = viewState.ref<number>('page', 1)
+const sourcePages = viewState.ref<Record<number, number[]>>('sourcePages', {})
 const pageSize = ref<number>(20)
 const watchLaterLayoutMode = useLayoutEditSettingValue(
   'page.watchLater.layout',
@@ -154,7 +157,7 @@ const cardWindow = useCardWindow({
   gap: cardGap,
   enabled: computed(() => currentWatchLaterList.value.length > CARD_WINDOW_THRESHOLD),
   estimatedHeight: computed(() => watchLaterLayoutMode.value === 'list' ? 190 : cardWidth.value / VIDEO_CARD_COVER_ASPECT_RATIO + 112),
-  layout: computed(() => `${watchLaterLayoutMode.value}:${settings.value.videoCardTitleFontSize}:${settings.value.videoCardAuthorFontSize}`),
+  layout: computed(() => `${watchLaterLayoutMode.value}:${settings.value.videoCardTitleFontSize}:${settings.value.videoCardAuthorFontSize}:${settings.value.interfaceFontSize}`),
   canRelease: key => !isLayoutEditing.value && pendingAction.value?.aid !== key,
 })
 const renderedRows = computed(() => cardWindow.ranges.value.flatMap<{ key: string, height: number | undefined, items: VideoItem[] }>(range => range.height !== undefined
@@ -164,10 +167,36 @@ let requestGeneration = 0
 let loadedAccountId: number | null = null
 let watchLaterExtensionContextInvalidated = false
 const actionLifetime = createAccountLifetime(getCurrentAccountId)
-const batch = useWatchLaterBatch({
-  visibleIds: () => filteredItems.value.map(item => item.aid),
+const deferredRemovals = new Set<number>()
+function commitRemovedItems(ids: readonly number[]) {
+  ids.forEach(id => deferredRemovals.add(id))
+  if (!deferredRemovals.size)
+    return
+  let firstPage = pageNum.value
+  const unlocated = new Set(deferredRemovals)
+  for (const [page, keys] of Object.entries(sourcePages.value)) {
+    for (const id of keys) {
+      if (unlocated.delete(id))
+        firstPage = Math.min(firstPage, Number(page))
+    }
+  }
+  if (unlocated.size)
+    firstPage = 1
+  currentWatchLaterList.value = currentWatchLaterList.value.filter(item => !deferredRemovals.has(item.aid))
+  pageNum.value = firstPage
+  sourcePages.value = Object.fromEntries(Object.entries(sourcePages.value).filter(([page]) => Number(page) < firstPage))
+  noMoreContent.value = currentWatchLaterList.value.length >= watchLaterCount.value
+  deferredRemovals.clear()
+}
+viewState.capture('items', () => {
+  commitRemovedItems([])
+  return currentWatchLaterList.value
+})
+const batch = useLibraryBatchSelection({
+  keys: () => filteredItems.value.map(item => item.aid),
   captureOwner: () => actionLifetime.capture(),
   remove: deleteWatchLaterItem,
+  commit: commitRemovedItems,
 })
 const bulkAction = useWatchLaterBulkAction({
   capture: () => actionLifetime.capture(),
@@ -182,7 +211,7 @@ const bulkAction = useWatchLaterBulkAction({
       const response = kind === 'clear'
         ? await api.watchlater.clearAllWatchLater({ accountId, csrf })
         : await api.watchlater.removeFromWatchLater({ accountId, viewed: true, csrf })
-      if (!owner.isCurrent() || !isCurrentRequest(generation, accountId))
+      if (!owner.isCurrent())
         return
       if (response?.code !== 0)
         throw response
@@ -225,30 +254,44 @@ async function loadCompleteLibrary(refresh = false) {
   isLoading.value = loadingLibrary = true
   isRefreshing.value = refresh
   requestFailed.value = false
+  const readVersion = captureWatchLaterReadGeneration()
   try {
     const response = await api.watchlater.getWatchLaterLibrary({ accountId }, { signal: controller.signal })
     if (!isCurrentRequest(generation, accountId))
       return
     if (response.code !== 0 || !Array.isArray(response.data?.list) || !Number.isSafeInteger(response.data.count) || response.data.count < 0)
       throw new Error('Watch Later library unavailable')
+    if (!isWatchLaterReadCurrent(response.watchLaterRead, readVersion))
+      throw new Error('Watch Later library changed before commit')
+    let readStamp = response.watchLaterRead
     let list = mergeWatchLaterItemsByAid([], response.data.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item)))
     // Some responses contain only a prefix. Complete the existing server pages
     // before exposing an oldest-first order or an all-results selection.
-    for (let pn = Math.floor(response.data.list.length / pageSize.value) + 1; list.length < response.data.count && pn <= Math.ceil(response.data.count / pageSize.value); pn++) {
+    for (let pn = Math.floor(response.data.list.length / pageSize.value) + 1; list.length < response.data.count; pn++) {
       const page = await api.watchlater.getWatchLaterListByPage({ accountId, pn, ps: pageSize.value }, { signal: controller.signal })
       if (!isCurrentRequest(generation, accountId))
         return
       if (page.code !== 0 || !Array.isArray(page.data?.list))
         throw new Error('Watch Later page unavailable')
+      if (page.data.count !== response.data.count)
+        throw new Error('Watch Later total changed during library read')
+      if (!isWatchLaterReadCurrent(page.watchLaterRead, readVersion))
+        throw new Error('Watch Later page changed before commit')
+      readStamp = page.watchLaterRead
       const incoming = page.data.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item))
       const merged = mergeWatchLaterItemsByAid(list, incoming)
-      if (merged.length === list.length)
-        break
+      if (merged.length === list.length && list.length < response.data.count) {
+        requestStalled.value = true
+        throw new Error('Watch Later library stalled')
+      }
       list = merged
     }
     if (list.length < response.data.count)
       throw new Error('Watch Later library incomplete')
+    if (!isCurrentRequest(generation, accountId) || !isWatchLaterReadCurrent(readStamp, readVersion))
+      throw new Error('Watch Later library changed before commit')
     currentWatchLaterList.value = list
+    sourcePages.value = {}
     noMoreContent.value = currentWatchLaterList.value.length >= response.data.count
     pageNum.value = Math.floor(currentWatchLaterList.value.length / pageSize.value) + 1
   }
@@ -298,17 +341,28 @@ watch(() => topBarStore.watchLaterUpdate, (update) => {
   if (!update || update.type !== 'change' || update.accountId !== getCurrentAccountId())
     return
   const change = update.change
+  invalidateRequests()
   if (change.type === 'clear') {
     currentWatchLaterList.value = []
     pageNum.value = 1
     noMoreContent.value = true
+    sourcePages.value = {}
   }
   else if (change.type === 'remove') {
+    if (batch.busy.value) {
+      deferredRemovals.add(change.entry.aid)
+      return
+    }
+    const affected = Object.entries(sourcePages.value).find(([, keys]) => keys.includes(change.entry.aid))
+    const firstPage = affected ? Number(affected[0]) : 1
     currentWatchLaterList.value = currentWatchLaterList.value.filter(item => item.aid !== change.entry.aid)
-    pageNum.value = Math.max(1, Math.ceil(currentWatchLaterList.value.length / pageSize.value))
+    pageNum.value = Math.min(pageNum.value, firstPage)
+    sourcePages.value = Object.fromEntries(Object.entries(sourcePages.value).filter(([page]) => Number(page) < firstPage))
     noMoreContent.value = currentWatchLaterList.value.length >= watchLaterCount.value
   }
   else {
+    sourcePages.value = {}
+    pageNum.value = 1
     viewDirty = true
     replaceView ||= change.type === 'invalidate'
     scheduleViewRefresh()
@@ -324,17 +378,21 @@ async function refreshViewHead() {
   if (!accountId || watchLaterExtensionContextInvalidated)
     return
   const generation = invalidateRequests()
+  const readVersion = captureWatchLaterReadGeneration()
   try {
     const response = await api.watchlater.getWatchLaterListByPage({ accountId, pn: 1, ps: pageSize.value })
-    if (!isCurrentRequest(generation, accountId) || response.code !== 0 || !response.data)
+    if (!isCurrentRequest(generation, accountId))
       return
+    if (response.code !== 0 || !response.data || !isWatchLaterReadCurrent(response.watchLaterRead, readVersion))
+      throw new Error('Watch Later head changed before commit')
     const list = response.data.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item))
     currentWatchLaterList.value = mergeWatchLaterItemsByAid(list, currentWatchLaterList.value)
-    pageNum.value = Math.max(2, Math.ceil(currentWatchLaterList.value.length / pageSize.value))
+    sourcePages.value = { 1: list.map(item => item.aid) }
+    pageNum.value = 2
     noMoreContent.value = currentWatchLaterList.value.length >= watchLaterCount.value
   }
   catch (error) {
-    if (!settleExtensionContextInvalidation(error))
+    if (isCurrentRequest(generation, accountId) && !settleExtensionContextInvalidation(error))
       requestFailed.value = true
   }
 }
@@ -365,6 +423,7 @@ function invalidateRequests(): number {
   isLoading.value = false
   isRefreshing.value = false
   refreshFailed.value = false
+  requestStalled.value = false
   return ++requestGeneration
 }
 
@@ -416,6 +475,7 @@ watch(
       return
 
     actionLifetime.invalidate()
+    deferredRemovals.clear()
     bulkAction.reset()
     batch.reset()
     sortOrder.value = 'newest'
@@ -447,6 +507,7 @@ async function initData() {
   noMoreContent.value = false
   requestFailed.value = false
   currentWatchLaterList.value = []
+  sourcePages.value = {}
   pendingAction.value = null
   pageNum.value = 1
   if (accountId === null)
@@ -471,6 +532,7 @@ function retryWatchLaterRequest() {
   if (watchLaterExtensionContextInvalidated || isLoading.value)
     return
   requestFailed.value = false
+  requestStalled.value = false
   if (refreshFailed.value) {
     void handleWatchLaterPageRefresh()
     return
@@ -497,25 +559,41 @@ async function handleWatchLaterPageRefresh() {
   readController = controller
   isLoading.value = isRefreshing.value = true
   requestFailed.value = false
+  const readVersion = captureWatchLaterReadGeneration()
   try {
     let list: VideoItem[] = []
     let nextPage = 1
     let exhausted = false
+    let readStamp: WatchLaterResult['watchLaterRead'] | undefined
+    let count: number | undefined
+    const pages: Record<number, number[]> = {}
     while (!exhausted && list.length < targetLength) {
       const response = await api.watchlater.getWatchLaterListByPage({ accountId, pn: nextPage, ps: pageSize.value }, { signal: controller.signal })
       if (!isCurrentRequest(generation, accountId))
         return
       if (response.code !== 0 || !Array.isArray(response.data?.list) || !Number.isSafeInteger(response.data.count) || response.data.count < 0)
         throw new Error('Watch Later refresh unavailable')
+      if (!isWatchLaterReadCurrent(response.watchLaterRead, readVersion))
+        throw new Error('Watch Later refresh changed before commit')
+      if (count !== undefined && count !== response.data.count)
+        throw new Error('Watch Later total changed during refresh')
+      count = response.data.count
+      readStamp = response.watchLaterRead
       const incoming = response.data.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item))
       const merged = mergeWatchLaterItemsByAid(list, incoming)
-      if (merged.length === list.length && list.length < response.data.count)
+      if (merged.length === list.length && list.length < response.data.count) {
+        requestStalled.value = true
         throw new Error('Watch Later refresh stalled')
+      }
       list = merged
+      pages[nextPage] = incoming.map(item => item.aid)
       nextPage++
-      exhausted = response.data.list.length < pageSize.value || list.length >= response.data.count
+      exhausted = list.length >= response.data.count
     }
+    if (!isCurrentRequest(generation, accountId) || !isWatchLaterReadCurrent(readStamp, readVersion))
+      throw new Error('Watch Later refresh changed before commit')
     currentWatchLaterList.value = list
+    sourcePages.value = pages
     pageNum.value = nextPage
     noMoreContent.value = exhausted
   }
@@ -560,6 +638,7 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
   const controller = new AbortController()
   readController = controller
   let pagesRead = 0
+  const readVersion = captureWatchLaterReadGeneration()
 
   try {
     while (!noMoreContent.value) {
@@ -591,15 +670,21 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
       }
 
       const list = payload.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item))
-      const previousListLength = currentWatchLaterList.value.length
+      if (!isWatchLaterReadCurrent(res.watchLaterRead, readVersion))
+        throw new Error('Watch Later page changed before commit')
+      const previousKeys = new Set(Object.entries(sourcePages.value).filter(([page]) => Number(page) < requestedPage).flatMap(([, keys]) => keys))
       const mergedList = mergeWatchLaterItemsByAid(currentWatchLaterList.value, list)
-      const madeProgress = mergedList.length > previousListLength
+      const madeProgress = list.some(item => !previousKeys.has(item.aid))
+      if ((list.length > 0 && !madeProgress) || (!list.length && mergedList.length < payload.count)) {
+        requestStalled.value = true
+        requestFailed.value = true
+        break
+      }
       currentWatchLaterList.value = mergedList
+      sourcePages.value = { ...sourcePages.value, [requestedPage]: list.map(item => item.aid) }
       requestFailed.value = false
       pageNum.value = requestedPage + 1
-      noMoreContent.value = payload.list.length < pageSize.value
-        || mergedList.length >= payload.count
-        || !madeProgress
+      noMoreContent.value = mergedList.length >= payload.count
 
       pagesRead++
       if (noMoreContent.value || filtersActive.value || pagesRead >= LIBRARY_AUTOFILL_PAGE_LIMIT)
@@ -640,21 +725,26 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
   const action = { accountId, aid }
   const owner = actionLifetime.capture()
   pendingAction.value = action
-  const generation = invalidateRequests()
+  invalidateRequests()
   try {
     const result = await updateOwnedWatchLater({ aid }, 'remove', {
       accountId: owner.accountId,
-      isCurrent: () => owner.isCurrent() && isCurrentRequest(generation, accountId),
+      isCurrent: owner.isCurrent,
     }, topBarStore)
-    if (result.status !== 'success' || !owner.isCurrent() || !isCurrentRequest(generation, accountId))
+    if (result.status !== 'success' || !owner.isCurrent())
       return false
+
+    if (batch.busy.value) {
+      deferredRemovals.add(aid)
+      return true
+    }
 
     const currentIndex = currentWatchLaterList.value.findIndex(item => item.aid === aid)
     if (currentIndex !== -1) {
-      currentWatchLaterList.value.splice(currentIndex, 1)
-      // Removal shifts position-based server pages. Re-read the last partial
-      // page and let aid deduplication fill the gap without clearing the list.
-      pageNum.value = Math.max(1, Math.ceil(currentWatchLaterList.value.length / pageSize.value))
+      currentWatchLaterList.value = currentWatchLaterList.value.filter(item => item.aid !== aid)
+      const firstPage = Number(Object.entries(sourcePages.value).find(([, keys]) => keys.includes(aid))?.[0] ?? 1)
+      pageNum.value = Math.min(pageNum.value, firstPage)
+      sourcePages.value = Object.fromEntries(Object.entries(sourcePages.value).filter(([page]) => Number(page) < firstPage))
       noMoreContent.value = currentWatchLaterList.value.length >= watchLaterCount.value
     }
     return true
@@ -726,10 +816,17 @@ function remove(item: VideoItem) {
   removals.begin(item, { restorable: !!getWatchLaterPlaybackUrl(item), ...captureWatchLaterRemoval(item.aid, owner, topBarStore, async (added) => {
     if (!owner.isCurrent())
       return
-    if (added)
+    invalidateRequests()
+    if (added) {
       await refreshViewHead()
-    else
+    }
+    else if (currentWatchLaterList.value.some(entry => entry.aid === item.aid)) {
+      const firstPage = Number(Object.entries(sourcePages.value).find(([, keys]) => keys.includes(item.aid))?.[0] ?? 1)
+      pageNum.value = Math.min(pageNum.value, firstPage)
+      sourcePages.value = Object.fromEntries(Object.entries(sourcePages.value).filter(([page]) => Number(page) < firstPage))
       currentWatchLaterList.value = currentWatchLaterList.value.filter(entry => entry.aid !== item.aid)
+      noMoreContent.value = currentWatchLaterList.value.length >= watchLaterCount.value
+    }
   }) })
 }
 
@@ -757,7 +854,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${removals.d
         {{ t('common.load_more') }}
       </Button>
       <Empty
-        v-if="requestFailed && !isLoading && removals.displayItems.value.length === 0" text-only fill :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')"
+        v-if="requestFailed && !isLoading && removals.displayItems.value.length === 0" text-only fill :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')"
         @action="retryWatchLaterRequest"
       />
       <Empty v-else-if="watchLaterCount === 0 && !removals.displayItems.value.length && (!isLoading || isRefreshing)" text-only fill :description="$t('common.no_data')" role="status" />
@@ -997,7 +1094,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${removals.d
         <SmoothLoading v-if="filtersActive && filteredItems.length" :show="isLoading && !isRefreshing" />
         <Empty
           v-if="requestFailed && !isLoading && currentWatchLaterList.length > 0"
-          text-only class="watch-later-load-more-error" :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')" @action="retryWatchLaterRequest"
+          text-only class="watch-later-load-more-error" :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')" @action="retryWatchLaterRequest"
         />
       </template>
     </main>

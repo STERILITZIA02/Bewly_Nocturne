@@ -21,6 +21,7 @@ interface FavoriteWriteDependencies {
   capture: ReturnType<typeof createAccountLifetime>['capture']
   getCSRF: () => string
   onError: (error: unknown) => void
+  onConfirmed?: (command: FavoriteWrite) => void
 }
 
 /** Serializes submitted intents, preserving their account, IDs and credentials across awaits. */
@@ -107,6 +108,7 @@ export function useFavoriteWrites(dependencies: FavoriteWriteDependencies) {
         return null
       if (response.code !== 0)
         throw response
+      dependencies.onConfirmed?.(command)
       return { kind: command.kind, data: response.data, succeeded: command.kind === 'folders' ? [...command.ids] : [], failed: [] }
     }
     catch (error) {

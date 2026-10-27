@@ -292,6 +292,8 @@ function showRefreshPrompt(...args: unknown[]): void {
     '--bew-interactive-radius',
     // Size tokens are calc() over the browser font scale, so copy the scale too.
     '--bew-font-scale',
+    '--bew-interface-scale',
+    '--bew-effective-font-scale',
     '--bew-font-size-control',
     '--bew-font-size-body',
     '--bew-line-height-control',

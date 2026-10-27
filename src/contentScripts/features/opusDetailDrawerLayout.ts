@@ -7,6 +7,7 @@ import { getBilibiliImageResourceKey } from '~/utils/bilibiliUrl'
 import { i18n } from '~/utils/i18n'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { isInIframe } from '~/utils/main'
+import { prefersReducedMotion, reducedMotionCss } from '~/utils/reducedMotion'
 
 const SPLIT_FLAG = 'bewlyOpusSplit'
 const READY_FLAG = 'bewlyOpusReady'
@@ -820,15 +821,10 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__panel .bili-dyn-gal
 html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__panel .opus-pic-view {
   display: none !important;
 }
-@media (prefers-reduced-motion: reduce) {
-  html.momentsPage.drawer.bewly-opus-layout .bewly-opus-iframe-loading,
+${reducedMotionCss(`html.momentsPage.drawer.bewly-opus-layout .bewly-opus-iframe-loading,
   html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-gallery [class*="bewly-opus-gallery__"],
   html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer,
-  html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer [class*="bewly-opus-viewer__"] {
-    transition-duration: 0s !important;
-    scroll-behavior: auto !important;
-  }
-}
+  html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer [class*="bewly-opus-viewer__"]`, 'transition-duration:0s !important;scroll-behavior:auto !important;')}
 @media (max-width: 860px) {
   html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split {
     grid-template-columns: minmax(0, 1fr) !important;
@@ -1299,7 +1295,6 @@ function unmountGalleryIcons() {
 }
 
 function createImageGallery(rawUrls: string[]): HTMLElement {
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
   const urls = rawUrls
     .map(url => normalizeImageUrl(url))
     .filter((url): url is string => Boolean(url))
@@ -1644,7 +1639,7 @@ function createImageGallery(rawUrls: string[]): HTMLElement {
       thumb.classList.toggle('is-active', i === index)
     })
     const activeThumb = thumbs.querySelector<HTMLElement>('.bewly-opus-gallery__thumb.is-active')
-    activeThumb?.scrollIntoView({ behavior: reducedMotion.matches ? 'auto' : 'smooth', block: 'nearest', inline: 'center' })
+    activeThumb?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'nearest', inline: 'center' })
   }
 
   /**
@@ -1666,7 +1661,7 @@ function createImageGallery(rawUrls: string[]): HTMLElement {
       moveDir = forward <= backward ? 1 : -1
     }
 
-    if (reducedMotion.matches) {
+    if (prefersReducedMotion()) {
       index = target
       wheelAccum = 0
       fillWindow()

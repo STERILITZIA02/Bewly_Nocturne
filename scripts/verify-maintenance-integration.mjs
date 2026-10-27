@@ -527,7 +527,6 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     const Settings = await compileComponent('../src/components/Settings/Settings.vue', {
       'vue-i18n': { useI18n: () => ({ t: key => key, tm: () => [], rt: key => key }) },
       '~/components/CloseButton.vue': { default: { render: () => Vue.h('button') } },
-      '~/components/PanelTopBlur.vue': { default: { render: () => null } },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ mainAppRef: Vue.ref(host) }) },
       '~/logic': { settings },
       '~/logic/layoutEdit': { enterLayoutEditMode: (...args) => edits.push(args), getSettingDescriptors: () => [], subscribeSettingNavigation: () => () => {} },
@@ -896,10 +895,9 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     const abort = await loadSourceModule('../src/utils/abort.ts', {}, { ...clock, DOMException })
     const module = await loadSourceModule('../src/components/Settings/navigateToSetting.ts', { 'vue': Vue, '~/utils/abort': abort }, { ...clock, MutationObserver: window.MutationObserver })
     const root = document.body.appendChild(document.createElement('div'))
-    root.innerHTML = '<header class="settings-header"></header><div class="viewport" style="padding-top:92px"></div>'
+    root.innerHTML = '<div class="viewport"></div>'
     const viewport = root.querySelector('.viewport')
     const rect = (top, height) => ({ top, bottom: top + height, left: 0, right: 600, width: 600, height })
-    root.firstElementChild.getBoundingClientRect = () => rect(100, 92)
     viewport.getBoundingClientRect = () => rect(100, 300)
     Object.defineProperty(viewport, 'clientHeight', { value: 300 })
     viewport.scrollTop = 100
@@ -939,7 +937,8 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       clock.step()
       await request
       assert.equal(scrolls.length, 1)
-      assert.equal(scrolls[0].top, 404)
+      // Centred in the 300px page column: 100 + 580 - 100 - (300 - 40) / 2.
+      assert.equal(scrolls[0].top, 450)
       assert.equal(scrolls[0].behavior, 'auto')
       assert.equal(clock.timers.size, 0)
       for (const exists of [false, true]) {

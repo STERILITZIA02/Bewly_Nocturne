@@ -93,7 +93,7 @@ function handleContributorImageError() {
 
       <section class="about-maintenance">
         <SettingsItemGroup data-setting-id="settings.third_party_licenses" :title="$t('settings.third_party_licenses')">
-          <Button type="secondary" @click="licenseKind = 'project'">
+          <Button data-setting-id="settings.project_license" :data-settings-title="$t('settings.project_license')" type="secondary" @click="licenseKind = 'project'">
             {{ $t('settings.project_license') }}
           </Button>
           <Button type="secondary" @click="licenseKind = 'thirdParty'">

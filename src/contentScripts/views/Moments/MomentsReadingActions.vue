@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { settings } from '~/logic'
 import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 
 const props = defineProps<{
   /** Back to the last card worked with: shown while it is out of view. */
@@ -48,7 +49,7 @@ async function sync() {
   while (shownJump.value !== props.jump || shownLatest.value !== props.latest) {
     const { jump, latest } = props
     const style = buttonsRef.value && getComputedStyle(buttonsRef.value)
-    const animate = style && !matchMedia('(prefers-reduced-motion: reduce)').matches
+    const animate = style && !prefersReducedMotion()
     // A changed first row moves the row below it, so that row leaves and returns too.
     const keys = jump !== shownJump.value ? ['jump', 'latest', 'refresh'] : ['latest', 'refresh']
     if (animate)

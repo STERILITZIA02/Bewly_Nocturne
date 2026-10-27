@@ -14,11 +14,15 @@ const emit = defineEmits<{
 }>()
 
 function selectOption(value: T) {
+  if (props.disabled || value === props.modelValue)
+    return
   emit('update:modelValue', value)
   emit('change', value)
 }
 
 function handleKeydown(event: KeyboardEvent, index: number) {
+  if (event.isComposing || props.disabled)
+    return
   const direction = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 0
   const targetIndex = event.key === 'Home' ? 0 : event.key === 'End' ? props.options.length - 1 : (index + direction + props.options.length) % props.options.length
   if (!direction && event.key !== 'Home' && event.key !== 'End')

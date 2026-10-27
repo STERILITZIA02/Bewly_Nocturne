@@ -51,7 +51,7 @@ interface Props {
 // 数据现在在转换阶段已经完成 HTML 解码，直接使用 props
 const logic = useVideoCardLogic(props, props.persistentState)
 const cardRemoval = computed(() => props.removal ?? logic.watchLaterRemoval.value)
-defineExpose({ canRecycle: computed(() => !logic.showVideoOptions.value && !logic.isPreviewFullscreen.value && !logic.isPreviewScrubbing.value && !logic.isHover.value && !logic.isUpdatingWatchLater.value && !logic.isUndoing.value) })
+defineExpose({ canRecycle: computed(() => !cardRemoval.value && !logic.showVideoOptions.value && !logic.isPreviewFullscreen.value && !logic.isPreviewScrubbing.value && !logic.isHover.value && !logic.isUpdatingWatchLater.value && !logic.isUndoing.value) })
 const { mainAppRef } = useBewlyApp()
 const { userRelations, retainUserRelations } = useUserRelations()
 watch(() => {
@@ -296,13 +296,13 @@ provide('getVideoType', () => props.type!)
 .horizontal-card-cover {
   --uno: "w-full";
   aspect-ratio: var(--bew-video-cover-aspect-ratio);
-  flex: var(--video-card-cover-flex, 50) 1 0;
+  flex: 1 1 0;
   min-width: 0;
-  max-width: var(--video-card-cover-max-width, 400px);
+  max-width: var(--bew-video-card-horizontal-cover-max-width);
 }
 
 .horizontal-card-info {
-  flex: var(--video-card-info-flex, 50) 1 0;
+  flex: 1 1 0;
   min-width: 0;
 }
 

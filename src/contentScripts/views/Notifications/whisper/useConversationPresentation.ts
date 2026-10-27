@@ -2,6 +2,7 @@ import type { Ref } from 'vue'
 import { computed, onMounted, onScopeDispose, readonly, ref, watch } from 'vue'
 
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
+import { MOTION_PREFERENCE_CHANGE, prefersReducedMotion } from '~/utils/reducedMotion'
 
 import type { ConversationExpansionGeometry } from './conversationExpansion'
 import { calculateConversationExpandedGeometry, CONVERSATION_EXPANSION_DURATION, getConversationExpansionGeometry } from './conversationExpansion'
@@ -108,7 +109,7 @@ export function useConversationPresentation(view: Ref<HTMLElement | null>, activ
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
     const sync = () => {
       isMobileLayout.value = mobile.matches
-      reducedMotion.value = motion.matches
+      reducedMotion.value = prefersReducedMotion()
       if (reducedMotion.value && isRevealingHistory.value) {
         isRevealingHistory.value = false
         events.revealFinished()
@@ -121,6 +122,7 @@ export function useConversationPresentation(view: Ref<HTMLElement | null>, activ
     for (const query of [mobile, motion])
       query.addEventListener('change', sync, { signal: media.signal })
     window.addEventListener('resize', sync, { signal: media.signal })
+    window.addEventListener(MOTION_PREFERENCE_CHANGE, sync, { signal: media.signal })
     window.visualViewport?.addEventListener('resize', sync, { signal: media.signal })
     window.visualViewport?.addEventListener('scroll', sync, { signal: media.signal })
     if (typeof ResizeObserver !== 'undefined') {

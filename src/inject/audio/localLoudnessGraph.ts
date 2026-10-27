@@ -29,14 +29,12 @@ export async function prepareLoudnessNode(context: AudioContext, config: LocalLo
             URL.revokeObjectURL(url)
           revoked = true
         }
-        signal.addEventListener('abort', release, { once: true })
         module = Promise.resolve().then(() => context.audioWorklet.addModule(url)).catch((error) => {
           if (modules.get(context) === module)
             modules.delete(context)
           throw error
         }).finally(() => {
           release()
-          signal.removeEventListener('abort', release)
         })
         modules.set(context, module)
       }

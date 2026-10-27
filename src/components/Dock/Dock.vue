@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { useElementSize, usePreferredReducedMotion, useWindowSize } from '@vueuse/core'
+import { useElementSize, useWindowSize } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { UndoForwardState, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'
+import { useReducedMotion } from '~/composables/useReducedMotion'
 import {
   getDockCollapsedStateForMode,
   getPreservedDockStageSize,
@@ -143,7 +144,7 @@ const { width: dockShellWidth, height: dockShellHeight } = useElementSize(
   { width: 0, height: 0 },
   { box: 'border-box' },
 )
-const preferredReducedMotion = usePreferredReducedMotion()
+const preferredReducedMotion = useReducedMotion()
 
 let autoCollapseTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -325,7 +326,7 @@ function scheduleDockMorphCompletion(direction: 'collapse' | 'expand') {
   if (dockMorphCompletionTimer !== undefined)
     clearTimeout(dockMorphCompletionTimer)
 
-  const transitionDuration = preferredReducedMotion.value === 'reduce'
+  const transitionDuration = preferredReducedMotion.value
     ? 1
     : DOCK_SHELL_TRANSITION_MS
 
@@ -373,7 +374,7 @@ function collapseDock() {
   isDockContentVisible.value = false
   isDockCollapsedTriggerVisible.value = false
 
-  if (dockMorphDirection.value === 'expand' || preferredReducedMotion.value === 'reduce') {
+  if (dockMorphDirection.value === 'expand' || preferredReducedMotion.value) {
     clearDockMorphSchedule()
     void startDockShellCollapse()
     return
@@ -430,7 +431,7 @@ function handleDockShellTransitionEnd(event: TransitionEvent) {
 }
 
 watch(preferredReducedMotion, (value) => {
-  if (value !== 'reduce' || (!isDockTransitioning.value && dockContentTimer === undefined && dockMorphFrame === undefined))
+  if (!value || (!isDockTransitioning.value && dockContentTimer === undefined && dockMorphFrame === undefined))
     return
   const direction = dockMorphDirection.value ?? 'collapse'
   clearDockMorphSchedule()

@@ -140,7 +140,7 @@ const API_WATCHLATER = {
   },
   async getWatchLaterListByPage(options: ReadOptions & { pn?: number, ps?: number } = {}, sender?: Runtime.MessageSender, readOptions?: ReadRequestOptions) {
     checkContext(sender)
-    return state.readPage(options.accountId, signal => doRequest({
+    return state.readPage(options.accountId, `page:${options.pn ?? 1}:${options.ps ?? 20}`, signal => doRequest({
       contentScriptQuery: 'getWatchLaterListByPage',
       pn: options.pn,
       ps: options.ps,
@@ -148,7 +148,7 @@ const API_WATCHLATER = {
   },
   async getWatchLaterLibrary(options: ReadOptions = {}, sender?: Runtime.MessageSender, readOptions?: ReadRequestOptions) {
     checkContext(sender)
-    return state.readPage(options.accountId, signal => doRequest({
+    return state.readPage(options.accountId, 'full', signal => doRequest({
       contentScriptQuery: 'getWatchLaterLibrary',
     }, endpoints.getAllWatchLaterList, { signal }) as Promise<WatchLaterResult>, readOptions)
   },

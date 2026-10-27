@@ -507,8 +507,8 @@ const unfollowUser = () => writeRelation(2)
         </ul>
 
         <!-- Gradient blur where the list is cut off; no arrow buttons. -->
-        <ProgressiveBlur class="context-menu-edge context-menu-edge--top" edge="top" :visible="canScrollUp" />
-        <ProgressiveBlur class="context-menu-edge context-menu-edge--bottom" edge="bottom" :visible="canScrollDown" />
+        <ProgressiveBlur class="context-menu-edge context-menu-edge--top" edge="top" :visible="canScrollUp" sample-within=".context-menu-container" />
+        <ProgressiveBlur class="context-menu-edge context-menu-edge--bottom" edge="bottom" :visible="canScrollDown" sample-within=".context-menu-container" />
       </div>
     </div>
 

@@ -4,10 +4,14 @@ import { effectScope, onScopeDispose } from 'vue'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { DARK_MODE_BASE_COLOR_CHANGE, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
+import { applyAppearanceStyle, getAppearanceStyle, resolveAppearanceAccent } from '~/utils/appearance'
 import { resolveDarkModeBaseColor } from '~/utils/darkModeTint'
 import { createIframeDocumentClient } from '~/utils/iframeDocument'
 import { getParentMessageData } from '~/utils/iframeMessage'
 import { isVideoPlaybackPage, setCookie } from '~/utils/main'
+import { holdAnimation } from '~/utils/motionPriority'
+import { getMotionDuration } from '~/utils/motionTiming'
+import { applyMotionPreference, prefersReducedMotion } from '~/utils/reducedMotion'
 
 const currentMinuteOfDay = ref(getCurrentMinuteOfDay())
 let scheduleClockInterval: number | null = null
@@ -71,27 +75,22 @@ function isFestivalPage(): boolean {
  * 设置深色模式基准颜色
  */
 function setDarkModeBaseColor(color: string) {
-  // 设置主文档的CSS变量（用于哔哩哔哩原站样式）
-  document.documentElement.style.setProperty('--bew-dark-base-color', color)
-
-  // 设置 Shadow DOM 内的 CSS 变量（用于 Bewly Nocturne 组件样式）
-  const bewlyContainer = document.getElementById('bewly')
-  if (bewlyContainer?.shadowRoot) {
-    const shadowHost = bewlyContainer
-    shadowHost.style.setProperty('--bew-dark-base-color', color)
+  for (const element of [document.documentElement, document.getElementById('bewly')]) {
+    if (element && element.style.getPropertyValue('--bew-dark-base-color') !== color)
+      element.style.setProperty('--bew-dark-base-color', color)
   }
 }
 
 function syncBilibiliTheme(isDark: boolean, persist = true) {
   const theme = isDark ? 'dark' : 'light'
-  if (persist)
-    setCookie('theme_style', theme, 365 * 10)
 
   // useDark() is shared by several components. Only notify Bilibili when the
   // effective theme actually changes; repeated events rebuild native feeds.
   if (lastThemeChangeState === isDark)
     return
 
+  if (persist)
+    setCookie('theme_style', theme, 365 * 10)
   lastThemeChangeState = isDark
   window.dispatchEvent(new CustomEvent('global.themeChange', { detail: theme }))
 }
@@ -144,6 +143,30 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
     && !isVideoPlaybackPage(currentUrl.value)
     && (parentTheme.value?.isOledDark ?? settings.value.enableOledDarkMode === true))
   const darkModeBaseColor = computed(() => parentTheme.value?.darkModeBaseColor ?? resolveDarkModeBaseColor(settings.value))
+  const accentColor = computed(() => resolveAppearanceAccent(settings.value, isDark.value))
+  const motionPreference = computed(() => settings.value.motionPreference)
+  watch(motionPreference, (preference) => {
+    for (const element of [document.documentElement, document.getElementById('bewly')]) {
+      if (element)
+        applyMotionPreference(element, preference)
+    }
+  }, { immediate: true })
+  onScopeDispose(() => {
+    for (const element of [document.documentElement, document.getElementById('bewly')]) {
+      if (element)
+        applyMotionPreference(element, undefined)
+    }
+  })
+  const appearanceStyle = computed<Record<string, string>>((previous) => {
+    const next = getAppearanceStyle(settings.value, isDark.value, isOledDark.value)
+    return previous && Object.keys(previous).length === Object.keys(next).length && Object.keys(next).every(key => previous[key] === next[key]) ? previous : next
+  })
+  watch(appearanceStyle, (style) => {
+    for (const element of [document.documentElement, document.getElementById('bewly')]) {
+      if (element)
+        applyAppearanceStyle(element, style)
+    }
+  }, { immediate: true })
 
   const handleIframeThemeMessage = (event: MessageEvent) => {
     iframeDocument.receive(event)
@@ -255,104 +278,130 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
   }
 
   let cancelAppearanceTransition: (() => void) | undefined
+  let applyingAppearance = false
   onScopeDispose(() => cancelAppearanceTransition?.())
+  watch([
+    () => settings.value.theme,
+    () => settings.value.appearanceColors.light.background,
+    () => settings.value.appearanceColors.light.foreground,
+    () => settings.value.appearanceColors.dark.background,
+    () => settings.value.appearanceColors.dark.foreground,
+    () => settings.value.appearanceColors.darkAccent,
+    () => settings.value.appearanceColors.separateModes,
+    appearanceStyle,
+    accentColor,
+    darkModeBaseColor,
+    isDark,
+    isOledDark,
+    motionPreference,
+    currentUrl,
+  ], () => {
+    if (!applyingAppearance)
+      cancelAppearanceTransition?.()
+  }, { flush: 'sync' })
 
-  function toggleDark(e: MouseEvent) {
+  function transitionAppearance(update: () => void, event?: MouseEvent): Promise<void> {
     cancelAppearanceTransition?.()
+    if (typeof document.startViewTransition !== 'function' || prefersReducedMotion() || document.hidden) {
+      update()
+      return Promise.resolve()
+    }
+    const style = getComputedStyle(document.documentElement)
+    const duration = getMotionDuration(style, '--bew-duration-normal')
+    const easing = style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out'
+    const trigger = event?.detail === 0 && event.currentTarget instanceof HTMLElement ? event.currentTarget.getBoundingClientRect() : undefined
+    const x = trigger ? trigger.left + trigger.width / 2 : event?.clientX ?? 0
+    const y = trigger ? trigger.top + trigger.height / 2 : event?.clientY ?? 0
+    const endRadius = Math.hypot(
+      Math.max(x, innerWidth - x),
+      Math.max(y, innerHeight - y),
+    )
+    let transitionStyle: HTMLStyleElement | undefined
+    let active = true
+    let committed = false
+    let transition: ViewTransition | undefined
+    let animation: Animation | undefined
+    const cleanup = () => {
+      if (!active)
+        return
+      active = false
+      animation?.cancel()
+      transitionStyle?.remove()
+      if (cancelAppearanceTransition === cancel)
+        cancelAppearanceTransition = undefined
+    }
+    function cancel() {
+      transition?.skipTransition()
+      cleanup()
+    }
+    cancelAppearanceTransition = cancel
+    try {
+      transition = document.startViewTransition(async () => {
+        if (!active)
+          return
+        applyingAppearance = true
+        try {
+          committed = true
+          update()
+          await nextTick()
+          if (!active)
+            return
+          const reverse = event && !isDark.value
+          transitionStyle = document.createElement('style')
+          transitionStyle.dataset.bewlyThemeTransition = ''
+          transitionStyle.textContent = `::view-transition-old(root), ::view-transition-new(root) { animation: none !important; mix-blend-mode: normal; } ::view-transition-old(root) { z-index: ${reverse ? 2 : 1}; } ::view-transition-new(root) { z-index: ${reverse ? 1 : 2}; }`
+          document.head.appendChild(transitionStyle)
+        }
+        finally {
+          applyingAppearance = false
+        }
+      })
+      void transition.ready.then(() => {
+        if (!active)
+          return
+        const isDarkNow = document.documentElement.classList.contains('dark')
+        const clipPath = [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`]
+        animation = document.documentElement.animate(event ? { clipPath: isDarkNow ? clipPath : [...clipPath].reverse() } : { opacity: [0, 1] }, {
+          duration,
+          easing,
+          fill: 'forwards',
+          pseudoElement: !event || isDarkNow ? '::view-transition-new(root)' : '::view-transition-old(root)',
+        })
+        holdAnimation(animation)
+        return animation.finished
+      }).catch(() => {
+        if (active)
+          transition?.skipTransition()
+      })
+      return transition.finished.then(cleanup, cleanup)
+    }
+    catch {
+      cleanup()
+      if (!committed)
+        update()
+      return Promise.resolve()
+    }
+  }
+
+  function toggleDark(event: MouseEvent) {
     const nextTheme = currentAppColorScheme.value !== currentSystemColorScheme.value
       ? 'auto'
       : isPreferredDark.value ? 'light' : 'dark'
-    const updateThemeSettings = () => {
+    transitionAppearance(() => {
       settings.value.theme = nextTheme
-    }
-
-    const isAppearanceTransition = typeof document !== 'undefined'
-      && typeof document.startViewTransition === 'function'
-      && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (!isAppearanceTransition) {
-      updateThemeSettings()
-    }
-    else {
-      const trigger = e.detail === 0 && e.currentTarget instanceof HTMLElement ? e.currentTarget.getBoundingClientRect() : undefined
-      const x = trigger ? trigger.left + trigger.width / 2 : e.clientX
-      const y = trigger ? trigger.top + trigger.height / 2 : e.clientY
-      const endRadius = Math.hypot(
-        Math.max(x, innerWidth - x),
-        Math.max(y, innerHeight - y),
-      )
-      const styles: HTMLStyleElement[] = []
-      let active = true
-      let transition: ViewTransition | undefined
-      let animation: Animation | undefined
-      const mountStyle = (parent: ParentNode, css: string) => {
-        const style = document.createElement('style')
-        style.dataset.bewlyThemeTransition = ''
-        style.textContent = css
-        styles.push(style)
-        parent.appendChild(style)
-      }
-      const cleanup = () => {
-        if (!active)
-          return
-        active = false
-        animation?.cancel()
-        styles.forEach(style => style.remove())
-        if (cancelAppearanceTransition === cancel)
-          cancelAppearanceTransition = undefined
-      }
-      function cancel() {
-        transition?.skipTransition()
-        cleanup()
-      }
-      cancelAppearanceTransition = cancel
-      try {
-        const suppressTransitions = '*, *::before, *::after { transition: none !important; }'
-        mountStyle(document.head, suppressTransitions)
-        mountStyle(document.head, '::view-transition-old(root), ::view-transition-new(root) { animation: none !important; mix-blend-mode: normal; }')
-        const shadow = document.getElementById('bewly')?.shadowRoot
-        if (shadow)
-          mountStyle(shadow, suppressTransitions)
-        transition = document.startViewTransition(async () => {
-          if (!active)
-            return
-          updateThemeSettings()
-          await nextTick()
-        })
-        void transition.ready.then(() => {
-          if (!active)
-            return
-          const isDarkNow = document.documentElement.classList.contains('dark')
-          const foregroundZIndex = 'var(--bew-z-popover)'
-          mountStyle(document.head, `::view-transition-old(root) { z-index: ${isDarkNow ? 1 : foregroundZIndex}; } ::view-transition-new(root) { z-index: ${isDarkNow ? foregroundZIndex : 1}; }`)
-          const clipPath = [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`]
-          animation = document.documentElement.animate({ clipPath: isDarkNow ? clipPath : [...clipPath].reverse() }, {
-            duration: 300,
-            easing: 'ease-in-out',
-            fill: 'forwards',
-            pseudoElement: isDarkNow ? '::view-transition-new(root)' : '::view-transition-old(root)',
-          })
-          return animation.finished
-        }).catch(() => {
-          // Keep suppression and the final clip until the browser drops its snapshots.
-          // Removing them at animation.finished briefly repaints the old theme.
-          if (active)
-            transition?.skipTransition()
-        })
-        void transition.finished.then(cleanup, cleanup)
-      }
-      catch {
-        cleanup()
-        updateThemeSettings()
-      }
-    }
+    }, event)
   }
 
   return {
     isDark,
     isOledDark,
     darkModeBaseColor,
+    accentColor,
+    appearanceStyle,
+    motionPreference,
     iframeDocument,
     toggleDark,
+    transitionAppearance,
   }
 }
 

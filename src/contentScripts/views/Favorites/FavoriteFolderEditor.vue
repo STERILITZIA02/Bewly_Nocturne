@@ -178,7 +178,7 @@ function save() {
     padding: var(--bew-space-2) var(--bew-space-3);
     border: 1px solid var(--bew-field-edge-color);
     border-radius: var(--bew-interactive-radius);
-    background: var(--bew-elevated-solid);
+    background: var(--bew-input-bg);
     color: var(--bew-text-1);
     font: inherit;
   }
