@@ -1,5 +1,6 @@
 import GRID_CSS from '~/styles/gridLayout.scss?inline'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
+import { reducedMotionCss } from '~/utils/reducedMotion'
 
 const BOOT_OVERLAY_ID = 'bewly-boot-overlay'
 const BOOT_OVERLAY_STYLE_ID = 'bewly-boot-overlay-style'
@@ -55,12 +56,7 @@ export function mountBewlyBootOverlay(doc: Document): BewlyBootOverlayController
     @media (prefers-color-scheme: dark) {
       #${BOOT_OVERLAY_ID} { background: var(--bew-bg, #050607); }
     }
-    @media (prefers-reduced-motion: reduce) {
-      #${BOOT_OVERLAY_ID} {
-        transition: none;
-        animation: none;
-      }
-    }
+    ${reducedMotionCss(`#${BOOT_OVERLAY_ID}`, 'transition:none;animation:none;')}
   `
 
   const overlay = doc.createElement('div')

@@ -51,6 +51,7 @@ library_tools:
   image_navigation: 图片查看区域，可滚动查看，放大后可拖动
   load_more_videos: 继续加载视频
 common:
+  pagination_stalled: 列表未能继续加载，请重试。
   advertisement: 广告
   clear_selection: 清空已选
   favorite_folder_full: 此收藏夹已满，无法新增当前视频
@@ -275,6 +276,7 @@ settings:
   search_identity_guest: 游客
   enable_text_autospace: 中英文自动间距
   enable_text_autospace_desc: 由支持的浏览器为阅读文字添加中英文视觉间距，不改写内容；代码和编辑器保持原样。
+  group_licenses: 许可
   project_license: 项目协议
   third_party_licenses: 第三方依赖许可
   licenses_loading: 正在读取许可资产
@@ -285,6 +287,7 @@ settings:
   licenses_sources: 构建入口
   licenses_text: 许可原文
   licenses_summary: 仅列出本次构建最终输出有贡献的依赖；不同版本分别列出。
+  licenses_view: 查看
   comment_reply_batch_pages: 每次加载的回复页数
   comment_reply_batch_pages_desc: 只在点击加载下一批时请求；首次展开和直接选页各请求一页，不自动加载整个楼层。
   enable_comment_reply_tree_container: 独立回复阅读区域
@@ -316,7 +319,6 @@ settings:
     located: 已定位到此设置
   category_general_desc: 配置语言、交互布局与抽屉行为。
   category_appearance_desc: 配置毛玻璃、主题颜色、字体和其他页面的适配。
-  breadcrumb: 设置位置
   group_interaction_layout: 交互与布局
   home_grid_layout: 首页视频布局
   home_grid_layout_desc: 调整首页视频内容的自适应网格或列表列数。
@@ -404,7 +406,85 @@ settings:
     reset_title: 恢复默认设置
     reset_desc: 此区域的操作会影响全部 Bewly Nocturne 设置。
     reset_warning: 恢复后无法撤销，当前语言设置会保留。
-  menu_appearance: 外观
+  menu_appearance: 视觉风格
+  visual_style:
+    motion_system: 跟随系统
+    motion_on: 开启
+    motion_off: 关闭
+    preset_pair: 联动主题的浅色与深色版本；缺少的版本保持原样。
+    preset_single: 预设只应用于当前编辑的配色。
+    choose_color: 选择预设颜色
+    title: 视觉风格
+    description: 统一设置显示模式、配色、字体与界面材质。
+    palette: 主题与配色
+    preset: 主题
+    custom: 自定义
+    automatic: 自动
+    accent: 强调色
+    editing_mode: 编辑配色
+    editing_mode_desc: 切换要编辑的配色，不改变当前显示模式。
+    separate_accent: 浅色与深色单独编辑
+    separate_accent_desc: 开启后分别选择主题与强调色，切换显示模式时自动使用对应配色。
+    background: 背景
+    background_desc: 作为表面基色，卡片、浮层和输入框由它统一派生。颜色会适配当前浅色或深色模式。
+    foreground: 前景
+    foreground_desc: 用于文字与中性控件，显示时自动保持与背景的对比。
+    contrast: 层次对比
+    contrast_desc: 提高次要文字与轮廓的对比度。0 保持原有层次。
+    preview: 文字与表面预览
+    preview_secondary: 次要信息
+    reset_colors: 恢复 Nocturne 配色
+    advanced: 高级
+    interface_font_size: 界面基础字号
+    interface_font_size_desc: 按比例调整现有文字层级，并保留系统与浏览器的文字缩放。
+    shadows: 界面阴影
+    motion: 减少动态效果
+    motion_desc: 减少界面位移与缩放，保留必要的状态反馈。
+    schedule_start: 浅色模式开始时间
+    schedule_end: 浅色模式结束时间
+    invalid_color: '请输入有效的十六进制颜色，例如 #2b2b2b。'
+    import: 导入视觉风格
+    export: 导出视觉风格
+    copy: 复制视觉风格
+    copied: 视觉风格已复制
+    imported: 视觉风格已导入
+    import_failed: 无法导入，请选择有效的 Nocturne 视觉风格文件。
+    presets:
+      absolutely: 绝对
+      ayu: 暖砂
+      catppuccin: 猫布奇诺
+      codex: Codex
+      dracula: 德古拉
+      everforest: 常青森林
+      github: GitHub
+      gruvbox: 复古暖色
+      linear: 线性
+      lobster: 龙虾
+      material: 材质
+      matrix: 矩阵
+      monokai: 莫诺凯
+      night_owl: 夜枭
+      nord: 北境
+      notion: Notion
+      og: 初代
+      one: 一号
+      oscurange: 暗橙
+      proof: 校样
+      raycast: Raycast
+      rose_pine: 玫瑰松
+      sentry: 哨兵
+      solarized: 日照
+      temple: 神殿
+      tokyo_night: 东京之夜
+      vercel: Vercel
+      vscode_plus: VS Code 增强
+      xcode: Xcode
+      chatgpt: ChatGPT
+      nocturne: Nocturne
+      graphite: 石墨
+      paper: 暖纸
+      sage: 鼠尾草
+      slate: 岩蓝
   menu_compatibility: 兼容性
   menu_about: 关于
   experimental: 实验性
@@ -751,15 +831,6 @@ settings:
   show_like_notification_reminder_desc: 启用后，顶栏通知角标会将收到的赞计入总数。
 
   # Video Card Grid Settings
-  group_video_card_grid: 视频卡片网格
-  group_video_card_grid_desc: 封面至少 320×180，能放下几列就放几列，窗口变宽时卡片随之变大。
-  auto_switch_list_layout: 根据视频卡片区域宽度自动切换单双列
-  auto_switch_list_layout_desc: 开启后，双列模式会在视频卡片区域宽度小于设定宽度时自动切换为单列。
-  auto_switch_list_layout_breakpoint: 切换宽度
-  video_card_cover_ratio: 封面占比
-  video_card_cover_ratio_desc: 分别设置单列与双列横向视频卡片中封面所占的宽度。
-  video_card_cover_ratio_one_column: 单列布局
-  video_card_cover_ratio_two_columns: 双列布局
   grid_columns: 显示
   video_card_title_font_size: 标题字号
   video_card_title_font_size_desc: 控制视频卡片标题的字号。
@@ -808,7 +879,7 @@ settings:
   back_to_top_and_refresh_buttons_are_separated: 分离回到顶部和刷新按钮
   sidebar_position: 侧边栏位置
   auto_hide_sidebar: 自动隐藏侧边栏
-  theme: 主题
+  theme: 显示模式
   theme_opt:
     light: 亮色
     dark: 暗色
@@ -822,11 +893,6 @@ settings:
   theme_color_desc: 自定义颜色与纯黑、纯白页面的对比度至少为 1.8:1，过暗或过亮时会自动调整明度。“无主题色”在浅色模式下为黑、深色模式下为白。
   theme_color_opt:
     neutral: 无主题色
-  dark_mode_base_color: 深色模式基准颜色
-  enable_dark_mode_tint: 深色背景色调
-  enable_dark_mode_tint_desc: 默认使用无色调的中性灰。开启后使用下方的背景色调；关闭会保留已选颜色。
-  enable_oled_dark_mode: OLED 纯黑模式
-  enable_oled_dark_mode_desc: 深色模式下使用纯黑底色，卡片和浮层保留层次。视频播放页仍使用普通深色。
   gradient_theme_color_background: 在深色模式下使用中性渐变
   gradient_theme_color_background_desc: 同时应用于网页背景和顶栏，不使用主题色。
   logo_color: Logo 颜色

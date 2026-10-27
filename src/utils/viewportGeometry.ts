@@ -6,6 +6,10 @@ export interface ViewportGeometry {
   scrollHeight: number
   /** Viewport content-box top in client coordinates. */
   top: number
+  scrollLeft: number
+  clientWidth: number
+  scrollWidth: number
+  left: number
 }
 
 type ViewportListener = (geometry: ViewportGeometry, reason: ViewportFrameReason) => void
@@ -28,12 +32,17 @@ function isDocumentViewport(element: HTMLElement) {
 }
 
 function measure(element: HTMLElement, version: number): ViewportGeometry {
+  const rect = isDocumentViewport(element) ? undefined : element.getBoundingClientRect()
   return {
     version,
     scrollTop: element.scrollTop,
     clientHeight: Math.max(1, element.clientHeight || window.innerHeight),
     scrollHeight: element.scrollHeight,
-    top: isDocumentViewport(element) ? 0 : element.getBoundingClientRect().top + element.clientTop,
+    top: rect ? rect.top + element.clientTop : 0,
+    scrollLeft: element.scrollLeft,
+    clientWidth: Math.max(1, element.clientWidth || window.innerWidth),
+    scrollWidth: element.scrollWidth,
+    left: rect ? rect.left + element.clientLeft : 0,
   }
 }
 

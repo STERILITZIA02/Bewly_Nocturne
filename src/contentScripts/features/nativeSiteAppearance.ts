@@ -3,7 +3,8 @@ import { effectScope, onScopeDispose, watch } from 'vue'
 import { stopDarkState, useDark } from '~/composables/useDark'
 import { getNativeSite } from '~/constants/nativeSites'
 import { settings, settingsInitializationState } from '~/logic/storage'
-import { applyThemeColorTokens, getThemeColorTokens, readThemeContrastSurfaces, syncNativeNeutralRgb } from '~/utils/themeColor'
+import { APPEARANCE_STYLE_KEYS } from '~/utils/appearance'
+import { NATIVE_NEUTRAL_RGB_PROPERTIES, syncThemeColors, THEME_COLOR_PROPERTIES } from '~/utils/themeColor'
 
 import { setupNativePageKeyboard } from './nativePageKeyboard'
 
@@ -22,7 +23,7 @@ export function setupNativeSiteAppearance() {
   const root = document.documentElement
   root.dataset.bewlyNativeSite = site
   const scope = effectScope()
-  const appearanceProperties = ['--bew-theme-color', '--bew-on-theme-color', '--bew-theme-checkmark-image', '--bew-switch-thumb-active', '--bew-theme-foreground', '--bew-theme-focus-ring', '--bew-dark-base-color', '--bew-native-font-family']
+  const appearanceProperties = [...THEME_COLOR_PROPERTIES, ...NATIVE_NEUTRAL_RGB_PROPERTIES, '--bew-native-font-family', ...APPEARANCE_STYLE_KEYS]
   let originalProperties: string[][] = []
   const originalClasses = new Map<Element, Map<string, boolean>>()
   let appearanceScope: ReturnType<typeof effectScope> | undefined
@@ -58,7 +59,7 @@ export function setupNativeSiteAppearance() {
         return
       originalProperties = appearanceProperties.map(key => [key, root.style.getPropertyValue(key), root.style.getPropertyPriority(key)])
       for (const element of [root, document.body].filter((element): element is HTMLElement => Boolean(element)))
-        originalClasses.set(element, new Map(['dark', 'oled-dark', 'bili_dark'].map(name => [name, element.classList.contains(name)])))
+        originalClasses.set(element, new Map(['dark', 'bili_dark'].map(name => [name, element.classList.contains(name)])))
       root.classList.add('bewly-design')
       appearanceScope = effectScope(true)
       appearanceScope.run(() => {
@@ -132,16 +133,15 @@ export function setupNativeSiteAppearance() {
           if (keyboardRoot)
             onScopeDispose(setupNativePageKeyboard(keyboardRoot, keyboardPage))
         }
-        const { isDark, isOledDark, darkModeBaseColor } = useDark({ observeRoute: false, syncNativeTheme: false })
+        const { isDark, accentColor, appearanceStyle } = useDark({ observeRoute: false, syncNativeTheme: false })
         watch([() => settings.value.customizeFont, () => settings.value.fontFamily], ([mode, family]) => {
           root.classList.toggle('bewly-native-fonts', mode !== 'default')
           if (mode === 'default')
             root.style.removeProperty('--bew-native-font-family')
           else root.style.setProperty('--bew-native-font-family', mode === 'custom' && family ? family : 'var(--bew-fonts)')
         }, { immediate: true })
-        watch([() => settings.value.themeColor, isDark, isOledDark, darkModeBaseColor], ([themeColor, dark]) => {
-          syncNativeNeutralRgb(root)
-          applyThemeColorTokens(root, getThemeColorTokens(themeColor, dark, readThemeContrastSurfaces(root)))
+        watch([accentColor, isDark, () => appearanceStyle.value['--bew-custom-background'], () => appearanceStyle.value['--bew-custom-foreground']], ([themeColor, dark]) => {
+          syncThemeColors(root, null, themeColor, dark)
         }, { immediate: true, flush: 'post' })
       })
     }, { immediate: true })

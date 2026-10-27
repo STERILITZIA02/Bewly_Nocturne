@@ -10,7 +10,7 @@ import type { useFavoritesData } from './useFavoritesData'
 import type { useFavoriteWrites } from './useFavoriteWrites'
 
 interface Dependencies {
-  api: typeof api.favorite
+  api: Pick<typeof api.favorite, 'getFavoriteFolderInfo' | 'uploadFavoriteCover'>
   data: ReturnType<typeof useFavoritesData>
   writes: ReturnType<typeof useFavoriteWrites>
   getCSRF: () => string
@@ -191,6 +191,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
     busy.value = true
     try {
       // Sort the authoritative complete list; do not overwrite folders created in another tab.
+      data.invalidateReads()
       await data.getFavoriteCategories()
       if (!owner.isCurrent() || version !== operationVersion || data.categoryState.failed)
         return
@@ -227,8 +228,6 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
       await data.getFavoriteCategories()
       if (!transaction.owner.isCurrent())
         return
-      if (currentFolderId.value === id)
-        void data.loadSelectedContent()
       void refreshInfo()
       notify()
     }

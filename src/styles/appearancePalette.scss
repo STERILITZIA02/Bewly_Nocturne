@@ -1,0 +1,10 @@
+// The runtime palette and the settings previews share the same pigment recipes.
+@mixin pigments($dark: false, $prefix: "--bew-neutral", $custom: "--bew-custom") {
+  @if $dark {
+    #{$prefix}-bg: var(#{$custom}-background, #141414);
+    #{$prefix}-fg: var(#{$custom}-foreground, #ebebeb);
+  } @else {
+    #{$prefix}-bg: var(#{$custom}-background, #fff);
+    #{$prefix}-fg: var(#{$custom}-foreground, #171717);
+  }
+}

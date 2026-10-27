@@ -1,11 +1,10 @@
-import type { InjectionKey, Ref, TransitionProps } from 'vue'
+import type { TransitionProps } from 'vue'
 import { onScopeDispose } from 'vue'
+
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 
 import { holdAnimation } from '../utils/motionPriority'
 import { getMotionDuration } from '../utils/motionTiming'
-
-/** True inside a surface that already samples the backdrop, so descendants stay solid. */
-export const GLASS_SURFACE_CONTEXT: InjectionKey<Readonly<Ref<boolean>>> = Symbol('bew-glass-surface')
 
 /** Keep glass and its ancestors opaque: opacity changes the backdrop sampling root. */
 export function useGlassPanelMotion(selector: string, collapsedTransform?: (panel: HTMLElement) => string, fadeSelector?: string): TransitionProps {
@@ -40,7 +39,7 @@ export function useGlassPanelMotion(selector: string, collapsedTransform?: (pane
     const panel = element.querySelector<HTMLElement>(selector)
     if (element instanceof HTMLElement)
       element.inert = !entering
-    if (!panel?.animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!panel?.animate || prefersReducedMotion()) {
       interrupted.delete(element)
       if (panel && fadeSelector)
         element.querySelectorAll<HTMLElement>(fadeSelector).forEach(target => interruptedOpacity.delete(target))

@@ -11,6 +11,7 @@ import { AppPage } from '~/enums/appEnums'
 import { originalSettings, settings } from '~/logic'
 import type { Settings } from '~/logic/storage'
 import { videoCardContextMenuKeys } from '~/logic/storage'
+import { isAppearanceColorsInput } from '~/utils/appearance'
 import { LOCAL_LOUDNESS_RANGE } from '~/utils/localLoudnessProtocol'
 import { isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
@@ -43,6 +44,7 @@ const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   pageMode: ['original', 'bewly', 'custom'],
   sidebarPosition: ['left', 'right'],
   theme: ['light', 'dark', 'auto', 'scheduled'],
+  motionPreference: ['system', 'reduce', 'full'],
   searchPageLogoColor: ['white', 'themeColor'],
   searchResultsPaginationMode: ['scroll', 'pagination'],
   recommendationMode: ['web', 'app', 'webNoCookie'],
@@ -114,6 +116,7 @@ const videoPlayerModeOverrideValues = new Set(['default', 'webFullscreen', 'wide
 const customPlayOrderOverrideValues = new Set(['sequential', 'reverse', 'random', 'inherit'])
 
 const settingValueValidators: Partial<Record<keyof Settings, (value: unknown) => boolean>> = {
+  appearanceColors: isAppearanceColorsInput,
   localLoudnessTarget: value => Number.isSafeInteger(value) && Number(value) >= LOCAL_LOUDNESS_RANGE.target.min && Number(value) <= LOCAL_LOUDNESS_RANGE.target.max,
   localLoudnessStrength: value => Number.isSafeInteger(value) && Number(value) >= LOCAL_LOUDNESS_RANGE.strength.min && Number(value) <= LOCAL_LOUDNESS_RANGE.strength.max,
   commentReplyBatchPages: value => Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= COMMENT_REPLY_BATCH_MAX,
@@ -190,11 +193,13 @@ function handleImportFile(event: Event) {
         const value = importedSettings[key]
         const enumValues = settingEnumValues[settingKey]
         const valueValidator = settingValueValidators[settingKey]
-        const validType = settingKey === 'savedVideoQuality'
-          ? valueValidator?.(value)
-          : settingKey === 'videoPlayerModeOverrides'
-            ? isPlainObject(value) && Object.keys(value).every(key => Object.hasOwn(originalSettings.videoPlayerModeOverrides, key))
-            : matchesSettingType(value, originalSettings[settingKey])
+        const validType = settingKey === 'appearanceColors'
+          ? true
+          : settingKey === 'savedVideoQuality'
+            ? valueValidator?.(value)
+            : settingKey === 'videoPlayerModeOverrides'
+              ? isPlainObject(value) && Object.keys(value).every(key => Object.hasOwn(originalSettings.videoPlayerModeOverrides, key))
+              : matchesSettingType(value, originalSettings[settingKey])
         if (!validType
           || (enumValues && !enumValues.includes(value))
           || (valueValidator && !valueValidator(value))) {

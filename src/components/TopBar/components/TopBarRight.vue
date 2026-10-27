@@ -12,6 +12,7 @@ import { getUserID, isInIframe, removeHttpFromUrl } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
 import { holdMotion } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { isComponentVisible, shouldShowBadge, shouldShowDotBadge, shouldShowNumberBadge } from '~/utils/topBarBadge'
 
 import { resetTopBarTransientInteraction, useTopBarInteraction } from '../composables/useTopBarInteraction'
@@ -135,7 +136,7 @@ watch(
 // The capsule change runs before the incoming page mounts: leaving buttons fade
 // out, slots resize, entering buttons fade in (durations from index.scss).
 function holdItemMotion(element: Element, entering: boolean) {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  if (prefersReducedMotion())
     return
   const style = getComputedStyle(element)
   const fade = getMotionDuration(style, '--top-bar-item-fade', 150)

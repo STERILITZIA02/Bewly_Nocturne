@@ -3,6 +3,7 @@ import SKELETON_CSS from '~/styles/skeleton.scss?inline'
 import { LOADING_FADE_DURATION, LOADING_ROOT_ID, MOBILE_BREAKPOINT } from '~/utils/bewlyWidescreen/constants'
 import { CARD_LAYOUT_PROPERTIES } from '~/utils/bewlyWidescreen/styles/cardLayout'
 import { injectCSS } from '~/utils/main'
+import { reducedMotionCss } from '~/utils/reducedMotion'
 
 export function injectLoadingStyle() {
   return injectCSS(`
@@ -387,13 +388,7 @@ export function injectLoadingStyle() {
       outline-offset: var(--bew-space-0-5, 2px);
     }
 
-    @media (prefers-reduced-motion: reduce) {
-      #${LOADING_ROOT_ID},
-      #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-block {
-        transition: none;
-        animation: none;
-      }
-    }
+    ${reducedMotionCss(`#${LOADING_ROOT_ID}, #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-block`, 'transition:none;animation:none;')}
 
     @media (max-width: ${MOBILE_BREAKPOINT}px) {
       #${LOADING_ROOT_ID} {

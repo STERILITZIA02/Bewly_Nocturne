@@ -380,7 +380,7 @@ export function registerRecommendationRuntimeChecks(check, { Vue, flush, compile
     const active = Vue.ref(true)
     const hostModule = await loadSourceModule('../src/composables/useIframeDocumentHost.ts', {
       'vue': Vue,
-      './useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#181818') }) },
+      './useDark': { useDark: () => ({ isDark: Vue.ref(false) }) },
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/utils/iframeDocument': protocol,
       '~/utils/iframeMessage': wire,

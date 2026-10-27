@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import ALink from '~/components/ALink.vue'
-import Button from '~/components/Button.vue'
 import CardRemovalPanel from '~/components/CardRemovalPanel.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
@@ -27,7 +26,7 @@ import { captureListRemovalFocus } from '~/utils/listRemovalFocus'
 import { getUserID, removeHttpFromUrl } from '~/utils/main'
 import { retiringListTransition } from '~/utils/motionPresence'
 import { openLinkInBackground } from '~/utils/tabs'
-import { getVideoPlaybackProgress, getVideoProgressPercentage } from '~/utils/videoVisitHistory'
+import { getVideoProgressPercentage } from '~/utils/videoVisitHistory'
 import { captureWatchLaterRemoval } from '~/utils/watchLater'
 import { getWatchLaterAuthor, getWatchLaterPlaybackUrl } from '~/utils/watchLaterList'
 
@@ -38,7 +37,7 @@ const topBarStore = useTopBarStore()
 const { openIframeDrawer } = useBewlyApp()
 const { t } = useI18n()
 const toast = useToast()
-const { watchLaterList, isLoadingWatchLater, watchLaterCount } = storeToRefs(topBarStore)
+const { watchLaterList, isLoadingWatchLater, watchLaterCount, watchLaterPageState } = storeToRefs(topBarStore)
 const viewAllUrl = computed((): string => {
   return 'https://www.bilibili.com/watchlater/list'
 })
@@ -173,23 +172,21 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
       </h3>
 
       <div class="bew-popover__actions">
-        <button type="button" class="bew-popover__action" @click.stop="emit('addOpenTabs')">
-          {{ $t('watch_later.open_tabs.title') }}
-        </button>
-        <ALink
-          :href="playAllUrl"
-          type="topBar"
-          class="bew-popover__action"
-        >
-          {{ $t('common.play_all') }}
-        </ALink>
-        <ALink
-          :href="viewAllUrl"
-          type="topBar"
-          class="bew-popover__action"
-        >
-          {{ $t('common.view_all') }}
-        </ALink>
+        <Tooltip :content="$t('watch_later.open_tabs.title')" placement="bottom" teleport>
+          <IconButton class="bew-popover__action" :label="$t('watch_later.open_tabs.title')" @click.stop="emit('addOpenTabs')">
+            <i i-tabler:browser-plus />
+          </IconButton>
+        </Tooltip>
+        <Tooltip :content="$t('common.play_all')" placement="bottom" teleport>
+          <ALink :href="playAllUrl" type="topBar" class="bew-popover__action" :aria-label="$t('common.play_all')">
+            <i i-tabler:player-play />
+          </ALink>
+        </Tooltip>
+        <Tooltip :content="$t('common.view_all')" placement="bottom" teleport>
+          <ALink :href="viewAllUrl" type="topBar" class="bew-popover__action" :aria-label="$t('common.view_all')">
+            <i i-tabler:arrow-up-right />
+          </ALink>
+        </Tooltip>
       </div>
     </header>
 
@@ -202,8 +199,14 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
       />
 
       <Empty
-        v-if="!isLoadingWatchLater && removals.displayItems.value.length === 0"
+        v-if="!isLoadingWatchLater && removals.displayItems.value.length === 0 && watchLaterPageState !== 'failed' && watchLaterPageState !== 'stalled'"
         class="bew-popover__state"
+      />
+
+      <Empty
+        v-if="!isLoadingWatchLater && (watchLaterPageState === 'failed' || watchLaterPageState === 'stalled')" text-only
+        :description="t(watchLaterPageState === 'stalled' ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="t('common.retry')"
+        @action="topBarStore.loadMoreWatchLaterList(true)"
       />
 
       <!-- watchlater -->
@@ -211,7 +214,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
         <article
           v-for="item in removals.displayItems.value"
           :key="item.aid"
-          class="group popover-card"
+          class="popover-card"
         >
           <ALink
             class="popover-card__primary"
@@ -220,106 +223,69 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
             :aria-label="item.title"
             type="topBar"
           />
-          <section class="popover-card__content" :inert="!!removals.get(item) || undefined" flex="~ gap-4 items-start">
-            <!-- Video cover, live cover, ariticle cover -->
-            <div
-              class="popover-card__media watch-later-pop__media aspect-video"
-            >
-              <div
-                class="popover-card__interactive popover-card-action watch-later-pop__leading-actions"
-                pos="absolute top-0 left-0" z-1
-                flex="~ gap-1"
-                m="1"
-              >
-                <!-- Open in regular video page button -->
-                <Tooltip :content="$t('watch_later.open_video_page')" placement="top" teleport>
-                  <IconButton
-                    class="popover-card__interactive popover-card__overlay-action"
-                    :label="$t('watch_later.open_video_page')"
-                    :disabled="pendingActions.has(item.aid) || !getWatchLaterPlaybackUrl(item)"
-                    @click.stop.prevent="openVideoPage(getWatchLaterPlaybackUrl(item))"
-                  >
-                    <i i-tabler:external-link />
-                  </IconButton>
-                </Tooltip>
-              </div>
-
-              <!-- Delete button -->
-              <IconButton
-                class="popover-card__interactive popover-card-action popover-card__overlay-action popover-card__overlay-action--danger watch-later-pop__remove"
-                :label="$t('common.operation.delete')"
-                :disabled="pendingActions.has(item.aid)"
-                @click.stop.prevent="confirmRemoval(item)"
-              >
-                <i i-tabler:x />
-              </IconButton>
-
-              <!-- Video -->
-              <div pos="absolute inset-0">
-                <Picture
-                  class="watch-later-pop__cover"
-                  aspect-ratio="auto"
-                  :src="`${removeHttpFromUrl(
-                    item.pic,
-                  )}@256w_144h_1c`"
-                  :alt="item.title"
-                  loading="lazy"
-                />
-                <div
-                  pos="absolute bottom-0 right-0"
-                  bg="black opacity-60"
-                  m="1"
-                  p="x-2 y-1"
-                  text="white xs"
-                  border="rounded-$bew-pill-radius"
-                >
-                  <!--  When progress = -1 means that the user watched the full video -->
-                  {{
-                    `${
-                      item.progress === -1
-                        ? calcCurrentTime(item.duration)
-                        : calcCurrentTime(getVideoPlaybackProgress({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)?.progress ?? 0)
-                    } /
-                    ${calcCurrentTime(item.duration)}`
-                  }}
-                </div>
-              </div>
+          <section class="popover-card__content" :inert="!!removals.get(item) || undefined">
+            <div class="popover-card__media">
+              <Picture
+                class="watch-later-pop__cover"
+                aspect-ratio="auto"
+                :src="`${removeHttpFromUrl(item.pic)}@256w_144h_1c`"
+                :alt="item.title"
+                loading="lazy"
+              />
               <Progress
-                class="watch-later-pop__progress"
-                :percentage="
-                  getVideoProgressPercentage({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)
-                "
+                class="popover-card__progress"
+                :percentage="getVideoProgressPercentage({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)"
               />
             </div>
 
-            <!-- Description -->
             <div class="popover-card__copy">
-              <h3
-                class="keep-two-lines popover-card__title"
-                break-anywhere
-              >
+              <h3 class="keep-two-lines popover-card__title">
                 {{ item.title }}
               </h3>
-              <div class="popover-card__meta" flex="~" align="items-center">
-                <ALink
-                  :href="getWatchLaterAuthor(item).authorUrl"
-                  type="topBar"
-                  class="popover-card__interactive"
-                >
-                  {{ getWatchLaterAuthor(item).name }}
-                </ALink>
+              <div class="popover-card__footer">
+                <p class="popover-card__meta">
+                  <ALink
+                    :href="getWatchLaterAuthor(item).authorUrl"
+                    type="topBar"
+                    class="popover-card__interactive"
+                  >
+                    {{ getWatchLaterAuthor(item).name }}
+                  </ALink>
+                  <span>{{ calcCurrentTime(item.duration) }}</span>
+                </p>
+                <div class="popover-card__actions">
+                  <Tooltip :content="$t('watch_later.play_and_remove')" placement="top" teleport>
+                    <IconButton
+                      class="popover-card__interactive bew-popover__action"
+                      :label="$t('watch_later.play_and_remove')"
+                      :disabled="pendingActions.has(item.aid) || !getWatchLaterPlaybackUrl(item)"
+                      @click.stop.prevent="handleOpenVideoPageAndRemove(item)"
+                    >
+                      <i i-tabler:player-play />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip :content="$t('watch_later.open_video_page')" placement="top" teleport>
+                    <IconButton
+                      class="popover-card__interactive bew-popover__action"
+                      :label="$t('watch_later.open_video_page')"
+                      :disabled="pendingActions.has(item.aid) || !getWatchLaterPlaybackUrl(item)"
+                      @click.stop.prevent="openVideoPage(getWatchLaterPlaybackUrl(item))"
+                    >
+                      <i i-tabler:external-link />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip :content="$t('common.operation.delete')" placement="top" teleport>
+                    <IconButton
+                      class="popover-card__interactive bew-popover__action bew-popover__action--danger"
+                      :label="$t('common.operation.delete')"
+                      :disabled="pendingActions.has(item.aid)"
+                      @click.stop.prevent="confirmRemoval(item)"
+                    >
+                      <i i-tabler:trash />
+                    </IconButton>
+                  </Tooltip>
+                </div>
               </div>
-              <Button
-                size="small"
-                type="secondary"
-                class="popover-card__interactive watch-later-pop__play-remove"
-                :aria-label="$t('watch_later.play_video')"
-                :disabled="pendingActions.has(item.aid) || !getWatchLaterPlaybackUrl(item)"
-                @click.stop.prevent="handleOpenVideoPageAndRemove(item)"
-              >
-                <i i-tabler:player-play aria-hidden="true" />
-                {{ $t('watch_later.play_and_remove') }}
-              </Button>
             </div>
           </section>
           <CardRemovalPanel v-if="removals.get(item)" :state="removals.get(item)!" kind="watchLater" />
@@ -334,8 +300,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
       <!-- no more content -->
       <div
         v-if="!isLoadingWatchLater && !hasMoreContent && watchLaterList.length > 0"
-        text="$bew-text-3 xs center"
-        p="y-4"
+        class="watch-later-pop__end"
       >
         {{ $t('common.no_more_content') }}
       </div>
@@ -351,27 +316,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
   height: min(500px, var(--bew-popover-max-height));
 }
 
-.watch-later-pop__scroll {
-  position: relative;
-}
-
-.watch-later-pop__play-remove {
-  margin-top: var(--bew-space-2);
-}
-
-.watch-later-pop__media {
-  flex: 0 0 var(--bew-popover-media-width);
-  width: var(--bew-popover-media-width);
-}
-
-.watch-later-pop__cover {
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  border-radius: 0;
-  corner-shape: unset;
-}
-
+.watch-later-pop__cover,
 .watch-later-pop__cover :deep(img) {
   width: 100%;
   height: 100%;
@@ -380,27 +325,16 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
   corner-shape: unset;
 }
 
-.watch-later-pop__leading-actions {
-  z-index: 3;
+// The undo panel covers the whole row, square like the row itself.
+.popover-card .card-removal {
+  border-radius: 0;
 }
 
-.watch-later-pop__remove {
-  z-index: 3;
-  top: var(--bew-space-1);
-  right: var(--bew-space-1);
-}
-
-.watch-later-pop__progress {
-  font-variant-numeric: tabular-nums;
-  position: absolute;
-  z-index: 2;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: inherit;
-  border-bottom-left-radius: inherit;
-  corner-shape: inherit;
+.watch-later-pop__end {
+  padding-block: var(--bew-space-4);
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+  text-align: center;
 }
 </style>

@@ -9,6 +9,7 @@ import { CARD_LAYOUT_PROPERTIES } from '~/utils/bewlyWidescreen/styles/cardLayou
 import { DANMAKU_SENDER_ORDER_BUTTON_CLASS, DANMAKU_SENDER_ORDER_CLASS } from '~/utils/danmakuSenderOrder'
 import { injectCSS } from '~/utils/main'
 import { PHOTO_VIEWER_SELECTOR } from '~/utils/photoViewer'
+import { reducedMotionCss } from '~/utils/reducedMotion'
 
 /**
  * The one solid surface every player popover shares: control menus and
@@ -3822,8 +3823,7 @@ export function injectLayoutStyle() {
       }
     }
 
-    @media (prefers-reduced-motion: reduce) {
-      body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+    ${reducedMotionCss(`body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
         .bpx-player-control-wrap,
         .bilibili-player-video-control-wrap,
         .bilibili-player-video-control,
@@ -3836,20 +3836,12 @@ export function injectLayoutStyle() {
       ${DANMAKU_SURFACE_SELECTOR},
       #${ROOT_ID} .bewly-widescreen-playlist-toggle::after,
       #${ROOT_ID} .bewly-widescreen-panel-playlist .${EPISODE_SECTION_CLASS},
-      #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__block {
-        transition: none;
-        animation: none;
-      }
+      #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__block`, 'transition:none;animation:none;')}
 
-      #${ROOT_ID} .bewly-widescreen-action-slot :is(.video-toolbar-left-item, .video-toolbar-right-item, .bewly-watch-later-btn):active,
-      #${ROOT_ID} .bewly-widescreen-up-slot .upinfo-btn-panel > .default-btn:active {
-        scale: none;
-      }
+    ${reducedMotionCss(`#${ROOT_ID} .bewly-widescreen-action-slot :is(.video-toolbar-left-item, .video-toolbar-right-item, .bewly-watch-later-btn):active,
+      #${ROOT_ID} .bewly-widescreen-up-slot .upinfo-btn-panel > .default-btn:active`, 'scale:none;')}
 
-      body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .b-back-panel :is(.b-back-submit, .b-back-content-fail-resubmit, .b-back-content-test-submit, .b-back-content-test-fail-submit, .b-back-content-test-success-submit, .b-back-content-test-speedtest, .b-back-content-test-fail-speedtest):active {
-        scale: none;
-      }
-    }
+    ${reducedMotionCss(`body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .b-back-panel :is(.b-back-submit, .b-back-content-fail-resubmit, .b-back-content-test-submit, .b-back-content-test-fail-submit, .b-back-content-test-success-submit, .b-back-content-test-speedtest, .b-back-content-test-fail-speedtest):active`, 'scale:none;')}
 
     /* One column: the 16:9 video pane across the top, then the column with
        its info capped, the tabs and the panels taking the remaining height. */

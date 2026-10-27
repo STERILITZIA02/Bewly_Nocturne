@@ -2,7 +2,6 @@
 withDefaults(defineProps<{
   title: string
   desc?: string
-  icon?: string
   collapsible?: boolean
   warning?: boolean
   badge?: string
@@ -24,9 +23,8 @@ const collapsed = defineModel<boolean>('collapsed', {
     :aria-expanded="!collapsed"
     @click="collapsed = !collapsed"
   >
-    <span v-if="icon" class="settings-section-heading__icon" :class="icon" />
     <span class="settings-section-heading__content">
-      <h2 class="bew-subheading">
+      <h2>
         {{ title }}
         <span v-if="badge" class="settings-risk-badge bew-warning-badge">{{ badge }}</span>
       </h2>
@@ -43,9 +41,8 @@ const collapsed = defineModel<boolean>('collapsed', {
     class="settings-section-heading"
     :data-settings-title="title"
   >
-    <span v-if="icon" class="settings-section-heading__icon" :class="icon" />
     <span class="settings-section-heading__content">
-      <h2 class="bew-subheading">
+      <h2>
         {{ title }}
         <span v-if="badge" class="settings-risk-badge bew-warning-badge">{{ badge }}</span>
       </h2>
@@ -55,20 +52,13 @@ const collapsed = defineModel<boolean>('collapsed', {
 </template>
 
 <style lang="scss" scoped>
+// The open page's title (user-specified, after Claude Code): plain type at
+// the top of the page column, the page's groups below it.
 .settings-section-heading {
   display: flex;
   gap: var(--bew-space-3);
-  align-items: center;
-  margin-bottom: var(--bew-space-4);
-  padding: 0 var(--bew-space-0-5);
-}
-
-.settings-section-heading__icon {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  color: var(--bew-text-1);
-  font-size: var(--bew-icon-size-lg);
+  align-items: flex-start;
+  margin-bottom: var(--bew-space-6);
 }
 
 .settings-section-heading__content {
@@ -81,24 +71,20 @@ const collapsed = defineModel<boolean>('collapsed', {
   text-align: left;
   cursor: pointer;
 
-  &:hover {
-    .settings-section-heading__content h2,
-    .settings-section-heading__chevron {
-      color: var(--bew-text-1);
-    }
+  &:hover .settings-section-heading__chevron {
+    color: var(--bew-text-1);
   }
 }
 
 .settings-section-heading__chevron {
-  width: 22px;
-  height: 22px;
+  width: var(--bew-icon-size-md);
+  height: var(--bew-icon-size-md);
   flex: 0 0 auto;
   margin-left: auto;
   color: var(--bew-text-2);
-  font-size: var(--bew-icon-size-md);
   transition:
     color var(--bew-duration-normal) var(--bew-ease-standard),
-    transform 0.2s ease;
+    transform var(--bew-duration-normal) var(--bew-ease-standard);
 
   &.collapsed {
     transform: rotate(-90deg);
@@ -106,8 +92,11 @@ const collapsed = defineModel<boolean>('collapsed', {
 }
 
 h2 {
+  margin: 0;
   color: var(--bew-text-1);
-  transition: color var(--bew-duration-normal) var(--bew-ease-standard);
+  font-size: var(--bew-font-size-heading);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-line-height-heading);
 }
 
 .settings-risk-badge {
@@ -116,10 +105,17 @@ h2 {
 }
 
 p {
-  margin-top: var(--bew-space-1);
+  margin: var(--bew-space-1) 0 0;
+  color: var(--bew-text-2);
 }
 
 p.bew-help.warning {
   color: var(--bew-warning-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-section-heading__chevron {
+    transition: none;
+  }
 }
 </style>

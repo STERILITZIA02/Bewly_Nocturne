@@ -10,13 +10,13 @@ import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import Progress from '~/components/Progress.vue'
+import Tooltip from '~/components/Tooltip.vue'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import type { HistoryResult, List as HistoryItem } from '~/models/history/history'
 import { Business } from '~/models/history/history'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isAccountRequestCurrent, resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
-import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getHistoryUrl, getHistoryVideoIdentity } from '~/utils/historyTarget'
 import { captureListRemovalFocus } from '~/utils/listRemovalFocus'
 import { getCSRF, removeHttpFromUrl, scrollToTop } from '~/utils/main'
@@ -280,23 +280,20 @@ defineExpose({
           {{ tab.name }}
         </button>
       </div>
-      <ALink
-        href="https://www.bilibili.com/history"
-        type="topBar"
-        class="bew-popover__action"
-      >
-        {{ $t('common.view_all') }}
-      </ALink>
+      <div class="bew-popover__actions">
+        <Tooltip :content="$t('common.view_all')" placement="bottom" teleport>
+          <ALink href="https://www.bilibili.com/history" type="topBar" class="bew-popover__action" :aria-label="$t('common.view_all')">
+            <i i-tabler:arrow-up-right />
+          </ALink>
+        </Tooltip>
+      </div>
     </header>
 
     <main
       ref="historysWrap"
-      class="bew-popover__body bew-popover__scroll bew-popover__list history-pop__scroll"
+      class="bew-popover__body bew-popover__scroll bew-popover__list"
     >
-      <PopoverListSkeleton
-        v-if="isLoading && historys.length === 0"
-        variant="history"
-      />
+      <PopoverListSkeleton v-if="isLoading && historys.length === 0" />
 
       <Empty
         v-else-if="loadError && historys.length === 0"
@@ -318,7 +315,7 @@ defineExpose({
         <article
           v-for="historyItem in historys"
           :key="historyItem.kid"
-          class="group popover-card"
+          class="popover-card"
         >
           <ALink
             class="popover-card__primary"
@@ -326,158 +323,57 @@ defineExpose({
             :aria-label="historyItem.title"
             type="topBar"
           />
-          <section class="popover-card__content" flex="~ gap-4 items-start">
-            <!-- Video cover, live cover, ariticle cover -->
-            <div
-              class="popover-card__media"
-            >
-              <!-- Delete button -->
-              <IconButton
-                class="popover-card__interactive popover-card-action popover-card__overlay-action popover-card__overlay-action--danger history-pop__remove"
-                :label="$t('common.operation.delete')"
-                :disabled="pendingRemovals.has(`${currentAccountId}:${getHistoryItemKey(historyItem)}`)"
-                @click.stop.prevent="deleteHistoryItem(historyItem, $event)"
+          <section class="popover-card__content">
+            <div class="popover-card__media">
+              <img
+                :src="`${removeHttpFromUrl(activatedTab === 2 ? Array.isArray(historyItem.covers) ? historyItem.covers[0] : '' : historyItem.cover)}@256w_144h_1c`"
+                :alt="historyItem.title"
               >
-                <i i-tabler:x />
-              </IconButton>
-
-              <!-- Video -->
-              <template v-if="activatedTab === 0">
-                <div pos="relative">
-                  <img
-                    w="150px" h-full
-                    class="aspect-video"
-                    :src="`${removeHttpFromUrl(
-                      historyItem.cover,
-                    )}@256w_144h_1c`"
-                    :alt="historyItem.title"
-                    object-cover
-                  >
-                  <div
-                    pos="absolute bottom-0 right-0"
-                    bg="black opacity-60"
-                    m="1"
-                    p="x-2 y-1"
-                    text="white xs"
-                    border="rounded-$bew-pill-radius"
-                  >
-                    <!--  When progress = -1 means that the user watched the full video -->
-                    {{
-                      `${
-                        historyItem.progress === -1
-                          ? calcCurrentTime(historyItem.duration)
-                          : calcCurrentTime(historyItem.progress)
-                      } /
-                    ${calcCurrentTime(historyItem.duration)}`
-                    }}
-                  </div>
-                </div>
-                <Progress
-                  class="history-pop__progress"
-                  :percentage="
-                    getVideoProgressPercentage(getHistoryVideoIdentity(historyItem), historyItem.progress, historyItem.duration)
-                  "
-                />
-              </template>
-
-              <!-- Live -->
-              <template v-else-if="activatedTab === 1">
-                <div pos="relative">
-                  <img
-                    w="150px"
-                    class="aspect-video"
-                    :src="`${removeHttpFromUrl(
-                      historyItem.cover,
-                    )}@256w_144h_1c`"
-                    :alt="historyItem.title"
-                    bg="contain"
-                  >
-                  <div
-                    v-if="historyItem.live_status === 1"
-                    pos="absolute top-0 left-0"
-                    bg="$bew-selected-bg"
-                    text="xs $bew-text-1"
-                    p="x-2 y-1"
-                    m="1"
-                    rounded="$bew-pill-radius"
-                  >
-                    LIVE
-                    <i i-svg-spinners:pulse-3 align-middle mt--0.2em />
-                  </div>
-                  <div
-                    v-else
-                    pos="absolute top-0 left-0"
-                    bg="black opacity-60"
-                    text="xs white"
-                    p="x-2 y-1"
-                    m="1"
-                    rounded="$bew-pill-radius"
-                  >
-                    OFFLINE
-                  </div>
-                </div>
-              </template>
-
-              <!-- Article -->
-              <div v-else-if="activatedTab === 2">
-                <img
-                  w="150px"
-                  class="aspect-video"
-                  :src="`${
-                    Array.isArray(historyItem.covers)
-                      ? historyItem.covers[0]
-                      : ''
-                  }@256w_144h_1c`"
-                  object-cover
-                  :alt="historyItem.title"
-                  bg="contain"
-                >
-              </div>
+              <Progress
+                v-if="activatedTab === 0"
+                class="popover-card__progress"
+                :percentage="getVideoProgressPercentage(getHistoryVideoIdentity(historyItem), historyItem.progress, historyItem.duration)"
+              />
             </div>
 
-            <!-- Description -->
             <div class="popover-card__copy">
-              <h3
-                class="keep-two-lines popover-card__title"
-                break-anywhere
-              >
+              <h3 class="keep-two-lines popover-card__title">
                 {{ historyItem.title }}
               </h3>
-              <div class="popover-card__meta" flex="~" align="items-center">
-                <ALink
-                  :href="`https://space.bilibili.com/${historyItem.author_mid}`"
-                  type="topBar"
-                  class="popover-card__interactive"
-                >
-                  {{ historyItem.author_name }}
-                </ALink>
-                <span
-                  v-if="historyItem.live_status === 1"
-                  text="$bew-text-1"
-                  flex
-                  items-center
-                  gap-1
-                  m="l-2"
-                >
-                  LIVE
-                  <i i-svg-spinners:pulse-3 align-middle mt--0.2em />
-                </span>
+              <div class="popover-card__footer">
+                <p class="popover-card__meta">
+                  <ALink
+                    :href="`https://space.bilibili.com/${historyItem.author_mid}`"
+                    type="topBar"
+                    class="popover-card__interactive"
+                  >
+                    {{ historyItem.author_name }}
+                  </ALink>
+                  <span v-if="historyItem.live_status === 1" class="history-pop__live">
+                    {{ $t('topbar.moments_dropdown.live_status') }}
+                  </span>
+                  <span v-else-if="activatedTab !== 1">{{ useDateFormat(historyItem.view_at * 1000, 'MM-DD HH:mm').value }}</span>
+                </p>
+                <div class="popover-card__actions">
+                  <Tooltip :content="$t('common.operation.delete')" placement="top" teleport>
+                    <IconButton
+                      class="popover-card__interactive bew-popover__action bew-popover__action--danger"
+                      :label="$t('common.operation.delete')"
+                      :disabled="pendingRemovals.has(`${currentAccountId}:${getHistoryItemKey(historyItem)}`)"
+                      @click.stop.prevent="deleteHistoryItem(historyItem, $event)"
+                    >
+                      <i i-tabler:trash />
+                    </IconButton>
+                  </Tooltip>
+                </div>
               </div>
-              <p class="popover-card__meta">
-                {{
-                  useDateFormat(
-                    historyItem.view_at * 1000,
-                    'YYYY-MM-DD HH:mm:ss',
-                  ).value
-                }}
-              </p>
             </div>
           </section>
         </article>
       </TransitionGroup>
       <!-- loading -->
       <Transition name="fade">
-        <PopoverListSkeleton v-if="isLoading && historys.length !== 0" variant="history" :count="2" />
+        <PopoverListSkeleton v-if="isLoading && historys.length !== 0" :count="2" />
         <div
           v-else-if="loadError && historys.length !== 0"
           class="history-pop__pagination-error"
@@ -504,30 +400,8 @@ defineExpose({
   flex: 0 0 auto;
 }
 
-.history-pop__scroll {
-  position: relative;
-}
-
-.history-pop .popover-card__media {
-  flex: 0 0 var(--bew-popover-media-width);
-  width: var(--bew-popover-media-width);
-  aspect-ratio: 16 / 9;
-}
-
-.history-pop__remove {
-  z-index: 3;
-  top: var(--bew-space-1);
-  right: var(--bew-space-1);
-}
-
-.history-pop__progress {
-  font-variant-numeric: tabular-nums;
-  position: absolute;
-  z-index: 2;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  border-radius: 0;
+.history-pop__live {
+  color: var(--bew-text-1);
 }
 
 .history-pop__pagination-error {
@@ -542,17 +416,8 @@ defineExpose({
 }
 
 @media (max-width: 420px) {
-  .history-pop .bew-popover__header {
-    gap: var(--bew-space-2);
-    padding-inline: var(--bew-space-3);
-  }
-
   .history-pop__tabs {
     --bew-control-item-padding-x: var(--bew-space-2);
-  }
-
-  .history-pop .bew-popover__action {
-    padding-inline: var(--bew-space-1);
   }
 }
 </style>

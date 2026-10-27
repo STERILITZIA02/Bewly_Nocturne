@@ -1,6 +1,7 @@
 import { nextTick } from 'vue'
 
 import { waitWithSignal, withRequestDeadline } from '~/utils/abort'
+import { afterMotion } from '~/utils/motionPriority'
 
 function nextFrame(signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
@@ -74,6 +75,7 @@ export async function navigateToSetting(options: {
         signal.throwIfAborted()
         expand(target, root)
         await nextTick()
+        await waitWithSignal(afterMotion(), signal)
         await nextFrame(signal)
         // Vue starts CSS enter transitions on its second animation frame.
         // Sample active animations after that boundary, not after a guessed delay.
@@ -98,12 +100,11 @@ export async function navigateToSetting(options: {
           continue
         if (!target.getClientRects().length)
           return undefined
+        // Centre the target in the page column (nothing overlays it).
         const targetRect = target.getBoundingClientRect()
         const viewportRect = viewport.getBoundingClientRect()
-        const header = root.querySelector<HTMLElement>('.settings-header')?.getBoundingClientRect()
-        const inset = Math.max(Number.parseFloat(getComputedStyle(viewport).paddingTop) || 0, header ? header.bottom - viewportRect.top : 0)
-        const centerOffset = Math.max(0, (viewport.clientHeight - inset - targetRect.height) / 2)
-        viewport.scrollTo({ top: Math.max(0, viewport.scrollTop + targetRect.top - viewportRect.top - viewport.clientTop - inset - centerOffset), behavior: options.behavior })
+        const centerOffset = Math.max(0, (viewport.clientHeight - targetRect.height) / 2)
+        viewport.scrollTo({ top: Math.max(0, viewport.scrollTop + targetRect.top - viewportRect.top - viewport.clientTop - centerOffset), behavior: options.behavior })
         return target
       }
     }, { signal: options.signal }, 5000)

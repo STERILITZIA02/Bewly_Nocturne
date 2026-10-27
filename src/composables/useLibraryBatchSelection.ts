@@ -1,21 +1,30 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 
-interface BatchOptions {
-  keys: () => string[]
+interface BatchOptions<Key extends string | number> {
+  keys: () => Key[]
   captureOwner: () => { isCurrent: () => boolean }
-  remove: (key: string) => Promise<boolean>
+  remove: (key: Key) => Promise<boolean>
+  commit?: (keys: readonly Key[]) => void
 }
 
 /** Only the currently loaded result set can be selected; paging never selects new rows. */
-export function useLibraryBatchSelection(options: BatchOptions) {
+export function useLibraryBatchSelection<Key extends string | number>(options: BatchOptions<Key>) {
   const managing = ref(false)
-  const selected = shallowRef(new Set<string>())
+  const selected = shallowRef(new Set<Key>())
   const busy = ref(false)
   const failed = ref(false)
-  const keys = computed(() => [...new Set(options.keys())])
+  const available = computed(() => new Set(options.keys()))
+  const keys = computed(() => [...available.value])
   const allSelected = computed(() => keys.value.length > 0 && keys.value.every(key => selected.value.has(key)))
   let generation = 0
-  watch(keys, available => selected.value = new Set([...selected.value].filter(key => available.includes(key))))
+  function reconcileSelection() {
+    if (busy.value)
+      return
+    const next = new Set([...selected.value].filter(key => available.value.has(key)))
+    if (next.size !== selected.value.size)
+      selected.value = next
+  }
+  watch([keys, busy], reconcileSelection, { flush: 'post' })
 
   function clearSelection() {
     selected.value = new Set()
@@ -32,8 +41,8 @@ export function useLibraryBatchSelection(options: BatchOptions) {
     managing.value = !managing.value
     clearSelection()
   }
-  function toggle(key: string) {
-    if (!managing.value || busy.value || !keys.value.includes(key))
+  function toggle(key: Key) {
+    if (!managing.value || busy.value || !available.value.has(key))
       return
     const next = new Set(selected.value)
     if (next.has(key))
@@ -58,6 +67,7 @@ export function useLibraryBatchSelection(options: BatchOptions) {
     const current = () => version === generation && owner.isCurrent()
     busy.value = true
     failed.value = false
+    const removedKeys: Key[] = []
     try {
       for (const key of targets) {
         if (!current())
@@ -69,9 +79,7 @@ export function useLibraryBatchSelection(options: BatchOptions) {
           failed.value = true
           return
         }
-        const remaining = new Set(selected.value)
-        remaining.delete(key)
-        selected.value = remaining
+        removedKeys.push(key)
       }
     }
     catch {
@@ -79,6 +87,12 @@ export function useLibraryBatchSelection(options: BatchOptions) {
         failed.value = true
     }
     finally {
+      if (current()) {
+        options.commit?.(removedKeys)
+        const remaining = new Set(selected.value)
+        removedKeys.forEach(key => remaining.delete(key))
+        selected.value = remaining
+      }
       if (version === generation)
         busy.value = false
     }

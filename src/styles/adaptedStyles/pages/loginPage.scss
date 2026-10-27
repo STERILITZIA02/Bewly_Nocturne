@@ -58,7 +58,7 @@ html.bewly-design:is(.loginPage, [data-bewly-native-site="login"]) {
   }
   // #endregion
 
-  // Shared surfaces apply in light, dark and OLED; QR image contrast stays native.
+  // Shared surfaces apply in light and dark; QR image contrast stays native.
   :not(foobar) {
     #app {
       background-color: var(--bew-bg);

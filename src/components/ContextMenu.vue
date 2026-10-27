@@ -8,6 +8,7 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { DIALOG_FOCUS_OWNER, getDeepActiveElement, restoreOverlayFocus } from '~/utils/dialogFocus'
 import { computeAnchoredFloatingMenuPosition } from '~/utils/floatingMenu'
 import { getMotionDuration } from '~/utils/motionTiming'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 
 interface ContextMenuItem {
   value: string | number
@@ -150,7 +151,7 @@ onMounted(async () => {
   await nextTick()
   const menu = menuRef.value
   const content = menu?.querySelector('ul')
-  if (!disposed && content?.animate && !previousFocus?.matches(':focus-visible') && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  if (!disposed && content?.animate && !previousFocus?.matches(':focus-visible') && !prefersReducedMotion()) {
     const style = getComputedStyle(menu!)
     entryAnimation = content.animate([{ opacity: 0, scale: 0.98 }, { opacity: 1, scale: 1 }], {
       duration: getMotionDuration(style, '--bew-duration-fast', 120),

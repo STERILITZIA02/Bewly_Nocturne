@@ -1,3 +1,5 @@
+import { prefersReducedMotion } from '~/utils/reducedMotion'
+
 import { getMotionDuration } from './motionTiming'
 import { scrollToPosition } from './scrollIntent'
 
@@ -19,7 +21,7 @@ export function revealSelectionRow(row: HTMLElement, viewport: HTMLElement) {
     : Math.max(0, rect.bottom - bounds.bottom + margin)
   if (Math.abs(delta) < 1)
     return
-  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const reduced = prefersReducedMotion()
   void scrollToPosition(viewport, viewport.scrollTop + delta, reduced ? 'auto' : 'smooth')
 }
 

@@ -10,7 +10,13 @@ export function useSettingsMotion() {
     const sourceSize = read('size')
     // Shortcut/deep-link openings have no physical trigger. Keep those centered.
     return panelOriginTransform(panel, { x: sourceX, y: sourceY, size: sourceSize })
-  }, '.settings-content__surface, .settings-content__scroll, .settings-header > *, .settings-primary-navigation__list > *')
+  }, [
+    // The window scales; the backdrop, its surface, header and columns fade.
+    '.settings-backdrop',
+    '.settings-window__surface',
+    '.settings-header',
+    '.settings-body',
+  ].join(', '))
   return {
     ...motion,
     onAfterEnter: (element: Element) => element.dispatchEvent(new Event('bew-settings-motion-ready')),

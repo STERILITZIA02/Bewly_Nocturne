@@ -33,6 +33,10 @@
   transform-origin: var(--bew-popover-origin-x, 50%) var(--bew-popover-origin-y, 0%);
 }
 
+// Media popovers (moments, favorites, history, watch later; user-specified):
+// the frosted panel is ruled by hairlines like the settings window. A header
+// strip (title or tabs, then icon actions) sits over a list whose scroll edge
+// is the header's line; rows are divided by inset lines, not plates.
 .bew-popover__header {
   position: relative;
   z-index: 2;
@@ -40,15 +44,18 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  min-height: var(--bew-popover-header-min-height);
-  padding: var(--bew-popover-header-padding-block) var(--bew-popover-header-padding-inline);
-  box-sizing: border-box;
   gap: var(--bew-space-3);
+  box-sizing: border-box;
+  min-height: calc(var(--bew-control-height) + var(--bew-space-2) * 2);
+  padding: var(--bew-space-2);
+  border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
 }
 
+// A text title starts on the rows' content line; tabs keep the strip's inset.
 .bew-popover__title {
   min-width: 0;
   margin: 0;
+  padding-inline-start: calc(var(--bew-popover-inset) - var(--bew-space-2));
   font-size: var(--bew-font-size-title);
   color: var(--bew-text-1);
   font-weight: var(--bew-font-weight-regular);
@@ -60,30 +67,42 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: var(--bew-space-2);
+  gap: var(--bew-space-1);
+  color: var(--bew-text-2);
 }
 
+// Header and row actions: quiet icons that lift to text-1 over a hover plate.
 .bew-popover__action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--bew-control-height-sm);
-  padding-inline: var(--bew-space-2);
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  box-sizing: border-box;
+  width: var(--bew-control-item-height);
+  height: var(--bew-control-item-height);
+  padding: 0;
   color: var(--bew-text-2);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-control);
-  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
+  font-size: var(--bew-icon-size-sm);
+  cursor: pointer;
   transition:
     color var(--bew-duration-fast) var(--bew-ease-standard),
     background-color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
-.bew-popover__action:hover {
+.bew-popover__action:is(:hover, :focus-visible):not(:disabled) {
   color: var(--bew-text-1);
-  background: var(--bew-fill-1);
+  background: var(--bew-hover-bg);
+}
+
+.bew-popover__action--danger:is(:hover, :focus-visible):not(:disabled) {
+  color: var(--bew-error-color);
+}
+
+.bew-popover__action[aria-pressed="true"] {
+  color: var(--bew-text-1);
 }
 
 .bew-popover__body,
@@ -114,19 +133,16 @@
   flex: 0 0 auto;
 }
 
+// Rows run edge to edge so their hover tint meets the panel's sides.
 .bew-popover__list {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--bew-space-1);
-  padding: 0 var(--bew-popover-body-padding-inline) var(--bew-popover-body-padding-bottom);
+  padding-bottom: var(--bew-space-2);
 }
 
 .bew-popover__compact-list {
   padding: var(--bew-popover-padding);
-}
-
-.bew-popover__list {
-  position: relative;
 }
 
 .bew-popover__state {

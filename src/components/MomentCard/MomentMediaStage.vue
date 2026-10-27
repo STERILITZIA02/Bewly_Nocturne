@@ -11,6 +11,7 @@ import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { hasLoadedPicture, rememberLoadedPicture } from '~/utils/pictureRevealMemory'
 import { isPortraitRatio, PORTRAIT_MAX_CLEAR_HEIGHT } from '~/utils/portraitMedia'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { createSideSwipe } from '~/utils/sideSwipe'
 
 import { getMomentThumbnailSrcset, getMomentThumbnailUrl } from './utils'
@@ -132,7 +133,7 @@ function fadeImageLayer(index: number, to: 0 | 1) {
   const style = getComputedStyle(element)
   const from = Number(style.opacity)
   imageFades.get(index)?.cancel()
-  const full = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const full = prefersReducedMotion()
     ? 0
     : getMotionDuration(style, '--bew-duration-moderate')
   const animation = element.animate([{ opacity: from }, { opacity: to }], {
@@ -223,7 +224,7 @@ function revealThumb(index: number) {
     ? start
     : end > scroller.scrollLeft + scroller.clientWidth ? end - scroller.clientWidth : scroller.scrollLeft
   if (left !== scroller.scrollLeft)
-    scroller.scrollTo({ left, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+    scroller.scrollTo({ left, behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
 }
 
 function handleCoverLoad(event: Event) {
@@ -304,7 +305,7 @@ function getImageLabel(index: number) {
           <span i-svg-spinners:pulse-3 aria-hidden="true" />
         </span>
       </div>
-      <ProgressiveBlur v-if="blur" edge="bottom" class="moment-media__blur" :visible="!previewing" />
+      <ProgressiveBlur v-if="blur" edge="bottom" class="moment-media__blur" :visible="!previewing" sample-within=".moment-media__stage" />
     </div>
     <!-- Several images: a strip of all of them just under the fade, edge to
          edge with hairlines between, scrolling sideways. -->

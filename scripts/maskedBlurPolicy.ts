@@ -83,7 +83,7 @@ export function hasInlineMaskedBackdrop(source: string) {
 
 /** Catch the Chromium mask loss caused by a rounded overflow clip above a blur. */
 export function findProgressiveBlurClippingAncestors(source: string, css: string): string[] {
-  if (!/<(?:ProgressiveBlur|PanelTopBlur)[\s/>]/.test(source))
+  if (!/<ProgressiveBlur[\s/>]/.test(source))
     return []
   const ast = parse(source).descriptor.template?.ast
   if (!ast)
@@ -112,7 +112,7 @@ export function findProgressiveBlurClippingAncestors(source: string, css: string
     for (const node of children) {
       if (node.type !== 1)
         continue
-      if (node.tag === 'ProgressiveBlur' || node.tag === 'PanelTopBlur') {
+      if (node.tag === 'ProgressiveBlur') {
         for (const ancestor of [...ancestors, node]) {
           const classes = ancestor.props.filter(prop => prop.type === 6 && prop.name === 'class')
             .flatMap(prop => prop.type === 6 ? prop.value?.content.split(/\s+/) ?? [] : [])

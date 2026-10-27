@@ -6,6 +6,7 @@ import { useImageTone } from '~/composables/useImageTone'
 import { removeHttpFromUrl } from '~/utils/main'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { hasLoadedPicture, rememberLoadedPicture } from '~/utils/pictureRevealMemory'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { keepSelectionScrollAnchor } from '~/utils/selectionScrollAnchor'
 
 const props = defineProps<{
@@ -34,7 +35,7 @@ watch(() => props.expanded, (expanded) => {
   if (expanded) {
     renderActions.value = true
   }
-  else if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+  else if (prefersReducedMotion()) {
     renderActions.value = false
   }
   else {

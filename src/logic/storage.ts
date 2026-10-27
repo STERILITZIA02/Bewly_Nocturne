@@ -10,14 +10,12 @@ import { DEFAULT_SEARCH_BAR_CHARACTER } from '~/constants/imgs'
 import { removeRetiredSettings, RETIRED_LOCAL_STORAGE_KEYS } from '~/constants/retiredSettings'
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import type { AppPage } from '~/enums/appEnums'
-import {
-  MOBILE_LIST_LAYOUT_BREAKPOINT,
-  normalizeListLayoutBreakpoint,
-} from '~/utils/gridLayout'
+import type { AppearanceColors } from '~/utils/appearance'
+import { defaultAppearanceColors, INTERFACE_FONT_SIZE, normalizeAppearanceColors, normalizeAppearanceNumber } from '~/utils/appearance'
 import { LOCAL_LOUDNESS_DEFAULTS, normalizeLocalLoudnessValue } from '~/utils/localLoudnessProtocol'
 import type { PageMode } from '~/utils/pageMode'
+import type { MotionPreference } from '~/utils/reducedMotion'
 import { DEFAULT_THEME_COLOR, normalizeThemeColor } from '~/utils/themeColor'
-import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
 import { DEFAULT_SCREENSHOT_SHORTCUT, isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
 export { appAuthTokens } from './appAuthStorage'
@@ -149,11 +147,6 @@ export interface Settings {
   externalWatchLaterButton: boolean // 稍后再看按钮外置
 
   // Grid 相关设置
-  autoSwitchListLayout: boolean
-  /** Automatic two-column -> one-column switch threshold in CSS pixels. */
-  autoSwitchListLayoutBreakpoint: number
-  videoCardCoverRatioOneColumn: number
-  videoCardCoverRatioTwoColumns: number
   watchLaterLayoutMode: WatchLaterLayoutMode
 
   language: string
@@ -279,9 +272,10 @@ export interface Settings {
   videoPageDarkMode: boolean
   /** Hex accent, or `NEUTRAL_THEME_COLOR` for black (light) / white (dark). */
   themeColor: string
-  darkModeBaseColor: string // 深色模式基准颜色
-  enableDarkModeTint: boolean
-  enableOledDarkMode: boolean
+  appearanceColors: AppearanceColors
+  appearanceContrast: number
+  interfaceFontSize: number
+  motionPreference: MotionPreference
   useLinearGradientThemeColorBackground: boolean
 
   searchPageLogoColor: 'white' | 'themeColor'
@@ -433,11 +427,6 @@ export const originalSettings: Settings = {
   externalWatchLaterButton: true, // 默认开启稍后再看按钮外置
 
   // Grid 相关默认设置
-  autoSwitchListLayout: true,
-  autoSwitchListLayoutBreakpoint: MOBILE_LIST_LAYOUT_BREAKPOINT,
-  // Preserve the former equal split and 400px maximum at default values.
-  videoCardCoverRatioOneColumn: 50,
-  videoCardCoverRatioTwoColumns: 50,
   watchLaterLayoutMode: 'list',
 
   language: '',
@@ -560,9 +549,10 @@ export const originalSettings: Settings = {
   themeScheduleEnd: '18:00',
   videoPageDarkMode: false,
   themeColor: DEFAULT_THEME_COLOR,
-  darkModeBaseColor: '#2a2d32', // 开启可选色调时使用；关闭时保留此值
-  enableDarkModeTint: false,
-  enableOledDarkMode: false,
+  appearanceColors: defaultAppearanceColors(),
+  appearanceContrast: 0,
+  interfaceFontSize: INTERFACE_FONT_SIZE.default,
+  motionPreference: 'system',
   useLinearGradientThemeColorBackground: false,
 
   searchPageLogoColor: 'themeColor',
@@ -725,10 +715,15 @@ function normalizeSettings(value: Settings) {
   removeRetiredSettings(value)
   if (typeof value.momentsStartFromLastSeen !== 'boolean')
     value.momentsStartFromLastSeen = false
-  if (typeof value.enableDarkModeTint !== 'boolean')
-    value.enableDarkModeTint = false
   value.dockPosition = normalizeDockPosition(value.dockPosition)
   value.themeColor = normalizeThemeColor(value.themeColor)
+  const appearanceColors = normalizeAppearanceColors(value.appearanceColors)
+  if (appearanceColors !== value.appearanceColors)
+    value.appearanceColors = appearanceColors
+  value.appearanceContrast = normalizeAppearanceNumber(value.appearanceContrast, 0, 100, 0)
+  value.interfaceFontSize = normalizeAppearanceNumber(value.interfaceFontSize, INTERFACE_FONT_SIZE.min, INTERFACE_FONT_SIZE.max, INTERFACE_FONT_SIZE.default)
+  if (!['system', 'reduce', 'full'].includes(value.motionPreference))
+    value.motionPreference = 'system'
   if (typeof value.autoRemoveWatchLaterOnEnd !== 'boolean')
     value.autoRemoveWatchLaterOnEnd = false
   for (const key of ['topBarLinkOpenMode', 'searchBarLinkOpenMode'] as const) {
@@ -841,18 +836,6 @@ function normalizeSettings(value: Settings) {
 
   if (record.frostedGlassBlurIntensity > FROSTED_GLASS_BLUR_MAX_PX)
     record.frostedGlassBlurIntensity = FROSTED_GLASS_BLUR_MAX_PX
-
-  // Normalize the user-configurable two-column list breakpoint. Older
-  // versions used a fixed 640px threshold and do not have this field.
-  record.autoSwitchListLayoutBreakpoint = normalizeListLayoutBreakpoint(record.autoSwitchListLayoutBreakpoint)
-  record.videoCardCoverRatioOneColumn = normalizeVideoCardCoverRatio(
-    record.videoCardCoverRatioOneColumn,
-    originalSettings.videoCardCoverRatioOneColumn,
-  )
-  record.videoCardCoverRatioTwoColumns = normalizeVideoCardCoverRatio(
-    record.videoCardCoverRatioTwoColumns,
-    originalSettings.videoCardCoverRatioTwoColumns,
-  )
 
   // 迁移旧的布尔类型自动播放设置到新的 AutoPlayMode 类型
   const autoPlayFields = ['autoPlayMultipart', 'autoPlayCollection', 'autoPlayRecommend', 'autoPlayWatchLater', 'autoPlayPlaylist'] as const

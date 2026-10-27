@@ -1,16 +1,41 @@
 <script lang="ts" setup>
 import { FORM_FIELD_LABEL_ID } from '~/components/formFieldLabel'
+import { useMotionValue } from '~/composables/useMotionValue'
+import { holdMotion } from '~/utils/motionPriority'
+import { getMotionDuration } from '~/utils/motionTiming'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 
-defineProps<{
+const props = defineProps<{
   modelValue: boolean
   label?: string
   accessibleLabel?: string
   disabled?: boolean
+  commitAfterMotion?: boolean
 }>()
+
+const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const fieldLabelId = inject(FORM_FIELD_LABEL_ID, undefined)
 
-const model = defineModel()
+const switchRef = ref<HTMLElement>()
+let releaseMotion: (() => void) | undefined
+const deferred = props.commitAfterMotion ? useMotionValue(() => props.modelValue, value => emit('update:modelValue', value)) : undefined
+const model = computed({
+  get: () => deferred?.value ?? props.modelValue,
+  set: (value: boolean) => {
+    if (props.disabled || value === model.value)
+      return
+    if (!deferred) {
+      emit('update:modelValue', value)
+      return
+    }
+    const previous = releaseMotion
+    releaseMotion = holdMotion(prefersReducedMotion() || !switchRef.value ? 0 : getMotionDuration(getComputedStyle(switchRef.value), '--bew-duration-normal'))
+    previous?.()
+    deferred.value = value
+  },
+})
+onScopeDispose(() => releaseMotion?.())
 </script>
 
 <template>
@@ -22,7 +47,7 @@ const model = defineModel()
       :aria-label="accessibleLabel"
       :aria-labelledby="label || accessibleLabel ? undefined : fieldLabelId"
     >
-    <span class="radio-switch" aria-hidden="true" />
+    <span ref="switchRef" class="radio-switch" aria-hidden="true" />
   </label>
 </template>
 

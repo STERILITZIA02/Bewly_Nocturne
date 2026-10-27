@@ -107,7 +107,10 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
       <Radio v-model="settings.enableCommentReplyTreeContainer" />
     </SettingsItem>
     <SettingsItem v-if="settings.enableCommentReplyTreeContainer" setting-id="settings.comment_reply_tree_container_height" :title="t('settings.comment_reply_tree_container_height')" :desc="t('settings.comment_reply_tree_container_height_desc')">
-      <Slider v-model="settings.commentReplyTreeContainerHeight" :min="COMMENT_REPLY_CONTAINER_HEIGHT.min" :max="COMMENT_REPLY_CONTAINER_HEIGHT.max" :step="20" :label="`${settings.commentReplyTreeContainerHeight}px`" />
+      <Slider
+        v-model="settings.commentReplyTreeContainerHeight" :min="COMMENT_REPLY_CONTAINER_HEIGHT.min" :max="COMMENT_REPLY_CONTAINER_HEIGHT.max" :step="1" editable
+        unit="px" :accessible-label="t('settings.comment_reply_tree_container_height')"
+      />
     </SettingsItem>
 
     <SettingsItem

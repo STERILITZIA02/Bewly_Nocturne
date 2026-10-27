@@ -1,6 +1,8 @@
 import type { Ref, WatchSource } from 'vue'
 import { nextTick, onScopeDispose, watch } from 'vue'
 
+import { prefersReducedMotion } from '~/utils/reducedMotion'
+
 import { getMotionDuration } from '../utils/motionTiming'
 
 /** Same surface, new geometry. Never fades a glass shell or scales its text. */
@@ -14,7 +16,7 @@ export function useSurfaceMorph(root: Ref<HTMLElement | null>, source: WatchSour
   }
   watch(source, async () => {
     const element = root.value
-    if (!element || !element.animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!element || !element.animate || prefersReducedMotion()) {
       cancel()
       return
     }

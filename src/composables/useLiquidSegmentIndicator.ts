@@ -5,6 +5,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, toValue, watch } f
 import { holdMotion } from '~/utils/motionPriority'
 import { getTravelDuration } from '~/utils/motionTiming'
 
+import { useReducedMotion } from './useReducedMotion'
+
 export interface LiquidSegmentRect {
   x: number
   y: number
@@ -164,15 +166,15 @@ export function useLiquidSegmentIndicator(options: {
   let previewProgress = 0
   let animToken = 0
   let pendingImmediateMeasure = false
-  let reducedMotionMediaQuery: MediaQueryList | undefined
   let disposed = false
   let releaseMotionHold: (() => void) | undefined
-  const prefersReducedMotion = ref(false)
+  const prefersReducedMotion = useReducedMotion()
 
   // Content swaps wait for this slide (see utils/motionPriority).
   function holdSlide(duration: number) {
-    releaseMotionHold?.()
+    const previous = releaseMotionHold
     releaseMotionHold = holdMotion(duration)
+    previous?.()
   }
 
   function releaseSlide() {
@@ -265,10 +267,9 @@ export function useLiquidSegmentIndicator(options: {
   }
 
   function measure(immediate = false) {
-    // Every branch below either settles at once or starts a morph that holds again.
-    releaseSlide()
     const container = options.containerRef.value
     if (!container) {
+      releaseSlide()
       cancelRaf()
       visible.value = false
       isMoving.value = false
@@ -277,6 +278,7 @@ export function useLiquidSegmentIndicator(options: {
 
     const activeEl = container.querySelector(activeItemSelector) as HTMLElement | null
     if (!activeEl) {
+      releaseSlide()
       cancelRaf()
       visible.value = false
       isMoving.value = false
@@ -286,6 +288,7 @@ export function useLiquidSegmentIndicator(options: {
     const activeRect = readItemRect(container, activeEl)
 
     if (previewTarget && previewProgress > 0 && container.contains(previewTarget)) {
+      releaseSlide()
       const targetRect = readItemRect(container, previewTarget)
       applyGeometry(computeLiquidGeometry(activeRect, targetRect, previewProgress))
       visible.value = true
@@ -300,6 +303,7 @@ export function useLiquidSegmentIndicator(options: {
       visible.value = true
       ready = true
       isMoving.value = false
+      releaseSlide()
       return
     }
 
@@ -313,7 +317,11 @@ export function useLiquidSegmentIndicator(options: {
       || Math.abs(activeRect.height - origin.height) > 0.5
 
     if (!changed) {
+      cancelRaf()
+      animToken++
       applySettled(activeRect)
+      isMoving.value = false
+      releaseSlide()
       return
     }
 
@@ -340,11 +348,10 @@ export function useLiquidSegmentIndicator(options: {
     })
   }
 
-  function handleReducedMotionChange(event: MediaQueryListEvent) {
-    prefersReducedMotion.value = event.matches
-    if (event.matches)
+  watch(prefersReducedMotion, (reduced) => {
+    if (reduced)
       void updateIndicator(true)
-  }
+  })
 
   function setPreview(targetEl: HTMLElement | null, progress: number) {
     if (!targetEl || progress <= 0) {
@@ -399,15 +406,11 @@ export function useLiquidSegmentIndicator(options: {
   })
 
   onMounted(() => {
-    reducedMotionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-    prefersReducedMotion.value = reducedMotionMediaQuery.matches
-    reducedMotionMediaQuery.addEventListener('change', handleReducedMotionChange)
     void updateIndicator(true)
   })
 
   onBeforeUnmount(() => {
     disposed = true
-    reducedMotionMediaQuery?.removeEventListener('change', handleReducedMotionChange)
     cancelMeasureFrame()
     cancelRaf()
     releaseSlide()

@@ -9,6 +9,8 @@
   height: var(--bew-control-height);
   padding: var(--bew-control-padding);
   border: var(--bew-control-border-width) solid var(--bew-control-border-color);
+  // Resolved here, not at :root, so the plate follows a variant's item radius.
+  --bew-liquid-indicator-radius: var(--bew-control-item-radius);
   border-radius: var(--bew-control-radius);
   corner-shape: var(--bew-corner-shape-capsule);
   background: transparent;
@@ -40,7 +42,8 @@
 
   corner-shape: var(--bew-corner-shape);
 
-  .bew-segment-control__item {
+  .bew-segment-control__item,
+  .bew-liquid-indicator {
     corner-shape: var(--bew-corner-shape);
   }
 }

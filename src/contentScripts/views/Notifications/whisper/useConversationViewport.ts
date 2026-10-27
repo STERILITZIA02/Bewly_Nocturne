@@ -1,5 +1,7 @@
 import { onMounted, onScopeDispose, readonly, ref, watch } from 'vue'
 
+import { prefersReducedMotion } from '~/utils/reducedMotion'
+
 import type { ConversationScrollMetrics } from './conversationExpansion'
 import { isConversationAtLatest } from './conversationExpansion'
 
@@ -197,7 +199,7 @@ export function useConversationViewport(options: {
     userHasReadUpward = false
     userRequestedLatest = true
     lastScrollTop = viewport.scrollTop
-    viewport.scrollTo({ top: viewport.scrollHeight, behavior: behavior === 'smooth' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : behavior })
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: behavior === 'smooth' && prefersReducedMotion() ? 'auto' : behavior })
     const metrics = readScrollMetrics(viewport)
     isAtLatestPosition.value = isMetricsAtLatest(metrics)
     saveViewportState(metrics)

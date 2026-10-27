@@ -589,7 +589,7 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
     }
   })
 
-  check('App authorization: actual Dialog omits only its top blur while preserving instructions, QR polling and cleanup', async () => {
+  check('App authorization: the actual solid Dialog preserves instructions, QR polling and cleanup', async () => {
     const host = document.body.appendChild(document.createElement('div'))
     const settings = Vue.ref({ recommendationMode: 'web', disableFrostedGlass: false })
     const authorizationState = Vue.ref('authorizing')
@@ -609,7 +609,6 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
     const Dialog = await compileComponent('../src/components/Dialog.vue', {
       '~/components/Button.vue': { default: Button },
       '~/components/CloseButton.vue': { default: Button },
-      '~/components/PanelTopBlur.vue': { default: await compileComponent('../src/components/PanelTopBlur.vue') },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ mainAppRef: Vue.ref(host) }) },
       '~/logic': { settings },
       '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
@@ -650,8 +649,7 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
       assert.ok(host.textContent.includes('settings.scan_qrcode_desc'))
       assert.ok(host.textContent.includes('settings.authorize_app_desc'))
       assert.ok(host.querySelector('[data-qr]'))
-      assert.equal(host.querySelector('.bew-panel-top-blur'), null)
-      assert.equal(host.querySelector('.dialog__surface').style.backdropFilter, 'var(--bew-filter-glass-1)')
+      assert.equal(host.querySelector('.dialog__surface').getAttribute('style'), null, 'the dialog is a solid window; its paint is in the stylesheet')
       assert.equal(polls.size, 1)
     }
     finally {

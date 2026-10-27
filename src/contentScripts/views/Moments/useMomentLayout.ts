@@ -648,6 +648,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
       Math.round(measuredCardWidths.get(card) ?? gridCardWidth.value),
       gridGap,
       settings.value.fontFamily,
+      settings.value.interfaceFontSize,
       textAutospaceMode.value,
       moment.title,
       getCardPreviewText(moment),
@@ -914,7 +915,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     }
   })
   watch(
-    () => [settings.value.fontFamily, textAutospaceMode.value],
+    [() => settings.value.fontFamily, textAutospaceMode, () => settings.value.interfaceFontSize],
     async () => {
       await nextTick()
       if (!active)

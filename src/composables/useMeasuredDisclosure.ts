@@ -2,7 +2,9 @@ import { useResizeObserver } from '@vueuse/core'
 import type { Ref } from 'vue'
 import { nextTick, onScopeDispose, ref, watch } from 'vue'
 
+import { holdMotion } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { getLayoutHeight } from '~/utils/viewportGeometry'
 
 /** Animate a clipped outer height while keeping the scroll/content layout natural. */
@@ -19,8 +21,11 @@ export function useMeasuredDisclosure(
   let settleTimer: ReturnType<typeof setTimeout> | undefined
   let disposed = false
   let revision = 0
+  let releaseMotion: (() => void) | undefined
 
   function finish() {
+    releaseMotion?.()
+    releaseMotion = undefined
     clearTimeout(settleTimer)
     settleTimer = undefined
     if (disposed)
@@ -48,7 +53,7 @@ export function useMeasuredDisclosure(
     const current = getLayoutHeight(shell)
     const version = ++revision
     clearTimeout(settleTimer)
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const reduced = prefersReducedMotion()
     const duration = getMotionDuration(getComputedStyle(shell), '--bew-duration-normal')
     if (reduced || duration <= 0 || Math.abs(target - current) < 1) {
       height.value = target
@@ -60,6 +65,9 @@ export function useMeasuredDisclosure(
       onMotionChange(true)
     }
     height.value = target
+    const previous = releaseMotion
+    releaseMotion = holdMotion(duration)
+    previous?.()
     // A detached/hidden tab or reduced-motion change can cancel transitionend.
     settleTimer = setTimeout(() => version === revision && finish(), duration * 1.5)
   }
@@ -86,6 +94,7 @@ export function useMeasuredDisclosure(
     revision++
     cancelAnimationFrame(frame)
     clearTimeout(settleTimer)
+    releaseMotion?.()
     if (moving.value)
       onMotionChange(false)
   })

@@ -31,6 +31,7 @@ import { buildCommentTree } from '~/utils/commentTree'
 import { getUserID, isElectron } from '~/utils/main'
 import type { PageSettingsPayload } from '~/utils/pageSettingsProtocol'
 import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
+import { prefersReducedMotion, reducedMotionCss } from '~/utils/reducedMotion'
 import { COMMENT_TEXT_AUTOSPACE_CSS } from '~/utils/textAutospace'
 
 const pageScriptGlobal = globalThis as typeof globalThis & {
@@ -591,11 +592,7 @@ else if (shouldInitializePageScript) {
           opacity: 0.56;
         }
 
-        @media (prefers-reduced-motion: reduce) {
-          :host > .bewly-comment-expand-all {
-            transition: none;
-          }
-        }
+        ${reducedMotionCss(':host > .bewly-comment-expand-all', 'transition:none;', 'native-shadow')}
 
         :host([data-bewly-comment-reply-tree]) #expander-contents > :is(bili-comment-reply-renderer, bili-comment-renderer, ${MISSING_COMMENT_PARENT_SELECTOR})[data-bewly-comment-reply-hidden] {
           display: none !important;
@@ -792,7 +789,7 @@ else if (shouldInitializePageScript) {
     target.style.height = `${motionState.fromHeight}px`
     target.style.overflow = 'hidden'
 
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const reducedMotion = prefersReducedMotion()
     if (
       reducedMotion
       || !Number.isFinite(targetHeight)

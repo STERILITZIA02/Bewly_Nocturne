@@ -72,21 +72,28 @@ type SidebarManageSection = 'folder' | 'season'
 
 const { handlePageRefresh, handleReachBottom, haveScrollbar, openSettingsAt } = useBewlyApp()
 const topBarStore = useTopBarStore()
+const viewOwner = crypto.randomUUID()
 const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
 const data = useFavoritesData({ api: api.favorite, getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null, haveScrollbar, t })
 const { favoriteCategories, collectedFavoriteSeasons, favoriteResources, favoriteView, selectedCategory, selectedSeason, keyword, searchScope, isLoading, isFullPageLoading, bootstrapFailed, failedContentPage, stalledContentPage, noMoreContent, loadedSeasonComplete, articleFavoriteCount, initData, retryFavoritesBootstrap, loadSelectedContent, loadNextPage, retryFavoriteContent, contentVersion, categoryState, subscriptionState, loadMoreSubscriptions } = data
 const { visibleSubscriptions, visibleResources, visibleArticles, folderCovers, loadFolderCover } = data
 const { videoOrder, subscriptionFilter, otherFavoriteType, otherSearchScope, otherFavoriteCounts, visibleOtherFavorites } = data
-const writes = useFavoriteWrites({ api: api.favorite, capture: data.capture, getCSRF, onError: () => toast.error(t('common.operation_failed')) })
-const folders = useFavoriteFolderManager({ api: api.favorite, data, writes, getCSRF, notify: notifyTopBarFavoritesChanged, error: key => toast.error(t(key)), confirm: key => showConfirmDialog(t(key)) })
+const writes = useFavoriteWrites({ api: api.favorite, capture: data.capture, getCSRF, onError: () => toast.error(t('common.operation_failed')), onConfirmed: (command) => {
+  if ('sourceId' in command)
+    applyResourceChange(command)
+  else if (command.kind === 'clean')
+    applyResourceChange({ kind: 'clean', sourceId: command.folderId, resourceKeys: [] })
+  else
+    data.invalidateReads('folderId' in command ? [command.folderId] : undefined)
+} })
+const folders = useFavoriteFolderManager({ api: { getFavoriteFolderInfo: data.reads.getFavoriteFolderInfo, uploadFavoriteCover: api.favorite.uploadFavoriteCover }, data, writes, getCSRF, notify: notifyTopBarFavoritesChanged, error: key => toast.error(t(key)), confirm: key => showConfirmDialog(t(key)) })
 const { editor: folderEditor, form: folderForm, info: folderInfo, infoLoading: folderInfoLoading, infoFailed: folderInfoFailed, currentFolderId } = folders
 const viewState = usePageViewState('favorites')
 const restoredFilter = normalizeFavoriteFilterQuery(viewState.read<FavoriteFilterQuery>('filter', EMPTY_FAVORITE_FILTER))
-// Partitions are a remote scan; fetch them only once their section has been opened.
-const partitionsRequested = ref(false)
 const filterKeyword = ref('')
 const filterScan = useFavoriteFilterScan({
-  api: api.favorite,
+  api: { getFavoriteResources: data.reads.getFavoriteResources, getFavoritePartitions: api.favorite.getFavoritePartitions },
+  invalidatePage: data.invalidateResourcePage,
   getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null,
   getSourceIds: () => searchScope.value === 'all' ? favoriteCategories.map(item => item.id) : selectedCategory.value ? [selectedCategory.value.id] : [],
   getScope: () => searchScope.value,
@@ -128,8 +135,8 @@ const sidebarManageSection = ref<SidebarManageSection | null>(null)
 const selectedFolderIds = ref<number[]>([])
 const selectedSeasonKeys = ref<string[]>([])
 const isSidebarOperating = computed(() => folders.pending.value)
-function notifyTopBarFavoritesChanged() {
-  void topBarStore.notifyFavoritesChanged().catch((error) => {
+function notifyTopBarFavoritesChanged(sourceIds?: number[]) {
+  void topBarStore.notifyFavoritesChanged({ sourceIds, handledBy: viewOwner }).catch((error) => {
     console.error('通知顶栏收藏状态变化失败:', error)
   })
 }
@@ -806,23 +813,29 @@ async function handleUnfavorite(resource: FavoriteResource) {
     resolveAid: async () => resource.id,
     read: (rid, account, signal) => api.favorite.getFavoriteCategories({ up_mid: String(account), rid, type: 2 }, { signal }),
     write: command => api.favorite.updateVideoFavorites(command),
-    changed: () => topBarStore.notifyFavoritesChanged(),
+    changed: () => topBarStore.notifyFavoritesChanged({ sourceIds: [sourceId], handledBy: viewOwner }),
   }, owner.isCurrent, async (added) => {
-    if (!owner.isCurrent() || version !== contentVersion.value)
+    if (!owner.isCurrent())
       return
-    if (added) {
-      await loadSelectedContent()
-      if (filterActive.value)
-        filterScan.refresh()
-    }
-    else {
-      const command = { kind: 'delete' as const, sourceId, resourceKeys: [getFavoriteResourceKey(resource)] }
-      data.applyResourceWrite(command, version)
-      filterScan.applyResourceWrite(command)
+    const command = { kind: added ? 'restore' as const : 'delete' as const, sourceId, resourceKeys: [getFavoriteResourceKey(resource)] }
+    const reconciliation = applyResourceChange(command)
+    if (added)
+      await reconciliation
+    if (version === contentVersion.value) {
       selectedResourceKeys.value = selectedResourceKeys.value.filter(key => !command.resourceKeys.includes(key))
     }
-    filterScan.invalidatePartitions()
   }) })
+}
+
+function applyResourceChange(command: Parameters<typeof data.applyResourceWrite>[0]) {
+  const reread = data.applyResourceWrite(command)
+  const scan = filterScan.applyResourceWrite(command)
+  if (currentFolderId.value && (currentFolderId.value === command.targetId || (command.kind !== 'copy' && currentFolderId.value === command.sourceId)))
+    void folders.refreshInfo()
+  if (reread && !filterActive.value)
+    return data.loadNextPage()
+  void data.getFavoriteCategories()
+  return scan
 }
 
 function getFavoriteMenuGroups(resource: FavoriteResource) {
@@ -841,12 +854,10 @@ function applyFavoriteFilter(query: FavoriteFilterQuery) {
 function requestPartitions() {
   if (favoriteView.value !== 'video')
     return
-  partitionsRequested.value = true
   void filterScan.loadPartitions()
 }
 function retryPartitions() {
-  filterScan.invalidatePartitions()
-  void filterScan.loadPartitions()
+  void filterScan.retryPartitions()
 }
 
 // A filter scan reads further pages as the grid asks for more; retrying a
@@ -865,11 +876,9 @@ function handleFavoriteGridRefresh() {
     void retryFavoriteContent()
 }
 
-watch(() => [favoriteView.value, searchScope.value, selectedCategory.value?.id, videoOrder.value, categoryState.loaded, searchScope.value === 'all' ? favoriteCategories.map(item => item.id).join(',') : ''] as const, () => {
+watch([favoriteView, searchScope, () => selectedCategory.value?.id, videoOrder, () => categoryState.loaded, () => searchScope.value === 'all' ? favoriteCategories.map(item => item.id).join(',') : ''], () => {
   if (filterScan.active.value)
     filterScan.refresh()
-  if (partitionsRequested.value && favoriteView.value === 'video')
-    void filterScan.loadPartitions()
 })
 let filterRestorePending = restoredFilter.mids.length + restoredFilter.tids.length > 0
 watch(() => categoryState.loaded, (loaded) => {
@@ -887,7 +896,6 @@ watch(keyword, () => {
 watch(accountId, () => {
   filterRestorePending = false
   filterScan.apply(EMPTY_FAVORITE_FILTER)
-  filterScan.invalidatePartitions()
   filterKeyword.value = ''
   data.resetAccount()
   writes.reset()
@@ -896,6 +904,17 @@ watch(accountId, () => {
   folders.reset()
   isResolvingSeasonPlayAll.value = false
   void initData()
+}, { flush: 'sync' })
+watch(() => topBarStore.favoriteStateVersion, () => {
+  const change = topBarStore.favoriteStateChange
+  if (!change || change.accountId !== accountId.value || change.handledBy === viewOwner)
+    return
+  const reread = data.invalidateResourceSources(change.sourceIds)
+  filterScan.invalidateSources(change.sourceIds)
+  if (currentFolderId.value && (!change.sourceIds || change.sourceIds.includes(currentFolderId.value)))
+    void folders.refreshInfo()
+  if (reread && !filterActive.value)
+    void data.loadNextPage()
 }, { flush: 'sync' })
 watch(contentVersion, () => {
   resetBatchSelection()
@@ -913,9 +932,6 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   const result = await writes.execute(transaction)
   if (!result)
     return
-  data.applyResourceWrite(command, version)
-  filterScan.applyResourceWrite(command)
-  filterScan.invalidatePartitions()
   if (version === contentVersion.value && selection === selectedResourceKeys.value) {
     selectedResourceKeys.value = selection.filter(key => !command.resourceKeys.includes(key))
     if (command.targetId === targetCategory.value?.id) {
@@ -925,7 +941,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
         closeBatchTransferDialog()
     }
   }
-  notifyTopBarFavoritesChanged()
+  notifyTopBarFavoritesChanged([command.sourceId, ...command.targetId ? [command.targetId] : []])
 }
 </script>
 
@@ -962,7 +978,8 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
         </Transition>
       </section>
       <LibraryHeroCarousel
-        :items="heroItems" :current="heroKey" :label="selectedContentTitle" :disabled="heroSwitchDisabled" class="favorites-hero"
+        :items="heroItems" :current="heroKey" :label="selectedContentTitle" :disabled="heroSwitchDisabled" :scope="`${accountId}:${favoriteView}`"
+        class="favorites-hero"
         :style="showUploaderStrip || uploaderStripPending ? { '--library-hero-pin': 'calc(var(--bew-library-uploader-tile-size) + var(--bew-space-2) + var(--bew-line-height-control) + var(--bew-space-6))' } : undefined"
         @select="selectHeroItem"
       >

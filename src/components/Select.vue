@@ -7,6 +7,9 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 import { DIALOG_FOCUS_OWNER } from '~/utils/dialogFocus'
+import { holdMotion } from '~/utils/motionPriority'
+import { getMotionDuration } from '~/utils/motionTiming'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { createSelectOptionKey } from '~/utils/selectOptionKey'
 
 type SelectValue = string | number | boolean | null | undefined
@@ -23,6 +26,7 @@ const props = withDefaults(defineProps<{
   loading?: boolean
   accessibleLabel?: string
   size?: 'default' | 'compact'
+  commitAfterLeave?: boolean
 }>(), {
   disabled: false,
   loading: false,
@@ -49,9 +53,13 @@ const unavailable = computed(() => props.disabled || props.loading)
 const showOptions = ref<boolean>(false)
 const keyboardOpened = ref(false)
 const activeOptionIndex = ref(-1)
+let typedPrefix = ''
+let lastTypedAt = 0
 const triggerRef = ref<HTMLButtonElement | null>(null)
 const containerRef = ref<HTMLElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
+let pendingSelection: OptionType | undefined
+let releaseMotion: (() => void) | undefined
 const {
   position: dropdownPosition,
   scheduleUpdate: schedulePositionUpdate,
@@ -69,6 +77,8 @@ async function focusOption(index: number) {
 
   activeOptionIndex.value = Math.max(0, Math.min(index, props.options.length - 1))
   await nextTick()
+  if (!showOptions.value)
+    return
   const option = dropdownRef.value?.querySelector<HTMLElement>(`[data-option-index="${activeOptionIndex.value}"]`)
   option?.focus({ preventScroll: true })
   option?.scrollIntoView({ block: 'nearest' })
@@ -78,6 +88,7 @@ function openOptions(initialIndex = selectedOptionIndex()) {
   if (unavailable.value || props.options.length === 0)
     return
 
+  pendingSelection = undefined
   activeOptionIndex.value = initialIndex >= 0 ? initialIndex : 0
   // 先写好坐标再挂载，避免 enter 动画把 top/left 从 0 过渡到真实位置（左上角飞入）
   startPositionTracking()
@@ -87,8 +98,9 @@ function openOptions(initialIndex = selectedOptionIndex()) {
 
 function closeOptions(restoreFocus = false) {
   showOptions.value = false
+  typedPrefix = ''
   if (restoreFocus)
-    void nextTick(() => triggerRef.value?.focus())
+    triggerRef.value?.focus({ preventScroll: true })
 }
 
 function toggleOptions(event: MouseEvent) {
@@ -106,12 +118,47 @@ function selectOption(option: OptionType) {
   if (unavailable.value)
     return
 
-  emit('update:modelValue', option.value)
-  emit('change', option.value)
+  if (props.commitAfterLeave)
+    pendingSelection = option
+  else commitSelection(option)
   closeOptions(true)
 }
 
+function commitSelection(option: OptionType) {
+  if (Object.is(props.modelValue, option.value))
+    return
+  emit('update:modelValue', option.value)
+  emit('change', option.value)
+}
+
+function holdMenuMotion(element: Element) {
+  const duration = keyboardOpened.value || prefersReducedMotion() ? 0 : getMotionDuration(getComputedStyle(element), '--bew-duration-fast')
+  const previous = releaseMotion
+  releaseMotion = holdMotion(duration)
+  previous?.()
+}
+function settleMenuMotion() {
+  releaseMotion?.()
+  releaseMotion = undefined
+}
+function finishLeave() {
+  settleMenuMotion()
+  const selection = pendingSelection
+  pendingSelection = undefined
+  if (selection && !unavailable.value && props.options.some(option => Object.is(option.value, selection.value)))
+    commitSelection(selection)
+}
+watch(() => props.modelValue, () => {
+  pendingSelection = undefined
+}, { flush: 'sync' })
+onScopeDispose(() => {
+  pendingSelection = undefined
+  settleMenuMotion()
+})
+
 function handleTriggerKeyDown(event: KeyboardEvent) {
+  if (event.isComposing)
+    return
   keyboardOpened.value = true
   switch (event.key) {
     case 'ArrowDown':
@@ -133,6 +180,7 @@ function handleTriggerKeyDown(event: KeyboardEvent) {
     case 'Escape':
       if (showOptions.value) {
         event.preventDefault()
+        event.stopPropagation()
         closeOptions(true)
       }
       break
@@ -140,6 +188,8 @@ function handleTriggerKeyDown(event: KeyboardEvent) {
 }
 
 function handleOptionKeyDown(event: KeyboardEvent) {
+  if (event.isComposing)
+    return
   switch (event.key) {
     case 'ArrowDown':
       event.preventDefault()
@@ -167,13 +217,41 @@ function handleOptionKeyDown(event: KeyboardEvent) {
     }
     case 'Escape':
       event.preventDefault()
+      event.stopPropagation()
       closeOptions(true)
       break
     case 'Tab':
       closeOptions()
       break
+    default: {
+      if (event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey)
+        return
+      event.preventDefault()
+      const now = performance.now()
+      const key = event.key.toLocaleLowerCase()
+      typedPrefix = now - lastTypedAt > 700 || typedPrefix === key ? key : typedPrefix + key
+      lastTypedAt = now
+      const count = props.options.length
+      for (let offset = typedPrefix.length === 1 ? 1 : 0; offset < count + 1; offset++) {
+        const index = (Math.max(0, activeOptionIndex.value) + offset) % count
+        if (props.options[index].label.toLocaleLowerCase().split(/\s+/).some(word => word.startsWith(typedPrefix))) {
+          void focusOption(index)
+          break
+        }
+      }
+    }
   }
 }
+
+watch(() => props.options, (options, previous) => {
+  if (!showOptions.value)
+    return
+  const active = previous[activeOptionIndex.value]?.value
+  const index = options.findIndex(option => Object.is(option.value, active))
+  if (index < 0)
+    closeOptions(true)
+  else activeOptionIndex.value = index
+})
 
 // 打开后再用真实内容高度校正方向与 maxHeight（此时坐标已接近正确，不再从 0,0 起步）
 watch(showOptions, async (visible, _previous, onCleanup) => {
@@ -188,8 +266,10 @@ watch(showOptions, async (visible, _previous, onCleanup) => {
 }, { flush: 'post' })
 
 watch(unavailable, (disabled) => {
-  if (disabled)
+  if (disabled) {
+    pendingSelection = undefined
     closeOptions()
+  }
 })
 </script>
 
@@ -226,14 +306,14 @@ watch(unavailable, (disabled) => {
     >
       <div
         :id="valueLabelId"
-        class="keep-one-line"
+        class="select-value"
         m="r-2"
         :aria-label="loading && !label ? $t('common.loading') : undefined"
       >
         <SkeletonBlock v-if="loading && !label" width="5em" height="1lh" />
-        <template v-else>
-          {{ label }}
-        </template>
+        <slot v-else name="value" :label="label" :value="modelValue">
+          <span class="keep-one-line">{{ label }}</span>
+        </slot>
       </div>
 
       <div class="select-arrow-slot" flex="none" grid place-items="center" m="l-2">
@@ -253,7 +333,12 @@ watch(unavailable, (disabled) => {
     </button>
 
     <Teleport :to="mainAppRef">
-      <Transition :name="dropdownPosition.openUp ? 'dropdown-up' : 'dropdown'" :css="!keyboardOpened">
+      <Transition
+        :name="dropdownPosition.openUp ? 'dropdown-up' : 'dropdown'" :css="!keyboardOpened"
+        @enter="holdMenuMotion" @leave="holdMenuMotion"
+        @after-enter="settleMenuMotion" @after-leave="finishLeave"
+        @enter-cancelled="settleMenuMotion" @leave-cancelled="settleMenuMotion"
+      >
         <div
           v-if="showOptions"
           :id="listboxId"
@@ -261,6 +346,7 @@ watch(unavailable, (disabled) => {
           class="bew-popover-surface"
           :class="{ 'select-options--compact': size === 'compact' }"
           role="listbox"
+          :inert="!showOptions || undefined"
           :data-bewly-dialog-owner="dialogOwner"
           :style="{
             'top': `${dropdownPosition.top}px`,
@@ -292,7 +378,9 @@ watch(unavailable, (disabled) => {
             @keydown="handleOptionKeyDown"
             @click="selectOption(option)"
           >
-            <span v-text="option.label" />
+            <slot name="option" :option="option" :selected="Object.is(option.value, modelValue)">
+              <span v-text="option.label" />
+            </slot>
             <i v-if="Object.is(option.value, modelValue)" i-tabler:check aria-hidden="true" />
           </div>
         </div>
@@ -311,6 +399,11 @@ watch(unavailable, (disabled) => {
 </template>
 
 <style lang="scss" scoped>
+.select-value {
+  flex: 1;
+  min-width: 0;
+  text-align: start;
+}
 .select-trigger {
   appearance: none;
   font: inherit;

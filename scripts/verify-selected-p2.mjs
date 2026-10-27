@@ -900,7 +900,6 @@ check('P2-09 Dialog focuses inside Shadow DOM, traps Tab, supports Select portal
     '~/logic': { settings: Vue.ref({ disableFrostedGlass: false }) },
     '~/components/Button.vue': { default: StubButton },
     '~/components/CloseButton.vue': { default: StubButton },
-    '~/components/PanelTopBlur.vue': { default: { render: () => null } },
   })
   const visible = Vue.ref(true)
   let closes = 0

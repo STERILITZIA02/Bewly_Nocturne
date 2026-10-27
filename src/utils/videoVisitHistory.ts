@@ -309,12 +309,15 @@ export async function clearVideoVisitHistory() {
   }
 }
 
-export async function removeVideoVisitHistory(identity: VideoIdentity) {
+export async function removeVideoVisitHistory(identity: VideoIdentity | readonly VideoIdentity[]) {
   if (!canonical)
     await initialize()
   if (!canonical || invalidated || disposed)
     return
-  const next = await sendMessage<VideoHistoryCommand, VideoHistorySnapshot>(VIDEO_VISIT_HISTORY_MESSAGE, { type: 'remove', epoch: canonical.epoch, identity }).catch(handleFailure)
+  const identities = Array.isArray(identity) ? identity : [identity as VideoIdentity]
+  if (!identities.length)
+    return
+  const next = await sendMessage<VideoHistoryCommand, VideoHistorySnapshot>(VIDEO_VISIT_HISTORY_MESSAGE, { type: 'remove', epoch: canonical.epoch, identities }).catch(handleFailure)
   if (next)
     acceptSnapshot(next)
 }

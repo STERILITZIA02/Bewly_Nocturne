@@ -33,7 +33,7 @@ import type { WatchLaterUpdate } from '~/constants/watchLaterState'
 import { settings } from '~/logic'
 import { checkLoginStatus, LoginStatus, parseDedeUserID } from '~/logic/loginStatus'
 import { parseTopBarPublicationTime, recordUploaderLatestVideoTimes } from '~/logic/uploaderLatestVideoTimes'
-import { applyWatchLaterUpdate, ensureWatchLaterCount, ensureWatchLaterState as ensureMembership, isInWatchLater as queryWatchLater, watchLaterState, watchLaterUpdate } from '~/logic/watchLaterState'
+import { applyWatchLaterUpdate, captureWatchLaterReadGeneration, ensureWatchLaterCount, ensureWatchLaterState as ensureMembership, isInWatchLater as queryWatchLater, isWatchLaterReadCurrent, watchLaterState, watchLaterUpdate } from '~/logic/watchLaterState'
 import type { List as VideoItem } from '~/models/video/watchLater'
 import { useSettingsStore } from '~/stores/settingsStore'
 import {
@@ -126,9 +126,12 @@ export const useTopBarStore = defineStore('topBar', () => {
   // 添加稍后再看列表
   const watchLaterList = reactive<VideoItem[]>([])
   const favoriteStateVersion = ref(0)
+  const favoriteStateChange = shallowRef<TopBarFavoritesChanged>()
   const isLoadingWatchLater = ref<boolean>(false)
   let nextWatchLaterPage = 1
   let watchLaterListGeneration = 0
+  const watchLaterPageState = ref<'ready' | 'failed' | 'stalled' | 'complete'>('ready')
+  const watchLaterPageKeys = new Map<number, number[]>()
   // 添加 Moments 相关状态
   const moments = shallowReactive<any[]>([])
   const isLoadingMoments = ref<boolean>(false)
@@ -253,6 +256,8 @@ export const useTopBarStore = defineStore('topBar', () => {
 
     newMomentsCount.value = 0
     watchLaterList.splice(0)
+    watchLaterPageKeys.clear()
+    watchLaterPageState.value = 'ready'
     nextWatchLaterPage = 1
     watchLaterListGeneration++
     moments.splice(0)
@@ -774,18 +779,21 @@ export const useTopBarStore = defineStore('topBar', () => {
 
   async function getWatchLaterPreview(): Promise<boolean> {
     const accountId = userInfo.mid
-    if (!isCurrentAccount(accountId))
+    if (!isCurrentAccount(accountId) || isLoadingWatchLater.value)
       return false
 
     const requestGeneration = ++watchLaterListGeneration
+    const readVersion = captureWatchLaterReadGeneration()
     nextWatchLaterPage = 1
     isLoadingWatchLater.value = true
+    watchLaterPageState.value = 'ready'
 
     try {
-      return await runTopBarSharedRefreshRequest('getWatchLaterList', async () => {
+      const succeeded = await runTopBarSharedRefreshRequest('getWatchLaterList', async () => {
         const response = await api.watchlater.getWatchLaterListByPage({
           pn: 1,
           ps: 10,
+          accountId,
         })
         if (!isCurrentAccount(accountId) || requestGeneration !== watchLaterListGeneration)
           return 'account-changed'
@@ -795,11 +803,23 @@ export const useTopBarStore = defineStore('topBar', () => {
           return 'api-error'
         if (!response.data || !Array.isArray(response.data.list) || typeof response.data.count !== 'number')
           return 'invalid-response'
+        if (!isWatchLaterReadCurrent(response.watchLaterRead, readVersion))
+          return 'invalid-response'
         const list = dedupeWatchLaterItems(response.data.list)
+        if (!list.length && response.data.count > 0) {
+          watchLaterPageState.value = 'stalled'
+          return 'invalid-response'
+        }
         watchLaterList.splice(0, watchLaterList.length, ...list)
+        watchLaterPageKeys.clear()
+        watchLaterPageKeys.set(1, list.map(item => item.aid))
+        watchLaterPageState.value = list.length >= response.data.count ? 'complete' : 'ready'
         nextWatchLaterPage = 2
         return true
       })
+      if (!succeeded && requestGeneration === watchLaterListGeneration && watchLaterPageState.value === 'ready')
+        watchLaterPageState.value = 'failed'
+      return succeeded
     }
     finally {
       if (requestGeneration === watchLaterListGeneration)
@@ -813,52 +833,75 @@ export const useTopBarStore = defineStore('topBar', () => {
     const change = update.change
     watchLaterListGeneration++
     isLoadingWatchLater.value = false
+    watchLaterPageState.value = 'ready'
     if (change.type === 'clear') {
       watchLaterList.splice(0)
       nextWatchLaterPage = 1
+      watchLaterPageKeys.clear()
+      watchLaterPageState.value = 'complete'
     }
     else if (change.type === 'remove') {
       const index = watchLaterList.findIndex(item => item.aid === change.entry.aid)
       if (index !== -1)
         watchLaterList.splice(index, 1)
-      nextWatchLaterPage = Math.max(1, Math.ceil(watchLaterList.length / 10))
+      const firstPage = [...watchLaterPageKeys].find(([, keys]) => keys.includes(change.entry.aid))?.[0] ?? 1
+      nextWatchLaterPage = Math.min(nextWatchLaterPage, firstPage)
+      for (const page of watchLaterPageKeys.keys()) {
+        if (page >= firstPage)
+          watchLaterPageKeys.delete(page)
+      }
     }
     // Preview media is a view, not membership. Only an open preview needs its
     // first page filled after an addition; other tabs keep the compact delta.
     else if (popupVisible.watchLater && !document.hidden) {
       void getWatchLaterPreview()
     }
-  })
+  }, { flush: 'sync' })
 
   // 加载更多稍后再看列表
-  async function loadMoreWatchLaterList() {
+  async function loadMoreWatchLaterList(retry = false) {
     const accountId = userInfo.mid
-    if (!isCurrentAccount(accountId) || isLoadingWatchLater.value)
+    if (!isCurrentAccount(accountId) || isLoadingWatchLater.value || (!retry && watchLaterPageState.value !== 'ready'))
       return
 
     const requestGeneration = watchLaterListGeneration
+    const readVersion = captureWatchLaterReadGeneration()
     const currentPage = nextWatchLaterPage
-    const totalPages = Math.ceil(watchLaterCount.value / 10)
-
-    if (currentPage > totalPages || watchLaterList.length >= watchLaterCount.value)
+    if (retry && currentPage === 1)
+      return getWatchLaterPreview()
+    if (watchLaterList.length >= watchLaterCount.value && !retry)
       return
 
     isLoadingWatchLater.value = true
+    watchLaterPageState.value = 'ready'
 
     try {
       const res = await api.watchlater.getWatchLaterListByPage({
         pn: currentPage,
         ps: 10,
+        accountId,
       })
-      if (res.code === 0 && isCurrentAccount(accountId) && requestGeneration === watchLaterListGeneration) {
+      if (!isCurrentAccount(accountId) || requestGeneration !== watchLaterListGeneration)
+        return
+      if (res.code !== 0 || !Array.isArray(res.data?.list) || !isWatchLaterReadCurrent(res.watchLaterRead, readVersion))
+        throw new Error('Watch Later page changed before commit')
+      {
         const existingAids = new Set(watchLaterList.map(item => item.aid))
-        const list = dedupeWatchLaterItems(Array.isArray(res.data?.list) ? res.data.list : [])
-          .filter(item => !existingAids.has(item.aid))
-        watchLaterList.push(...list)
+        const list = dedupeWatchLaterItems(res.data.list)
+        const previousKeys = new Set([...watchLaterPageKeys].filter(([page]) => page < currentPage).flatMap(([, keys]) => keys))
+        if ((list.length && list.every(item => previousKeys.has(item.aid))) || (!list.length && watchLaterList.length < res.data.count)) {
+          watchLaterPageState.value = 'stalled'
+          return
+        }
+        watchLaterList.push(...list.filter(item => !existingAids.has(item.aid)))
+        watchLaterPageKeys.set(currentPage, list.map(item => item.aid))
+        watchLaterPageState.value = watchLaterList.length >= res.data.count ? 'complete' : 'ready'
         nextWatchLaterPage = currentPage + 1
       }
     }
     catch (error) {
+      if (requestGeneration === watchLaterListGeneration)
+        watchLaterPageState.value = 'failed'
       reportRuntimeFailure('Failed to load Watch Later page', error)
     }
     finally {
@@ -1366,9 +1409,11 @@ export const useTopBarStore = defineStore('topBar', () => {
 
   onMessage<TopBarFavoritesChanged>(
     TOP_BAR_STATE_MESSAGE.FAVORITES_CHANGED,
-    ({ accountId }) => {
-      if (accountId === userInfo.mid)
+    (change) => {
+      if (change.accountId === userInfo.mid) {
+        favoriteStateChange.value = change
         favoriteStateVersion.value++
+      }
     },
   )
 
@@ -1550,14 +1595,14 @@ export const useTopBarStore = defineStore('topBar', () => {
     })
   }
 
-  function notifyFavoritesChanged() {
+  function notifyFavoritesChanged(change: Omit<TopBarFavoritesChanged, 'accountId'> = {}) {
     const accountId = userInfo.mid
     if (!accountId || sharedStateMessagingUnavailable)
       return Promise.resolve()
 
     return sendMessage<TopBarFavoritesChanged>(
       TOP_BAR_STATE_MESSAGE.FAVORITES_CHANGED,
-      { accountId },
+      { accountId, ...change },
     ).catch((error) => {
       if (!isExtensionContextInvalidatedError(error))
         throw error
@@ -1710,7 +1755,9 @@ export const useTopBarStore = defineStore('topBar', () => {
     watchLaterCount,
     watchLaterList,
     favoriteStateVersion,
+    favoriteStateChange,
     isLoadingWatchLater,
+    watchLaterPageState,
     popupVisible,
 
     isSearchPage,

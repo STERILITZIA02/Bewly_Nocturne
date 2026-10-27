@@ -1,4 +1,5 @@
 export interface WatchLaterResult {
+  watchLaterRead: { accountId: number, epoch: string, revision: number }
   code: number
   message: string
   ttl: number

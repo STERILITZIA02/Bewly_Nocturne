@@ -1,7 +1,8 @@
-import { usePreferredReducedMotion } from '@vueuse/core'
 import { onScopeDispose, readonly, ref, watch } from 'vue'
 
 import { holdMotion } from '~/utils/motionPriority'
+
+import { useReducedMotion } from './useReducedMotion'
 
 /** Exact critically damped step: stable across refresh rates and rapid retargets. */
 export function stepCriticalSpring(position: number, velocity: number, target: number, seconds: number, response: number) {
@@ -17,7 +18,7 @@ export function stepCriticalSpring(position: number, velocity: number, target: n
 
 export function useSpringValue(target: () => number, response: () => number) {
   const value = ref(target())
-  const reduced = usePreferredReducedMotion()
+  const reduced = useReducedMotion()
   let velocity = 0
   let frame: number | undefined
   let lastTime = 0
@@ -46,7 +47,7 @@ export function useSpringValue(target: () => number, response: () => number) {
   }
   watch([target, reduced], () => {
     responseSeconds = Math.max(0.001, response())
-    if (reduced.value === 'reduce') {
+    if (reduced.value) {
       stop()
       value.value = target()
     }

@@ -11,10 +11,12 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
     const warnings = []
     console.warn = (...args) => warnings.push(args)
     const dark = Vue.ref(true)
-    const oled = Vue.ref(false)
     const Pip = await compileComponent('../src/components/PipWindow.vue', {
-      '~/composables/useDark': { useDark: () => ({ isDark: dark, isOledDark: oled, darkModeBaseColor: Vue.ref('#171717') }) },
+      '~/composables/useDark': { useDark: () => ({ isDark: dark, appearanceStyle: Vue.ref({}), accentColor: Vue.ref('#00a1d6'), motionPreference: Vue.ref('system') }) },
       '~/components/Button.vue': { default: { render: () => Vue.h('button') } },
+      '~/utils/appearance': await import('../src/utils/appearance'),
+      '~/utils/reducedMotion': { applyMotionPreference() {} },
+      '~/utils/themeColor': await import('../src/utils/themeColor'),
     }, { globals: { console } })
     try {
       for (const mode of ['opened', 'unmounted', 'rejected']) {

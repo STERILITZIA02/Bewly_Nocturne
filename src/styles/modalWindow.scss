@@ -1,0 +1,67 @@
+// A modal window (user-specified, after Claude Code's settings): one solid
+// surface ruled into regions by hairlines. A header runs across the top
+// (title, then the window's controls and close), then the content, then an
+// optional footer of actions. No glass, no top blur. The settings window,
+// Dialog and ConfirmDialog share these.
+
+// Content starts this far in from the window's edge; the header title and the
+// footer line up with it.
+$inset: var(--bew-space-5);
+
+// The page behind an open window dims evenly, the same in every modal; the
+// window's motion fades it in and out.
+@mixin backdrop {
+  background: var(--bew-modal-backdrop);
+}
+
+// The window's paint, split so a window can draw its edge above scrolling
+// content (Dialog) or keep both on one layer (`surface`).
+@mixin fill {
+  background: var(--bew-elevated-solid);
+}
+@mixin edge {
+  border: var(--bew-hairline) solid var(--bew-edge-color);
+  border-radius: var(--bew-modal-radius);
+  corner-shape: var(--bew-corner-shape);
+  box-shadow: var(--bew-shadow-4);
+}
+@mixin surface {
+  @include fill;
+  @include edge;
+}
+
+// As tall as a control with room around it, so the close button sits centred.
+@mixin header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--bew-space-3);
+  box-sizing: border-box;
+  min-height: calc(var(--bew-control-height) + var(--bew-space-2) * 2);
+  padding: var(--bew-space-2) var(--bew-space-3) var(--bew-space-2) $inset;
+  border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
+}
+
+@mixin title {
+  margin: 0;
+  color: var(--bew-text-1);
+  font-size: var(--bew-font-size-subheading);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-line-height-subheading);
+}
+
+@mixin body {
+  box-sizing: border-box;
+  padding: $inset;
+}
+
+@mixin footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--bew-space-2);
+  box-sizing: border-box;
+  padding: var(--bew-space-3) $inset;
+  border-top: var(--bew-hairline) solid var(--bew-separator-color);
+}

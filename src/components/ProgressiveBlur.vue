@@ -9,8 +9,10 @@ const props = withDefaults(defineProps<{
   edge: ProgressiveBlurEdge
   /** CSS length at the strongest point; defaults to the global frosted-glass radius. */
   radius?: string
-  /** Fades the layers themselves (over `--bew-progressive-blur-fade`, default fast): an ancestor with opacity < 1 would stop the blur. */
+  /** Fade paint layers, not their wrapper, so they can still sample content outside that wrapper. */
   visible?: boolean
+  /** Closest ancestor containing all sampled paint. Used only by development diagnostics. */
+  sampleWithin?: string
 }>(), { visible: true })
 
 const layers = computed(() => createProgressiveBlurLayers(props.edge, props.radius))
@@ -18,12 +20,20 @@ const layers = computed(() => createProgressiveBlurLayers(props.edge, props.radi
 // Check each mount, including re-enabling glass. Walk through Shadow DOM hosts.
 const rootRef = ref<HTMLElement | null>(null)
 if (import.meta.env.DEV) {
-  watch(rootRef, (root) => {
+  watch([rootRef, () => props.sampleWithin], ([root, selector]) => {
+    if (!root)
+      return
+    const sample = selector ? root.parentElement?.closest(selector) : undefined
+    const describe = (element: Element) => `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}${Array.from(element.classList, name => `.${name}`).join('')}`
+    if (selector && !sample)
+      console.warn(`[Bewly] ProgressiveBlur (${describe(root)}) sample boundary ${selector} is missing; checking all ancestors.`, root)
     let node: Element | null = root
+    let containsSample = false
     while (node) {
-      const issue = getProgressiveBlurAncestorIssue(getComputedStyle(node))
+      containsSample ||= node === sample
+      const issue = getProgressiveBlurAncestorIssue(getComputedStyle(node), containsSample)
       if (issue) {
-        console.warn(`[Bewly] ProgressiveBlur blocked by ${issue}; keep glass and rounded overflow clips on sibling layers.`, node)
+        console.warn(`[Bewly] ProgressiveBlur (${describe(root)}) blocked by ${issue} on ${describe(node)}; keep glass and rounded overflow clips on sibling layers.`, node)
         return
       }
       node = node.parentElement ?? ((node.getRootNode() as ShadowRoot).host ?? null)

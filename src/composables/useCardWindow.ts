@@ -38,15 +38,27 @@ export function useCardWindow(options: {
   columns: Ref<number>
   gap: Ref<number>
   enabled: Ref<boolean>
+  axis?: 'vertical' | 'horizontal'
+  suspended?: Ref<boolean>
   estimatedHeight: Ref<number>
   /** Mixed full-width headings and media rows can supply their own estimate. */
   estimateHeight?: (key: CardKey) => number
   layout: Ref<string>
   canRelease: (key: CardKey) => boolean
   snapshot?: CardWindowSnapshot
+  saveSnapshot?: (snapshot: CardWindowSnapshot) => void
   /** Return true when the page owns the viewport position and cached card anchors must not override it. */
   restoreScroll?: () => boolean | void
 }) {
+  const horizontal = options.axis === 'horizontal'
+  const scrollPosition = (root: HTMLElement) => horizontal ? root.scrollLeft : root.scrollTop
+  const setScrollPosition = (root: HTMLElement, value: number) => {
+    if (horizontal)
+      root.scrollLeft = value
+    else root.scrollTop = value
+  }
+  const startOf = (rect: DOMRect) => horizontal ? rect.left : rect.top
+  const endOf = (rect: DOMRect) => horizontal ? rect.right : rect.bottom
   const ranges = shallowRef<CardRange[]>([])
   const loadingRange = shallowRef({ start: 0, end: 0 })
   const measurements = new Map<CardKey, CardMeasurement>(options.snapshot?.measurements)
@@ -64,7 +76,14 @@ export function useCardWindow(options: {
   let measuredColumns = options.columns.value
   let active = false
   let restoring = !!options.snapshot
-  const restoredAnchor = options.snapshot?.anchor
+  let restoredAnchor = options.snapshot?.anchor
+  if (restoredAnchor && !options.keys.value.includes(restoredAnchor.key)) {
+    const keys = options.snapshot!.renderedKeys
+    const at = keys.indexOf(restoredAnchor.key)
+    const available = new Set(options.keys.value)
+    const neighbour = [...keys.slice(Math.max(0, at + 1)), ...keys.slice(0, Math.max(0, at)).reverse()].find(key => available.has(key))
+    restoredAnchor = neighbour === undefined ? undefined : { key: neighbour, offset: restoredAnchor.offset }
+  }
   options.snapshot = undefined
   let generation = 0
   let sweepTimer: ReturnType<typeof setTimeout> | undefined
@@ -81,10 +100,10 @@ export function useCardWindow(options: {
   function viewport() {
     const root = options.root.value
     if (!root)
-      return { top: 0, height: Math.max(1, window.innerHeight) }
+      return { top: 0, height: Math.max(1, horizontal ? window.innerWidth : window.innerHeight) }
     // Shared with every other consumer of this scroll owner in the same round.
     const geometry = readViewportGeometry(root)
-    return { top: geometry.top, height: geometry.clientHeight }
+    return { top: horizontal ? geometry.left : geometry.top, height: horizontal ? geometry.clientWidth : geometry.clientHeight }
   }
 
   function visibleAnchor() {
@@ -94,11 +113,11 @@ export function useCardWindow(options: {
       if (!element.isConnected)
         continue
       const rect = element.getBoundingClientRect()
-      const offset = rect.top - top
+      const offset = startOf(rect) - top
       const precedesAnchor = !anchor || offset < anchor.offset
         || (Math.abs(offset - anchor.offset) < 0.5 && (indices.get(key) ?? Infinity) < (indices.get(anchor.key) ?? Infinity))
-      if (rect.bottom > top && rect.top < top + height && precedesAnchor)
-        anchor = { key, offset: rect.top - top }
+      if (endOf(rect) > top && startOf(rect) < top + height && precedesAnchor)
+        anchor = { key, offset }
     }
     return anchor
   }
@@ -107,9 +126,9 @@ export function useCardWindow(options: {
     const root = options.root.value
     const element = anchor && slots.get(anchor.key)
     if (root && !getScrollIntent(root).active && anchor && element?.isConnected) {
-      const adjustment = element.getBoundingClientRect().top - viewport().top - anchor.offset
+      const adjustment = startOf(element.getBoundingClientRect()) - viewport().top - anchor.offset
       if (Math.abs(adjustment) > 1)
-        root.scrollTop += adjustment
+        setScrollPosition(root, scrollPosition(root) + adjustment)
     }
   }
 
@@ -119,18 +138,18 @@ export function useCardWindow(options: {
     const root = options.root.value
     // At the page top, a newly measured/replaced grid must not scroll past the
     // content above it. Anchor preservation is only for a scrolled viewport.
-    if (!root || root.scrollTop === 0 || getScrollIntent(root).active)
+    if (!root || scrollPosition(root) === 0 || getScrollIntent(root).active)
       return
     // ResizeObserver runs after CSS reflows. Use the last settled position
     // when the user has not scrolled since, rather than the already-shifted DOM.
-    let anchor = root === bookmark?.root && root?.scrollTop === bookmark?.scrollTop
+    let anchor = root === bookmark?.root && scrollPosition(root) === bookmark?.scrollTop
       ? bookmark?.anchor
       : visibleAnchor()
     const container = options.container.value
     // A scrollbar jump can put every old slot outside the viewport. Preserve
     // the destination row while its estimated predecessors are measured.
     if (!anchor && container) {
-      const offset = viewport().top - container.getBoundingClientRect().top
+      const offset = viewport().top - startOf(container.getBoundingClientRect())
       if (offset >= 0 && offset < metrics.offset(rowCount)) {
         const row = metrics.rowAt(offset)
         const key = options.keys.value[row * options.columns.value]
@@ -140,7 +159,7 @@ export function useCardWindow(options: {
     }
     if (!root || !anchor)
       return
-    const scrollTop = root.scrollTop
+    const scrollTop = scrollPosition(root)
     const version = generation
     const scrollVersion = getScrollIntent(root).version
     anchorPending = true
@@ -154,8 +173,8 @@ export function useCardWindow(options: {
       pendingAnchor = undefined
       // A narrower row count can shrink the entire scroll range. The browser
       // clamps scrollTop in that case; it is not a new user scroll.
-      const clampedScrollTop = Math.min(scrollTop, Math.max(0, root.scrollHeight - root.clientHeight))
-      if (version !== generation || scrollVersion !== getScrollIntent(root).version || Math.abs(root.scrollTop - clampedScrollTop) > 1)
+      const clampedScrollTop = Math.min(scrollTop, Math.max(0, horizontal ? root.scrollWidth - root.clientWidth : root.scrollHeight - root.clientHeight))
+      if (version !== generation || scrollVersion !== getScrollIntent(root).version || Math.abs(scrollPosition(root) - clampedScrollTop) > 1)
         return
       restoreAnchor(anchor)
       scheduleUpdate()
@@ -173,11 +192,11 @@ export function useCardWindow(options: {
     const containerRect = container?.getBoundingClientRect()
     const anchorIndex = restoredAnchor && indices.get(restoredAnchor.key)
     const pendingIndex = pendingAnchor && indices.get(pendingAnchor.key)
-    const offset = pendingIndex !== undefined && options.root.value?.scrollTop === pendingScrollTop
+    const offset = pendingIndex !== undefined && options.root.value && scrollPosition(options.root.value) === pendingScrollTop
       ? metrics.offset(Math.floor(pendingIndex / columns)) - pendingAnchor!.offset
       : restoring || !container
         ? metrics.offset(Math.floor((anchorIndex ?? 0) / columns))
-        : top - containerRect!.top
+        : top - startOf(containerRect!)
     const loadingStart = metrics.rowAt(Math.max(0, offset - height * OVERSCAN_BEFORE))
     const loadingEnd = Math.min(rowCount, metrics.rowAt(offset + height * OVERSCAN_AFTER) + 1)
     const loadable = active && !restoring && !document.hidden && container?.isConnected
@@ -252,7 +271,7 @@ export function useCardWindow(options: {
       bookmarkScheduled = false
       const root = options.root.value
       if (active && !anchorPending && root)
-        bookmark = { root, scrollTop: root.scrollTop, anchor: visibleAnchor() }
+        bookmark = { root, scrollTop: scrollPosition(root), anchor: visibleAnchor() }
     })
   }
 
@@ -360,7 +379,7 @@ export function useCardWindow(options: {
       const row = Math.floor(index / options.columns.value)
       if (dirtyRows && !dirtyRows.has(row))
         continue
-      const height = element.getBoundingClientRect().height
+      const height = horizontal ? element.offsetWidth : element.getBoundingClientRect().height
       if (height <= 0)
         continue
       pending.push([key, height])
@@ -394,7 +413,7 @@ export function useCardWindow(options: {
 
   function captureSnapshot(): CardWindowSnapshot {
     measureMounted()
-    return { measurements: [...measurements], renderedKeys: [...slots.keys()], anchor: visibleAnchor() }
+    return { measurements: [...measurements], renderedKeys: [...(slots.size ? slots.keys() : measurements.keys())].sort((a, b) => (indices.get(a) ?? 0) - (indices.get(b) ?? 0)), anchor: visibleAnchor() ?? bookmark?.anchor ?? restoredAnchor }
   }
 
   function disconnect() {
@@ -453,7 +472,7 @@ export function useCardWindow(options: {
   }
 
   function activate() {
-    if (active)
+    if (active || options.suspended?.value)
       return
     active = true
     observe()
@@ -476,10 +495,13 @@ export function useCardWindow(options: {
 
   watch([stableKeys, options.columns, options.gap, options.estimatedHeight, options.layout, options.enabled], (next, previous) => rebuildRows(next, previous), { immediate: true })
   watch([options.root, options.container], observe, { flush: 'post' })
+  if (options.suspended)
+    watch(options.suspended, value => value ? deactivate() : activate(), { flush: 'post' })
   onMounted(activate)
   onActivated(activate)
   onDeactivated(deactivate)
   onBeforeUnmount(() => {
+    options.saveSnapshot?.(captureSnapshot())
     deactivate()
     slots.clear()
     measurements.clear()

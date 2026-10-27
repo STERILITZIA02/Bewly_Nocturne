@@ -1,4 +1,5 @@
 import type { List as HistoryItem } from '~/models/history/history'
+import { parseLocalCalendarDate } from '~/utils/localDate'
 
 export type HistoryContentFilter = 'all' | 'archive' | 'pgc' | 'live' | 'article'
 export type HistorySortOrder = 'newest' | 'oldest'
@@ -17,14 +18,10 @@ export function hasHistoryFilters(filters: HistoryFilters) {
 }
 
 export function historyDateBounds(value: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (!match)
+  const start = parseLocalCalendarDate(value)
+  if (!start)
     return undefined
-  const [, year, month, day] = match.map(Number)
-  const start = new Date(year, month - 1, day)
-  if (start.getFullYear() !== year || start.getMonth() !== month - 1 || start.getDate() !== day)
-    return undefined
-  return { start: Math.floor(start.getTime() / 1000), end: Math.floor(new Date(year, month - 1, day + 1).getTime() / 1000) - 1 }
+  return { start: Math.floor(start.getTime() / 1000), end: Math.floor(new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1).getTime() / 1000) - 1 }
 }
 
 export function historyRangeBounds(filters: HistoryFilters, now = new Date()): ReturnType<typeof historyDateBounds> | null {
@@ -58,8 +55,4 @@ export function matchesHistoryFilters(item: HistoryItem, type: HistoryContentFil
   }
   return (type === 'all' || business === type || (type === 'article' && business === 'article-list'))
     && (!bounds || (item.view_at >= bounds.start && item.view_at <= bounds.end))
-}
-
-export function sortHistoryItems(items: readonly HistoryItem[], order: HistorySortOrder) {
-  return [...items].sort((a, b) => order === 'oldest' ? a.view_at - b.view_at : b.view_at - a.view_at)
 }

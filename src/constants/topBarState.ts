@@ -54,6 +54,8 @@ export interface TopBarStateInvalidate {
 
 export interface TopBarFavoritesChanged {
   accountId: number
+  sourceIds?: number[]
+  handledBy?: string
 }
 
 export const TOP_BAR_STATE_MESSAGE = {

@@ -1,3 +1,5 @@
+import { prefersReducedMotion } from '~/utils/reducedMotion'
+
 import { holdAnimation } from './motionPriority'
 import { getMotionDuration } from './motionTiming'
 import { normalizeWheelDelta } from './wheelStep'
@@ -28,7 +30,6 @@ export function createElasticWheelScroll(scroller: HTMLElement, content: HTMLEle
   let stretch = 0
   let releaseTimer: ReturnType<typeof setTimeout> | undefined
   let settle: Animation | undefined
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
   function render() {
     content.style.translate = stretch ? `${-rubberBand(stretch)}px 0` : ''
@@ -41,7 +42,7 @@ export function createElasticWheelScroll(scroller: HTMLElement, content: HTMLEle
     const from = -rubberBand(stretch)
     stretch = 0
     render()
-    if (typeof content.animate !== 'function' || reducedMotion.matches)
+    if (typeof content.animate !== 'function' || prefersReducedMotion())
       return
     const style = getComputedStyle(content)
     settle = content.animate([{ translate: `${from}px 0` }, { translate: '0 0' }], {
@@ -74,7 +75,7 @@ export function createElasticWheelScroll(scroller: HTMLElement, content: HTMLEle
     event.preventDefault()
     interruptSettle()
     const left = scroller.scrollLeft
-    if (reducedMotion.matches)
+    if (prefersReducedMotion())
       stretch = 0
 
     let remaining = delta
@@ -89,7 +90,7 @@ export function createElasticWheelScroll(scroller: HTMLElement, content: HTMLEle
       const clamped = Math.min(max, Math.max(0, target))
       if (clamped !== left)
         scroller.scrollLeft = clamped
-      if (!reducedMotion.matches)
+      if (!prefersReducedMotion())
         stretch += target - clamped
     }
     render()

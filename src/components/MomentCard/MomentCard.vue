@@ -24,6 +24,7 @@ import { isMomentVideoUrl } from '~/utils/momentUrl'
 import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { isPortraitRatio } from '~/utils/portraitMedia'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { getLayoutHeight } from '~/utils/viewportGeometry'
 
 import type { Author, Video } from '../VideoCard/types'
@@ -568,7 +569,7 @@ async function toggleDescription() {
   descriptionOpen.value = opening
   const style = getComputedStyle(element)
   const duration = getMotionDuration(style, '--bew-duration-normal')
-  if (duration <= 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  if (duration <= 0 || prefersReducedMotion()) {
     descriptionAnimation?.cancel()
     descriptionExpanded.value = opening
     emit('interactiveResize')
@@ -618,7 +619,7 @@ function syncDisplayedDisclosure(value: MomentDisclosure) {
     displayedDisclosure.value = value
     return
   }
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  if (prefersReducedMotion())
     displayedDisclosure.value = 'none'
 }
 

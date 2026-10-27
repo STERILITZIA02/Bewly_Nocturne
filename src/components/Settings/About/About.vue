@@ -92,13 +92,17 @@ function handleContributorImageError() {
       </section>
 
       <section class="about-maintenance">
-        <SettingsItemGroup data-setting-id="settings.third_party_licenses" :title="$t('settings.third_party_licenses')">
-          <Button type="secondary" @click="licenseKind = 'project'">
-            {{ $t('settings.project_license') }}
-          </Button>
-          <Button type="secondary" @click="licenseKind = 'thirdParty'">
-            {{ $t('settings.third_party_licenses') }}
-          </Button>
+        <SettingsItemGroup data-setting-id="settings.group_licenses" :title="$t('settings.group_licenses')">
+          <SettingsItem setting-id="settings.project_license" :title="$t('settings.project_license')" right-width="auto">
+            <Button type="secondary" @click="licenseKind = 'project'">
+              {{ $t('settings.licenses_view') }}
+            </Button>
+          </SettingsItem>
+          <SettingsItem setting-id="settings.third_party_licenses" :title="$t('settings.third_party_licenses')" right-width="auto">
+            <Button type="secondary" @click="licenseKind = 'thirdParty'">
+              {{ $t('settings.licenses_view') }}
+            </Button>
+          </SettingsItem>
         </SettingsItemGroup>
         <Dialog
           v-if="licenseKind"

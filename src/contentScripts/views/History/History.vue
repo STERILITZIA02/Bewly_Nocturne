@@ -25,6 +25,7 @@ import type { Video } from '~/components/VideoCard/types'
 import VideoCard from '~/components/VideoCard/VideoCard.vue'
 import type { VideoCardContextMenuExtraOption } from '~/components/VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import type { CardWindowSnapshot } from '~/composables/useCardWindow'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
@@ -50,10 +51,10 @@ import { retiringTransition } from '~/utils/motionPresence'
 import { clearVideoVisitHistory, getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
 
 import type { HistoryFilters, HistorySortOrder } from './historyFilters'
-import { hasHistoryFilters, historyRangeBounds, sortHistoryItems } from './historyFilters'
+import { hasHistoryFilters, historyRangeBounds } from './historyFilters'
 import HistoryGroupRow from './HistoryGroupRow.vue'
 import type { HistoryGroup } from './historyGroups'
-import { groupHistoryItems, HISTORY_GROUP_INTERVALS, historyGroupHours, historyItemKey } from './historyGroups'
+import { HISTORY_GROUP_INTERVALS, historyGroupHours, historyItemKey } from './historyGroups'
 import HistoryGroupSkeleton from './HistoryGroupSkeleton.vue'
 import { useHistoryTimeline } from './useHistoryTimeline'
 
@@ -64,6 +65,8 @@ const { confirm: showConfirmDialog } = useConfirmDialog()
 const { handlePageRefresh, handleReachBottom, haveScrollbar, scrollViewportRef, requestLoadMoreCheck } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const viewState = usePageViewState('history')
+const sortOrder = viewState.ref<HistorySortOrder>('sort', 'newest')
+const interval = computed(() => settings.value.historyGroupInterval)
 const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
 const timeline = useHistoryTimeline({
   api: api.history,
@@ -71,21 +74,40 @@ const timeline = useHistoryTimeline({
   getCSRF,
   haveScrollbar,
   onWriteError: () => toast.error(t('common.operation_failed')),
-  onDeleted: (item) => { void removeVideoVisitHistory(getHistoryVideoIdentity(item)) },
+  onDeleted: (items) => { void removeVideoVisitHistory(items.map(getHistoryVideoIdentity)) },
   onCleared: () => { void clearVideoVisitHistory() },
+  getGroupInterval: () => interval.value,
+  getSortOrder: () => sortOrder.value,
 })
-const { isLoading, requestFailed, noMoreContent, historyList, keyword, submittedKeyword, filters, contentType, filtersActive, isClearingHistory, historyStatus, setHistoryPauseStatus, clearAllHistory } = timeline
+const { isLoading, requestFailed, requestStalled, noMoreContent, historyList, keyword, submittedKeyword, filters, contentType, filtersActive, isClearingHistory, historyStatus, setHistoryPauseStatus, clearAllHistory } = timeline
 viewState.capture('timeline', timeline.snapshot)
-const sortOrder = viewState.ref<HistorySortOrder>('sort', 'newest')
-const sortedHistory = computed(() => sortHistoryItems(historyList, sortOrder.value))
 const collapsedGroups = viewState.ref('collapsedGroups', new Set<string>())
+const stripSnapshots = new Map<string, CardWindowSnapshot>(viewState.read('strips', []))
+watch(accountId, () => stripSnapshots.clear(), { flush: 'post' })
+const groupRefs = new Map<string, { $el: HTMLElement, captureSnapshot: () => CardWindowSnapshot }>()
+const cardRefs = new Map<string, { canRecycle: boolean }>()
+const canReleaseCard = (key: string) => cardRefs.get(key)?.canRecycle !== false
+viewState.capture('strips', () => {
+  groupRefs.forEach((group, key) => stripSnapshots.set(key, group.captureSnapshot()))
+  return [...stripSnapshots]
+})
 const mutationKey = (item: HistoryItem) => `${item.history.business}_${item.history.oid}`
-const interval = computed(() => settings.value.historyGroupInterval)
 const dateFormatter = computed(() => new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), { dateStyle: 'medium' }))
 const timeFormatter = computed(() => new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }))
 // Rows of the chosen interval (user-specified): an hour, eight hours or a day,
 // each under its date heading; part-day groups add their hours.
-const historyGroups = computed(() => groupHistoryItems(sortedHistory.value, interval.value))
+const historyGroups = timeline.groups
+watch(() => historyGroups.value.map(group => `group:${group.key}`), (keys) => {
+  const current = new Set(keys)
+  for (const key of stripSnapshots.keys()) {
+    if (!current.has(key))
+      stripSnapshots.delete(key)
+  }
+})
+function saveStripSnapshot(key: string, snapshot: CardWindowSnapshot) {
+  if (historyGroups.value.some(group => `group:${group.key}` === key))
+    stripSnapshots.set(key, snapshot)
+}
 // The group the list starts at: the hero's current card (see the hero row
 // below). The groups before it come back by choosing them in the hero.
 const startGroupKey = ref<string>()
@@ -105,10 +127,8 @@ function groupLabel(group: HistoryGroup) {
 const batch = useLibraryBatchSelection({
   keys: () => shownGroups.value.filter(group => !collapsedGroups.value.has(group.key)).flatMap(group => group.items.map(mutationKey)),
   captureOwner: timeline.capture,
-  remove: async (key) => {
-    const item = historyList.find(item => mutationKey(item) === key)
-    return item ? timeline.deleteHistoryItem(item) : true
-  },
+  remove: timeline.deleteSelectedHistoryItem,
+  commit: timeline.commitSelectedHistoryItems,
 })
 const controlsDisabled = computed(() => batch.busy.value || isClearingHistory.value || timeline.deleting.size > 0)
 // Filtered reads (search, filters, a content type) scan pages for an unknown
@@ -183,7 +203,7 @@ function selectRailContent(value: string) {
 const historyContent = ref<HTMLElement | null>(null)
 const historyContainer = ref<HTMLElement | null>(null)
 // Cards slide into place when one leaves its row.
-const layoutMotion = useLayoutMotion(historyContainer, () => sortedHistory.value.map(historyItemKey).join(','), {
+const layoutMotion = useLayoutMotion(historyContainer, () => String(timeline.contentRevision.value), {
   selector: '[data-history-key]',
   key: 'data-history-key',
 })
@@ -227,8 +247,8 @@ const cardWindow = useCardWindow({
   enabled: computed(() => historyList.length > CARD_WINDOW_THRESHOLD),
   estimatedHeight: rowHeight,
   estimateHeight: key => collapsedGroups.value.has(groupByKey.value.get(String(key))?.key ?? '') ? HEADING_HEIGHT : rowHeight.value,
-  layout: computed(() => `${interval.value}:${Math.round(cardWidth.value)}`),
-  canRelease: key => !groupByKey.value.get(String(key))?.items.some(item => timeline.deleting.has(mutationKey(item))),
+  layout: computed(() => `${interval.value}:${Math.round(cardWidth.value)}:${settings.value.interfaceFontSize}`),
+  canRelease: key => !groupByKey.value.get(String(key))?.items.some(item => timeline.deleting.has(mutationKey(item)) || !canReleaseCard(historyItemKey(item))),
 })
 type RenderedHistoryRow = { kind: 'group', key: string, group: HistoryGroup } | { kind: 'spacer', key: string, height: number }
 const renderedRows = computed(() => cardWindow.ranges.value.flatMap<RenderedHistoryRow>(range => range.height !== undefined
@@ -492,6 +512,7 @@ function jumpToLoginPage() {
       <Transition name="library-hero" :duration="300">
         <LibraryHeroCarousel
           v-if="showHero && !batch.managing.value" :items="heroItems" :current="heroKey" :label="t('history.title')" class="history-hero"
+          :scope="accountId" :disabled="controlsDisabled"
           :style="showDayStrip ? { '--library-hero-pin': 'calc(var(--bew-control-height) + var(--bew-space-6) * 2)' } : undefined"
           @select="selectStartGroup"
         >
@@ -513,7 +534,7 @@ function jumpToLoginPage() {
       </p>
       <LoadingFill v-if="pendingPhase !== 'idle'" ref="pendingRef" :loading="pendingLoading" />
       <Empty
-        v-else-if="requestFailed && !isLoading && historyList.length === 0" text-only fill :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')"
+        v-else-if="requestFailed && !isLoading && historyList.length === 0" text-only fill :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')"
         @action="retryHistoryRequest"
       />
       <Empty v-else-if="noMoreContent && !isLoading && !historyList.length" text-only fill :description="t(filtersActive ? 'library_tools.no_matches' : 'common.no_data')" role="status" />
@@ -526,33 +547,37 @@ function jumpToLoginPage() {
           <template v-for="entry in renderedRows" :key="entry.key">
             <div v-if="entry.kind === 'spacer'" :style="{ height: `${entry.height}px` }" aria-hidden="true" />
             <HistoryGroupRow
-              v-else :ref="component => cardWindow.setElement(entry.key, (component as { $el?: HTMLElement } | null)?.$el ?? null)" :data-history-cell="entry.key"
+              v-else :ref="component => { const row = component as { $el: HTMLElement, captureSnapshot: () => CardWindowSnapshot } | null; row ? groupRefs.set(entry.key, row) : groupRefs.delete(entry.key); cardWindow.setElement(entry.key, row?.$el ?? null) }" :data-history-cell="entry.key"
               :label="groupLabel(entry.group)" :expanded="!collapsedGroups.has(entry.group.key)" :disabled="controlsDisabled"
+              :items="entry.group.items" :card-width="cardWidth" :can-release="canReleaseCard" :snapshot="stripSnapshots.get(entry.key)" @snapshot="saveStripSnapshot(entry.key, $event)"
               @toggle="toggleHistoryGroup(entry.group.key)"
             >
-              <div v-for="item in entry.group.items" :key="historyItemKey(item)" class="history-card" :data-history-key="historyItemKey(item)">
-                <VideoCard
-                  :video="getHistoryVideo(item)" :menu-item="item" :get-menu-extra-groups="getHistoryMenuGroups"
-                  :show-watch-later="item.history.business === Business.ARCHIVE" :inert="batch.managing.value ? true : undefined"
-                >
-                  <!-- The cover carries no text (user-specified): only the watched line. -->
-                  <template v-if="hasWatchProgress(item)" #coverBottom>
-                    <Progress :percentage="getVideoProgressPercentage(getHistoryVideoIdentity(item), item.progress, item.duration)" />
-                  </template>
-                </VideoCard>
-                <SelectionOverlay
-                  v-if="batch.managing.value" :label="item.show_title || item.title"
-                  :selected="batch.selected.value.has(mutationKey(item))" :disabled="batch.busy.value"
-                  @toggle="batch.toggle(mutationKey(item))"
-                />
-              </div>
+              <template #default="{ item, setElement }">
+                <div :ref="setElement" class="history-card" :data-history-key="historyItemKey(item)">
+                  <VideoCard
+                    :ref="component => { const card = component as { canRecycle: boolean } | null; card ? cardRefs.set(historyItemKey(item), card) : cardRefs.delete(historyItemKey(item)) }"
+                    :video="getHistoryVideo(item)" :menu-item="item" :get-menu-extra-groups="getHistoryMenuGroups"
+                    :show-watch-later="item.history.business === Business.ARCHIVE" :inert="batch.managing.value ? true : undefined"
+                  >
+                    <!-- The cover carries no text (user-specified): only the watched line. -->
+                    <template v-if="hasWatchProgress(item)" #coverBottom>
+                      <Progress :percentage="getVideoProgressPercentage(getHistoryVideoIdentity(item), item.progress, item.duration)" />
+                    </template>
+                  </VideoCard>
+                  <SelectionOverlay
+                    v-if="batch.managing.value" :label="item.show_title || item.title"
+                    :selected="batch.selected.value.has(mutationKey(item))" :disabled="batch.busy.value"
+                    @toggle="batch.toggle(mutationKey(item))"
+                  />
+                </div>
+              </template>
             </HistoryGroupRow>
           </template>
         </div>
       </Transition>
 
       <Empty
-        v-if="requestFailed && !isLoading && historyList.length > 0" text-only class="history-load-more-error" :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')"
+        v-if="requestFailed && !isLoading && historyList.length > 0" text-only class="history-load-more-error" :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')"
         @action="retryHistoryRequest"
       />
 

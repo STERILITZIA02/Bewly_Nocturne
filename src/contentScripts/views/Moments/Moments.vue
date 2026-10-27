@@ -1519,7 +1519,6 @@ function appendMoments(items: DisplayMoment[]) {
       :show-header="false"
       :show-border="false"
       :show-footer="false"
-      :frosted-glass="false"
       :title="selectedMoment.isLive ? t('moments.live_room') : selectedMoment.isVideo ? t('moments.video_playback') : selectedMoment.author.name"
       :desc="selectedMoment.isLive || selectedMoment.isVideo ? selectedMoment.title || selectedMoment.author.name : (selectedMoment.time || t('moments.detail'))"
       :width="detailDialogWidth"

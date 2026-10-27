@@ -1,3 +1,5 @@
+import { prefersReducedMotion } from '~/utils/reducedMotion'
+
 const intents = new WeakMap<HTMLElement, { version: number, finish?: () => void }>()
 const SMOOTH_SCROLL_DEADLINE_MS = 3_000
 
@@ -94,7 +96,7 @@ export function scrollToPosition(element: HTMLElement, top: number, behavior: Sc
   intents.set(element, state)
   if (element.scrollTop === top)
     return Promise.resolve()
-  if (behavior === 'smooth' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  if (behavior === 'smooth' && prefersReducedMotion())
     behavior = 'instant'
   if (behavior !== 'smooth') {
     element.scrollTo({ top, behavior })

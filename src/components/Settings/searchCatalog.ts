@@ -1,3 +1,5 @@
+import { CODEX_THEME_NAMES } from '~/utils/appearanceThemeNames'
+
 import { MenuType } from './types'
 
 export interface SettingsSearchStorageValue {
@@ -13,6 +15,7 @@ export interface SettingsSearchEntry {
   targetId?: string
   fallbackIds?: string[]
   conditionTitleKey?: string
+  contextTitleKey?: string
   secondaryTitleKey?: string
   storageValues?: SettingsSearchStorageValue[]
   keywordKeys?: string[]
@@ -341,10 +344,6 @@ const entries: SettingsSearchEntry[] = [
   ], { targetKey: 'settings.moments_filter_charge_dynamic' }),
   ...createEntries(videoCardRoute, [
     'settings.plugin.video_card',
-    'settings.group_video_card_grid',
-    'settings.auto_switch_list_layout',
-    'settings.auto_switch_list_layout_breakpoint',
-    'settings.video_card_cover_ratio',
     'settings.group_video_card_display',
     'settings.enable_video_preview',
     'settings.resume_from_preview_position',
@@ -372,7 +371,7 @@ const entries: SettingsSearchEntry[] = [
     'video_card.operation.favorite',
     'video_card.operation.block_user',
   ]),
-  ...createEntries(videoCardRoute, [
+  ...createEntries(appearanceRoute, [
     'settings.video_card_title_font_size',
     'settings.video_card_author_font_size',
   ], { keywordKeys: ['settings.font_size_option'] }),
@@ -572,7 +571,6 @@ const entries: SettingsSearchEntry[] = [
     'settings.group_visual_effects',
     'settings.disable_frosted_glass_and_top_bar_gradient',
     'settings.frosted_glass_blur_intensity',
-    'settings.disable_shadow',
     'settings.group_page_style',
     'settings.adapt_to_other_page_styles',
     'settings.group_color',
@@ -580,11 +578,20 @@ const entries: SettingsSearchEntry[] = [
     'settings.theme_schedule',
     'settings.video_page_dark_mode',
   ]),
-  ...createEntries(appearanceRoute, ['settings.theme_color'], { keywordKeys: ['settings.theme_color_opt.neutral'] }),
+  ...createEntries(appearanceRoute, ['settings.visual_style.accent'], { targetId: 'settings.theme_color', keywordKeys: ['settings.theme_color', 'settings.theme_color_opt.neutral'] }),
+  ...createEntries(appearanceRoute, ['settings.visual_style.shadows'], { targetId: 'settings.disable_shadow', keywordKeys: ['settings.disable_shadow'] }),
   ...createEntries(appearanceRoute, [
-    'settings.enable_dark_mode_tint',
-    'settings.dark_mode_base_color',
-    'settings.enable_oled_dark_mode',
+    'settings.visual_style.editing_mode',
+    'settings.visual_style.separate_accent',
+    'settings.visual_style.background',
+    'settings.visual_style.foreground',
+    'settings.visual_style.contrast',
+    'settings.visual_style.interface_font_size',
+  ]),
+  ...createEntries(appearanceRoute, ['settings.visual_style.import', 'settings.visual_style.export', 'settings.visual_style.copy'], { targetId: 'settings.visual_style.preset' }),
+  ...createEntries(appearanceRoute, ['settings.visual_style.preset'], { keywordKeys: ['settings.visual_style.presets'], keywords: Object.values(CODEX_THEME_NAMES) }),
+  ...createEntries(appearanceRoute, ['settings.visual_style.motion'], { keywordKeys: ['settings.visual_style.motion_system', 'settings.visual_style.motion_on', 'settings.visual_style.motion_off'] }),
+  ...createEntries(appearanceRoute, [
     'settings.gradient_theme_color_background',
     'settings.group_fonts',
     'settings.customize_font',
@@ -630,7 +637,7 @@ const entries: SettingsSearchEntry[] = [
   ]),
 
   ...createEntries(authorizationRoute, ['settings.authorize_app'], { targetId: 'account.appAuthorization' }),
-  ...createEntries(aboutRoute, ['settings.project_license'], { targetKey: 'settings.third_party_licenses' }),
+  ...createEntries(aboutRoute, ['settings.project_license']),
   ...createEntries(aboutRoute, ['settings.third_party_licenses', 'settings.enable_version_reminder']),
   ...createEntries(dataRoute, [
     'settings.enable_settings_sync',
@@ -659,7 +666,6 @@ const targetAliases: Record<string, string> = {
   'settings.messages_server_unfollowed': 'messages.server.unfollowed',
   'settings.messages_server_block_words': 'messages.server.blockWords',
   'settings.moments_blocked_keywords': 'settings.moments_enable_keyword_filter',
-  'settings.auto_switch_list_layout_breakpoint': 'settings.auto_switch_list_layout',
   'settings.remember_playback_rate': 'settings.group_playback_memory',
   'settings.remember_video_aspect_ratio': 'settings.group_playback_memory',
   'settings.remember_video_quality': 'settings.group_playback_memory',
@@ -673,7 +679,6 @@ const conditionalParents: Record<string, string[]> = {
   'settings.clean_share_link_remove_tracking_params': ['settings.enable_clean_share_link'],
   'settings.open_top_bar_items_in_bewly': ['settings.topbar_display_settings'],
   'settings.theme_schedule': ['settings.theme'],
-  'settings.dark_mode_base_color': ['settings.enable_dark_mode_tint'],
   'settings.frosted_glass_blur_intensity': ['settings.disable_frosted_glass_and_top_bar_gradient'],
   'settings.remember_no_cookie_recommendation_state': ['settings.recommendation_mode'],
   'settings.recommendation_mode_visible_options': ['settings.show_recommendation_mode_switcher'],
@@ -688,6 +693,19 @@ const conditionalParents: Record<string, string[]> = {
   'settings.comment_reply_pagination_mode.title': ['settings.enable_comment_reply_tree_display'],
   'settings.comment_reply_batch_pages': ['settings.comment_reply_pagination_mode.title', 'settings.enable_comment_reply_tree_display'],
   'settings.comment_reply_tree_container_height': ['settings.enable_comment_reply_tree_container'],
+  'player_adjustment.show_button': ['player_adjustment.enable'],
+  'settings.always_show_dock_actions_when_auto_hide': ['settings.auto_hide_dock'],
+}
+const contextTitles: Record<string, string> = {
+  'settings.original_moments_show_user_card': 'settings.group_original_moments_page',
+  'settings.original_moments_show_live_list': 'settings.group_original_moments_page',
+  'settings.original_moments_show_hot_search': 'settings.group_original_moments_page',
+  'settings.original_moments_show_up_list': 'settings.group_original_moments_page',
+  'settings.original_moments_show_community_center': 'settings.group_original_moments_page',
+  'settings.moments_show_user_card': 'settings.group_new_moments_page',
+  'settings.moments_show_live': 'settings.group_new_moments_page',
+  'settings.moments_show_publish': 'settings.group_new_moments_page',
+  'settings.moments_show_up_list': 'settings.group_new_moments_page',
 }
 const previewKeys = new Set(['settings.resume_from_preview_position', 'settings.enable_video_ctrl_bar_on_video_card', 'settings.video_preview_swipe_seek', 'settings.hover_video_card_delayed', 'settings.only_cover_video_preview'])
 
@@ -714,9 +732,10 @@ export const settingsSearchEntries = entries.map((entry) => {
     parents = [page === 'moments' ? 'settings.moments_enable_video_preview' : 'settings.enable_video_preview']
   return {
     ...entry,
+    contextTitleKey: entry.contextTitleKey ?? contextTitles[key],
     keywordKeys: targetAliases[key] ? [...(entry.keywordKeys ?? []), `${targetAliases[key]}_desc`] : entry.keywordKeys,
     targetId: entry.targetId ?? targetKey,
-    fallbackIds: parents,
-    conditionTitleKey: key === 'settings.open_top_bar_items_in_bewly' ? 'settings.touch_screen_optimization' : undefined,
+    fallbackIds: entry.fallbackIds ?? parents,
+    conditionTitleKey: entry.conditionTitleKey ?? (key === 'settings.open_top_bar_items_in_bewly' ? 'settings.touch_screen_optimization' : undefined),
   }
 })

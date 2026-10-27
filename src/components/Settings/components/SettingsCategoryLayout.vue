@@ -24,8 +24,9 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const setBreadcrumb = inject<(detail?: string) => void>('setSettingsBreadcrumb')
 const scrollSettingsContentToTop = inject<() => void>('scrollSettingsContentToTop')
+// The window header shows the open page as the last step of its path.
+const setSettingsPageTitle = inject<(title?: string) => void>('setSettingsPageTitle')
 const savedPage = sessionStorage.getItem(props.storageKey)
 const activePage = ref(
   props.pages.some(page => page.value === savedPage)
@@ -53,7 +54,8 @@ const pageGroups = computed(() => {
   return groups
 })
 
-watch(activePage, page => sessionStorage.setItem(props.storageKey, page))
+watch(activePage, page => sessionStorage.setItem(props.storageKey, page), { immediate: true, flush: 'sync' })
+watchEffect(() => setSettingsPageTitle?.(currentPage.value && t(currentPage.value.titleKey)))
 watch(
   () => [props.navigationRequestId, props.navigationPage] as const,
   ([, page]) => {
@@ -62,7 +64,6 @@ watch(
   },
   { immediate: true },
 )
-watchEffect(() => setBreadcrumb?.(currentPage.value ? t(currentPage.value.titleKey) : undefined))
 
 function selectPage(page: string) {
   if (page === activePage.value)
@@ -85,13 +86,14 @@ function handlePageMouseDown(event: MouseEvent) {
 </script>
 
 <template>
+  <!-- The category's pages as a column of their own between the categories
+       and the page, divided from the page by a hairline (user-specified). -->
   <div class="settings-category-layout">
     <nav class="settings-category-nav" :aria-label="$t('settings.category_navigation')">
       <div
         v-for="(group, groupIndex) in pageGroups"
         :key="group.key ?? `ungrouped-${groupIndex}`"
         class="settings-category-group"
-        :class="{ 'has-label': !!group.key }"
       >
         <div v-if="group.key" class="settings-category-group-label bew-section-label">
           {{ $t(group.key) }}
@@ -102,14 +104,16 @@ function handlePageMouseDown(event: MouseEvent) {
           type="button"
           class="settings-category-button"
           :class="{ active: activePage === page.value }"
+          :aria-current="activePage === page.value ? 'page' : undefined"
           @mousedown="handlePageMouseDown"
           @click="selectPage(page.value)"
         >
           <span
-            class="settings-category-icon"
+            class="settings-nav-icon"
             :class="activePage === page.value ? page.iconActivated : page.icon"
+            aria-hidden="true"
           />
-          <span>{{ $t(page.titleKey) }}</span>
+          <span class="settings-nav-label">{{ $t(page.titleKey) }}</span>
         </button>
       </div>
     </nav>
@@ -118,7 +122,6 @@ function handlePageMouseDown(event: MouseEvent) {
       <SettingsSectionHeading
         :title="$t(currentPage.titleKey)"
         :desc="currentPage.descriptionKey ? $t(currentPage.descriptionKey) : undefined"
-        :icon="currentPage.iconActivated"
         :warning="currentPage.warning"
         :badge="currentPage.badgeKey ? $t(currentPage.badgeKey) : undefined"
       />
@@ -128,24 +131,26 @@ function handlePageMouseDown(event: MouseEvent) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../../styles/settingsNav";
+
 .settings-category-layout {
+  --settings-category-nav-width: 192px;
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: var(--bew-space-6);
-  margin-left: calc(var(--bew-space-8) * -1);
+  grid-template-columns: var(--settings-category-nav-width) minmax(0, 1fr);
+  align-items: start;
   overflow-anchor: none;
 }
 
+// Pinned in the page's scroller and exactly as tall as it (the scroller is a
+// size container), so its hairline runs the full height and a long list
+// scrolls on its own.
 .settings-category-nav {
+  @include settingsNav.column;
+  @include settingsNav.scroller;
   position: sticky;
-  // The scroll viewport already reserves the 80px header with padding. A zero
-  // inset keeps the sticky position aligned with the nav's natural position.
   top: 0;
-  display: flex;
-  flex-direction: column;
-  align-self: start;
-  gap: var(--bew-space-2);
-  overflow-anchor: none;
+  height: 100cqh;
+  gap: var(--bew-space-4);
 }
 
 .settings-category-group {
@@ -155,76 +160,47 @@ function handlePageMouseDown(event: MouseEvent) {
 }
 
 .settings-category-group-label {
-  padding: 0 var(--bew-space-3) var(--bew-space-0-5);
+  @include settingsNav.group-label;
 }
 
 .settings-category-button {
-  display: flex;
-  gap: var(--bew-space-2);
-  align-items: center;
-  width: 100%;
-  min-height: 40px;
-  padding: var(--bew-space-2) var(--bew-space-3);
-  color: var(--bew-text-1);
-  text-align: left;
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-  font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-body);
-  overflow-anchor: none;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease;
-
-  &:hover {
-    background: var(--bew-fill-2);
-  }
-
-  &.active {
-    color: var(--bew-text-1);
-    background: var(--bew-selected-bg);
-  }
-
-  > span:last-child {
-    min-width: 0;
-    line-height: 1.3;
-  }
-}
-
-.settings-category-icon {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 auto;
-  font-size: var(--bew-icon-size-md);
+  @include settingsNav.row(".active");
 }
 
 .settings-category-content {
+  box-sizing: border-box;
   min-width: 0;
+  max-width: calc(var(--settings-content-max-width) + var(--bew-space-8) * 2);
+  padding: var(--settings-content-padding);
 }
 
-@media (max-width: 760px) {
+// Too narrow for two columns: the pages wrap above the page instead, ruled
+// off from it.
+@container settings-viewport (max-width: 520px) {
   .settings-category-layout {
     display: block;
-    margin-left: 0;
   }
 
   .settings-category-nav {
     position: static;
-    display: grid;
-    grid-template-columns: 1fr;
-    margin-bottom: 20px;
+    flex-flow: row wrap;
+    height: auto;
+    gap: var(--bew-space-1);
+    overflow: visible;
+    border-inline-end: 0;
+    border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
   }
 
   .settings-category-group {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--bew-space-1);
+    display: contents;
   }
 
   .settings-category-group-label {
-    grid-column: 1 / -1;
-    padding: 4px 6px 2px;
+    display: none;
+  }
+
+  .settings-category-button {
+    width: auto;
   }
 }
 </style>

@@ -9,6 +9,7 @@ import type { WidescreenDisplayMode, WidescreenRect, WidescreenZoomFrame, Widesc
 import { interpolateWidescreenZoomFrame, resolveWidescreenContentWidth, resolveWidescreenZoomFrame, resolveWidescreenZoomVisual, WIDESCREEN_IDENTITY_ZOOM_FRAME } from '~/utils/bewlyWidescreenPolicy'
 import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 
 // @unocss-include: `.ts` is outside UnoCSS's watch pipeline, so without it a
 // running `pnpm dev` never generates icons named only here.
@@ -178,7 +179,7 @@ export function setWidescreenDisplayMode(
     return
 
   const { playerEl, root } = currentState
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const reducedMotion = prefersReducedMotion()
   const shouldAnimate = animate && !reducedMotion && typeof playerEl.animate === 'function'
   const painted = shouldAnimate ? measurePaintedPlayer(currentState) : undefined
   const restMode = currentState.heldRestMode ?? currentState.displayMode

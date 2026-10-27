@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { LIBRARY_HERO_RENDER_RADIUS } from '~/constants/library'
 import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { normalizeWheelDelta } from '~/utils/wheelStep'
 
 /**
@@ -31,13 +32,17 @@ import { normalizeWheelDelta } from '~/utils/wheelStep'
  * their spacing), `--library-hero-gap` (the space to the content after it)
  * and `--library-hero-margin` (its own share of that space).
  */
-const props = defineProps<{ items: ReadonlyArray<{ key: string, label: string }>, current: string, label: string, disabled?: boolean }>()
+const props = defineProps<{ items: ReadonlyArray<{ key: string, label: string }>, current: string, label: string, disabled?: boolean, scope?: string | number | null }>()
 const emit = defineEmits<{ (event: 'select', key: string): void }>()
 const { t } = useI18n()
 
 const track = ref<HTMLElement | null>(null)
 const index = computed(() => Math.max(0, props.items.findIndex(item => item.key === props.current)))
 const last = computed(() => props.items.length > 1 && index.value === props.items.length - 1)
+const windowStart = computed(() => Math.max(0, index.value - LIBRARY_HERO_RENDER_RADIUS))
+const windowEnd = computed(() => Math.min(props.items.length, index.value + LIBRARY_HERO_RENDER_RADIUS + 1))
+const slides = computed(() => props.items.slice(windowStart.value, windowEnd.value).map((item, offset) => ({ item, index: windowStart.value + offset })))
+const spacerStyle = (count: number) => ({ flexBasis: `calc(${count} * (var(--carousel-slide) + var(--carousel-gap)) - var(--carousel-gap))` })
 // A gesture ends after this long without wheel events (its inertial tail included).
 const WHEEL_IDLE_MS = 140
 // Past an end the row follows at this fraction of the gesture.
@@ -48,39 +53,45 @@ let drag: Drag | undefined
 let settling: Animation | undefined
 let touch: { id: number, x: number, y: number, lastX: number, horizontal?: boolean } | undefined
 let dragged = false
-onBeforeUnmount(() => {
-  settling?.cancel()
+let operation = 0
+let disposed = false
+function cancelGesture() {
+  operation++
+  const animation = settling
+  settling = undefined
+  animation?.cancel()
   if (drag) {
     cancelAnimationFrame(drag.frame)
     clearTimeout(drag.idle)
+    drag = undefined
   }
+  touch = undefined
+  if (track.value)
+    track.value.style.transform = ''
+}
+watch(() => [props.current, props.scope, props.disabled, props.items.map(item => item.key).join('\0')], cancelGesture, { flush: 'sync' })
+onBeforeUnmount(() => {
+  disposed = true
+  cancelGesture()
 })
 
-function placeTrack(element: HTMLElement, target: number) {
-  element.style.setProperty('--carousel-index', String(target))
-  element.style.setProperty('--carousel-end-shift', props.items.length > 1 && target === props.items.length - 1 ? '1' : '0')
-}
-function trackX(element: HTMLElement) {
-  return new DOMMatrixReadOnly(getComputedStyle(element).transform).m41
-}
-// A card's resting position, read with its index applied for one style pass.
-function restingX(element: HTMLElement, target: number) {
-  placeTrack(element, target)
-  const x = trackX(element)
-  placeTrack(element, index.value)
-  return x
+function trackGeometry(element: HTMLElement, style: CSSStyleDeclaration) {
+  const card = element.querySelector<HTMLElement>('.is-current')!
+  const width = Number.parseFloat(getComputedStyle(card).width)
+  const gap = Number.parseFloat(style.columnGap) || 0
+  const hostWidth = Number.parseFloat(getComputedStyle(element.parentElement!.parentElement!).width)
+  return { step: width + gap, endShift: hostWidth - width }
 }
 function canMove() {
-  return props.items.length > 1 && !props.disabled && !settling
+  return !disposed && props.items[index.value]?.key === props.current && props.items.length > 1 && !props.disabled && !settling
 }
 
 function beginDrag() {
   const element = track.value
   if (drag || !element || !canMove())
     return drag
-  const card = element.children[index.value] as HTMLElement | undefined
-  const gap = Number.parseFloat(getComputedStyle(element).columnGap) || 0
-  drag = { base: trackX(element), offset: 0, step: (card?.offsetWidth ?? 0) + gap, frame: 0 }
+  const style = getComputedStyle(element)
+  drag = { base: new DOMMatrixReadOnly(style.transform).m41, offset: 0, step: trackGeometry(element, style).step, frame: 0 }
   return drag
 }
 // `delta` > 0 brings the next card in. The row is written once a frame.
@@ -111,41 +122,55 @@ function endDrag() {
   const target = props.items[index.value + direction] ? index.value + direction : index.value
   settle(target, current.step)
 }
-function settle(target: number, step?: number) {
+async function settle(target: number, step?: number) {
   const element = track.value
-  if (!element)
+  const targetKey = props.items[target]?.key
+  if (!element || targetKey === undefined || disposed)
     return
-  const from = element.style.transform || getComputedStyle(element).transform
-  element.style.transform = ''
-  const fromX = new DOMMatrixReadOnly(from).m41
-  const toX = restingX(element, target)
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  const full = reduced ? 0 : getMotionDuration(getComputedStyle(element), '--bew-duration-moderate', 300)
-  // The rest of the way takes its share of the time, never too abrupt.
-  const share = step ? Math.min(1, Math.max(0.35, Math.abs(toX - fromX) / step)) : 1
-  const finish = () => {
-    if (target !== index.value)
-      emit('select', props.items[target].key)
-  }
-  if (!full || Math.abs(toX - fromX) < 1) {
+  const version = ++operation
+  const origin = props.current
+  const scope = props.scope
+  let animation: Animation | undefined
+  try {
+    const style = getComputedStyle(element)
+    const geometry = trackGeometry(element, style)
+    const from = element.style.transform || style.transform
+    const fromX = new DOMMatrixReadOnly(from).m41
+    const toX = -target * geometry.step + (props.items.length > 1 && target === props.items.length - 1 ? geometry.endShift : 0)
+    const reduced = prefersReducedMotion()
+    const full = reduced ? 0 : getMotionDuration(style, '--bew-duration-moderate', 300)
+    element.style.transform = ''
+    // The rest of the way takes its share of the time, never too abrupt.
+    const share = step ? Math.min(1, Math.max(0.35, Math.abs(toX - fromX) / step)) : 1
+    const finish = () => {
+      if (version === operation && !disposed && !props.disabled && props.scope === scope && props.current === origin
+        && props.items.some(item => item.key === targetKey) && targetKey !== origin) {
+        emit('select', targetKey)
+      }
+    }
+    if (!full || Math.abs(toX - fromX) < 1) {
+      finish()
+      return
+    }
+    animation = settling = element.animate([{ transform: `translateX(${fromX}px)` }, { transform: `translateX(${toX}px)` }], {
+      duration: full * share,
+      easing: 'cubic-bezier(0.2, 0, 0, 1)',
+      fill: 'forwards',
+    })
+    holdAnimation(animation)
+    await animation.finished
     finish()
-    return
-  }
-  const animation = settling = element.animate([{ transform: `translateX(${fromX}px)` }, { transform: `translateX(${toX}px)` }], {
-    duration: full * share,
-    easing: 'cubic-bezier(0.2, 0, 0, 1)',
-    fill: 'forwards',
-  })
-  holdAnimation(animation)
-  void animation.finished.then(async () => {
-    finish()
-    // Hold the end frame until the committed index has moved the row there.
+    // Hold the end frame until the committed key has moved the row there.
     await nextTick()
-    animation.cancel()
-    settling = undefined
-  }, () => {
-    settling = undefined
-  })
+  }
+  catch { /* Cancellation returns to the confirmed key without navigation. */ }
+  finally {
+    animation?.cancel()
+    if (version === operation) {
+      settling = undefined
+      element.style.transform = ''
+    }
+  }
 }
 
 function handleWheel(event: WheelEvent) {
@@ -181,11 +206,19 @@ function handlePointerMove(event: PointerEvent) {
   touch.lastX = event.clientX
 }
 function handlePointerUp(event: PointerEvent) {
+  if (touch?.id !== event.pointerId)
+    return
   if (touch?.id === event.pointerId && touch.horizontal) {
     dragged = true
     endDrag()
   }
   touch = undefined
+}
+function handlePointerCancel(event: PointerEvent) {
+  if (touch?.id !== event.pointerId)
+    return
+  dragged = true
+  cancelGesture()
 }
 function selectPeek(target: number) {
   if (dragged) {
@@ -200,12 +233,14 @@ function selectPeek(target: number) {
 <template>
   <section
     class="library-hero-carousel" :class="{ 'library-hero-carousel--single': items.length < 2 }" :aria-label="label"
-    @wheel="handleWheel" @pointerdown="handlePointerDown" @pointermove="handlePointerMove" @pointerup="handlePointerUp" @pointercancel="handlePointerUp"
+    @wheel="handleWheel" @pointerdown="handlePointerDown" @pointermove="handlePointerMove" @pointerup="handlePointerUp" @pointercancel="handlePointerCancel"
+    @lostpointercapture="handlePointerCancel"
   >
     <div class="library-hero-carousel__viewport">
       <div ref="track" class="library-hero-carousel__track" :style="{ '--carousel-index': index, '--carousel-end-shift': last ? '1' : '0' }">
+        <div v-if="windowStart" class="library-hero-carousel__spacer" :style="spacerStyle(windowStart)" aria-hidden="true" />
         <div
-          v-for="(item, itemIndex) in items" :key="item.key" class="library-hero-carousel__slide"
+          v-for="{ item, index: itemIndex } in slides" :key="item.key" class="library-hero-carousel__slide"
           :class="{ 'is-current': itemIndex === index }"
         >
           <template v-if="Math.abs(itemIndex - index) <= LIBRARY_HERO_RENDER_RADIUS">
@@ -221,6 +256,7 @@ function selectPeek(target: number) {
             />
           </template>
         </div>
+        <div v-if="windowEnd < items.length" class="library-hero-carousel__spacer" :style="spacerStyle(items.length - windowEnd)" aria-hidden="true" />
       </div>
     </div>
   </section>
@@ -281,6 +317,10 @@ function selectPeek(target: number) {
   flex: 0 0 var(--carousel-slide);
   height: 100%;
   min-width: 0;
+}
+.library-hero-carousel__spacer {
+  flex-grow: 0;
+  flex-shrink: 0;
 }
 .library-hero-carousel__card {
   height: 100%;

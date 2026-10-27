@@ -5,6 +5,7 @@ import { useSidebarHost } from '~/composables/useSidebarHost'
 import { settings } from '~/logic'
 import { holdMotion } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
+import { prefersReducedMotion } from '~/utils/reducedMotion'
 
 import SidebarHeadingControl from './SidebarHeadingControl.vue'
 import SidebarSearchControl from './SidebarSearchControl.vue'
@@ -88,7 +89,7 @@ export default defineComponent({
       stop()
       host.railOpen.value = open
       const logo = host.logo.value
-      if (!logo || !target?.animate || !content || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      if (!logo || !target?.animate || !content || prefersReducedMotion()) {
         docked.value = !open && Boolean(logo)
         host.morphing.value = false
         return

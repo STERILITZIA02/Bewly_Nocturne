@@ -1,6 +1,8 @@
 import type { Ref, WatchSource } from 'vue'
 import { nextTick, onScopeDispose, watch } from 'vue'
 
+import { prefersReducedMotion } from '~/utils/reducedMotion'
+
 import { getMotionDuration } from '../utils/motionTiming'
 
 interface Frame { rect: DOMRect, opacity: string }
@@ -25,7 +27,7 @@ export function useLayoutMotion(root: Ref<HTMLElement | null>, source: WatchSour
   }
   watch(source, async () => {
     const element = root.value
-    if (!element || options.enabled?.() === false || !element.animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!element || options.enabled?.() === false || !element.animate || prefersReducedMotion()) {
       cancel()
       return
     }

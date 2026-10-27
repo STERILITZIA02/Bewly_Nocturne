@@ -18,9 +18,9 @@ let contextInvalidated = false
 let pendingMembers: Promise<boolean> | undefined
 let pendingCount: Promise<boolean> | undefined
 let membershipDemanded = false
-let projectionInvalidation = 0
+let watchLaterReadGeneration = 0
 let retryAt = 0
-let indexSource: WatchLaterSnapshot | undefined
+let indexSource: WatchLaterSnapshot['entries'] | undefined
 let index = { aid: new Map<number, WatchLaterEntry>(), bvid: new Map<string, WatchLaterEntry>(), epid: new Map<number, WatchLaterEntry>() }
 let bvidIndexComplete = false
 let episodeIndexComplete = false
@@ -40,14 +40,16 @@ function syncAccount() {
     pendingMembers = undefined
     pendingCount = undefined
     membershipDemanded = false
+    indexSource = undefined
+    index = { aid: new Map(), bvid: new Map(), epid: new Map() }
     retryAt = 0
-    projectionInvalidation++
+    watchLaterReadGeneration++
   }
   return current
 }
 
 function recoverProjection() {
-  projectionInvalidation++
+  watchLaterReadGeneration++
   const previous = snapshot.value
   if (previous)
     snapshot.value = applyWatchLaterChange(previous, { type: 'invalidate' })
@@ -133,13 +135,13 @@ async function read(full: boolean, force: boolean) {
     return true
   }
   const version = generation
-  const invalidation = projectionInvalidation
+  const invalidation = watchLaterReadGeneration
   const task = Promise.resolve().then(async () => {
     try {
       // A count read names the list this page holds, so an unchanged list is not resent.
       const known = !full && existing?.accountId === id ? { knownEpoch: existing.epoch, knownRevision: existing.revision } : {}
       const result = await (full ? api.watchlater.getWatchLaterState : api.watchlater.getWatchLaterCount)({ accountId: id, force, ...known })
-      if (version !== generation || currentAccount() !== id || result.code !== 0 || invalidation !== projectionInvalidation)
+      if (version !== generation || currentAccount() !== id || result.code !== 0 || invalidation !== watchLaterReadGeneration)
         return false
       const reply = result.data as WatchLaterCountReply
       const local = snapshot.value
@@ -158,7 +160,7 @@ async function read(full: boolean, force: boolean) {
         contextInvalidated = true
         throw error
       }
-      if (version !== generation || currentAccount() !== id || invalidation !== projectionInvalidation)
+      if (version !== generation || currentAccount() !== id || invalidation !== watchLaterReadGeneration)
         return false
       retryAt = Date.now() + 5_000
       reportRuntimeFailure('Failed to read Watch Later state', error)
@@ -169,7 +171,7 @@ async function read(full: boolean, force: boolean) {
         pendingMembers = undefined
       if (!full && pendingCount === task)
         pendingCount = undefined
-      if (version === generation && invalidation !== projectionInvalidation && !document.hidden && !contextInvalidated)
+      if (version === generation && invalidation !== watchLaterReadGeneration && !document.hidden && !contextInvalidated)
         void read(membershipDemanded, false).catch(() => {})
     }
   })
@@ -189,11 +191,24 @@ export function ensureWatchLaterCount(force = false) {
   return read(false, force)
 }
 
+export function captureWatchLaterReadGeneration() {
+  syncAccount()
+  return watchLaterReadGeneration
+}
+
+/** Recheck the broker stamp at the UI commit, including gaps awaiting reconciliation. */
+export function isWatchLaterReadCurrent(value: { accountId: number, epoch: string, revision: number } | undefined, generation: number): boolean {
+  if (!value || value.accountId !== syncAccount() || generation !== watchLaterReadGeneration)
+    return false
+  const current = snapshot.value
+  return !current || (value.epoch === current.epoch && value.revision >= current.revision)
+}
+
 export function findWatchLaterEntry(target: WatchLaterTarget): WatchLaterEntry | undefined {
   const value = snapshot.value
   if (!value)
     return
-  if (indexSource !== value) {
+  if (indexSource !== value.entries) {
     index = { aid: new Map(), bvid: new Map(), epid: new Map() }
     bvidIndexComplete = true
     episodeIndexComplete = true
@@ -206,7 +221,7 @@ export function findWatchLaterEntry(target: WatchLaterTarget): WatchLaterEntry |
         index.epid.set(entry.epid, entry)
       else episodeIndexComplete = false
     }
-    indexSource = value
+    indexSource = value.entries
   }
   return index.aid.get(Number(target.aid))
     ?? (target.bvid ? index.bvid.get(`BV${target.bvid.slice(2)}`) : undefined)

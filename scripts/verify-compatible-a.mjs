@@ -240,7 +240,7 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       await flush()
       assert.equal(host.querySelector('.popover-card'), first)
       assert.equal(host.querySelector('.favorites-pop__items').hasAttribute('inert'), true)
-      host.querySelector('.favorites-pop__watch-later button').click()
+      host.querySelector('.favorites-pop__watch-later').click()
       await flush()
       host.querySelectorAll('.favorites-pop__category')[2].click()
       await flush()
@@ -535,7 +535,7 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
     const host = await loadSourceModule('../src/composables/useIframeDocumentHost.ts', {
       'vue': Vue,
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
-      './useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#181818') }) },
+      './useDark': { useDark: () => ({ isDark: Vue.ref(false) }) },
       '~/utils/iframeDocument': { createIframeDocumentHost: () => ({ clear() {}, request() {}, receive() {}, send(message) {
         commands.push(message)
         return true
@@ -557,7 +557,7 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
     scope.stop()
     assert.equal(receive, undefined)
   })
-  check('A03 document theme: reload, stale host, route conflict and OLED share the actual reactive application', async () => {
+  check('A03 document theme: reload, stale host and route conflict share the actual reactive application', async () => {
     const protocol = await import('../src/constants/globalEvents')
     const route = Vue.ref('https://www.bilibili.com/video/BV1fixture')
     const location = { href: route.value }
@@ -581,9 +581,8 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       },
     }
     const documentModule = await loadSourceModule('../src/utils/iframeDocument.ts', { './iframeMessage': wire }, { crypto, location, window: childWindow })
-    const settings = Vue.ref({ theme: 'dark', videoPageDarkMode: true, enableOledDarkMode: true, darkModeBaseColor: '#181818' })
+    const settings = Vue.ref({ theme: 'dark', videoPageDarkMode: true, themeColor: '#00a1d6', appearanceColors: { light: { background: null, foreground: null }, dark: { background: null, foreground: null }, separateModes: false, darkAccent: null }, appearanceContrast: 0, interfaceFontSize: 13, motionPreference: 'system' })
     const dark = await loadSourceModule('../src/composables/useDark.ts', {
-      '~/utils/darkModeTint': await import('../src/utils/darkModeTint'),
       'vue': Vue,
       '@vueuse/core': { usePreferredDark: () => Vue.ref(true) },
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => route },
@@ -592,6 +591,10 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       '~/utils/iframeDocument': documentModule,
       '~/utils/iframeMessage': wire,
       '~/utils/main': { isVideoPlaybackPage: () => true, setCookie() {} },
+      '~/utils/appearance': await import('../src/utils/appearance'),
+      '~/utils/motionPriority': await import('../src/utils/motionPriority'),
+      '~/utils/motionTiming': await import('../src/utils/motionTiming'),
+      '~/utils/reducedMotion': await import('../src/utils/reducedMotion'),
     }, { ...Vue, window: childWindow, CustomEvent })
     const host = documentModule.createIframeDocumentHost(() => frame)
     const deliver = message => listeners.get('message')({ data: message })
@@ -609,7 +612,7 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
     try {
       const state = dark.useDark()
       handshake()
-      host.send({ type: protocol.IFRAME_DARK_MODE_CHANGE, isDark: false, isOledDark: false, darkModeBaseColor: '#282828' })
+      host.send({ type: protocol.IFRAME_DARK_MODE_CHANGE, isDark: false })
       const oldTheme = parentMessages.at(-1)
       deliver(oldTheme)
       await flush()
@@ -619,14 +622,10 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       route.value = location.href = 'https://www.bilibili.com/video/BV2fixture'
       await flush()
       assert.ok(receive(childMessages.at(-1)))
-      host.send({ type: protocol.IFRAME_DARK_MODE_CHANGE, isDark: true, isOledDark: true, darkModeBaseColor: '#242424' })
+      host.send({ type: protocol.IFRAME_DARK_MODE_CHANGE, isDark: true })
       deliver(parentMessages.at(-1))
       await flush()
-      // A playback page keeps the dark palette under an inherited pure black.
       assert.equal(state.isDark.value, true)
-      assert.equal(state.isOledDark.value, false)
-      assert.equal(state.darkModeBaseColor.value, '#242424')
-      assert.ok(!document.documentElement.classList.contains('oled-dark'))
       deliver(oldTheme)
       await flush()
       assert.equal(state.isDark.value, true, 'stale route reply is ignored')

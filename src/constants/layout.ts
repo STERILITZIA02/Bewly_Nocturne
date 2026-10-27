@@ -13,6 +13,8 @@ export const GRID_BREAKPOINTS = {
  * Keep aligned with --bew-video-card-min-width in variables.scss.
  */
 export const VIDEO_CARD_MIN_WIDTH = 320
+/** Keep aligned with --bew-video-card-horizontal-cover-max-width. */
+export const VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH = 400
 
 /** 14/15 of the former 16:9 height; keep aligned with --bew-video-cover-aspect-ratio. */
 export const VIDEO_CARD_COVER_ASPECT_RATIO = 40 / 21

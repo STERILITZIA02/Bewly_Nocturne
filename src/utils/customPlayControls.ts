@@ -1,5 +1,7 @@
 import type { RandomPlayOrder } from '~/logic/storage'
 
+import { reducedMotionCss } from './reducedMotion'
+
 export const PLAYLIST_ROOT_SELECTOR = '.video-pod,.multi-page,.video-sections-content-list,.base-video-sections-v1,.video-sections-v1,.video-sections'
 export const PLAYLIST_RECOMMENDATION_SELECTOR = '[class*="recommend_wrap"],.recommend-list-v1,.recommend-list,.rec-list,.next-play'
 let style: HTMLStyleElement | null = null
@@ -44,7 +46,7 @@ function ensureStyle() {
     .random-play .random-play-edit-btn { display:flex; align-items:center; justify-content:center; flex:none; width:var(--bew-control-height-sm); height:var(--bew-control-height-sm); padding:0; cursor:pointer; color:var(--bew-text-2); background:transparent; border:0; border-radius:var(--bew-interactive-radius); corner-shape:var(--bew-corner-shape); }
     .random-play .random-play-edit-btn:hover { background:var(--bew-fill-2); }
     .random-play :is(button,select):focus-visible { outline: var(--bew-focus-ring, 1px solid CanvasText); outline-offset:var(--bew-space-0-5); }
-    @media (prefers-reduced-motion:reduce) { .random-play .switch-btn,.random-play .switch-block { transition:none; } }
+    ${reducedMotionCss('.random-play .switch-btn, .random-play .switch-block', 'transition:none;')}
   `
   ;(document.head || document.documentElement).appendChild(style)
 }

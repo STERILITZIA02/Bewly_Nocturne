@@ -72,7 +72,9 @@ export function createVideoVisitHistoryCoordinator(dependencies: Dependencies) {
       let records = { ...current.records }
       const next = { ...current, revision: current.revision + 1, records }
       if (command.type === 'remove') {
-        const keys = new Set(videoHistoryBaseKeys(command.identity))
+        if (!Array.isArray(command.identities))
+          throw new TypeError('Invalid history removal')
+        const keys = new Set(command.identities.flatMap(videoHistoryBaseKeys))
         const legacyKeys = new Set([...keys].map(key => key.toLowerCase()))
         if (!keys.size)
           return current

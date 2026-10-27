@@ -570,8 +570,8 @@ defineExpose({
       </div>
     </div>
 
-    <ProgressiveBlur class="conversation-card__top-edge" edge="top" :visible="conversationExpanded" />
-    <ProgressiveBlur class="conversation-card__bottom-edge" edge="bottom" :visible="conversationExpanded" />
+    <ProgressiveBlur class="conversation-card__top-edge" edge="top" :visible="conversationExpanded" sample-within=".conversation-view" />
+    <ProgressiveBlur class="conversation-card__bottom-edge" edge="bottom" :visible="conversationExpanded" sample-within=".conversation-view" />
 
     <Transition name="conversation-latest">
       <div

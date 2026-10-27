@@ -42,7 +42,6 @@ const template = `
   <nav>
     <button @click="theme('light')">浅色</button>
     <button @click="theme('dark')">深色</button>
-    <button @click="theme('oled')">OLED</button>
     <label>强度 <input aria-label="模糊强度" type="range" min="2" max="40" v-model.number="strength"> {{strength}}px</label>
     <button @click="hidden = !hidden">切换边缘</button>
     <button @click="settings.disableFrostedGlass = !settings.disableFrostedGlass">切换毛玻璃</button>
@@ -79,7 +78,6 @@ createApp({ components: { ProgressiveBlur }, template: ${JSON.stringify(template
   const radius = computed(() => strength.value + 'px');
   function theme(mode) {
     document.documentElement.classList.toggle('dark', mode !== 'light');
-    document.documentElement.classList.toggle('oled-dark', mode === 'oled');
   }
   watch(() => settings.value.disableFrostedGlass, value => document.documentElement.classList.toggle('disable-frosted-glass', value));
   theme('dark');

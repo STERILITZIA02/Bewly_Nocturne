@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import Button from '~/components/Button.vue'
 import { useDark } from '~/composables/useDark'
+import { applyAppearanceStyle } from '~/utils/appearance'
+import { applyMotionPreference } from '~/utils/reducedMotion'
+import { applyThemeColorTokens, getThemeColorTokens, readThemeContrastSurfaces } from '~/utils/themeColor'
 
 const props = defineProps<{
   url: string
@@ -14,7 +17,7 @@ const pipWindowRef = ref<HTMLElement | null>(null)
 const pipWindowEl = ref<any | null>(null)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const currentUrl = ref<string>(props.url)
-const { isDark, isOledDark, darkModeBaseColor } = useDark()
+const { isDark, appearanceStyle, accentColor, motionPreference } = useDark()
 let pipHost: HTMLElement | null = null
 let disposed = false
 let closing = false
@@ -29,14 +32,24 @@ function applyPipTheme() {
     if (!element)
       continue
     element.classList.toggle('dark', isDark.value)
-    element.classList.toggle('oled-dark', isOledDark.value)
-    element.style.setProperty('--bew-dark-base-color', darkModeBaseColor.value)
+    applyAppearanceStyle(element, appearanceStyle.value)
+    applyMotionPreference(element, motionPreference.value)
   }
-  if (pipHost)
-    documentElement.style.background = pipWindowEl.value.getComputedStyle(pipHost).getPropertyValue('--bew-bg')
 }
 
-watch([isDark, isOledDark, darkModeBaseColor], applyPipTheme)
+function applyPipColors() {
+  const documentElement = pipWindowEl.value?.document?.documentElement
+  if (!documentElement || !pipHost)
+    return
+  const surfaces = readThemeContrastSurfaces(pipHost)
+  const background = pipWindowEl.value.getComputedStyle(pipHost).getPropertyValue('--bew-bg')
+  const tokens = getThemeColorTokens(accentColor.value, isDark.value, surfaces)
+  applyThemeColorTokens(documentElement, tokens)
+  applyThemeColorTokens(pipHost, tokens)
+  documentElement.style.background = background
+}
+watch([isDark, appearanceStyle, motionPreference], applyPipTheme)
+watch([isDark, accentColor, () => appearanceStyle.value['--bew-custom-background'], () => appearanceStyle.value['--bew-custom-foreground']], applyPipColors, { flush: 'post' })
 
 onMounted(() => {
   void openPipWindow()
@@ -84,6 +97,7 @@ async function openPipWindow() {
     shadow.append(pipWindowRef.value!)
     openedWindow.document.body.append(pipHost)
     applyPipTheme()
+    applyPipColors()
 
     openedWindow.addEventListener('pagehide', handleClose, { once: true })
   }

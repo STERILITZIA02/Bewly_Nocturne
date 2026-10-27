@@ -53,10 +53,20 @@ export function relativeContrast(foreground: string, background: string): number
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-function ensureContrast(color: string, backgrounds: readonly string[], targetColor: string, minimumContrast: number): string {
+export function ensureContrast(color: string, backgrounds: readonly string[], targetColor: string, minimumContrast: number): string {
   const source = parseHexColor(color)
   const target = parseHexColor(targetColor)
-  const contrast = (value: string) => Math.min(...backgrounds.map(background => relativeContrast(value, background)))
+  const backgroundLuminances = backgrounds.map((background) => {
+    const rgb = parseHexColor(background)
+    return rgb ? relativeLuminance(rgb) : undefined
+  })
+  const contrast = (value: string) => {
+    const rgb = parseHexColor(value)
+    if (!rgb)
+      return 1
+    const luminance = relativeLuminance(rgb)
+    return Math.min(...backgroundLuminances.map(background => background === undefined ? 1 : (Math.max(luminance, background) + 0.05) / (Math.min(luminance, background) + 0.05)))
+  }
   if (!source || !target || contrast(color) >= minimumContrast)
     return color
   // Extremely conflicting custom surfaces may have no reachable solution in
@@ -93,16 +103,33 @@ function readOpaqueCssColors(root: HTMLElement, tokens: readonly string[]): Map<
     const context = canvas.getContext('2d', { colorSpace: 'srgb', willReadFrequently: true })
     if (!styles || !context)
       return colors
+    const resolved = new Map<string, RgbColor | null>()
     for (const token of tokens) {
       const value = styles.getPropertyValue(token).trim()
+      if (resolved.has(value)) {
+        const color = resolved.get(value)
+        if (color)
+          colors.set(token, color)
+        continue
+      }
+      resolved.set(value, null)
       if (!value || !CSS.supports('color', value))
         continue
+      const hex = parseHexColor(value)
+      if (hex) {
+        colors.set(token, hex)
+        resolved.set(value, hex)
+        continue
+      }
       context.clearRect(0, 0, 1, 1)
       context.fillStyle = value
       context.fillRect(0, 0, 1, 1)
       const [r, g, b, alpha] = context.getImageData(0, 0, 1, 1).data
-      if (alpha === 255)
-        colors.set(token, { r, g, b })
+      if (alpha === 255) {
+        const color = { r, g, b }
+        colors.set(token, color)
+        resolved.set(value, color)
+      }
     }
   }
   catch {
@@ -116,11 +143,15 @@ function readOpaqueCssColors(root: HTMLElement, tokens: readonly string[]): Map<
 }
 
 const NATIVE_NEUTRAL_COLOR_NAMES = ['Ga0', 'Ga0_s', 'Ga1', 'Ga1_s', 'Ga2', 'Ga3', 'Ga5', 'Ga7', 'Ga10', 'Ga11', 'Ga12', 'Ga12_s', 'Ga13', 'Ga13_s', 'Wh0', 'Wh0_s', 'bg1', 'graph_bg_thin'] as const
+export const NATIVE_NEUTRAL_RGB_PROPERTIES = NATIVE_NEUTRAL_COLOR_NAMES.map(name => `--bew-native-${name}-rgb`)
 const THEME_CONTRAST_SURFACES = ['--bew-bg', '--bew-content-solid', '--bew-content-alt-solid-hover', '--bew-elevated-solid-hover', '--bew-elevated-alt-solid-hover', '--bew-sidebar-background-solid', '--bew-selected-bg'] as const
 
-/** Legacy native CSS needs RGB tuples. CSS remains the only palette authority. */
-export function syncNativeNeutralRgb(root: HTMLElement) {
-  const colors = readOpaqueCssColors(root, NATIVE_NEUTRAL_COLOR_NAMES.map(name => `--${name}`))
+/** Sample both palettes before writing: native tuples must not force a second style flush. */
+export function syncThemeColors(root: HTMLElement, host: HTMLElement | null, accent: string, dark: boolean) {
+  const nativeTokens = NATIVE_NEUTRAL_COLOR_NAMES.map(name => `--${name}`)
+  const colors = readOpaqueCssColors(root, host ? nativeTokens : [...nativeTokens, ...THEME_CONTRAST_SURFACES])
+  const surfaces = host ? readThemeContrastSurfaces(host) : [...new Set(THEME_CONTRAST_SURFACES.flatMap(token => colors.has(token) ? [toHex(colors.get(token)!)] : []))]
+  const tokens = getThemeColorTokens(accent, dark, surfaces)
   for (const name of NATIVE_NEUTRAL_COLOR_NAMES) {
     const property = `--bew-native-${name}-rgb`
     const color = colors.get(`--${name}`)
@@ -133,6 +164,9 @@ export function syncNativeNeutralRgb(root: HTMLElement) {
     if (root.style.getPropertyValue(property) !== value)
       root.style.setProperty(property, value)
   }
+  applyThemeColorTokens(root, tokens)
+  if (host)
+    applyThemeColorTokens(host, tokens)
 }
 
 /**
@@ -148,7 +182,7 @@ export const NEUTRAL_THEME_COLOR = 'neutral'
 export const DEFAULT_THEME_COLOR = '#00a1d6'
 /**
  * A custom accent must stay distinguishable from both a white page and a pure
- * black (OLED) page; every preset clears it (lowest: #fda4af at 1.89:1 on white).
+ * black page; every preset clears it (lowest: #fda4af at 1.89:1 on white).
  */
 export const THEME_COLOR_MIN_PAGE_CONTRAST = 1.8
 
@@ -243,6 +277,22 @@ export function normalizeThemeColor(value: unknown): string {
   return typeof value === 'string' ? clampThemeColor(value) : DEFAULT_THEME_COLOR
 }
 
+export function normalizeHexColor(value: unknown): string | null {
+  const rgb = typeof value === 'string' ? parseHexColor(value) : null
+  return rgb ? toHex(rgb) : null
+}
+
+/** Keep the chosen hue while keeping a surface within its light/dark scheme. */
+export function normalizeSurfaceColor(value: unknown, dark: boolean): string | null {
+  const rgb = typeof value === 'string' ? parseHexColor(value) : null
+  if (!rgb)
+    return null
+  const { l, c, h } = rgbToOklch(rgb)
+  if (dark ? l <= 0.4 : l >= 0.88)
+    return toHex(rgb)
+  return oklchToHex(dark ? Math.min(l, 0.4) : Math.max(l, 0.88), c, h)
+}
+
 export function getThemeColorTokens(themeColor: string, isDark: boolean, surfaces: readonly string[] = []) {
   const backgrounds = surfaces.filter(surface => parseHexColor(surface))
   if (!backgrounds.length)
@@ -266,12 +316,21 @@ export function getThemeColorTokens(themeColor: string, isDark: boolean, surface
   }
 }
 
+const THEME_TOKEN_PROPERTIES = {
+  theme: '--bew-theme-color',
+  onTheme: '--bew-on-theme-color',
+  brandAccent: '--bew-brand-accent',
+  checkmarkImage: '--bew-theme-checkmark-image',
+  switchThumb: '--bew-switch-thumb-active',
+  foreground: '--bew-theme-foreground',
+  focusRing: '--bew-theme-focus-ring',
+} as const
+export const THEME_COLOR_PROPERTIES = Object.values(THEME_TOKEN_PROPERTIES)
+
 export function applyThemeColorTokens(element: HTMLElement, tokens: ReturnType<typeof getThemeColorTokens>) {
-  element.style.setProperty('--bew-theme-color', tokens.theme)
-  element.style.setProperty('--bew-on-theme-color', tokens.onTheme)
-  element.style.setProperty('--bew-brand-accent', tokens.brandAccent)
-  element.style.setProperty('--bew-theme-checkmark-image', tokens.checkmarkImage)
-  element.style.setProperty('--bew-switch-thumb-active', tokens.switchThumb)
-  element.style.setProperty('--bew-theme-foreground', tokens.foreground)
-  element.style.setProperty('--bew-theme-focus-ring', tokens.focusRing)
+  for (const key of Object.keys(THEME_TOKEN_PROPERTIES) as (keyof typeof THEME_TOKEN_PROPERTIES)[]) {
+    const property = THEME_TOKEN_PROPERTIES[key]
+    if (element.style.getPropertyValue(property) !== tokens[key])
+      element.style.setProperty(property, tokens[key])
+  }
 }

@@ -1,15 +1,13 @@
 <script setup lang="ts">
-import { useEventListener, usePreferredReducedMotion } from '@vueuse/core'
+import { useEventListener } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import CloseButton from '~/components/CloseButton.vue'
-import PanelTopBlur from '~/components/PanelTopBlur.vue'
 import type { SettingsNavigationRequest } from '~/composables/useAppProvider'
 import { useBewlyApp } from '~/composables/useAppProvider'
-import { GLASS_SURFACE_CONTEXT } from '~/composables/useGlassPanelMotion'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
-import { settings } from '~/logic'
+import { useReducedMotion } from '~/composables/useReducedMotion'
 import type { SettingDescriptor } from '~/logic/layoutEdit'
 import { enterLayoutEditMode, getSettingDescriptors, subscribeSettingNavigation } from '~/logic/layoutEdit'
 import { createAsyncPageRegistry } from '~/utils/asyncPage'
@@ -30,9 +28,7 @@ const emit = defineEmits(['close'])
 const requestedNavigation = shallowRef<SettingsNavigationRequest | null>(null)
 
 const { t, tm, rt } = useI18n()
-const reducedMotion = usePreferredReducedMotion()
-provide(GLASS_SURFACE_CONTEXT, computed(() => !settings.value.disableFrostedGlass))
-const breadcrumbDetail = ref<string>()
+const reducedMotion = useReducedMotion()
 const searchQuery = ref('')
 const isSearchFocused = ref(false)
 const settingsContentKey = ref(0)
@@ -125,10 +121,13 @@ onActivated(activateSettingsModal)
 onDeactivated(deactivateSettingsModal)
 useEventListener(() => settingsModalActive.value ? window : undefined, 'keydown', trapSettingsFocus, { capture: true })
 
-provide('setSettingsBreadcrumb', (detail?: string) => {
-  breadcrumbDetail.value = detail
-})
 provide('startQuickLayoutEdit', startQuickLayoutEdit)
+// The open page of a category with pages (SettingsCategoryLayout reports
+// it); the header shows the path to it.
+const pageTitle = ref<string>()
+provide('setSettingsPageTitle', (title?: string) => {
+  pageTitle.value = title
+})
 
 const asyncSettings = createAsyncPageRegistry()
 const settingsMenu = {
@@ -171,7 +170,6 @@ watch(
   { immediate: true },
 )
 const settingsWindow = ref<HTMLDivElement>()
-const isPrimaryNavigationExpanded = ref(false)
 const settingsSearchRef = ref<HTMLElement>()
 const searchInputRef = ref<HTMLInputElement>()
 const searchPopoverStyle = ref<CSSProperties>({})
@@ -189,25 +187,27 @@ function updateSearchPopoverBounds() {
   if (!settingsModalActive.value || !isSearchFocused.value)
     return
   const searchElement = settingsSearchRef.value
-  const contentElement = searchElement?.closest<HTMLElement>('.settings-content')
-  if (!searchElement || !contentElement)
+  const windowElement = settingsWindow.value
+  if (!searchElement || !windowElement)
     return
 
   const searchRect = searchElement.getBoundingClientRect()
-  const contentRect = contentElement.getBoundingClientRect()
+  const windowRect = windowElement.getBoundingClientRect()
   const edgeInset = 8
-  const popoverGap = 10
-  const narrowLayout = window.innerWidth <= 760
-  const bottomEdge = Math.min(window.innerHeight - edgeInset, contentRect.bottom - edgeInset)
+  const popoverGap = 8
+  // Under the field from its left edge, as wide as the results need, inside
+  // the window.
+  const left = Math.max(searchRect.left, windowRect.left + edgeInset)
+  const width = Math.min(Math.max(searchRect.width, 360), windowRect.right - edgeInset - left)
+  const bottomEdge = Math.min(window.innerHeight, windowRect.bottom) - edgeInset
 
   // Fixed positioning so the popover can be teleported out of the settings
-  // window (which has its own backdrop-filter that would swallow ours).
+  // window, above its clipped columns.
   searchPopoverStyle.value = {
     position: 'fixed',
     top: `${searchRect.bottom + popoverGap}px`,
-    right: narrowLayout ? 'auto' : `${window.innerWidth - searchRect.right}px`,
-    left: narrowLayout ? `${contentRect.left + edgeInset}px` : 'auto',
-    width: narrowLayout ? `${Math.max(0, contentRect.width - edgeInset * 2)}px` : `${searchRect.width}px`,
+    left: `${left}px`,
+    width: `${width}px`,
     maxHeight: `${Math.max(0, bottomEdge - searchRect.bottom - popoverGap)}px`,
   }
 }
@@ -217,7 +217,6 @@ function focusSettingsSearch(event: MouseEvent) {
     return
 
   searchInputRef.value?.focus({ preventScroll: true })
-  nextTick(updateSearchPopoverBounds)
 }
 
 const scrollViewportRef = ref<HTMLElement>()
@@ -247,7 +246,7 @@ provide('scrollSettingsContentToTop', () => {
 watch(
   () => activatedMenuItem.value,
   (menuItem) => {
-    breadcrumbDetail.value = undefined
+    pageTitle.value = undefined
     sessionStorage.setItem(settingsMenuStorageKey, menuItem)
     scrollViewportRef.value?.scrollTo({ top: 0 })
   },
@@ -305,20 +304,16 @@ const activeSettingsComponentProps = computed(() => (
     : {}
 ))
 
-const title = computed(() => {
-  const currentMenuItem = settingsMenuItems.find(item => item.value === activatedMenuItem.value)
-  return currentMenuItem ? t(currentMenuItem.titleKey) : t('settings.title')
-})
-
 function getSearchEntryTitle(entry: SettingsSearchEntry) {
   return entry.titleKey ? t(entry.titleKey) : entry.title ?? ''
 }
 
 function getSearchEntryLocation(entry: SettingsSearchEntry) {
   const primaryTitle = getMenuTitle(entry.menu)
-  return entry.secondaryTitleKey
+  const location = entry.secondaryTitleKey
     ? `${primaryTitle} / ${t(entry.secondaryTitleKey)}`
     : primaryTitle
+  return entry.contextTitleKey ? `${t(entry.contextTitleKey)} · ${location}` : location
 }
 
 function getTranslatedSearchTerms(key: string): string[] {
@@ -337,7 +332,7 @@ function getTranslatedSearchTerms(key: string): string[] {
 
 function getSearchEntryText(entry: SettingsSearchEntry) {
   const inferredKeywordKeys = entry.titleKey
-    ? [`${entry.titleKey}_desc`, `${entry.titleKey}_opt`, `${entry.titleKey}_option`, ...(entry.titleKey.endsWith('.title') ? [entry.titleKey.slice(0, -6)] : [])]
+    ? [`${entry.titleKey}_desc`, `${entry.titleKey}_opt`, `${entry.titleKey}_option`, `${entry.titleKey}_unit`, ...(entry.titleKey.endsWith('.title') ? [entry.titleKey.slice(0, -6)] : [])]
     : []
   const translatedKeywords = [...inferredKeywordKeys, ...(entry.keywordKeys ?? [])]
     .flatMap(getTranslatedSearchTerms)
@@ -373,11 +368,9 @@ const searchResults = computed(() => {
 const activeSearchResultIndex = ref(-1)
 const searchResultsRef = ref<HTMLElement>()
 
-watch(searchQuery, (query) => {
+watch(searchQuery, () => {
   cancelSettingNavigation()
   activeSearchResultIndex.value = -1
-  if (query)
-    nextTick(updateSearchPopoverBounds)
 }, { flush: 'sync' })
 
 function moveSearchResultSelection(event: KeyboardEvent, direction: 1 | -1) {
@@ -442,7 +435,7 @@ function clearSearchTargetHighlight() {
 function highlightSearchTarget(target: HTMLElement, hint?: string) {
   clearSearchTargetHighlight()
   const visualTarget = target.matches('.b-settings-item-group')
-    ? target.querySelector<HTMLElement>(':scope > .group-heading') ?? target
+    ? target.querySelector<HTMLElement>(':scope > .group-heading, :scope > .group-title') ?? target
     : target
 
   highlightedSearchTarget = visualTarget
@@ -464,7 +457,7 @@ async function locateSetting(find: () => HTMLElement | undefined, navigationId: 
     return
   const owner = new AbortController()
   settingNavigationController = owner
-  const target = await navigateToSetting({ root: settingsWindow.value, viewport: scrollViewportRef.value, find, signal: owner.signal, behavior: keyboard || reducedMotion.value === 'reduce' ? 'auto' : 'smooth' })
+  const target = await navigateToSetting({ root: settingsWindow.value, viewport: scrollViewportRef.value, find, signal: owner.signal, behavior: keyboard || reducedMotion.value ? 'auto' : 'smooth' })
   if (target && !owner.signal.aborted && settingsModalActive.value && navigationId === searchNavigationId) {
     highlightSearchTarget(target, hint?.(target))
     if (keyboard) {
@@ -496,12 +489,23 @@ function navigateToSearchResult(entry: SettingsSearchEntry, keyboard = false) {
   requestedNavigation.value = null
   searchQuery.value = ''
   const navigationId = cancelSettingNavigation()
-  entry.storageValues?.forEach(({ key, value }) => sessionStorage.setItem(key, value))
-
-  activatedMenuItem.value = entry.menu
-  if (entry.storageValues?.length)
-    settingsContentKey.value++
+  activateSettingsRoute(entry.menu, entry.storageValues)
   nextTick(() => scrollToSearchTarget(entry, navigationId, keyboard))
+}
+
+function activateSettingsRoute(menu: MenuType, values: ReadonlyArray<{ key: string, value: string }> = []) {
+  let changed = false
+  for (const { key, value } of values) {
+    if (sessionStorage.getItem(key) !== value) {
+      sessionStorage.setItem(key, value)
+      changed = true
+    }
+  }
+  // A primary-category change mounts its own component. Only a changed route
+  // within the same mounted category needs the storage-backed subtree rebuilt.
+  if (activatedMenuItem.value === menu && changed)
+    settingsContentKey.value++
+  activatedMenuItem.value = menu
 }
 
 function scrollToSettingId(settingId: string, navigationId: number) {
@@ -513,14 +517,9 @@ function navigateToSettingDescriptor(descriptor: SettingDescriptor) {
   const menu = descriptor.category as MenuType
   if (!(menu in settingsMenu))
     return
-  if (menu === MenuType.BewlyPages)
-    sessionStorage.setItem(bewlyPagesStorageKey, descriptor.page)
-  else if (menu === MenuType.BewlyComponents)
-    sessionStorage.setItem(bewlyComponentsStorageKey, descriptor.page)
-
   const navigationId = cancelSettingNavigation()
-  activatedMenuItem.value = menu
-  settingsContentKey.value++
+  const key = menu === MenuType.BewlyPages ? bewlyPagesStorageKey : menu === MenuType.BewlyComponents ? bewlyComponentsStorageKey : undefined
+  activateSettingsRoute(menu, key ? [{ key, value: descriptor.page }] : [])
   nextTick(() => scrollToSettingId(descriptor.id, navigationId))
 }
 
@@ -564,116 +563,47 @@ function changeMenuItem(menuItem: MenuType) {
     tabindex="-1"
     @bew-settings-motion-ready="settingsContentReady = true"
   >
-    <div
-      class="settings-backdrop fixed w-full h-full top-0 left-0"
-      @click="handleClose"
-    />
+    <div class="settings-backdrop" @click="handleClose" />
+    <!-- One solid window ruled into regions by hairlines (user-specified, after
+         Claude Code): the header across the top, then the categories (search
+         on top), a category's pages, and the open page. No glass, no top blur. -->
     <div
       id="settings-window"
       ref="settingsWindow"
-      pos="fixed top-1/2 left-1/2" w="90%" h="90%"
-      max-w-1000px max-h-900px transform="~ translate-x--1/2 translate-y--1/2 gpu"
-      flex="~ justify-between items-center"
+      class="settings-window"
+      pos="fixed top-1/2 left-1/2" transform="~ translate-x--1/2 translate-y--1/2 gpu"
     >
-      <aside
-        class="settings-primary-navigation group"
-        :data-expanded="isPrimaryNavigationExpanded"
-        shrink-0
-        pos="absolute" z-2
-        @mouseenter="isPrimaryNavigationExpanded = true"
-        @mouseleave="isPrimaryNavigationExpanded = false"
-      >
-        <ul
-          class="settings-primary-navigation__list"
-          relative
-          overflow-hidden antialiased
-        >
-          <!-- frosted glass background -->
-          <!-- https://github.com/BewlyBewly/BewlyBewly/issues/1162 -->
-          <div
-            class="settings-primary-navigation__surface"
-            pointer-events-none rounded-inherit
-          />
-
-          <li
-            v-for="menuItem in settingsMenuItems"
-            :key="menuItem.value"
-            :class="{ 'menu-section-start': menuItem.sectionStart }"
-          >
-            <button
-              type="button"
-              class="settings-primary-navigation__item"
-              cursor-pointer
-              :class="{ 'menu-item-activated': menuItem.value === activatedMenuItem }"
-              :aria-current="menuItem.value === activatedMenuItem ? 'page' : undefined"
-              :aria-label="$t(menuItem.titleKey)"
-              @click="changeMenuItem(menuItem.value)"
-            >
-              <div
-                v-show="menuItem.value !== activatedMenuItem"
-                text="xl center" w-40px h-20px flex="~ shrink-0" justify-center
-                :class="menuItem.icon"
-              />
-              <div
-                v-show="menuItem.value === activatedMenuItem"
-                text="xl center" w-40px h-20px flex="~ shrink-0" justify-center
-                :class="menuItem.iconActivated"
-              />
-              <div flex="~ items-center gap-2" shrink-0>
-                <span>{{ $t(menuItem.titleKey) }}</span>
-                <span
-                  v-if="menuItem.badge"
-                  text="xs"
-                  bg="orange-500/20"
-                  px-2 py-0.5
-                  rounded="$bew-pill-radius"
-                  text-orange-500
-                >
-                  {{ menuItem.badge }}
-                </span>
-              </div>
-            </button>
-          </li>
-        </ul>
-      </aside>
-
-      <div
-        class="settings-content bew-shape-smooth-rect"
-        relative flex-1 min-w-0 box-border
-        h-full
-        rounded="$bew-modal-radius"
-      >
-        <div
-          class="settings-content__surface"
-          aria-hidden="true"
+      <div class="settings-window__surface" aria-hidden="true" />
+      <header class="settings-header">
+        <!-- The path to the open page: settings, its category, its page. -->
+        <h2 class="settings-header__title">
+          <span class="settings-header__crumb">{{ $t('settings.title') }}</span>
+          <i class="settings-header__separator" i-tabler:chevron-right aria-hidden="true" />
+          <span class="settings-header__crumb" :class="{ 'is-current': !pageTitle }">{{ getMenuTitle(activatedMenuItem) }}</span>
+          <Transition name="settings-crumb" mode="out-in">
+            <span v-if="pageTitle" :key="pageTitle" class="settings-header__page">
+              <i class="settings-header__separator" i-tabler:chevron-right aria-hidden="true" />
+              <span class="settings-header__crumb is-current">{{ pageTitle }}</span>
+            </span>
+          </Transition>
+        </h2>
+        <CloseButton
+          class="settings-header__close"
+          :label="$t('common.close')"
+          @click="handleClose"
         />
-        <header
-          class="settings-header"
-          flex justify-between items-center w-full h-92px
-          pos="absolute top-0 left-0" p="x-11" box-border gap-4
-          z-1
-          style="
-            text-shadow: 0 0 10px var(--bew-elevated-solid), 0 0 15px var(--bew-elevated-solid)
-          "
-        >
-          <PanelTopBlur :enabled="!settings.disableFrostedGlass" />
-          <nav class="settings-breadcrumb" :aria-label="$t('settings.breadcrumb')">
-            <span>{{ $t('settings.title') }}</span>
-            <i i-tabler:chevron-right />
-            <strong>{{ title }}</strong>
-            <template v-if="breadcrumbDetail">
-              <i i-tabler:chevron-right />
-              <strong>{{ breadcrumbDetail }}</strong>
-            </template>
-          </nav>
+      </header>
+
+      <div class="settings-body">
+        <!-- The categories, with the search pinned above them. -->
+        <div class="settings-primary">
           <div
             ref="settingsSearchRef"
             class="settings-search"
             :class="{ 'has-query': Boolean(searchQuery) }"
-            :style="{ backgroundColor: 'var(--bew-input-bg)' }"
             @click="focusSettingsSearch"
           >
-            <i i-tabler:search />
+            <i i-tabler:search aria-hidden="true" />
             <input
               ref="searchInputRef"
               v-model="searchQuery"
@@ -693,29 +623,41 @@ function changeMenuItem(menuItem: MenuType) {
               @blur="handleSearchBlur"
             >
           </div>
-          <CloseButton
-            class="settings-header__close"
-            :label="$t('common.close')"
-            size="medium"
-            @click="handleClose"
-          />
-        </header>
+          <nav class="settings-primary-navigation" :aria-label="$t('settings.title')">
+            <ul class="settings-primary-navigation__list">
+              <li
+                v-for="menuItem in settingsMenuItems"
+                :key="menuItem.value"
+                :class="{ 'menu-section-start': menuItem.sectionStart }"
+              >
+                <button
+                  type="button"
+                  class="settings-primary-navigation__item"
+                  :class="{ 'menu-item-activated': menuItem.value === activatedMenuItem }"
+                  :aria-current="menuItem.value === activatedMenuItem ? 'page' : undefined"
+                  :aria-label="$t(menuItem.titleKey)"
+                  @click="changeMenuItem(menuItem.value)"
+                >
+                  <span
+                    class="settings-nav-icon"
+                    :class="menuItem.value === activatedMenuItem ? menuItem.iconActivated : menuItem.icon"
+                    aria-hidden="true"
+                  />
+                  <span class="settings-nav-label">{{ $t(menuItem.titleKey) }}</span>
+                  <span v-if="menuItem.badge" class="settings-primary-navigation__badge bew-warning-badge">
+                    {{ menuItem.badge }}
+                  </span>
+                </button>
+              </li>
+            </ul>
+          </nav>
+        </div>
+
         <div
           ref="scrollViewportRef"
           class="settings-content__scroll"
-          :style="{
-            maskImage: settings.disableFrostedGlass ? 'none' : 'linear-gradient(to bottom, transparent 0%, black 92px 30%)',
-            WebkitMaskImage: settings.disableFrostedGlass ? 'none' : 'linear-gradient(to bottom, transparent 0%, black 92px 30%)',
-            scrollbarGutter: 'stable',
-            overflowAnchor: 'none',
-            overscrollBehavior: 'contain',
-          }"
-          h-inherit of-y-auto of-x-hidden
-          style="padding-top: 92px;"
         >
-          <main w-full min-h="[calc(100%-92px)]" p="x-12 b-10">
-            <!-- <div h-80px mt--8 /> -->
-
+          <main class="settings-main">
             <Transition mode="out-in" v-bind="contentTransition">
               <Component
                 :is="settingsMenu[activatedMenuItem as keyof typeof settingsMenu]"
@@ -769,234 +711,227 @@ function changeMenuItem(menuItem: MenuType) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/modalWindow";
+@use "../../styles/settingsNav";
 @use "../../styles/truncateFade";
-.menu-item-activated {
-  color: var(--bew-text-1);
-  background: var(--bew-selected-bg);
+
+// The page dims behind the window like behind every modal.
+.settings-backdrop {
+  @include modalWindow.backdrop;
+  position: absolute;
+  inset: 0;
 }
 
-.settings-primary-navigation {
-  right: calc(100% + var(--bew-space-3));
-  --settings-primary-nav-inset: var(--bew-space-2);
-  --settings-primary-nav-item-size: 40px;
-  --settings-primary-nav-expanded-item-width: 190px;
-  --settings-primary-nav-collapsed-width: calc(
-    var(--settings-primary-nav-item-size) + var(--settings-primary-nav-inset) + var(--settings-primary-nav-inset)
-  );
-  --settings-primary-nav-collapsed-radius: calc(var(--settings-primary-nav-collapsed-width) / 2);
-}
-
-.settings-primary-navigation__list {
+#settings-window {
+  --bew-panel-enter-duration: var(--bew-duration-moderate);
+  --bew-panel-leave-duration: var(--bew-duration-moderate);
+  container: settings-window / inline-size;
   display: flex;
-  isolation: isolate;
-  box-sizing: border-box;
-  width: var(--settings-primary-nav-collapsed-width);
-  padding: var(--settings-primary-nav-inset);
   flex-direction: column;
-  align-items: stretch;
-  gap: var(--bew-space-2);
-  border-radius: var(--settings-primary-nav-collapsed-radius);
-  corner-shape: var(--bew-corner-shape-capsule);
-  transition:
-    width var(--bew-duration-moderate) var(--bew-ease-standard),
-    border-radius var(--bew-duration-moderate) var(--bew-ease-standard),
-    background-color var(--bew-duration-moderate) var(--bew-ease-standard),
-    transform var(--bew-duration-moderate) var(--bew-ease-standard);
-
-  > li {
-    width: 100%;
-    flex: 0 0 auto;
-  }
-}
-
-.settings-primary-navigation__surface,
-.settings-content__surface {
-  background: var(--bew-glass-tint);
-  backdrop-filter: var(--bew-filter-glass-1);
-}
-
-.settings-primary-navigation__surface {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
   box-sizing: border-box;
-  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
-  border-radius: inherit;
-  corner-shape: inherit;
-  box-shadow: var(--bew-shadow-4);
-  transition: box-shadow var(--bew-duration-moderate) var(--bew-ease-standard);
+  width: min(1120px, calc(100% - var(--bew-space-12)));
+  height: min(860px, calc(100% - var(--bew-space-12)));
+  transform-origin: center;
 }
 
-.settings-primary-navigation__item {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  width: 100%;
-  height: var(--settings-primary-nav-item-size);
-  align-items: center;
-  font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-regular);
-  overflow-x: hidden;
-  border-radius: calc(var(--settings-primary-nav-item-size) / 2);
-  corner-shape: var(--bew-corner-shape-capsule);
-  transition:
-    border-radius var(--bew-duration-moderate) var(--bew-ease-standard),
-    color var(--bew-duration-moderate) var(--bew-ease-standard),
-    background-color var(--bew-duration-moderate) var(--bew-ease-standard);
-
-  &:hover:not(.menu-item-activated) {
-    background: var(--bew-fill-2);
-  }
-
-  &:focus-visible {
-    outline: var(--bew-focus-ring, 1px solid CanvasText);
-    outline-offset: -2px;
-  }
-}
-
-.settings-primary-navigation:is([data-expanded="true"], :has(:focus-visible)) {
-  .settings-primary-navigation__list {
-    width: calc(
-      var(--settings-primary-nav-expanded-item-width) + var(--settings-primary-nav-inset) +
-        var(--settings-primary-nav-inset)
-    );
-    border-radius: var(--bew-modal-radius);
-    corner-shape: var(--bew-corner-shape);
-  }
-
-  .settings-primary-navigation__item {
-    border-radius: var(--bew-surface-radius);
-    corner-shape: var(--bew-corner-shape);
-  }
-
-  .settings-primary-navigation__surface {
-    box-shadow: none;
-  }
-}
-
-.settings-content {
-  isolation: isolate;
-}
-
-.settings-content__surface {
+// The window's paint is a layer of its own, so opening fades it while the
+// window itself only scales (useSettingsMotion).
+.settings-window__surface {
+  @include modalWindow.surface;
   position: absolute;
-  z-index: 0;
   inset: 0;
+  z-index: 0;
   box-sizing: border-box;
-  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
-  box-shadow: var(--bew-shadow-4);
-  border-radius: inherit;
-  corner-shape: inherit;
   pointer-events: none;
 }
 
+// The window header every modal shares; its title lines up with the
+// navigation rows' icons (both start at the window's content inset).
 .settings-header {
-  z-index: 2;
-  border-top-left-radius: inherit;
-  border-top-right-radius: inherit;
-  corner-shape: inherit;
-}
-
-.settings-breadcrumb,
-.settings-search,
-.settings-header__close {
+  @include modalWindow.header;
   position: relative;
   z-index: 1;
 }
 
-.settings-content__scroll {
-  position: relative;
-  z-index: 1;
-  border-radius: inherit;
-  corner-shape: inherit;
-}
-
-.settings-breadcrumb {
+.settings-header__title {
+  @include modalWindow.title;
   display: flex;
-  overflow: hidden;
-  gap: var(--bew-space-2);
-  align-items: center;
   flex: 1 1 auto;
+  align-items: center;
+  gap: var(--bew-space-1);
   min-width: 0;
   color: var(--bew-text-2);
-  font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-body);
+}
 
-  i {
-    width: 16px;
-    height: 16px;
-    flex: 0 0 auto;
-  }
+// Each step shrinks and fades at its end when the path is too long; the
+// open one reads as the title.
+.settings-header__crumb {
+  flex: 0 1 auto;
+  min-width: 0;
+  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+  @include truncateFade.line;
 
-  strong {
-    min-width: 0;
-    flex: 0 1 auto;
+  &.is-current {
     color: var(--bew-text-1);
-    font-size: var(--bew-font-size-heading);
-    font-weight: var(--bew-font-weight-regular);
-    line-height: var(--bew-line-height-heading);
-    @include truncateFade.line;
-  }
-
-  strong:last-child {
-    flex: 1 1 auto;
   }
 }
 
+.settings-header__separator {
+  flex: none;
+  width: var(--bew-icon-size-xs);
+  height: var(--bew-icon-size-xs);
+  color: var(--bew-text-3);
+}
+
+.settings-header__page {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--bew-space-1);
+  min-width: 0;
+}
+
+.settings-crumb-enter-active,
+.settings-crumb-leave-active {
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.settings-crumb-enter-from,
+.settings-crumb-leave-to {
+  opacity: 0;
+}
+
+// Pinned above the categories, a row tall, its icon where the rows' icons are.
 .settings-search {
   position: relative;
   display: flex;
+  flex: none;
   box-sizing: border-box;
   align-items: center;
-  flex: 0 1 auto;
-  width: min(320px, 38%);
-  min-width: 42px;
-  height: var(--bew-control-height);
-  padding: 0 var(--bew-space-3);
+  gap: var(--bew-space-2);
+  height: var(--bew-space-8);
+  padding: 0 #{settingsNav.$row-inset};
   color: var(--bew-text-1);
-  background: var(--bew-content);
-  border: var(--bew-hairline) solid var(--bew-edge-color);
-  border-radius: calc(var(--bew-control-height) / 2);
+  background: var(--bew-input-bg);
+  border: 1px solid var(--bew-field-edge-color);
+  border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-capsule);
-  box-shadow: none;
-  transition:
-    width var(--bew-duration-moderate) var(--bew-ease-standard),
-    border-radius var(--bew-duration-moderate) var(--bew-ease-standard),
-    border-color var(--bew-duration-normal) var(--bew-ease-standard),
-    box-shadow var(--bew-duration-normal) var(--bew-ease-standard),
-    background-color var(--bew-duration-normal) var(--bew-ease-standard);
+  cursor: text;
+  transition: border-color var(--bew-duration-fast) var(--bew-ease-standard);
 
-  &:focus-within {
-    border-radius: var(--bew-surface-radius);
-    corner-shape: var(--bew-corner-shape);
-    box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
+  &:hover {
+    border-color: var(--bew-field-edge-color-hover);
   }
 
   > i {
-    width: 18px;
-    height: 18px;
     flex: 0 0 auto;
-    color: var(--bew-text-2);
+    width: var(--bew-icon-size-sm);
+    height: var(--bew-icon-size-sm);
+    color: var(--bew-text-3);
     pointer-events: none;
   }
 
   input {
     width: 100%;
     min-width: 0;
-    margin-left: var(--bew-space-2);
     color: var(--bew-text-1);
     background: transparent;
     border: 0;
     outline: 0;
-    font-size: var(--bew-font-size-body);
+    font-size: var(--bew-font-size-control);
     font-weight: var(--bew-font-weight-regular);
-    line-height: var(--bew-line-height-body);
+    line-height: var(--bew-line-height-control);
 
-    &:focus-visible {
-      outline: 0;
+    &::placeholder {
+      color: var(--bew-text-4);
     }
   }
+}
+
+.settings-header__close {
+  flex: none;
+}
+
+// The columns below the header: the categories, then the open category
+// (its own pages column, if it has pages, and the page).
+.settings-body {
+  // The open page's padding and measure; SettingsCategoryLayout reads them
+  // for the column it lays a page out in. Set here, under the window, so the
+  // window's own container queries can change them.
+  --settings-content-padding: var(--bew-space-6) var(--bew-space-8) var(--bew-space-10);
+  --settings-content-max-width: 720px;
+  --settings-primary-width: 216px;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: var(--settings-primary-width) minmax(0, 1fr);
+  // The columns are exactly as tall as the window leaves them; each scrolls.
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+}
+
+// The search stays put; only the categories under it scroll.
+.settings-primary {
+  @include settingsNav.column;
+  gap: var(--bew-space-3);
+}
+
+.settings-primary-navigation {
+  @include settingsNav.scroller;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.settings-primary-navigation__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+// A new group of categories: space, not another line.
+.menu-section-start {
+  margin-top: var(--bew-space-4);
+}
+
+.settings-primary-navigation__item {
+  @include settingsNav.row(".menu-item-activated");
+}
+
+.settings-primary-navigation__badge {
+  flex: none;
+}
+
+// The open page scrolls on its own. It is a size container so the pages
+// column of a category (sticky inside it) can be exactly as tall as it.
+.settings-content__scroll {
+  container: settings-viewport / size;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  // Its scrollbar ends inside the window's bottom corner.
+  border-end-end-radius: var(--bew-modal-radius);
+  corner-shape: var(--bew-corner-shape);
+}
+
+.settings-main {
+  box-sizing: border-box;
+  min-height: 100%;
+  max-width: calc(var(--settings-content-max-width) + var(--bew-space-8) * 2);
+  padding: var(--settings-content-padding);
+}
+
+// A category with pages lays out its own columns edge to edge.
+.settings-main:has(> .settings-category-layout) {
+  max-width: none;
+  padding: 0;
 }
 
 .settings-search-results {
@@ -1056,7 +991,7 @@ function changeMenuItem(menuItem: MenuType) {
 }
 
 .settings-search-results {
-  transform-origin: top right;
+  transform-origin: top left;
 }
 
 .settings-search-popover-enter-active,
@@ -1154,99 +1089,46 @@ function changeMenuItem(menuItem: MenuType) {
   }
 }
 
-// 1000px panel plus the expanded navigation, gap and an 8px viewport gutter.
-@media (max-width: 1456px) {
-  #settings-window {
-    /* 侧栏进入布局后先维持 1000px 内容宽度，空间不足时再连续收缩。 */
-    width: min(calc(1000px + 72px), calc(100% - var(--bew-space-6)));
-    max-width: none;
-    margin-left: calc(-1 * var(--bew-space-1));
+// A narrower window keeps every column: the categories become icons and the
+// search folds to its icon, opening over the next column while in use.
+@container settings-window (max-width: 820px) {
+  .settings-body {
+    --settings-primary-width: calc(#{settingsNav.$column-inset} * 2 + var(--bew-space-8) + var(--bew-space-2));
+    --settings-content-padding: var(--bew-space-5) var(--bew-space-5) var(--bew-space-8);
   }
 
-  .settings-primary-navigation {
-    /* 外侧不足以容纳展开导航时，使用同一个导航占位，让内容随宽度避让。 */
-    position: relative;
-    right: auto;
-    width: calc(var(--settings-primary-nav-collapsed-width) + var(--bew-space-4));
-    box-sizing: border-box;
-    padding-inline: var(--bew-space-2);
-    transition: width var(--bew-duration-moderate) var(--bew-ease-standard);
+  .settings-primary-navigation__item {
+    justify-content: center;
+    padding-inline: 0;
 
-    &:is([data-expanded="true"], :has(:focus-visible)) {
-      width: calc(var(--settings-primary-nav-expanded-item-width) + var(--settings-primary-nav-inset) * 4);
-    }
-  }
-}
-
-@media (max-width: 760px) {
-  .settings-header {
-    gap: var(--bew-space-2);
-    padding-inline: var(--bew-space-4);
-  }
-
-  .settings-primary-navigation {
-    /* 触屏窄屏不依赖 hover，保持常驻图标列。 */
-    li {
-      width: 100%;
-    }
-
-    button {
-      justify-content: center;
-    }
-
-    button > div:last-child {
+    > .settings-nav-label,
+    > .settings-primary-navigation__badge {
       display: none;
-    }
-
-    button > div:first-child,
-    button > div:nth-child(2) {
-      width: 40px;
-      flex: 0 0 40px;
-    }
-
-    &:is([data-expanded="true"], :has(:focus-visible)) {
-      width: calc(var(--settings-primary-nav-collapsed-width) + var(--bew-space-4));
-      .settings-primary-navigation__list {
-        width: var(--settings-primary-nav-collapsed-width);
-        border-radius: var(--settings-primary-nav-collapsed-radius);
-        corner-shape: var(--bew-corner-shape-capsule);
-        transform: none;
-      }
-
-      .settings-primary-navigation__item {
-        border-radius: calc(var(--settings-primary-nav-item-size) / 2);
-        corner-shape: var(--bew-corner-shape-capsule);
-      }
     }
   }
 
   .settings-search {
-    width: 42px;
-    flex: 0 0 42px;
+    justify-content: center;
+    padding: 0;
     cursor: pointer;
 
     input {
       width: 0;
-      margin-left: 0;
       opacity: 0;
       pointer-events: none;
-      transition:
-        width var(--bew-duration-moderate) var(--bew-ease-standard),
-        margin-left var(--bew-duration-moderate) var(--bew-ease-standard),
-        opacity var(--bew-duration-normal) var(--bew-ease-standard);
     }
 
+    // Still in the column's flow, so nothing under it moves.
     &:focus-within,
     &.has-query {
-      position: absolute;
-      right: calc(var(--bew-space-4) + 32px + var(--bew-space-2));
-      left: var(--bew-space-4);
-      z-index: 3;
-      width: auto;
+      z-index: 2;
+      justify-content: flex-start;
+      width: 240px;
+      padding: 0 #{settingsNav.$row-inset};
+      cursor: text;
 
       input {
         width: 100%;
-        margin-left: var(--bew-space-2);
         opacity: 1;
         pointer-events: auto;
       }
@@ -1254,33 +1136,12 @@ function changeMenuItem(menuItem: MenuType) {
   }
 }
 
-.menu-section-start {
-  position: relative;
-  padding-top: calc(var(--bew-space-2) + 1px);
-
-  &::before {
-    position: absolute;
-    top: 0;
-    right: 8px;
-    left: 8px;
-    height: 1px;
-    background: var(--bew-separator-color);
-    content: "";
-  }
-}
-
-#settings-window {
-  --bew-panel-enter-duration: var(--bew-duration-moderate);
-  --bew-panel-leave-duration: var(--bew-duration-moderate);
-  transform-origin: center;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .settings-primary-navigation,
-  .settings-primary-navigation__list,
-  .settings-primary-navigation__item,
-  .settings-search {
-    transition-property: color, background-color, border-color, box-shadow;
+  .settings-search,
+  .settings-header__crumb,
+  .settings-crumb-enter-active,
+  .settings-crumb-leave-active {
+    transition: none;
   }
 
   .settings-search-popover-enter-active,
