@@ -56,10 +56,15 @@ function onKey(event: KeyboardEvent, index: number) {
   gap: var(--bew-space-2);
   width: 100%;
 }
+// The shared item centres its content (`justify-content: center`), which would
+// shrink this grid's only column to the label and leave the preview a sliver;
+// a 1fr column makes the preview span the whole option.
 .appearance-modes__option {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   height: auto;
   min-width: 0;
+  text-align: center;
   gap: var(--bew-space-2);
   padding: var(--bew-space-2);
   border-radius: var(--bew-control-item-radius);
@@ -105,8 +110,8 @@ function onKey(event: KeyboardEvent, index: number) {
   background: color-mix(in srgb, currentColor 8%, transparent);
 }
 .appearance-modes__rail i {
-  width: var(--bew-icon-size-sm);
-  height: var(--bew-icon-size-sm);
+  width: var(--bew-icon-size-md);
+  height: var(--bew-icon-size-md);
 }
 .appearance-modes__content {
   display: grid;

@@ -1,11 +1,10 @@
 export const PHOTO_VIEWER_SELECTOR = [
   '.pswp.pswp--open',
-  '.bewly-opus-viewer.is-open',
-  '.moment-image-viewer',
+  '.bew-image-viewer',
   '.photo-imager-container',
 ].join(', ')
 
-const PHOTO_VIEWER_HOST_SELECTOR = '.pswp, .bewly-opus-viewer, .moment-image-viewer, .photo-imager-container'
+const PHOTO_VIEWER_HOST_SELECTOR = '.pswp, .bew-image-viewer, .photo-imager-container'
 
 function isElementVisible(element: Element): boolean {
   if (!(element instanceof HTMLElement || element instanceof SVGElement))

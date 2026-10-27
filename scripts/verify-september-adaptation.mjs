@@ -1099,7 +1099,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       assert.ok(mounted > 0 && mounted < 80)
       const first = root.querySelector('.watch-later-list-card')
       first.querySelector('a').focus()
-      first.querySelector('[aria-label="watch_later.remove_from_watch_later"]').click()
+      first.querySelector('[aria-label="common.remove_from_watch_later"]').click()
       assert.equal(writeRequests, 0, 'single removal first opens the card confirmation')
       await flush()
       first.querySelector('.card-removal button:last-child').click()

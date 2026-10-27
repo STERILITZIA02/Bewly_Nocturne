@@ -459,7 +459,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(interaction, /settings\.value\.touchScreenOptimization \|\| hoverControllers\.get\(key\)\?\.openOnClick/)
     assert.match(topBar, /!settings\.value\.touchScreenOptimization && !hasOpenClickPopup\(\)/)
     assert.match(right, /custom-click-event\s+class="avatar-img top-bar-trigger"/, 'a plain click on the face never navigates')
-    assert.match(panel, /<Button type="secondary" strong @click="handleClickChannel">/, 'the name leads to the profile')
+    assert.match(panel, /<button type="button" class="user-panel__name" @click="handleClickChannel">/, 'the name leads to the profile')
     // Panel below the avatar, so it never covers the tools.
     assert.match(right, /setupTopBarItemTransformer\('userPanel', avatarPopRef\)\n/)
     assert.match(right, /<Transition name="slide-in">\s*<UserPanelPop/)
@@ -641,7 +641,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     // Covers carry no stats, duration, watch-later button or charge badge; LIVE stays.
     assert.doesNotMatch(card, /moment-card__watch-later|moment-card__video-stats|moment-card__video-stat-group/)
     assert.doesNotMatch(mediaStage, /charge-badge|videoPlay|videoDanmaku|i-tabler-player-play/)
-    assert.match(mediaStage, /<span v-if="live" class="moment-media__live-mark">/)
+    assert.match(mediaStage, /<LiveMark v-if="live" class="moment-media__live-mark" \/>/)
   })
   check('moment cards: image posts crossfade one top image with a thumbnail strip; long text animates; portrait media is marked', async () => {
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')

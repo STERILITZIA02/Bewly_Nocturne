@@ -5,6 +5,7 @@ import type { ErrorData, Events } from 'hls.js'
 
 import Button from '~/components/Button.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
+import LiveMark from '~/components/LiveMark.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 import { useVideoPreviewSwipeSeek } from '~/composables/useVideoPreviewSwipeSeek'
 import { settings } from '~/logic'
@@ -501,16 +502,11 @@ onBeforeUnmount(() => {
           <slot name="coverTopLeft" />
         </div>
 
-        <div
+        <LiveMark
           v-if="video?.liveStatus === 1"
-          class="video-card-overlay-transition bew-shape-pill group-hover:opacity-0"
-
-          pos="absolute left-0 top-0" bg="$bew-selected-bg" text="xs $bew-text-1"
-          p="x-2 y-1" m="$bew-cover-overlay-inset" inline-block
-        >
-          LIVE
-          <i i-svg-spinners:pulse-3 align-middle mt--0.2em />
-        </div>
+          class="video-card-overlay-transition group-hover:opacity-0"
+          pos="absolute left-0 top-0" m="$bew-cover-overlay-inset"
+        />
 
         <div
           v-if="Object.keys(video?.badge ?? {}).length > 0"

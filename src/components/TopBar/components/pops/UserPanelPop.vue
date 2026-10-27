@@ -4,7 +4,6 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 
 import ALink from '~/components/ALink.vue'
-import Button from '~/components/Button.vue'
 import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -58,12 +57,12 @@ const otherLinks = computed((): { name: string, url: string, icon: string, code?
     {
       name: t('topbar.user_dropdown.bilibili_premium'),
       url: 'https://account.bilibili.com/big',
-      icon: 'i-tabler:accessible',
+      icon: 'i-tabler:crown',
     },
     {
       name: t('topbar.user_dropdown.bilibili_premium_rewards'),
       url: 'https://account.bilibili.com/account/big/myPackage',
-      icon: 'i-tabler:accessible',
+      icon: 'i-tabler:gift',
       code: 'vip_rewards',
     },
     {
@@ -84,7 +83,7 @@ const otherLinks = computed((): { name: string, url: string, icon: string, code?
     {
       name: t('topbar.user_dropdown.my_stream_info'),
       url: 'https://link.bilibili.com/p/center/index',
-      icon: 'i-tabler:video',
+      icon: 'i-tabler:broadcast',
     },
     {
       name: t('topbar.user_dropdown.my_courses'),
@@ -94,23 +93,27 @@ const otherLinks = computed((): { name: string, url: string, icon: string, code?
   ]
 })
 
-const levelProgressBarWidth = computed(() => {
-  // 登录态尚未初始化（瞬态故障后自动重查期间）时 userInfo 可能为空，兜底防止解引用崩溃
+const level = computed(() => props.userInfo.level_info?.current_level ?? 0)
+// LV6 is the top level: its bar stays full instead of giving way to other content.
+const isMaxLevel = computed(() => level.value >= 6)
+const levelProgress = computed(() => {
+  if (isMaxLevel.value)
+    return 100
+  // userInfo can be empty while the login state is re-checked after a transient failure.
   const { next_exp: nextExp = 1, current_exp: currentExp = 0 } = props.userInfo.level_info ?? {}
-
-  const percentage = (currentExp / nextExp) * 100
-  return `${percentage.toFixed(2)}%`
+  return Math.min(100, Math.max(0, (currentExp / nextExp) * 100))
+})
+const levelCaption = computed(() => {
+  const { current_exp: currentExp = 0, next_exp: nextExp = 0 } = props.userInfo.level_info ?? {}
+  return isMaxLevel.value
+    ? t('topbar.user_dropdown.exp_max', { current_exp: currentExp })
+    : t('topbar.user_dropdown.exp_desc', { current_exp: currentExp, level: level.value + 1, need_exp: nextExp - currentExp || 0 })
 })
 
 const userStat = reactive<Partial<UserStat>>({})
 const loginLog = reactive<Partial<LoginLogItem>>({})
 
-const showLv6LastLoginInfo = computed(() => {
-  return !(props.userInfo?.level_info?.current_level >= 6 && settings.value.hideTopBarUserPanelLv6LastLoginLocation)
-})
-const shouldLoadLoginLog = computed(() => Boolean(
-  props.userInfo?.level_info?.current_level >= 6 && showLv6LastLoginInfo.value,
-))
+const showLastLogin = computed(() => !settings.value.hideTopBarUserPanelLastLogin)
 let requestGeneration = 0
 let readController: AbortController | undefined
 
@@ -169,7 +172,7 @@ async function loadLoginLog(requestAccountId: number, generation: number, signal
   }
 }
 
-watch([currentAccountId, shouldLoadLoginLog], ([accountId, shouldLoadLogin]) => {
+watch([currentAccountId, showLastLogin], ([accountId, shouldLoadLogin]) => {
   cancelPanelReads()
   const generation = requestGeneration
   clearAccountData()
@@ -238,212 +241,117 @@ function handleClickChannel() {
     class="userPanel-pop bew-popover bew-popover-surface"
     data-key="userPanel"
   >
-    <div class="bew-popover__scroll user-panel-pop__scroll">
-      <div
-        class="user-panel-pop__identity"
-        text="xl" flex="~ items-center gap-2"
-      >
-        <!-- Clicking the avatar opens this panel, so the name leads to the profile. -->
-        <Button type="secondary" strong @click="handleClickChannel">
-          {{ userInfo.uname ? userInfo.uname : '-' }}
-        </Button>
-      </div>
-      <div
-        class="user-panel-pop__identity"
-        text="xs $bew-text-2"
-        m="t-1 b-2"
-      >
-        <ALink
-          class="group mr-4"
-          href="https://account.bilibili.com/account/coin"
-          type="topBar"
-        >
-          {{ $t('topbar.user_dropdown.money') + (userInfo.money ?? '-') }}
+    <!-- The enlarged avatar settles in this strip's top-right corner. -->
+    <header class="user-panel__identity">
+      <!-- Clicking the avatar opens this panel, so the name leads to the profile. -->
+      <button type="button" class="user-panel__name" @click="handleClickChannel">
+        {{ userInfo.uname || '-' }}
+      </button>
+      <p class="user-panel__balances">
+        <ALink class="user-panel__balance" href="https://account.bilibili.com/account/coin" type="topBar">
+          {{ $t('topbar.user_dropdown.money') }}{{ userInfo.money ?? '-' }}
         </ALink>
-        <ALink
-          class="group"
-          href="https://pay.bilibili.com/pay-v2-web/bcoin_index"
-          type="topBar"
-        >
-          {{
-            $t('topbar.user_dropdown.b_coins') + (userInfo.wallet?.bcoin_balance ?? '-')
-          }}
+        <ALink class="user-panel__balance" href="https://pay.bilibili.com/pay-v2-web/bcoin_index" type="topBar">
+          {{ $t('topbar.user_dropdown.b_coins') }}{{ userInfo.wallet?.bcoin_balance ?? '-' }}
         </ALink>
-      </div>
+      </p>
+    </header>
 
-      <ALink
-        v-if="userInfo?.level_info?.current_level < 6"
-        href="//account.bilibili.com/account/record?type=exp"
-        type="topBar"
-        block mt-2 mb-2 w-full
-        flex="~ col justify-center items-start"
-      >
-        <div
-          flex="~ items-center justify-center gap-2"
-          w-full
-        >
-          <div
-            flex="~ items-center"
-            class="level"
-            v-html="DOMPurify.sanitize(getLvIcon(userInfo.level_info.current_level))"
-          />
-          <div relative w="full" h="2px" bg="$bew-fill-3">
-            <div
-              pos="absolute top-0 left-0" h-2px
-              h="2px"
-              rounded="$bew-pill-radius"
-              bg="$bew-warning-color"
-              :style="{ width: levelProgressBarWidth }"
+    <div class="bew-popover__scroll user-panel__scroll">
+      <section class="user-panel__section">
+        <ALink class="user-panel__level" href="//account.bilibili.com/account/record?type=exp" type="topBar">
+          <span class="user-panel__level-bar">
+            <span
+              class="user-panel__level-icon"
+              v-html="DOMPurify.sanitize(getLvIcon(level, isMaxLevel && userInfo.is_senior_member))"
             />
+            <span
+              class="user-panel__progress"
+              role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(levelProgress)"
+            >
+              <span class="user-panel__progress-fill" :style="{ width: `${levelProgress}%` }" />
+            </span>
+            <span
+              v-if="!isMaxLevel"
+              class="user-panel__level-icon user-panel__level-icon--next"
+              v-html="DOMPurify.sanitize(getLvIcon(level + 1))"
+            />
+          </span>
+          <span class="user-panel__caption">{{ levelCaption }}</span>
+        </ALink>
+        <dl v-if="showLastLogin && (loginLog.time_at || loginLog.geo)" class="user-panel__login">
+          <div v-if="loginLog.time_at" class="user-panel__login-item">
+            <dt class="user-panel__login-label">
+              {{ $t('topbar.user_dropdown.last_login_time') }}
+            </dt>
+            <dd class="user-panel__login-value">
+              {{ loginLog.time_at }}
+            </dd>
           </div>
-          <div
-            class="level level-next"
-            flex="~ items-center"
-            v-html="DOMPurify.sanitize(getLvIcon(userInfo.level_info.current_level + 1))"
-          />
-        </div>
-        <div w-full text="xs $bew-text-3">
-          {{
-            $t('topbar.user_dropdown.exp_desc', {
-              current_exp: userInfo.level_info.current_exp,
-              level: userInfo.level_info.current_level + 1,
-              need_exp: userInfo.level_info.next_exp - userInfo.level_info.current_exp || 0,
-            })
-          }}
-        </div>
-      </ALink>
+          <div v-if="loginLog.geo" class="user-panel__login-item">
+            <dt class="user-panel__login-label">
+              {{ $t('topbar.user_dropdown.last_login_location') }}
+            </dt>
+            <dd class="user-panel__login-value">
+              {{ loginLog.geo }}
+            </dd>
+          </div>
+        </dl>
+      </section>
 
-      <ALink
-        v-else
-        href="//account.bilibili.com/account/record?type=exp"
-        type="topBar"
-        mt-2 mb-2
-        duration-300
-        flex="~ items-center gap-2"
-        class="lv6-entry"
-        :class="showLv6LastLoginInfo ? 'lv6-entry--card' : 'lv6-entry--compact'"
-      >
-        <div
-          :style="{ width: userInfo?.is_senior_member ? '36px' : '28px' }"
-          class="level"
-          h-20px
-          v-html="DOMPurify.sanitize(getLvIcon(userInfo?.level_info?.current_level, userInfo?.is_senior_member))"
-        />
-        <div v-if="showLv6LastLoginInfo" flex="~ col 1" text="xs $bew-text-3">
-          <div v-if="loginLog.time_at">
-            {{ $t('topbar.user_dropdown.last_login_time') }}: {{ loginLog.time_at }}
-          </div>
-          <div v-if="loginLog.geo">
-            {{ $t('topbar.user_dropdown.last_login_location') }}: {{ loginLog.geo }}
-          </div>
-        </div>
-      </ALink>
-
-      <div grid="~ cols-3 gap-2" mb-2>
+      <section class="user-panel__section user-panel__stats">
         <ALink
+          v-for="stat in [
+            { href: `https://space.bilibili.com/${mid}/fans/follow`, value: userStat.following, label: $t('topbar.user_dropdown.following') },
+            { href: `https://space.bilibili.com/${mid}/fans/fans`, value: userStat.follower, label: $t('topbar.user_dropdown.followers') },
+            { href: `https://space.bilibili.com/${mid}/dynamic`, value: userStat.dynamic_count, label: $t('topbar.user_dropdown.posts') },
+          ]"
+          :key="stat.href"
           class="channel-info-item"
-          :href="`https://space.bilibili.com/${mid}/fans/follow`"
-          :title="userStat.following === undefined ? undefined : String(userStat.following)"
+          :href="stat.href"
+          :title="stat.value === undefined ? undefined : String(stat.value)"
           type="topBar"
         >
-          <div class="num">
-            {{ userStat.following === undefined ? '—' : numFormatter(userStat.following) }}
-          </div>
-          <div>{{ $t('topbar.user_dropdown.following') }}</div>
+          <span class="num">{{ stat.value === undefined ? '—' : numFormatter(stat.value) }}</span>
+          <span class="channel-info-item__label">{{ stat.label }}</span>
         </ALink>
-        <ALink
-          class="channel-info-item"
-          :href="`https://space.bilibili.com/${mid}/fans/fans`"
-          :title="userStat.follower === undefined ? undefined : String(userStat.follower)"
-          type="topBar"
-        >
-          <div class="num">
-            {{ userStat.follower === undefined ? '—' : numFormatter(userStat.follower) }}
-          </div>
-          <div>{{ $t('topbar.user_dropdown.followers') }}</div>
-        </ALink>
-        <ALink
-          class="channel-info-item"
-          :href="`https://space.bilibili.com/${mid}/dynamic`"
-          :title="userStat.dynamic_count === undefined ? undefined : String(userStat.dynamic_count)"
-          type="topBar"
-        >
-          <div class="num">
-            {{
-              userStat.dynamic_count === undefined ? '—' : numFormatter(userStat.dynamic_count)
-            }}
-          </div>
-          <div>{{ $t('topbar.user_dropdown.posts') }}</div>
-        </ALink>
-      </div>
+      </section>
 
-      <div
-        class="user-panel-section"
-        flex="~ justify-between col gap-1"
-        mb-2
+      <section
+        v-for="(group, groupIndex) in [otherLinks.slice(0, 2), otherLinks.slice(2)]"
+        :key="groupIndex"
+        class="user-panel__section user-panel__links"
       >
         <ALink
-          v-for="item in otherLinks.filter((_, index) => index <= 1)"
+          v-for="item in group"
           :key="item.url"
           :href="item.url"
           type="topBar"
-          class="user-panel-section__row"
+          class="user-panel__row"
         >
-          <!-- B币领取提醒dot -->
-          <div
-            v-if="hasBCoinToReceive && item?.code === 'vip_rewards' && settings.showBCoinReceiveReminder"
-            class="unread-dot"
-            pos="absolute top-1 right-1"
+          <i :class="item.icon" class="user-panel__row-icon" aria-hidden="true" />
+          <span class="user-panel__row-label">{{ item.name }}</span>
+          <span
+            v-if="hasBCoinToReceive && item.code === 'vip_rewards' && settings.showBCoinReceiveReminder"
+            class="user-panel__dot"
+            aria-hidden="true"
           />
-
-          <div flex="~ items-center gap-2">
-            <div :class="item.icon" text="$bew-text-2" />
-            {{ item.name }}
-          </div>
-          <div i-tabler:arrow-right />
         </ALink>
-      </div>
+      </section>
 
-      <div
-        class="user-panel-section"
-        flex="~ justify-between col gap-1"
-      >
-        <ALink
-          v-for="item in otherLinks.filter((_, index) => index > 1)"
-          :key="item.url"
-          :href="item.url"
-          type="topBar"
-          class="user-panel-section__row"
-        >
-          <!-- B币领取提醒dot -->
-          <div
-            v-if="hasBCoinToReceive && item?.code === 'vip_rewards' && settings.showBCoinReceiveReminder"
-            class="unread-dot"
-            pos="absolute top-1 right-1"
-          />
-
-          <div flex="~ items-center gap-2">
-            <div :class="item.icon" text="$bew-text-2" />
-            {{ item.name }}
-          </div>
-          <div i-tabler:arrow-right />
-        </ALink>
-        <div
-          class="user-panel-section__row user-panel-section__row--danger"
-          text="$bew-error-color"
-          @click="logout()"
-        >
-          <div i-tabler:logout text="$bew-error-60" mr-2 />
-          {{ $t('topbar.user_dropdown.log_out') }}
-        </div>
-      </div>
+      <section class="user-panel__section user-panel__links">
+        <button type="button" class="user-panel__row user-panel__row--danger" @click="logout()">
+          <i class="i-tabler:logout user-panel__row-icon" aria-hidden="true" />
+          <span class="user-panel__row-label">{{ $t('topbar.user_dropdown.log_out') }}</span>
+        </button>
+      </section>
     </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
-@use "../../styles/index.scss";
 @use "../../../../styles/sidebarSurface";
+@use "../../../../styles/truncateFade";
 
 .userPanel-pop {
   width: 300px;
@@ -460,87 +368,256 @@ function handleClickChannel() {
   corner-shape: var(--bew-corner-shape) round var(--bew-corner-shape) var(--bew-corner-shape);
 }
 
-// Keep the name and balances clear of the enlarged avatar in the top-right corner.
-.user-panel-pop__identity {
-  padding-inline-end: calc(var(--avatar-panel-face-radius) * 2 + var(--bew-space-2) * 2);
-}
-
-.user-panel-pop__scroll {
-  padding: var(--bew-popover-padding);
-}
-
-.user-panel-section {
-  padding: var(--bew-space-2);
-  background: var(--bew-fill-alt);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-1);
-}
-
-.user-panel-section__row {
-  position: relative;
+// Ruled like the media popovers and the settings window: flat on the glass,
+// sections divided by edge-to-edge hairlines, rows tinted edge to edge on hover.
+// The identity strip is as tall as the enlarged avatar plus its space-2 inset,
+// and its line is the scroll edge of everything below.
+.user-panel__identity {
   display: flex;
-  min-height: var(--bew-control-height);
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--bew-space-2) var(--bew-space-4);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
+  flex: 0 0 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--bew-space-1);
+  box-sizing: border-box;
+  min-height: calc(var(--avatar-panel-face-radius) * 2 + var(--bew-space-2) * 2);
+  padding: var(--bew-space-3) calc(var(--avatar-panel-face-radius) * 2 + var(--bew-space-2) * 2) var(--bew-space-3)
+    var(--bew-popover-inset);
+  border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
+}
+
+.user-panel__name {
+  appearance: none;
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  color: var(--bew-text-1);
+  background: transparent;
+  font: inherit;
+  font-size: var(--bew-font-size-subheading);
+  line-height: var(--bew-line-height-subheading);
+  text-align: start;
   cursor: pointer;
+  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+  @include truncateFade.line;
+}
+
+.user-panel__balances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--bew-space-3);
+  margin: 0;
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.user-panel__balance {
+  color: var(--bew-text-2);
+  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.user-panel__name:is(:hover, :focus-visible),
+.user-panel__balance:is(:hover, :focus-visible) {
+  color: var(--bew-theme-foreground);
+}
+
+.user-panel__section + .user-panel__section {
+  border-top: var(--bew-hairline) solid var(--bew-separator-color);
+}
+
+.user-panel__level {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-2);
+  padding: var(--bew-space-3) var(--bew-popover-inset);
+  color: var(--bew-text-2);
   transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
-.user-panel-section__row:hover {
-  background: var(--bew-fill-2);
+.user-panel__level-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-2);
 }
 
-.user-panel-section__row--danger {
-  justify-content: flex-start;
-  color: var(--bew-error-color);
+// The level badges are fixed artwork; only their height is set.
+.user-panel__level-icon {
+  display: flex;
+  flex: 0 0 auto;
+
+  :deep(.icon) {
+    width: auto;
+    height: var(--bew-icon-size-sm);
+  }
 }
 
-.level :deep(svg) {
-  --uno: "w-25px h-16px";
+.user-panel__level-icon--next :deep(.level-bg) {
+  fill: var(--bew-text-4);
 }
 
-.level-next :deep(svg .level-bg) {
-  --uno: "fill-#c9ccd0";
+.user-panel__progress {
+  position: relative;
+  flex: 1 1 auto;
+  height: var(--bew-space-1);
+  overflow: hidden;
+  border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
+  background: var(--bew-fill-3);
 }
 
-.lv6-entry--card {
-  --uno: "w-full p-2 bg-$bew-fill-alt hover:bg-$bew-fill-2";
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-1);
+.user-panel__progress-fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-radius: inherit;
+  corner-shape: inherit;
+  background: var(--bew-accent-solid);
 }
 
-.lv6-entry--compact {
-  display: inline-flex;
-  width: fit-content;
-  padding: 0;
-  background: transparent;
-  border-radius: 0;
-  box-shadow: none;
+.user-panel__caption {
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.user-panel__login {
+  display: grid;
+  gap: var(--bew-space-1);
+  margin: 0;
+  padding: 0 var(--bew-popover-inset) var(--bew-space-3);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+}
+
+.user-panel__login-item {
+  display: flex;
+  gap: var(--bew-space-2);
+  min-width: 0;
+}
+
+.user-panel__login-label {
+  flex: 0 0 auto;
+  color: var(--bew-text-3);
+}
+
+.user-panel__login-value {
+  min-width: 0;
+  margin: 0;
+  color: var(--bew-text-2);
+  font-variant-numeric: tabular-nums;
+  @include truncateFade.line;
+}
+
+// Three counts side by side, split by inset vertical hairlines.
+.user-panel__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .channel-info-item {
-  --uno: "p-2 m-0 text-sm flex flex-col items-center transition-colors duration-200";
-  --uno: "bg-$bew-fill-alt hover:bg-$bew-fill-2";
-  --uno: "shadow-[var(--bew-shadow-1)]";
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-
-  > * {
-    --uno: "transition-colors duration-200";
-  }
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--bew-space-0-5);
+  padding: var(--bew-space-3) var(--bew-space-2);
+  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
 
   .num {
-    --uno: "text-xl";
+    color: var(--bew-text-1);
+    font-size: var(--bew-font-size-heading);
+    line-height: var(--bew-line-height-heading);
     font-variant-numeric: tabular-nums;
-
-    + div {
-      --uno: "text-$bew-text-2 mt-1 text-xs font-normal";
-    }
   }
+}
+
+.channel-info-item + .channel-info-item::before {
+  content: "";
+  position: absolute;
+  inset-block: var(--bew-space-3);
+  inset-inline-start: 0;
+  border-inline-start: var(--bew-hairline) solid var(--bew-separator-color);
+  pointer-events: none;
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.channel-info-item__label {
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+}
+
+// A tinted cell hides the lines beside it, so the tint never meets a line.
+.channel-info-item:is(:hover, :focus-visible)::before,
+.channel-info-item:is(:hover, :focus-visible) + .channel-info-item::before {
+  opacity: 0;
+}
+
+.user-panel__links {
+  display: flex;
+  flex-direction: column;
+  padding-block: var(--bew-space-1);
+}
+
+.user-panel__row {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-3);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--bew-control-height);
+  padding: 0 var(--bew-popover-inset);
+  border: 0;
+  color: var(--bew-text-1);
+  background: transparent;
+  font: inherit;
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    color var(--bew-duration-fast) var(--bew-ease-standard),
+    background-color var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.user-panel__row-icon {
+  flex: 0 0 auto;
+  width: var(--bew-icon-size-sm);
+  height: var(--bew-icon-size-sm);
+  color: var(--bew-text-2);
+  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.user-panel__row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  @include truncateFade.line;
+}
+
+.user-panel__row:is(:hover, :focus-visible) .user-panel__row-icon {
+  color: var(--bew-text-1);
+}
+
+.user-panel__row--danger,
+.user-panel__row--danger .user-panel__row-icon,
+.user-panel__row--danger:is(:hover, :focus-visible) .user-panel__row-icon {
+  color: var(--bew-error-color);
+}
+
+.user-panel__dot {
+  flex: 0 0 auto;
+  width: var(--bew-space-2);
+  height: var(--bew-space-2);
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
+  background: var(--bew-accent-marker);
+}
+
+.user-panel__level:is(:hover, :focus-visible),
+.channel-info-item:is(:hover, :focus-visible),
+.user-panel__row:is(:hover, :focus-visible) {
+  background: var(--bew-hover-bg);
 }
 </style>

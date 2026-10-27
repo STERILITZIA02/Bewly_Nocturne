@@ -160,7 +160,7 @@ function getAuthorFollowed() {
 }
 
 // Every configurable item, grouped in display order. The settings list decides
-// which ones fold under “更多操作”; nothing is hidden outright.
+// which ones fold under “高级选项”; nothing is hidden outright.
 const configurableGroups = computed((): ConfigurableItem[][] => {
   const video = props.video
   const type = getVideoType()

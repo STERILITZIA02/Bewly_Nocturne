@@ -349,11 +349,11 @@ function toggleChannel(value: string) {
 
     <SettingsItemGroup data-setting-id="settings.topbar_user_menu" :title="$t('settings.topbar_user_menu')">
       <SettingsItem
-        setting-id="settings.hide_lv6_last_login_location_in_top_bar_user_pop" :title="$t('settings.hide_lv6_last_login_location_in_top_bar_user_pop')"
-        :desc="$t('settings.hide_lv6_last_login_location_in_top_bar_user_pop_desc')"
+        setting-id="settings.hide_last_login_in_top_bar_user_pop" :title="$t('settings.hide_last_login_in_top_bar_user_pop')"
+        :desc="$t('settings.hide_last_login_in_top_bar_user_pop_desc')"
         right-width="auto"
       >
-        <Radio v-model="settings.hideTopBarUserPanelLv6LastLoginLocation" />
+        <Radio v-model="settings.hideTopBarUserPanelLastLogin" />
       </SettingsItem>
     </SettingsItemGroup>
   </div>

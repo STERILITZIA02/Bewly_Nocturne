@@ -47,8 +47,6 @@ library_tools:
   find_messages: Find in loaded conversation messages
   previous_match: Previous match
   next_match: Next match
-  original_size: Original size
-  image_navigation: Image viewer. Scroll to explore or drag when zoomed in.
   load_more_videos: Load more videos
 common:
   pagination_stalled: The list did not advance. Retry to continue.
@@ -58,7 +56,7 @@ common:
   retry: Retry
   operation_completed: Done
   dialog: Dialog
-  view_all: View ALL
+  view_all: View all
   play_all: Play ALL
   loading: Loading...
   search: Search
@@ -420,7 +418,7 @@ settings:
     preset: Theme
     custom: Custom
     automatic: Automatic
-    accent: Accent
+    accent: Theme color
     editing_mode: Edit palette
     editing_mode_desc: Choose the palette to edit without changing the display mode.
     separate_accent: Edit light and dark separately
@@ -496,9 +494,9 @@ settings:
     topbar: Top Bar
     dock_and_sidebar: Dock
     home: Home
-    moments: Dynamic Feed
-    watch_later_page: Watch Later
-    search: Search
+    moments: Moments Page
+    watch_later_page: Watch Later Page
+    search: Search Page
     playback_page: Playback Page
     messages_page: Messages Page
 
@@ -635,8 +633,8 @@ settings:
   open_top_bar_items_in_bewly: Open Bewly pages from top bar icons
   open_top_bar_items_in_bewly_desc: When touch screen optimization is off, the Logo, Moments, Favorites, History, and Watch Later icons follow the top bar link opening behavior and open the corresponding Dock page using its Bewly/original Bilibili setting. Unsupported icons keep their existing behavior.
   show_bewly_or_bili_page_switcher_desc: Show the Original, Bewly, and Custom page mode switcher in the floating Dock or sidebar.
-  hide_lv6_last_login_location_in_top_bar_user_pop: Hide LV6 last login info
-  hide_lv6_last_login_location_in_top_bar_user_pop_desc: When enabled, the LV6 section in the top bar user popup will no longer show the last login time or location, and no login log request will be made.
+  hide_last_login_in_top_bar_user_pop: Hide last login time and location
+  hide_last_login_in_top_bar_user_pop_desc: When enabled, the top bar user popup no longer shows when and where you last logged in, and no login log request is made.
   chk_box:
     show: Show
     hidden: Hidden
@@ -1162,6 +1160,7 @@ topbar:
     money: 'Money: '
     b_coins: 'B-coins: '
     exp_desc: 'Current XP: {current_exp}; need {need_exp} more for LV {level}'
+    exp_max: 'Current XP: {current_exp}; max level reached'
     following: FOLLOWING
     followers: FOLLOWERS
     posts: POSTS
@@ -1382,7 +1381,6 @@ notifications:
       open_media: View content
       unsupported: This message type is not supported yet
       preview_image: Preview image
-      image_preview: Direct-message image preview
       image_alt: Direct-message image
       click_load_image: Click to load image
       image_load_failed: Image failed to load. Click to retry
@@ -1591,15 +1589,8 @@ moments:
   loading_detail: Loading post details…
   author_detail: 'Details from {author}'
   open_new_tab: Open in a new tab
-  image_viewer: Post image viewer
-  close_image_viewer: Close image viewer
-  image_large: Full-size post image
-  previous_image: Previous image
-  next_image: Next image
   zoom_out: Zoom out
   zoom_in: Zoom in
-  fit_window: Fit to window
-  rotate_clockwise: Rotate clockwise
 moment_card:
   video_post: Video post
   copy_link: Copy moment link
@@ -1748,7 +1739,7 @@ video_card:
     unfollow_user: Unfollow User
     block_user: Block User
     more_options: More options
-    advanced_options: More actions
+    advanced_options: Advanced options
   follow_user_confirm:
     title: Confirm Follow User
     message: Are you sure you want to follow {name}?
@@ -2083,7 +2074,6 @@ watch_later:
   play_video: Remove and open video page
   play_and_remove: Play & remove
   play_in_watch_later: Playlist
-  remove_from_watch_later: Remove
 widescreen:
   panel_load_incomplete: Content could not finish loading. Reload the page or exit Bewly Playback Page to try again.
   reload_page: Reload page
@@ -2244,3 +2234,18 @@ search:
     in_progress: In progress
 
 filter_rule_execution_failed: Regular-expression filtering could not finish. Check your filter rules and try again.
+
+image_viewer:
+  title: Image viewer
+  close: Close image viewer
+  previous: Previous image
+  next: Next image
+  zoom_in: Zoom in
+  zoom_out: Zoom out
+  fit: Fit to window
+  actual_size: Actual size
+  rotate: Rotate right
+  open_original: Open original in new tab
+  thumbnails: All images
+  position: '{index} / {count}'
+  view_image: View image {index}

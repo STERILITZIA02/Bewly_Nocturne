@@ -91,10 +91,10 @@ export function registerTopBarSyncChecks(check, { Vue, flush, compileComponent }
     }
   }
 
-  async function createUserPanel() {
+  async function createUserPanel(level = 6) {
     const fixture = await createStore((_request, reply) => reply(undefined))
-    Object.assign(fixture.store.userInfo, { uname: 'Panel fixture', level_info: { current_level: 6, current_exp: 100, next_exp: 200 }, vip: { status: 0 } })
-    const settings = Vue.ref({ hideTopBarUserPanelLv6LastLoginLocation: false })
+    Object.assign(fixture.store.userInfo, { uname: 'Panel fixture', level_info: { current_level: level, current_exp: 100, next_exp: level >= 6 ? '--' : 200 }, vip: { status: 0 } })
+    const settings = Vue.ref({ hideTopBarUserPanelLastLogin: false })
     const reads = []
     const errors = []
     const read = kind => (_params, options) => new Promise((resolve, reject) => reads.push({ kind, options, resolve, reject }))
@@ -204,7 +204,7 @@ export function registerTopBarSyncChecks(check, { Vue, flush, compileComponent }
           assert.equal(fixture.host.textContent.includes('late location'), false)
           fixture.unmount()
           fixture.mount()
-          fixture.settings.value.hideTopBarUserPanelLv6LastLoginLocation = true
+          fixture.settings.value.hideTopBarUserPanelLastLogin = true
           await flush()
           assert.equal(fixture.reads.length, 2)
           assert.equal(fixture.errors.length, 0)
@@ -231,7 +231,7 @@ export function registerTopBarSyncChecks(check, { Vue, flush, compileComponent }
       await flush()
       assert.deepEqual(fixture.counts(), ['0', '8', '2'])
       assert.equal(fixture.host.textContent.includes('old account location'), false)
-      fixture.settings.value.hideTopBarUserPanelLv6LastLoginLocation = true
+      fixture.settings.value.hideTopBarUserPanelLastLogin = true
       await flush()
       assert.equal(fixture.reads[3].options.signal.aborted, true)
       assert.equal(fixture.reads.at(-1).kind, 'stat')
@@ -246,6 +246,27 @@ export function registerTopBarSyncChecks(check, { Vue, flush, compileComponent }
       assert.equal(fixture.errors.length, 0)
     }
     finally { fixture.dispose() }
+  })
+
+  check('user panel level: every level shows its progress and the last login; LV6 keeps a full bar', async () => {
+    for (const level of [3, 6]) {
+      const fixture = await createUserPanel(level)
+      try {
+        assert.deepEqual(fixture.reads.map(read => read.kind), ['stat', 'log'], `LV${level} reads the login log too`)
+        fixture.reads[1].resolve({ code: 0, data: { list: [{ time_at: '2026-10-28 12:00:00', geo: 'fixture city' }] } })
+        await flush()
+        const fill = fixture.host.querySelector('.user-panel__progress-fill').style.width
+        assert.equal(fill, level === 6 ? '100%' : '50%')
+        assert.equal(Boolean(fixture.host.querySelector('.user-panel__level-icon--next')), level < 6, 'only a level below the top shows the next badge')
+        assert.ok(fixture.host.querySelector('.user-panel__caption').textContent.includes(level === 6 ? 'exp_max' : 'exp_desc'))
+        assert.ok(fixture.host.textContent.includes('fixture city'))
+        fixture.settings.value.hideTopBarUserPanelLastLogin = true
+        await flush()
+        assert.equal(fixture.host.textContent.includes('fixture city'), false, 'the preference hides the login at every level')
+        assert.equal(fixture.reads.filter(read => read.kind === 'log').length, 1, 'and makes no further login read')
+      }
+      finally { fixture.dispose() }
+    }
   })
 
   check('user panel ordinary failures: network errors remain diagnosable and a reopened panel may retry', async () => {

@@ -5,6 +5,7 @@ import { useToast } from 'vue-toastification'
 import Loading from '~/components/Loading.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
+import { useIframeImageViewerBridge } from '~/composables/useIframeImageViewerBridge'
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { IFRAME_NAVIGATION_ACK, IFRAME_NAVIGATION_REQUEST, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { useSettingsStore } from '~/stores/settingsStore'
@@ -25,6 +26,8 @@ const toast = useToast()
 const settingsStore = useSettingsStore()
 const headerShow = ref(false)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
+// Images of an embedded moment page open full window in this document's viewer.
+useIframeImageViewerBridge(iframeRef)
 const currentUrl = ref<string>(props.url)
 const iframeKey = ref(0)
 

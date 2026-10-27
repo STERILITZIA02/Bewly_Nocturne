@@ -14,6 +14,7 @@ import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } 
 import { settings } from '~/logic'
 import { findLayoutEditableTarget } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { numFormatter } from '~/utils/dataFormatter'
 import { getDeepActiveElement } from '~/utils/dialogFocus'
 import { computeFloatingMenuPosition, getContextMenuPlacement } from '~/utils/floatingMenu'
 import { createPointerNavigationGuard, hasNavigationModifier } from '~/utils/linkNavigation'
@@ -43,7 +44,6 @@ import MomentVideoPreview from './MomentVideoPreview.vue'
 import MomentVote from './MomentVote.vue'
 import type { DisplayForwardVideo, DisplayMoment, WatchLaterTarget } from './types'
 import {
-  formatCount,
   getAvatarThumbnailUrl,
   getCardPreviewText,
   getMomentThumbnailUrl,
@@ -96,7 +96,6 @@ const emit = defineEmits<{
   toggleWatchLater: [target: WatchLaterTarget, isViewCurrent: () => boolean]
   toggleLike: [moment: DisplayMoment]
   toggleReservation: [moment: DisplayMoment]
-  openImagePreview: [images: string[], index: number, trigger: HTMLElement]
   interactiveResize: []
   interactionChange: [held: boolean]
   disclosureMotion: [moving: boolean]
@@ -725,10 +724,6 @@ function handleRichLinkClick(event: MouseEvent, url: string) {
   emit('openVideoLink', url)
 }
 
-function handleCommentImagePreview(images: string[], index: number, trigger: HTMLElement) {
-  emit('openImagePreview', images, index, trigger)
-}
-
 function requestNativeUserProfile(event: MouseEvent) {
   const trigger = event.currentTarget
   if (!(trigger instanceof HTMLAnchorElement))
@@ -822,7 +817,6 @@ onBeforeUnmount(() => {
         :blur="ready && !entering"
         @shown="shownTopImage = $event"
         @first-load="handleCoverLoad"
-        @preview="(index, trigger) => emit('openImagePreview', moment.images, index, trigger)"
         @cover-click="openPrimaryDetail"
         @cover-enter="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && emit('mediaEnter', moment, $event)"
         @cover-leave="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && onMediaLeave()"
@@ -1024,7 +1018,6 @@ onBeforeUnmount(() => {
                 :portrait="isQuotePortrait"
                 :blur="ready && !entering"
                 @shown="shownQuoteImage = $event"
-                @preview="(index, trigger) => emit('openImagePreview', quoteImages, index, trigger)"
               />
               <div class="moment-card__quote-body">
                 <div class="moment-card__quote-source">
@@ -1189,7 +1182,7 @@ onBeforeUnmount(() => {
           @click.stop="toggleForward"
         >
           <span i-tabler-repeat />
-          {{ formatCount(displayedForwardCount) }}
+          {{ numFormatter(displayedForwardCount) }}
         </button>
         <button
           v-if="!moment.isLive"
@@ -1202,7 +1195,7 @@ onBeforeUnmount(() => {
           @click.stop="toggleComments"
         >
           <span i-tabler-message-circle />
-          {{ formatCount(moment.commentCount + addedCommentCount) }}
+          {{ numFormatter(moment.commentCount + addedCommentCount) }}
         </button>
         <span v-else class="moment-card__footer-stat" :aria-label="t('moment_card.live_popularity', { value: moment.livePopularity || t('moment_card.no_data') })">
           <span i-tabler-users />
@@ -1221,7 +1214,7 @@ onBeforeUnmount(() => {
         >
           <span v-if="moment.isLiked" i-tabler-heart-filled />
           <span v-else i-tabler-heart />
-          {{ formatCount(moment.likeCount) }}
+          {{ numFormatter(moment.likeCount) }}
         </button>
       </footer>
 
@@ -1247,7 +1240,6 @@ onBeforeUnmount(() => {
               @writing-change="commentWriting = $event"
               @posted="addedCommentCount += 1"
               @removed="addedCommentCount -= $event"
-              @open-image-preview="handleCommentImagePreview"
               @interactive-resize="emit('interactiveResize')"
             />
           </div>

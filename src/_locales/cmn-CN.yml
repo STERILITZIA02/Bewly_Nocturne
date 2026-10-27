@@ -47,8 +47,6 @@ library_tools:
   find_messages: 查找本会话已加载的消息
   previous_match: 上一个匹配
   next_match: 下一个匹配
-  original_size: 原尺寸
-  image_navigation: 图片查看区域，可滚动查看，放大后可拖动
   load_more_videos: 继续加载视频
 common:
   pagination_stalled: 列表未能继续加载，请重试。
@@ -58,7 +56,7 @@ common:
   retry: 重试
   operation_completed: 操作完成
   dialog: 对话框
-  view_all: 查看更多
+  view_all: 查看全部
   play_all: 播放全部
   loading: 加载中...
   search: 搜索
@@ -420,7 +418,7 @@ settings:
     preset: 主题
     custom: 自定义
     automatic: 自动
-    accent: 强调色
+    accent: 主题色
     editing_mode: 编辑配色
     editing_mode_desc: 切换要编辑的配色，不改变当前显示模式。
     separate_accent: 浅色与深色单独编辑
@@ -497,7 +495,7 @@ settings:
     dock_and_sidebar: Dock栏
     home: 首页
     moments: 动态页
-    watch_later_page: 稍后再看
+    watch_later_page: 稍后再看页
     search: 搜索页
     playback_page: 播放页
     messages_page: 消息页
@@ -629,8 +627,8 @@ settings:
   open_top_bar_items_in_bewly: 点击顶栏图标打开 Bewly 页面
   open_top_bar_items_in_bewly_desc: 未启用触屏优化时，点击 Logo、动态、收藏、历史或稍后再看图标，将按照“顶栏链接打开行为”打开 Dock 中对应的页面，并沿用该页面的 Bewly/原版 Bilibili 配置；尚未适配的图标保持原有行为。
   show_bewly_or_bili_page_switcher_desc: 在悬浮 Dock 或侧边栏中显示全原版、全 Bewly 与自定义页面模式切换按钮。
-  hide_lv6_last_login_location_in_top_bar_user_pop: 隐藏 LV6 等级最后登录信息显示
-  hide_lv6_last_login_location_in_top_bar_user_pop_desc: 开启后，顶栏头像弹窗中的 LV6 等级信息区域将不再显示最后登录时间和地点，也不会请求登录记录。
+  hide_last_login_in_top_bar_user_pop: 隐藏最后登录时间和地点
+  hide_last_login_in_top_bar_user_pop_desc: 开启后，顶栏头像弹窗不再显示最后登录的时间和地点，也不会请求登录记录。
   chk_box:
     show: 显示
     hidden: 隐藏
@@ -875,18 +873,18 @@ settings:
   topbar_mode_bilibili: Bilibili 顶栏
   dock_item_open_in_new_tab: 在新标签页打开
   dock_item_use_original_bili_web_page: 使用原版 Bilibili 网页
-  disable_light_dark_mode_switcher: 禁用亮/暗色模式切换按钮
+  disable_light_dark_mode_switcher: 禁用浅/深色模式切换按钮
   back_to_top_and_refresh_buttons_are_separated: 分离回到顶部和刷新按钮
   sidebar_position: 侧边栏位置
   auto_hide_sidebar: 自动隐藏侧边栏
   theme: 显示模式
   theme_opt:
-    light: 亮色
-    dark: 暗色
+    light: 浅色
+    dark: 深色
     auto: 设备
     scheduled: 定时
-  theme_schedule: 亮色时间
-  theme_schedule_desc: 在所选时间范围内使用亮色模式，其余时间使用暗色模式。
+  theme_schedule: 浅色时间
+  theme_schedule_desc: 在所选时间范围内使用浅色模式，其余时间使用深色模式。
   video_page_dark_mode: 仅视频播放页深色模式
   video_page_dark_mode_desc: 保持全站主题设置不变，仅在视频播放页启用 Bewly Nocturne 深色样式。
   theme_color: 主题色
@@ -1069,7 +1067,7 @@ topbar:
   sign_in: 登录
   moments: 动态
   favorites: 收藏
-  history: 历史
+  history: 观看历史
   watch_later: 稍后再看
   creative_center: 创作中心
   upload: 投稿
@@ -1125,6 +1123,7 @@ topbar:
     money: 硬币：
     b_coins: B币：
     exp_desc: 当前成长 {current_exp}，升级到 LV {level} 还需要 {need_exp}
+    exp_max: 当前成长 {current_exp}，已满级
     following: 关注
     followers: 粉丝
     posts: 动态
@@ -1345,7 +1344,6 @@ notifications:
       open_media: 查看内容
       unsupported: 当前版本暂未支持此消息
       preview_image: 预览图片
-      image_preview: 私信图片预览
       image_alt: 私信图片
       click_load_image: 点击加载图片
       image_load_failed: 图片加载失败，点击重试
@@ -1425,14 +1423,14 @@ dock:
   favorites: 收藏
   watch_later: 稍后再看
   moments: 动态
-  notifications: 消息页
+  notifications: 消息
   page_mode_original: BiliBili
   page_mode_bewly: Bewly Nocturne
-  page_mode_custom: 设置
+  page_mode_custom: 自定义
   page_mode_switch_tooltip: 当前为{current}配置, 点击切换为{next}配置
   bewly_page_unavailable: 当前页面暂无 Bewly Nocturne 版本
-  dark_mode: 暗色模式
-  light_mode: 亮色模式
+  dark_mode: 深色模式
+  light_mode: 浅色模式
   settings: 设置
   collapse_dock: 收起 Dock
   expand_dock: 展开 Dock
@@ -1554,15 +1552,8 @@ moments:
   loading_detail: 正在加载动态详情…
   author_detail: '{author} 的详情'
   open_new_tab: 新建标签页打开
-  image_viewer: 动态图片查看器
-  close_image_viewer: 关闭图片查看器
-  image_large: 动态图片大图
-  previous_image: 上一张
-  next_image: 下一张
   zoom_out: 缩小
   zoom_in: 放大
-  fit_window: 适应窗口
-  rotate_clockwise: 顺时针旋转
 moment_card:
   video_post: 视频投稿
   copy_link: 复制动态链接
@@ -1709,9 +1700,9 @@ video_card:
     view_the_original_cover: 查看封面
     follow_user: 关注用户
     unfollow_user: 取消关注
-    block_user: 拉黑用户
+    block_user: 加入黑名单
     more_options: 更多操作
-    advanced_options: 更多操作
+    advanced_options: 高级选项
   follow_user_confirm:
     title: 确认关注用户
     message: 确定要关注 {name} 吗？
@@ -1721,9 +1712,9 @@ video_card:
     message: 确定要取消关注 {name} 吗？
     warning: 取消关注后，该用户的内容将不再出现在你的关注列表中。
   block_user_confirm:
-    title: 确认拉黑用户
-    message: 确定要拉黑 {name} 吗？
-    warning: 拉黑后，你将无法看到该用户发布的所有内容。
+    title: 确认加入黑名单
+    message: 确定要将 {name} 加入黑名单吗？
+    warning: 加入黑名单后，你将无法看到该用户发布的所有内容。
   group_contribution: '{firstAuthor} 等 {num} 人联合创作'
   followed: 已关注
   video_removed: 视频已移除
@@ -1786,7 +1777,7 @@ home:
   precious: 入站必刷
   live: 直播
   moments: 动态
-  uploaders_with_updates: '{count}个UP主有更新'
+  uploaders_with_updates: '{count} 个 UP 主有更新'
 ranking:
   all: 全部
   original_content: 原创内容
@@ -1850,7 +1841,7 @@ history:
   retry_recording_status: 读取记录状态
   pause_watch_history_confirm: |-
     要暂停记录观看历史吗？
-    你确定要要暂停记录观看历史吗？
+    你确定要暂停记录观看历史吗？
   search_watch_history: 搜索观看历史
   title: 观看历史
   turn_on_watch_history: 开启观看历史
@@ -2039,7 +2030,6 @@ watch_later:
   play_video: 移除并进入视频页
   play_and_remove: 播放并移除
   play_in_watch_later: 列表播放
-  remove_from_watch_later: 移除
 widescreen:
   panel_load_incomplete: 内容未能完成加载，可刷新页面或退出 Bewly 播放页后重试
   reload_page: 刷新页面
@@ -2200,3 +2190,18 @@ search:
     in_progress: 进行中
 
 filter_rule_execution_failed: 正则过滤未能完成，请检查过滤规则后重试。
+
+image_viewer:
+  title: 图片查看器
+  close: 关闭图片查看器
+  previous: 上一张
+  next: 下一张
+  zoom_in: 放大
+  zoom_out: 缩小
+  fit: 适应窗口
+  actual_size: 原始尺寸
+  rotate: 向右旋转
+  open_original: 在新标签页打开原图
+  thumbnails: 全部图片
+  position: '{index} / {count}'
+  view_image: 查看第 {index} 张图片

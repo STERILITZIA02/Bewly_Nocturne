@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import LoadingRing from '~/components/LoadingRing.vue'
+import LoadingFill from '~/components/LoadingFill.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 
 // An arbitrary page has no predictable layout, so it gets the ring; video and
@@ -8,9 +8,7 @@ withDefaults(defineProps<{ kind?: 'page' | 'video' | 'article', loading?: boolea
 </script>
 
 <template>
-  <div v-if="kind === 'page'" class="loading-container loading-container--page" role="status" :aria-label="loading ? $t('common.loading') : undefined" :aria-busy="loading">
-    <LoadingRing :loading="loading" size="var(--bew-icon-size-xl)" />
-  </div>
+  <LoadingFill v-if="kind === 'page'" :loading="loading" />
   <div
     v-else class="loading-container" :class="`loading-container--${kind}`" role="status" :aria-label="$t('common.loading')"
     aria-busy="true"
@@ -37,11 +35,6 @@ withDefaults(defineProps<{ kind?: 'page' | 'video' | 'article', loading?: boolea
   gap: var(--bew-space-6);
   padding: var(--bew-space-6);
   box-sizing: border-box;
-}
-.loading-container--page {
-  place-items: center;
-  align-content: center;
-  color: var(--bew-text-2);
 }
 .loading-container__heading {
   display: flex;

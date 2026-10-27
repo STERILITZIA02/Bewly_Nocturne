@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useEventListener } from '@vueuse/core'
 
-import Button from '~/components/Button.vue'
+import FrameActions from '~/components/FrameActions.vue'
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
 import { usePanelTrigger } from '~/composables/usePanelOrigin'
@@ -573,46 +573,13 @@ defineExpose({ close: handleClose })
         m-auto px-4
         pointer-events-none
       >
-        <a
-          :href="externalHref" target="_blank" rel="noopener noreferrer"
-          class="iframe-drawer__external"
-          style="
-            --b-button-color: var(--bew-elevated-solid);
-            --b-button-color-hover: var(--bew-elevated-solid-hover);
-          "
-          pointer-events-auto
-          @pointerdown="syncExternalHref" @focus="syncExternalHref" @contextmenu="syncExternalHref"
-          @click="handleOpenInNewTab"
-        >
-          <i i-tabler:external-link />
-          {{ $t('iframe_drawer.open_in_new_tab') }}
-        </a>
-        <Button
-          v-if="!isEscPressed"
-          style="
-            --b-button-color: var(--bew-elevated-solid);
-            --b-button-color-hover: var(--bew-elevated-solid-hover);
-          "
-          pointer-events-auto
-          @click="handleClose"
-        >
-          <template #left>
-            <i i-tabler:x />
-          </template>
-          {{ $t('iframe_drawer.close') }}
-          <kbd>Esc</kbd>
-        </Button>
-        <Button
-          v-else
-          type="error"
-          @click="handleClose"
-        >
-          <template #left>
-            <i i-tabler:x />
-          </template>
-          {{ $t('iframe_drawer.press_esc_again_to_close') }}
-          <kbd>Esc</kbd>
-        </Button>
+        <FrameActions
+          :href="externalHref"
+          :escape="isEscPressed ? 'armed' : 'hint'"
+          @sync="syncExternalHref"
+          @open="handleOpenInNewTab"
+          @close="handleClose"
+        />
       </div>
     </Transition>
 
@@ -648,20 +615,6 @@ defineExpose({ close: handleClose })
 </template>
 
 <style lang="scss" scoped>
-.iframe-drawer__external {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--bew-space-2);
-  min-height: var(--bew-control-height);
-  padding: var(--bew-space-2) var(--bew-space-3);
-  border-radius: var(--bew-interactive-radius);
-  background: var(--bew-elevated-solid);
-  color: var(--bew-text-1);
-
-  &:hover {
-    background: var(--bew-elevated-solid-hover);
-  }
-}
 .iframe-drawer-layer,
 .iframe-drawer__fullscreen {
   z-index: var(--bew-z-drawer);

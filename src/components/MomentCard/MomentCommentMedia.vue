@@ -1,17 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
+import { useImageViewer } from '~/composables/useImageViewer'
 import { i18n } from '~/utils/i18n'
 
 import type { MomentCommentPicture } from './commentUtils'
-import { getMomentThumbnailUrl } from './utils'
+import { getMomentOriginalImageUrl, getMomentThumbnailUrl } from './utils'
 
 const { pictures } = defineProps<{
   pictures: MomentCommentPicture[]
-}>()
-
-const emit = defineEmits<{
-  openImagePreview: [urls: string[], index: number, trigger: HTMLElement]
 }>()
 
 const { t } = i18n.global
@@ -24,11 +21,19 @@ function markPictureFailed(url: string) {
   failedPictures.value = new Set(failedPictures.value).add(url)
 }
 
+// Each visible thumbnail is where its image opens from and closes back to.
+const buttons: HTMLElement[] = []
+const imageViewer = useImageViewer()
 function handleOpenImage(index: number, event: MouseEvent) {
-  const trigger = event.currentTarget
-  if (!(trigger instanceof HTMLElement))
-    return
-  emit('openImagePreview', pictures.map(picture => picture.url), index, trigger)
+  imageViewer.open({
+    urls: pictures.map(picture => getMomentOriginalImageUrl(picture.url)),
+    index,
+    trigger: event.currentTarget as HTMLElement,
+    getOrigin: (shown) => {
+      const button = buttons[shown]
+      return button?.isConnected ? button.getBoundingClientRect() : undefined
+    },
+  })
 }
 </script>
 
@@ -40,9 +45,10 @@ function handleOpenImage(index: number, event: MouseEvent) {
     <button
       v-for="(picture, index) in visiblePictures"
       :key="`${picture.url}-${index}`"
+      :ref="element => buttons[index] = element as HTMLElement"
       type="button"
       class="moment-comment-media__item"
-      :aria-label="`${t('moments.image_viewer')} ${index + 1}`"
+      :aria-label="t('image_viewer.view_image', { index: index + 1 })"
       @click="handleOpenImage(index, $event)"
     >
       <img

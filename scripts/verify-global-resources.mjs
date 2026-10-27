@@ -88,7 +88,7 @@ export function registerGlobalResourceChecks(check, { Vue, flush }) {
       await flush()
       tick()
       const inner = shadow.appendChild(doc.createElement('div'))
-      inner.className = 'moment-image-viewer'
+      inner.className = 'bew-image-viewer'
       inner.getBoundingClientRect = () => ({ width: 300, height: 200 })
       await flush()
       tick()

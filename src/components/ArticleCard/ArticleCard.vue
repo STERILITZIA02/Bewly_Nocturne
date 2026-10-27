@@ -34,15 +34,6 @@ const articleUrl = computed(() => {
   return `https://www.bilibili.com/read/${id.startsWith('cv') ? id : `cv${id}`}`
 })
 
-// 格式化数字：已是展示字符串则原样返回
-function formatNumber(num: number | string | undefined) {
-  if (num === undefined || num === null || num === '')
-    return '0'
-  if (typeof num === 'string')
-    return num
-  return numFormatter(num)
-}
-
 // 格式化日期：字符串直接展示；数字按 Unix 秒处理
 function formatDate(timestamp: number | string | undefined) {
   if (timestamp === undefined || timestamp === null || timestamp === '')
@@ -95,15 +86,15 @@ function formatDate(timestamp: number | string | undefined) {
         <span v-if="publishTime">{{ formatDate(publishTime) }}</span>
         <div v-if="view !== undefined" flex items-center gap-1>
           <div i-tabler:eye />
-          <span>{{ formatNumber(view) }}</span>
+          <span>{{ numFormatter(view) }}</span>
         </div>
         <div v-if="like !== undefined" flex items-center gap-1>
           <div i-tabler:thumb-up />
-          <span>{{ formatNumber(like) }}</span>
+          <span>{{ numFormatter(like) }}</span>
         </div>
         <div v-if="reply !== undefined" flex items-center gap-1>
           <div i-tabler:message />
-          <span>{{ formatNumber(reply) }}</span>
+          <span>{{ numFormatter(reply) }}</span>
         </div>
       </div>
 

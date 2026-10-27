@@ -21,6 +21,7 @@ import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { toAdvertisementCard, toSearchBrandAdvertisementCards } from '~/utils/advertising'
+import { numFormatter } from '~/utils/dataFormatter'
 import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON } from '~/utils/lvIcons'
 import { getUserID } from '~/utils/main'
 import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
@@ -42,7 +43,6 @@ import {
   convertUserHighlight,
   convertVideoData,
   convertWebGameData,
-  formatNumber,
   isAdVideo,
   removeHighlight,
   removeUnusedActivityCard,
@@ -708,7 +708,7 @@ defineExpose({
                     </span>
                   </div>
                   <div text="xs $bew-text-3" flex items-center gap-3>
-                    <span>{{ t('search.user.fans', { count: formatNumber(user.fans || 0) }) }}</span>
+                    <span>{{ t('search.user.fans', { count: numFormatter(user.fans) }) }}</span>
                     <span>{{ t('search.user.videos', { count: user.videos || 0 }) }}</span>
                   </div>
                   <div v-if="user.desc" class="user-highlight-desc" mt-1>

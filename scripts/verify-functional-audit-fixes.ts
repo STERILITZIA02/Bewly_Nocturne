@@ -275,26 +275,6 @@ async function verifyPreferredFontScale() {
   }
 }
 
-async function verifyHorizontalWheelBoundary() {
-  const context = await loadSourceFunctions('../src/components/HorizontalScrollView.vue', ['handleMouseScroll'], { ...await import('../src/utils/wheelStep') })
-  const element = { scrollLeft: 0, scrollWidth: 600, clientWidth: 200 }
-  let prevented = false
-  const wheel = (deltaY: number, deltaX = 0, ctrlKey = false) => {
-    prevented = false
-    context.handleMouseScroll({ currentTarget: element, deltaY, deltaX, ctrlKey, preventDefault: () => prevented = true })
-    return prevented
-  }
-  assert.equal(wheel(-20), false, 'the start boundary lets the page scroll up')
-  assert.equal(wheel(20), true)
-  assert.equal(element.scrollLeft, 20)
-  assert.equal(wheel(20, 100), false, 'horizontal trackpad gestures remain native')
-  assert.equal(wheel(20, 0, true), false, 'pinch zoom is not swallowed')
-  element.scrollLeft = 400
-  assert.equal(wheel(20), false, 'the end boundary lets the page scroll down')
-  element.scrollWidth = element.clientWidth
-  assert.equal(wheel(20), false, 'a row without overflow never traps scrolling')
-}
-
 export async function verifyFunctionalAuditFixes() {
   await verifyPreferredFontScale()
   // Search suggestions now mount the real component in verify-maintenance-review.mjs.
@@ -304,7 +284,7 @@ export async function verifyFunctionalAuditFixes() {
   await verifyImageReleaseBatch()
   await verifyVideoIdentityReuse()
   await verifySharedVideoStyles()
-  await verifyHorizontalWheelBoundary()
+  // Horizontal rows mount the real component in verify-platform-compatibility.mjs.
   assert.equal(decodeHtmlEntities('&#x1F63A; &#128570; &#x20000;'), '😺 😺 𠀀')
   assert.equal(decodeHtmlEntities('&amp; &copy;'), '& ©')
   assert.equal(decodeHtmlEntities('&#12ab; &#x110000;'), '&#12ab; &#x110000;')

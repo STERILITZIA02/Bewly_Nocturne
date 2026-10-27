@@ -14,7 +14,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (event: 'preview', src: string): void
+  (event: 'preview', src: string, trigger: HTMLElement): void
 }>()
 
 const { t } = useI18n()
@@ -87,7 +87,8 @@ watch(() => props.content, () => {
       type="button"
       class="private-message-content__media-button"
       :aria-label="t('notifications.whisper.messages.preview_image')"
-      @click="emit('preview', content.src)"
+      :data-image-src="content.src"
+      @click="emit('preview', content.src, $event.currentTarget as HTMLElement)"
     >
       <img
         class="private-message-content__media"

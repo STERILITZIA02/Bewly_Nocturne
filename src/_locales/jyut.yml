@@ -47,8 +47,6 @@ library_tools:
   find_messages: 搵呢個對話已載入嘅訊息
   previous_match: 上一個符合項目
   next_match: 下一個符合項目
-  original_size: 原本大小
-  image_navigation: 圖片檢視範圍，可以捲動睇，放大後可以拖曳
   load_more_videos: 繼續載入影片
 common:
   pagination_stalled: 清單未能繼續載入，請再試。
@@ -420,7 +418,7 @@ settings:
     preset: 主題
     custom: 自訂
     automatic: 自動
-    accent: 強調色
+    accent: 主題色
     editing_mode: 編輯配色
     editing_mode_desc: 揀要編輯嘅配色，唔會改變而家嘅顯示模式。
     separate_accent: 淺色同深色分開編輯
@@ -497,7 +495,7 @@ settings:
     dock_and_sidebar: Dock
     home: 主頁
     moments: 動態頁
-    watch_later_page: 陣間至睇
+    watch_later_page: 陣間至睇頁
     search: 搵嘢頁
     playback_page: 播放頁
     messages_page: 訊息頁
@@ -655,8 +653,8 @@ settings:
   open_top_bar_items_in_bewly: 撳頂欄圖示打開 Bewly 頁面
   open_top_bar_items_in_bewly_desc: 未開啟觸控螢幕優化嗰陣，撳 Logo、動態、收藏、歷史或者稍後再睇圖示，會跟「頂欄連結開啟行為」打開 Dock 入面對應嘅頁面，並沿用該頁面嘅 Bewly/原版 Bilibili 設定；未適配嘅圖示會維持原本行為。
   show_bewly_or_bili_page_switcher_desc: 喺浮動 Dock 或側邊欄顯示「全原版」、「全 Bewly」同「自訂」頁面模式切換掣。
-  hide_lv6_last_login_location_in_top_bar_user_pop: 隱藏 LV6 等級最後登入資訊顯示
-  hide_lv6_last_login_location_in_top_bar_user_pop_desc: 開咗之後，頂欄頭像彈窗入面嘅 LV6 等級資訊區域就唔會再顯示最後登入時間同地點，亦都唔會請求登入記錄。
+  hide_last_login_in_top_bar_user_pop: 隱藏最後登入時間同地點
+  hide_last_login_in_top_bar_user_pop_desc: 開咗之後，頂欄頭像彈窗唔會再顯示最後登入嘅時間同地點，亦都唔會請求登入記錄。
   chk_box:
     show: 擺出嚟
     hidden: 收埋
@@ -1069,7 +1067,7 @@ topbar:
   sign_in: 登入
   moments: 動向
   favorites: 我嘅至愛
-  history: 記錄
+  history: 收睇記錄
   watch_later: 陣間至睇
   creative_center: 創作中心
   upload: Po 嘢
@@ -1125,6 +1123,7 @@ topbar:
     money: 銀仔：
     b_coins: B銀：
     exp_desc: 而家經驗 {current_exp}，升到 LV {level} 仲要 {need_exp}
+    exp_max: 而家經驗 {current_exp}，已經滿級
     following: 跟緊
     followers: 擁躉
     posts: 動向
@@ -1345,7 +1344,6 @@ notifications:
       open_media: 睇內容
       unsupported: 而家個版本暫時未支援呢種訊息
       preview_image: 預覽圖片
-      image_preview: 私訊圖片預覽
       image_alt: 私訊圖片
       click_load_image: 點擊載入圖片
       image_load_failed: 圖片載入失敗，點擊重試
@@ -1425,7 +1423,7 @@ dock:
   watch_later: 陣間至睇
   favorites: 我嘅至愛
   moments: 動向
-  notifications: 訊息頁
+  notifications: 訊息
   page_mode_original: 全原版
   page_mode_bewly: 全 Bewly
   page_mode_custom: 自訂
@@ -1554,15 +1552,8 @@ moments:
   loading_detail: 載入緊動態詳情…
   author_detail: '{author} 嘅詳情'
   open_new_tab: 喺新分頁開啟
-  image_viewer: 動態圖片檢視器
-  close_image_viewer: 關閉圖片檢視器
-  image_large: 動態圖片大圖
-  previous_image: 上一張
-  next_image: 下一張
   zoom_out: 縮細
   zoom_in: 放大
-  fit_window: 配合視窗
-  rotate_clockwise: 順時針旋轉
 moment_card:
   video_post: 影片投稿
   copy_link: 複製動態連結
@@ -1709,9 +1700,9 @@ video_card:
     view_the_original_cover: 睇吓封面
     follow_user: 關注用戶
     unfollow_user: 取消關注
-    block_user: 拉黑用戶
+    block_user: 加入黑名單
     more_options: 更多操作
-    advanced_options: 更多操作
+    advanced_options: 進階選項
   follow_user_confirm:
     title: 確認關注用戶
     message: 確定要關注 {name} 嗎？
@@ -1721,9 +1712,9 @@ video_card:
     message: 確定要取消關注 {name} 嗎？
     warning: 取消關注咗之後，該用戶嘅內容就唔會再出現喺你嘅關注清單入面。
   block_user_confirm:
-    title: 確認拉黑用戶
-    message: 確定要拉黑 {name} 嗎？
-    warning: 拉黑咗之後，你就睇唔到該用戶發佈嘅所有內容。
+    title: 確認加入黑名單
+    message: 確定要將 {name} 加入黑名單嗎？
+    warning: 加入黑名單之後，你就睇唔到該用戶發佈嘅所有內容。
   group_contribution: '{firstAuthor} 等 {num} 人一齊創作'
   followed: 已關注
   video_removed: 經已鏟咗條片
@@ -1786,7 +1777,7 @@ home:
   precious: 入站必睇
   live: 直播
   moments: 動向
-  uploaders_with_updates: '{count}個UP主有更新'
+  uploaders_with_updates: '{count} 個 UP 主有更新'
 ranking:
   all: 全部
   original_content: 原創內容
@@ -1852,7 +1843,7 @@ history:
     噉做冇得返轉頭噃，你確定要剷晒啲收睇記錄？
   pause_watch_history_confirm: |-
     係咪要暫停進行收睇記錄呀？
-    你確定要暫停暫停進行收睇記錄？
+    你確定要暫停進行收睇記錄？
   search_watch_history: 搵吓收睇記錄
   turn_on_watch_history_confirm: |-
     係咪要開返收睇記錄呀？
@@ -2039,7 +2030,6 @@ watch_later:
   play_video: 剷走兼入去影片頁
   play_and_remove: 播放兼移除
   play_in_watch_later: 清單播
-  remove_from_watch_later: 剷走
 widescreen:
   panel_load_incomplete: 內容未能載入完成，可以重新整理頁面或者退出 Bewly 播放頁後再試
   reload_page: 重新整理頁面
@@ -2200,3 +2190,18 @@ search:
     in_progress: 進行中
 
 filter_rule_execution_failed: 正則篩選未能完成，請檢查篩選規則之後再試。
+
+image_viewer:
+  title: 睇圖
+  close: 閂咗睇圖
+  previous: 上一張
+  next: 下一張
+  zoom_in: 放大
+  zoom_out: 縮細
+  fit: 配合視窗
+  actual_size: 原本大小
+  rotate: 向右轉
+  open_original: 喺新分頁打開原圖
+  thumbnails: 全部圖片
+  position: '{index} / {count}'
+  view_image: 睇第 {index} 張圖

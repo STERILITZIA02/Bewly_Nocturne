@@ -243,12 +243,13 @@
   --bew-z-control-backdrop: 10003;
   --bew-z-control-menu: 10004;
   --bew-z-layout-editor: 10005;
-  --bew-z-image-viewer: 10010;
   --bew-z-critical-dialog: 10012;
   --bew-z-toast: 10020;
   --bew-z-native-detail: 99999;
   --bew-z-native-overlay: 100000;
   --bew-z-drawer: 999999;
+  // Above the drawer: images opened from a drawer page fill the window.
+  --bew-z-image-viewer: calc(var(--bew-z-drawer) + 1);
   --bew-z-widescreen: 2147483000;
   --bew-z-widescreen-loading: calc(var(--bew-z-widescreen) + 1);
   --bew-z-hud: 2147483646;
@@ -308,6 +309,14 @@
   --bew-overlay-background: rgb(0 0 0 / 72%);
   --bew-overlay-background-hover: rgb(0 0 0 / 84%);
   --bew-on-overlay-color: white;
+  // The image viewer is a dark media room in every theme: a blurred scrim with
+  // solid controls on it (no glass on glass), white text at two levels.
+  --bew-image-viewer-scrim: rgb(10 10 10 / 82%);
+  --bew-image-viewer-chrome: rgb(34 34 34 / 92%);
+  --bew-image-viewer-control-hover: rgb(255 255 255 / 12%);
+  --bew-image-viewer-control-pressed: rgb(255 255 255 / 18%);
+  --bew-image-viewer-text-1: rgb(255 255 255 / 96%);
+  --bew-image-viewer-text-2: rgb(255 255 255 / 64%);
   --bew-dock-control-size: 36px;
   --bew-dock-control-size-lg: 44px;
   --bew-floating-control-icon-size: var(--bew-icon-size-md);

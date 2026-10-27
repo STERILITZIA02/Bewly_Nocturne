@@ -69,7 +69,7 @@ const groups = computed<MenuGroup[]>(() => [
   },
 ])
 
-// On = shown directly in the menu; off = folded under “更多操作”.
+// On = shown directly in the menu; off = folded under “高级选项”.
 function isVisible(key: VideoCardContextMenuKey) {
   return !settings.value.videoCardContextMenuAdvanced.includes(key)
 }

@@ -37,7 +37,6 @@ const props = withDefaults(defineProps<{
 }>(), { active: true })
 
 const emit = defineEmits<{
-  openImagePreview: [images: string[], index: number, trigger: HTMLElement]
   interactiveResize: []
   writingChange: [pending: boolean]
   posted: []
@@ -613,10 +612,6 @@ async function deleteComment(comment: MomentCommentItem) {
   }
 }
 
-function openCommentImage(images: string[], index: number, trigger: HTMLElement) {
-  emit('openImagePreview', images, index, trigger)
-}
-
 async function loadThreadReplies(root: MomentCommentItem) {
   if (disposed || props.active === false || document.hidden)
     return
@@ -793,7 +788,6 @@ onBeforeUnmount(() => {
                 <MomentCommentMedia
                   v-if="node.comment.pictures.length"
                   :pictures="node.comment.pictures"
-                  @open-image-preview="openCommentImage"
                 />
                 <p v-if="!node.layout.directParentVisible" class="moment-comments__missing-parent">
                   {{ t('moment_card.comments_missing_parent') }}
