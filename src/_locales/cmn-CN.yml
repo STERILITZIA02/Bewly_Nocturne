@@ -276,6 +276,7 @@ settings:
   search_identity_guest: 游客
   enable_text_autospace: 中英文自动间距
   enable_text_autospace_desc: 由支持的浏览器为阅读文字添加中英文视觉间距，不改写内容；代码和编辑器保持原样。
+  group_licenses: 许可
   project_license: 项目协议
   third_party_licenses: 第三方依赖许可
   licenses_loading: 正在读取许可资产
@@ -286,6 +287,7 @@ settings:
   licenses_sources: 构建入口
   licenses_text: 许可原文
   licenses_summary: 仅列出本次构建最终输出有贡献的依赖；不同版本分别列出。
+  licenses_view: 查看
   comment_reply_batch_pages: 每次加载的回复页数
   comment_reply_batch_pages_desc: 只在点击加载下一批时请求；首次展开和直接选页各请求一页，不自动加载整个楼层。
   enable_comment_reply_tree_container: 独立回复阅读区域
@@ -423,9 +425,6 @@ settings:
     editing_mode_desc: 切换要编辑的配色，不改变当前显示模式。
     separate_accent: 浅色与深色单独编辑
     separate_accent_desc: 开启后分别选择主题与强调色，切换显示模式时自动使用对应配色。
-    dark_surface: 深色背景
-    dark_surface_desc: OLED 使用纯黑页面背景，播放页保留普通深色表面。
-    tint: 深色色调
     background: 背景
     background_desc: 作为表面基色，卡片、浮层和输入框由它统一派生。颜色会适配当前浅色或深色模式。
     foreground: 前景
@@ -486,11 +485,6 @@ settings:
       paper: 暖纸
       sage: 鼠尾草
       slate: 岩蓝
-    surface:
-      neutral: 标准深色
-      tinted: 柔和色调
-      custom: 自定义背景
-      oled: OLED 纯黑
   menu_compatibility: 兼容性
   menu_about: 关于
   experimental: 实验性
@@ -899,11 +893,6 @@ settings:
   theme_color_desc: 自定义颜色与纯黑、纯白页面的对比度至少为 1.8:1，过暗或过亮时会自动调整明度。“无主题色”在浅色模式下为黑、深色模式下为白。
   theme_color_opt:
     neutral: 无主题色
-  dark_mode_base_color: 深色模式基准颜色
-  enable_dark_mode_tint: 深色背景色调
-  enable_dark_mode_tint_desc: 默认使用无色调的中性灰。开启后使用下方的背景色调；关闭会保留已选颜色。
-  enable_oled_dark_mode: OLED 纯黑模式
-  enable_oled_dark_mode_desc: 深色模式下使用纯黑底色，卡片和浮层保留层次。视频播放页仍使用普通深色。
   gradient_theme_color_background: 在深色模式下使用中性渐变
   gradient_theme_color_background_desc: 同时应用于网页背景和顶栏，不使用主题色。
   logo_color: Logo 颜色

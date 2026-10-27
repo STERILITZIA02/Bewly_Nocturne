@@ -695,7 +695,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     const failures = []
     const drawer = await compileComponent('../src/components/IframeDrawer.vue', {
       '~/composables/useAppProvider': { DrawerType: { IframeDrawer: 'iframe', None: 'none' }, useBewlyApp: () => ({ activeDrawer, setActiveDrawer: value => activeDrawer.value = value }) },
-      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false) }) },
+      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }) },
       '~/constants/globalEvents': protocol,
       '~/constants/timing': await import('../src/constants/timing'),
       '~/logic': { settings },

@@ -182,7 +182,7 @@ export const NEUTRAL_THEME_COLOR = 'neutral'
 export const DEFAULT_THEME_COLOR = '#00a1d6'
 /**
  * A custom accent must stay distinguishable from both a white page and a pure
- * black (OLED) page; every preset clears it (lowest: #fda4af at 1.89:1 on white).
+ * black page; every preset clears it (lowest: #fda4af at 1.89:1 on white).
  */
 export const THEME_COLOR_MIN_PAGE_CONTRAST = 1.8
 

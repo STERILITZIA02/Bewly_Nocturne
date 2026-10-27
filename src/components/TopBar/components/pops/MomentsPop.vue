@@ -241,13 +241,13 @@ defineExpose({
           {{ tab.name }}
         </button>
       </div>
-      <ALink
-        href="https://t.bilibili.com/"
-        type="topBar"
-        class="bew-popover__action"
-      >
-        {{ $t('common.view_all') }}
-      </ALink>
+      <div class="bew-popover__actions">
+        <Tooltip :content="$t('common.view_all')" placement="bottom" teleport>
+          <ALink href="https://t.bilibili.com/" type="topBar" class="bew-popover__action" :aria-label="$t('common.view_all')">
+            <i i-tabler:arrow-up-right />
+          </ALink>
+        </Tooltip>
+      </div>
     </header>
 
     <main
@@ -289,7 +289,7 @@ defineExpose({
           v-for="(moment, index) in topBarStore.moments"
           :key="moment.id_str"
           :data-moment-id="moment.dynamicId"
-          class="group popover-card"
+          class="popover-card"
         >
           <MomentReadMarker v-if="moment.id_str === boundaryId" :label="t(entryBoundary?.local ? 'moments.local_bookmark' : 'moments.video_boundary')" />
           <button v-if="moment.id_str === gapBoundaryId" type="button" class="popover-card__interactive" :disabled="topBarStore.isLoadingNewerMoments" @click="getNewerData">
@@ -301,102 +301,63 @@ defineExpose({
             :aria-label="moment.title"
             type="topBar"
           />
-          <!-- new moment dot -->
-          <div
+          <span
             v-if="topBarStore.isNewMoment(index) && selectedMomentTab.type === 'video'"
-            class="bew-shape-circle"
-            rounded="$bew-pill-radius"
-            w="8px"
-            h="8px"
-            m="-2"
-            bg="$bew-accent-marker"
-            pos="absolute -top-12px -left-12px"
+            class="moments-pop__new-dot bew-shape-circle"
+            aria-hidden="true"
           />
-          <div class="popover-card__content moments-pop__card-content">
+          <div class="popover-card__content">
             <ALink
               :href="moment.authorJumpUrl"
               type="topBar"
-              class="popover-card__interactive bew-shape-circle"
-              w="40px" h="40px" m="r-4"
-              bg="$bew-skeleton"
-              shrink-0
+              class="popover-card__interactive moments-pop__avatar bew-shape-circle"
             >
-              <img
-                :src="`${moment.authorFace}@50w_50h_1c`"
-                rounded-inherit
-                w="40px" h="40px"
-              >
+              <img :src="`${moment.authorFace}@50w_50h_1c`" alt="">
             </ALink>
 
-            <div class="moments-pop__content-row">
-              <div class="moments-pop__copy popover-card__copy">
-                <!-- <span v-if="selectedTab !== 1">{{ `${moment.name} ${t('topbar.moments_dropdown.uploaded')}` }}</span> -->
-                <!-- <span v-else>{{ `${moment.name} ${t('topbar.moments_dropdown.now_streaming')}` }}</span> -->
-
-                <!-- 联合投稿显示多个作者 -->
-                <div v-if="moment.isCollaborative && moment.authors" class="moments-pop__authors">
+            <div class="popover-card__copy">
+              <!-- A joint upload lists every author. -->
+              <div class="moments-pop__authors">
+                <template v-if="moment.isCollaborative && moment.authors">
                   <template v-for="(author, authorIndex) in moment.authors" :key="author.jump_url">
-                    <ALink
-                      :href="author.jump_url"
-                      type="topBar"
-                      class="popover-card__interactive"
-                    >
+                    <ALink :href="author.jump_url" type="topBar" class="popover-card__interactive">
                       {{ author.name }}
                     </ALink>
-                    <span v-if="Number(authorIndex) < moment.authors.length - 1" text="$bew-text-2">/</span>
+                    <span v-if="Number(authorIndex) < moment.authors.length - 1">/</span>
                   </template>
-                </div>
-                <!-- 单个作者 -->
-                <ALink
-                  v-else
-                  :href="moment.authorJumpUrl"
-                  type="topBar"
-                  class="popover-card__interactive"
-                >
+                </template>
+                <ALink v-else :href="moment.authorJumpUrl" type="topBar" class="popover-card__interactive">
                   {{ moment.author }}
                 </ALink>
-                <div class="moments-pop__title popover-card__title">
-                  {{ moment.title }}
-                </div>
-                <div class="popover-card__meta moments-pop__meta">
-                  <!-- publish time -->
-                  <div v-if="selectedMomentTab.type !== 'live'">
-                    {{ moment.pubTime }}
-                  </div>
-
-                  <!-- Live -->
-                  <div
-                    v-else
-                    text="$bew-text-1"
-                    flex="~"
-                    items="center"
-                  >
-                    <div i-tabler:broadcast m="r-2" />
+              </div>
+              <div class="popover-card__title keep-two-lines">
+                {{ moment.title }}
+              </div>
+              <div class="popover-card__footer">
+                <p class="popover-card__meta">
+                  <span v-if="selectedMomentTab.type === 'live'" class="moments-pop__live">
+                    <i i-tabler:broadcast aria-hidden="true" />
                     {{ $t('topbar.moments_dropdown.live_status') }}
-                  </div>
+                  </span>
+                  <span v-else>{{ moment.pubTime }}</span>
+                </p>
+                <div v-if="moment.watchLaterAid" class="popover-card__actions">
+                  <Tooltip :content="topBarStore.isInWatchLater(moment.watchLaterAid) === undefined ? $t('common.watch_later_status_unknown') : topBarStore.isInWatchLater(moment.watchLaterAid) ? $t('common.remove_from_watch_later') : $t('common.save_to_watch_later')" placement="top" teleport>
+                    <IconButton
+                      :label="topBarStore.isInWatchLater(moment.watchLaterAid) === undefined ? $t('common.watch_later_status_unknown') : topBarStore.isInWatchLater(moment.watchLaterAid) ? $t('common.remove_from_watch_later') : $t('common.save_to_watch_later')"
+                      :aria-pressed="topBarStore.isInWatchLater(moment.watchLaterAid) === true"
+                      class="popover-card__interactive bew-popover__action"
+                      @click.stop.prevent="toggleWatchLater(moment.watchLaterAid)"
+                    >
+                      <i :class="topBarStore.isInWatchLater(moment.watchLaterAid) ? 'i-tabler:check' : 'i-tabler:clock'" />
+                    </IconButton>
+                  </Tooltip>
                 </div>
               </div>
-              <div
-                class="group popover-card__media"
-              >
-                <img
-                  :src="`${moment.cover}@128w_72h_1c`"
-                  :alt="moment.title"
-                >
-                <IconButton
-                  v-if="moment.watchLaterAid"
-                  :label="topBarStore.isInWatchLater(moment.watchLaterAid) === undefined ? $t('common.watch_later_status_unknown') : topBarStore.isInWatchLater(moment.watchLaterAid) ? $t('common.remove_from_watch_later') : $t('common.save_to_watch_later')"
-                  class="popover-card__interactive popover-card-action popover-card__overlay-action"
-                  @click.stop.prevent="toggleWatchLater(moment.watchLaterAid)"
-                >
-                  <Tooltip v-if="!topBarStore.isInWatchLater(moment.watchLaterAid)" :content="topBarStore.isInWatchLater(moment.watchLaterAid) === undefined ? $t('common.watch_later_status_unknown') : $t('common.save_to_watch_later')" placement="bottom" type="dark">
-                    <div i-tabler:playlist />
-                  </Tooltip>
-                  <Tooltip v-else :content="$t('common.added')" placement="bottom" type="dark">
-                    <div i-tabler:check />
-                  </Tooltip>
-                </IconButton>
-              </div>
+            </div>
+
+            <div class="popover-card__media">
+              <img :src="`${moment.cover}@164w_92h_1c`" :alt="moment.title">
             </div>
           </div>
         </article>
@@ -425,61 +386,69 @@ defineExpose({
   flex: 0 0 auto;
 }
 
-.moments-pop__scroll {
-  position: relative;
+.moments-pop__avatar {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: var(--bew-space-10);
+  height: var(--bew-space-10);
+  overflow: hidden;
+  background: var(--bew-skeleton);
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
 }
 
-.moments-pop__card-content,
-.moments-pop__content-row {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-}
-
-.moments-pop__card-content {
-  align-items: flex-start;
-}
-
-.moments-pop__content-row {
-  justify-content: space-between;
-}
-
-.moments-pop__copy {
-  min-width: 0;
+// Unread marker in the row's leading gutter, level with the avatar.
+.moments-pop__new-dot {
+  position: absolute;
+  top: calc(var(--bew-space-3) + var(--bew-space-5) - var(--bew-space-1));
+  left: calc((var(--bew-popover-inset) - var(--bew-space-2)) / 2);
+  width: var(--bew-space-2);
+  height: var(--bew-space-2);
+  background: var(--bew-accent-marker);
 }
 
 .moments-pop__authors {
   display: flex;
-  max-width: 100%;
+  min-width: 0;
   align-items: center;
   gap: var(--bew-space-1);
-  overflow: hidden;
+  margin-bottom: var(--bew-space-0-5);
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-callout);
+  line-height: var(--bew-line-height-callout);
   white-space: nowrap;
+
+  a {
+    min-width: 0;
+    @include truncateFade.line;
+  }
 }
 
-.moments-pop__authors a {
-  min-width: 0;
-  font-weight: var(--bew-font-weight-regular);
-  @include truncateFade.line;
-}
-
-.moments-pop__title {
-  overflow: hidden;
-  overflow-wrap: anywhere;
-}
-
-.moments-pop .popover-card__media {
+// The read boundary is a labelled rule across the top of its row.
+.popover-card .moment-read-marker {
   display: flex;
-  flex: 0 0 var(--bew-popover-media-width);
-  width: var(--bew-popover-media-width);
-  height: 46px;
   align-items: center;
-  justify-content: center;
-  margin-left: var(--bew-space-4);
+  gap: var(--bew-space-2);
+  margin-bottom: var(--bew-space-2);
+  padding: 0;
+  color: var(--bew-text-3);
+  background: none;
+
+  &::after {
+    content: "";
+    flex: 1 1 auto;
+    border-top: var(--bew-hairline) solid var(--bew-separator-color);
+  }
 }
 
-.moments-pop .popover-card__overlay-action {
-  inset: 50% auto auto 50%;
-  transform: translate(-50%, -50%);
+.moments-pop__live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bew-space-1);
+  color: var(--bew-text-1);
 }
 </style>

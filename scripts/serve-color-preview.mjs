@@ -11,7 +11,7 @@ import { createServer } from 'vite'
 const root = process.cwd()
 const virtual = {
   '/__color-settings.js': `import {ref} from 'vue';
-export const settings=ref({theme:'dark',themeColor:'#eab308',darkModeBaseColor:'#2d2a2f',enableDarkModeTint:false,enableOledDarkMode:false,themeScheduleStart:'06:00',themeScheduleEnd:'18:00',disableFrostedGlass:false,frostedGlassBlurIntensity:20,disableShadow:false,adaptToOtherPageStyles:true,videoPageDarkMode:false,useLinearGradientThemeColorBackground:false,customizeFont:'default',fontFamily:''});
+export const settings=ref({theme:'dark',themeColor:'#eab308',themeScheduleStart:'06:00',themeScheduleEnd:'18:00',disableFrostedGlass:false,frostedGlassBlurIntensity:20,disableShadow:false,adaptToOtherPageStyles:true,videoPageDarkMode:false,useLinearGradientThemeColorBackground:false,customizeFont:'default',fontFamily:''});
 export const FROSTED_GLASS_BLUR_MAX_PX=20, FROSTED_GLASS_BLUR_MIN_PX=1;`,
   '/__color-app.js': `import {ref} from 'vue'; export const useBewlyApp=()=>({mainAppRef:ref(document.body)});`,
   '/__color-preview.vue': `<script setup>
@@ -21,14 +21,13 @@ import Button from '/src/components/Button.vue';
 import Radio from '/src/components/Radio.vue';
 import Segmented from '/src/components/Settings/components/SettingsSegmentedControl.vue';
 import {settings} from '/__color-settings.js';
-import {resolveDarkModeBaseColor} from '/src/utils/darkModeTint.ts';
 import {getThemeColorTokens,readThemeContrastSurfaces,relativeContrast} from '/src/utils/themeColor.ts';
 const selected=ref('first'), checked=ref(true), report=ref('');
 const colors=[['黄','#eab308'],['橙','#fb923c'],['浅绿','#a3e635'],['浅粉','#fda4af'],['深蓝','#3b82f6']];
 function swatch(color){const t=getThemeColorTokens(color,settings.value.theme==='dark'); return {'--bew-accent-solid':t.theme,'--bew-on-accent-solid':t.onTheme,'--bew-theme-color':t.theme,'--bew-on-theme-color':t.onTheme};}
-watchEffect(()=>{const el=document.documentElement;el.classList.toggle('dark',settings.value.theme==='dark');el.classList.toggle('oled-dark',settings.value.enableOledDarkMode&&settings.value.theme==='dark');el.style.setProperty('--bew-dark-base-color',resolveDarkModeBaseColor(settings.value));const t=getThemeColorTokens(settings.value.themeColor,settings.value.theme==='dark',readThemeContrastSurfaces(el));for(const [key,value] of Object.entries({'--bew-theme-color':t.theme,'--bew-on-theme-color':t.onTheme,'--bew-theme-foreground':t.foreground,'--bew-theme-focus-ring':t.focusRing,'--bew-switch-thumb-active':t.switchThumb}))el.style.setProperty(key,value);});
+watchEffect(()=>{const el=document.documentElement;el.classList.toggle('dark',settings.value.theme==='dark');const t=getThemeColorTokens(settings.value.themeColor,settings.value.theme==='dark',readThemeContrastSurfaces(el));for(const [key,value] of Object.entries({'--bew-theme-color':t.theme,'--bew-on-theme-color':t.onTheme,'--bew-theme-foreground':t.foreground,'--bew-theme-focus-ring':t.focusRing,'--bew-switch-thumb-active':t.switchThumb}))el.style.setProperty(key,value);});
 function hex(value){const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const c=canvas.getContext('2d');c.fillStyle=value;c.fillRect(0,0,1,1);return '#'+[...c.getImageData(0,0,1,1).data].slice(0,3).map(v=>v.toString(16).padStart(2,'0')).join('');}
-async function inspect(){await nextTick();const samples=[...document.querySelectorAll('[data-swatch]')].map(el=>{const s=getComputedStyle(el),bg=hex(s.backgroundColor),fg=hex(s.color);return {chosen:el.dataset.swatch,background:bg,foreground:fg,contrast:Number(relativeContrast(fg,bg).toFixed(2)),unchanged:bg===el.dataset.swatch};});const rootStyle=getComputedStyle(document.documentElement);report.value=JSON.stringify({mode:settings.value.theme,oled:settings.value.enableOledDarkMode,tintEnabled:settings.value.enableDarkModeTint,savedTint:settings.value.darkModeBaseColor,effectiveTint:resolveDarkModeBaseColor(settings.value),surfaces:Object.fromEntries(['--bew-bg','--bew-content-solid','--bew-selected-bg'].map(key=>[key,hex(rootStyle.getPropertyValue(key))])),samples},null,2);}
+async function inspect(){await nextTick();const samples=[...document.querySelectorAll('[data-swatch]')].map(el=>{const s=getComputedStyle(el),bg=hex(s.backgroundColor),fg=hex(s.color);return {chosen:el.dataset.swatch,background:bg,foreground:fg,contrast:Number(relativeContrast(fg,bg).toFixed(2)),unchanged:bg===el.dataset.swatch};});const rootStyle=getComputedStyle(document.documentElement);report.value=JSON.stringify({mode:settings.value.theme,surfaces:Object.fromEntries(['--bew-bg','--bew-content-solid','--bew-selected-bg'].map(key=>[key,hex(rootStyle.getPropertyValue(key))])),samples},null,2);}
 onMounted(inspect);
 </script>
 <template><main class="preview"><header><h1>配色验证</h1><p>实际外观设置与共享组件 · 本地独立设置 · 不连接 B 站账号</p></header>

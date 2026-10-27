@@ -1,30 +1,48 @@
+// The moments popover's reading controls: a strip at the top of the list,
+// ruled off like the header, of quiet text buttons whose labels start on the
+// rows' content line.
 .moments-reading-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--bew-space-2);
-  padding-block: var(--bew-space-2);
+  gap: var(--bew-space-1);
+  padding: var(--bew-space-2) calc(var(--bew-popover-inset) - var(--bew-space-2));
+  border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
 
   button {
     min-height: var(--bew-control-item-height);
-    padding: var(--bew-space-1) var(--bew-space-2);
-    border-radius: var(--bew-interactive-radius);
+    padding: 0 var(--bew-space-2);
     color: var(--bew-text-2);
-    background: var(--bew-fill-1);
+    background: transparent;
+    border-radius: var(--bew-pill-radius);
+    corner-shape: var(--bew-corner-shape-capsule);
     font-size: var(--bew-font-size-control);
     line-height: var(--bew-line-height-control);
     cursor: pointer;
+    transition:
+      color var(--bew-duration-fast) var(--bew-ease-standard),
+      background-color var(--bew-duration-fast) var(--bew-ease-standard);
 
-    &:is(:hover, :focus-visible) {
+    &:is(:hover, :focus-visible):not(:disabled) {
       background: var(--bew-hover-bg);
       color: var(--bew-text-1);
     }
-    &:active {
+    &:active:not(:disabled) {
       background: var(--bew-pressed-bg);
     }
     &:disabled {
       color: var(--bew-text-4);
       cursor: default;
+    }
+  }
+
+  .bew-help {
+    padding-inline: var(--bew-space-2);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    button {
+      transition: none;
     }
   }
 }

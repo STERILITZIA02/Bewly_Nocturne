@@ -580,7 +580,6 @@ const entries: SettingsSearchEntry[] = [
   ]),
   ...createEntries(appearanceRoute, ['settings.visual_style.accent'], { targetId: 'settings.theme_color', keywordKeys: ['settings.theme_color', 'settings.theme_color_opt.neutral'] }),
   ...createEntries(appearanceRoute, ['settings.visual_style.shadows'], { targetId: 'settings.disable_shadow', keywordKeys: ['settings.disable_shadow'] }),
-  ...createEntries(appearanceRoute, ['settings.visual_style.dark_surface'], { targetId: 'settings.enable_oled_dark_mode', fallbackIds: ['settings.visual_style.editing_mode'], conditionTitleKey: 'settings.theme_opt.dark', keywordKeys: ['settings.enable_oled_dark_mode', 'settings.enable_dark_mode_tint', 'settings.dark_mode_base_color', 'settings.visual_style.surface'] }),
   ...createEntries(appearanceRoute, [
     'settings.visual_style.editing_mode',
     'settings.visual_style.separate_accent',

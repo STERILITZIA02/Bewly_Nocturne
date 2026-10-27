@@ -27,7 +27,7 @@ export function setupNecessarySettingsWatchers(scrollViewportRef: Ref<HTMLElemen
   const settingsStore = useSettingsStore()
   const currentLocationHref = useCurrentLocationHref()
   const iframePageActive = useIframePageActive()
-  const { isDark, isOledDark, darkModeBaseColor, accentColor, appearanceStyle } = useDark()
+  const { isDark, accentColor, appearanceStyle } = useDark()
   let effectiveTopBarSource: EffectiveTopBarSource = 'bewly'
 
   let stopNativeKeyboard: (() => void) | undefined
@@ -334,7 +334,7 @@ export function setupNecessarySettingsWatchers(scrollViewportRef: Ref<HTMLElemen
   }, { immediate: true })
 
   watch(
-    [accentColor, () => appearanceStyle.value['--bew-custom-background'], () => appearanceStyle.value['--bew-custom-foreground'], isDark, isOledDark, darkModeBaseColor, () => settings.value.adaptToOtherPageStyles],
+    [accentColor, () => appearanceStyle.value['--bew-custom-background'], () => appearanceStyle.value['--bew-custom-foreground'], isDark, () => settings.value.adaptToOtherPageStyles],
     () => {
       syncThemeColors(document.documentElement, document.getElementById('bewly'), accentColor.value, isDark.value)
     },

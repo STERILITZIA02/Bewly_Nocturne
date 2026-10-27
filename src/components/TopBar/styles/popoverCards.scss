@@ -1,121 +1,141 @@
+@use "../../../styles/contentCard";
+@use "../../../styles/truncateFade";
+
+// Rows of the top-bar media popovers (user-specified hairline design): flat on
+// the glass, edge to edge, divided by inset hairlines. Hover tints the whole
+// row and hides the lines beside it, so the tint never meets a line.
 .popover-card {
   position: relative;
-  padding: var(--bew-popover-card-padding);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-  transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
+  padding: var(--bew-space-3) var(--bew-popover-inset);
+  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
-.popover-card:hover {
-  background: var(--bew-fill-2);
+.popover-card + .popover-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  inset-inline: var(--bew-popover-inset);
+  border-top: var(--bew-hairline) solid var(--bew-separator-color);
+  pointer-events: none;
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+// Keyboard focus anywhere in the row tints it like hover (focus rings are off
+// project-wide); a mouse click leaves no tint behind.
+.popover-card:is(:hover, :has(:focus-visible)) {
+  background: var(--bew-hover-bg);
+}
+
+.popover-card:is(:hover, :has(:focus-visible))::before,
+.popover-card:is(:hover, :has(:focus-visible)) + .popover-card::before {
+  opacity: 0;
 }
 
 .popover-card__primary {
   position: absolute;
   z-index: 0;
   inset: 0;
-  border-radius: inherit;
-  corner-shape: inherit;
 }
 
 .popover-card__primary:focus-visible {
-  outline: var(--bew-focus-ring, 1px solid CanvasText);
-  outline-offset: -2px;
+  outline: none;
 }
 
 .popover-card__content {
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: stretch;
   min-width: 0;
   gap: var(--bew-popover-card-gap);
   pointer-events: none;
 }
 
+// Title on top, the meta line and actions on the cover's bottom edge.
 .popover-card__copy {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
   min-width: 0;
 }
 
 .popover-card__title {
   margin: 0;
-  overflow: hidden;
+  color: var(--bew-text-1);
   font-size: var(--bew-media-pop-title-font-size);
   font-weight: var(--bew-media-pop-title-font-weight);
   line-height: var(--bew-media-pop-title-line-height);
   overflow-wrap: anywhere;
 }
 
+.popover-card__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-2);
+  min-height: var(--bew-space-6);
+  margin-top: auto;
+  padding-top: var(--bew-space-1);
+}
+
+// Meta parts joined by middots; the author link shrinks and fades first.
 .popover-card__meta {
-  margin-top: var(--bew-space-2);
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--bew-space-1);
+  min-width: 0;
+  margin: 0;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  > * {
+    flex: 0 0 auto;
+  }
+
+  > :first-child {
+    flex-shrink: 1;
+    min-width: 0;
+    @include truncateFade.line;
+  }
+
+  > * + *::before {
+    content: "·";
+    margin-inline-end: var(--bew-space-1);
+  }
+}
+
+a.popover-card__interactive:is(:hover, :focus-visible) {
+  color: var(--bew-text-1);
+}
+
+// Row actions keep their place (the meta never reflows) and show on hover or
+// focus; touch screens always show them.
+.popover-card__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--bew-space-0-5);
+  color: var(--bew-text-2);
+  opacity: 0;
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+
+  .bew-popover__action {
+    width: var(--bew-space-6);
+    height: var(--bew-space-6);
+  }
+}
+
+.popover-card:is(:hover, :has(:focus-visible)) .popover-card__actions {
+  opacity: 1;
 }
 
 .popover-card__interactive {
   position: relative;
   z-index: 2;
   pointer-events: auto;
-}
-
-.popover-card__media {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-  background: var(--bew-skeleton);
-}
-
-.popover-card__media > img,
-.popover-card__media > picture,
-.popover-card__media > video,
-.popover-card__media > picture > img,
-.popover-card__media img,
-.popover-card__media video {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: inherit;
-  corner-shape: inherit;
-}
-
-.popover-card-action {
-  position: absolute;
-  opacity: 0;
-  transition:
-    opacity var(--bew-duration-fast) var(--bew-ease-standard),
-    background-color var(--bew-duration-fast) var(--bew-ease-standard),
-    transform var(--bew-duration-fast) var(--bew-ease-emphasized);
-}
-
-.popover-card:hover .popover-card-action,
-.popover-card:focus-within .popover-card-action {
-  opacity: 1;
-}
-
-button.popover-card__overlay-action {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  padding: 0;
-  color: var(--bew-on-overlay-color);
-  background: var(--bew-overlay-background);
-  border: 0;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-}
-
-button.popover-card__overlay-action:hover {
-  background: var(--bew-selected-bg);
-  color: var(--bew-text-1);
-}
-
-button.popover-card__overlay-action--danger:hover {
-  background: var(--bew-error-color);
-  color: var(--bew-on-overlay-color);
 }
 
 button.popover-card__interactive {
@@ -129,8 +149,48 @@ button.popover-card__interactive:disabled {
   cursor: wait;
 }
 
+// Covers carry no text or buttons (project rule); only a progress line.
+.popover-card__media {
+  position: relative;
+  flex: 0 0 var(--bew-popover-media-width);
+  align-self: flex-start;
+  width: var(--bew-popover-media-width);
+  aspect-ratio: var(--bew-popover-media-ratio, 16 / 9);
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
+  background: var(--bew-skeleton);
+  @include contentCard.media-frame;
+}
+
+.popover-card__media img,
+.popover-card__media video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.popover-card__progress {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 0;
+}
+
 @media (hover: none), (pointer: coarse) {
-  .popover-card-action {
+  .popover-card__actions {
     opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover-card,
+  .popover-card + .popover-card::before,
+  .popover-card__actions {
+    transition: none;
   }
 }

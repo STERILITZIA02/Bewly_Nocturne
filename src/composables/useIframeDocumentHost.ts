@@ -11,14 +11,14 @@ import { useDark } from './useDark'
 
 /** Theme and verified current location share one ready handshake per host. */
 export function useIframeDocumentHost(frame: Ref<HTMLIFrameElement | null | undefined>, active: () => boolean) {
-  const { isDark, isOledDark, darkModeBaseColor } = useDark()
+  const { isDark } = useDark()
   const currentHref = ref('')
   const photoViewerOpen = ref(false)
   const channel = createIframeDocumentHost(() => active() ? frame.value : null)
   let lastSearchRequestId = 0
   function syncTheme() {
     if (active())
-      channel.send({ type: IFRAME_DARK_MODE_CHANGE, isDark: isDark.value, isOledDark: isOledDark.value, darkModeBaseColor: darkModeBaseColor.value })
+      channel.send({ type: IFRAME_DARK_MODE_CHANGE, isDark: isDark.value })
   }
   function loaded() {
     currentHref.value = ''
@@ -71,7 +71,7 @@ export function useIframeDocumentHost(frame: Ref<HTMLIFrameElement | null | unde
       window.removeEventListener('message', receive)
     })
   }, { flush: 'post', immediate: true })
-  watch([isDark, isOledDark, darkModeBaseColor], syncTheme)
+  watch(isDark, syncTheme)
   onScopeDispose(() => {
     window.removeEventListener('message', receive)
     channel.clear()

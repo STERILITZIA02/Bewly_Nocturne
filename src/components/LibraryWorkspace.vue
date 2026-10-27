@@ -138,7 +138,6 @@ const sidebarHost = useSidebarRail()
   --bew-control-item-radius: var(--bew-pill-radius);
   --bew-liquid-indicator-bg: var(--bew-segment-item-active-bg);
   --bew-liquid-indicator-shadow: var(--bew-segment-item-active-shadow);
-  --bew-liquid-indicator-radius: var(--bew-control-item-radius);
   width: 100%;
   min-height: var(--bew-control-height);
   height: auto;

@@ -131,9 +131,9 @@ function stopWidescreenLanguageWatch() {
 }
 
 function setupWidescreenSettingsWatchers(currentState: BewlyWidescreenState) {
-  const { isDark, isOledDark, darkModeBaseColor, appearanceStyle } = useDark()
+  const { isDark, appearanceStyle } = useDark()
   const stopThemeWatch = watch(
-    [isDark, isOledDark, darkModeBaseColor, appearanceStyle],
+    [isDark, appearanceStyle],
     () => syncActionAnimationTheme(currentState),
     { flush: 'post' },
   )

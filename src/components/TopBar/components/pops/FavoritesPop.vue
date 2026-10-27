@@ -398,28 +398,22 @@ defineExpose({
       </h3>
 
       <div class="bew-popover__actions">
-        <ALink
-          :href="playAllUrl"
-          type="topBar"
-          class="bew-popover__action"
-        >
-          {{ $t('common.play_all') }}
-        </ALink>
-        <ALink
-          :href="viewAllUrl"
-          type="topBar"
-          class="bew-popover__action"
-        >
-          {{ $t('common.view_all') }}
-        </ALink>
+        <Tooltip :content="$t('common.play_all')" placement="bottom" teleport>
+          <ALink :href="playAllUrl" type="topBar" class="bew-popover__action" :aria-label="$t('common.play_all')">
+            <i i-tabler:player-play />
+          </ALink>
+        </Tooltip>
+        <Tooltip :content="$t('common.view_all')" placement="bottom" teleport>
+          <ALink :href="viewAllUrl" type="topBar" class="bew-popover__action" :aria-label="$t('common.view_all')">
+            <i i-tabler:arrow-up-right />
+          </ALink>
+        </Tooltip>
       </div>
     </header>
 
     <main class="bew-popover__split-body">
-      <aside
-        class="bew-popover__sidebar favorites-pop__sidebar"
-      >
-        <ul grid="~ cols-1">
+      <aside class="favorites-pop__sidebar">
+        <ul>
           <li
             v-for="item in favoriteCategories"
             :key="item.id"
@@ -431,7 +425,7 @@ defineExpose({
               :aria-pressed="activatedMediaId === item.id"
               @click="changeCategory(item)"
             >
-              <span>{{ item.title }}</span>
+              <span class="settings-nav-label">{{ item.title }}</span>
             </button>
           </li>
         </ul>
@@ -440,7 +434,7 @@ defineExpose({
       <!-- Favorite videos wrapper -->
       <div
         ref="favoriteVideosWrap"
-        class="bew-popover__scroll bew-popover__list favorites-pop__content"
+        class="bew-popover__scroll bew-popover__list"
       >
         <PopoverListSkeleton
           v-if="(isLoadingCategories || isLoading) && favoriteResources.length === 0"
@@ -459,7 +453,7 @@ defineExpose({
           <article
             v-for="item in favoriteResources"
             :key="getFavoriteResourceKey(item)"
-            class="group popover-card"
+            class="popover-card"
           >
             <ALink
               v-if="getFavoriteResourceUrl(item)"
@@ -468,60 +462,41 @@ defineExpose({
               :aria-label="item.title"
               type="topBar"
             />
-            <section class="popover-card__content" flex="~ gap-4" items-start>
-              <div
-                class="popover-card__media aspect-video"
-              >
-                <div v-if="isPlayableFavoriteVideo(item)" class="popover-card__interactive popover-card-action favorites-pop__watch-later">
-                  <Tooltip :content="t(topBarStore.isInWatchLater(item.id) ? 'common.remove_from_watch_later' : 'common.save_to_watch_later')" placement="top" teleport>
-                    <IconButton
-                      class="popover-card__overlay-action" :label="t(topBarStore.isInWatchLater(item.id) ? 'common.remove_from_watch_later' : 'common.save_to_watch_later')"
-                      :aria-pressed="topBarStore.isInWatchLater(item.id) === true" :disabled="pendingWatchLater.has(item.id)"
-                      @click.prevent.stop="toggleWatchLater(item)"
-                    >
-                      <i :class="topBarStore.isInWatchLater(item.id) ? 'i-tabler:check' : 'i-tabler:clock'" />
-                    </IconButton>
-                  </Tooltip>
-                </div>
-                <div pos="relative" w-full h-full>
-                  <img
-                    w-full h-full
-                    :src="`${removeHttpFromUrl(item.cover)}@256w_144h_1c`"
-                    :alt="item.title"
-                    object-cover
-                  >
-                  <div
-                    pos="absolute bottom-0 right-0"
-                    bg="black opacity-60"
-                    m="1"
-                    p="x-2 y-1"
-                    text="white xs"
-                    rounded="$bew-pill-radius"
-                  >
-                    {{ calcCurrentTime(item.duration) }}
-                  </div>
-                </div>
+            <section class="popover-card__content">
+              <div class="popover-card__media">
+                <img
+                  :src="`${removeHttpFromUrl(item.cover)}@256w_144h_1c`"
+                  :alt="item.title"
+                >
               </div>
 
-              <!-- Description -->
               <div class="popover-card__copy">
-                <h3
-                  class="keep-two-lines popover-card__title"
-                >
+                <h3 class="keep-two-lines popover-card__title">
                   {{ item.title }}
                 </h3>
-                <div
-                  class="popover-card__meta"
-                  flex="~"
-                  items-center
-                >
-                  <ALink
-                    :href="`https://space.bilibili.com/${item.upper.mid}`"
-                    type="topBar"
-                    class="popover-card__interactive"
-                  >
-                    {{ item.upper.name }}
-                  </ALink>
+                <div class="popover-card__footer">
+                  <p class="popover-card__meta">
+                    <ALink
+                      :href="`https://space.bilibili.com/${item.upper.mid}`"
+                      type="topBar"
+                      class="popover-card__interactive"
+                    >
+                      {{ item.upper.name }}
+                    </ALink>
+                    <span>{{ calcCurrentTime(item.duration) }}</span>
+                  </p>
+                  <div v-if="isPlayableFavoriteVideo(item)" class="popover-card__actions">
+                    <Tooltip :content="t(topBarStore.isInWatchLater(item.id) ? 'common.remove_from_watch_later' : 'common.save_to_watch_later')" placement="top" teleport>
+                      <IconButton
+                        class="popover-card__interactive bew-popover__action favorites-pop__watch-later"
+                        :label="t(topBarStore.isInWatchLater(item.id) ? 'common.remove_from_watch_later' : 'common.save_to_watch_later')"
+                        :aria-pressed="topBarStore.isInWatchLater(item.id) === true" :disabled="pendingWatchLater.has(item.id)"
+                        @click.prevent.stop="toggleWatchLater(item)"
+                      >
+                        <i :class="topBarStore.isInWatchLater(item.id) ? 'i-tabler:check' : 'i-tabler:clock'" />
+                      </IconButton>
+                    </Tooltip>
+                  </div>
                 </div>
               </div>
             </section>
@@ -544,25 +519,38 @@ defineExpose({
 </template>
 
 <style lang="scss" scoped>
-@use "../../../../styles/truncateFade";
+@use "../../../../styles/settingsNav";
 @use "../../styles/popoverCards";
 
 .favorites-pop {
-  --bew-popover-media-width: 120px;
   width: 450px;
   height: min(500px, var(--bew-popover-max-height));
 }
 
-.favorites-pop__watch-later {
-  position: absolute;
-  top: var(--bew-space-1);
-  left: var(--bew-space-1);
-  z-index: 1;
+// The title lines up with the folder labels below it (column + row inset).
+.favorites-pop .bew-popover__title {
+  padding-inline-start: calc(settingsNav.$column-inset + settingsNav.$row-inset - var(--bew-space-2));
+}
+
+// Folders: a ruled column on the glass with the settings window's nav rows.
+.favorites-pop__sidebar {
+  @include settingsNav.column;
+  @include settingsNav.scroller;
+  flex: 0 0 140px;
+
+  ul {
+    display: grid;
+    gap: var(--bew-space-0-5);
+  }
+}
+
+.favorites-pop__category {
+  @include settingsNav.row(".activated-category");
 }
 
 .favorites-pop__items {
-  display: grid;
-  gap: var(--bew-space-2);
+  display: flex;
+  flex-direction: column;
   transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
   &--stale {
     opacity: 0.45;
@@ -573,64 +561,13 @@ defineExpose({
   }
 }
 
-.favorites-pop__sidebar {
-  width: 140px;
-  padding: var(--bew-space-2);
-  background: var(--bew-fill-1);
-}
-
-.favorites-pop__category {
-  width: 100%;
-  text-align: left;
-  min-height: var(--bew-control-height);
-  padding: var(--bew-space-2) var(--bew-space-3);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-  cursor: pointer;
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-  transition:
-    color var(--bew-duration-fast) var(--bew-ease-standard),
-    background-color var(--bew-duration-fast) var(--bew-ease-standard);
-}
-
-// The fade masks the label only, not the button's hover and selected plate.
-.favorites-pop__category > span {
-  display: block;
-  @include truncateFade.line;
-}
-
-.favorites-pop__category:hover {
-  background: var(--bew-fill-1);
-}
-
-.activated-category {
-  color: var(--bew-text-1);
-  background: var(--bew-fill-2);
-}
-
-.favorites-pop__content {
-  position: relative;
-  padding-top: var(--bew-space-1);
-}
-
-.favorites-pop .popover-card__media {
-  flex: 0 0 var(--bew-popover-media-width);
-  width: var(--bew-popover-media-width);
-}
-
 @media (max-width: 480px) {
+  .favorites-pop {
+    --bew-popover-media-width: 96px;
+  }
+
   .favorites-pop__sidebar {
-    width: 112px;
-  }
-
-  .favorites-pop .popover-card__content {
-    gap: var(--bew-space-3);
-  }
-
-  .favorites-pop .popover-card__media {
-    flex-basis: 96px;
-    width: 96px;
+    flex-basis: 112px;
   }
 }
 </style>

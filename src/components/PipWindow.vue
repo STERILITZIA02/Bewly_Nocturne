@@ -17,7 +17,7 @@ const pipWindowRef = ref<HTMLElement | null>(null)
 const pipWindowEl = ref<any | null>(null)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const currentUrl = ref<string>(props.url)
-const { isDark, isOledDark, darkModeBaseColor, appearanceStyle, accentColor, motionPreference } = useDark()
+const { isDark, appearanceStyle, accentColor, motionPreference } = useDark()
 let pipHost: HTMLElement | null = null
 let disposed = false
 let closing = false
@@ -32,8 +32,6 @@ function applyPipTheme() {
     if (!element)
       continue
     element.classList.toggle('dark', isDark.value)
-    element.classList.toggle('oled-dark', isOledDark.value)
-    element.style.setProperty('--bew-dark-base-color', darkModeBaseColor.value)
     applyAppearanceStyle(element, appearanceStyle.value)
     applyMotionPreference(element, motionPreference.value)
   }
@@ -50,8 +48,8 @@ function applyPipColors() {
   applyThemeColorTokens(pipHost, tokens)
   documentElement.style.background = background
 }
-watch([isDark, isOledDark, darkModeBaseColor, appearanceStyle, motionPreference], applyPipTheme)
-watch([isDark, isOledDark, darkModeBaseColor, accentColor, () => appearanceStyle.value['--bew-custom-background'], () => appearanceStyle.value['--bew-custom-foreground']], applyPipColors, { flush: 'post' })
+watch([isDark, appearanceStyle, motionPreference], applyPipTheme)
+watch([isDark, accentColor, () => appearanceStyle.value['--bew-custom-background'], () => appearanceStyle.value['--bew-custom-foreground']], applyPipColors, { flush: 'post' })
 
 onMounted(() => {
   void openPipWindow()

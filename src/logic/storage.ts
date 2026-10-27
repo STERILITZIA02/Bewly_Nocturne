@@ -15,7 +15,7 @@ import { defaultAppearanceColors, INTERFACE_FONT_SIZE, normalizeAppearanceColors
 import { LOCAL_LOUDNESS_DEFAULTS, normalizeLocalLoudnessValue } from '~/utils/localLoudnessProtocol'
 import type { PageMode } from '~/utils/pageMode'
 import type { MotionPreference } from '~/utils/reducedMotion'
-import { DEFAULT_THEME_COLOR, normalizeHexColor, normalizeThemeColor } from '~/utils/themeColor'
+import { DEFAULT_THEME_COLOR, normalizeThemeColor } from '~/utils/themeColor'
 import { DEFAULT_SCREENSHOT_SHORTCUT, isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
 export { appAuthTokens } from './appAuthStorage'
@@ -272,9 +272,6 @@ export interface Settings {
   videoPageDarkMode: boolean
   /** Hex accent, or `NEUTRAL_THEME_COLOR` for black (light) / white (dark). */
   themeColor: string
-  darkModeBaseColor: string // 深色模式基准颜色
-  enableDarkModeTint: boolean
-  enableOledDarkMode: boolean
   appearanceColors: AppearanceColors
   appearanceContrast: number
   interfaceFontSize: number
@@ -552,9 +549,6 @@ export const originalSettings: Settings = {
   themeScheduleEnd: '18:00',
   videoPageDarkMode: false,
   themeColor: DEFAULT_THEME_COLOR,
-  darkModeBaseColor: '#2a2d32', // 开启可选色调时使用；关闭时保留此值
-  enableDarkModeTint: false,
-  enableOledDarkMode: false,
   appearanceColors: defaultAppearanceColors(),
   appearanceContrast: 0,
   interfaceFontSize: INTERFACE_FONT_SIZE.default,
@@ -721,13 +715,8 @@ function normalizeSettings(value: Settings) {
   removeRetiredSettings(value)
   if (typeof value.momentsStartFromLastSeen !== 'boolean')
     value.momentsStartFromLastSeen = false
-  if (typeof value.enableDarkModeTint !== 'boolean')
-    value.enableDarkModeTint = false
   value.dockPosition = normalizeDockPosition(value.dockPosition)
   value.themeColor = normalizeThemeColor(value.themeColor)
-  value.darkModeBaseColor = normalizeHexColor(value.darkModeBaseColor) ?? originalSettings.darkModeBaseColor
-  if (typeof value.enableOledDarkMode !== 'boolean')
-    value.enableOledDarkMode = false
   const appearanceColors = normalizeAppearanceColors(value.appearanceColors)
   if (appearanceColors !== value.appearanceColors)
     value.appearanceColors = appearanceColors

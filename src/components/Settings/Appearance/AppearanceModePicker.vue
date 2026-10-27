@@ -45,6 +45,8 @@ function onKey(event: KeyboardEvent, index: number) {
 </template>
 
 <style scoped lang="scss">
+// Concentric: preview (interactive 8) + option padding 8 = option and plate
+// (surface 16); + the track's 2px inset = the track.
 .appearance-modes {
   --bew-control-radius: calc(var(--bew-surface-radius) + var(--bew-space-0-5));
   --bew-control-item-radius: var(--bew-surface-radius);
@@ -52,8 +54,7 @@ function onKey(event: KeyboardEvent, index: number) {
   height: auto;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--bew-space-2);
-  width: calc(var(--bew-control-height) * 10);
-  max-width: 100%;
+  width: 100%;
 }
 .appearance-modes__option {
   display: grid;
@@ -73,7 +74,7 @@ function onKey(event: KeyboardEvent, index: number) {
 .appearance-modes__preview {
   --bew-preview-accent: var(--bew-appearance-preview-light-accent);
   display: flex;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
   width: 100%;
   overflow: hidden;
   border: var(--bew-hairline) solid var(--bew-edge-color);
@@ -99,20 +100,20 @@ function onKey(event: KeyboardEvent, index: number) {
 .appearance-modes__rail {
   display: grid;
   place-items: start center;
-  padding-top: var(--bew-space-2);
+  padding-top: var(--bew-space-3);
   width: 30%;
   background: color-mix(in srgb, currentColor 8%, transparent);
 }
 .appearance-modes__rail i {
-  width: var(--bew-icon-size-xs);
-  height: var(--bew-icon-size-xs);
+  width: var(--bew-icon-size-sm);
+  height: var(--bew-icon-size-sm);
 }
 .appearance-modes__content {
   display: grid;
   align-content: center;
-  gap: var(--bew-space-1);
+  gap: var(--bew-space-2);
   flex: 1;
-  padding: var(--bew-space-2);
+  padding: var(--bew-space-3);
 }
 .appearance-modes__preview--auto .appearance-modes__content,
 .appearance-modes__preview--scheduled .appearance-modes__content {

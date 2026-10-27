@@ -1,19 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-import { NEUTRAL_DARK_BASE_COLOR, resolveDarkModeBaseColor } from '../src/utils/darkModeTint'
+import { ACCENT_COLORS } from '../src/utils/appearanceThemes'
 import { clampThemeColor, DEFAULT_THEME_COLOR, getThemeColorTokens, NEUTRAL_THEME_COLOR, normalizeThemeColor, relativeContrast, THEME_COLOR_MIN_PAGE_CONTRAST } from '../src/utils/themeColor'
-
-const saved = { darkModeBaseColor: '#2d2a2f', enableDarkModeTint: false }
-assert.equal(resolveDarkModeBaseColor(saved), NEUTRAL_DARK_BASE_COLOR)
-saved.enableDarkModeTint = true
-assert.equal(resolveDarkModeBaseColor(saved), '#2d2a2f')
-saved.enableDarkModeTint = false
-assert.equal(resolveDarkModeBaseColor(saved), NEUTRAL_DARK_BASE_COLOR)
-assert.equal(saved.darkModeBaseColor, '#2d2a2f')
-assert.equal(resolveDarkModeBaseColor({ darkModeBaseColor: '#2d2a2f' }), NEUTRAL_DARK_BASE_COLOR)
-assert.equal(resolveDarkModeBaseColor({ enableDarkModeTint: 'true', darkModeBaseColor: '#2d2a2f' }), NEUTRAL_DARK_BASE_COLOR)
-assert.equal(resolveDarkModeBaseColor({ enableDarkModeTint: true, darkModeBaseColor: 'invalid' }), NEUTRAL_DARK_BASE_COLOR)
 
 const brightColors = ['#eab308', '#fb923c', '#a3e635', '#fda4af', '#ffff00', '#ccffcc', '#ffe0ec']
 const palettes = [
@@ -25,12 +14,12 @@ const palettes = [
 // Read the actual label opacities so future palette edits keep all reading
 // levels legible on the page, cards and the lifted sidebar.
 const variables = readFileSync(new URL('../src/styles/variables.scss', import.meta.url), 'utf8')
-const secondaryAlpha = Number(variables.match(/--bew-text-2: color-mix\(in srgb, var\(--bew-neutral-fg\) (\d+)%/)![1]) / 100
-const tertiaryAlpha = [...variables.matchAll(/--bew-text-3: color-mix\(in srgb, var\(--bew-neutral-fg\) (\d+)%/g)].map(match => Number(match[1]) / 100)
+const secondaryAlpha = Number(variables.match(/--bew-text-2: color-mix\(in srgb, var\(--bew-neutral-fg\) (?:calc\()?(\d+)%/)![1]) / 100
+const tertiaryAlpha = [...variables.matchAll(/--bew-text-3: color-mix\(in srgb, var\(--bew-neutral-fg\) (?:calc\()?(\d+)%/g)].map(match => Number(match[1]) / 100)
 for (const [mode, foreground, backgrounds, tertiary] of [
   ['light', 23, [255, 246, 232], tertiaryAlpha[0]],
   ['dark', 235, [20, 39, 55], tertiaryAlpha[1]],
-  ['oled', 235, [0, 24, 48], tertiaryAlpha[1]],
+  ['black', 235, [0, 24, 48], tertiaryAlpha[1]],
 ] as const) {
   for (const background of backgrounds) {
     const gray = (value: number) => `#${Math.round(value).toString(16).padStart(2, '0').repeat(3)}`
@@ -89,9 +78,7 @@ function withinRange(color: string) {
     && relativeContrast(color, '#000000') >= THEME_COLOR_MIN_PAGE_CONTRAST
 }
 const appearance = readFileSync(new URL('../src/components/Settings/Appearance/Appearance.vue', import.meta.url), 'utf8')
-const presets = [...appearance.slice(appearance.indexOf('themeColorOptions'), appearance.indexOf('darkModeBaseColorOptions')).matchAll(/'(#[\da-f]{6})'/g)].map(match => match[1])
-assert.ok(presets.length >= 17)
-for (const preset of presets)
+for (const preset of ACCENT_COLORS)
   assert.equal(clampThemeColor(preset), preset, `${preset}: presets must already be inside the allowed range`)
 assert.equal(normalizeThemeColor(NEUTRAL_THEME_COLOR), NEUTRAL_THEME_COLOR)
 assert.equal(normalizeThemeColor(undefined), DEFAULT_THEME_COLOR)
@@ -115,8 +102,8 @@ for (let red = 0; red <= 255; red += 15) {
 assert.ok(clamped > 0)
 const storage = readFileSync(new URL('../src/logic/storage.ts', import.meta.url), 'utf8')
 assert.match(storage, /value\.themeColor = normalizeThemeColor\(value\.themeColor\)/, 'stored theme colors are normalized at the storage boundary')
-assert.match(appearance, /changeThemeColor\(clampThemeColor\(color\)\)/, 'the custom picker clamps its input')
-assert.match(appearance, /changeThemeColor\(NEUTRAL_THEME_COLOR\)/, 'the neutral option is selectable in settings')
+assert.match(appearance, /clampThemeColor\(value \?\? DEFAULT_THEME_COLOR\)/, 'the custom picker clamps its input')
+assert.match(appearance, /value === 'neutral' \? value/, 'the neutral option is selectable in settings')
 
 // The top bar logo circle is the folded persistent rail: same material and
 // border, unchanged on hover (only the icon recolors).
@@ -135,4 +122,4 @@ assert.match(logo, /viewBox="210 210 604 604"/, 'the TV mark is cropped to its c
 assert.match(logo, /width: var\(--bew-icon-size-lg\);\s+height: var\(--bew-icon-size-lg\);/)
 assert.match(logo, /prefers-reduced-motion: reduce\)[\s\S]*\.logo \{\s+transition: none;/)
 
-console.log(`Color policy passed: ${samples} RGB samples, light/dark/OLED palettes, opt-in tint and retained custom value.`)
+console.log(`Color policy passed: ${samples} RGB samples, light, dark and pure-black palettes.`)

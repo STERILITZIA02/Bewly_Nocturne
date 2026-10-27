@@ -273,7 +273,6 @@ function showRefreshPrompt(...args: unknown[]): void {
     '--bew-focus-ring',
     '--bew-focus-shadow',
     '--bew-on-theme-color',
-    '--bew-dark-base-color',
     '--bew-text-1',
     '--bew-text-2',
     '--bew-hairline',

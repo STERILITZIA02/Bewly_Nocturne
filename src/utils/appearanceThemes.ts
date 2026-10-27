@@ -8,7 +8,6 @@ import { DEFAULT_THEME_COLOR, normalizeHexColor, normalizeThemeColor } from './t
 
 // Preset editing and theme files are only loaded with the settings page.
 export const ACCENT_COLORS = ['#22c55e', '#34d399', '#14b8a6', '#06b6d4', '#00a1d6', '#60a5fa', '#3b82f6', '#6366f1', '#818cf8', '#a78bfa', '#f46d43', '#fb923c', '#f59e0b', '#eab308', '#f43f5e', '#fb7299', '#fda4af'] as const
-export const DARK_TINT_COLORS = ['#2a2d32', '#1a1b1e', '#2d2a2f', '#2a2f2d', '#2f2d2a', '#252829', '#2c2a2a', '#292a2c'] as const
 
 export const APPEARANCE_PRESETS: readonly AppearancePreset[] = [
   { id: 'nocturne', light: { accent: DEFAULT_THEME_COLOR, background: null, foreground: null }, dark: { accent: DEFAULT_THEME_COLOR, background: null, foreground: null } },
@@ -42,16 +41,10 @@ export function appearancePresetPatch(preset: AppearancePreset, settings: Appear
   }
   if (light)
     patch.themeColor = normalizeThemeColor(light.accent)
-  if (dark) {
-    patch.enableDarkModeTint = false
-    patch.enableOledDarkMode = false
-  }
   return patch
 }
 
 export function matchingAppearancePreset(settings: AppearancePreferences, scheme: ColorScheme): string {
-  if (scheme !== 'light' && (settings.enableOledDarkMode || settings.enableDarkModeTint))
-    return 'custom'
   const actual = settings.appearanceColors[scheme]
   const accent = resolveAppearanceAccent(settings, scheme === 'dark')
   return presetMatches.find(({ preset, colors, lightAccent }) => {
@@ -65,9 +58,6 @@ export function matchingAppearancePreset(settings: AppearancePreferences, scheme
 
 const APPEARANCE_KEYS = [
   'themeColor',
-  'darkModeBaseColor',
-  'enableDarkModeTint',
-  'enableOledDarkMode',
   'appearanceColors',
   'appearanceContrast',
   'interfaceFontSize',
@@ -101,21 +91,20 @@ export function parseAppearance(text: string): Partial<AppearanceFilePreferences
     || APPEARANCE_KEYS.some(key => (input.version === 2 || key !== 'motionPreference') && !(key in fields))) {
     throw new TypeError('Invalid appearance file')
   }
-  const booleanKeys = ['enableDarkModeTint', 'enableOledDarkMode', 'removeTheIndentFromChinesePunctuation', 'overrideDanmakuFont', 'disableFrostedGlass', 'disableShadow', 'useLinearGradientThemeColorBackground'] as const
+  const booleanKeys = ['removeTheIndentFromChinesePunctuation', 'overrideDanmakuFont', 'disableFrostedGlass', 'disableShadow', 'useLinearGradientThemeColorBackground'] as const
   const options = { customizeFont: ['default', 'recommend', 'custom'], videoCardTitleFontSize: ['xs', 'sm', 'base', 'lg'], videoCardAuthorFontSize: ['xs', 'sm', 'base', 'lg'], textAutospaceMode: ['default', 'on', 'off'] }
   if (booleanKeys.some(key => typeof fields[key] !== 'boolean')
     || (fields.motionPreference !== undefined && !['system', 'reduce', 'full'].includes(String(fields.motionPreference)))
     || Object.entries(options).some(([key, allowed]) => !allowed.includes(String(fields[key])))
     || typeof fields.fontFamily !== 'string'
     || !isAppearanceColorsInput(fields.appearanceColors)
-    || !normalizeHexColor(fields.darkModeBaseColor) || (fields.themeColor !== 'neutral' && !normalizeHexColor(fields.themeColor))
+    || (fields.themeColor !== 'neutral' && !normalizeHexColor(fields.themeColor))
     || ['appearanceContrast', 'interfaceFontSize', 'frostedGlassBlurIntensity'].some(key => typeof fields[key] !== 'number' || !Number.isFinite(fields[key]))) {
     throw new TypeError('Invalid appearance settings')
   }
   return {
     ...Object.fromEntries(APPEARANCE_KEYS.filter(key => key in fields).map(key => [key, fields[key]])) as AppearanceFilePreferences,
     themeColor: normalizeThemeColor(fields.themeColor),
-    darkModeBaseColor: normalizeHexColor(fields.darkModeBaseColor)!,
     appearanceColors: normalizeAppearanceColors(fields.appearanceColors),
     appearanceContrast: normalizeAppearanceNumber(fields.appearanceContrast, 0, 100, 0),
     interfaceFontSize: normalizeAppearanceNumber(fields.interfaceFontSize, INTERFACE_FONT_SIZE.min, INTERFACE_FONT_SIZE.max, INTERFACE_FONT_SIZE.default),

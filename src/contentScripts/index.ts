@@ -1690,8 +1690,6 @@ else if (shouldInitializeContentScript) {
     container.dataset.bewlyRuntimeUrl = browser.runtime.getURL('')
     const appearance = useDark()
     container.classList.toggle('dark', appearance.isDark.value)
-    container.classList.toggle('oled-dark', appearance.isOledDark.value)
-    container.style.setProperty('--bew-dark-base-color', appearance.darkModeBaseColor.value)
     applyAppearanceStyle(container, appearance.appearanceStyle.value)
     applyMotionPreference(container, appearance.motionPreference.value)
     // Resolve OS/browser text scaling once; the default adds no style writes.

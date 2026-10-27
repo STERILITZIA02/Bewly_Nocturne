@@ -15,9 +15,6 @@ export interface AppearanceColors {
 /** Existing color fields keep their ownership; these are only the additional palette inputs. */
 export interface AppearancePreferences {
   themeColor: string
-  darkModeBaseColor: string
-  enableDarkModeTint: boolean
-  enableOledDarkMode: boolean
   appearanceColors: AppearanceColors
   appearanceContrast: number
   interfaceFontSize: number
@@ -72,16 +69,16 @@ export function resolveAppearanceAccent(settings: AppearancePreferences, dark: b
 }
 
 /** CSS still owns surface derivation. Only explicit overrides are written here. */
-export function getAppearanceStyle(settings: AppearancePreferences, dark: boolean, oled: boolean): Record<string, string> {
+export function getAppearanceStyle(settings: AppearancePreferences, dark: boolean): Record<string, string> {
   const palette = settings.appearanceColors[dark ? 'dark' : 'light']
   const style: Record<string, string> = {
     '--bew-interface-scale': String(settings.interfaceFontSize / INTERFACE_FONT_SIZE.default),
     '--bew-contrast-boost': `${settings.appearanceContrast / 100 * 18}%`,
   }
-  if (palette.background && !oled)
+  if (palette.background)
     style['--bew-custom-background'] = palette.background
   if (palette.foreground) {
-    const background = oled ? '#000000' : palette.background ?? (dark ? '#141414' : '#ffffff')
+    const background = palette.background ?? (dark ? '#141414' : '#ffffff')
     style['--bew-custom-foreground'] = ensureContrast(palette.foreground, [background], dark ? '#ffffff' : '#000000', 7)
   }
   return style

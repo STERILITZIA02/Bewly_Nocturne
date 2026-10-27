@@ -3133,7 +3133,6 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /body\.\$\{BODY_CLASS\} \.\$\{DANMAKU_GLASS_CLASS\},[\s\S]{0,140}#\$\{ROOT_ID\} :is\(\.bewly-widescreen-info, \.bewly-widescreen-sidebar, \.bewly-widescreen-panel, \.bewly-widescreen-panel-loading\)/)
   assert.match(widescreen, /--bewly-widescreen-danmaku-bar-bg: var\(--bew-glass-tint\)/)
   assert.doesNotMatch(widescreen, /--bewly-widescreen-danmaku-bar-bg: var\(--bew-content-solid/)
-  assert.doesNotMatch(widescreen, /html\.dark\.oled-dark #\$\{ROOT_ID\}[\s\S]{0,160}--bewly-widescreen-danmaku-bar-bg/)
   assert.match(cmnCn, /bewly_widescreen: Bewly播放页/)
   assert.match(cmnCn, /loading: 正在加载 Bewly 播放页…/)
   assert.doesNotMatch(cmnCn, /Bewly ?宽屏|宽屏模式/)

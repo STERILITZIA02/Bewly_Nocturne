@@ -15,7 +15,7 @@ export const store=reactive({userInfo:{mid:1},unReadMessage:{reply:38,at:17,like
 export const samples=ref(Array.from({length:60},(_,i)=>({gainDb:-5+3*Math.sin(i/8),loudness:-18,peakReductionDb:0})));`,
   '/__chart-store.js': `import {store} from '/__chart-state.js';export const useTopBarStore=()=>store;`,
   '/__chart-logic.js': `export {settings} from '/__chart-state.js';`,
-  '/__chart-dark.js': `import {computed} from 'vue';import {mode} from '/__chart-state.js';export const useDark=()=>({isDark:computed(()=>mode.value!=='light'),isOledDark:computed(()=>mode.value==='oled')});`,
+  '/__chart-dark.js': `import {computed} from 'vue';import {mode} from '/__chart-state.js';export const useDark=()=>({isDark:computed(()=>mode.value!=='light')});`,
   '/__chart-loudness.js': `import {ref} from 'vue';export {samples as localLoudnessSamples} from '/__chart-state.js';export const localLoudnessPanelOpen=ref(true),localLoudnessState=ref('active');export const notifyLocalLoudnessPanel=()=>{};`,
   '/__chart-main.js': `export const getCSRF=()=>'',getUserID=()=>'';`,
   '/__chart-dialog.js': `import {h} from 'vue';export default {setup:(_,ctx)=>()=>h('section',ctx.slots.default?.())};`,
@@ -36,7 +36,7 @@ const sessions=Array.from({length:28},(_,i)=>({key:'1:'+i,talkerId:String(i+1),n
 const app=createApp({setup(){const scenario=ref('sample');const change=value=>{scenario.value=value;const counts=value==='zero'?[0,0,0,0]:value==='unknown'?[undefined,undefined,undefined,undefined]:value==='large'?[12345,3,750,0]:[38,17,24,7];Object.assign(store.unReadMessage,{reply:counts[0],at:counts[1],like:counts[2],sys_msg:counts[3]});Object.assign(store.unReadDm,value==='unknown'?{follow_unread:undefined,unfollow_unread:undefined}:value==='zero'?{follow_unread:0,unfollow_unread:0}:{follow_unread:23,unfollow_unread:11});};
 return()=>h('main',{class:'fixture'},[
 h('h1',{class:'bew-page-heading'},'数据图表 · Mono 灰阶'),h('p',{class:'bew-help'},'真实项目组件，示例数据。主题色只点亮当前读数；所有操作留在本地。'),
-h('nav',[['light','浅色'],['dark','深色'],['oled','OLED']].map(([value,label])=>h('button',{onClick:()=>{mode.value=value;document.documentElement.className=value==='light'?'':value==='oled'?'dark oled-dark':'dark'}},label))),
+h('nav',[['light','浅色'],['dark','深色']].map(([value,label])=>h('button',{onClick:()=>{mode.value=value;document.documentElement.className=value==='light'?'':'dark'}},label))),
 h('nav',[['sample','示例数据'],['zero','全部为零'],['unknown','尚未读取'],['large','悬殊数值']].map(([value,label])=>h('button',{'aria-pressed':scenario.value===value,onClick:()=>change(value)},label))),
 h(Insights,{sessions:scenario.value==='zero'||scenario.value==='unknown'?[]:sessions,loaded:scenario.value!=='unknown'}),
 h('section',{class:'support-grid'},[

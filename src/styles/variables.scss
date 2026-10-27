@@ -362,14 +362,11 @@
   --bew-popover-surface-background-solid: var(--bew-elevated-solid);
   --bew-popover-surface-shadow: var(--bew-shadow-3);
   --bew-popover-padding: var(--bew-space-2);
-  --bew-popover-header-min-height: 52px;
-  --bew-popover-header-padding-block: var(--bew-space-3);
-  --bew-popover-header-padding-inline: var(--bew-space-5);
-  --bew-popover-body-padding-inline: var(--bew-space-2);
-  --bew-popover-body-padding-bottom: var(--bew-space-2);
-  --bew-popover-media-width: 144px;
-  --bew-popover-card-padding: var(--bew-space-2);
-  --bew-popover-card-gap: var(--bew-space-4);
+  // Media popovers: rows and the header title start this far in (the
+  // surface radius, so content clears the rounded corners).
+  --bew-popover-inset: var(--bew-space-4);
+  --bew-popover-media-width: 120px;
+  --bew-popover-card-gap: var(--bew-space-3);
   --bew-popover-row-min-height: var(--bew-control-height);
   --bew-date-picker-input-width: 115px;
   --bew-date-picker-panel-width: 280px;
@@ -512,7 +509,6 @@
   // The only theme-dependent neutral pigments. All reading surfaces, text,
   // fills and borders below derive from this pair (sRGB amounts are predictable).
   @include appearancePalette.pigments;
-  --bew-oled-foreground: #ebebeb;
   --bew-neutral-canvas: color-mix(in srgb, var(--bew-neutral-fg) 4%, var(--bew-neutral-bg));
   --bew-neutral-surface: var(--bew-neutral-bg);
   --bew-neutral-raised: var(--bew-neutral-bg);
@@ -658,11 +654,8 @@
   --bew-error-foreground: color-mix(in srgb, var(--bew-error-color) 84%, white);
   // A dark page needs more dimming to set the raised window apart.
   --bew-modal-backdrop: rgb(0 0 0 / 56%);
-
-  // 深色模式基准颜色（通过 JS 动态设置）
-  --bew-dark-base-color: #2b2b2b;
   // Dark glass is tinted below raised surfaces (6% vs 8% foreground) so it
-  // reads dark rather than grey; OLED uses the same recipe over black.
+  // reads dark rather than grey.
   --bew-glass-tint-solid: color-mix(in srgb, var(--bew-neutral-fg) 6%, var(--bew-neutral-bg));
   --bew-sidebar-action-hover: color-mix(in srgb, var(--bew-neutral-bg) 18%, transparent);
   // The rail is lighter than solid content here, so a solid selected plate would
@@ -675,10 +668,10 @@
   --bew-wheel-text: rgb(from var(--bew-custom-foreground, #fff) r g b / 67%);
   --bew-dock-navigation-active-color: var(--bew-custom-foreground, #fff);
 
-  // Dark and OLED: shadows barely read, so surface edges carry the layering.
+  // Dark: shadows barely read, so surface edges carry the layering.
   --bew-separator-color: color-mix(in srgb, var(--bew-neutral-fg) calc(12% + var(--bew-contrast-boost)), transparent);
   --bew-edge-color: color-mix(in srgb, var(--bew-neutral-fg) calc(16% + var(--bew-contrast-boost)), transparent);
-  // A light rim on artwork, brighter than surface edges (dark and OLED).
+  // A light rim on artwork, brighter than surface edges.
   --bew-media-edge-color: rgb(255 255 255 / 22%);
   --bew-glass-edge-color: rgb(255 255 255 / 26%);
   --bew-field-edge-color: color-mix(in srgb, var(--bew-neutral-fg) calc(18% + var(--bew-contrast-boost)), transparent);
@@ -721,18 +714,6 @@
 
   --bew-fill-alt: var(--bew-fill-1);
   --bew-surface-inset-bg: color-mix(in srgb, var(--bew-neutral-bg) 20%, transparent);
-}
-
-:host(.dark.oled-dark),
-:root.dark.oled-dark {
-  --bew-sidebar-action-hover: color-mix(in srgb, var(--bew-neutral-fg) 10%, transparent);
-  --bew-neutral-bg: #000;
-  --bew-neutral-fg: var(--bew-custom-foreground, var(--bew-oled-foreground));
-  // Pure-black canvases need their own low-light balance, not the dark-mode ramp.
-  --bew-neutral-surface: color-mix(in srgb, var(--bew-neutral-fg) 4%, var(--bew-neutral-bg));
-  --bew-neutral-raised: color-mix(in srgb, var(--bew-neutral-fg) 9%, var(--bew-neutral-bg));
-  --bew-neutral-inset: color-mix(in srgb, var(--bew-neutral-fg) 2%, var(--bew-neutral-bg));
-  // The shared glass tint stays slightly lifted above the OLED black page.
 }
 
 @media (prefers-contrast: more) {
@@ -1409,15 +1390,6 @@
   --Lb1_rgb: 11, 32, 42;
   --Lb5_rgb: 0, 135, 189;
   --Lb7_rgb: 88, 177, 212;
-}
-
-:root.dark.bewly-design.oled-dark {
-  --Ga0: var(--bew-neutral-canvas);
-  --Ga0_t: var(--bew-neutral-canvas);
-  --Ga0_rgb: var(--bew-native-Ga0-rgb, 0, 0, 0);
-  --bg1: var(--bew-neutral-canvas);
-  --bg1_rgb: var(--bew-native-bg1-rgb, 0, 0, 0);
-  --bpx-aux-content-bg: var(--bew-neutral-canvas);
 }
 
 // #endregion

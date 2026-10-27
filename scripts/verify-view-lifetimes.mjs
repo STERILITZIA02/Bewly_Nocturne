@@ -29,7 +29,7 @@ export function registerViewLifetimeChecks(check, { Vue, compileComponent, flush
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       'vue-toastification': { useToast: () => ({ error: message => errors.push(message) }) },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ reachTop }) },
-      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false) }) },
+      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }) },
       '~/constants/globalEvents': events,
       '~/logic': { settings: Vue.ref({}) },
       '~/stores/settingsStore': { useSettingsStore: () => ({ getEffectiveTopBarSource: () => 'bewly' }) },

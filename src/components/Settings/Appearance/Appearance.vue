@@ -15,8 +15,7 @@ import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, settings } from '
 import type { VideoCardFontSizeSetting } from '~/logic/storage'
 import type { AppearancePalette, AppearancePreferences, ColorScheme } from '~/utils/appearance'
 import { defaultAppearanceColors, getAppearanceStyle, INTERFACE_FONT_SIZE, normalizeAppearanceColors, resolveAppearanceAccent } from '~/utils/appearance'
-import { ACCENT_COLORS, APPEARANCE_PRESETS, appearancePresetPatch, DARK_TINT_COLORS, matchingAppearancePreset, parseAppearance, serializeAppearance } from '~/utils/appearanceThemes'
-import { resolveDarkModeBaseColor } from '~/utils/darkModeTint'
+import { ACCENT_COLORS, APPEARANCE_PRESETS, appearancePresetPatch, matchingAppearancePreset, parseAppearance, serializeAppearance } from '~/utils/appearanceThemes'
 import { clampThemeColor, DEFAULT_THEME_COLOR, getThemeColorTokens, normalizeHexColor } from '~/utils/themeColor'
 
 import SettingsItem from '../components/SettingsItem.vue'
@@ -67,7 +66,6 @@ function apply(patch: Partial<AppearancePreferences>, animate = false) {
   const paletteChanged = resolveAppearanceAccent(next, isDark.value) !== resolveAppearanceAccent(settings.value, isDark.value)
     || next.appearanceColors[scheme].background !== settings.value.appearanceColors[scheme].background
     || next.appearanceColors[scheme].foreground !== settings.value.appearanceColors[scheme].foreground
-    || (isDark.value && (resolveDarkModeBaseColor(next) !== resolveDarkModeBaseColor(settings.value) || next.enableOledDarkMode !== settings.value.enableOledDarkMode))
   if (paletteChanged)
     transitionAppearance(update)
   else update()
@@ -102,8 +100,7 @@ function setAccent(scheme: ColorScheme, value: string | null) {
 function setPalette(scheme: ColorScheme, field: keyof AppearancePalette, value: string | null) {
   if (scheme !== editingScheme.value)
     return
-  const next = normalizeAppearanceColors({ ...colors.value, [scheme]: { ...colors.value[scheme], [field]: value } })
-  apply({ appearanceColors: next, ...(field === 'background' && scheme === 'dark' ? { enableOledDarkMode: false, ...(value ? { enableDarkModeTint: false } : {}) } : {}) })
+  apply({ appearanceColors: normalizeAppearanceColors({ ...colors.value, [scheme]: { ...colors.value[scheme], [field]: value } }) })
 }
 // Retiring editors keep their original handlers; a late blur cannot write into the incoming mode.
 const colorActions = computed(() => {
@@ -114,30 +111,17 @@ const colorActions = computed(() => {
     foreground: (value: string | null) => setPalette(scheme, 'foreground', value),
   }
 })
-type DarkSurface = 'neutral' | 'tinted' | 'custom' | 'oled'
-const darkSurface = computed<DarkSurface>({
-  get: () => settings.value.enableOledDarkMode ? 'oled' : colors.value.dark.background ? 'custom' : settings.value.enableDarkModeTint ? 'tinted' : 'neutral',
-  set: value => apply({
-    enableOledDarkMode: value === 'oled',
-    enableDarkModeTint: value === 'tinted',
-    appearanceColors: { ...colors.value, dark: { ...colors.value.dark, background: value === 'custom' ? colors.value.dark.background ?? '#202020' : null } },
-  }, true),
-})
-
 const previewStyle = computed(() => {
-  const result: Record<string, string> = { '--bew-dark-base-color': resolveDarkModeBaseColor(settings.value) }
+  const result: Record<string, string> = {}
   for (const scheme of ['light', 'dark'] as const) {
     const dark = scheme === 'dark'
-    const oled = dark && settings.value.enableOledDarkMode
-    const custom = getAppearanceStyle(settings.value, dark, oled)
+    const custom = getAppearanceStyle(settings.value, dark)
     const modeAccent = resolveAppearanceAccent(settings.value, dark)
     result[`--bew-appearance-preview-${scheme}-accent`] = modeAccent === 'neutral' ? dark ? '#ffffff' : '#000000' : modeAccent
-    if (oled || custom['--bew-custom-background'])
-      result[`--bew-preview-${scheme}-background`] = oled ? '#000000' : custom['--bew-custom-background']
+    if (custom['--bew-custom-background'])
+      result[`--bew-preview-${scheme}-background`] = custom['--bew-custom-background']
     if (custom['--bew-custom-foreground'])
       result[`--bew-preview-${scheme}-foreground`] = custom['--bew-custom-foreground']
-    else if (oled)
-      result[`--bew-preview-${scheme}-foreground`] = 'var(--bew-oled-foreground)'
   }
   return result
 })
@@ -148,7 +132,7 @@ function selectPreset(value: unknown) {
     apply(appearancePresetPatch(selected, settings.value, separateModes.value ? editingScheme.value : undefined), true)
 }
 function resetColors() {
-  apply({ themeColor: DEFAULT_THEME_COLOR, enableDarkModeTint: false, enableOledDarkMode: false, appearanceColors: defaultAppearanceColors(), appearanceContrast: 0 }, true)
+  apply({ themeColor: DEFAULT_THEME_COLOR, appearanceColors: defaultAppearanceColors(), appearanceContrast: 0 }, true)
 }
 
 const frostedGlassEnabled = computed({
@@ -233,8 +217,10 @@ async function importTheme(event: Event) {
     <SettingsSectionHeading data-setting-id="settings.menu_appearance" :title="$t('settings.visual_style.title')" :desc="$t('settings.visual_style.description')" />
 
     <SettingsItemGroup>
-      <SettingsItem setting-id="appearance.theme" :title="$t('settings.theme')" right-width="auto">
-        <AppearanceModePicker :model-value="settings.theme" :apply="selectMode" />
+      <SettingsItem setting-id="appearance.theme" :title="$t('settings.theme')">
+        <template #bottom>
+          <AppearanceModePicker :model-value="settings.theme" :apply="selectMode" />
+        </template>
       </SettingsItem>
       <SettingsItem v-if="settings.theme === 'scheduled'" setting-id="settings.theme_schedule" :title="$t('settings.theme_schedule')" :desc="$t('settings.theme_schedule_desc')" right-width="auto">
         <div class="theme-schedule">
@@ -282,15 +268,9 @@ async function importTheme(event: Event) {
               neutral @update:model-value="colorActions.accent"
             />
           </SettingsItem>
-          <SettingsItem v-if="editingScheme === 'dark'" setting-id="settings.enable_oled_dark_mode" :title="$t('settings.visual_style.dark_surface')" :desc="$t('settings.visual_style.dark_surface_desc')" right-width="auto">
-            <Select v-model="darkSurface" commit-after-leave class="appearance-settings__select" :options="['neutral', 'tinted', 'custom', 'oled'].map(value => ({ value, label: $t(`settings.visual_style.surface.${value}`) }))" />
-          </SettingsItem>
-          <SettingsItem v-if="editingScheme === 'dark' && darkSurface === 'tinted'" setting-id="settings.dark_mode_base_color" :title="$t('settings.visual_style.tint')" right-width="auto">
-            <AppearanceColorField :model-value="settings.darkModeBaseColor" :label="$t('settings.visual_style.tint')" fallback="#2a2d32" :presets="DARK_TINT_COLORS" @update:model-value="value => settings.darkModeBaseColor = normalizeHexColor(value)!" />
-          </SettingsItem>
           <SettingsItem setting-id="settings.visual_style.background" :title="$t('settings.visual_style.background')" :desc="$t('settings.visual_style.background_desc')" right-width="auto">
             <AppearanceColorField
-              :key="`background-${editingScheme}`" :model-value="editingScheme === 'dark' && settings.enableOledDarkMode ? '#000000' : palette.background" :label="$t('settings.visual_style.background')" :fallback="editingScheme === 'dark' ? '#202020' : '#ffffff'" automatic
+              :key="`background-${editingScheme}`" :model-value="palette.background" :label="$t('settings.visual_style.background')" :fallback="editingScheme === 'dark' ? '#202020' : '#ffffff'" automatic
               :swatch-color="`var(--bew-appearance-preview-${editingScheme}-bg)`"
               @update:model-value="colorActions.background"
             />
@@ -322,7 +302,7 @@ async function importTheme(event: Event) {
       </div>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.visual_style.advanced')" collapsible>
+    <SettingsItemGroup :title="$t('settings.visual_style.advanced')" collapsible default-collapsed>
       <SettingsItemSubgroup :title="$t('settings.group_fonts')">
         <SettingsItem setting-id="settings.visual_style.interface_font_size" :title="$t('settings.visual_style.interface_font_size')" :desc="$t('settings.visual_style.interface_font_size_desc')" right-width="auto">
           <Slider

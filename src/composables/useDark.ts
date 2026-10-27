@@ -2,10 +2,9 @@ import { usePreferredDark } from '@vueuse/core'
 import { effectScope, onScopeDispose } from 'vue'
 
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
-import { DARK_MODE_BASE_COLOR_CHANGE, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
+import { IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { applyAppearanceStyle, getAppearanceStyle, resolveAppearanceAccent } from '~/utils/appearance'
-import { resolveDarkModeBaseColor } from '~/utils/darkModeTint'
 import { createIframeDocumentClient } from '~/utils/iframeDocument'
 import { getParentMessageData } from '~/utils/iframeMessage'
 import { isVideoPlaybackPage, setCookie } from '~/utils/main'
@@ -16,7 +15,6 @@ import { applyMotionPreference, prefersReducedMotion } from '~/utils/reducedMoti
 const currentMinuteOfDay = ref(getCurrentMinuteOfDay())
 let scheduleClockInterval: number | null = null
 let lastThemeChangeState: boolean | undefined
-let lastDarkModeBaseColor: string | undefined
 
 function getCurrentMinuteOfDay(): number {
   const now = new Date()
@@ -71,16 +69,6 @@ function isFestivalPage(): boolean {
   return /https?:\/\/(?:www\.)?bilibili\.com\/festival\/.*/.test(document.URL)
 }
 
-/**
- * 设置深色模式基准颜色
- */
-function setDarkModeBaseColor(color: string) {
-  for (const element of [document.documentElement, document.getElementById('bewly')]) {
-    if (element && element.style.getPropertyValue('--bew-dark-base-color') !== color)
-      element.style.setProperty('--bew-dark-base-color', color)
-  }
-}
-
 function syncBilibiliTheme(isDark: boolean, persist = true) {
   const theme = isDark ? 'dark' : 'light'
 
@@ -96,7 +84,7 @@ function syncBilibiliTheme(isDark: boolean, persist = true) {
 }
 
 function createDarkState(observeRoute = true, syncNativeTheme = true) {
-  const parentTheme = shallowRef<{ isDark: boolean, isOledDark: boolean, darkModeBaseColor: string }>()
+  const parentTheme = shallowRef<{ isDark: boolean }>()
   watch([() => settings.value.theme, () => Boolean(parentTheme.value)], ([theme, inherited], _previous, onCleanup) => {
     const syncClock = () => {
       if (theme === 'scheduled' && !inherited && !document.hidden)
@@ -136,13 +124,6 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
   })
   const iframeDocument = createIframeDocumentClient()
   const isDark = computed(() => parentTheme.value?.isDark ?? (currentAppColorScheme.value === 'dark' || isVideoPageDark.value))
-  // Playback pages keep the dark-mode palette under pure black until they get
-  // a pure-black design of their own. The URL is known at document start, so
-  // the early loading cover and the playback page never flash black.
-  const isOledDark = computed(() => isDark.value
-    && !isVideoPlaybackPage(currentUrl.value)
-    && (parentTheme.value?.isOledDark ?? settings.value.enableOledDarkMode === true))
-  const darkModeBaseColor = computed(() => parentTheme.value?.darkModeBaseColor ?? resolveDarkModeBaseColor(settings.value))
   const accentColor = computed(() => resolveAppearanceAccent(settings.value, isDark.value))
   const motionPreference = computed(() => settings.value.motionPreference)
   watch(motionPreference, (preference) => {
@@ -158,7 +139,7 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
     }
   })
   const appearanceStyle = computed<Record<string, string>>((previous) => {
-    const next = getAppearanceStyle(settings.value, isDark.value, isOledDark.value)
+    const next = getAppearanceStyle(settings.value, isDark.value)
     return previous && Object.keys(previous).length === Object.keys(next).length && Object.keys(next).every(key => previous[key] === next[key]) ? previous : next
   })
   watch(appearanceStyle, (style) => {
@@ -173,15 +154,11 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
     const data = getParentMessageData(event, [IFRAME_DARK_MODE_CHANGE])
     if (!data
       || !iframeDocument.matches(data)
-      || typeof data.isDark !== 'boolean'
-      || (data.isOledDark !== undefined && typeof data.isOledDark !== 'boolean')
-      || (data.darkModeBaseColor !== undefined && typeof data.darkModeBaseColor !== 'string')) {
+      || typeof data.isDark !== 'boolean') {
       return
     }
 
-    parentTheme.value = { isDark: data.isDark, isOledDark: data.isOledDark === true, darkModeBaseColor: typeof data.darkModeBaseColor === 'string' && /^#[\da-f]{6}$/i.test(data.darkModeBaseColor)
-      ? data.darkModeBaseColor
-      : resolveDarkModeBaseColor(settings.value) }
+    parentTheme.value = { isDark: data.isDark }
   }
   window.addEventListener('message', handleIframeThemeMessage)
   const resumeDocument = (event: PageTransitionEvent) => {
@@ -202,28 +179,12 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
   watch(
     [
       isDark,
-      isOledDark,
       currentAppColorScheme,
       () => settings.value.adaptToOtherPageStyles,
       currentUrl,
     ],
     () => {
       setAppAppearance()
-    },
-    { immediate: true },
-  )
-
-  // 监听深色模式基准颜色变化
-  watch(
-    darkModeBaseColor,
-    (newColor) => {
-      setDarkModeBaseColor(newColor)
-      if (lastDarkModeBaseColor === newColor)
-        return
-
-      lastDarkModeBaseColor = newColor
-      // 触发全局基准颜色变化事件
-      window.dispatchEvent(new CustomEvent(DARK_MODE_BASE_COLOR_CHANGE, { detail: newColor }))
     },
     { immediate: true },
   )
@@ -238,14 +199,11 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
     const bewlyContainer = document.querySelector('#bewly')
 
     bewlyContainer?.classList.toggle('dark', isDark.value)
-    bewlyContainer?.classList.toggle('oled-dark', isOledDark.value)
 
     // Only apply global theme classes if not on festival pages
     if (!isSelectiveDark) {
       document.documentElement.classList.toggle('dark', isDark.value)
-      document.documentElement.classList.toggle('oled-dark', isOledDark.value)
       document.body?.classList.toggle('dark', isDark.value)
-      document.body?.classList.toggle('oled-dark', isOledDark.value)
 
       if (isDark.value) {
         // bili_dark is bilibili's official dark mode class
@@ -255,9 +213,6 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
         document.documentElement.classList.remove('bili_dark')
       }
     }
-
-    if (isDark.value)
-      setDarkModeBaseColor(darkModeBaseColor.value)
 
     if (syncNativeTheme)
       syncBilibiliTheme(isDark.value, !parentTheme.value)
@@ -290,9 +245,7 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
     () => settings.value.appearanceColors.separateModes,
     appearanceStyle,
     accentColor,
-    darkModeBaseColor,
     isDark,
-    isOledDark,
     motionPreference,
     currentUrl,
   ], () => {
@@ -394,8 +347,6 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
 
   return {
     isDark,
-    isOledDark,
-    darkModeBaseColor,
     accentColor,
     appearanceStyle,
     motionPreference,

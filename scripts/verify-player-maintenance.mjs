@@ -799,8 +799,8 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     window.addEventListener('message', record)
     const appHost = document.body.appendChild(document.createElement('div'))
     appHost.id = 'bewly'
-    appHost.className = 'dark oled-dark'
-    appHost.style.setProperty('--bew-dark-base-color', '#123456')
+    appHost.className = 'dark disable-frosted-glass'
+    appHost.style.setProperty('--bew-custom-background', '#123456')
     appHost.style.setProperty('visibility', 'hidden')
     const panels = document.body.appendChild(document.createElement('div'))
     const panel = panels.appendChild(document.createElement('section'))
@@ -820,8 +820,8 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       assert.ok(panel.hasAttribute(bridge.EXTERNAL_COMMENT_COMPOSER_ATTRIBUTE))
       assert.equal(isolated.playbackCommentComposer.value, null, 'no comment list yet, nothing to post to')
       // The app host's theme reaches the composer; its own layout styles do not.
-      assert.ok(host.classList.contains('dark') && host.classList.contains('oled-dark'))
-      assert.equal(host.style.getPropertyValue('--bew-dark-base-color'), '#123456')
+      assert.ok(host.classList.contains('dark') && host.classList.contains('disable-frosted-glass'))
+      assert.equal(host.style.getPropertyValue('--bew-custom-background'), '#123456')
       assert.equal(host.style.getPropertyValue('visibility'), '')
 
       // The native list arrives later (moved in by hydration); the host stays outside it.

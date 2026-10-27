@@ -35,7 +35,7 @@ import Forward from '/src/components/MomentCard/MomentForwardComposer.vue';
 import {createMomentForwardTransactions,MOMENT_FORWARD_TRANSACTIONS} from '/src/components/MomentCard/momentForwardTransactions.ts';
 import Skeleton from '/src/components/SkeletonBlock.vue';
 import '/src/styles/reset.css';import '/src/styles/variables.scss';import '/src/styles/fonts.scss';import '/src/styles/main.scss';import '/src/styles/segmentControl.scss';import '/src/styles/momentDisclosure.scss';import 'virtual:uno.css';
-document.documentElement.className='dark';document.documentElement.style.setProperty('--bew-dark-base-color','#2b2b2b');
+document.documentElement.className='dark';
 const app=createApp({setup(){const open=ref(true),shown=ref(true),mode=ref('comments'),outer=ref(null),inner=ref(null),diagnostics=ref('展开或收起后显示本地测量。');provide('BEWLY_APP',{mainAppRef:ref(document.querySelector('#root'))});
 const transactions=createMomentForwardTransactions(()=>1,()=>{});provide(MOMENT_FORWARD_TRANSACTIONS,transactions);onBeforeUnmount(transactions.dispose);
 const toggle=kind=>{if(mode.value===kind)open.value=!open.value;else{mode.value=kind;open.value=true;shown.value=true;}};
@@ -45,7 +45,7 @@ const motion=useMeasuredDisclosure(outer,inner,open,()=>shown.value=false,moving
 watch(open,value=>{if(value)shown.value=true;});onBeforeUnmount(()=>cancelAnimationFrame(frame));
 return()=>h('main',{class:'bewly-wrapper fixture'},[
 h('h1',{class:'bew-page-heading'},'动态卡片 · 常驻评论框'),h('p',{class:'bew-help'},'真实评论区与输入组件；所有发布与上传均为本地模拟。'),
-h('nav',['浅色','深色','OLED'].map((text,i)=>h('button',{onClick:()=>{document.documentElement.classList.toggle('dark',i!==0);document.documentElement.classList.toggle('oled-dark',i===2)}},text))),
+h('nav',['浅色','深色'].map((text,i)=>h('button',{onClick:()=>{document.documentElement.classList.toggle('dark',i!==0)}},text))),
 h('details',[h('summary','预览检查选项'),h('label',[h('input',{type:'checkbox',onChange:e=>document.documentElement.classList.toggle('disable-frosted-glass',e.target.checked)}),' 关闭磨砂'])]),
 h('article',{class:'card'},[h('div',{class:'card-content'},[h('header','示例作者 · 刚刚'),h('p','评论与转发共用磨砂输入框。表情、@ 和话题面板可以伸出卡片，提交仅在本地模拟。'),h('div',{class:'actions'},['comments','forward'].map(kind=>h('button',{onClick:()=>toggle(kind),'aria-expanded':open.value&&mode.value===kind},(open.value&&mode.value===kind?'收起':'展开')+(kind==='comments'?'评论':'转发'))))]),h('div',{ref:outer,class:['moment-card__disclosure',{'is-open':open.value}],style:{height:motion.height.value===undefined?undefined:motion.height.value+'px'},inert:!open.value,'aria-hidden':!open.value,onTransitionend:motion.onTransitionEnd,onTransitioncancel:motion.onTransitionEnd},[h('div',{ref:inner,class:'moment-card__disclosure-inner'},shown.value?(mode.value==='comments'?h(Comments,{active:open.value,moment:{id:'987654321',commentId:'987654321',commentType:17,commentCount:12}}):h(Forward,{active:open.value,autofocus:false,moment:{id:'987654321',forwardCount:0},onClose:()=>open.value=false})):null)])]),
 h('p',{id:'status',role:'status'}),h('details',[h('summary','查看本地模拟提交内容'),h('pre',{id:'request'},'尚未提交')]),h('details',[h('summary','展开动画诊断'),h('pre',{id:'motion-diagnostics'},diagnostics.value)])]);}});

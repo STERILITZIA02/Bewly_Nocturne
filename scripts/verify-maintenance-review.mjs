@@ -76,7 +76,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       '@vueuse/core': { onKeyStroke() {}, useMediaQuery: () => Vue.ref(false), useMouseInElement: () => ({ isOutside: Vue.ref(true) }) },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ reachTop: Vue.ref(true), scrollViewportRef, activatedPage }) },
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => Vue.ref(window.location.href) },
-      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false), darkModeBaseColor: Vue.ref('#2b2b2b') }) },
+      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }) },
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/enums/appEnums': await import('../src/enums/appEnums'),
       '~/logic': { settings },
@@ -196,9 +196,8 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
         finished.reject(new Error('animation canceled'))
       } }
     } })
-    const settings = Vue.ref({ theme: 'light', themeScheduleStart: '06:00', themeScheduleEnd: '18:00', darkModeBaseColor: '#181818', adaptToOtherPageStyles: true, videoPageDarkMode: false, enableOledDarkMode: false })
+    const settings = Vue.ref({ theme: 'light', themeScheduleStart: '06:00', themeScheduleEnd: '18:00', adaptToOtherPageStyles: true, videoPageDarkMode: false, themeColor: '#00a1d6', appearanceColors: { light: { background: null, foreground: null }, dark: { background: null, foreground: null }, separateModes: false, darkAccent: null }, appearanceContrast: 0, interfaceFontSize: 13, motionPreference: 'system' })
     const module = await loadSourceModule('../src/composables/useDark.ts', {
-      '~/utils/darkModeTint': await import('../src/utils/darkModeTint'),
       'vue': Vue,
       '@vueuse/core': { usePreferredDark: () => Vue.ref(false) },
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => Vue.ref(window.location.href) },
@@ -207,6 +206,10 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       '~/utils/iframeMessage': { getParentMessageData: () => undefined },
       '~/utils/iframeDocument': await import('../src/utils/iframeDocument'),
       '~/utils/main': { isVideoPlaybackPage: () => playbackPage, setCookie() {} },
+      '~/utils/appearance': await import('../src/utils/appearance'),
+      '~/utils/motionPriority': await import('../src/utils/motionPriority'),
+      '~/utils/motionTiming': await import('../src/utils/motionTiming'),
+      '~/utils/reducedMotion': { applyMotionPreference() {}, prefersReducedMotion: () => reduced },
     }, {
       ref: Vue.ref,
       shallowRef: Vue.shallowRef,
@@ -298,23 +301,6 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     finally {
       fixture.close()
       button.remove()
-    }
-  })
-
-  check('review pure black: playback pages keep the dark palette; other pages turn pure black', async () => {
-    for (const playbackPage of [false, true]) {
-      const fixture = await themeFixture({ playbackPage })
-      try {
-        fixture.settings.value.theme = 'dark'
-        fixture.settings.value.enableOledDarkMode = true
-        await flush()
-        assert.equal(fixture.state.isDark.value, true)
-        assert.equal(fixture.state.isOledDark.value, !playbackPage)
-        assert.equal(document.documentElement.classList.contains('dark'), true)
-        assert.equal(document.documentElement.classList.contains('oled-dark'), !playbackPage)
-        assert.equal(document.querySelector('#bewly').classList.contains('oled-dark'), !playbackPage)
-      }
-      finally { fixture.close() }
     }
   })
 

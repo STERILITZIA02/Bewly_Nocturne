@@ -3,7 +3,8 @@
 // The settings window's navigation columns (user-specified, after Claude
 // Code): flat columns on the window's solid surface, divided from what follows
 // by a hairline; a row fills only when hovered or current. The primary column
-// (Settings.vue) and the secondary one (SettingsCategoryLayout) share these.
+// (Settings.vue) and the secondary one (SettingsCategoryLayout) share these,
+// as does the folder column of the top bar's favorites popover.
 
 // A row's content (its icon) starts this far in from the column edge: the
 // column's own inset plus the row's. The window's header title lines up with it.

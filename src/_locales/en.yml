@@ -276,6 +276,7 @@ settings:
   search_identity_guest: Guest
   enable_text_autospace: Automatic CJK spacing
   enable_text_autospace_desc: Uses browser text-autospace for reading content without changing text. Code and editors retain their original spacing.
+  group_licenses: Licenses
   project_license: Project license
   third_party_licenses: Third-party licenses
   licenses_loading: Loading license assets
@@ -286,6 +287,7 @@ settings:
   licenses_sources: Build entries
   licenses_text: License text
   licenses_summary: "Lists dependencies contributing to this build's final output, with versions listed separately."
+  licenses_view: View
   comment_reply_batch_pages: Reply pages per batch
   comment_reply_batch_pages_desc: Only Load next batch requests several pages. Initial expansion and direct page selection request one page; the rest of the thread is never fetched automatically.
   enable_comment_reply_tree_container: Separate reply reading area
@@ -423,9 +425,6 @@ settings:
     editing_mode_desc: Choose the palette to edit without changing the display mode.
     separate_accent: Edit light and dark separately
     separate_accent_desc: Choose a theme and accent for each mode. The matching palette follows the display mode.
-    dark_surface: Dark background
-    dark_surface_desc: OLED uses a pure black page background. Playback pages keep their standard dark surfaces.
-    tint: Dark tint
     background: Background
     background_desc: 'The base for cards, overlays, and fields. Colors are adjusted to fit the light or dark mode.'
     foreground: Foreground
@@ -486,11 +485,6 @@ settings:
       paper: Warm paper
       sage: Sage
       slate: Slate
-    surface:
-      neutral: Standard dark
-      tinted: Soft tint
-      custom: Custom background
-      oled: OLED black
   menu_compatibility: Compatibility
   menu_about: About
   experimental: Experimental
@@ -820,11 +814,6 @@ settings:
   theme_color_desc: Custom colors keep at least 1.8:1 contrast against pure black and pure white pages; colors that are too dark or too light are adjusted automatically. "No theme color" is black in light mode and white in dark mode.
   theme_color_opt:
     neutral: No theme color
-  dark_mode_base_color: Dark mode base color
-  enable_dark_mode_tint: Dark background tint
-  enable_dark_mode_tint_desc: Use neutral gray by default. Enable to use the tint below; disabling preserves your chosen color.
-  enable_oled_dark_mode: OLED pure black mode
-  enable_oled_dark_mode_desc: 'Use a black page background in dark mode, while keeping cards and panels distinct. Playback pages retain the standard dark background.'
   gradient_theme_color_background: Use a neutral gradient in dark mode
   gradient_theme_color_background_desc: Apply a neutral gradient to the page background and top bar without using the theme color.
   logo_color: Logo color
