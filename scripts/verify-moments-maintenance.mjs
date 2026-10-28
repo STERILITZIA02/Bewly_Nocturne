@@ -237,6 +237,30 @@ export function registerMomentsMaintenanceChecks(check, { Vue, compileComponent,
     for (const text of ['警惕外卖口令骗局：美团搜【551122】领券，不要相信。', '揭秘返佣话术：通过我的链接下单，返利20元。'])
       assert.equal(detectMomentPromotion(article(text))?.kind, 'suspected', text)
   })
+  check('moment promotion: e-commerce tokens alone are sales evidence, sales slogans and plain shop mentions are not', () => {
+    const filter = createMomentFilter({ blockAds: true })
+    const sample = '库存掉的飞快！16一箱纯牛奶，27一箱安慕希！！\nBug价！！27一箱安慕希酸奶和16纯牛奶一箱！！\n比矿泉水都便宜，1.6一盒啊\n拼手速！有货就直接拍！！\ncopy本段话打开手淘下单8(5IiWTyI4vlc):// CA1831\ncopy本段话打开手淘下单8(5IiWTyI4vlc):// CA1831\n[图片][图片][图片]'
+    const post = (type, content) => ({ type, modules: { module_dynamic: { desc: { text: content } } } })
+    const forward = (orig, text = '转发动态') => ({ ...post('DYNAMIC_TYPE_FORWARD', text), orig })
+    for (const raw of [post('DYNAMIC_TYPE_DRAW', sample), post('DYNAMIC_TYPE_WORD', sample), forward(post('DYNAMIC_TYPE_DRAW', sample)), forward(forward(post('DYNAMIC_TYPE_DRAW', sample)))]) {
+      const mapped = { momentPromotion: detectMomentPromotion(raw) }
+      assert.deepEqual(mapped.momentPromotion, { kind: 'commerce', reason: 'shopping-token' })
+      assert.equal(filter.passes(mapped), false)
+      assert.equal(createMomentFilter({ blockAds: false }).passes(mapped), true)
+    }
+    for (const text of ['8(5IiWTyI4vlc):// CA1831', '￥AbC123xyZ8￥', '€Xy7Kp2Qm9Lw€', '( CZ005 ZyhoTqUOYxS)/', '复制这段话打开淘宝领券', '長按複製本段話，打開拼多多下單'])
+      assert.equal(detectMomentPromotion(post('DYNAMIC_TYPE_WORD', text))?.kind, 'commerce', text)
+    for (const text of [
+      '库存掉的飞快！Bug价！！拼手速！有货就直接拍！！',
+      '今天在淘宝买了个键盘，手感不错，下单前看了很多评测。',
+      '复制了一段淘宝的商品描述，打开看看写得有多离谱。',
+      'Copy this code (AbcDEF123xy):// 是我在研究的自定义协议，和桃宝无关。',
+      '打开 bilibili://video/123 或复制这段话给朋友。',
+      '这件衣服 ￥12345678￥ 是乱码吗？',
+    ])
+      assert.notEqual(detectMomentPromotion(post('DYNAMIC_TYPE_WORD', text))?.kind, 'commerce', text)
+    assert.equal(detectMomentPromotion(post('DYNAMIC_TYPE_WORD', '警惕骗局：不要复制这段话打开淘宝下单 8(5IiWTyI4vlc):// CA1831'))?.kind, 'suspected')
+  })
   check('article promotion: structural goods/ad evidence differs from conservative text hints and normal discussion stays readable', () => {
     const known = detectMomentPromotion({ ...article('正文'), is_ad: 1 })
     assert.deepEqual(known, { kind: 'advertisement', reason: 'api' })

@@ -537,6 +537,12 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       '~/utils/searchHighlight': { sanitizeSearchHighlight: value => value },
       '~/utils/searchNavigation': { openSearchResults() {}, resolveSearchNavigationTarget: value => value },
       '../TagRemoveButton.vue': { default: {} },
+      './SearchBarFilters.vue': { default: {} },
+      '~/composables/useSearchCommands': { useSearchCommands: () => Vue.computed(() => []) },
+      '~/utils/motionPriority': { holdAnimation: () => () => {} },
+      '~/utils/motionTiming': { getMotionDuration: () => 0 },
+      '~/utils/reducedMotion': { prefersReducedMotion: () => true },
+      '~/utils/searchUrl': await import('../src/utils/searchUrl'),
       './searchHistoryProvider': {
         getSearchHistory: () => {
           const request = pending()

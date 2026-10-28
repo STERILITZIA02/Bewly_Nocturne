@@ -55,10 +55,6 @@ function acknowledgeCurrentVersion() {
     @close="dialogVisible = false"
   >
     <div class="version-reminder-dialog">
-      <p class="version-reminder-dialog__intro">
-        {{ $t('version_reminder.description') }}
-      </p>
-
       <div class="version-reminder-dialog__links">
         <a
           :href="GITHUB_RELEASES_URL"
@@ -67,10 +63,7 @@ function acknowledgeCurrentVersion() {
           class="version-reminder-dialog__link"
         >
           <span class="version-reminder-dialog__link-icon version-reminder-dialog__link-icon--github" i-tabler:brand-github />
-          <span>
-            <strong>{{ $t('version_reminder.github_releases') }}</strong>
-            <small>{{ $t('version_reminder.github_releases_desc') }}</small>
-          </span>
+          <span class="version-reminder-dialog__link-label">{{ $t('version_reminder.github_releases') }}</span>
           <span class="version-reminder-dialog__arrow" i-tabler:external-link />
         </a>
 
@@ -81,10 +74,7 @@ function acknowledgeCurrentVersion() {
           class="version-reminder-dialog__link"
         >
           <span class="version-reminder-dialog__link-icon version-reminder-dialog__link-icon--bilibili" i-tabler:brand-bilibili />
-          <span>
-            <strong>{{ $t('version_reminder.bilibili_dynamic') }}</strong>
-            <small>{{ $t('version_reminder.bilibili_dynamic_desc') }}</small>
-          </span>
+          <span class="version-reminder-dialog__link-label">{{ $t('version_reminder.bilibili_dynamic') }}</span>
           <span class="version-reminder-dialog__arrow" i-tabler:external-link />
         </a>
       </div>
@@ -174,13 +164,6 @@ function acknowledgeCurrentVersion() {
   padding: var(--bew-space-0-5) 0 0;
 }
 
-.version-reminder-dialog__intro {
-  margin: 0;
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-body);
-  line-height: var(--bew-line-height-body);
-}
-
 .version-reminder-dialog__links {
   display: grid;
   gap: var(--bew-space-3);
@@ -191,7 +174,6 @@ function acknowledgeCurrentVersion() {
   grid-template-columns: 38px minmax(0, 1fr) 18px;
   gap: var(--bew-space-3);
   align-items: center;
-  min-height: 64px;
   padding: var(--bew-space-3);
   color: var(--bew-text-1);
   background: var(--bew-fill-1);
@@ -227,22 +209,9 @@ function acknowledgeCurrentVersion() {
   color: var(--bew-theme-foreground);
 }
 
-.version-reminder-dialog__link strong,
-.version-reminder-dialog__link small {
-  display: block;
-}
-
-.version-reminder-dialog__link strong {
+.version-reminder-dialog__link-label {
   font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-body);
-}
-
-.version-reminder-dialog__link small {
-  margin-top: var(--bew-space-1);
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
 }
 
 .version-reminder-dialog__arrow {

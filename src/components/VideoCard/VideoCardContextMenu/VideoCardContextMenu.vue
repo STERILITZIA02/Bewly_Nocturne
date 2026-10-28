@@ -235,7 +235,7 @@ const layoutGroup = computed((): MenuItem[] => {
   if (!target)
     return []
   return [
-    { key: 'layout:edit', name: t('layout_editor.edit_layout'), icon: 'i-tabler:edit', run: closeThen(() => enterLayoutEditMode(target.descriptor.id)) },
+    { key: 'layout:edit', name: t('layout_editor.quick_edit'), icon: 'i-tabler:edit', run: closeThen(() => enterLayoutEditMode(target.descriptor.id, target.element)) },
     { key: 'layout:setting', name: t('layout_editor.open_setting'), icon: 'i-tabler:settings', run: closeThen(() => openLayoutEditorSetting(target.descriptor.settingId, target.element.getBoundingClientRect())) },
   ]
 })

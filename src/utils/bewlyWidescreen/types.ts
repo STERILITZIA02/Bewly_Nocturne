@@ -1,7 +1,7 @@
 import type { Data as VideoInfoData } from '~/models/video/videoInfo'
 import type { WidescreenDisplayMode, WidescreenRect, WidescreenZoomFrame } from '~/utils/bewlyWidescreenPolicy'
 
-export type BewlyWidescreenTab = 'comment' | 'danmaku' | 'playlist' | 'recommendations'
+export type BewlyWidescreenTab = 'comment' | 'danmaku' | 'playlist'
 
 export interface MovedNode {
   node: HTMLElement
@@ -14,7 +14,6 @@ export interface WidescreenSidebarReadiness {
   comment: boolean
   danmaku: boolean
   playlist: boolean
-  recommendations: boolean
   complete: boolean
 }
 

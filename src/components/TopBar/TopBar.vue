@@ -5,10 +5,11 @@ import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted,
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
+import { usePageDim } from '~/composables/usePageDim'
 import { BEWLY_IFRAME_DRAWER_HOST_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { useIframePageActive } from '~/logic/iframePageState'
-import { isLayoutEditing, useLayoutEditableRoot, vLayoutEditable } from '~/logic/layoutEdit'
+import { isLayoutEditing } from '~/logic/layoutEdit'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
@@ -23,6 +24,9 @@ import { resetTopBarTransientInteraction, useTopBarInteraction } from './composa
 const { reachTop } = useBewlyApp()
 // 顶栏状态管理
 const topBarStore = useTopBarStore()
+// The glass panels (profile and the media popovers) dim the page; the small
+// upload and more menus stay menus.
+usePageDim(() => (['userPanel', 'moments', 'favorites', 'history', 'watchLater'] as const).some(key => topBarStore.popupVisible[key]))
 const settingsStore = useSettingsStore()
 const { forceWhiteIcon, hasOpenClickPopup } = useTopBarInteraction()
 
@@ -35,8 +39,6 @@ const { isDark } = useDark()
 // （含个人空间的吸顶导航）出现时，避免两层页头重叠。
 const bewlyWidescreenActive = ref(false)
 const forceHideTopBar = ref(false)
-const headerTarget = ref<HTMLElement>()
-useLayoutEditableRoot('topBar', headerTarget)
 
 const currentLocationHref = useCurrentLocationHref()
 const effectiveTopBarSource = computed(() => settingsStore.getEffectiveTopBarSource())
@@ -344,7 +346,6 @@ onKeyStroke('Escape', (event: KeyboardEvent) => {
     <!-- The playback page frames its card from the window corner; the Dock still leads home. -->
     <TopBarLogo
       v-if="topBarStore.showTopBar && !bewlyWidescreenActive"
-      v-layout-editable="'topbar-logo'"
       class="floating-home-logo"
       floating
       :force-white-icon="forceWhiteIcon && !hideTopBar"
@@ -352,9 +353,7 @@ onKeyStroke('Escape', (event: KeyboardEvent) => {
     <Transition name="top-bar">
       <header
         v-if="topBarStore.showTopBar"
-        ref="headerTarget"
         class="top-bar"
-        data-layout-editable-id="topbar"
         w="full" transition="opacity duration-300, transform duration-300, background-color duration-300"
         :class="{ 'hide': hideTopBar, 'force-white-icon': forceWhiteIcon }"
       >

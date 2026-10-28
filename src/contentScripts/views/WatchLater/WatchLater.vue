@@ -91,13 +91,17 @@ const SORT_ORDERS = ['newest', 'oldest'] as const
 const SORT_ICONS = { newest: 'i-tabler:sort-descending', oldest: 'i-tabler:sort-ascending' } as const
 const LAYOUTS = ['list', 'grid'] as const
 const LAYOUT_ICONS = { list: 'i-tabler:list-details', grid: 'i-tabler:layout-grid' } as const
+const watchLaterLayoutMode = useLayoutEditSettingValue(
+  'page.watchLater.layout',
+  () => settings.value.watchLaterLayoutMode,
+)
 const filterGroups = computed<LibraryFilterGroup[]>(() => [
   { key: 'progress', title: t('library_tools.filter_progress'), value: advancedFilters.value.progress, options: PROGRESS.map(value => ({ value, label: t(`watch_later.filters.progress_${value}`), icon: PROGRESS_ICONS[value] })) },
   { key: 'added', title: t('library_tools.filter_added'), value: advancedFilters.value.added, options: ADDED.map(value => ({ value, label: t(value === 'all' ? 'history.filters.period_all' : 'library_tools.date_custom'), icon: ADDED_ICONS[value] })) },
   { key: 'duration', title: t('library_tools.filter_duration'), value: advancedFilters.value.duration, options: DURATIONS.map(value => ({ value, label: t(`watch_later.filters.duration_${value}`), icon: DURATION_ICONS[value] })) },
   { key: 'sort', title: t('library_tools.filter_sort'), value: sortOrder.value, options: SORT_ORDERS.map(value => ({ value, label: t(`watch_later.sort_${value}`), icon: SORT_ICONS[value] })) },
   ...settings.value.enableGridLayoutSwitcher
-    ? [{ key: 'layout', title: t('library_tools.filter_layout'), value: settings.value.watchLaterLayoutMode, options: LAYOUTS.map(value => ({ value, label: t(`library_tools.layout_${value}`), icon: LAYOUT_ICONS[value] })) }]
+    ? [{ key: 'layout', title: t('library_tools.filter_layout'), value: watchLaterLayoutMode.value, options: LAYOUTS.map(value => ({ value, label: t(`library_tools.layout_${value}`), icon: LAYOUT_ICONS[value] })) }]
     : [],
 ])
 // The funnel lights for any filter, and for the oldest-first order too; the
@@ -126,10 +130,6 @@ const { handlePageRefresh, handleReachBottom, haveScrollbar, scrollViewportRef }
 const pageNum = viewState.ref<number>('page', 1)
 const sourcePages = viewState.ref<Record<number, number[]>>('sourcePages', {})
 const pageSize = ref<number>(20)
-const watchLaterLayoutMode = useLayoutEditSettingValue(
-  'page.watchLater.layout',
-  () => settings.value.watchLaterLayoutMode,
-)
 const { gridClass: watchLaterGridClass } = useGridLayout(() => 'adaptive')
 const cardContainer = ref<HTMLElement | null>(null)
 const removals = useCardRemoval({
@@ -846,9 +846,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${removals.d
 <template>
   <LibraryWorkspace v-if="getCSRF()" :label="t('watch_later.title')">
     <main
-      v-layout-editable="'watch-later-layout'"
       :aria-busy="isLoading || batch.busy.value"
-      data-layout-editable-id="watch-later-layout"
     >
       <Button v-if="requiresFullLibrary && !noMoreContent && !isLoading && !requestFailed" type="secondary" :disabled="batch.busy.value" @click="loadCompleteLibrary()">
         {{ t('common.load_more') }}
@@ -884,7 +882,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${removals.d
           :action-count="3"
         />
         <!-- watcher later list -->
-        <div v-else-if="watchLaterLayoutMode === 'list'" ref="cardContainer">
+        <div v-else-if="watchLaterLayoutMode === 'list'" ref="cardContainer" v-layout-editable="'watch-later-layout'">
           <TransitionGroup name="library-list" :css="currentWatchLaterList.length <= CARD_WINDOW_THRESHOLD" v-bind="currentWatchLaterList.length <= CARD_WINDOW_THRESHOLD ? retiringListTransition : {}">
             <template v-for="row in renderedRows" :key="row.key">
               <div v-if="row.height !== undefined" :style="{ height: `${row.height}px` }" aria-hidden="true" />
@@ -1055,6 +1053,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${removals.d
         <div v-else class="watch-later-grid-root">
           <div
             ref="cardContainer"
+            v-layout-editable="'watch-later-layout'"
             class="watch-later-grid"
             :class="watchLaterGridClass"
           >

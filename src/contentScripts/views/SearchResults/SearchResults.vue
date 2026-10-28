@@ -8,7 +8,6 @@ import { addSearchHistory } from '~/components/SearchBar/searchHistoryProvider'
 import Select from '~/components/Select.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
-import { usePageViewState } from '~/composables/usePageViewState'
 import { syncRouteState } from '~/composables/useRouteState'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -80,13 +79,14 @@ const initialFilters = getFiltersFromUrl()
 // 当前页码（响应式，切换tab时重置为1）
 const currentPage = ref<number>(initialFilters.page)
 
-// 视频筛选条件（不同步到URL）
-const viewState = usePageViewState('search-filters')
-const currentVideoOrder = viewState.ref<string>('videoOrder', '')
-const currentDuration = viewState.ref<number>('duration', 0)
-const currentTimeRange = viewState.ref<string>('timeRange', 'all')
-const customStartDate = viewState.ref<string>('start', '')
-const customEndDate = viewState.ref<string>('end', '')
+// 视频筛选条件（同步到URL，搜索框面板的预筛选经 URL 带入）
+const currentVideoOrder = ref<string>(initialFilters.video.order)
+const currentDuration = ref<number>(initialFilters.video.duration)
+const currentTimeRange = ref<string>(initialFilters.video.timeRange)
+const customStartDate = ref<string>(initialFilters.video.customStartDate)
+const customEndDate = ref<string>(initialFilters.video.customEndDate)
+// The partition filter has no picker while Bilibili rebuilds it; a URL that carries one still applies.
+const currentTids = ref<number>(initialFilters.video.tids)
 
 // 用户筛选条件（同步到URL）
 const currentUserOrder = ref<string>(initialFilters.userOrder)
@@ -102,6 +102,7 @@ const videoFilters = computed(() => ({
   timeRange: currentTimeRange.value,
   customStartDate: customStartDate.value,
   customEndDate: customEndDate.value,
+  tids: currentTids.value,
 }))
 
 const userFilters = computed(() => ({
@@ -208,6 +209,12 @@ async function handleUrlChange() {
     currentUserOrder.value = filters.userOrder
     currentUserType.value = filters.userType
     currentLiveSubCategory.value = filters.liveSubCategory
+    currentVideoOrder.value = filters.video.order
+    currentDuration.value = filters.video.duration
+    currentTimeRange.value = filters.video.timeRange
+    customStartDate.value = filters.video.customStartDate
+    customEndDate.value = filters.video.customEndDate
+    currentTids.value = filters.video.tids
     await nextTick()
     if (restoreGeneration !== urlRestoreGeneration)
       return
@@ -264,6 +271,22 @@ watch([currentUserOrder, currentUserType], () => {
     pn: 1,
   })
 }, { deep: false })
+
+// 监听视频筛选条件变化
+watch([currentVideoOrder, currentDuration, currentTimeRange, customStartDate, customEndDate], () => {
+  if (restoringFromUrl || !normalizedKeyword.value)
+    return
+  const custom = currentTimeRange.value === 'custom'
+  currentPage.value = 1
+  updateUrlParams({
+    order: currentVideoOrder.value,
+    duration: currentDuration.value,
+    time_range: currentTimeRange.value,
+    pubtime_begin: custom ? customStartDate.value : '',
+    pubtime_end: custom ? customEndDate.value : '',
+    pn: 1,
+  })
+})
 
 // 监听直播子分类变化
 watch(currentLiveSubCategory, () => {

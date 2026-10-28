@@ -5,7 +5,6 @@ import type { BewlyWidescreenTab } from '~/utils/bewlyWidescreen/types'
 export interface PlaybackRailTabs {
   tablist: HTMLElement
   activeTab: BewlyWidescreenTab
-  recommendations: HTMLElement | null
   /** Changes with the tab list, so the indicator remounts and measures the new one. */
   generation: number
 }
@@ -26,7 +25,6 @@ export function publishRailTabs(tablist: HTMLElement, activeTab: BewlyWidescreen
   playbackRailTabs.value = {
     tablist,
     activeTab,
-    recommendations: tablist.parentElement?.querySelector<HTMLElement>('.bewly-widescreen-panel-recommendations') ?? null,
     generation: current?.tablist === tablist ? current.generation : ++generation,
   }
 }

@@ -2,7 +2,6 @@
 import { useMediaQuery } from '@vueuse/core'
 import type { AsyncComponentLoader } from 'vue'
 
-import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import Logo from '~/components/Logo.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
@@ -125,6 +124,7 @@ function unsubscribeHomeEvents() {
 // 使用全局的homeActivatedPage状态
 const activatedPage = homeActivatedPage
 const homeGridLayout = useLayoutEditSettingValue('page.home.gridLayout', () => gridLayout.value.home)
+provide('layoutEditableGridId', 'home-video-grid')
 function preventBackgroundSelection(event: MouseEvent) {
   if (isLayoutEditing.value || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey
     || window.getSelection()?.isCollapsed === false || !(event.target instanceof HTMLElement)) {
@@ -198,10 +198,6 @@ restorePreservedForYou()
 const tabContentLoading = ref<boolean>(false)
 const currentTabs = ref<HomeTab[]>([])
 const tabContentRef = ref<HTMLElement>()
-const recommendationPageRef = ref<{ startImmersive?: (trigger: HTMLElement) => void }>()
-function enterImmersive(event: MouseEvent) {
-  recommendationPageRef.value?.startImmersive?.(event.currentTarget as HTMLElement)
-}
 const tabContentMinHeight = ref<number>()
 const shouldShowHomeTabs = computed(() => currentTabs.value.length > 1)
 const recommendationSwitcherEnabled = useLayoutEditSettingValue('page.home.recommendationSwitcher', () => settings.value.showRecommendationModeSwitcher)
@@ -443,9 +439,7 @@ watch(tabContentLoading, (loading) => {
             />
           </div>
           <div
-            v-layout-editable="'home-search'"
             class="home-search-stage__sticky-search"
-            data-layout-editable-id="home-search"
           >
             <div
               ref="searchDock"
@@ -453,6 +447,7 @@ watch(tabContentLoading, (loading) => {
               :class="{ 'home-search-stage__dock--brand-logo': settings.topBarLogoStyle === 'brand', 'home-search-stage__dock--departed': searchDeparted }"
             >
               <SearchBar
+                layout-editable-id="home-search"
                 :focused-character="showHomeSearchCharacter ? settings.searchPageSearchBarFocusCharacter : undefined"
                 :show-hot-search="settings.showHotSearchInTopBar"
                 :top-bar-appearance="true"
@@ -489,6 +484,7 @@ watch(tabContentLoading, (loading) => {
                 />
                 <button
                   v-for="tab in currentTabs" :key="tab.page"
+                  v-layout-editable="'home-tabs'"
                   type="button" :aria-pressed="activatedPage === tab.page"
                   class="home-tab-button bew-segment-control__item bew-segment-control__item--wide"
                   data-segment-item
@@ -505,16 +501,6 @@ watch(tabContentLoading, (loading) => {
         </div>
 
         <div class="home-header-actions">
-          <IconButton
-            v-if="activatedPage === HomeSubPage.ForYou && settings.showImmersiveModeEntry"
-            class="bew-icon-button--control"
-            :label="$t('settings.immersive_mode')"
-            :title="$t('settings.immersive_mode')"
-            :disabled="tabContentLoading"
-            @click="enterImmersive"
-          >
-            <span class="i-tabler:player-play" aria-hidden="true" />
-          </IconButton>
           <RecommendationModeSwitcher
             v-if="reserveRecommendationModeSwitcher"
             class="home-control-surface"
@@ -536,6 +522,7 @@ watch(tabContentLoading, (loading) => {
             />
             <button
               v-for="icon in gridLayoutIcons" :key="icon.value"
+              v-layout-editable="'home-grid-switcher'"
               type="button"
               class="home-grid-layout-item bew-segment-control__item bew-segment-control__item--icon"
               data-segment-item
@@ -557,8 +544,6 @@ watch(tabContentLoading, (loading) => {
       <div
         v-if="homeActive"
         ref="tabContentRef"
-        v-layout-editable="'home-video-grid'"
-        data-layout-editable-id="home-video-grid"
         :style="tabContentMinHeight === undefined ? undefined : { minHeight: `${tabContentMinHeight}px` }"
         min-w-0
       >
@@ -575,8 +560,7 @@ watch(tabContentLoading, (loading) => {
           />
           <Component
             :is="pages[activatedPage]"
-            v-else
-            ref="recommendationPageRef" :key="`${activatedPageCacheKey}:${homeAccountGeneration}`"
+            v-else :key="`${activatedPageCacheKey}:${homeAccountGeneration}`"
             :grid-layout="homeGridLayout"
             @before-loading="toggleTabContentLoading(true)"
             @after-loading="toggleTabContentLoading(false)"
@@ -633,7 +617,7 @@ watch(tabContentLoading, (loading) => {
 }
 
 .home-search-stage__dock {
-  width: min(var(--b-search-bar-max-width, 550px), 100%);
+  width: min(var(--bew-search-bar-max-width), 100%);
   min-width: 0;
   margin-inline: auto;
 }

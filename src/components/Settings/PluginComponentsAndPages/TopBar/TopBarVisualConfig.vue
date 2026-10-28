@@ -14,7 +14,7 @@ import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
 
 const { t } = useI18n()
 
-type BadgeType = 'number' | 'dot' | 'none'
+type BadgeType = 'dot' | 'none'
 
 interface TopBarComponent {
   key: string
@@ -46,7 +46,7 @@ const topBarComponents = computed<TopBarComponent[]>(() => [
     key: 'watchLater',
     i18nKey: 'topbar.watch_later',
     icon: 'i-tabler:playlist',
-    supportsBadge: true,
+    supportsBadge: false,
   },
   {
     key: 'creatorCenter',
@@ -63,7 +63,6 @@ const topBarComponents = computed<TopBarComponent[]>(() => [
 ])
 
 const badgeOptions = computed(() => [
-  { label: t('settings.top_bar_icon_badges_opt.number'), value: 'number' },
   { label: t('settings.top_bar_icon_badges_opt.dot'), value: 'dot' },
   { label: t('settings.top_bar_icon_badges_opt.none'), value: 'none' },
 ])
@@ -72,7 +71,7 @@ function createDefaultComponentConfig(component: TopBarComponent) {
   return {
     key: component.key,
     visible: true,
-    badgeType: (component.supportsBadge ? 'number' : 'none') as BadgeType,
+    badgeType: (component.supportsBadge ? 'dot' : 'none') as BadgeType,
   }
 }
 
@@ -167,7 +166,6 @@ function toggleChannel(value: string) {
   <div class="topbar-settings-groups" :data-settings-title="$t('settings.group_topbar')">
     <SettingsItemGroup
       data-setting-id="settings.topbar_display_settings" :title="$t('settings.topbar_display_settings')"
-      :desc="$t('settings.topbar_display_settings_desc')"
     >
       <SettingsItem
         v-if="!settings.touchScreenOptimization" setting-id="settings.open_top_bar_items_in_bewly"
@@ -181,12 +179,10 @@ function toggleChannel(value: string) {
 
     <SettingsItemGroup
       data-setting-id="settings.topbar_logo_and_channels" :title="$t('settings.topbar_logo_and_channels')"
-      :desc="$t('settings.topbar_logo_and_channels_desc')"
     >
       <SettingsItem
         setting-id="navigation.topBar.logo"
         :title="$t('settings.top_bar_logo_style')"
-        :desc="$t('settings.top_bar_logo_style_desc')"
         right-width="auto"
       >
         <div
@@ -233,7 +229,6 @@ function toggleChannel(value: string) {
     <SettingsItemGroup
       data-setting-id="navigation.topBar.pinnedChannels"
       :title="$t('settings.group_topbar_pinned_channels')"
-      :desc="$t('settings.topbar_pinned_channels_desc')"
       icon="i-tabler:pin"
       collapsible
       default-collapsed
@@ -291,7 +286,6 @@ function toggleChannel(value: string) {
     <SettingsItemGroup
       data-setting-id="navigation.topBar.components"
       :title="$t('settings.topbar_actions')"
-      :desc="$t('settings.topbar_actions_desc')"
     >
       <SettingsItem
         v-for="component in topBarComponents"
@@ -310,7 +304,7 @@ function toggleChannel(value: string) {
           <div v-if="component.supportsBadge" class="topbar-component-control topbar-component-control--badge">
             <span class="topbar-component-control__label">{{ $t('settings.badge_type') }}</span>
             <Select
-              :model-value="getComponentConfig(component.key)?.badgeType ?? 'number'"
+              :model-value="getComponentConfig(component.key)?.badgeType ?? 'dot'"
               :options="badgeOptions"
               :accessible-label="`${$t(component.i18nKey)} · ${$t('settings.badge_type')}`"
               :disabled="!getComponentConfig(component.key)?.visible"
@@ -331,7 +325,6 @@ function toggleChannel(value: string) {
 
       <SettingsItem
         setting-id="settings.filter_articles_in_moments" :title="$t('settings.filter_articles_in_moments')"
-        :desc="$t('settings.filter_articles_in_moments_desc')"
         right-width="auto"
       >
         <Radio v-model="settings.filterArticlesInMoments" />

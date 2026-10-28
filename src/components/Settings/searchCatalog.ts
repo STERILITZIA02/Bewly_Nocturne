@@ -249,13 +249,6 @@ const entries: SettingsSearchEntry[] = [
     'settings.group_recommendation_mode',
     'settings.show_recommendation_mode_switcher',
     'settings.recommendation_mode_visible_options',
-    'settings.immersive_mode',
-    'settings.immersive_entry',
-    'settings.immersive_wheel',
-    'settings.immersive_keyboard',
-    'settings.immersive_autoplay',
-    'settings.immersive_auto_next',
-    'settings.immersive_preload',
     'settings.remember_no_cookie_recommendation_state',
     'settings.auto_switch_recommendation_mode',
     'settings.preserve_for_you_state',
@@ -409,14 +402,12 @@ const entries: SettingsSearchEntry[] = [
     'settings.group_link_opening_behavior',
     'settings.top_bar_link_opening_behavior',
   ], { keywordKeys: linkOpeningOptionKeys }),
-  ...[
-    ['moments', 'topbar.moments'],
-    ['watchLater', 'topbar.watch_later'],
-  ].flatMap(([, titleKey]) => createEntries(topBarRoute, [titleKey!], {
+  ...createEntries(topBarRoute, ['topbar.moments'], {
     keywordKeys: ['settings.visibility', 'settings.badge_type', 'settings.top_bar_icon_badges_opt'],
-  })),
+  }),
   ...[
     ['favorites', 'topbar.favorites'],
+    ['watchLater', 'topbar.watch_later'],
     ['history', 'topbar.history'],
     ['creatorCenter', 'topbar.creative_center'],
     ['upload', 'topbar.upload'],
@@ -724,8 +715,6 @@ export const settingsSearchEntries = entries.map((entry) => {
     parents = ['settings.enable_custom_play_order_overrides', 'settings.default_custom_play_order']
   if (key.startsWith('settings.auto_play_'))
     parents = ['settings.use_bilibili_default_auto_play']
-  if (key.startsWith('settings.immersive_') && !['settings.immersive_mode', 'settings.immersive_entry'].includes(key))
-    parents = ['settings.immersive_entry']
   if (key.startsWith('settings.moments_preview_'))
     parents = ['settings.moments_enable_video_preview']
   if (previewKeys.has(key))

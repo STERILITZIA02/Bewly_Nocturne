@@ -28,6 +28,7 @@ const useLightText = computed(() => forceWhiteIcon.value && !settings.value.disa
       <SearchBar
         v-if="showSearchBar"
         v-model="searchKeyword"
+        layout-editable-id="topbar-search"
         :active="active"
         class="search-bar"
         :force-light-text="useLightText"

@@ -48,13 +48,7 @@ export function useIframeDocumentHost(frame: Ref<HTMLIFrameElement | null | unde
     if (!search)
       return
     lastSearchRequestId = Number(data.requestId)
-    const target = new URL(resolveSearchNavigationTarget(search.keyword))
-    if (search.category !== 'all') {
-      if (target.hostname === 'www.bilibili.com')
-        target.searchParams.set('category', search.category)
-      else target.pathname = `/${search.category === 'user' ? 'upuser' : search.category}`
-    }
-    openSearchResultsInCurrentTab(target.href)
+    openSearchResultsInCurrentTab(resolveSearchNavigationTarget(search.keyword, search.category))
   }
   watch([frame, active], ([iframe, enabled], _previous, onCleanup) => {
     channel.clear()

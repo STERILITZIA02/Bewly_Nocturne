@@ -31,7 +31,7 @@ export interface VideoSearchRequest extends SearchRequestBase {
   filters?: {
     order?: string
     duration?: number
-    categoryId?: string | number
+    tids?: number
     pubtimeBegin?: number
     pubtimeEnd?: number
   }
@@ -95,7 +95,7 @@ export const SEARCH_API_DEFINITIONS = {
       page_size: 20,
       order: undefined as string | undefined,
       duration: undefined as number | undefined,
-      category_id: undefined as string | number | undefined,
+      tids: undefined as number | undefined,
       pubtime_begin_s: undefined as number | undefined,
       pubtime_end_s: undefined as number | undefined,
       context: undefined as string | undefined,
@@ -256,9 +256,7 @@ export function parseAnonymousSearchRequest(value: unknown): SearchRequest {
         filters: {
           ...(stringValue(filters.order) ? { order: stringValue(filters.order) } : {}),
           ...(finiteNumber(filters.duration) !== undefined ? { duration: finiteNumber(filters.duration) } : {}),
-          ...(typeof filters.categoryId === 'string' || typeof filters.categoryId === 'number'
-            ? { categoryId: filters.categoryId }
-            : {}),
+          ...(finiteNumber(filters.tids) ? { tids: finiteNumber(filters.tids) } : {}),
           ...(finiteNumber(filters.pubtimeBegin) !== undefined ? { pubtimeBegin: finiteNumber(filters.pubtimeBegin) } : {}),
           ...(finiteNumber(filters.pubtimeEnd) !== undefined ? { pubtimeEnd: finiteNumber(filters.pubtimeEnd) } : {}),
         },
@@ -324,7 +322,7 @@ export function buildSearchApiRequest(input: SearchRequest): BuiltSearchApiReque
     case 'video':
       assignNonEmpty(params, 'order', request.filters?.order)
       assignNonEmpty(params, 'duration', request.filters?.duration)
-      assignNonEmpty(params, 'category_id', request.filters?.categoryId)
+      assignNonEmpty(params, 'tids', request.filters?.tids)
       assignNonEmpty(params, 'pubtime_begin_s', request.filters?.pubtimeBegin)
       assignNonEmpty(params, 'pubtime_end_s', request.filters?.pubtimeEnd)
       assignNonEmpty(params, 'context', request.context)

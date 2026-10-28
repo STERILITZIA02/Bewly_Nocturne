@@ -3,16 +3,12 @@ import { useResizeObserver } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
-import ALink from '~/components/ALink.vue'
 import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
 import LibraryBleedStrip from '~/components/LibraryBleedStrip.vue'
 import LibraryDateRange from '~/components/LibraryDateRange.vue'
 import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
 import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
-import LibraryHero from '~/components/LibraryHero.vue'
-import LibraryHeroCarousel from '~/components/LibraryHeroCarousel.vue'
-import LibraryHeroSkeleton from '~/components/LibraryHeroSkeleton.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
@@ -31,10 +27,11 @@ import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { useLibraryBatchSelection } from '~/composables/useLibraryBatchSelection'
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
+import { usePageSearchIntent } from '~/composables/usePageSearchIntent'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
-import { LIBRARY_HERO_RENDER_RADIUS } from '~/constants/library'
 import SelectionOverlay from '~/contentScripts/views/WatchLater/WatchLaterSelectionOverlay.vue'
+import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import type { HistoryGroupInterval } from '~/logic/storage'
 import type { List as HistoryItem } from '~/models/history/history'
@@ -44,7 +41,7 @@ import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getAdaptiveGridColumnCount } from '~/utils/gridLayout'
-import { getHistoryResumeUrl, getHistoryUrl, getHistoryVideoIdentity } from '~/utils/historyTarget'
+import { getHistoryUrl, getHistoryVideoIdentity } from '~/utils/historyTarget'
 import { normalizeIntlLocale } from '~/utils/locale'
 import { getCSRF, getUserID, removeHttpFromUrl } from '~/utils/main'
 import { retiringTransition } from '~/utils/motionPresence'
@@ -108,15 +105,13 @@ function saveStripSnapshot(key: string, snapshot: CardWindowSnapshot) {
   if (historyGroups.value.some(group => `group:${group.key}` === key))
     stripSnapshots.set(key, snapshot)
 }
-// The group the list starts at: the hero's current card (see the hero row
-// below). The groups before it come back by choosing them in the hero.
+// The group the list starts at, chosen in the day strip; choosing the first
+// day brings back the whole list. Only the plain newest-first list starts late.
 const startGroupKey = ref<string>()
-// The hero row shows while the plain newest-first list does.
-const showHero = computed(() => !submittedKeyword.value && sortOrder.value === 'newest' && !hasHistoryFilters(filters.value) && historyGroups.value.length > 0)
-const heroKey = computed(() => historyGroups.value.some(group => group.key === startGroupKey.value) ? startGroupKey.value! : historyGroups.value[0]?.key ?? '')
+const plainList = computed(() => !submittedKeyword.value && sortOrder.value === 'newest' && !hasHistoryFilters(filters.value))
 const shownGroups = computed(() => {
   const groups = historyGroups.value
-  const start = showHero.value ? groups.findIndex(group => group.key === startGroupKey.value) : -1
+  const start = plainList.value ? groups.findIndex(group => group.key === startGroupKey.value) : -1
   return start > 0 ? groups.slice(start) : groups
 })
 function groupLabel(group: HistoryGroup) {
@@ -235,7 +230,9 @@ useResizeObserver(historyContent, (entries) => {
 // size, and must not make the row taller than its visible cards.
 const cardHeight = computed(() => Math.round(cardWidth.value / VIDEO_CARD_COVER_ASPECT_RATIO + 56))
 const HEADING_HEIGHT = 28
-const rowGap = ref(24)
+// Matches `.history-groups`' gap: wide enough that the wheel over it scrolls
+// the page rather than a row's strip (user request).
+const rowGap = ref(48)
 const rowHeight = computed(() => HEADING_HEIGHT + 12 + cardWidth.value / VIDEO_CARD_COVER_ASPECT_RATIO + 80)
 const groupByKey = computed(() => new Map(shownGroups.value.map(group => [`group:${group.key}`, group])))
 const cardWindow = useCardWindow({
@@ -283,7 +280,7 @@ function jumpToDay(dayKey: string) {
 // The list below starts at the chosen group (user-specified): its history
 // loads in place of the scroll, the later pages following as usual.
 function selectStartGroup(groupKey: string) {
-  if (controlsDisabled.value || groupKey === heroKey.value)
+  if (controlsDisabled.value || groupKey === (startGroupKey.value ?? historyGroups.value[0]?.key))
     return
   layoutMotion.cancel()
   batch.clearSelection()
@@ -291,31 +288,6 @@ function selectStartGroup(groupKey: string) {
 }
 // The day strip shows with a second day, or held by skeletons on the first page.
 const showDayStrip = computed(() => historyDays.value.length > 1 || (showSkeletons.value && !historyList.length))
-// The hero row (user-specified), while the plain newest-first list shows: one
-// card per group, its date and hours over the latest video in it left
-// unfinished (else its latest). Choosing another (a peeking card, a swipe, the
-// day strip) starts the list below at that group.
-const heroItems = computed(() => historyGroups.value.map(group => ({ key: group.key, label: groupLabel(group) })))
-// Only the cards the row renders (the current one and a few each side).
-const heroCards = computed(() => {
-  const groups = historyGroups.value
-  const index = groups.findIndex(group => group.key === heroKey.value)
-  return new Map(groups.slice(Math.max(0, index - LIBRARY_HERO_RENDER_RADIUS), index + LIBRARY_HERO_RENDER_RADIUS + 1).map((group) => {
-    const item = group.items.find(item => getHistoryResumeUrl(item)) ?? group.items[0]
-    const resume = getHistoryResumeUrl(item)
-    return [group.key, {
-      resume,
-      href: resume ?? getHistoryUrl(item),
-      props: {
-        image: getHistoryItemCover(item),
-        label: groupLabel(group),
-        eyebrow: groupLabel(group),
-        title: item.show_title || item.title,
-        meta: [item.author_name, resume ? t('library_tools.resume_at', { time: calcCurrentTime(item.progress), total: calcCurrentTime(item.duration) }) : formatHistoryTime(item)].filter(Boolean).join(' · '),
-      },
-    }]
-  }))
-})
 function toggleHistoryGroup(key: string) {
   if (controlsDisabled.value)
     return
@@ -423,6 +395,10 @@ onMounted(() => {
   handleReachBottom.value = handleHistoryReachBottom
   handlePageRefresh.value = handleHistoryPageRefresh
 })
+usePageSearchIntent(AppPage.History, (query) => {
+  keyword.value = query
+  handleSearch()
+})
 watch(accountId, () => {
   if (mounted) {
     batch.reset()
@@ -509,26 +485,6 @@ function jumpToLoginPage() {
           </button>
         </LibraryBleedStrip>
       </section>
-      <Transition name="library-hero" :duration="300">
-        <LibraryHeroCarousel
-          v-if="showHero && !batch.managing.value" :items="heroItems" :current="heroKey" :label="t('history.title')" class="history-hero"
-          :scope="accountId" :disabled="controlsDisabled"
-          :style="showDayStrip ? { '--library-hero-pin': 'calc(var(--bew-control-height) + var(--bew-space-6) * 2)' } : undefined"
-          @select="selectStartGroup"
-        >
-          <template #default="{ item: heroItem }">
-            <LibraryHero v-if="heroCards.get(heroItem.key)" v-bind="heroCards.get(heroItem.key)!.props">
-              <template #actions>
-                <ALink :href="heroCards.get(heroItem.key)!.href" type="videoCard" class="history-hero__resume">
-                  <i i-tabler:player-play-filled aria-hidden="true" />{{ t(heroCards.get(heroItem.key)!.resume ? 'history.continue_watching' : 'history.watch_again') }}
-                </ALink>
-              </template>
-            </LibraryHero>
-          </template>
-        </LibraryHeroCarousel>
-        <!-- The first unfiltered page holds the hero row with a skeleton of the same shape. -->
-        <LibraryHeroSkeleton v-else-if="showSkeletons && !historyList.length && !batch.managing.value" class="history-hero" />
-      </Transition>
       <p v-if="submittedKeyword" class="history-query-summary" role="status">
         {{ t('library_tools.search_results', { query: submittedKeyword }) }}
       </p>
@@ -540,8 +496,8 @@ function jumpToLoginPage() {
       <Empty v-else-if="noMoreContent && !isLoading && !historyList.length" text-only fill :description="t(filtersActive ? 'library_tools.no_matches' : 'common.no_data')" role="status" />
       <HistoryGroupSkeleton v-else-if="showSkeletons && !historyList.length" :cards="cardColumns + 1" />
 
-      <!-- One row per group; a new interval or starting group fades the rows over
-           (after the hero has slid: motion first, then the rows mount). -->
+      <!-- One row per group; a new interval or starting group (chosen in the
+           day strip) fades the rows over. -->
       <Transition v-else name="page-fade" mode="out-in" v-bind="retiringTransition">
         <div :key="`${interval}:${startGroupKey ?? ''}`" ref="historyContainer" class="history-groups">
           <template v-for="entry in renderedRows" :key="entry.key">
@@ -761,7 +717,7 @@ function jumpToLoginPage() {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--bew-space-6);
+  gap: var(--bew-space-12);
   min-width: 0;
 }
 // Each loaded day, starting the list at it; pinned like the Moments up-list.
@@ -794,33 +750,6 @@ function jumpToLoginPage() {
     outline-offset: var(--bew-space-0-5);
   }
 }
-.history-hero {
-  // The content's flex gap is the whole space below it.
-  --library-hero-margin: 0px;
-  --library-hero-gap: var(--bew-space-6);
-}
-.history-hero__resume {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--bew-space-2);
-  height: var(--bew-control-height);
-  padding-inline: var(--bew-space-4);
-  border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-capsule);
-  background: var(--bew-accent-solid);
-  color: var(--bew-on-accent-solid);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-  text-decoration: none;
-  transition: transform var(--bew-duration-fast) var(--bew-ease-standard);
-  i {
-    width: var(--bew-control-icon-size);
-    height: var(--bew-control-icon-size);
-  }
-  &:active {
-    transform: scale(var(--bew-control-press-scale));
-  }
-}
 // A card of the group's strip, as wide as an adaptive-grid column.
 .history-card {
   position: relative;
@@ -832,8 +761,7 @@ function jumpToLoginPage() {
     var(--history-card-height, 224px);
 }
 @media (prefers-reduced-motion: reduce) {
-  .history-day-strip__day,
-  .history-hero__resume {
+  .history-day-strip__day {
     transition: none;
   }
 }

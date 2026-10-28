@@ -144,10 +144,10 @@ onScopeDispose(serverSettings.dispose)
       <SettingsItem setting-id="messages.autoMarkRead" :title="$t('settings.messages_auto_mark_read')" :desc="$t('settings.messages_auto_mark_read_desc')" right-width="auto">
         <Radio v-model="settings.autoMarkPrivateMessagesRead" />
       </SettingsItem>
-      <SettingsItem setting-id="messages.followNew" :title="$t('settings.messages_follow_new')" :desc="$t('settings.messages_follow_new_desc')" right-width="auto">
+      <SettingsItem setting-id="messages.followNew" :title="$t('settings.messages_follow_new')" right-width="auto">
         <Radio v-model="settings.followNewPrivateMessages" />
       </SettingsItem>
-      <SettingsItem setting-id="messages.autoLoadImages" :title="$t('settings.messages_auto_load_images')" :desc="$t('settings.messages_auto_load_images_desc')" right-width="auto">
+      <SettingsItem setting-id="messages.autoLoadImages" :title="$t('settings.messages_auto_load_images')" right-width="auto">
         <Radio v-model="settings.autoLoadPrivateMessageImages" />
       </SettingsItem>
     </SettingsItemGroup>

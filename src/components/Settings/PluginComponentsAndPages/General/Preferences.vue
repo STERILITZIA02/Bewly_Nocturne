@@ -41,10 +41,6 @@ const drawerEscapeBehaviorOptions = computed(() => [
 
 <template>
   <div>
-    <p class="bew-help" mb-4>
-      {{ $t('settings.category_general_desc') }}
-    </p>
-
     <SettingsItemGroup data-setting-id="settings.group_language" :title="$t('settings.group_language')">
       <SettingsItem setting-id="settings.select_language" :title="$t('settings.select_language')" right-width="auto">
         <Select

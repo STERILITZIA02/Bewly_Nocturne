@@ -187,6 +187,7 @@ function arraysEqual<T>(a: T[], b: T[]): boolean {
       <ALink
         v-for="channel in displayedChannels"
         :key="channel.key"
+        v-layout-editable="'topbar-pinned-channels'"
         :href="channel.href"
         type="topBar"
         class="pinned-channels__item bew-segment-control__item bew-segment-control__item--icon"
@@ -207,6 +208,7 @@ function arraysEqual<T>(a: T[], b: T[]): boolean {
     </div>
     <div
       v-if="hiddenCount > 0"
+      v-layout-editable="'topbar-pinned-channels'"
       class="pinned-channels__more"
       :class="{ 'white-icon': props.forceWhiteIcon }"
       :title="hiddenTooltip"

@@ -10,10 +10,9 @@ const { t } = useI18n()
       <div class="conversation-empty-state__symbol" aria-hidden="true">
         <i i-tabler:message-circle />
       </div>
-      <div class="conversation-empty-state__heading">
-        <h2>{{ t('notifications.whisper.select_conversation_empty') }}</h2>
-        <p>{{ t('notifications.whisper.select_conversation_hint') }}</p>
-      </div>
+      <h2 class="conversation-empty-state__heading">
+        {{ t('notifications.whisper.select_conversation_empty') }}
+      </h2>
     </div>
   </section>
 </template>
@@ -54,25 +53,11 @@ const { t } = useI18n()
 }
 
 .conversation-empty-state__heading {
-  display: grid;
-  gap: var(--bew-space-1);
-}
-
-.conversation-empty-state__heading h2,
-.conversation-empty-state__heading p {
   margin: 0;
-}
-
-.conversation-empty-state__heading h2 {
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-heading);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-heading);
-}
-
-.conversation-empty-state__heading p {
-  font-size: var(--bew-font-size-body);
-  line-height: var(--bew-line-height-body);
 }
 
 @media (max-width: breakpoints.$mobile-max) {

@@ -15,7 +15,6 @@ export function registerUpstreamPlayerChecks(check) {
       detectVideoType: () => type,
       detectEndBehaviorVideoType: () => type,
       detectCustomPlayListVideoType: () => type,
-      isImmersiveFrame: () => false,
       invalidatePendingEndPlaybackStateChanges() {},
       userManuallyChangedAutoPlay: false,
       customEndPlaybackHandlerActive: true,

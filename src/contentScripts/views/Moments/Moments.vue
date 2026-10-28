@@ -22,8 +22,10 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
+import { usePageSearchIntent } from '~/composables/usePageSearchIntent'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
+import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { vLayoutEditable } from '~/logic/layoutEdit'
 import { parseDedeUserID } from '~/logic/loginStatus'
@@ -526,6 +528,7 @@ function applyMomentSearch(next: MomentSearch) {
   if (next.keyword !== current.keyword || next.kind !== current.kind || next.time !== current.time)
     momentSearch.value = next
 }
+usePageSearchIntent(AppPage.Moments, keyword => applyMomentSearch({ ...momentSearch.value, keyword }))
 
 async function reapplyMomentFiltersFromCache() {
   if (selectedHostMid.value)

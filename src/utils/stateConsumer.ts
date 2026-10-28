@@ -1,15 +1,13 @@
-import { IFRAME_ACTIVITY_CHANGE } from '~/constants/immersive'
 import type { StateConsumerReply, StateTopic } from '~/constants/stateConsumers'
 import { STATE_CONSUMER_MESSAGE } from '~/constants/stateConsumers'
 
-import { isIframeDocumentActive } from './iframeActivity'
 import { isExtensionContextInvalidatedError, reportRuntimeFailure, sendMessage } from './messaging'
 
 const followed = new Map<StateTopic, () => void>()
 let pageListenersAttached = false
 
 function report(topic: StateTopic, active: boolean) {
-  return sendMessage<{ topic: StateTopic, active: boolean }, StateConsumerReply | undefined>(STATE_CONSUMER_MESSAGE.REGISTER, { topic, active: active && isIframeDocumentActive() })
+  return sendMessage<{ topic: StateTopic, active: boolean }, StateConsumerReply | undefined>(STATE_CONSUMER_MESSAGE.REGISTER, { topic, active })
     .then(reply => reply?.stale === true)
     .catch((error) => {
       if (!isExtensionContextInvalidatedError(error))
@@ -25,13 +23,12 @@ function attachPageListeners() {
   const syncActivity = () => {
     for (const [topic, onStale] of followed) {
       void report(topic, !document.hidden).then((stale) => {
-        if (stale && !document.hidden && isIframeDocumentActive())
+        if (stale && !document.hidden)
           onStale()
       })
     }
   }
   document.addEventListener('visibilitychange', syncActivity)
-  window.addEventListener(IFRAME_ACTIVITY_CHANGE, syncActivity)
   // The document leaves (navigation or close); a bfcache return registers again.
   window.addEventListener('pagehide', () => {
     if (followed.size)

@@ -7,7 +7,6 @@ import { useIframePlaybackContext } from '~/logic/iframePageState'
 import type { AutoPlayMode, DefaultVideoPlayerMode, VideoPlayerModeContext, VideoPlayerModeOverride } from '~/logic/storage'
 import { selectors as playbackSelectors } from '~/utils/bewlyWidescreen/constants'
 import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
-import { isImmersiveFrame } from '~/utils/iframeActivity'
 import {
   applyConfiguredPlaybackRate,
   resolvePlaybackRateChange,
@@ -472,111 +471,6 @@ function isPlaylistHandoffEnabled(): boolean {
   return autoHandoffRadio?.checked === true
 }
 
-/** Borrow only confirmed native end controls; a later user choice wins. */
-export function createImmersiveEndPlaybackPolicy() {
-  let auto: { button: HTMLElement, original: boolean } | undefined
-  let handoff: { original: string, applied: string } | undefined
-  let loop: { original: boolean, applied: boolean } | undefined
-  let userAuto = false
-  let userHandoff = false
-  let userLoop = false
-  let pauseRequested = false
-  let applying = false
-  const userChange = (event: Event) => {
-    if (applying || !event.isTrusted || !(event.target instanceof Element))
-      return
-    if (event.target.closest('.auto-play, .continuous-btn'))
-      userAuto = true
-    if (event.target.closest('.bpx-player-ctrl-setting-handoff'))
-      userHandoff = true
-    if (event.target.closest('.bpx-player-ctrl-setting-loop'))
-      userLoop = true
-  }
-  document.addEventListener('click', userChange, true)
-  document.addEventListener('change', userChange, true)
-  function restoreHandoff() {
-    const selected = document.querySelector<HTMLInputElement>('.bpx-player-ctrl-setting-handoff input:checked')
-    if (handoff && !userHandoff && selected?.value === handoff.applied)
-      document.querySelector<HTMLInputElement>(`.bpx-player-ctrl-setting-handoff input[value="${handoff.original}"]`)?.click()
-    handoff = undefined
-  }
-  function setHandoff(value: '0' | '2') {
-    const selected = document.querySelector<HTMLInputElement>('.bpx-player-ctrl-setting-handoff input:checked')
-    const target = document.querySelector<HTMLInputElement>(`.bpx-player-ctrl-setting-handoff input[value="${value}"]`)
-    if (!selected || !target || userHandoff)
-      return
-    handoff ??= { original: selected.value, applied: value }
-    if (selected !== target)
-      target.click()
-    handoff.applied = value
-  }
-  function restoreLoop() {
-    const input = document.querySelector<HTMLInputElement>('.bpx-player-ctrl-setting-loop input[type=checkbox]')
-    if (loop && !userLoop && input?.checked === loop.applied) {
-      input.checked = loop.original
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-    }
-    loop = undefined
-  }
-  return {
-    sync(boundary: boolean, multipart = false) {
-      applying = true
-      try {
-        const mode = multipart && !settings.value.useBilibiliDefaultAutoPlay ? settings.value.autoPlayMultipart : 'default'
-        pauseRequested = mode === 'pauseAtEnd' && !userHandoff
-        if (mode !== 'default' && !userLoop) {
-          const input = document.querySelector<HTMLInputElement>('.bpx-player-ctrl-setting-loop input[type=checkbox]')
-          if (input) {
-            loop ??= { original: input.checked, applied: mode === 'loop' }
-            loop.applied = mode === 'loop'
-            if (input.checked !== loop.applied) {
-              input.checked = loop.applied
-              input.dispatchEvent(new Event('change', { bubbles: true }))
-            }
-          }
-        }
-        else {
-          restoreLoop()
-        }
-        const current = findAutoPlaySwitchButton()
-        if (current && !userAuto) {
-          if (!auto || auto.button !== current.button)
-            auto = { button: current.button, original: auto?.original ?? current.isOn }
-          if (current.isOn)
-            current.button.click()
-        }
-        if (!boundary) {
-          if (mode === 'default')
-            restoreHandoff()
-          else setHandoff(mode === 'loop' || mode === 'pauseAtEnd' ? '2' : '0')
-          return false
-        }
-        setHandoff('2')
-        const selected = document.querySelector<HTMLInputElement>('.bpx-player-ctrl-setting-handoff input:checked')
-        const pause = document.querySelector<HTMLInputElement>('.bpx-player-ctrl-setting-handoff input[value="2"]')
-        // Unknown controls leave a visible manual next action, never two end owners.
-        return !pauseRequested && !isLoopEnabled() && !!current && !findAutoPlaySwitchButton()?.isOn
-          && (!selected || pause?.checked === true)
-      }
-      finally { applying = false }
-    },
-    allowsAdvance() {
-      return !pauseRequested && !isLoopEnabled() && !isAutoPlayEnabled() && !isPlaylistHandoffEnabled()
-    },
-    dispose() {
-      document.removeEventListener('click', userChange, true)
-      document.removeEventListener('change', userChange, true)
-      applying = true
-      restoreHandoff()
-      restoreLoop()
-      const current = findAutoPlaySwitchButton()
-      if (auto && !userAuto && current?.button === auto.button && !current.isOn && auto.original)
-        auto.button.click()
-      applying = false
-    },
-  }
-}
-
 // 视频类型枚举
 export enum VideoType {
   MULTIPART = 'multipart', // 分P视频
@@ -715,8 +609,6 @@ export function resolveMomentsDialogPlayerModeOverride(context?: string): Defaul
 }
 
 export function resolveDefaultVideoPlayerMode(): DefaultVideoPlayerMode {
-  if (isImmersiveFrame())
-    return 'bewlyWidescreen'
   const embeddedMode = resolveMomentsDialogPlayerModeOverride(useIframePlaybackContext().value)
   if (embeddedMode)
     return embeddedMode
@@ -1015,8 +907,6 @@ function disableNativeEndPlaybackBehavior(videoType = detectEndBehaviorVideoType
 
 // 根据视频类型和设置应用自动连播状态
 export function applyAutoPlayByVideoType() {
-  if (isImmersiveFrame())
-    return
   invalidatePendingEndPlaybackStateChanges()
   const videoType = detectEndBehaviorVideoType()
 

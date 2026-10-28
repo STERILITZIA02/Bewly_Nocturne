@@ -73,7 +73,6 @@ const videoCardOpenModeOptions = computed(() => {
     <SettingsItem
       v-if="props.scope === 'videoCard'" setting-id="settings.video_card_link_opening_behavior"
       :title="$t('settings.video_card_link_opening_behavior')"
-      :desc="$t('settings.video_card_link_opening_behavior_desc')"
       right-width="auto"
     >
       <Select

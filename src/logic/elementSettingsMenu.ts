@@ -78,10 +78,10 @@ function topBarActions(target: LayoutEditableDescriptor, t: (key: string) => str
     const actions: ElementSettingsAction[] = [{ value: `topbar:${key}:visible`, label: t(target.topBarKey ? 'settings.visibility' : item.titleKey), icon: 'i-tabler:eye', kind: 'toggle', closeOnSelect: false, checked: isComponentVisible(key), run: () => {
       ensureConfig().visible = !isComponentVisible(key)
     } }]
-    if (!target.topBarKey || !['moments', 'watchLater'].includes(key))
+    if (!target.topBarKey || key !== 'moments')
       return actions
     const current = getBadgeType(key)
-    for (const badge of ['number', 'dot', 'none'] as const) {
+    for (const badge of ['dot', 'none'] as const) {
       actions.push({ value: `badge:${badge}`, label: `${t('settings.badge_type')} · ${t(`settings.top_bar_icon_badges_opt.${badge}`)}`, icon: 'i-tabler:bell', kind: 'radio', closeOnSelect: false, checked: current === badge, run: () => {
         ensureConfig().badgeType = badge
       } })

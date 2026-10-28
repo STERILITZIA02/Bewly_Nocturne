@@ -22,7 +22,7 @@ import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
 import { VIDEO_CARD_COVER_ASPECT_RATIO, VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
-import { isLayoutEditing } from '~/logic/layoutEdit'
+import { isLayoutEditing, vLayoutEditable } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import { getAdaptiveGridColumnCount, getListGridColumnCount } from '~/utils/gridLayout'
@@ -236,6 +236,7 @@ const emit = defineEmits<{
 }>()
 
 const membership = useTopBarStore()
+const layoutEditableGridId = inject('layoutEditableGridId', '')
 const removalLifetime = createAccountLifetime(() => membership.isLogin && String(membership.userInfo.mid) === getUserID() ? membership.userInfo.mid : null)
 const watchLaterRemovals = useCardRemoval({
   items: () => props.items,
@@ -1152,6 +1153,7 @@ function getUniqueKey(item: T, index: number): string | number {
     <div
       v-else
       ref="gridContainerRef"
+      v-layout-editable="layoutEditableGridId"
       class="video-card-grid-container"
       :class="renderedGridClass"
       m="b-0 t-0" relative w-full

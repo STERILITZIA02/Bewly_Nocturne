@@ -523,8 +523,8 @@ defineExpose({
 @use "../../styles/popoverCards";
 
 .favorites-pop {
-  width: 450px;
-  height: min(500px, var(--bew-popover-max-height));
+  width: var(--bew-popover-panel-wide-width);
+  height: var(--bew-popover-panel-height);
 }
 
 // The title lines up with the folder labels below it (column + row inset).

@@ -43,8 +43,6 @@ export async function loadSourceModule(file: string, imports: Record<string, unk
     imports = { './momentFeedTypes': await import('../src/contentScripts/views/Moments/momentFeedTypes'), ...imports }
   if (source.includes('from \'~/constants/appClient\''))
     imports = { '~/constants/appClient': await import('../src/constants/appClient'), ...imports }
-  if (source.includes('from \'~/constants/immersive\''))
-    imports = { '~/constants/immersive': await import('../src/constants/immersive'), ...imports }
   if (source.includes('from \'~/logic/recommendationMode\'') && !('~/logic/recommendationMode' in imports)) {
     const storage = imports['~/logic/storage'] ?? imports['~/logic'] ?? { settings: { value: { recommendationMode: 'web' } } }
     imports = { '~/logic/recommendationMode': await loadSourceModule('../src/logic/recommendationMode.ts', {
@@ -56,7 +54,7 @@ export async function loadSourceModule(file: string, imports: Record<string, unk
   }
   // Dependency-free helpers; fixtures may still override them. They run in the
   // fixture's own sandbox so defaults such as `location.href` read its globals.
-  for (const name of ['momentsReadPosition', 'scrollIntent', 'bilibiliLocale', 'bilibiliLiveContext', 'viewSnapshotBudget', 'fullscreenChange', 'pageBridgeChannel', 'videoMetadataBridge', 'playbackTab', 'themeColor', 'iframeActivity', 'motionPriority', 'reducedMotion', 'cssSelectors', 'htmlDecode', 'uriParse', 'textAutospace', 'viewportGeometry']) {
+  for (const name of ['momentsReadPosition', 'scrollIntent', 'bilibiliLocale', 'bilibiliLiveContext', 'viewSnapshotBudget', 'fullscreenChange', 'pageBridgeChannel', 'videoMetadataBridge', 'playbackTab', 'themeColor', 'motionPriority', 'reducedMotion', 'cssSelectors', 'htmlDecode', 'uriParse', 'textAutospace', 'viewportGeometry']) {
     for (const path of [`~/utils/${name}`, `../utils/${name}`, `./${name}`]) {
       if (source.includes(`from '${path}'`) && !(path in imports))
         imports = { [path]: await loadSourceModule(`../src/utils/${name}.ts`, {}, globals), ...imports }

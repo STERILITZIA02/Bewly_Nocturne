@@ -5,8 +5,10 @@ import { settings } from '~/logic'
 import { getLinkFallbackPage } from '~/utils/configuredLinkNavigation'
 import { IFRAME_SEARCH_REQUEST, parseIframeSearchUrl } from '~/utils/iframeSearch'
 import { isHomePage, isInIframe, openLinkToNewTab } from '~/utils/main'
-import { getDefaultCustomUseOriginalBiliPage, resolvePluginSearchResultsUsage } from '~/utils/pageMode'
+import { buildNativeSearchUrl, getDefaultCustomUseOriginalBiliPage, resolvePluginSearchResultsUsage } from '~/utils/pageMode'
 import { resolveSearchOpenAction } from '~/utils/searchNavigationCore'
+import type { SearchScope, SearchVideoFilters } from '~/utils/searchUrl'
+import { buildPluginSearchResultsUrl, EMPTY_SEARCH_VIDEO_FILTERS } from '~/utils/searchUrl'
 import { openLinkInBackground } from '~/utils/tabs'
 
 export { getPluginSearchResultsUrl } from './searchUrl'
@@ -27,18 +29,10 @@ export function shouldUsePluginSearchResultsPage(): boolean {
   )
 }
 
-export function resolveSearchNavigationTarget(keyword: string): string {
-  const normalized = keyword.trim()
-  const target = shouldUsePluginSearchResultsPage()
-    ? new URL('https://www.bilibili.com/')
-    : new URL('https://search.bilibili.com/all')
-
-  if (shouldUsePluginSearchResultsPage())
-    target.searchParams.set('page', 'SearchResults')
-  if (normalized)
-    target.searchParams.set('keyword', normalized)
-
-  return target.toString()
+/** Search target for a keyword with an optional scope and video filters (Bewly or native results). */
+export function resolveSearchNavigationTarget(keyword: string, scope: SearchScope = 'all', filters: SearchVideoFilters = EMPTY_SEARCH_VIDEO_FILTERS): string {
+  const target = buildPluginSearchResultsUrl(keyword, scope, filters)
+  return shouldUsePluginSearchResultsPage() ? target : buildNativeSearchUrl(target)
 }
 
 function isPluginSearchResultsDestination(destination: string): boolean {

@@ -124,23 +124,19 @@ common:
     top: 頂部
     bottom: 底部
 layout_editor:
-  hint: 版面編輯中：選擇一個區域進行調整，按 Esc 可取消
-  menu_label: 版面編輯選單
-  edit_layout: 編輯此版面
-  quick_edit: 快速版面編輯
-  quick_edit_desc: 關閉設定後進入視覺化編輯；選擇頁面元素即可調整，按 Esc 可隨時取消。
+  no_settings: 沒有相關設定項目
+  menu_label: 視覺化編輯選單
+  quick_edit: 視覺化編輯
+  quick_edit_desc: 關閉設定後選擇頁面元素進行預覽；完成時套用所有變更，按 Esc 取消。
   start_quick_edit: 開始編輯
-  adjust_target: 調整此元素
   open_setting: 開啟對應設定
+  apply_open_setting: 套用並開啟設定
   preview: 即時預覽
   done: 完成
-  scope_current_page: 目前頁面
-  scope_all_pages: 所有頁面
   target_dock: Dock
-  target_topbar: 頂欄
   target_sidebar: 側欄
   target_page_mode_switcher: 頁面模式切換器
-  target_topbar_logo: 頂欄標誌與頻道
+  target_topbar_logo: 頂欄標誌
   target_topbar_pinned_channels: 頂欄固定頻道
   target_search_bar: 搜尋列
   target_topbar_actions: 頂欄操作區
@@ -212,16 +208,6 @@ player_adjustment:
   delay: 聲音延後
   delay_note: 僅修正聲音領先的固定偏移，不會自動同步影音或修復動態緩衝。音源無法處理時保留原聲。
 settings:
-  immersive_queue_filtered: 本輪結果已被篩選，可以繼續尋找
-  immersive_queue_stalled: 本輪沒有新內容，可以重試
-  immersive_scope: 一般稿件按分 P 策略播放；EP 播放一集，SS 播放進入時解析出的選集。
-  immersive_queue_loading: 正在尋找下一則
-  immersive_queue_continue: 本輪未找到可播放項目，可以繼續尋找
-  immersive_queue_failed: 下一則讀取失敗，請重試
-  immersive_queue_ended: 推薦佇列已到末尾
-  immersive_playback_gesture: 請在原生播放器中點選播放
-  immersive_playback_error: 播放未成功，請使用原生重試或手動切換
-  immersive_playback_unknown: 正在確認播放單元；可操作原生播放器或手動切換
   moments_start_from_last_seen: 進入動態時自動續讀
   moments_start_from_last_seen_desc: 用於全部動態、影片投稿與頂欄影片動態。優先恢復本視窗的閱讀書籤，否則定位至伺服器影片未讀分界；分界不代表所有類型的閱讀位置。
   parameters: 參數
@@ -235,7 +221,6 @@ settings:
   playback_controls: 控制項
   playback_behavior: 播放行為
   list_layouts: 清單與版面
-  list_layouts_desc: 設定觀看紀錄與稍後再看的預設版面。
   search_results_effective_bewly: 目前使用 Bewly 搜尋結果頁。
   search_results_effective_bilibili: 目前使用 Bilibili 搜尋結果頁。
   search_results_controlled_by_mode: 目前使用 Bilibili 搜尋結果頁，由頁面模式中的搜尋頁選擇決定。
@@ -250,7 +235,6 @@ settings:
   moments_preview_swipe: 動態影片預覽滑動定位
   moments_preview_delay: 動態影片預覽延遲
   moments_preview_cover_only: 僅在動態封面內預覽
-  page_mode_desc: 統一選擇頁面模式；在自訂模式下分別選擇各頁面與頂欄。
   app_authorized: 已授權
   settings_data: 設定資料
   page_mode: 頁面模式
@@ -315,33 +299,15 @@ settings:
     placeholder: 搜尋設定
     no_results: 找不到相關設定
     located: 已定位到此設定
-  category_general_desc: 設定語言、互動版面與抽屜行為。
-  category_appearance_desc: 設定毛玻璃、主題顏色、字型與其他頁面的適配。
   group_interaction_layout: 互動與版面
   home_grid_layout: 首頁影片版面
-  home_grid_layout_desc: 調整首頁影片內容的自適應網格或清單欄數。
   group_watch_later_layout: 稍後觀看版面
-  group_watch_later_layout_desc: 僅變更已載入內容的呈現方式，不會重新請求清單。
   watch_later_layout_mode: 版面模式
-  watch_later_layout_mode_desc: 在清單和響應式網格之間切換。
-  category_browsing_home_desc: 設定首頁推薦、內容過濾、關注頁和首頁分頁。
-  category_browsing_video_card_desc: 設定影片卡片的版面、預覽、資訊顯示與開啟方式。
-  category_browsing_favorites_desc: 設定收藏內容的顯示與互動方式。
-  category_navigation_link_opening_desc: 統一設定頂欄、影片卡片與搜尋列連結的開啟位置和抽屜行為。
-  category_navigation_topbar_desc: 調整頂欄元件、置頂頻道與連結開啟方式。
-  category_navigation_dock_desc: 設定 Dock 列與側欄的位置、顯示和快捷操作。
-  category_navigation_search_desc: 設定搜尋入口、外觀、建議、紀錄與結果頁。
-  category_navigation_moments_desc: 設定插件動態頁的左側元件和動態卡片開啟方式。
-  category_navigation_watch_later_page_desc: 設定稍後觀看頁面的內容版面。
-  category_navigation_playback_page_desc: 設定影片預設顯示模式與 Bewly 播放頁互動。
-  category_navigation_messages_page_desc: 設定私訊閱讀、會話列表、記憶體與行動版行為。
   messages_reading_behavior: 閱讀行為
   messages_auto_mark_read: 自動標記已讀
   messages_auto_mark_read_desc: 位於目前會話最新訊息區域時，自動提交已讀狀態。
   messages_follow_new: 位於底部時自動跟隨新訊息
-  messages_follow_new_desc: 閱讀最新訊息時，重新整理後保持在會話底部。
   messages_auto_load_images: 自動載入私訊圖片
-  messages_auto_load_images_desc: 關閉後需要點選圖片預留區域才會載入遠端圖片。
   messages_conversation_list: 會話列表
   messages_show_official_assistants: 顯示官方助手
   messages_density: 訊息密度
@@ -384,12 +350,6 @@ settings:
     network: 網路連線失敗
     invalid-response: 暫時無法讀取訊息設定
     api-error: 操作失敗，請重試
-  category_playback_player_desc: 設定彈幕、字幕、播放記憶、響度與截圖。
-  category_playback_autoplay_desc: 設定自動連播與自訂播放行為。
-  category_bilibili_comments_desc: 增強留言區的使用者資訊與內容顯示。
-  category_bilibili_vip_desc: 設定大會員權益的提醒與自動領取。
-  category_advanced_compatibility_desc: 設定原版頁面、第三方擴充功能和其他頁面的相容行為。
-  category_advanced_maintenance_desc: 匯出備份、匯入設定或還原 Bewly Nocturne 預設配置。
   maintenance:
     title: 備份與重設
     backup_title: 設定備份
@@ -413,7 +373,6 @@ settings:
     preset_single: 預設只套用至目前編輯的配色。
     choose_color: 選擇預設顏色
     title: 視覺風格
-    description: 統一設定顯示模式、配色、字體與介面材質。
     palette: 主題與配色
     preset: 主題
     custom: 自訂
@@ -422,9 +381,7 @@ settings:
     editing_mode: 編輯配色
     editing_mode_desc: 切換要編輯的配色，不改變目前的顯示模式。
     separate_accent: 淺色與深色個別編輯
-    separate_accent_desc: 開啟後分別選擇主題與強調色，切換顯示模式時自動使用對應配色。
     background: 背景
-    background_desc: 作為表面基色，卡片、浮層與輸入框由它統一衍生。顏色會配合目前的淺色或深色模式。
     foreground: 前景
     foreground_desc: 用於文字與中性控制項，顯示時自動維持與背景的對比。
     contrast: 層次對比
@@ -437,7 +394,6 @@ settings:
     interface_font_size_desc: 等比例調整現有文字層級，並保留系統與瀏覽器的文字縮放。
     shadows: 介面陰影
     motion: 減少動態效果
-    motion_desc: 減少介面位移與縮放，保留必要的狀態回饋。
     schedule_start: 淺色模式開始時間
     schedule_end: 淺色模式結束時間
     invalid_color: '請輸入有效的十六進位顏色，例如 #2b2b2b。'
@@ -516,9 +472,8 @@ settings:
   group_video_card: 影片卡片
   group_video_card_display: 顯示與預覽
   group_video_card_content: 卡片內容
-  group_video_card_content_desc: 調整卡片字級與資訊顯示。
   group_video_card_context_menu: 更多選單
-  group_video_card_context_menu_desc: 右鍵或長按卡片可開啟選單。選擇直接顯示的操作，其餘收進「更多操作」。
+  group_video_card_context_menu_desc: 右鍵或長按卡片可開啟選單。選擇直接顯示的操作，其餘收進「進階選項」。
   video_card_context_menu_region_recommendation: 推薦
   video_card_context_menu_region_opening: 開啟
   video_card_context_menu_region_copying: 複製
@@ -527,11 +482,8 @@ settings:
   video_card_content_region_other: 其它
   group_player_components: 播放器組件
   group_player_display_mode: 播放模式
-  group_player_display_mode_desc: 設定基礎顯示模式，並依需要覆寫特定播放情境。
   group_playback_memory: 播放狀態記憶
-  group_playback_memory_desc: 選擇是否記住倍速、影片比例和畫質。
   group_video_page_actions: 影片頁功能
-  group_video_page_actions_desc: 標籤僅用於切換影片頁和播放器控制列中相關按鈕的顯示。
   group_custom_auto_play_behavior: 播放結束行為
   group_custom_auto_play_behavior_desc: 僅清單內連播會在清單結束時停止；連播推薦允許繼續播放推薦影片。
   group_playback_end_behavior: 播放結束行為
@@ -542,15 +494,11 @@ settings:
   group_random_play_settings_desc: 僅用於使用隨機順序的清單。
   group_topbar: 頂部列
   topbar_logo_and_channels: Logo 設定
-  topbar_logo_and_channels_desc: 設定頂部列 Logo 樣式，以及觸控模式下是否顯示首頁按鈕。
   topbar_actions: 頂部列功能圖示
-  topbar_actions_desc: 分別設定右側功能圖示的顯示狀態、角標與相關提醒。
   topbar_user_menu: 頂部列使用者選單
   topbar_display_settings: 頂部列顯示與行為
-  topbar_display_settings_desc: 調整頂部列在不同頁面與互動情境下的顯示方式。
   group_dock: Dock
   group_sidebar: 側邊欄
-  group_sidebar_desc: 位於首頁以外的頁面右側或左側，通常有淺/深色模式切換按鈕和設定按鈕。
   group_color: 顏色
   group_page_style: 頁面樣式
   group_logo: LOGO
@@ -559,13 +507,12 @@ settings:
   group_recommendation_mode: 「為你推薦」推薦模式
   group_recommendation_filters: 「為你推薦」過濾
   group_following: 正在跟隨
-  group_following_desc: 按 UP 主或分組瀏覽投稿，設定直播內容與影片篩選。右鍵 UP 主或分組可管理分組。
+  group_following_desc: 右鍵 UP 主或分組可管理分組。
   group_search_page_mode: 搜尋頁模式
   group_home_tabs: 首頁標籤欄
   group_home_layout: 首頁版面
   group_original_moments_page: Bilibili 頁面
   group_new_moments_page: Bewly動態頁
-  group_new_moments_page_desc: 此頁面並非最終成品，相關形式後續可能會有較大調整。
   group_moments_sidebar: 動態頁左側元件
   group_moments_interaction: 動態卡片互動
   group_settings_sync: 瀏覽器雲端同步
@@ -580,23 +527,18 @@ settings:
   moments_show_live: 顯示正在直播元件
   moments_show_up_list: 顯示經常造訪的 UP 主
   moments_visible_components: 顯示元件
-  moments_visible_components_original_desc: 控制 Bilibili 原版動態頁側欄與橫幅等元件是否顯示。主題色表示顯示，灰色表示隱藏。
-  moments_visible_components_plugin_desc: 控制 Bewly 動態頁側欄與頂部元件是否顯示。主題色表示顯示，灰色表示隱藏。
   moments_filtered_types: 過濾動態
-  moments_filtered_types_desc: 控制各類動態是否出現在 Bewly 動態流中。選中（主題色）表示不過濾，未選中表示過濾。開啟任意過濾後，每次最多請求兩頁，後續內容透過「載入更多」取得。
+  moments_filtered_types_desc: 選中的類型會出現在動態流中，未選中的會被過濾。
   moments_enable_keyword_filter: 啟用關鍵詞過濾
-  moments_enable_keyword_filter_desc: 過濾符合作者、標題、正文或附加內容的動態。啟用有效關鍵詞後，每次最多請求兩頁，後續內容透過「載入更多」取得。
+  moments_enable_keyword_filter_desc: 過濾符合作者、標題、正文或附加內容的動態。
   moments_blocked_keywords: 封鎖關鍵詞
   moments_blocked_keywords_placeholder: 使用換行、逗號或分號分隔關鍵詞
   moments_enable_live_preview: 直播懸停預覽
-  moments_enable_live_preview_desc: 懸停直播動態封面或左側正在直播列表時，靜音預覽直播；移開後停止播放。
   moments_enable_video_preview: 影片動態懸停預覽
-  moments_enable_video_preview_desc: 懸停影片動態或轉發影片時播放預覽，可設定觸發範圍、額外延遲、控制列和拖曳定位。
   moments_grid_columns: 動態欄數
-  moments_grid_columns_desc: 設定 Bewly 動態頁的期望欄數。卡片尺寸會隨欄數自動調整；視窗空間不足時會自動減少欄數，左側欄與動態流整體保持置中。
+  moments_grid_columns_desc: 視窗空間不足時會自動減少欄數。
   moments_grid_columns_option: '{count} 欄'
   moments_filter_up_recommendation: 過濾：UP主的推薦
-  moments_filter_up_recommendation_desc: 過濾所有帶有「UP主的推薦」附加資訊的動態。
   moments_filter_up_recommendation_short: UP主的推薦
   moments_filter_video_dynamic: 影片動態
   moments_filter_draw_dynamic: 圖文動態
@@ -609,7 +551,6 @@ settings:
   moments_filter_live_reservation: 直播預約動態
   moments_filter_live_dynamic: 直播動態
   moments_hide_charge_exclusive: 隱藏充電專屬動態
-  moments_hide_charge_exclusive_desc: 從外掛動態流中過濾所有充電專屬動態。
   moments_card_open_mode: 動態卡片點擊行為
   moments_card_open_mode_desc: 圖文等動態可選擇彈窗、新分頁或背景分頁；影片動態始終在新分頁開啟，直播動態不使用彈窗。
   moments_card_open_mode_opt:
@@ -625,7 +566,6 @@ settings:
     啟用後，如頂部列，你可能需要點選項目才能看到更多資訊，而不是滑鼠移過去就會顯示。影片頁支援雙擊播放、暫停或快進快退，按住左右滑動調整播放進度，以及從播放器左右邊緣上下滑動調整音量。（舊版頂部列不支援此功能）
   open_top_bar_items_in_bewly: 點選頂部列圖示開啟 Bewly 頁面
   open_top_bar_items_in_bewly_desc: 未啟用觸控螢幕優化時，點選 Logo、動態、收藏、歷史或稍後再看圖示，將依照「頂部列連結開啟行為」開啟 Dock 中對應的頁面，並沿用該頁面的 Bewly/原版 Bilibili 設定；尚未適配的圖示維持原有行為。
-  show_bewly_or_bili_page_switcher_desc: 在浮動 Dock 或側邊欄中顯示「全原版」、「全 Bewly」與「自訂」頁面模式切換按鈕。
   hide_last_login_in_top_bar_user_pop: 隱藏最後登入時間和地點
   hide_last_login_in_top_bar_user_pop_desc: 開啟後，頂部列頭像彈窗不再顯示最後登入的時間和地點，也不會請求登入記錄。
   chk_box:
@@ -655,7 +595,6 @@ settings:
   remove_the_indent_from_chinese_punctuation_desc: |
     Bilibili 預設會特別處理中文標點符號以達到左對齊。 如果你正在使用自訂字型，建議移除縮排。
   disable_frosted_glass_and_top_bar_gradient: 毛玻璃與頂欄漸層
-  disable_frosted_glass_and_top_bar_gradient_desc: 關閉後使用實色表面。
   frosted_glass_blur_intensity: 毛玻璃模糊強度
   disable_shadow: 停用陰影
   link_opening_behavior_opt:
@@ -668,7 +607,6 @@ settings:
   top_bar_link_opening_behavior: 頂部列連結開啟行為
   video_card_link_opening_behavior: 影片和番劇卡片連結開啟行為
   link_opening_behavior_desc: 控制點擊連結後的開啟位置。「首頁外目前分頁」表示：目前頁面為首頁時使用新索引標籤開啟，其他頁面使用目前索引標籤開啟；「後台打開」會在瀏覽器允許時開到背景索引標籤。
-  video_card_link_opening_behavior_desc: 控制點擊影片和番劇卡片後的開啟位置，可選擇目前索引標籤、抽屜、背景索引標籤或新索引標籤。
   search_bar_link_opening_behavior: 搜尋列連結開啟行為
   drawer_escape_behavior: 抽屜 Esc 關閉方式
   drawer_escape_immediate: 按一次立即關閉
@@ -680,9 +618,7 @@ settings:
   # Video Card Grid Settings
   grid_columns: 顯示
   video_card_title_font_size: 標題字級
-  video_card_title_font_size_desc: 控制影片卡片標題的字級。
   video_card_author_font_size: UP 資訊字級
-  video_card_author_font_size_desc: 控制標題下方 UP 主與發布時間這一行的字級。
   font_size_option:
     xs: 特小
     sm: 小
@@ -692,9 +628,7 @@ settings:
     有時候，搜尋結果上方的廣告實際上是年末總結、年度報告這些。 如果你不想這些內容被誤刪，請停用此選項。
   video_default_player_mode: 影片預設顯示模式
   video_danmaku_default_state: 彈幕預設狀態
-  video_danmaku_default_state_desc: 開啟影片時自動調整彈幕開關，也可以保持原樣。
   video_caption_default_state: 字幕預設狀態
-  video_caption_default_state_desc: 開啟影片時自動調整字幕開關，也可以保持原樣。
   video_default_state_opt:
     system: Bilibili 預設
     remember: 記住上次狀態
@@ -718,7 +652,6 @@ settings:
     context_moments_dialog: 動態影片彈窗
     context_moments_dialog_desc: 繼承時繼續依影片所屬的多 P、合集等情境解析；僅影響從動態開啟的站內彈窗。
     bewly_widescreen_sidebar_position: Bewly播放頁側邊欄位置
-    bewly_widescreen_sidebar_position_desc: 選擇留言、彈幕與推薦欄位於影片卡片的哪一側
     bewly_widescreen_sidebar_position_left: 左側
     bewly_widescreen_sidebar_position_right: 右側
   enable_video_preview: 影片卡片懸停預覽
@@ -732,9 +665,7 @@ settings:
   show_video_watched_badge: 在動態影片中顯示觀看狀態
   show_bewly_or_bili_page_switcher: 顯示頁面模式切換按鈕
   filter_articles_in_moments: 頂欄動態中隱藏專欄
-  filter_articles_in_moments_desc: 只影響頂欄的動態選單。
   top_bar_icon_badges_opt:
-    number: 數字
     dot: 圓點
     none: 不顯示
   auto_receive_bcoin_coupon_desc: 自動領取會在偵測到可領取的券時提交領取，無須開啟提醒。
@@ -742,23 +673,18 @@ settings:
   auto_receive_bcoin_coupon_failed: 'B幣券自動領取失敗：{message}'
   auto_receive_bcoin_coupon_error: B幣券自動領取異常，請稍後再試
   auto_receive_vip_exp: 大會員經驗自動領取
-  auto_receive_vip_exp_desc: 啟用後，將自動領取大會員每日經驗
   auto_receive_vip_exp_success: 大會員經驗自動領取成功
   show_like_notification_reminder: 顯示按讚提醒
-  show_like_notification_reminder_desc: 啟用後，頂欄通知角標會將按讚提醒計入總數。
   always_use_dock: 總是使用 Dock
   always_use_dock_desc: 啟用後，Dock 將始終顯示，側邊欄將隱藏。
   dock_collapse_mode: Dock 收合方式
-  dock_collapse_mode_desc: 顯示收起按鈕、隱藏入口，或在游標離開後自動收起。
   dock_collapse_mode_button: 顯示收合按鈕
   dock_collapse_mode_hidden: 不顯示收合按鈕
   dock_collapse_mode_automatic: 無按鈕，離開後自動收合
   dock_position: Dock 位置
-  dock_position_desc: 螢幕上的位置。
   dock_content_adjustment: Dock 內容調整
   dock_content_adjustment_desc: 第一個啟用的 Dock 項目的頁面將是起始頁面。
   topbar_mode: 頂部列模式
-  topbar_mode_desc: 全 Bewly 或全原版模式會跟隨全域設定；自訂模式下可個別選擇。
   custom_page_mode_required: 僅在「自訂」頁面模式下可個別設定。
   topbar_mode_bewly: Bewly 頂部列
   topbar_mode_bilibili: Bilibili 頂部列
@@ -775,9 +701,7 @@ settings:
     auto: 裝置
     scheduled: 定時
   theme_schedule: 淺色時間
-  theme_schedule_desc: 在所選時間範圍內使用淺色模式，其餘時間使用深色模式。
   video_page_dark_mode: 僅影片播放頁深色模式
-  video_page_dark_mode_desc: 保持全站主題設定不變，僅在影片播放頁啟用 Bewly Nocturne 深色樣式。
   theme_color: 主題色
   theme_color_desc: 自訂顏色與純黑、純白頁面的對比度至少為 1.8:1，過暗或過亮時會自動調整明度。「無主題色」在淺色模式下為黑、深色模式下為白。
   theme_color_opt:
@@ -794,7 +718,6 @@ settings:
   logo_visibility: Logo 可視性
   choose_search_bar_focused_character: 選擇搜尋列聚焦時出現的人物
   show_hot_search_in_top_bar: 顯示熱門搜尋
-  show_hot_search_in_top_bar_desc: 搜尋列聚焦時顯示熱門搜尋列表
   show_hot_search_in_search_page: 搜尋框聚焦時顯示熱搜
   show_hot_search_in_search_page_desc: 適用於頂欄和獨立搜尋頁的搜尋框。
   show_search_recommendation: 顯示搜尋推薦
@@ -805,20 +728,6 @@ settings:
   depersonalize_search_results_desc: 啟用後，搜尋結果請求不攜帶登入 Cookie。
   recommendation_mode: 推薦模式
   show_recommendation_mode_switcher: 顯示推薦模式快速切換按鈕組
-  immersive_mode: 沉浸式推薦
-  immersive_entry: 顯示沉浸式推薦入口
-  immersive_wheel: 在畫面上滾輪切換影片
-  immersive_keyboard: 方向鍵 / W S / PageUp PageDown 切換影片
-  immersive_autoplay: 切換後自動播放
-  immersive_auto_next: 播完自動進入下一則推薦
-  immersive_preload: 預先載入下一則
-  immersive_preload_desc: 提前準備下一則的封面與已有資訊。切換後才載入原站播放頁。
-  immersive_previous: 上一則推薦
-  immersive_next: 下一則推薦
-  immersive_recommendations: 推薦側欄
-  immersive_current: 正在播放
-  immersive_native_pending: 版面仍在準備，可直接操作原生播放器或退出後重試。
-  show_recommendation_mode_switcher_desc: 在首頁「為你推薦」的分頁列旁顯示 Web、Web 訪客、APP 單列與 APP 雙列的快速入口。
   recommendation_mode_desc: |
     Web：網頁端推薦。Web 訪客：請求時不攜帶 Cookie。APP 單列 / 雙列：兩種 APP 介面請求設定，需先授權，不改變 Nocturne 桌面網格欄數。
   recommendation_mode_web_no_cookie: Web 訪客
@@ -834,17 +743,13 @@ settings:
   app_authorization_success: APP 推薦授權成功
   scan_qrcode_desc: 使用 Bilibili 手機應用程式掃描這個行動條碼，以授權取得 access key。
   disable_filters_for_followed_users: 正在跟隨的使用者不受過濾條件限制
-  disable_filters_for_followed_users_desc: |
-    如果啟用此選項，正在跟隨的使用者不受過濾條件限制。
   filter_out_vertical_videos: 過濾直式影片（僅在 app 推薦模式下有效）
   filter_by_view_count: 依觀看次數篩選
-  filter_by_view_count_desc: 只保留播放量大於設定值的影片。
   filter_by_view_count_unit: 次
   filter_by_like_count: 依按讚數篩選
   filter_by_like_count_desc: 保留按讚數大於設定值的影片。APP 推薦按需讀取候選稿件的按讚數；未知值不當作零。
   filter_by_like_count_unit: 次
   filter_by_duration: 依影片長度篩選
-  filter_by_duration_desc: 只保留時長大於設定值的影片。
   filter_by_duration_unit: 秒
   filter_by_publish_time: 依發布時間篩選
   filter_by_publish_time_desc: Web 與 Web 訪客推薦：保留最近設定天數內的影片，最少 7 天。
@@ -868,9 +773,7 @@ settings:
     username_or_mid: 使用者名稱 / MID
   following_tab_show_livestreaming_videos: 在「正在跟隨」中顯示實況直播
   following_filter_charging_videos: 過濾充電專屬影片
-  following_filter_charging_videos_desc: 啟用後，在「正在跟隨」頁面中將隱藏需要充電才能觀看的付費影片
   following_filter_dynamic_videos: 過濾動態影片
-  following_filter_dynamic_videos_desc: 啟用後，在「正在跟隨」頁面中將隱藏標記為動態影片的內容
   collected_season_play_all_mode: 訂閱收藏「播放全部」起播位置
   collected_season_play_all_mode_desc: 適用於訂閱的公開收藏夾與合集。預設從開頭播放；「最新」在公開夾中指最近收藏的影片，在合集中保留最新一期語意。找不到上次觀看或列表不完整時使用原生入口，不改變列表順序與連播方向。
   collected_season_play_all_mode_beginning: 從頭播放
@@ -883,7 +786,6 @@ settings:
   following_inactive_days: 活動時間間隔
   following_inactive_days_desc: 依本地已知時間判斷；沒有投稿紀錄時使用關注時間。
   preserve_for_you_state: 留存為你推薦切換前狀態
-  preserve_for_you_state_desc: 當從 Dock 列切換到其他頁面時，留存為你推薦頁面的瀏覽狀態，返回時保持切換前的內容
   show_standalone_search_page: 單獨顯示搜尋頁
   show_standalone_search_page_desc: 關閉時，搜尋頁會整合到首頁，並從 Dock 中隱藏。
   home_tabs_adjustment: 標籤列調整
@@ -919,7 +821,6 @@ settings:
   sync_cloud_enable_failed: 開啟雲端同步失敗
   sync_cloud_incompatible: 雲端資料由較新版本的擴充功能寫入，請先升級擴充功能再開啟同步
   remember_playback_rate: 記住倍速
-  remember_playback_rate_desc: 啟用後，播放器會記住你上次設定的倍速，並在下次打開影片時自動套用
   remember_video_aspect_ratio: 記住影片比例
   remember_video_quality: 記住畫質
   player_extra_controls_hint: 空間不足時，收起的操作仍可在播放器右鍵選單中使用。
@@ -936,11 +837,9 @@ settings:
   show_system_notification_reminder: 顯示系統通知提醒
   show_followed_private_message_unread_count: 顯示已關注私訊未讀數
   show_unfollowed_private_message_unread_count: 顯示未關注私訊未讀數
-  remember_video_aspect_ratio_desc: 啟用後，播放器會記住你上次選擇的影片比例，並在下次打開影片時自動套用
   auto_exit_fullscreen_on_end: 全螢幕/網頁全螢幕播放完畢後自動退出
   auto_exit_fullscreen_on_end_desc: 啟用後，當影片播放結束且沒有單集循環、隨機播放、自動連播等後續播放行為時，會自動退出全螢幕模式
   use_bilibili_default_auto_play: 沿用 Bilibili 結束行為
-  use_bilibili_default_auto_play_desc: 關閉後可依影片類型指定結束行為。清單播放順序在下方設定。
   auto_play_watch_later: 稍後觀看
   auto_play_mode_default: Bilibili 預設
   auto_play_mode_auto_play: 自動連播
@@ -948,22 +847,15 @@ settings:
   auto_play_mode_pause_at_end: 播完暫停
   auto_play_mode_loop: 單集循環
   auto_play_multipart: 分P影片
-  auto_play_multipart_desc: 選擇分P影片的自動播放行為。「連播推薦」表示目前影片結束後繼續播放推薦影片。
   auto_play_collection: 合集影片
-  auto_play_collection_desc: 選擇合集影片的自動播放行為。「連播推薦」表示目前影片結束後繼續播放推薦影片。
   auto_play_recommend: 單影片推薦
-  auto_play_recommend_desc: 選擇單影片播放結束後的自動播放行為。「連播推薦」表示目前影片結束後繼續播放推薦影片。
   auto_play_playlist: 收藏列表
-  auto_play_playlist_desc: 選擇收藏列表的自動播放行為。「連播推薦」表示目前影片結束後繼續播放推薦影片。
   default_custom_play_order: 播放順序
   default_custom_play_order_desc: 順序與逆序會自動啟用並在清單內循環；隨機播放可選擇手動或自動啟用。
   enable_custom_play_order_overrides: 依影片類型設定自訂播放預設值
-  enable_custom_play_order_overrides_desc: 啟用後，可為支援的播放情境分別選擇預設自訂播放選項。
   custom_play_order_overrides: 依影片類型設定
-  custom_play_order_overrides_desc: 選擇「繼承預設」時會使用上方的預設自訂播放選項。
   custom_play_order_inherit: 繼承預設
   random_play_mode: 隨機播放啟用方式
-  random_play_mode_desc: 隨機播放適用時保持關閉並由使用者手動開啟，或在影片數量達到條件時自動開啟
   random_play_mode_manual: 手動切換
   random_play_mode_auto: 自動啟用
   min_videos_for_random: 啟用隨機播放的最小影片數
@@ -974,7 +866,6 @@ settings:
   random_play_order_random: 隨機播放
   random_play_edit_playlist: 編輯播放列表
   random_play_finish_editing: 完成列表編輯
-  random_play_edit_playlist_desc: 進入編輯後，直接拖曳 Bilibili 選集項目調整播放順序。
   random_play_edit_playlist_empty: 目前沒有可編輯的播放列表
   random_play_edit_playlist_save: 儲存
   random_play_edit_playlist_cancel: 取消
@@ -983,9 +874,7 @@ settings:
   random_play_not_enabled: 自訂播放功能未啟用
   random_play_min_videos_required: 需要至少{count}個影片才能啟用隨機播放
   enable_undo_refresh_button: 啟用撤銷重新整理按鈕（僅在Web推薦模式下有效）
-  enable_undo_refresh_button_desc: 重新整理頁面後顯示撤銷按鈕，點擊可恢復重新整理前的內容
   clean_url_argument: 清理 URL 追蹤參數
-  clean_url_argument_desc: 自動清理 URL 中的追蹤參數，使連結更加簡潔
 
   # Clean Share Link
   group_clean_share_link: 分享連結淨化
@@ -994,20 +883,12 @@ settings:
     啟用後，分享連結將自動移除追蹤參數，並可選擇是否包含影片標題。
     此功能適用於 Bewly Nocturne 的複製連結功能，同時也會攔截 Bilibili 原生分享按鈕的複製內容。
   clean_share_link_include_title: 分享時包含影片標題
-  clean_share_link_include_title_desc: >
-    分享時在連結前新增影片標題，例如 "影片標題 https://www.bilibili.com/video/BVxxx"
   clean_share_link_remove_tracking_params: 移除連結中的追蹤參數
-  clean_share_link_remove_tracking_params_desc: >
-    移除分享連結中的追蹤參數，如 spm_id_from、vd_source、share_source 等。
 
   show_ip_location: 顯示 IP 歸屬地
-  show_ip_location_desc: 在影片/動態評論區顯示IP歸屬地
   show_sex: 顯示使用者性別
-  show_sex_desc: 在影片/動態評論區顯示使用者性別
   show_comment_host_tag: 顯示樓主標示
-  show_comment_host_tag_desc: 在評論回覆詳情頁標示樓主
   enable_comment_reply_tree_display: 評論區樹狀顯示
-  enable_comment_reply_tree_display_desc: 開啟後依回覆關係整理樓中樓；關閉後不再重排、縮排或繪製評論回覆樹
   comment_reply_tree_mode:
     title: 評論回覆樹樣式
     desc: 根據回覆關係和發佈時間整理樓中樓。線條模式下可收合任意父級評論的回覆；「收起主評論」會收合父評論本體，「不收起主評論」則保留父評論正文僅隱藏子回覆
@@ -1020,38 +901,27 @@ settings:
     load_more: 載入更多
     pagination: 原生分頁
   adjust_comment_image_height: 調整評論區圖片高度
-  adjust_comment_image_height_desc: 自動調整評論區圖片高度以匹配實際長寬比，避免圖片變形
   hide_comment_image_scrollbar: 評論圖片預覽時隱藏頁面滾動條
-  hide_comment_image_scrollbar_desc: 開啟評論區圖片預覽時隱藏頁面右側滾動條，避免滾動條顯示在遮罩右側
   video_player_scroll: 調整顯示模式後滾動
   video_player_scroll_position: 播放器捲動位置
   video_player_scroll_sending_bar: 優先顯示彈幕發送欄
   video_player_scroll_center: 播放器置中
-  video_player_scroll_desc: 啟用後，在默認模式為寬屏和默認時，會自動滾動到合適位置。
   enlarge_favorite_dialog: 放大收藏彈窗
-  enlarge_favorite_dialog_desc: 啟用後，影片頁收藏彈窗將以更大的尺寸顯示，方便查看和管理收藏夾。
   external_watch_later_button: 稍後再看按鈕外置
-  external_watch_later_button_desc: 啟用後，影片頁工具欄會顯示獨立的稍後觀看按鈕；按鈕會顯示目前影片狀態，可點擊加入或移除。
   show_vertical_video_zoom_button: 直式影片放大按鈕
   vertical_video_zoom_position: 調整直式影片放大區域
-  show_vertical_video_zoom_button_desc: 在直式影片播放器中顯示放大/縮小按鈕與畫面位置調整控制項
   show_video_screenshot_button: 顯示播放器截圖按鈕
-  show_video_screenshot_button_desc: 啟用後，在影片播放器控制列中顯示擷取目前影片畫面的按鈕。
   group_fonts: 字體
   group_visual_effects: 視覺效果
   badge_type: 角標類型
   group_topbar_components: 頂部列工具設定
   topbar_components_adjustment: 頂部列工具角標設定
-  topbar_components_adjustment_desc: 配置各個頂部列圖像的角標顯示方式
   group_topbar_pinned_channels: 頂部列常駐分區
-  topbar_pinned_channels_desc: 可將分區固定在頂部列，並調整顯示順序。
   topbar_pinned_channels_title: 常駐分區
-  topbar_pinned_channels_hint: 點擊卡片即可固定或取消，點擊順序決定顯示順序。排在後面的分區會在空間不足時優先隱藏。
   topbar_pinned_channels_all_selected: 所有可用分區都已加入。
   topbar_pinned_channels_empty: 尚未新增任何常駐分區。
   topbar_pinned_channels_order_tip: 點擊順序決定顯示順序，再點一次即可取消固定。
   top_bar_logo_style: Logo 樣式
-  top_bar_logo_style_desc: 選擇頂部列使用圓形圖示或橫向品牌標誌。
   top_bar_logo_style_opt:
     icon: 圓形圖示
     brand: 品牌標誌
@@ -1060,7 +930,6 @@ settings:
   use_plugin_search_results_page: 使用插件搜尋結果頁
   use_plugin_search_results_page_desc: 開啟後使用 Bewly 結果頁；全域或自訂頁面模式選擇原版搜尋時，仍使用 Bilibili。
   search_results_pagination_mode: 搜尋結果分頁模式
-  search_results_pagination_mode_desc: 選擇搜尋結果的展示方式：滾動自動加載或翻頁
 auth:
   auth_access_key_first: 在這之前請先授權 BewlyBewly 使用 access key
 topbar:
@@ -1294,7 +1163,6 @@ notifications:
     summary_unavailable: 暫無訊息摘要
     select_conversation: 選擇與{name}的會話
     select_conversation_empty: 選擇一個會話
-    select_conversation_hint: 從列表閱讀訊息，或使用會話搜尋尋找聯絡人。
     fallback_aria: '{name}的原版私訊入口'
     fallback_description: 此類型會話暫時需在原版私訊中查看
     session_kinds:
@@ -1435,12 +1303,9 @@ dock:
   collapse_dock: 收合 Dock
   expand_dock: 展開 Dock
 moments:
-  loaded_new_videos: '本列表含 {count} 則新影片'
   jump_to_last_seen: 回到上次正在看的動態
-  jump_to_video_boundary: 跳到影片未讀分界
   jump_to_latest: 回到最新
   refresh_moments: 重新整理動態
-  load_newer: 載入更新的動態
   local_bookmark: 本視窗的閱讀書籤
   video_boundary: 影片未讀分界
   continue_gap: 繼續補齊這裡的動態
@@ -1455,6 +1320,7 @@ moments:
   promotion_suspected: 疑似軟廣
   promotion_reason_api: 介面明確標記為廣告
   promotion_reason_goods: 包含商品卡片或商品連結
+  promotion_reason_shopping-token: 包含電商口令或複製口令開啟購物 App 的引導
   promotion_reason_coupon-code: 包含購物平台、促銷資訊和搜尋口令
   promotion_reason_purchase-token: 包含購物口令、促銷資訊和複製或下單引導
   promotion_reason_comment-shopping: 包含留言區或購物入口導流及領券促銷
@@ -1829,8 +1695,6 @@ history:
     device_tv: TV
   all_history: 全部歷史
   media: 影集 / 影視
-  continue_watching: 繼續觀看
-  watch_again: 再看一遍
   unknown_date: 日期不明
   clear_failed: 清空歷史記錄失敗，請重試
   title: 觀看記錄
@@ -1934,8 +1798,6 @@ favorites:
   folder_visibility: 收藏夾可見性
   folder_public: 公開
   folder_private: 私密
-  folder_public_desc: 公開收藏夾可供其他使用者查看
-  folder_private_desc: 私密收藏夾僅自己可見
   default_folder_locked: 預設收藏夾不可編輯或刪除
   delete_folders_confirm: |-
     要刪除已選的 {count} 個收藏夾嗎？
@@ -1950,11 +1812,8 @@ version_reminder:
   trigger: 新版本說明
   title: Bewly Nocturne 已更新
   current_version: 目前版本 v{version}
-  description: 查看此版本的更新記錄與最新動態。確認後，此版本將不再顯示提醒。
   github_releases: GitHub Releases
-  github_releases_desc: 查看完整版本記錄與下載資訊
   bilibili_dynamic: Bilibili 動態
-  bilibili_dynamic_desc: 查看開發者發佈的更新動態
   acknowledge: 已知曉，此版本不再提示
   settings_hint: 可在「設定 → 關於」中關閉「新版本提醒」。
 watch_later:
@@ -2071,6 +1930,16 @@ search_bar:
   history_title: 搜尋記錄
   hot_search_title: 熱門搜尋
   clear_history: 清除所有搜尋記錄
+  scope_label: 搜尋範圍
+  actions_title: 快速操作
+  open_video: 開啟影片
+  open_bangumi: 開啟番劇
+  open_article: 開啟專欄
+  open_space: 開啟個人空間
+  open_live: 開啟直播間
+  open_link: 開啟連結
+  search_in: '在{page}中搜尋'
+  search_settings: 搜尋設定
 search_page:
   hot_search_ranking: 熱門搜尋排行榜
   loading: 載入中...

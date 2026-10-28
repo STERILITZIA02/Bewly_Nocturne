@@ -1,4 +1,4 @@
-export type TextPromotionReason = 'coupon-code' | 'purchase-token' | 'comment-shopping' | 'commission-shopping'
+export type TextPromotionReason = 'shopping-token' | 'coupon-code' | 'purchase-token' | 'comment-shopping' | 'commission-shopping'
 export const MOMENT_PROMOTION_TEXT_LIMIT = 32_768
 
 // Require a conversion path as well as an offer. A brand, price, or the word
@@ -8,6 +8,10 @@ const OFFER = /[券劵]|(?:优惠|優惠|福利|折扣|神|大额|大額|无门�
 const SEARCH_CODE = /(?:[搜嗖]索?|[输輸]入|[口密暗]令|暗[号號])[^。！？!?\n]{0,24}?(?:\b\d{5,12}\b|[【〖「“][\p{L}\p{N}]{2,16}[】〗」”]|\p{Script=Han}{1,8}\d{2,6})|(?:快去|去)[^。！？!?\n]{0,12}[：:]\s*\d{5,12}\b/u
 const COPY = /(?:[复複腹]|fu)[\s·]*[制製]|copy|[长長]按|整段/iu
 const TOKEN = /[￥¥$][A-Za-z0-9]{6,32}[￥¥$]|\b[A-Za-z0-9]{8,32}[(（)）]?[:：]\/\/|[(（]\s*(?:[A-Z]{2}\d{3,4}\s+)?[A-Za-z0-9]{8,32}\s*[)）](?:\s*\/|\s*[:：]\/\/)/u
+// E-commerce tokens are explicit sales evidence on their own; slogans such as
+// "Bug价" are not. Text is NFKC-normalized, so ￥（）： arrive as ¥():.
+const SHOPPING_TOKEN = /\d{1,2}\s?\(\s?[A-Za-z0-9]{8,16}\s?\)\s?:\/\/\s?[A-Z]{2}\d{3,4}|\(\s*[A-Z]{2}\d{3,4}\s+[A-Za-z0-9]{8,32}\s*\)\s*(?::\/\/|\/)|([¥€])(?=[A-Za-z0-9]{0,31}[A-Za-z])[A-Za-z0-9]{8,32}\1/u
+const COPY_TO_MARKETPLACE = /(?:(?:[复複腹]|fu)[\s·]*[制製]|copy|[长長]按)[^。！？!?\n]{0,12}?打[开開][\s|｜丨·]*(?:手淘|[淘陶桃🍑][\s|｜丨·]*[宝寶]|天[猫貓]|拼多多|京[东東]|抖音|[闲閒][鱼魚])[^。！？!?\n]{0,8}?(?:下[单單]|[领領][券劵]|[购購][买買]|[抢搶][购購]|拍)/iu
 const PURCHASE = /加[购購]|[购購]物[车車]|拍下|直接拍|下[单單箪]|[抢搶][购購]|[购購][买買]/u
 const BENEFIT = /(?:[券劵卷]后|到手)[价價]?[^\n。！？!?]{0,12}\d|[满滿]\s*\d+[^\n。！？!?]{0,8}[减減]\s*\d+|[低仅僅]至?\s*[￥¥]?\d|[￥¥💰]\s*\d|\d+(?:\.\d+)?\s*(?:[元块塊折]|到手|[捡撿]漏[价價]|包[邮郵])|免[单單]|[买買]\S{1,4}[送赠贈]/u
 const COMMENT_PATH = /(?:[评評][论論][区區]|[评評][论論]).{0,12}(?:置[顶頂]|[链鏈]接|[蓝藍][链鏈]|[传傳]送[门門])|(?:[链鏈]接|[蓝藍][链鏈]|[传傳]送[门門]).{0,12}(?:[评評][论論][区區]|置[顶頂])|小[黄黃][车車]|橱窗|櫥窗/u
@@ -29,7 +33,9 @@ export function detectTextCommerce(text: string): { reason: TextPromotionReason,
   for (let offset = 0; offset < text.length; offset += windowSize / 2) {
     const part = text.slice(offset, offset + windowSize)
     let reason: TextPromotionReason | undefined
-    if (MARKETPLACE.test(part) && OFFER.test(part) && SEARCH_CODE.test(part))
+    if (SHOPPING_TOKEN.test(part) || COPY_TO_MARKETPLACE.test(part))
+      reason = 'shopping-token'
+    else if (MARKETPLACE.test(part) && OFFER.test(part) && SEARCH_CODE.test(part))
       reason = 'coupon-code'
     else if (MARKETPLACE.test(part) && TOKEN.test(part) && (OFFER.test(part) || BENEFIT.test(part)) && (COPY.test(part) || PURCHASE.test(part)))
       reason = 'purchase-token'

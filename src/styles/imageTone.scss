@@ -22,6 +22,12 @@ $tone-transition:
   --bew-edge-color: color-mix(in srgb, var(--moment-tone-fg) 18%, transparent);
   --bew-hover-bg: color-mix(in srgb, var(--moment-tone-fg) 8%, transparent);
   --bew-selected-bg: color-mix(in srgb, var(--moment-tone-fg) 12%, transparent);
+  --bew-pressed-bg: color-mix(in srgb, var(--moment-tone-fg) 16%, transparent);
+  // The neutral aliases were resolved on the root to an opaque grey; set them
+  // again so they take the tone too.
+  --bew-theme-surface: var(--bew-selected-bg);
+  --bew-theme-surface-hover: var(--bew-pressed-bg);
+  --bew-on-theme-surface: var(--bew-text-1);
   --bew-theme-foreground: var(--moment-tone-fg);
   // Glass stays glass: the solid tint takes the tone, and the glass tint is it
   // at the global glass opacity, as the shared tokens are built. Inherited

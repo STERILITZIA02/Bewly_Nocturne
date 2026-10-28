@@ -290,7 +290,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.doesNotMatch(logo, /translate:/, 'the icon never moves between rail and non-rail pages')
     assert.doesNotMatch(header, /ProgressiveBlur|translateX|ResizeObserver/, 'no top bar edge blur and no centring offset')
     assert.match(header, /padding-inline: var\(--bew-home-logo-inline-start\)/)
-    assert.match(header, /grid-template-columns:\s*auto minmax\(0, var\(--b-search-bar-max-width, 550px\)\)/, 'search column follows the logo')
+    assert.match(header, /grid-template-columns:\s*auto minmax\(0, var\(--bew-search-bar-max-width\)\)/, 'search column follows the logo')
     assert.match(header, /--top-bar-rail-offset: max\(\s*0px,\s*calc\(var\(--bew-messages-sidebar-width\)/, 'rail displacement has one shared value')
     assert.match(header, /\.top-bar-header--rail \{[\s\S]*?margin-inline-start: var\(--top-bar-rail-offset\);[\s\S]*?translate: var\(--top-bar-rail-offset\) 0;/, 'the grid reserves the displacement before translating search and channels')
     // The dock follows the scroll: sticky first, then the next stretch of scrolling
@@ -319,7 +319,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(retired, /'disableSearchFocusEffect'/)
     assert.doesNotMatch(layoutEdit, /search\.focus/)
   })
-  check('top bar: no message button; the right-hand tools share one glass capsule mirroring the logo', async () => {
+  check('top bar: no message button; pages, creating and the avatar are three glass groups mirroring the logo', async () => {
     const { existsSync } = await import('node:fs')
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
     const [right, styles, surface, logo, header, storage, retired] = await Promise.all([
@@ -336,7 +336,15 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.doesNotMatch(right, /notifications|i-tabler:bell/i)
     assert.doesNotMatch(storage, /openNotificationsPageAsDrawer|key: 'notifications'/)
     assert.match(retired, /'openNotificationsPageAsDrawer'/)
-    assert.match(right, /<div v-if="isLogin" class="top-bar-tools">[\s\S]*<\/div>\s*<!-- Avatar/, 'the avatar stays outside the capsule')
+    // Three groups (user-specified): the pages, creating, the avatar.
+    assert.match(right, /<div\s+v-if="isLogin" v-layout-editable="'topbar'" class="top-bar-tools"[^>]*>[\s\S]*?showPageItem\('watchLater'\)[\s\S]*?<div v-if="isLogin && showCreateGroup" class="top-bar-tools top-bar-tools--wide-only">[\s\S]*?isComponentVisible\('creatorCenter'\)[\s\S]*?isComponentVisible\('upload'\)[\s\S]*?<\/div>\s*<!-- Avatar/, 'pages and creating are two capsules; the avatar stays outside both')
+    assert.doesNotMatch(right, /shouldShowDivider/, 'groups are separate capsules, not a divider')
+    assert.match(right, /usePageDim\(pagesGroupHovered\)/)
+    assert.match(right, /@pointerenter="pagesGroupHovered = true" @pointerleave="pagesGroupHovered = false"/, 'the page group dims the page while hovered')
+    // Roomier gaps that never carry the Moments page's right side past its hot-search card (user request).
+    assert.match(styles, /--top-bar-tools-gap: clamp\(\s*var\(--bew-space-1\),[\s\S]*?var\(--bew-moments-hot-search-width\)[\s\S]*?\/\s*5\s*\),\s*var\(--bew-space-2\)\s*\);/)
+    assert.match(styles, /\.others \{[^}]*gap: calc\(var\(--top-bar-tools-gap\) \+ var\(--bew-space-1\)\);/)
+    assert.match(styles, /\.top-bar-tools__pages \{\s*gap: var\(--top-bar-tools-gap\);/)
     assert.match(styles, /\.top-bar-tools \{[\s\S]*?height: var\(--bew-top-bar-primary-control-height\);[\s\S]*?&::before \{\s*@include sidebarSurface\.floating;/, 'glass on a layer behind the buttons, as tall as the logo circle')
     assert.match(logo, /\.logo-circle \{\s*@include sidebarSurface\.floating\(round\);/, 'one shared floating material for both sides; the logo circle stays a true circle')
     assert.match(surface, /@mixin floating\(\$shape: capsule\) \{/)
@@ -369,7 +377,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
       read('components/TopBar/styles/index.scss'),
     ])
     const capsule = right.slice(right.indexOf('class="top-bar-tools"'), right.indexOf('<!-- Avatar'))
-    for (const condition of [`showPageItem('moments')`, `showPageItem('favorites')`, `showPageItem('history')`, `showPageItem('watchLater')`, `isComponentVisible('creatorCenter')`, 'shouldShowDivider', `isComponentVisible('upload')`])
+    for (const condition of [`showPageItem('moments')`, `showPageItem('favorites')`, `showPageItem('history')`, `showPageItem('watchLater')`, `isComponentVisible('creatorCenter')`, `isComponentVisible('upload')`])
       assert.match(capsule, new RegExp(`<Transition name="top-bar-item"[^>]*>\\s*<div\\s+v-if="${condition.replace(/[()]/g, '\\$&')}"`), `${condition} uses the shared item transition`)
     // Leaving: fade, then resize. Entering: resize (after the fade-out phase), then fade in.
     assert.match(styles, /\.top-bar-item-leave-active \{\s*transition:\s*opacity var\(--top-bar-item-fade\)[^,]*,\s*width var\(--top-bar-item-resize\) var\(--bew-ease-in-out\) var\(--top-bar-item-fade\)/)
@@ -471,8 +479,8 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(orb, /&\.open \{\s*transform:\s*translate\([\s\S]*?scale\(var\(--avatar-panel-scale\)\);[\s\S]*?&::before \{\s*opacity: 0;/)
     assert.match(orb, /\.avatar:hover \.avatar-orb:not\(\.open\) \{\s*transform: scale\(1\.06\);/)
     assert.match(styles, /prefers-reduced-motion: reduce\)[\s\S]*?\.avatar-orb,\s*\.avatar-orb::before,/)
-    // Glass and the concentric top-right corner.
-    assert.match(panel, /\.userPanel-pop\.bew-popover-surface \{\s*@include sidebarSurface\.floating;\s*border-radius: var\(--bew-surface-radius\) calc\(var\(--avatar-panel-face-radius\) \+ var\(--bew-space-2\)\)/)
+    // The settings-window surface and the concentric top-right corner.
+    assert.match(panel, /\.userPanel-pop\.bew-popover-surface \{\s*@include modalWindow\.surface;\s*border-radius: var\(--bew-modal-radius\) calc\(var\(--avatar-panel-face-radius\) \+ var\(--bew-space-2\)\)/)
     assert.match(panel, /corner-shape: var\(--bew-corner-shape\) round var\(--bew-corner-shape\) var\(--bew-corner-shape\);/)
   })
   check('top bar search never jumps between pages: rail shift glides, home and top bar boxes hand off', async () => {
@@ -1203,13 +1211,14 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(history, /const showDayStrip = computed\(\(\) => historyDays\.value\.length > 1 \|\| \(showSkeletons\.value && !historyList\.length\)\)/)
     assert.match(history, /<section v-if="showDayStrip" class="history-day-strip"[\s\S]*?<LibraryBleedStrip/)
     assert.match(history, /\.history-day-strip \{\s*@include bleedStrip\.bar\(/)
-    // A day starts the list at its first group, like choosing it in the hero.
+    // A day starts the list at its first group; the first day brings back the whole list.
     assert.match(history, /function jumpToDay\(dayKey: string\) \{[\s\S]*?selectStartGroup\(group\.key\)/)
     assert.match(favorites, /<section v-if="showUploaderStrip \|\| uploaderStripPending" class="favorite-uploader-strip"[\s\S]*?<LibraryBleedStrip v-if="!showUploaderStrip"[\s\S]*?<SkeletonBlock width="var\(--favorite-uploader-tile\)"/)
     assert.match(favoritesLayout, /\.favorite-uploader-strip \{[^}]*@include bleedStrip\.bar\(/)
     assert.match(favorites, /mids: mid === undefined \|\| isStripUploader\(mid\) \? \[\] : \[mid\]/, 'an uploader is a one-tap filter, again to clear it')
     // Immersive heroes; the hero never fades as a whole (its blur would stop).
-    assert.match(history, /<LibraryHeroCarousel\s+v-if="showHero && !batch\.managing\.value" :items="heroItems" :current="heroKey"/)
+    // History has no hero row (user request): the day strip leads straight into the rows.
+    assert.doesNotMatch(history, /LibraryHero|history-hero|heroCards/)
     assert.match(watchLater, /<LibraryHeroCarousel v-if="!batch\.managing\.value" :items="\[\{ key: 'queue'[\s\S]*?<LibraryHero\s+:image="currentWatchLaterList\[0\]\?\.pic"[\s\S]*?<WatchLaterPlayAllCard/)
     assert.match(favorites, /<LibraryHeroCarousel\s+:items="heroItems" :current="heroKey"[\s\S]*?<LibraryHero v-bind="getHeroCard/)
     // A row of cards (user-specified): the current one about 85% wide, the next
@@ -1228,15 +1237,12 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
       assert.match(source, /const filterActive = computed\(\(\) => has\w+Filters\([^)]*\) \|\| sortOrder\.value !== 'newest'\)/, 'the funnel lights for the oldest-first order')
       assert.doesNotMatch(source, /SettingsSegmentedControl|-sort-button|layout-switcher/)
     }
-    assert.match(history, /groups\.slice\(Math\.max\(0, index - LIBRARY_HERO_RENDER_RADIUS\), index \+ LIBRARY_HERO_RENDER_RADIUS \+ 1\)/, 'history builds the rendered cards only')
     assert.match(favorites, /distance <= LIBRARY_HERO_RENDER_RADIUS \+ 1[\s\S]*?loadFolderCover\(folder\.id, 'hero'\)/, 'the hero reads covers a card past what it renders, in its own lane')
     assert.match(carousel, /class="library-hero-carousel__peek"[\s\S]*?@click="selectPeek\(itemIndex\)"/)
     assert.match(carousel, /A scrim\s+\/\/ dims it: the card's own opacity would stop its progressive blur\./)
     assert.match(favorites, /function selectHeroItem\(key: string\) \{[\s\S]*?if \(folder\)\s+changeCategory\(folder\)\s+else if \(season\)\s+changeSeason\(season\)/, 'the hero opens a folder the way the rail does')
-    // History: choosing a period starts the list below at it (no scrolling),
-    // the rows fading over once the hero has slid.
-    assert.match(history, /@select="selectStartGroup"/)
-    assert.match(history, /const start = showHero\.value \? groups\.findIndex\(group => group\.key === startGroupKey\.value\) : -1\s*return start > 0 \? groups\.slice\(start\) : groups/)
+    // History: choosing a day starts the list below at it (no scrolling), the rows fading over.
+    assert.match(history, /const start = plainList\.value \? groups\.findIndex\(group => group\.key === startGroupKey\.value\) : -1\s*return start > 0 \? groups\.slice\(start\) : groups/)
     assert.match(history, /keys: computed\(\(\) => shownGroups\.value\.map\(group => `group:\$\{group\.key\}`\)\)/)
     assert.match(history, /<div :key="`\$\{interval\}:\$\{startGroupKey \?\? ''\}`" ref="historyContainer" class="history-groups">/)
     assert.doesNotMatch(history, /new IntersectionObserver|jumpToGroup/)
@@ -1261,8 +1267,10 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(carousel, /\.library-hero-carousel__viewport \{[^}]*margin-inline: calc\(-1 \* var\(--bew-bleed-strip-start\)\) calc\(-1 \* var\(--library-content-inline-padding\)\);/)
     assert.match(carousel, /padding-inline-start: var\(--bew-bleed-strip-start\);/)
     // Loading keeps the row's shape: the next card is held too.
-    assert.match(await read('components/PageAsyncLoading.vue'), /<LibraryHeroSkeleton v-if="\[AppPage\.Favorites, AppPage\.History, AppPage\.WatchLater\]\.includes\(page\)" :single="page === AppPage\.WatchLater" \/>/)
-    assert.match(history, /<LibraryHeroSkeleton v-else-if="showSkeletons && !historyList\.length && !batch\.managing\.value" class="history-hero" \/>/)
+    assert.match(await read('components/PageAsyncLoading.vue'), /<LibraryHeroSkeleton v-if="\[AppPage\.Favorites, AppPage\.WatchLater\]\.includes\(page\)" :single="page === AppPage\.WatchLater" \/>/)
+    // A wide gap between history rows, where the wheel scrolls the page rather than a strip (user request).
+    assert.match(history, /const rowGap = ref\(48\)/)
+    assert.match(history, /\.history-groups \{[^}]*gap: var\(--bew-space-12\);/)
     assert.match(favorites, /return \[\{ key: 'current', label: selectedContentTitle\.value \}, \{ key: 'loading', label: '' \}\]/)
     assert.match(favorites, /mediaPending: Boolean\(folder && folderCovers\[folder\.id\] === undefined\)/)
     // Side by side (user-specified): the info on the left, laid out alike on

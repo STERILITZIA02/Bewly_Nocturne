@@ -3,7 +3,6 @@ import { ref } from 'vue'
 
 import { useSidebarHost } from '~/composables/useSidebarHost'
 import { settings } from '~/logic'
-import { vLayoutEditable } from '~/logic/layoutEdit'
 
 import { useTopBarInteraction } from '../composables/useTopBarInteraction'
 import TopBarLogo from './TopBarLogo.vue'
@@ -51,9 +50,7 @@ const sidebarHost = useSidebarHost()
 
     <!-- search bar -->
     <div
-      v-layout-editable="'topbar-search'"
       class="top-bar-header__search"
-      data-layout-editable-id="topbar-search"
       :class="{ 'top-bar-header__search--focused': topBarSearchFocused }"
     >
       <div v-if="showSearchBar" class="top-bar-header__search-control">
@@ -80,7 +77,7 @@ const sidebarHost = useSidebarHost()
 .top-bar-header {
   display: grid;
   grid-template-columns:
-    auto minmax(0, var(--b-search-bar-max-width, 550px)) minmax(var(--top-bar-channels-min-width, 0px), 1fr)
+    auto minmax(0, var(--bew-search-bar-max-width)) minmax(var(--top-bar-channels-min-width, 0px), 1fr)
     max-content;
   align-items: center;
   gap: var(--bew-top-bar-section-gap);

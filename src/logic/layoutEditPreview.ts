@@ -16,6 +16,7 @@ export interface LayoutPreviewController {
   cancel: () => boolean
   getPreviewValue: (settingId: string) => unknown
   getSnapshot: () => LayoutPreviewSnapshot | undefined
+  getSnapshots: () => LayoutPreviewSnapshot[]
 }
 
 function clonePreviewValue<T>(value: T): T {
@@ -33,66 +34,77 @@ function clonePreviewValue<T>(value: T): T {
 export function createLayoutPreviewController(
   resolveSetting: (settingId: string) => LayoutPreviewSettingAdapter | undefined,
 ): LayoutPreviewController {
-  let active: {
+  const previews = new Map<string, {
     adapter: LayoutPreviewSettingAdapter
     settingId: string
     before: unknown
     after: unknown
-  } | undefined
+  }>()
+  let active: string | undefined
 
   function cancel() {
-    if (!active)
+    if (!previews.size)
       return false
+    previews.clear()
     active = undefined
     return true
   }
 
   return {
     begin(settingId) {
-      cancel()
+      if (previews.has(settingId)) {
+        active = settingId
+        return true
+      }
       const adapter = resolveSetting(settingId)
       if (!adapter)
         return false
 
       const before = clonePreviewValue(adapter.get())
-      active = {
+      previews.set(settingId, {
         adapter,
         settingId,
         before,
         after: clonePreviewValue(before),
-      }
+      })
+      active = settingId
       return true
     },
     update(value) {
-      if (!active)
+      const preview = active && previews.get(active)
+      if (!preview)
         return false
-      active.after = clonePreviewValue(value)
+      preview.after = clonePreviewValue(value)
       return true
     },
     commit() {
-      if (!active)
+      if (!previews.size)
         return false
-
-      const transaction = active
+      const transactions = [...previews.values()]
+      previews.clear()
       active = undefined
-      if (!Object.is(transaction.after, transaction.before))
-        transaction.adapter.set(clonePreviewValue(transaction.after))
+      for (const transaction of transactions) {
+        if (!Object.is(transaction.after, transaction.before))
+          transaction.adapter.set(clonePreviewValue(transaction.after))
+      }
       return true
     },
     cancel,
     getPreviewValue(settingId) {
-      return active?.settingId === settingId
-        ? clonePreviewValue(active.after)
-        : undefined
+      return clonePreviewValue(previews.get(settingId)?.after)
     },
     getSnapshot() {
-      if (!active)
+      const preview = active && previews.get(active)
+      if (!preview)
         return undefined
       return {
-        settingId: active.settingId,
-        before: clonePreviewValue(active.before),
-        after: clonePreviewValue(active.after),
+        settingId: preview.settingId,
+        before: clonePreviewValue(preview.before),
+        after: clonePreviewValue(preview.after),
       }
+    },
+    getSnapshots() {
+      return [...previews.values()].map(({ settingId, before, after }) => ({ settingId, before: clonePreviewValue(before), after: clonePreviewValue(after) }))
     },
   }
 }

@@ -392,8 +392,8 @@ defineExpose({
 @use "../../styles/popoverCards";
 
 .history-pop {
-  width: 380px;
-  height: min(500px, var(--bew-popover-max-height));
+  width: var(--bew-popover-panel-width);
+  height: var(--bew-popover-panel-height);
 }
 
 .history-pop__tabs {

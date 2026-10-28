@@ -51,7 +51,7 @@ const topBarModeDisabled = computed(() => settings.value.pageMode !== 'custom')
 
 <template>
   <SettingsItemGroup>
-    <SettingsItem setting-id="navigation.pageMode" :title="$t('settings.page_mode')" :desc="$t('settings.page_mode_desc')" right-width="auto">
+    <SettingsItem setting-id="navigation.pageMode" :title="$t('settings.page_mode')" right-width="auto">
       <SettingsSegmentedControl v-model="pageMode" :disabled="pageModeChangePending" :label="$t('settings.page_mode')" :options="pageModeOptions" />
     </SettingsItem>
     <SettingsItem setting-id="navigation.topBar.mode" :title="$t('settings.topbar_mode')" :desc="topBarModeDisabled ? $t('settings.custom_page_mode_required') : undefined" right-width="auto">

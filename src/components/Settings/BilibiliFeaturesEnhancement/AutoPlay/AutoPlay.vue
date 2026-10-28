@@ -116,7 +116,6 @@ const randomPlayActivationModeOptions = computed(() => {
       </SettingsItem>
       <SettingsItem
         setting-id="settings.use_bilibili_default_auto_play" :title="t('settings.use_bilibili_default_auto_play')"
-        :desc="t('settings.use_bilibili_default_auto_play_desc')"
         right-width="auto"
       >
         <Radio v-model="settings.useBilibiliDefaultAutoPlay" />
@@ -202,7 +201,6 @@ const randomPlayActivationModeOptions = computed(() => {
       <SettingsItem
         setting-id="settings.enable_custom_play_order_overrides"
         :title="t('settings.enable_custom_play_order_overrides')"
-        :desc="t('settings.enable_custom_play_order_overrides_desc')"
         right-width="auto"
       >
         <Radio v-model="settings.enableCustomPlayOrderOverrides" />
@@ -232,7 +230,6 @@ const randomPlayActivationModeOptions = computed(() => {
     >
       <SettingsItem
         setting-id="settings.random_play_mode" :title="t('settings.random_play_mode')"
-        :desc="t('settings.random_play_mode_desc')"
         right-width="auto"
       >
         <Select v-model="settings.randomPlayMode" :options="randomPlayActivationModeOptions" w="160px" />
