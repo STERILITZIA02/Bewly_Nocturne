@@ -3,7 +3,9 @@ import { AppPage } from '~/enums/appEnums'
 import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 
 import type { HomeTabConfigItem } from './homeTabConfig'
+import { PAGE_SEARCH_PAGES, PAGE_SEARCH_PARAM } from './pageSearch'
 import { PRIVATE_CONVERSATION_ROUTE_PARAMS } from './privateConversationRoute'
+import { SEARCH_VIDEO_FILTER_PARAMS } from './searchUrl'
 
 export function homeTabStateKey(tab: HomeSubPage, requestIdentity: string) {
   return tab === HomeSubPage.ForYou ? `${tab}:${requestIdentity}` : tab
@@ -53,9 +55,11 @@ export function writeHomeRoute(href: string, page: AppPage, tab: HomeSubPage, de
   else
     url.searchParams.set('page', page)
   if (page !== AppPage.SearchResults) {
-    for (const key of ['keyword', 'category', 'user_order', 'user_type', 'search_type', 'live_room_order', 'live_user_order', 'pn'])
+    for (const key of ['keyword', 'category', 'user_order', 'user_type', 'search_type', 'live_room_order', 'live_user_order', 'pn', ...SEARCH_VIDEO_FILTER_PARAMS])
       url.searchParams.delete(key)
   }
+  if (!PAGE_SEARCH_PAGES.includes(page))
+    url.searchParams.delete(PAGE_SEARCH_PARAM)
   if (page !== AppPage.Notifications) {
     for (const key of ['notificationView', ...Object.values(PRIVATE_CONVERSATION_ROUTE_PARAMS)])
       url.searchParams.delete(key)

@@ -46,11 +46,10 @@ import api from '~/utils/api'
 import { toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { showBewlyTopBar } from '~/utils/effectiveTopBarSource'
 import { i18n } from '~/utils/i18n'
-import { isIframeDocumentActive } from '~/utils/iframeActivity'
 import { getCSRF, isHomePage } from '~/utils/main'
 import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure, sendMessage } from '~/utils/messaging'
 import { resolveStableMomentKey } from '~/utils/momentKey'
-import type { MomentGap, MomentJoinStatus, MomentUnreadSnapshot } from '~/utils/momentsReadPosition'
+import type { MomentGap, MomentUnreadSnapshot } from '~/utils/momentsReadPosition'
 import { dynamicId, fetchNewerMoments, MOMENTS_LATEST_OFFSET, parseMomentUnreadSnapshot } from '~/utils/momentsReadPosition'
 import { getNotificationBadgeCounts } from '~/utils/notificationBadge'
 import { reportStateTopicActive } from '~/utils/stateConsumer'
@@ -98,7 +97,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   const currentLocationHref = useCurrentLocationHref()
   let sharedStateMessagingUnavailable = false
   let uiActive = !document.hidden
-  const canRefreshUi = () => uiActive && !document.hidden && isIframeDocumentActive() && !sharedStateMessagingUnavailable
+  const canRefreshUi = () => uiActive && !document.hidden && !sharedStateMessagingUnavailable
   const resourceVersions: Record<TopBarSharedResource, number> = { unread: 0, moments: 0, rewards: 0 }
   const resourceRefreshIds: Record<TopBarSharedResource, number> = { unread: -1, moments: -1, rewards: -1 }
   const dirtyResources = new Set<TopBarSharedResource>()
@@ -145,7 +144,6 @@ export const useTopBarStore = defineStore('topBar', () => {
   let momentsCountRequestGeneration = 0
   const momentEntrySnapshot = shallowRef<MomentUnreadSnapshot>()
   const momentNewerGap = shallowRef<MomentGap>()
-  const momentJoinStatus = ref<MomentJoinStatus>('connected')
   const isLoadingNewerMoments = ref(false)
   const momentsPageFailed = ref(false)
   const momentReadingBookmark = shallowRef<{ id: string, offset: number }>()
@@ -155,7 +153,6 @@ export const useTopBarStore = defineStore('topBar', () => {
   let momentReadController: AbortController | undefined
   const momentRawIds = new Set<string>()
   const entryUnreadIds = new Set<string>()
-  const visibleNewMomentsCount = ref(0)
 
   // B币领取状态
   const privilegeInfo = reactive<PrivilegeInfo>({} as PrivilegeInfo)
@@ -942,10 +939,8 @@ export const useTopBarStore = defineStore('topBar', () => {
     selectedMomentType = selectedType
     momentRawIds.clear()
     entryUnreadIds.clear()
-    visibleNewMomentsCount.value = 0
     momentNewestRawId = ''
     momentNewerGap.value = undefined
-    momentJoinStatus.value = 'connected'
     momentsPageFailed.value = false
     momentAtLatest.value = true
     isLoadingNewerMoments.value = false
@@ -1012,7 +1007,6 @@ export const useTopBarStore = defineStore('topBar', () => {
       const items = result.items.filter(item => !momentRawIds.has(item.id_str))
       items.forEach(item => momentRawIds.add(item.id_str))
       acceptTopBarMoments(items, 'video', gap.targetId)
-      momentJoinStatus.value = result.status
       momentNewerGap.value = result.gap
       momentAtLatest.value = result.status === 'connected'
       if (momentAtLatest.value && result.newestId)
@@ -1033,7 +1027,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     moments.splice(0)
     momentRawIds.clear()
     entryUnreadIds.clear()
-    visibleNewMomentsCount.value = 0
     momentEntrySnapshot.value = undefined
     momentNewerGap.value = undefined
     collaborativeVideoMap.clear()
@@ -1112,8 +1105,6 @@ export const useTopBarStore = defineStore('topBar', () => {
         }
 
         accepted.push(momentItem)
-        if (momentItem.unread)
-          visibleNewMomentsCount.value++
 
         if (selectedType === 'video' && item.type === 8) {
           const bvid = extractBvid(item)
@@ -1261,8 +1252,6 @@ export const useTopBarStore = defineStore('topBar', () => {
       mergeAuthors(existingEntry.item, item)
       existingEntry.item.bewlyUnread ||= entryUnreadIds.has(item.id_str)
       if (existingEntry.moment) {
-        if (!existingEntry.moment.unread && existingEntry.item.bewlyUnread)
-          visibleNewMomentsCount.value++
         existingEntry.moment.unread = existingEntry.item.bewlyUnread
         updateMomentCollaborative(existingEntry.moment, existingEntry.item)
       }
@@ -1802,10 +1791,8 @@ export const useTopBarStore = defineStore('topBar', () => {
     readMomentEntrance,
     momentEntrySnapshot,
     momentNewerGap,
-    momentJoinStatus,
     momentAtLatest,
     momentReadingBookmark,
-    visibleNewMomentsCount,
     isLoadingNewerMoments,
     momentsPageFailed,
     getNewerTopBarMoments,

@@ -67,7 +67,6 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
 <template>
   <SettingsItemGroup
     data-setting-id="settings.group_player_display_mode" :title="t('settings.group_player_display_mode')"
-    :desc="t('settings.group_player_display_mode_desc')"
   >
     <SettingsItem setting-id="settings.video_default_player_mode" :title="t('settings.video_default_player_mode')" right-width="auto">
       <Select v-model="settings.defaultVideoPlayerMode" :options="videoPlayerModeOptions" w="160px" />
@@ -79,7 +78,6 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
       </SettingsItem>
       <SettingsItem
         setting-id="settings.video_player_mode.bewly_widescreen_sidebar_position" :title="t('settings.video_player_mode.bewly_widescreen_sidebar_position')"
-        :desc="t('settings.video_player_mode.bewly_widescreen_sidebar_position_desc')"
         right-width="auto"
       >
         <Select v-model="settings.bewlyWidescreenSidebarPosition" :options="bewlyWidescreenSidebarPositionOptions" w="160px" />

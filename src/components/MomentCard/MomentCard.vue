@@ -1624,11 +1624,6 @@ onBeforeUnmount(() => {
     transform 0.16s ease;
 }
 
-.moment-card__likes:hover {
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
-}
-
 .moment-card__likes:active {
   transform: scale(0.94);
 }
@@ -2177,15 +2172,24 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
+// States are translucent washes of the card's own foreground, so they darken a
+// light card and lighten a dark or image-toned one (`--bew-theme-surface` is
+// resolved once on the root as an opaque grey and ignores the card's tone).
+// Hover, open and pressed step up in strength; the text lifts to text-1.
 .moment-card__footer > a:hover,
-.moment-card__footer > button:hover {
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
+.moment-card__footer > button:hover:not(:disabled) {
+  color: var(--bew-text-1);
+  background: var(--bew-hover-bg);
 }
 
 .moment-card__footer > button.is-active {
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
+  color: var(--bew-text-1);
+  background: var(--bew-fill-2);
+}
+
+.moment-card__footer > a:active,
+.moment-card__footer > button:active:not(:disabled) {
+  background: var(--bew-fill-3);
 }
 
 .moment-card__footer > button:disabled {

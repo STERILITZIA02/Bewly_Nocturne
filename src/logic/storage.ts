@@ -191,7 +191,7 @@ export interface Settings {
   // Desktop & Dock
   showBewlyOrBiliPageSwitcher: boolean
   topBarLogoStyle: TopBarLogoStyle
-  topBarComponentsConfig: { key: string, visible: boolean, badgeType: 'number' | 'dot' | 'none' }[]
+  topBarComponentsConfig: { key: string, visible: boolean, badgeType: 'dot' | 'none' }[]
   topBarPinnedChannels: string[]
   showLikeNotificationReminder: boolean
   showReplyNotificationReminder: boolean
@@ -301,14 +301,8 @@ export interface Settings {
   appRecommendationColumn: AppRecommendationColumn
   recommendationModeSwitcherOptions: RecommendationModeSwitcherOption[]
   showRecommendationModeSwitcher: boolean
-  showImmersiveModeEntry: boolean
-  immersiveWheelSwitch: boolean
-  immersiveKeyboardSwitch: boolean
-  immersiveAutoPlay: boolean
-  immersiveAutoNext: boolean
   playerAdjustmentEnabled: boolean
   showPlayerAdjustmentButton: boolean
-  immersivePreloadNext: boolean
   autoSwitchRecommendationMode: boolean
 
   // filter setting
@@ -470,10 +464,10 @@ export const originalSettings: Settings = {
   showBewlyOrBiliPageSwitcher: true,
   topBarLogoStyle: 'icon',
   topBarComponentsConfig: [
-    { key: 'moments', visible: true, badgeType: 'number' },
+    { key: 'moments', visible: true, badgeType: 'dot' },
     { key: 'favorites', visible: true, badgeType: 'none' },
     { key: 'history', visible: true, badgeType: 'none' },
-    { key: 'watchLater', visible: true, badgeType: 'number' },
+    { key: 'watchLater', visible: true, badgeType: 'none' },
     { key: 'creatorCenter', visible: true, badgeType: 'none' },
     { key: 'upload', visible: true, badgeType: 'none' },
   ],
@@ -578,14 +572,8 @@ export const originalSettings: Settings = {
   appRecommendationColumn: 2,
   recommendationModeSwitcherOptions: RECOMMENDATION_MODES.map(mode => ({ mode, visible: true })),
   showRecommendationModeSwitcher: false,
-  showImmersiveModeEntry: true,
-  immersiveWheelSwitch: true,
-  immersiveKeyboardSwitch: true,
-  immersiveAutoPlay: true,
-  immersiveAutoNext: true,
   playerAdjustmentEnabled: true,
   showPlayerAdjustmentButton: true,
-  immersivePreloadNext: false,
   autoSwitchRecommendationMode: true,
 
   // filter setting
@@ -750,7 +738,7 @@ function normalizeSettings(value: Settings) {
 
   // Missing category switches preserve Nocturne's existing reminders. They
   // change badge presentation only, never the server's read/unread state.
-  for (const field of ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount', 'rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters', 'playerAdjustmentEnabled', 'showPlayerAdjustmentButton', 'showImmersiveModeEntry', 'immersiveWheelSwitch', 'immersiveKeyboardSwitch', 'immersiveAutoPlay', 'immersiveAutoNext', 'immersivePreloadNext', 'resumeFromPreviewPosition', 'showDockBackToTop', 'showSearchIdentitySwitcher'] as const) {
+  for (const field of ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount', 'rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters', 'playerAdjustmentEnabled', 'showPlayerAdjustmentButton', 'resumeFromPreviewPosition', 'showDockBackToTop', 'showSearchIdentitySwitcher'] as const) {
     if (typeof record[field] !== 'boolean')
       record[field] = originalSettings[field]
   }
@@ -805,18 +793,19 @@ function normalizeSettings(value: Settings) {
   if (!validTopBarLogoStyles.includes(record.topBarLogoStyle))
     record.topBarLogoStyle = originalSettings.topBarLogoStyle
 
-  const unsupportedBadgeKeys = new Set(['favorites', 'history'])
+  // Only Moments has an unread state; the Watch Later count is a queue size.
+  const unsupportedBadgeKeys = new Set(['favorites', 'history', 'watchLater'])
   if (Array.isArray(record.topBarComponentsConfig)) {
     // The top bar notifications button was removed.
     if (record.topBarComponentsConfig.some(component => component.key === 'notifications'))
       record.topBarComponentsConfig = record.topBarComponentsConfig.filter(component => component.key !== 'notifications')
-    const hasUnsupportedBadge = record.topBarComponentsConfig.some((component) => {
-      return unsupportedBadgeKeys.has(component.key) && component.badgeType !== 'none'
-    })
-    if (hasUnsupportedBadge) {
+    // The top bar shows no counts, at most an unread dot: the old `number` is a dot.
+    const badgeTypeOf = (component: { key: string, badgeType: string }) =>
+      unsupportedBadgeKeys.has(component.key) ? 'none' : component.badgeType === 'none' ? 'none' : 'dot'
+    if (record.topBarComponentsConfig.some(component => component.badgeType !== badgeTypeOf(component))) {
       record.topBarComponentsConfig = record.topBarComponentsConfig.map(component => ({
         ...component,
-        badgeType: unsupportedBadgeKeys.has(component.key) ? 'none' : component.badgeType,
+        badgeType: badgeTypeOf(component),
       }))
     }
   }

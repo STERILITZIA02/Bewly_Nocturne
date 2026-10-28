@@ -7,7 +7,7 @@ import ContextMenu from '~/components/ContextMenu.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { findElementSettingsTarget, getElementSettingsActions } from '~/logic/elementSettingsMenu'
-import { isLayoutEditing, layoutEditableRegistryVersion } from '~/logic/layoutEdit'
+import { enterLayoutEditMode, isLayoutEditing, layoutEditableRegistryVersion } from '~/logic/layoutEdit'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { getDeepActiveElement } from '~/utils/dialogFocus'
@@ -22,7 +22,7 @@ const trigger = shallowRef<HTMLElement | null>(null)
 const anchor = ref({ x: 0, y: 0 })
 const generation = ref(0)
 const actions = computed(() => target.value ? getElementSettingsActions(target.value.descriptor, mainStore.dockItems, settingsStore, t) : [])
-const options = computed(() => [...actions.value, { value: 'settings', label: t('dock.settings'), icon: 'i-tabler:settings' }])
+const options = computed(() => [...actions.value, { value: 'visual-edit', label: t('layout_editor.quick_edit'), icon: 'i-tabler:edit' }, { value: 'settings', label: t('layout_editor.open_setting'), icon: 'i-tabler:settings' }])
 function close() {
   target.value = undefined
 }
@@ -49,10 +49,18 @@ function open(event: MouseEvent | KeyboardEvent) {
 function select(value: string | number) {
   if (!target.value?.element.isConnected)
     return close()
-  if (value === 'settings')
+  if (value === 'visual-edit') {
+    const id = target.value.descriptor.id
+    const element = target.value.element
+    close()
+    enterLayoutEditMode(id, element)
+  }
+  else if (value === 'settings') {
     emit('openSetting', target.value.descriptor.settingId, target.value.element.getBoundingClientRect())
-  else
+  }
+  else {
     actions.value.find(action => action.value === value)?.run()
+  }
 }
 useEventListener(mainAppRef, 'contextmenu', open)
 useEventListener(mainAppRef, 'keydown', (event) => {

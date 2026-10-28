@@ -5,7 +5,6 @@ import { getTitleText } from '~/utils/bewlyWidescreen/nativeDom'
 import { publishRailTabs } from '~/utils/bewlyWidescreen/railTabs'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState, BewlyWidescreenTab } from '~/utils/bewlyWidescreen/types'
-import { isImmersiveFrame } from '~/utils/iframeActivity'
 
 export function setActiveTab(nextTab: BewlyWidescreenTab, hydrate = true) {
   if (!session.current)
@@ -154,10 +153,8 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
     comment: createTabButton('comment', t('widescreen.comments')),
     danmaku: createTabButton('danmaku', t('widescreen.danmaku')),
     playlist: createTabButton('playlist', t('widescreen.playlist')),
-    recommendations: createTabButton('recommendations', t('settings.immersive_recommendations')),
   }
-  tabButtons.recommendations.hidden = !isImmersiveFrame()
-  tablist.append(...Object.values(tabButtons).filter(button => !button.hidden))
+  tablist.append(tabButtons.comment, tabButtons.danmaku, tabButtons.playlist)
 
   const panelWrap = document.createElement('div')
   panelWrap.className = 'bewly-widescreen-panels'
@@ -166,7 +163,6 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
     comment: document.createElement('section'),
     danmaku: document.createElement('section'),
     playlist: document.createElement('section'),
-    recommendations: document.createElement('section'),
   }
 
   for (const [tab, panel] of Object.entries(panels) as Array<[BewlyWidescreenTab, HTMLElement]>) {
@@ -180,14 +176,13 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
     panel.setAttribute('role', 'tabpanel')
     panel.setAttribute('aria-labelledby', tabId)
     panel.tabIndex = 0
-    if (!tabButtons[tab].hidden)
-      panelWrap.appendChild(panel)
+    panelWrap.appendChild(panel)
   }
 
   const playlistToggleButton = createPlaylistToggleButton()
   panels.playlist.prepend(playlistToggleButton)
 
-  const tabOrder = (Object.keys(tabButtons) as BewlyWidescreenTab[]).filter(tab => !tabButtons[tab].hidden)
+  const tabOrder = Object.keys(tabButtons) as BewlyWidescreenTab[]
   tablist.addEventListener('keydown', (event) => {
     const currentIndex = tabOrder.findIndex(tab => tabButtons[tab] === event.target)
     if (currentIndex < 0)

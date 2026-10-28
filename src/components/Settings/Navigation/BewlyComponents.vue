@@ -13,7 +13,6 @@ const pages = [
   {
     value: 'video-card',
     titleKey: 'settings.plugin.video_card',
-    descriptionKey: 'settings.category_browsing_video_card_desc',
     icon: 'i-tabler:video',
     iconActivated: 'i-tabler:video-filled',
     component: defineAsyncComponent(() => import('../PluginComponentsAndPages/VideoCard/VideoCard.vue')),
@@ -21,7 +20,6 @@ const pages = [
   {
     value: 'topbar',
     titleKey: 'settings.plugin.topbar',
-    descriptionKey: 'settings.category_navigation_topbar_desc',
     icon: 'i-tabler:layout-navbar',
     iconActivated: 'i-tabler:layout-navbar-filled',
     component: defineAsyncComponent(() => import('../PluginComponentsAndPages/TopBar/TopBar.vue')),
@@ -29,7 +27,6 @@ const pages = [
   {
     value: 'dock',
     titleKey: 'settings.plugin.dock_and_sidebar',
-    descriptionKey: 'settings.category_navigation_dock_desc',
     icon: 'i-tabler:navigation',
     iconActivated: 'i-tabler:navigation-filled',
     component: defineAsyncComponent(() => import('../PluginComponentsAndPages/DockAndSidebar/DockAndSidebar.vue')),

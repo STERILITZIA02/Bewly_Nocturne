@@ -118,7 +118,6 @@ function openPlayerFeedback() {
 
 <template>
   <div
-    v-layout-editable="'sidebar-auto-hide'"
     :class="{
       'left-side': sidebarPosition === 'left',
       'right-side': sidebarPosition === 'right',

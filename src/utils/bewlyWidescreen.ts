@@ -459,7 +459,6 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     comment: false,
     danmaku: false,
     playlist: false,
-    recommendations: true,
   })
 
   const handleWidescreenKeydown = (event: KeyboardEvent) => {

@@ -6,6 +6,7 @@ import { useRouteState } from '~/composables/useRouteState'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { AppPage } from '~/enums/appEnums'
 import { localSettings, settings } from '~/logic'
+import { useLayoutEditSettingValue } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { getCSRF, getUserID } from '~/utils/main'
@@ -174,7 +175,8 @@ const markAllMessagesRead = useMarkAllMessagesRead(currentMid, {
   },
   syncUnread: () => topBarStore.syncUnreadMessageState(),
 })
-const isBottomDock = computed(() => settings.value.dockPosition === 'bottom')
+const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () => settings.value.dockPosition)
+const isBottomDock = computed(() => dockPosition.value === 'bottom')
 const currentSection = computed(() => NOTIFICATION_SECTION_BY_ID[currentView.value])
 const nativeView = computed<NativeNotificationSection | null>(() => (
   isNativeNotificationSection(currentView.value) ? currentView.value : null

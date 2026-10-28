@@ -27,6 +27,7 @@ import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
 import { useHomePageRoute } from '~/composables/useHomePageRoute'
 import { localLoudnessPanelOpen } from '~/composables/useLocalLoudness'
+import { pageDimmed } from '~/composables/usePageDim'
 import { providePageViewState } from '~/composables/usePageViewState'
 import { providePanelOrigin } from '~/composables/usePanelOrigin'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
@@ -71,7 +72,6 @@ import { cancelScrollIntent, scrollToPosition } from '~/utils/scrollIntent'
 import type { ViewportFrameReason, ViewportGeometry } from '~/utils/viewportGeometry'
 import { invalidateViewportGeometry, readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
 
-import ImmersivePlaybackRail from './ImmersivePlaybackRail.vue'
 import { setupNecessarySettingsWatchers } from './necessarySettingsWatchers'
 import PlaybackCommentComposer from './PlaybackCommentComposer.vue'
 import PlaybackRailTabsIndicator from './PlaybackRailTabsIndicator.vue'
@@ -80,6 +80,9 @@ const mainStore = useMainStore()
 registerSidebarWidth()
 const settingsStore = useSettingsStore()
 const topBarStore = useTopBarStore()
+// An open top bar popover rises above the home search, which docks into the
+// bar's row from the page (later in the DOM, the same z-index).
+const topBarPopoverOpen = computed(() => Object.values(topBarStore.popupVisible).some(Boolean))
 const currentLocationHref = useCurrentLocationHref()
 const appAccountScope = ref(String(getUserID() || 'guest'))
 watch([() => topBarStore.userInfo.mid, currentLocationHref], () => {
@@ -957,7 +960,7 @@ onBeforeUnmount(stopUrlCleaner)
     <div
       v-if="showTopBar"
       class="top-bar-host"
-      :class="{ 'top-bar-host--messages': showBewlyPage && activatedPage === AppPage.Notifications, 'top-bar-host--library': showBewlyPage && isLibraryPage }"
+      :class="{ 'top-bar-host--messages': showBewlyPage && activatedPage === AppPage.Notifications, 'top-bar-host--library': showBewlyPage && isLibraryPage, 'top-bar-host--popover-open': topBarPopoverOpen }"
       :style="{
         opacity: hideUIForIframePhotoViewer ? 0 : 1,
         pointerEvents: hideUIForIframePhotoViewer ? 'none' : 'auto',
@@ -1035,7 +1038,6 @@ onBeforeUnmount(stopUrlCleaner)
     <LocalLoudnessPanel v-if="localLoudnessPanelOpen" />
     <PlaybackCommentComposer v-if="!isInIframe()" />
     <PlaybackRailTabsIndicator />
-    <ImmersivePlaybackRail />
 
     <!-- Keep the static overlay removal before resolving a caller's request. -->
     <ConfirmDialog
@@ -1045,10 +1047,17 @@ onBeforeUnmount(stopUrlCleaner)
       @finish="confirmDialogHost.finish"
     />
     <ImageViewerHost />
+
+    <!-- Above the page, Dock and rails; below the top bar and the home search,
+         whose open popovers and panel hold it. -->
+    <Transition name="page-dim">
+      <div v-if="pageDimmed" class="page-dim" aria-hidden="true" />
+    </Transition>
   </div>
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/modalWindow";
 .bewly-wrapper {
   --bew-active-sidebar-width: var(--bew-sidebar-base-width);
   --bew-messages-sidebar-width: var(--bew-active-sidebar-width);
@@ -1064,6 +1073,36 @@ onBeforeUnmount(stopUrlCleaner)
 }
 .top-bar-layer {
   z-index: var(--bew-z-topbar-host);
+}
+
+.top-bar-host--popover-open .top-bar-layer {
+  z-index: calc(var(--bew-z-topbar-host) + 1);
+}
+
+.page-dim {
+  @include modalWindow.backdrop;
+  position: fixed;
+  inset: 0;
+  z-index: var(--bew-z-page-dim);
+  // Only a veil: the popover's own outside-click and hover rules close it.
+  pointer-events: none;
+}
+
+.page-dim-enter-active,
+.page-dim-leave-active {
+  transition: opacity var(--bew-duration-moderate) var(--bew-ease-standard);
+}
+
+.page-dim-enter-from,
+.page-dim-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-dim-enter-active,
+  .page-dim-leave-active {
+    transition: none;
+  }
 }
 
 // Let the persistent rail sit above the top bar's own surface, while keeping

@@ -312,8 +312,8 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
 @use "../../styles/popoverCards";
 
 .watchLater-pop {
-  width: 380px;
-  height: min(500px, var(--bew-popover-max-height));
+  width: var(--bew-popover-panel-width);
+  height: var(--bew-popover-panel-height);
 }
 
 .watch-later-pop__cover,

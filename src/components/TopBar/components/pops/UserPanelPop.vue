@@ -350,21 +350,21 @@ function handleClickChannel() {
 </template>
 
 <style lang="scss" scoped>
-@use "../../../../styles/sidebarSurface";
+@use "../../../../styles/modalWindow";
 @use "../../../../styles/truncateFade";
 
 .userPanel-pop {
-  width: 300px;
-  max-height: min(620px, var(--bew-popover-max-height));
+  width: 340px;
+  max-height: var(--bew-popover-panel-height);
 }
 
-// Same glass material, border and shadow as the circles and capsule in the top
-// bar. The top-right corner is concentric with the enlarged avatar sitting a
+// The same solid window as the other top bar panels and the settings window.
+// The top-right corner is concentric with the enlarged avatar sitting a
 // space-2 inside it (--avatar-panel-face-radius comes from the .avatar host).
 .userPanel-pop.bew-popover-surface {
-  @include sidebarSurface.floating;
-  border-radius: var(--bew-surface-radius) calc(var(--avatar-panel-face-radius) + var(--bew-space-2))
-    var(--bew-surface-radius) var(--bew-surface-radius);
+  @include modalWindow.surface;
+  border-radius: var(--bew-modal-radius) calc(var(--avatar-panel-face-radius) + var(--bew-space-2))
+    var(--bew-modal-radius) var(--bew-modal-radius);
   corner-shape: var(--bew-corner-shape) round var(--bew-corner-shape) var(--bew-corner-shape);
 }
 

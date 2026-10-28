@@ -10,7 +10,6 @@ import { getRecommendationModeOption, selectRecommendationMode } from './recomme
 
 export type LayoutEditSection = 'dock' | 'topBar' | 'sidebar' | 'page'
 export type LayoutEditCategory = 'navigation' | 'page-layout'
-export type LayoutEditScope = 'current-page' | 'all-pages'
 
 export interface SettingDescriptor<T = unknown> {
   id: string
@@ -18,7 +17,6 @@ export interface SettingDescriptor<T = unknown> {
   page: string
   group: string
   titleKey: string
-  descriptionKey?: string
   get: () => T
   set: (value: T) => void
 }
@@ -39,10 +37,11 @@ export interface LayoutEditableDescriptor {
   category: LayoutEditCategory
   settingId: string
   titleKey: string
-  scope?: LayoutEditScope
   previewControl?: LayoutEditSelectControl
   dockPage?: AppPage
   topBarKey?: string
+  /** Preserve selection when a layout preview replaces the container root. */
+  region?: boolean
 }
 
 const settingDescriptorMap = new Map<string, SettingDescriptor>()
@@ -52,9 +51,11 @@ const editableElementGenerations = new Map<string, number>()
 const navigationListeners = new Set<(descriptor: SettingDescriptor) => void>()
 
 const activeTargetIdState = ref<string | null>(null)
+const activeTargetElementState = shallowRef<Element>()
 const isLayoutEditingState = ref(false)
 const activePreviewSettingIdState = ref<string | null>(null)
 const activePreviewValueState = shallowRef<unknown>()
+const previewValuesState = shallowRef(new Map<string, unknown>())
 const editableRegistryVersionState = ref(0)
 let pendingSettingNavigation: SettingDescriptor | undefined
 
@@ -69,6 +70,7 @@ const previewController = createLayoutPreviewController((settingId) => {
 })
 
 export const activeLayoutEditTargetId = readonly(activeTargetIdState)
+export const activeLayoutEditTargetElement = computed(() => activeTargetElementState.value)
 export const activeLayoutEditPreviewSettingId = readonly(activePreviewSettingIdState)
 export const activeLayoutEditPreviewValue = readonly(activePreviewValueState)
 export const layoutEditableRegistryVersion = readonly(editableRegistryVersionState)
@@ -78,6 +80,7 @@ function syncPreviewState() {
   const snapshot = previewController.getSnapshot()
   activePreviewSettingIdState.value = snapshot?.settingId ?? null
   activePreviewValueState.value = snapshot?.after
+  previewValuesState.value = new Map(previewController.getSnapshots().map(item => [item.settingId, item.after]))
 }
 
 export function registerSettingDescriptors(descriptors: SettingDescriptor[]) {
@@ -106,9 +109,30 @@ export function findLayoutEditableTarget(path: EventTarget[]) {
     if (!(node instanceof HTMLElement))
       continue
     const descriptor = getLayoutEditableDescriptor(node.dataset.layoutEditableId ?? '')
-    if (descriptor)
+    if (descriptor && editableElements.get(descriptor.id)?.has(node))
       return { element: node, descriptor }
   }
+}
+
+/** One selection per setting: inner controls belong to their setting's surface. */
+export function findVisualEditTarget(path: EventTarget[]) {
+  let target: ReturnType<typeof findLayoutEditableTarget>
+  for (const node of path) {
+    const candidate = findLayoutEditableTarget([node])
+    if (candidate && (!target || candidate.descriptor.settingId === target.descriptor.settingId))
+      target = candidate
+  }
+  return target?.element
+}
+
+export function selectVisualEditElement(element: Element | undefined) {
+  const path: Element[] = []
+  for (let node = element; node; node = node.parentElement ?? undefined)
+    path.push(node)
+  const target = findVisualEditTarget(path)
+  const registered = target && findLayoutEditableTarget([target])
+  activeTargetIdState.value = registered?.descriptor.id ?? null
+  activeTargetElementState.value = registered?.element
 }
 
 export function getLayoutEditableDescriptors(): readonly LayoutEditableDescriptor[] {
@@ -140,14 +164,16 @@ export function subscribeSettingNavigation(listener: (descriptor: SettingDescrip
   return () => navigationListeners.delete(listener)
 }
 
-function scheduleMissingTargetExit(id: string) {
+function scheduleMissingTargetClear(id: string) {
   const generation = (editableElementGenerations.get(id) ?? 0) + 1
   editableElementGenerations.set(id, generation)
   queueMicrotask(() => {
     if (editableElementGenerations.get(id) !== generation || editableElements.get(id)?.size)
       return
-    if (activeTargetIdState.value === id)
-      exitLayoutEditMode()
+    if (activeTargetIdState.value === id) {
+      activeTargetIdState.value = null
+      activeTargetElementState.value = undefined
+    }
   })
 }
 
@@ -161,6 +187,8 @@ export function registerLayoutEditableElement(id: string, element: HTMLElement) 
   elements.add(element)
   editableElements.set(id, elements)
   element.dataset.layoutEditableId = id
+  if (activeTargetElementState.value === element)
+    activeTargetIdState.value = id
   editableRegistryVersionState.value++
 
   return () => {
@@ -169,7 +197,7 @@ export function registerLayoutEditableElement(id: string, element: HTMLElement) 
       delete element.dataset.layoutEditableId
     if (elements.size === 0) {
       editableElements.delete(id)
-      scheduleMissingTargetExit(id)
+      scheduleMissingTargetClear(id)
     }
     editableRegistryVersionState.value++
   }
@@ -195,11 +223,13 @@ export function useLayoutEditableRoot(
   onScopeDispose(() => unregister?.())
 }
 
-export function getRegisteredLayoutEditableElement(id: string): HTMLElement | undefined {
+export function getRegisteredLayoutEditableElement(id: string, preferred?: Element): HTMLElement | undefined {
   const elements = editableElements.get(id)
   if (!elements)
     return undefined
-  return Array.from(elements).find(element => element.isConnected)
+  if (preferred instanceof HTMLElement && preferred.isConnected && elements.has(preferred))
+    return preferred
+  return Array.from(elements).find(element => element.isConnected && element.getClientRects().length && !element.closest('[inert]'))
 }
 
 interface LayoutEditableDirectiveState {
@@ -259,44 +289,45 @@ export function cancelLayoutEditSettingPreview(): boolean {
 
 export function useLayoutEditSettingValue<T>(settingId: string, persistedValue: () => T) {
   return computed<T>(() => {
-    if (activePreviewSettingIdState.value === settingId)
-      return activePreviewValueState.value as T
+    if (previewValuesState.value.has(settingId))
+      return previewValuesState.value.get(settingId) as T
     return persistedValue()
   })
 }
 
-export function setActiveLayoutEditTarget(id: string | null): boolean {
-  if (id === activeTargetIdState.value)
-    return true
-  cancelLayoutEditSettingPreview()
+export function setActiveLayoutEditTarget(id: string | null, element?: HTMLElement): boolean {
   if (id === null) {
     activeTargetIdState.value = null
+    activeTargetElementState.value = undefined
     return true
   }
 
   const descriptor = editableDescriptorMap.get(id)
-  if (!descriptor || !getRegisteredLayoutEditableElement(id))
+  const target = getRegisteredLayoutEditableElement(id, element)
+  if (!descriptor || !target)
     return false
-  activeTargetIdState.value = id
+  selectVisualEditElement(target)
   return true
 }
 
-export function enterLayoutEditMode(targetId?: string) {
+export function enterLayoutEditMode(targetId?: string, element?: HTMLElement) {
   isLayoutEditingState.value = true
   if (targetId)
-    setActiveLayoutEditTarget(targetId)
+    setActiveLayoutEditTarget(targetId, element)
 }
 
 export function completeLayoutEditMode() {
   commitLayoutEditSettingPreview()
   isLayoutEditingState.value = false
   activeTargetIdState.value = null
+  activeTargetElementState.value = undefined
 }
 
 export function exitLayoutEditMode() {
   cancelLayoutEditSettingPreview()
   isLayoutEditingState.value = false
   activeTargetIdState.value = null
+  activeTargetElementState.value = undefined
 }
 
 const dockItemDescriptors = [
@@ -387,42 +418,50 @@ registerSettingDescriptors([
   { id: 'messages.mobileOpenMode', category: 'BewlyPages', page: 'messages', group: 'mobile', titleKey: 'settings.messages_mobile_open_mode', get: () => settings.value.privateMessageMobileOpenMode, set: value => settings.value.privateMessageMobileOpenMode = value as typeof settings.value.privateMessageMobileOpenMode },
 ])
 
+const homeGridPreviewControl: LayoutEditSelectControl = {
+  type: 'select',
+  options: [
+    { labelKey: 'layout_editor.layout_adaptive', value: 'adaptive' },
+    { labelKey: 'layout_editor.layout_two_columns', value: 'twoColumns' },
+    { labelKey: 'layout_editor.layout_one_column', value: 'oneColumn' },
+  ],
+}
+
 registerLayoutEditableDescriptors([
+  { id: 'dock-items', section: 'dock', category: 'navigation', settingId: 'navigation.dock.items', titleKey: 'settings.dock_content_adjustment', region: true },
   {
     id: 'dock',
     section: 'dock',
     category: 'navigation',
     settingId: 'navigation.dock.position',
     titleKey: 'layout_editor.target_dock',
-    scope: 'all-pages',
     previewControl: {
       type: 'select',
       options: DOCK_POSITIONS.map(value => ({ labelKey: `common.position.${value}`, value })),
     },
   },
-  { id: 'dock-page-mode-switcher', section: 'dock', category: 'navigation', settingId: 'navigation.pageMode', titleKey: 'layout_editor.target_page_mode_switcher', scope: 'all-pages' },
-  { id: 'dock-theme-toggle', section: 'dock', category: 'navigation', settingId: 'navigation.dock.themeSwitcher', titleKey: 'settings.disable_light_dark_mode_switcher', scope: 'all-pages' },
-  { id: 'dock-collapse-toggle', section: 'dock', category: 'navigation', settingId: 'navigation.dock.collapseMode', titleKey: 'settings.dock_collapse_mode', scope: 'all-pages' },
-  { id: 'dock-refresh-action', section: 'dock', category: 'navigation', settingId: 'navigation.dock.actionButtons', titleKey: 'common.operation.refresh', scope: 'all-pages' },
-  { id: 'dock-back-to-top-action', section: 'dock', category: 'navigation', settingId: 'navigation.dock.actionButtons', titleKey: 'common.operation.back_to_top', scope: 'all-pages' },
-  { id: 'dock-refresh-back-to-top-action', section: 'dock', category: 'navigation', settingId: 'navigation.dock.actionButtons', titleKey: 'settings.back_to_top_and_refresh_buttons_are_separated', scope: 'all-pages' },
-  { id: 'dock-undo-refresh-action', section: 'dock', category: 'navigation', settingId: 'navigation.dock.undoRefresh', titleKey: 'common.operation.undo_refresh', scope: 'all-pages' },
-  { id: 'dock-forward-refresh-action', section: 'dock', category: 'navigation', settingId: 'navigation.dock.undoRefresh', titleKey: 'common.operation.forward_refresh', scope: 'all-pages' },
-  { id: 'sidebar-page-mode-switcher', section: 'sidebar', category: 'navigation', settingId: 'navigation.pageMode', titleKey: 'layout_editor.target_page_mode_switcher', scope: 'all-pages' },
-  { id: 'sidebar-theme-toggle', section: 'sidebar', category: 'navigation', settingId: 'appearance.theme', titleKey: 'settings.theme', scope: 'all-pages' },
-  { id: 'sidebar-auto-hide', section: 'sidebar', category: 'navigation', settingId: 'navigation.sidebar.autoHide', titleKey: 'settings.auto_hide_sidebar', scope: 'all-pages' },
-  { id: 'topbar', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.components', titleKey: 'layout_editor.target_topbar', scope: 'all-pages' },
-  { id: 'topbar-logo', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.logo', titleKey: 'layout_editor.target_topbar_logo', scope: 'all-pages' },
-  { id: 'topbar-search', section: 'topBar', category: 'navigation', settingId: 'search.bar.recommendation', titleKey: 'layout_editor.target_search_bar', scope: 'all-pages' },
-  { id: 'topbar-pinned-channels', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.pinnedChannels', titleKey: 'layout_editor.target_topbar_pinned_channels', scope: 'all-pages' },
-  { id: 'topbar-more', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.components', titleKey: 'layout_editor.target_topbar_actions', scope: 'all-pages' },
+  { id: 'dock-page-mode-switcher', section: 'dock', category: 'navigation', settingId: 'navigation.pageMode', titleKey: 'layout_editor.target_page_mode_switcher' },
+  { id: 'dock-theme-toggle', section: 'dock', category: 'navigation', settingId: 'navigation.dock.themeSwitcher', titleKey: 'settings.disable_light_dark_mode_switcher' },
+  { id: 'dock-collapse-toggle', section: 'dock', category: 'navigation', settingId: 'navigation.dock.collapseMode', titleKey: 'settings.dock_collapse_mode' },
+  { id: 'dock-refresh-action', section: 'dock', category: 'navigation', settingId: 'navigation.dock.actionButtons', titleKey: 'common.operation.refresh' },
+  { id: 'dock-back-to-top-action', section: 'dock', category: 'navigation', settingId: 'navigation.dock.actionButtons', titleKey: 'common.operation.back_to_top' },
+  { id: 'dock-refresh-back-to-top-action', section: 'dock', category: 'navigation', settingId: 'navigation.dock.actionButtons', titleKey: 'settings.back_to_top_and_refresh_buttons_are_separated' },
+  { id: 'dock-undo-refresh-action', section: 'dock', category: 'navigation', settingId: 'navigation.dock.undoRefresh', titleKey: 'common.operation.undo_refresh' },
+  { id: 'dock-forward-refresh-action', section: 'dock', category: 'navigation', settingId: 'navigation.dock.undoRefresh', titleKey: 'common.operation.forward_refresh' },
+  { id: 'sidebar-page-mode-switcher', section: 'sidebar', category: 'navigation', settingId: 'navigation.pageMode', titleKey: 'layout_editor.target_page_mode_switcher' },
+  { id: 'sidebar-theme-toggle', section: 'sidebar', category: 'navigation', settingId: 'appearance.theme', titleKey: 'settings.theme' },
+  { id: 'topbar', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.components', titleKey: 'layout_editor.target_topbar_actions', region: true },
+  { id: 'topbar-logo', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.logo', titleKey: 'layout_editor.target_topbar_logo' },
+  { id: 'topbar-search', section: 'topBar', category: 'navigation', settingId: 'search.bar.recommendation', titleKey: 'layout_editor.target_search_bar' },
+  { id: 'topbar-pinned-channels', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.pinnedChannels', titleKey: 'layout_editor.target_topbar_pinned_channels' },
+  { id: 'topbar-more', section: 'topBar', category: 'navigation', settingId: 'navigation.topBar.components', titleKey: 'layout_editor.target_topbar_actions' },
   {
     id: 'sidebar',
+    region: true,
     section: 'sidebar',
     category: 'navigation',
     settingId: 'navigation.sidebar.position',
     titleKey: 'layout_editor.target_sidebar',
-    scope: 'all-pages',
     previewControl: {
       type: 'select',
       options: [
@@ -433,31 +472,24 @@ registerLayoutEditableDescriptors([
   },
   {
     id: 'home-video-grid',
+    region: true,
     section: 'page',
     category: 'page-layout',
     settingId: 'page.home.gridLayout',
     titleKey: 'layout_editor.target_home_grid',
-    scope: 'current-page',
-    previewControl: {
-      type: 'select',
-      options: [
-        { labelKey: 'layout_editor.layout_adaptive', value: 'adaptive' },
-        { labelKey: 'layout_editor.layout_two_columns', value: 'twoColumns' },
-        { labelKey: 'layout_editor.layout_one_column', value: 'oneColumn' },
-      ],
-    },
+    previewControl: homeGridPreviewControl,
   },
-  { id: 'home-tabs', section: 'page', category: 'page-layout', settingId: 'page.home.tabs', titleKey: 'layout_editor.target_home_tabs', scope: 'current-page' },
-  { id: 'home-grid-switcher', section: 'page', category: 'page-layout', settingId: 'page.home.gridLayout', titleKey: 'layout_editor.target_home_grid_switcher', scope: 'current-page' },
-  { id: 'home-search', section: 'page', category: 'page-layout', settingId: 'search.bar.recommendation', titleKey: 'layout_editor.target_search_bar', scope: 'current-page' },
-  { id: 'home-recommendation-switcher', section: 'page', category: 'page-layout', settingId: 'page.home.recommendationSwitcher', titleKey: 'settings.show_recommendation_mode_switcher', scope: 'current-page' },
+  { id: 'home-tabs', section: 'page', category: 'page-layout', settingId: 'page.home.tabs', titleKey: 'layout_editor.target_home_tabs' },
+  { id: 'home-grid-switcher', section: 'page', category: 'page-layout', settingId: 'page.home.gridLayout', titleKey: 'layout_editor.target_home_grid_switcher', previewControl: homeGridPreviewControl },
+  { id: 'home-search', section: 'page', category: 'page-layout', settingId: 'search.bar.recommendation', titleKey: 'layout_editor.target_search_bar' },
+  { id: 'home-recommendation-switcher', section: 'page', category: 'page-layout', settingId: 'page.home.recommendationSwitcher', titleKey: 'settings.show_recommendation_mode_switcher' },
   {
     id: 'moments-grid',
+    region: true,
     section: 'page',
     category: 'page-layout',
     settingId: 'page.moments.gridColumns',
     titleKey: 'layout_editor.target_moments_grid',
-    scope: 'current-page',
     previewControl: {
       type: 'select',
       options: [
@@ -467,15 +499,15 @@ registerLayoutEditableDescriptors([
       ],
     },
   },
-  { id: 'moments-sidebar', section: 'page', category: 'page-layout', settingId: 'page.moments.sidebar', titleKey: 'layout_editor.target_moments_sidebar', scope: 'current-page' },
-  { id: 'moments-up-list', section: 'page', category: 'page-layout', settingId: 'page.moments.sidebar', titleKey: 'layout_editor.target_moments_up_list', scope: 'current-page' },
+  { id: 'moments-sidebar', section: 'page', category: 'page-layout', settingId: 'page.moments.sidebar', titleKey: 'layout_editor.target_moments_sidebar', region: true },
+  { id: 'moments-up-list', section: 'page', category: 'page-layout', settingId: 'page.moments.sidebar', titleKey: 'layout_editor.target_moments_up_list', region: true },
   {
     id: 'watch-later-layout',
+    region: true,
     section: 'page',
     category: 'page-layout',
     settingId: 'page.watchLater.layout',
     titleKey: 'layout_editor.target_watch_later',
-    scope: 'current-page',
     previewControl: {
       type: 'select',
       options: [
@@ -491,7 +523,6 @@ registerLayoutEditableDescriptors([
     settingId: 'navigation.dock.items',
     dockPage: page,
     titleKey,
-    scope: 'all-pages',
   })),
   ...topBarItemDescriptors.map(([id, key, titleKey]): LayoutEditableDescriptor => ({
     id,
@@ -500,6 +531,5 @@ registerLayoutEditableDescriptors([
     settingId: 'navigation.topBar.components',
     topBarKey: key,
     titleKey,
-    scope: 'all-pages',
   })),
 ])

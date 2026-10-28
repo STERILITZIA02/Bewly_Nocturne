@@ -135,10 +135,10 @@ const dockContentRef = useDelayedHover({
       collapseDock()
   },
 })
-useLayoutEditableRoot('dock', dockContentRef)
 const { width: dockWidth, height: dockHeight } = useElementSize(dockContentRef)
 const dockShellRef = ref<HTMLElement>()
 const dockShellSurfaceRef = ref<HTMLElement>()
+useLayoutEditableRoot('dock', dockShellSurfaceRef)
 const { width: dockShellWidth, height: dockShellHeight } = useElementSize(
   dockShellRef,
   { width: 0, height: 0 },
@@ -783,7 +783,6 @@ onUnmounted(() => {
     <div
       ref="dockContentRef"
       class="dock-content"
-      data-layout-editable-id="dock"
       :class="{
         right: dockPosition === 'right',
         bottom: dockPosition === 'bottom',
@@ -810,7 +809,6 @@ onUnmounted(() => {
         <div
           ref="dockShellSurfaceRef"
           class="dock-shell-surface"
-          aria-hidden="true"
           @transitionend="handleDockShellTransitionEnd"
         />
 
@@ -821,7 +819,7 @@ onUnmounted(() => {
           :inert="!isDockContentVisible"
           @wheel="handleDockWheel"
         >
-          <div class="dock-page-navigation bew-segment-control">
+          <div v-layout-editable="'dock-items'" class="dock-page-navigation bew-segment-control">
             <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator bew-shape-circle" :active-key="activeDockItemPage" />
 
             <template v-for="dockItem in currentDockItems" :key="dockItem.page">

@@ -1,3 +1,4 @@
+@use "./modalWindow";
 @use "./truncateFade";
 .bew-popover-surface {
   box-sizing: border-box;
@@ -10,12 +11,10 @@
   backdrop-filter: none;
 }
 
-// These fixed TopBar panels extend beyond the header's glass boundary.
-// Menus and controls inside them retain the default solid surface.
+// The fixed top bar panels are solid windows like the settings window
+// (user-specified): same fill, hairline edge, corner and shadow, no glass.
 .bew-popover.bew-popover-surface {
-  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
-  background: var(--bew-popover-surface-background);
-  backdrop-filter: var(--bew-filter-glass-1);
+  @include modalWindow.surface;
 }
 
 .bew-popover-surface--clip {

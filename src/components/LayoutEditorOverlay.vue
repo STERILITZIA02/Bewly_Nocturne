@@ -1,730 +1,476 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import { nextTick, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { DOCK_LAYOUT, LAYOUT_EDITOR_LAYOUT } from '~/constants/layout'
-import { settings } from '~/logic'
-import { ownsContextMenu } from '~/logic/elementSettingsMenu'
+import { useBewlyApp } from '~/composables/useAppProvider'
+import { LAYOUT_EDITOR_LAYOUT } from '~/constants/layout'
 import {
   activeLayoutEditPreviewSettingId,
   activeLayoutEditPreviewValue,
+  activeLayoutEditTargetElement,
   activeLayoutEditTargetId,
   beginLayoutEditSettingPreview,
   completeLayoutEditMode,
-  enterLayoutEditMode,
   exitLayoutEditMode,
-  findLayoutEditableTarget,
+  findVisualEditTarget,
   getLayoutEditableDescriptor,
-  getLayoutEditableDescriptors,
   getRegisteredLayoutEditableElement,
   getSettingDescriptor,
   isLayoutEditing,
   layoutEditableRegistryVersion,
-  setActiveLayoutEditTarget,
+  selectVisualEditElement,
   updateLayoutEditSettingPreview,
   useLayoutEditSettingValue,
 } from '~/logic/layoutEdit'
-import { pickLayoutEditableAtPoint } from '~/logic/layoutEditHitTest'
+import { getDeepActiveElement, moveDialogTabFocus, restoreOverlayFocus } from '~/utils/dialogFocus'
+import { computeAnchoredPopoverPosition } from '~/utils/floatingMenu'
+import { getLayoutEditAncestors, getLayoutEditViewport, measureLayoutEditTarget } from '~/utils/layoutEditGeometry'
+import type { ViewportFrameReason, ViewportGeometry } from '~/utils/viewportGeometry'
+import { invalidateViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
+import { normalizeWheelDelta } from '~/utils/wheelStep'
 
 import Button from './Button.vue'
 
-const emit = defineEmits<{
-  (event: 'openSetting', settingId: string, origin?: DOMRect): void
-}>()
-
-interface OverlayRect {
-  height: number
-  left: number
-  top: number
-  width: number
-}
-
-interface SafeInsets {
-  bottom: number
-  left: number
-  right: number
-  top: number
-}
-
-interface RegisteredHitTarget {
-  depth: number
-  element: HTMLElement
-  id: string
-  rect: OverlayRect & { bottom: number, right: number }
-}
-
+const emit = defineEmits<{ openSetting: [settingId: string, origin?: DOMRect] }>()
 const { t } = useI18n()
-const hoveredTargetId = ref<string | null>(null)
-const hoveredElement = shallowRef<HTMLElement>()
-const selectedElement = shallowRef<HTMLElement>()
-const hoveredRect = shallowRef<OverlayRect>()
-const selectedRect = shallowRef<OverlayRect>()
-const contextTargetId = ref<string | null>(null)
-const contextPoint = ref({ x: 0, y: 0 })
+const { scrollViewportRef, mainAppRef } = useBewlyApp()
+const supportsTopLayer = 'popover' in HTMLElement.prototype
+const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () => getSettingDescriptor('navigation.dock.position')!.get())
+const overlayRef = ref<HTMLElement>()
+const toolbarRef = ref<HTMLElement>()
 const actionMenuRef = ref<HTMLElement>()
-const contextMenuRef = ref<HTMLElement>()
-const inlineControlRef = ref<HTMLSelectElement>()
-const safeInsets = ref<SafeInsets>({ top: 8, right: 8, bottom: 8, left: 8 })
-const actionMenuStyle = ref<CSSProperties>({})
-const contextMenuStyle = ref<CSSProperties>({})
-const registeredHitTargets = shallowRef<RegisteredHitTarget[]>([])
-const overlayStyle = {
-  '--layout-editor-action-menu-width': `${LAYOUT_EDITOR_LAYOUT.actionMenuWidth}px`,
-  '--layout-editor-context-menu-width': `${LAYOUT_EDITOR_LAYOUT.contextMenuWidth}px`,
-} as CSSProperties
-const permanentDisposers: Array<() => void> = []
-const editingDisposers: Array<() => void> = []
-const contextMenuDisposers: Array<() => void> = []
-let trackedElementsObserver: ResizeObserver | undefined
-let updateFrame: number | undefined
-let overlayMounted = false
+const hoveredElement = shallowRef<Element>()
+const selectedElement = activeLayoutEditTargetElement
+const hoveredGeometry = shallowRef<ReturnType<typeof measureLayoutEditTarget>>()
+const selectedGeometry = shallowRef<ReturnType<typeof measureLayoutEditTarget>>()
+const actionMenuStyle = shallowRef<CSSProperties>({})
+const toolbarStyle = shallowRef<CSSProperties>({ visibility: 'hidden' })
+const disposers: Array<() => void> = []
+const scrollDisposers = new Map<HTMLElement, () => void>()
+const observedElements = new Set<Element>()
+const frameElements = shallowRef<HTMLIFrameElement[]>([])
+const frameGeometries = shallowRef<{ element: HTMLIFrameElement, style: CSSProperties }[]>([])
+let resizeObserver: ResizeObserver | undefined
+let geometryObserver: MutationObserver | undefined
+let frameOwner: HTMLElement | undefined
+let returnFocus: HTMLElement | null = null
+let trackedElements: Element[] = []
+let mounted = false
+let pressedTarget: { element: Element, x: number, y: number, disabled: boolean } | undefined
 
-const selectedDescriptor = computed(() => activeLayoutEditTargetId.value
-  ? getLayoutEditableDescriptor(activeLayoutEditTargetId.value)
-  : undefined)
-const contextDescriptor = computed(() => contextTargetId.value
-  ? getLayoutEditableDescriptor(contextTargetId.value)
-  : undefined)
-const persistedSelectedSettingValue = computed(() => selectedDescriptor.value
-  ? getSettingDescriptor(selectedDescriptor.value.settingId)?.get()
-  : undefined)
-const selectedControlValue = computed(() =>
-  activeLayoutEditPreviewSettingId.value === selectedDescriptor.value?.settingId
+const selectedDescriptor = computed(() => {
+  const descriptor = activeLayoutEditTargetId.value ? getLayoutEditableDescriptor(activeLayoutEditTargetId.value) : undefined
+  return descriptor && getSettingDescriptor(descriptor.settingId) ? descriptor : undefined
+})
+const selectedControlValue = computed(() => {
+  const descriptor = selectedDescriptor.value
+  if (!descriptor)
+    return undefined
+  return activeLayoutEditPreviewSettingId.value === descriptor.settingId
     ? activeLayoutEditPreviewValue.value
-    : persistedSelectedSettingValue.value,
-)
-const dockPosition = useLayoutEditSettingValue(
-  'navigation.dock.position',
-  () => settings.value.dockPosition,
-)
-
-function toOverlayRect(rect: DOMRect): OverlayRect | undefined {
-  if (rect.width <= 0 || rect.height <= 0)
-    return undefined
-  return {
-    top: rect.top,
-    left: rect.left,
-    width: rect.width,
-    height: rect.height,
-  }
-}
-
-function toOutlineStyle(rect: OverlayRect | undefined): CSSProperties | undefined {
-  if (!rect)
-    return undefined
-  return {
-    top: `${rect.top}px`,
-    left: `${rect.left}px`,
-    width: `${rect.width}px`,
-    height: `${rect.height}px`,
-  }
-}
-
-const hoveredOutlineStyle = computed(() => toOutlineStyle(hoveredRect.value))
-const selectedOutlineStyle = computed(() => toOutlineStyle(selectedRect.value))
-
-function getViewportBounds() {
-  const visualViewport = window.visualViewport
-  const left = visualViewport?.offsetLeft ?? 0
-  const top = visualViewport?.offsetTop ?? 0
-  return {
-    left,
-    top,
-    right: left + (visualViewport?.width ?? window.innerWidth),
-    bottom: top + (visualViewport?.height ?? window.innerHeight),
-  }
-}
-
-function getDockSurfaceRect() {
-  const dockRoot = getRegisteredLayoutEditableElement('dock')
-  const dockSurface = dockRoot?.querySelector<HTMLElement>('.dock-shell-surface')
-  return (dockSurface ?? dockRoot)?.getBoundingClientRect()
-}
-
-function updateSafeInsets() {
-  const viewport = getViewportBounds()
-  const gap = Math.max(8, DOCK_LAYOUT.controlGap)
-  const nextInsets: SafeInsets = { top: 8, right: 8, bottom: 8, left: 8 }
-  const dockRect = getDockSurfaceRect()
-  if (dockRect && dockRect.width > 0 && dockRect.height > 0) {
-    if (dockPosition.value === 'right')
-      nextInsets.right = Math.max(nextInsets.right, viewport.right - dockRect.left + gap)
-    else
-      nextInsets.bottom = Math.max(nextInsets.bottom, viewport.bottom - dockRect.top + gap)
-  }
-  safeInsets.value = nextInsets
-}
-
-function clamp(value: number, minimum: number, maximum: number) {
-  return Math.min(Math.max(value, minimum), Math.max(minimum, maximum))
-}
-
-function updateMenuPosition(
-  menu: HTMLElement | undefined,
-  anchor: OverlayRect | undefined,
-): CSSProperties {
-  if (!anchor)
-    return {}
-  const viewport = getViewportBounds()
-  const menuRect = menu?.getBoundingClientRect()
-  const width = menuRect?.width || LAYOUT_EDITOR_LAYOUT.actionMenuWidth
-  const height = menuRect?.height || LAYOUT_EDITOR_LAYOUT.actionMenuFallbackHeight
-  const gap = 8
-  const minimumLeft = viewport.left + safeInsets.value.left
-  const maximumRight = viewport.right - safeInsets.value.right
-  const minimumTop = viewport.top + safeInsets.value.top
-  const maximumBottom = viewport.bottom - safeInsets.value.bottom
-  const left = clamp(anchor.left + (anchor.width - width) / 2, minimumLeft, maximumRight - width)
-  const belowTop = anchor.top + anchor.height + gap
-  const top = belowTop + height <= maximumBottom
-    ? belowTop
-    : clamp(anchor.top - height - gap, minimumTop, maximumBottom - height)
-  return { left: `${left}px`, top: `${top}px` }
-}
-
-function updateContextMenuPosition(): CSSProperties {
-  const viewport = getViewportBounds()
-  const menuRect = contextMenuRef.value?.getBoundingClientRect()
-  const width = menuRect?.width || LAYOUT_EDITOR_LAYOUT.contextMenuWidth
-  const height = menuRect?.height || LAYOUT_EDITOR_LAYOUT.contextMenuFallbackHeight
-  const minimumLeft = viewport.left + safeInsets.value.left
-  const maximumRight = viewport.right - safeInsets.value.right
-  const minimumTop = viewport.top + safeInsets.value.top
-  const maximumBottom = viewport.bottom - safeInsets.value.bottom
-  return {
-    left: `${clamp(contextPoint.value.x, minimumLeft, maximumRight - width)}px`,
-    top: `${clamp(contextPoint.value.y, minimumTop, maximumBottom - height)}px`,
-  }
-}
-
-function refreshTrackedElements() {
-  if (!isLayoutEditing.value) {
-    trackedElementsObserver?.disconnect()
-    return
-  }
-  if (hoveredElement.value && !hoveredElement.value.isConnected) {
-    hoveredTargetId.value = null
-    hoveredElement.value = undefined
-    hoveredRect.value = undefined
-  }
-  selectedElement.value = activeLayoutEditTargetId.value
-    ? getRegisteredLayoutEditableElement(activeLayoutEditTargetId.value)
-    : undefined
-  if (selectedElement.value && !selectedElement.value.isConnected) {
-    exitLayoutEditMode()
-    return
-  }
-
-  trackedElementsObserver?.disconnect()
-  const observed = new Set([selectedElement.value, hoveredElement.value].filter(Boolean) as HTMLElement[])
-  observed.forEach(element => trackedElementsObserver?.observe(element))
-}
-
-function getElementDepth(element: HTMLElement) {
-  let depth = 0
-  let current: HTMLElement | null = element
-  while (current) {
-    depth++
-    current = current.parentElement
-  }
-  return depth
-}
-
-function refreshRegisteredHitTargets() {
-  if (!isLayoutEditing.value) {
-    registeredHitTargets.value = []
-    return
-  }
-
-  registeredHitTargets.value = getLayoutEditableDescriptors().flatMap((descriptor) => {
-    const element = getRegisteredLayoutEditableElement(descriptor.id)
-    if (!element)
-      return []
-    const style = window.getComputedStyle(element)
-    if (style.display === 'none' || style.visibility === 'hidden' || Number.parseFloat(style.opacity) === 0)
-      return []
-    const rect = element.getBoundingClientRect()
-    if (rect.width <= 0 || rect.height <= 0)
-      return []
-    return [{
-      id: descriptor.id,
-      element,
-      depth: getElementDepth(element),
-      rect: {
-        top: rect.top,
-        left: rect.left,
-        right: rect.right,
-        bottom: rect.bottom,
-        width: rect.width,
-        height: rect.height,
-      },
-    }]
-  })
-}
-
-function updateGeometry() {
-  updateFrame = undefined
-  updateSafeInsets()
-  refreshRegisteredHitTargets()
-  hoveredRect.value = hoveredElement.value?.isConnected
-    ? toOverlayRect(hoveredElement.value.getBoundingClientRect())
-    : undefined
-  selectedRect.value = selectedElement.value?.isConnected
-    ? toOverlayRect(selectedElement.value.getBoundingClientRect())
-    : undefined
-  actionMenuStyle.value = updateMenuPosition(actionMenuRef.value, selectedRect.value)
-  contextMenuStyle.value = updateContextMenuPosition()
-}
+    : getSettingDescriptor(descriptor.settingId)?.get()
+})
 
 function scheduleGeometryUpdate() {
-  if ((!isLayoutEditing.value && !contextTargetId.value) || updateFrame !== undefined)
-    return
-  updateFrame = requestAnimationFrame(updateGeometry)
-}
-
-function stopDisposers(target: Array<() => void>) {
-  target.splice(0).forEach(dispose => dispose())
-}
-
-function addViewportTracking(target: Array<() => void>) {
-  window.addEventListener('resize', scheduleGeometryUpdate, { passive: true })
-  window.addEventListener('scroll', scheduleGeometryUpdate, { capture: true, passive: true })
-  target.push(
-    () => window.removeEventListener('resize', scheduleGeometryUpdate),
-    () => window.removeEventListener('scroll', scheduleGeometryUpdate, true),
-  )
-
-  const visualViewport = window.visualViewport
-  if (!visualViewport)
-    return
-  visualViewport.addEventListener('resize', scheduleGeometryUpdate, { passive: true })
-  visualViewport.addEventListener('scroll', scheduleGeometryUpdate, { passive: true })
-  target.push(
-    () => visualViewport.removeEventListener('resize', scheduleGeometryUpdate),
-    () => visualViewport.removeEventListener('scroll', scheduleGeometryUpdate),
-  )
-}
-
-function startEditingResources() {
-  if (!overlayMounted || editingDisposers.length)
-    return
-  trackedElementsObserver = new ResizeObserver(scheduleGeometryUpdate)
-  window.addEventListener('pointermove', handlePointerMove, { capture: true, passive: true })
-  window.addEventListener('pointerdown', blockBusinessPress, true)
-  window.addEventListener('mousedown', blockBusinessPress, true)
-  window.addEventListener('touchstart', blockBusinessPress, { capture: true, passive: true })
-  window.addEventListener('click', blockBusinessInteraction, true)
-  window.addEventListener('auxclick', blockBusinessInteraction, true)
-  window.addEventListener('keydown', handleKeyDown, true)
-  editingDisposers.push(
-    () => window.removeEventListener('pointermove', handlePointerMove, true),
-    () => window.removeEventListener('pointerdown', blockBusinessPress, true),
-    () => window.removeEventListener('mousedown', blockBusinessPress, true),
-    () => window.removeEventListener('touchstart', blockBusinessPress, true),
-    () => window.removeEventListener('click', blockBusinessInteraction, true),
-    () => window.removeEventListener('auxclick', blockBusinessInteraction, true),
-    () => window.removeEventListener('keydown', handleKeyDown, true),
-  )
-  addViewportTracking(editingDisposers)
-  refreshTrackedElements()
-  scheduleGeometryUpdate()
-}
-
-function stopEditingResources() {
-  stopDisposers(editingDisposers)
-  trackedElementsObserver?.disconnect()
-  trackedElementsObserver = undefined
-  if (updateFrame !== undefined)
-    cancelAnimationFrame(updateFrame)
-  updateFrame = undefined
-}
-
-function startContextMenuResources() {
-  if (!overlayMounted || contextMenuDisposers.length || isLayoutEditing.value)
-    return
-  window.addEventListener('pointerdown', handlePointerDown, true)
-  window.addEventListener('keydown', handleKeyDown, true)
-  contextMenuDisposers.push(
-    () => window.removeEventListener('pointerdown', handlePointerDown, true),
-    () => window.removeEventListener('keydown', handleKeyDown, true),
-  )
-  addViewportTracking(contextMenuDisposers)
-  scheduleGeometryUpdate()
-}
-
-function stopContextMenuResources() {
-  stopDisposers(contextMenuDisposers)
-  if (!isLayoutEditing.value && updateFrame !== undefined)
-    cancelAnimationFrame(updateFrame)
-  if (!isLayoutEditing.value)
-    updateFrame = undefined
-}
-
-function composedElements(event: Event) {
-  return event.composedPath().filter((target): target is HTMLElement => target instanceof HTMLElement)
-}
-
-function eventIsEditorControl(event: Event) {
-  return composedElements(event).some(element => element.hasAttribute('data-layout-editor-control'))
-}
-
-function eventIsTextEditingControl(event: Event) {
-  return composedElements(event).some(element =>
-    element instanceof HTMLInputElement
-    || element instanceof HTMLTextAreaElement
-    || element instanceof HTMLSelectElement
-    || element.isContentEditable
-    || Boolean(element.closest('[contenteditable="true"]')),
-  )
-}
-
-function resolveTargetFromEvent(event: Event) {
-  const found = findLayoutEditableTarget(event.composedPath())
-  if (found)
-    return { id: found.descriptor.id, element: found.element }
-
-  if (event instanceof MouseEvent) {
-    const candidate = pickLayoutEditableAtPoint(
-      registeredHitTargets.value.filter(target => target.element.isConnected),
-      event.clientX,
-      event.clientY,
-    )
-    if (candidate)
-      return { id: candidate.id, element: candidate.element }
-  }
+  invalidateViewportGeometry(frameOwner)
 }
 
 function clearHover() {
-  if (!hoveredTargetId.value && !hoveredElement.value && !hoveredRect.value)
+  if (!hoveredElement.value)
     return
-  hoveredTargetId.value = null
   hoveredElement.value = undefined
-  hoveredRect.value = undefined
-  refreshTrackedElements()
+  hoveredGeometry.value = undefined
 }
 
-function handlePointerMove(event: PointerEvent) {
-  if (!isLayoutEditing.value || eventIsEditorControl(event)) {
+function handleViewportFrame(_geometry: ViewportGeometry, reason: ViewportFrameReason) {
+  if (reason === 'scroll' && hoveredElement.value) {
     clearHover()
-    return
+    refreshTrackedElements()
   }
-  const target = resolveTargetFromEvent(event)
-  if (!target) {
+  updateGeometry()
+}
+
+function refreshTrackedElements() {
+  if (!isLayoutEditing.value)
+    return
+  if (selectedElement.value && !selectedElement.value.isConnected) {
+    const descriptor = activeLayoutEditTargetId.value ? getLayoutEditableDescriptor(activeLayoutEditTargetId.value) : undefined
+    selectVisualEditElement(descriptor?.region ? getRegisteredLayoutEditableElement(descriptor.id) : undefined)
+  }
+  if (!hoveredElement.value?.isConnected)
     clearHover()
-    return
+  const nextTracked = [...new Set([selectedElement.value, hoveredElement.value, getRegisteredLayoutEditableElement('dock'), ...frameElements.value]
+    .flatMap(element => element ? getLayoutEditAncestors(element) : []))]
+  if (nextTracked.length !== trackedElements.length || nextTracked.some((element, index) => element !== trackedElements[index])) {
+    geometryObserver?.disconnect()
+    for (const element of nextTracked)
+      geometryObserver?.observe(element, { attributes: true, attributeFilter: ['class', 'style', 'hidden', 'inert'] })
   }
-  if (hoveredTargetId.value === target.id && hoveredElement.value === target.element)
-    return
-  hoveredTargetId.value = target.id
-  hoveredElement.value = target.element
-  refreshTrackedElements()
+  trackedElements = nextTracked
+  frameOwner = scrollViewportRef.value ?? document.scrollingElement as HTMLElement
+  const scrollOwners = new Set([frameOwner, document.scrollingElement as HTMLElement])
+  for (const element of trackedElements) {
+    const style = getComputedStyle(element)
+    if (element instanceof HTMLElement && /auto|scroll/.test(`${style.overflowX} ${style.overflowY}`))
+      scrollOwners.add(element)
+  }
+  for (const [owner, stop] of scrollDisposers) {
+    if (!scrollOwners.has(owner)) {
+      stop()
+      scrollDisposers.delete(owner)
+    }
+  }
+  for (const owner of scrollOwners) {
+    if (!scrollDisposers.has(owner))
+      scrollDisposers.set(owner, subscribeViewportFrame(owner, handleViewportFrame))
+  }
+  const nextObserved = new Set<Element>([...trackedElements, toolbarRef.value, actionMenuRef.value].filter((element): element is Element => Boolean(element)))
+  for (const element of observedElements) {
+    if (!nextObserved.has(element)) {
+      resizeObserver?.unobserve(element)
+      observedElements.delete(element)
+    }
+  }
+  for (const element of nextObserved) {
+    if (!observedElements.has(element)) {
+      resizeObserver?.observe(element)
+      observedElements.add(element)
+    }
+  }
   scheduleGeometryUpdate()
 }
 
-function blockBusinessInteraction(event: MouseEvent) {
-  if (!isLayoutEditing.value || eventIsEditorControl(event))
+function updateGeometry() {
+  if (!isLayoutEditing.value)
     return
-  event.preventDefault()
-  event.stopImmediatePropagation()
-  const target = resolveTargetFromEvent(event)
-  if (target) {
-    setActiveLayoutEditTarget(target.id)
-    selectedElement.value = target.element
-    refreshTrackedElements()
+  // Read both targets and both panels before publishing any reactive styles.
+  const selected = selectedElement.value && measureLayoutEditTarget(selectedElement.value)
+  const hovered = hoveredElement.value && hoveredElement.value !== selectedElement.value
+    ? measureLayoutEditTarget(hoveredElement.value)
+    : undefined
+  const viewport = getLayoutEditViewport()
+  const toolbar = toolbarRef.value?.getBoundingClientRect()
+  const menu = actionMenuRef.value?.getBoundingClientRect()
+  const frames = frameElements.value.flatMap((element) => {
+    const geometry = measureLayoutEditTarget(element)
+    return geometry ? [{ element, style: geometry.style }] : []
+  })
+  const dock = getRegisteredLayoutEditableElement('dock')?.getBoundingClientRect()
+  const right = dock && dockPosition.value === 'right' ? Math.min(viewport.right, dock.left - 8) : viewport.right
+  const bottom = dock && dockPosition.value === 'bottom' ? Math.min(viewport.bottom, dock.top - 8) : viewport.bottom
+  const toolbarTop = Math.max(viewport.top + 8, bottom - (toolbar?.height || 40) - 8)
+  const availableHeight = Math.max(0, toolbarTop - viewport.top - 8)
+  const width = Math.max(0, right - viewport.left)
+  const position = selected && computeAnchoredPopoverPosition({
+    ...selected.visible,
+    left: selected.visible.left - viewport.left,
+    right: selected.visible.right - viewport.left,
+    top: selected.visible.top - viewport.top,
+    bottom: selected.visible.bottom - viewport.top,
+  }, { width: menu?.width || LAYOUT_EDITOR_LAYOUT.actionMenuWidth, height: menu?.height || LAYOUT_EDITOR_LAYOUT.actionMenuFallbackHeight }, width, availableHeight)
+  // Track only finite motion on the measured branch (Dock movement and layout transitions).
+  const moving = trackedElements.some(element => element.getAnimations().some(animation =>
+    animation.timeline === element.ownerDocument.timeline && animation.playState === 'running' && animation.effect?.getComputedTiming().endTime !== Infinity,
+  ))
+  selectedGeometry.value = selected
+  hoveredGeometry.value = hovered
+  frameGeometries.value = frames
+  toolbarStyle.value = { top: `${toolbarTop}px`, left: `${viewport.left + width / 2}px`, maxWidth: `${Math.max(0, width - 16)}px` }
+  actionMenuStyle.value = position
+    ? {
+        left: `${position.left + viewport.left}px`,
+        top: `${position.top + viewport.top}px`,
+        width: `${Math.min(LAYOUT_EDITOR_LAYOUT.actionMenuWidth, Math.max(0, width - 32))}px`,
+        maxHeight: `${Math.max(0, availableHeight - 32)}px`,
+      }
+    : {}
+  if (moving)
     scheduleGeometryUpdate()
-  }
-  contextTargetId.value = null
 }
 
-function blockBusinessPress(event: Event) {
-  if (!isLayoutEditing.value || eventIsEditorControl(event))
-    return
+function eventIsEditorControl(event: Event) {
+  return event.composedPath().some(node => node instanceof HTMLElement && node.hasAttribute('data-layout-editor-control'))
+}
 
+function frameTarget(event: Event) {
+  const path = event.composedPath()
+  const shield = path.find((node): node is HTMLElement => node instanceof HTMLElement && node.hasAttribute('data-layout-editor-frame'))
+  if (shield)
+    return frameGeometries.value[Number(shield.dataset.layoutEditorFrame)]?.element
+}
+
+function eventTarget(event: Event) {
+  const frame = frameTarget(event)
+  return findVisualEditTarget(frame ? getLayoutEditAncestors(frame) : event.composedPath())
+}
+
+function selectElement(element: Element | undefined) {
+  selectVisualEditElement(element)
+  clearHover()
+  refreshTrackedElements()
+}
+
+function selectTarget(event: Event) {
+  selectElement(eventTarget(event))
+}
+
+function handlePointerMove(event: Event) {
+  if (eventIsEditorControl(event)) {
+    clearHover()
+    return
+  }
   event.stopImmediatePropagation()
-  const isTouchEvent = typeof TouchEvent !== 'undefined' && event instanceof TouchEvent
-  const isTouchPointer = typeof PointerEvent !== 'undefined' && event instanceof PointerEvent && event.pointerType !== 'mouse'
-  if (!isTouchEvent && !isTouchPointer)
+  const target = eventTarget(event)
+  if (hoveredElement.value !== target) {
+    hoveredElement.value = target
+    refreshTrackedElements()
+  }
+}
+
+function blockInteraction(event: Event) {
+  if (eventIsEditorControl(event))
+    return
+  event.stopImmediatePropagation()
+  event.preventDefault()
+  if (event.type === 'click' || event.type === 'contextmenu')
+    selectTarget(event)
+  if (event.type === 'pointerup' && pressedTarget) {
+    const pointer = event as PointerEvent
+    if (pressedTarget.disabled && Math.hypot(pointer.clientX - pressedTarget.x, pointer.clientY - pressedTarget.y) < 8)
+      selectElement(pressedTarget.element)
+    pressedTarget = undefined
+  }
+}
+
+function blockPress(event: Event) {
+  if (eventIsEditorControl(event))
+    return
+  event.stopImmediatePropagation()
+  if (event instanceof PointerEvent) {
+    const element = eventTarget(event)
+    pressedTarget = element ? { element, x: event.clientX, y: event.clientY, disabled: event.composedPath().some(node => node instanceof Element && node.matches(':disabled')) } : undefined
+  }
+  // Keep native touch scrolling; the subsequent click only selects an object.
+  if (!(event instanceof PointerEvent) || event.pointerType === 'mouse')
     event.preventDefault()
 }
 
-function handleContextMenu(event: MouseEvent) {
-  if (eventIsEditorControl(event) || eventIsTextEditingControl(event)
-    || (!isLayoutEditing.value && ownsContextMenu(composedElements(event)))) {
-    if (!isLayoutEditing.value)
-      contextTargetId.value = null
-    return
-  }
-  const target = resolveTargetFromEvent(event)
-  if (!target) {
-    contextTargetId.value = null
-    return
-  }
-  event.preventDefault()
-  event.stopImmediatePropagation()
-  if (isLayoutEditing.value) {
-    setActiveLayoutEditTarget(target.id)
-    selectedElement.value = target.element
-    refreshTrackedElements()
-  }
-  else {
-    contextTargetId.value = target.id
-    contextPoint.value = { x: event.clientX, y: event.clientY }
-  }
-  scheduleGeometryUpdate()
-  void nextTick(scheduleGeometryUpdate)
+function blockHover(event: Event) {
+  if (!eventIsEditorControl(event))
+    event.stopImmediatePropagation()
 }
 
-function handlePointerDown(event: PointerEvent) {
-  if (contextTargetId.value && !eventIsEditorControl(event))
-    contextTargetId.value = null
+function handleWheel(event: WheelEvent) {
+  if (eventIsEditorControl(event))
+    return
+  event.stopImmediatePropagation()
+  const target = frameTarget(event)
+  if (!(target instanceof HTMLIFrameElement))
+    return
+  event.preventDefault()
+  const owner = getLayoutEditAncestors(target).find(element => element instanceof HTMLElement && scrollDisposers.has(element)) as HTMLElement | undefined
+  const viewport = owner ?? frameOwner!
+  viewport.scrollBy({ left: normalizeWheelDelta(event.deltaX, event.deltaMode, viewport.clientWidth), top: normalizeWheelDelta(event.deltaY, event.deltaMode, viewport.clientHeight), behavior: 'instant' })
 }
 
 function handleKeyDown(event: KeyboardEvent) {
-  if (event.key !== 'Escape')
-    return
-  if (isLayoutEditing.value) {
+  if (event.key === 'Escape') {
     event.preventDefault()
     event.stopImmediatePropagation()
     exitLayoutEditMode()
   }
-  else if (contextTargetId.value) {
-    event.preventDefault()
-    contextTargetId.value = null
+  else if (event.key === 'Tab' && overlayRef.value) {
+    event.stopImmediatePropagation()
+    moveDialogTabFocus(overlayRef.value, overlayRef.value, event)
+  }
+  else if (!eventIsEditorControl(event)) {
+    event.stopImmediatePropagation()
+    if (event.key === 'Enter' || event.key === ' ')
+      event.preventDefault()
   }
 }
 
-function beginSelectedPreview() {
+function updateSelectedPreview(value: unknown) {
   const descriptor = selectedDescriptor.value
-  if (!descriptor)
-    return
-  if (!descriptor.previewControl) {
-    openSelectedSetting()
-    return
-  }
-  if (activeLayoutEditPreviewSettingId.value !== descriptor.settingId)
-    beginLayoutEditSettingPreview(descriptor.settingId)
-  void nextTick(() => inlineControlRef.value?.focus())
-}
-
-function updateSelectedPreview(event: Event) {
-  const descriptor = selectedDescriptor.value
-  const control = descriptor?.previewControl
-  if (!descriptor || !control)
-    return
-  if (activeLayoutEditPreviewSettingId.value !== descriptor.settingId)
-    beginLayoutEditSettingPreview(descriptor.settingId)
-  const selectedValue = (event.currentTarget as HTMLSelectElement).value
-  const option = control.options.find(item => String(item.value) === selectedValue)
-  if (option)
-    updateLayoutEditSettingPreview(option.value)
+  if (descriptor && beginLayoutEditSettingPreview(descriptor.settingId))
+    updateLayoutEditSettingPreview(value)
 }
 
 function openSelectedSetting() {
   const descriptor = selectedDescriptor.value
   if (!descriptor)
     return
-  const origin = selectedElement.value?.getBoundingClientRect()
-  exitLayoutEditMode()
+  const origin = selectedGeometry.value?.rect
+  completeLayoutEditMode()
   emit('openSetting', descriptor.settingId, origin)
 }
 
-function editContextTarget() {
-  const descriptor = contextDescriptor.value
-  if (!descriptor)
+function startEditingResources() {
+  if (!mounted || disposers.length)
     return
-  contextTargetId.value = null
-  enterLayoutEditMode(descriptor.id)
+  const active = getDeepActiveElement(document)
+  returnFocus = active instanceof HTMLElement ? active : null
+  returnFocus?.blur()
+  resizeObserver = new ResizeObserver(scheduleGeometryUpdate)
+  geometryObserver = new MutationObserver(scheduleGeometryUpdate)
+  function listen(target: EventTarget, type: string, listener: EventListener, passive = false) {
+    target.addEventListener(type, listener, { capture: true, passive })
+    disposers.push(() => target.removeEventListener(type, listener, true))
+  }
+  const root = mainAppRef.value.getRootNode()
+  // enter/leave events inside Shadow DOM do not cross the shadow boundary.
+  for (const target of [window, root]) {
+    listen(target, 'pointermove', handlePointerMove, true)
+    for (const type of ['pointerover', 'pointerout', 'pointerenter', 'pointerleave', 'pointercancel', 'mouseover', 'mouseout', 'mouseenter', 'mouseleave', 'mousemove', 'touchstart', 'touchmove', 'touchend', 'touchcancel'])
+      listen(target, type, blockHover, true)
+    listen(target, 'wheel', handleWheel as EventListener)
+    for (const type of ['pointerdown', 'mousedown'])
+      listen(target, type, blockPress)
+    for (const type of ['click', 'dblclick', 'auxclick', 'contextmenu', 'pointerup', 'mouseup', 'dragstart', 'selectstart'])
+      listen(target, type, blockInteraction)
+  }
+  listen(window, 'keydown', handleKeyDown as EventListener)
+  listen(window, 'keyup', blockHover, true)
+  listen(window, 'focusin', (event) => {
+    if (event.composedPath().includes(overlayRef.value!) || eventIsEditorControl(event))
+      return
+    event.stopImmediatePropagation()
+    overlayRef.value?.focus({ preventScroll: true })
+  })
+  listen(window, 'blur', clearHover)
+  for (const type of ['transitionrun', 'transitionend', 'transitioncancel', 'animationstart', 'animationend'])
+    listen(root, type, scheduleGeometryUpdate, true)
+  if (window.visualViewport) {
+    listen(window.visualViewport, 'resize', scheduleGeometryUpdate, true)
+    listen(window.visualViewport, 'scroll', scheduleGeometryUpdate, true)
+  }
+  // A transparent shield selects the iframe itself without entering its document.
+  function refreshFrames() {
+    frameElements.value = [...new Set([...document.querySelectorAll('iframe'), ...mainAppRef.value.querySelectorAll('iframe')])]
+    refreshTrackedElements()
+  }
+  const mutationObserver = new MutationObserver((records) => {
+    if (records.some(record => [...record.addedNodes, ...record.removedNodes].some(node => node instanceof Element && (node.matches('iframe') || node.querySelector('iframe')))))
+      refreshFrames()
+    if (selectedElement.value && !selectedElement.value.isConnected)
+      refreshTrackedElements()
+  })
+  mutationObserver.observe(document.body, { childList: true, subtree: true })
+  mutationObserver.observe(root, { childList: true, subtree: true })
+  disposers.push(() => mutationObserver.disconnect())
+  refreshFrames()
   refreshTrackedElements()
-  scheduleGeometryUpdate()
+  void nextTick(() => {
+    if (!isLayoutEditing.value)
+      return
+    overlayRef.value?.showPopover?.()
+    refreshTrackedElements()
+    overlayRef.value?.focus({ preventScroll: true })
+  })
 }
 
-function openContextSetting() {
-  const descriptor = contextDescriptor.value
-  if (!descriptor)
-    return
-  const origin = getRegisteredLayoutEditableElement(descriptor.id)?.getBoundingClientRect()
-  contextTargetId.value = null
-  emit('openSetting', descriptor.settingId, origin)
+function stopEditingResources() {
+  disposers.splice(0).forEach(dispose => dispose())
+  scrollDisposers.forEach(dispose => dispose())
+  scrollDisposers.clear()
+  resizeObserver?.disconnect()
+  resizeObserver = undefined
+  geometryObserver?.disconnect()
+  geometryObserver = undefined
+  observedElements.clear()
+  frameOwner = undefined
+  trackedElements = []
+  hoveredElement.value = undefined
+  frameElements.value = []
+  frameGeometries.value = []
+  pressedTarget = undefined
+  hoveredGeometry.value = undefined
+  selectedGeometry.value = undefined
+  toolbarStyle.value = { visibility: 'hidden' }
+  const target = returnFocus
+  returnFocus = null
+  void nextTick(() => {
+    if (!isLayoutEditing.value)
+      restoreOverlayFocus(overlayRef.value ?? null, target)
+  })
 }
 
-function setEditingClasses(active: boolean) {
-  document.body?.classList.toggle('bewly-layout-editing', active)
-  const host = document.getElementById('bewly')
-  host?.classList.toggle('bewly-layout-editing', active)
-  host?.shadowRoot?.querySelector('.bewly-wrapper')?.classList.toggle('bewly-layout-editing', active)
-}
-
-watch(activeLayoutEditTargetId, () => {
-  refreshTrackedElements()
-  scheduleGeometryUpdate()
-  void nextTick(scheduleGeometryUpdate)
+watch([activeLayoutEditTargetId, activeLayoutEditTargetElement, layoutEditableRegistryVersion, scrollViewportRef], refreshTrackedElements, { flush: 'post' })
+watch(selectedElement, () => selectedGeometry.value = undefined, { flush: 'sync' })
+watch(selectedDescriptor, (descriptor) => {
+  if (descriptor?.previewControl)
+    beginLayoutEditSettingPreview(descriptor.settingId)
 })
-
-watch(layoutEditableRegistryVersion, () => {
+watch([activeLayoutEditPreviewValue, actionMenuRef], () => {
   refreshTrackedElements()
-  scheduleGeometryUpdate()
-})
-
-watch([activeLayoutEditPreviewValue, dockPosition], scheduleGeometryUpdate)
-
+}, { flush: 'post' })
 watch(isLayoutEditing, (active) => {
-  setEditingClasses(active)
-  contextTargetId.value = null
-  if (!active) {
-    stopEditingResources()
-    hoveredTargetId.value = null
-    hoveredElement.value = undefined
-    hoveredRect.value = undefined
-    selectedElement.value = undefined
-    selectedRect.value = undefined
-    registeredHitTargets.value = []
-  }
-  else {
+  if (active)
     startEditingResources()
-  }
-}, { immediate: true })
-
-watch(contextTargetId, (id) => {
-  if (id)
-    startContextMenuResources()
   else
-    stopContextMenuResources()
-})
-
+    stopEditingResources()
+}, { flush: 'post' })
 onMounted(() => {
-  overlayMounted = true
-  window.addEventListener('contextmenu', handleContextMenu, true)
-  permanentDisposers.push(
-    () => window.removeEventListener('contextmenu', handleContextMenu, true),
-  )
+  mounted = true
   if (isLayoutEditing.value)
     startEditingResources()
-  else if (contextTargetId.value)
-    startContextMenuResources()
 })
-
 onBeforeUnmount(() => {
-  overlayMounted = false
+  mounted = false
   exitLayoutEditMode()
-  setEditingClasses(false)
   stopEditingResources()
-  stopContextMenuResources()
-  stopDisposers(permanentDisposers)
 })
 </script>
 
 <template>
-  <div class="layout-editor-overlay" :class="{ 'is-editing': isLayoutEditing }" :style="overlayStyle">
+  <div
+    v-if="isLayoutEditing" ref="overlayRef" class="layout-editor-overlay" tabindex="-1" :popover="supportsTopLayer ? 'manual' : undefined"
+    :aria-label="t('layout_editor.quick_edit')" @keydown.stop @keyup.stop
+  >
     <div
-      v-if="isLayoutEditing"
-      class="layout-editor-hint"
-      :style="{
-        top: `${safeInsets.top}px`,
-        right: `${safeInsets.right}px`,
-        left: `${safeInsets.left}px`,
-      }"
-      aria-live="polite"
+      ref="toolbarRef" class="layout-editor-toolbar" :style="toolbarStyle" data-layout-editor-control
+      role="toolbar" :aria-label="t('layout_editor.quick_edit')"
     >
-      <span>{{ t('layout_editor.hint') }}</span>
+      <span class="layout-editor-toolbar__title">{{ t('layout_editor.quick_edit') }}</span>
+      <Button type="tertiary" size="small" title="Esc" @click="exitLayoutEditMode">
+        {{ t('common.operation.cancel') }}
+      </Button>
+      <Button type="primary" size="small" @click="completeLayoutEditMode">
+        {{ t('layout_editor.done') }}
+      </Button>
     </div>
 
     <div
-      v-if="isLayoutEditing && hoveredRect && hoveredTargetId !== activeLayoutEditTargetId"
-      class="layout-editor-outline layout-editor-outline--hovered"
-      :style="hoveredOutlineStyle"
-      aria-hidden="true"
+      v-for="(frame, index) in frameGeometries" :key="index" class="layout-editor-frame"
+      :data-layout-editor-frame="index" :style="frame.style" aria-hidden="true"
     />
-    <div
-      v-if="isLayoutEditing && selectedRect"
-      class="layout-editor-outline layout-editor-outline--selected"
-      :style="selectedOutlineStyle"
-      aria-hidden="true"
-    />
+    <div v-if="hoveredGeometry" class="layout-editor-outline layout-editor-outline--hovered" :style="hoveredGeometry.style" aria-hidden="true" />
+    <div v-if="selectedGeometry" class="layout-editor-outline" :style="selectedGeometry.style" aria-hidden="true" />
 
     <section
-      v-if="isLayoutEditing && selectedDescriptor && selectedRect"
-      ref="actionMenuRef"
-      class="layout-editor-menu bew-shape-smooth-rect"
-      :style="actionMenuStyle"
-      data-layout-editor-control
-      role="dialog"
-      :aria-label="t('layout_editor.menu_label')"
+      v-if="selectedElement && selectedGeometry" ref="actionMenuRef"
+      class="layout-editor-menu" :style="actionMenuStyle" data-layout-editor-control
+      tabindex="-1" role="region" :aria-label="t('layout_editor.menu_label')"
     >
-      <header class="layout-editor-menu__header" data-layout-editor-control>
-        <strong>{{ t(selectedDescriptor.titleKey) }}</strong>
-        <span>{{ t(selectedDescriptor.scope === 'all-pages' ? 'layout_editor.scope_all_pages' : 'layout_editor.scope_current_page') }}</span>
+      <header class="layout-editor-menu__header">
+        <span>{{ t(selectedDescriptor?.titleKey ?? 'layout_editor.no_settings') }}</span>
       </header>
-
-      <div class="layout-editor-menu__actions" data-layout-editor-control>
+      <div v-if="selectedDescriptor?.previewControl" class="layout-editor-menu__choices" role="group" :aria-label="t('layout_editor.preview')">
         <Button
-          type="secondary"
-          size="small"
-          data-layout-editor-control
-          @click="beginSelectedPreview"
+          v-for="option in selectedDescriptor.previewControl.options" :key="String(option.value)"
+          type="secondary" size="small" :aria-pressed="Object.is(selectedControlValue, option.value)"
+          @click="updateSelectedPreview(option.value)"
         >
-          <template #left>
-            <span class="layout-editor-icon i-tabler:edit" aria-hidden="true" />
-          </template>
-          {{ t('layout_editor.adjust_target') }}
-        </Button>
-        <Button type="secondary" size="small" data-layout-editor-control @click="openSelectedSetting">
-          <template #left>
-            <span class="layout-editor-icon i-tabler:settings" aria-hidden="true" />
-          </template>
-          {{ t('layout_editor.open_setting') }}
+          {{ t(option.labelKey) }}
         </Button>
       </div>
-
-      <label
-        v-if="selectedDescriptor.previewControl"
-        class="layout-editor-menu__control"
-        data-layout-editor-control
-      >
-        <span>{{ t('layout_editor.preview') }}</span>
-        <select
-          ref="inlineControlRef"
-          :value="String(selectedControlValue)"
-          data-layout-editor-control
-          @focus="beginSelectedPreview"
-          @change="updateSelectedPreview"
-        >
-          <option
-            v-for="option in selectedDescriptor.previewControl.options"
-            :key="String(option.value)"
-            :value="String(option.value)"
-          >
-            {{ t(option.labelKey) }}
-          </option>
-        </select>
-      </label>
-
-      <footer class="layout-editor-menu__footer" data-layout-editor-control>
-        <Button type="tertiary" size="small" data-layout-editor-control @click="exitLayoutEditMode">
-          {{ t('common.operation.cancel') }}
-        </Button>
-        <Button type="primary" size="small" data-layout-editor-control @click="completeLayoutEditMode">
-          {{ t('layout_editor.done') }}
-        </Button>
-      </footer>
-    </section>
-
-    <section
-      v-if="contextDescriptor"
-      ref="contextMenuRef"
-      class="layout-editor-context-menu bew-popover-surface"
-      :style="contextMenuStyle"
-      data-layout-editor-control
-      role="menu"
-    >
-      <button type="button" data-layout-editor-control role="menuitem" @click="editContextTarget">
-        <span class="layout-editor-icon i-tabler:edit" aria-hidden="true" />
-        <span>{{ t('layout_editor.edit_layout') }}</span>
-      </button>
-      <button type="button" data-layout-editor-control role="menuitem" @click="openContextSetting">
-        <span class="layout-editor-icon i-tabler:settings" aria-hidden="true" />
-        <span>{{ t('layout_editor.open_setting') }}</span>
-      </button>
+      <Button v-if="selectedDescriptor" type="secondary" size="small" @click="openSelectedSetting">
+        <template #left>
+          <span class="i-tabler:settings" aria-hidden="true" />
+        </template>
+        {{ t('layout_editor.apply_open_setting') }}
+      </Button>
     </section>
   </div>
 </template>
@@ -734,199 +480,94 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: var(--bew-z-layout-editor);
   inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  color: inherit;
+  background: transparent;
+  border: 0;
   pointer-events: none;
+
+  &::backdrop {
+    background: transparent;
+    pointer-events: none;
+  }
 }
 
-.layout-editor-hint {
+.layout-editor-toolbar,
+.layout-editor-menu {
   position: fixed;
   display: flex;
-  justify-content: center;
-  pointer-events: none;
+  box-sizing: border-box;
+  gap: var(--bew-space-2);
+  padding: var(--bew-space-2);
+  color: var(--bew-text-1);
+  background: var(--bew-elevated-alt-solid);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
+  border-radius: var(--bew-surface-radius);
+  corner-shape: var(--bew-corner-shape);
+  box-shadow: var(--bew-shadow-2);
+  pointer-events: auto;
+}
 
-  span {
-    padding: var(--bew-space-2) var(--bew-space-4);
-    color: var(--bew-text-1);
-    background: var(--bew-selected-bg);
-    border-radius: var(--bew-pill-radius);
-    corner-shape: var(--bew-corner-shape-capsule);
-    box-shadow: var(--bew-shadow-2);
-    font-size: var(--bew-font-size-control);
-    font-weight: var(--bew-font-weight-regular);
-    line-height: var(--bew-line-height-control);
-  }
+.layout-editor-toolbar {
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: max-content;
+  translate: -50% 0;
+  z-index: 1;
+}
+
+.layout-editor-toolbar__title {
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+}
+
+.layout-editor-frame {
+  position: fixed;
+  pointer-events: auto;
+  touch-action: pan-y;
 }
 
 .layout-editor-outline {
   position: fixed;
   box-sizing: border-box;
-  border-radius: var(--bew-surface-radius);
-  corner-shape: var(--bew-corner-shape);
+  border: 1px solid var(--bew-layout-editor-outline-color);
   pointer-events: none;
-  transition:
-    top var(--bew-duration-fast) var(--bew-ease-standard),
-    left var(--bew-duration-fast) var(--bew-ease-standard),
-    width var(--bew-duration-fast) var(--bew-ease-standard),
-    height var(--bew-duration-fast) var(--bew-ease-standard),
-    opacity var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
 .layout-editor-outline--hovered {
-  border: 1px dashed var(--bew-layout-editor-outline-color);
-  box-shadow: none;
-}
-
-.layout-editor-outline--selected {
-  border: 1px solid var(--bew-layout-editor-outline-color);
-  box-shadow: none;
+  border-style: dashed;
 }
 
 .layout-editor-menu {
-  position: fixed;
-  display: flex;
-  width: min(var(--layout-editor-action-menu-width), calc(100vw - var(--bew-space-4) * 2));
-  padding: var(--bew-space-3);
   flex-direction: column;
-  gap: var(--bew-space-3);
-  color: var(--bew-text-1);
-  background: var(--bew-elevated-alt-solid);
-  border: var(--bew-hairline) solid var(--bew-edge-color);
-  border-radius: var(--bew-surface-radius);
-  box-shadow: var(--bew-shadow-4);
-  pointer-events: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .layout-editor-menu__header {
   display: flex;
   gap: var(--bew-space-2);
-  align-items: flex-start;
   justify-content: space-between;
-
-  strong {
-    font-size: var(--bew-font-size-title);
-    font-weight: var(--bew-font-weight-regular);
-    line-height: var(--bew-line-height-title);
-  }
-
-  span {
-    flex: 0 0 auto;
-    color: var(--bew-text-2);
-    font-size: var(--bew-font-size-caption);
-    line-height: var(--bew-line-height-caption);
-  }
+  align-items: baseline;
+  font-size: var(--bew-font-size-title);
+  line-height: var(--bew-line-height-title);
 }
 
-.layout-editor-menu__actions,
-.layout-editor-menu__footer {
+.layout-editor-menu__choices {
   display: flex;
-  gap: var(--bew-space-2);
-}
-
-.layout-editor-menu__actions > *,
-.layout-editor-menu__footer > * {
-  flex: 1 1 0;
-}
-
-.layout-editor-menu__control {
-  display: grid;
-  gap: var(--bew-space-2);
-
-  span {
-    color: var(--bew-text-2);
-    font-size: var(--bew-font-size-caption);
-    line-height: var(--bew-line-height-caption);
-  }
-
-  select {
-    width: 100%;
-    height: var(--bew-control-height);
-    padding: 0 var(--bew-space-3);
-    color: var(--bew-text-1);
-    background: var(--bew-content-solid);
-    border: var(--bew-hairline) solid var(--bew-edge-color);
-    border-radius: var(--bew-interactive-radius);
-    corner-shape: var(--bew-corner-shape);
-    outline: none;
-
-    &:focus-visible {
-      box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
-    }
-  }
-}
-
-.layout-editor-menu__footer {
-  justify-content: flex-end;
-  padding-top: var(--bew-space-1);
-  border-top: var(--bew-hairline) solid var(--bew-separator-color);
-}
-
-.layout-editor-context-menu {
-  position: fixed;
-  display: flex;
-  min-width: var(--layout-editor-context-menu-width);
-  padding: var(--bew-space-2);
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: var(--bew-space-1);
-  pointer-events: auto;
 
-  button {
-    display: flex;
-    min-height: var(--bew-control-item-height);
-    padding: var(--bew-space-2) var(--bew-space-3);
-    gap: var(--bew-space-2);
-    align-items: center;
+  [aria-pressed="true"] {
+    background: var(--bew-selected-bg);
     color: var(--bew-text-1);
-    border-radius: var(--bew-interactive-radius);
-    corner-shape: var(--bew-corner-shape);
-    font-size: var(--bew-font-size-control);
-    font-weight: var(--bew-font-weight-regular);
-    line-height: var(--bew-line-height-control);
-    text-align: left;
-
-    &:hover,
-    &:focus-visible {
-      background: var(--bew-fill-2);
-    }
-
-    &:focus-visible {
-      outline: var(--bew-focus-ring, 1px solid CanvasText);
-      outline-offset: -2px;
-    }
-  }
-}
-
-// Buttons provide their icon size; the context menu keeps the medium glyph.
-.layout-editor-icon {
-  flex: none;
-  width: var(--b-button-icon-size, var(--bew-icon-size-md));
-  height: var(--b-button-icon-size, var(--bew-icon-size-md));
-}
-
-:global(body.bewly-layout-editing),
-:global(#bewly.bewly-layout-editing),
-:global(.bewly-wrapper.bewly-layout-editing) {
-  cursor: default;
-  overscroll-behavior-x: none;
-}
-
-:global(.bewly-wrapper.bewly-layout-editing) {
-  touch-action: pan-y;
-}
-
-:global(body.bewly-layout-editing [data-layout-editable-id]),
-:global(#bewly.bewly-layout-editing [data-layout-editable-id]),
-:global(.bewly-wrapper.bewly-layout-editing [data-layout-editable-id]) {
-  pointer-events: none !important;
-}
-
-:global(body.bewly-layout-editing [data-layout-editor-control]),
-:global(#bewly.bewly-layout-editing [data-layout-editor-control]),
-:global(.bewly-wrapper.bewly-layout-editing [data-layout-editor-control]) {
-  pointer-events: auto !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .layout-editor-outline {
-    transition-duration: 1ms;
   }
 }
 </style>

@@ -483,6 +483,12 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       '~/utils/searchHighlight': { sanitizeSearchHighlight: value => value },
       '~/utils/searchNavigation': { openSearchResults() {}, resolveSearchNavigationTarget: value => `https://www.bilibili.com/?keyword=${value}`, shouldUsePluginSearchResultsPage: () => true },
       '../TagRemoveButton.vue': { default: Vue.defineComponent({ props: ['label', 'disabled'], emits: ['click'], setup: (props, { emit }) => () => Vue.h('button', { 'aria-label': props.label, 'disabled': props.disabled, 'onClick': event => emit('click', event) }, 'Remove') }) },
+      './SearchBarFilters.vue': { default: { render: () => null } },
+      '~/composables/useSearchCommands': { useSearchCommands: () => Vue.computed(() => []) },
+      '~/utils/motionPriority': { holdAnimation: () => () => {} },
+      '~/utils/motionTiming': { getMotionDuration: () => 0 },
+      '~/utils/reducedMotion': { prefersReducedMotion: () => true },
+      '~/utils/searchUrl': await import('../src/utils/searchUrl'),
       './searchHistoryProvider': {
         getSearchHistory: async () => {
           const read = nextHistoryRead
@@ -503,10 +509,11 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       },
     })
     const host = document.body.appendChild(document.createElement('div'))
-    const props = Vue.reactive({ modelValue: '', searchBehavior: 'stay' })
+    const props = Vue.reactive({ modelValue: '' })
     const app = Vue.createApp({ render: () => Vue.h(source, { ...props, 'onUpdate:modelValue': value => props.modelValue = value }) })
     app.component('ALink', { props: ['href'], setup: (props, { slots }) => () => Vue.h('a', { href: props.href }, slots.default?.()) })
     app.component('SkeletonBlock', { render: () => Vue.h('span') })
+    app.component('Tooltip', { inheritAttrs: false, setup: (_props, { slots }) => () => slots.default?.() })
     app.config.globalProperties.$t = key => key
     app.config.errorHandler = error => errors.push(error)
     app.mount(host)
@@ -541,7 +548,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       await flush()
       assert.equal(fixture.host.querySelectorAll('.history-item').length, 2)
       assert.ok(fixture.host.querySelector('[role="alert"]'))
-      Array.from(fixture.host.querySelectorAll('button')).find(button => button.textContent.trim() === 'search_bar.clear_history').click()
+      fixture.host.querySelector('[aria-label="search_bar.clear_history"]').click()
       await flush()
       assert.equal(fixture.host.querySelectorAll('.history-item').length, 2)
       fixture.host.querySelector('.history-error button').click()

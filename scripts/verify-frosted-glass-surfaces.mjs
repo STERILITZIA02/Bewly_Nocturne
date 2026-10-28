@@ -35,7 +35,7 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
     for (const file of await listSourceFiles()) {
       const text = await readFile(file, 'utf8')
       // Segment indicators keep their geometry-only `--bew-liquid-indicator-*` tokens.
-      if (/data-bew-liquid-glass|v-liquid-glass|vLiquidGlass|attachLiquidGlass|LiquidGlassSurface|@wxperia|bew-liquid-(?:glass|frame|outer|tint)|DockLiquidGlass|dockLiquidGlass|liquid_glass/.test(text.replace(/RETIRED_SETTINGS_FIELDS[^\n]*/, '')))
+      if (/data-bew-liquid-glass|v-liquid-glass|vLiquidGlass|attachLiquidGlass|LiquidGlassSurface|@wxperia|bew-liquid-(?:glass|frame|outer|tint)|DockLiquidGlass|dockLiquidGlass|liquid_glass|liquidGlassMaterial|--bew-filter-(?:frosted|glass-(?:surface|modal|shell|capsule|round))/.test(text.replace(/RETIRED_SETTINGS_FIELDS[^\n]*/, '')))
         offenders.push(fileURLToPath(file))
     }
     assert.deepEqual(offenders, [])
@@ -53,8 +53,8 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
     assert.equal(manifest.dependencies?.['@wxperia/liquid-glass-vue'], undefined)
     assert.equal(manifest.devDependencies?.['@wxperia/liquid-glass-vue'], undefined)
     const { RETIRED_SETTINGS_FIELDS, removeRetiredSettings } = await import('../src/constants/retiredSettings')
-    const legacy = { enableDockLiquidGlass: true, dockLiquidGlassMode: 'polar', dockLiquidGlassRefraction: 70, dockLiquidGlassBlur: 12, dockLiquidGlassTintSource: 'custom', dockLiquidGlassTintColor: '#7a3f91', dockLiquidGlassTintOpacity: 65, dockLiquidGlassDispersion: 2, dockLiquidGlassSaturation: 160, dockLiquidGlassFrost: 4, disableFrostedGlass: false, frostedGlassBlurIntensity: 14 }
-    for (const key of Object.keys(legacy).filter(key => /LiquidGlass/.test(key)))
+    const legacy = { enableDockLiquidGlass: true, dockLiquidGlassMode: 'polar', dockLiquidGlassRefraction: 70, dockLiquidGlassBlur: 12, dockLiquidGlassTintSource: 'custom', dockLiquidGlassTintColor: '#7a3f91', dockLiquidGlassTintOpacity: 65, dockLiquidGlassDispersion: 2, dockLiquidGlassSaturation: 160, dockLiquidGlassFrost: 4, liquidGlassMaterial: true, disableFrostedGlass: false, frostedGlassBlurIntensity: 14 }
+    for (const key of Object.keys(legacy).filter(key => /liquidglass/i.test(key)))
       assert.ok(RETIRED_SETTINGS_FIELDS.includes(key), `${key} is cleaned and excluded from sync`)
     removeRetiredSettings(legacy)
     assert.deepEqual(legacy, { disableFrostedGlass: false, frostedGlassBlurIntensity: 14 }, 'ordinary glass preferences survive the cleanup')

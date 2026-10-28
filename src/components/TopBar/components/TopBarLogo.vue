@@ -2,6 +2,7 @@
 import bilibiliBrandLogoUrl from '~/assets/branding/bilibili-brand-logo.png'
 import { useSidebarHost } from '~/composables/useSidebarHost'
 import { settings } from '~/logic'
+import { vLayoutEditable } from '~/logic/layoutEdit'
 
 import { useTopBarInteraction } from '../composables/useTopBarInteraction'
 
@@ -43,6 +44,7 @@ if (sidebarHost) {
     <span v-if="placeholder" class="logo-placeholder" aria-hidden="true" />
     <a
       v-else
+      v-layout-editable="floating ? 'topbar-logo' : ''"
       :href="getTopBarLogoHref()"
       target="_top"
       class="group logo"

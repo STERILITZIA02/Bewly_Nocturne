@@ -22,14 +22,13 @@ type CommentToggleSetting
 interface CommentToggleOption {
   setting: CommentToggleSetting
   labelKey: string
-  description: string
   icon: string
 }
 
 const commentToggleOptions = computed<CommentToggleOption[]>(() => [
-  { setting: 'showIPLocation', labelKey: 'settings.show_ip_location', description: t('settings.show_ip_location_desc'), icon: 'i-tabler-map-pin' },
-  { setting: 'showSex', labelKey: 'settings.show_sex', description: t('settings.show_sex_desc'), icon: 'i-tabler-gender-bigender' },
-  { setting: 'showCommentHostTag', labelKey: 'settings.show_comment_host_tag', description: t('settings.show_comment_host_tag_desc'), icon: 'i-tabler-user-star' },
+  { setting: 'showIPLocation', labelKey: 'settings.show_ip_location', icon: 'i-tabler-map-pin' },
+  { setting: 'showSex', labelKey: 'settings.show_sex', icon: 'i-tabler-gender-bigender' },
+  { setting: 'showCommentHostTag', labelKey: 'settings.show_comment_host_tag', icon: 'i-tabler-user-star' },
 ])
 
 const commentReplyTreeModeOptions = computed<{ label: string, value: CommentReplyTreeMode }[]>(() => [
@@ -68,7 +67,6 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
         v-model="settings[option.setting]"
         :label="$t(option.labelKey)"
         :data-setting-id="option.labelKey"
-        :description="option.description"
         :icon="option.icon"
         :show-state-icon="false"
       />
@@ -76,7 +74,6 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
 
     <SettingsItem
       setting-id="settings.enable_comment_reply_tree_display" :title="$t('settings.enable_comment_reply_tree_display')"
-      :desc="$t('settings.enable_comment_reply_tree_display_desc')"
       right-width="auto"
     >
       <Radio v-model="settings.enableCommentReplyTreeDisplay" />
@@ -128,7 +125,6 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
 
     <SettingsItem
       setting-id="settings.adjust_comment_image_height" :title="$t('settings.adjust_comment_image_height')"
-      :desc="$t('settings.adjust_comment_image_height_desc')"
       right-width="auto"
     >
       <Radio v-model="settings.adjustCommentImageHeight" />
@@ -136,7 +132,6 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
 
     <SettingsItem
       setting-id="settings.hide_comment_image_scrollbar" :title="$t('settings.hide_comment_image_scrollbar')"
-      :desc="$t('settings.hide_comment_image_scrollbar_desc')"
       right-width="auto"
     >
       <Radio v-model="settings.hideCommentImageScrollbar" />

@@ -1,6 +1,6 @@
 import { AppPage } from '~/enums/appEnums'
 import { isBilibiliHomepagePathname, splitBilibiliLocalePath } from '~/utils/bilibiliLocale'
-import { getPluginSearchResultsUrl } from '~/utils/searchUrl'
+import { getPluginSearchResultsUrl, writeNativeSearchVideoFilters } from '~/utils/searchUrl'
 
 export type PageMode = 'original' | 'bewly' | 'custom'
 
@@ -174,6 +174,9 @@ export function buildNativeSearchUrl(rawUrl: string): string {
     const page = Number(sourceUrl.searchParams.get('pn'))
     if (Number.isInteger(page) && page > 1)
       targetUrl.searchParams.set('page', String(page))
+
+    if (category === 'all' || category === 'video')
+      writeNativeSearchVideoFilters(targetUrl.searchParams, sourceUrl.searchParams)
 
     if (category === 'user') {
       const userOrder = sourceUrl.searchParams.get('user_order')

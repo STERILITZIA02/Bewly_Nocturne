@@ -33,7 +33,6 @@ const bCoinMode = computed({
       </SettingsItem>
       <SettingsItem
         setting-id="settings.auto_receive_vip_exp" :title="$t('settings.auto_receive_vip_exp')"
-        :desc="$t('settings.auto_receive_vip_exp_desc')"
         right-width="auto"
       >
         <Radio v-model="settings.autoReceiveVipExp" />

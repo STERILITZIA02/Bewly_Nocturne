@@ -218,6 +218,7 @@
   --bew-moment-forward-picker-state-min-height: 112px;
   --bew-widescreen-episode-max-height: 560px;
   --bew-media-search-max-width: 1920px;
+  --bew-search-bar-max-width: 680px;
   --bew-media-result-cover-width: 160px;
   --bew-media-episode-control-width: 240px;
   --bew-layout-home-search-stage-lead-height: 128px;
@@ -234,11 +235,12 @@
   --bew-z-base-overlay: 1000;
   --bew-z-topbar-interaction: var(--bew-z-base-overlay);
   --bew-z-topbar-host: 1001;
+  // Under the top bar host and the home search, over the page, Dock and rails.
+  --bew-z-page-dim: calc(var(--bew-z-topbar-host) - 1);
   --bew-z-home-logo: calc(var(--bew-z-topbar-host) + 1);
   --bew-z-native-topbar: 1003;
   --bew-z-context-backdrop: 9998;
   --bew-z-popover: 9999;
-  --bew-z-immersive-feed: 10000;
   --bew-z-dialog: 10002;
   --bew-z-control-backdrop: 10003;
   --bew-z-control-menu: 10004;
@@ -375,6 +377,11 @@
   // surface radius, so content clears the rounded corners).
   --bew-popover-inset: var(--bew-space-4);
   --bew-popover-media-width: 120px;
+  // The top bar's glass panels (moments, history, watch later; favorites adds
+  // its folder column): roomy enough to read a list without crowding.
+  --bew-popover-panel-width: 440px;
+  --bew-popover-panel-wide-width: 560px;
+  --bew-popover-panel-height: min(640px, var(--bew-popover-max-height));
   --bew-popover-card-gap: var(--bew-space-3);
   --bew-popover-row-min-height: var(--bew-control-height);
   --bew-date-picker-input-width: 115px;

@@ -65,7 +65,7 @@ export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent
       assert.equal(settings.value.dockPosition, 'right')
       layout.getSettingDescriptor('navigation.dock.position').set('left')
       assert.equal(settings.value.dockPosition, 'bottom', 'old left-position values normalize to the supported default')
-      host.querySelector('[role="menuitem"]').click()
+      ;[...host.querySelectorAll('[role="menuitem"]')].find(item => item.textContent.includes('open_setting')).click()
       await flush()
       assert.deepEqual(opened, ['navigation.dock.position'])
       assert.equal(document.activeElement, input, 'closing the menu cannot steal focus from the newly opened panel')

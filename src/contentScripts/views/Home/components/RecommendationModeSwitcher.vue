@@ -24,7 +24,8 @@ watch(visibleOptions, () => indicator.value?.updateIndicator(true), { flush: 'po
   >
     <LiquidSegmentIndicator ref="indicator" :active-key="activeOption" />
     <button
-      v-for="option in visibleOptions" :key="option.value" type="button"
+      v-for="option in visibleOptions" :key="option.value" v-layout-editable="'home-recommendation-switcher'"
+      type="button"
       class="bew-segment-control__item" data-segment-item
       :data-active="activeOption === option.value ? 'true' : undefined"
       :aria-pressed="activeOption === option.value"

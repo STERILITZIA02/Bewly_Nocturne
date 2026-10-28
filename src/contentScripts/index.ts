@@ -32,7 +32,6 @@ import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
-import { isImmersiveFrame } from '~/utils/iframeActivity'
 import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { handleIframeNavigationRequest } from '~/utils/iframeNavigation'
@@ -67,7 +66,6 @@ import { suspendHiddenHomepageImages } from './features/hiddenHomepageImages'
 import { cleanupIframePhotoViewerDetector, setupIframePhotoViewerDetector } from './features/iframePhotoViewerDetector'
 import { setupNotificationStateInvalidation } from './features/notificationStateInvalidation'
 import { disposeOpusDetailDrawerLayout, setupOpusDetailDrawerLayout } from './features/opusDetailDrawerLayout'
-import { setupImmersiveFrame } from './immersiveFrame'
 import { setupLocalLoudnessControl } from './localLoudnessControl'
 import { getPageLoadingGuard } from './pageLoadingGuard'
 import { observePlayerDom } from './playerDomLifecycle'
@@ -474,17 +472,6 @@ else if (shouldInitializeContentScript) {
     if (contentScriptSignal.aborted)
       return
     playerModeSettingsReady = true
-    contentScriptDisposers.push(setupImmersiveFrame(useDark().iframeDocument, (active) => {
-      void useTopBarStore().setUiActive(active && !document.hidden)
-      if (active) {
-        waitForPlayerModePageSettle(false)
-        applyDefaultPlayerMode()
-      }
-      else {
-        clearPlayerModeRetry()
-        invalidatePlayerModeApplication()
-      }
-    }))
     contentScriptDisposers.push(setupVideoWatchProgress())
     contentScriptDisposers.push(setupVideoQualityMemory())
     contentScriptDisposers.push(setupLocalLoudnessControl())
@@ -1049,8 +1036,6 @@ else if (shouldInitializeContentScript) {
 
   // 初始化随机播放功能
   function initRandomPlayFeature() {
-    if (isImmersiveFrame())
-      return
     // 只在视频页面初始化随机播放功能
     if (isCustomPlayPage() && settings.value.enableRandomPlay) {
       initRandomPlay()

@@ -28,7 +28,11 @@ export function registerSurfaceMaterialChecks(check, { Vue, compileComponent, fl
     assert.ok(shell.indexOf('class="settings-primary"') < shell.indexOf('ref="settingsSearchRef"') && shell.indexOf('ref="settingsSearchRef"') < shell.indexOf('<nav class="settings-primary-navigation"'))
     // The header title is the path to the open page, reported by the pages column.
     assert.match(shell, /provide\('setSettingsPageTitle'/)
-    assert.match(shell, /<Transition name="settings-crumb" mode="out-in">\s*<span v-if="pageTitle" :key="pageTitle"/)
+    // Kept per category and swapped in place: switching pages or returning to a
+    // category never blanks the page step and fades it back in.
+    assert.match(shell, /const pageTitle = computed\(\(\) => pageTitles\[activatedMenuItem\.value\]\)/)
+    assert.match(shell, /<Transition name="settings-crumb">\s*<span v-if="pageTitle" class="settings-header__page">/)
+    assert.doesNotMatch(shell, /pageTitle\.value = undefined/)
     assert.match(category, /watchEffect\(\(\) => setSettingsPageTitle\?\.\(currentPage\.value && t\(currentPage\.value\.titleKey\)\)\)/)
     // The page dims behind the window and fades with it.
     assert.match(shell, /\.settings-backdrop \{\s*@include modalWindow\.backdrop;/)
@@ -100,7 +104,10 @@ export function registerSurfaceMaterialChecks(check, { Vue, compileComponent, fl
       assert.equal(property(control, 'background'), 'var(--bew-segment-surface-background, var(--bew-control-background))')
       assert.equal(property(host.querySelector('#contained-menu'), 'backdrop-filter'), 'none')
       assert.equal(property(host.querySelector('#contained-menu'), 'background'), 'var(--bew-popover-surface-background-solid)')
-      assert.equal(property(host.querySelector('#external-pop'), 'backdrop-filter'), 'var(--bew-filter-glass-1)')
+      // The top bar panels are solid windows like the settings window, not glass.
+      assert.equal(property(host.querySelector('#external-pop'), 'backdrop-filter'), 'none')
+      assert.equal(property(host.querySelector('#external-pop'), 'background'), 'var(--bew-elevated-solid)')
+      assert.equal(property(host.querySelector('#external-pop'), 'border-radius'), 'var(--bew-modal-radius)')
       assert.equal(property(host.querySelector('[aria-checked="true"]'), 'color'), 'var(--bew-segment-item-current-color, var(--bew-segment-item-active-color))')
     }
     finally {

@@ -22,7 +22,6 @@ const historyGroupOptions = computed<{ label: string, value: HistoryGroupInterva
       <SettingsItem
         setting-id="page.watchLater.layout"
         :title="$t('settings.watch_later_layout_mode')"
-        :desc="$t('settings.watch_later_layout_mode_desc')"
         right-width="auto"
       >
         <SettingsSegmentedControl

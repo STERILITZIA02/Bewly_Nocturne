@@ -130,6 +130,7 @@ const settingValueValidators: Partial<Record<keyof Settings, (value: unknown) =>
     && hasExactProperties(item, ['key', 'visible', 'badgeType'])
     && typeof item.key === 'string'
     && typeof item.visible === 'boolean'
+    // Older exports may still hold `number`; normalizeSettings turns it into a dot.
     && ['number', 'dot', 'none'].includes(item.badgeType as string)),
   topBarPinnedChannels: value => Array.isArray(value) && value.every(item => typeof item === 'string'),
   dockItemsConfig: value => Array.isArray(value) && value.every(item =>

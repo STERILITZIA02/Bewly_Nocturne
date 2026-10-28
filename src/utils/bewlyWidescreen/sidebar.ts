@@ -197,7 +197,6 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
     comment: commentFound,
     danmaku: danmakuReady,
     playlist: hasPlaylist || hasRecommend,
-    recommendations: true,
     complete: false,
   }
   readiness.complete = readiness.top && readiness[activeTab]
@@ -527,7 +526,6 @@ export function suspendSidebarForVideoNavigation(currentState: BewlyWidescreenSt
     comment: false,
     danmaku: false,
     playlist: false,
-    recommendations: true,
   })
 }
 

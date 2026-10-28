@@ -25,7 +25,7 @@ import SettingsItemGroup from '../components/SettingsItemGroup.vue'
       <SettingsItem setting-id="settings.block_top_search_page_ads" :title="$t('settings.block_top_search_page_ads')" :desc="$t('settings.block_top_search_page_ads_desc')" right-width="auto">
         <Radio v-model="settings.blockTopSearchPageAds" />
       </SettingsItem>
-      <SettingsItem setting-id="settings.clean_url_argument" :title="$t('settings.clean_url_argument')" :desc="$t('settings.clean_url_argument_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.clean_url_argument" :title="$t('settings.clean_url_argument')" right-width="auto">
         <Radio v-model="settings.cleanUrlArgument" />
       </SettingsItem>
     </SettingsItemGroup>
@@ -35,10 +35,10 @@ import SettingsItemGroup from '../components/SettingsItemGroup.vue'
         <Radio v-model="settings.enableCleanShareLink" />
       </SettingsItem>
       <template v-if="settings.enableCleanShareLink">
-        <SettingsItem setting-id="settings.clean_share_link_include_title" :title="$t('settings.clean_share_link_include_title')" :desc="$t('settings.clean_share_link_include_title_desc')" right-width="auto">
+        <SettingsItem setting-id="settings.clean_share_link_include_title" :title="$t('settings.clean_share_link_include_title')" right-width="auto">
           <Radio v-model="settings.cleanShareLinkIncludeTitle" />
         </SettingsItem>
-        <SettingsItem setting-id="settings.clean_share_link_remove_tracking_params" :title="$t('settings.clean_share_link_remove_tracking_params')" :desc="$t('settings.clean_share_link_remove_tracking_params_desc')" right-width="auto">
+        <SettingsItem setting-id="settings.clean_share_link_remove_tracking_params" :title="$t('settings.clean_share_link_remove_tracking_params')" right-width="auto">
           <Radio v-model="settings.cleanShareLinkRemoveTrackingParams" />
         </SettingsItem>
       </template>

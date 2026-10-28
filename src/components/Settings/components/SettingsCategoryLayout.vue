@@ -7,13 +7,10 @@ import SettingsSectionHeading from './SettingsSectionHeading.vue'
 export interface CategoryPage {
   value: string
   titleKey: string
-  descriptionKey?: string
   icon: string
   iconActivated: string
   component: Component
   groupKey?: string
-  warning?: boolean
-  badgeKey?: string
 }
 
 const props = defineProps<{
@@ -26,7 +23,7 @@ const props = defineProps<{
 const { t } = useI18n()
 const scrollSettingsContentToTop = inject<() => void>('scrollSettingsContentToTop')
 // The window header shows the open page as the last step of its path.
-const setSettingsPageTitle = inject<(title?: string) => void>('setSettingsPageTitle')
+const setSettingsPageTitle = inject<() => (title?: string) => void>('setSettingsPageTitle')?.()
 const savedPage = sessionStorage.getItem(props.storageKey)
 const activePage = ref(
   props.pages.some(page => page.value === savedPage)
@@ -119,12 +116,7 @@ function handlePageMouseDown(event: MouseEvent) {
     </nav>
 
     <section v-if="currentPage" class="settings-category-content">
-      <SettingsSectionHeading
-        :title="$t(currentPage.titleKey)"
-        :desc="currentPage.descriptionKey ? $t(currentPage.descriptionKey) : undefined"
-        :warning="currentPage.warning"
-        :badge="currentPage.badgeKey ? $t(currentPage.badgeKey) : undefined"
-      />
+      <SettingsSectionHeading :title="$t(currentPage.titleKey)" />
       <Component :is="currentPage.component" :key="currentPage.value" />
     </section>
   </div>

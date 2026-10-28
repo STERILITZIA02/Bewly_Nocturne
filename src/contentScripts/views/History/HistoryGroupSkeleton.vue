@@ -24,7 +24,8 @@ withDefaults(defineProps<{ rows?: number, cards?: number }>(), { rows: 2, cards:
 .history-group-skeleton {
   display: flex;
   flex-direction: column;
-  gap: var(--bew-space-6);
+  // The same gap as the real rows (History's `.history-groups`).
+  gap: var(--bew-space-12);
   min-width: 0;
 }
 .history-group-skeleton__row {

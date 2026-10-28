@@ -25,13 +25,17 @@ import NotificationsPageSkeleton from '~/contentScripts/views/Notifications/comp
 import { AppPage } from '~/enums/appEnums'
 import type { GridLayoutType } from '~/logic'
 import { gridLayout as savedGridLayout, settings } from '~/logic'
+import { useLayoutEditSettingValue } from '~/logic/layoutEdit'
 import { MOMENT_GRID_DIMENSIONS, resolveMomentGridColumnCount } from '~/utils/momentsLayout'
 import { normalizeNotificationRoute } from '~/utils/notificationRoute'
 
 const props = defineProps<{ contentOnly?: boolean, gridLayout?: GridLayoutType }>()
 const app = inject<BewlyAppProvider>('BEWLY_APP')
 const page = computed(() => app?.activatedPage.value ?? AppPage.Home)
-const layout = computed(() => props.gridLayout ?? (page.value === AppPage.Home ? savedGridLayout.value.home : 'adaptive'))
+const homeGridLayout = useLayoutEditSettingValue('page.home.gridLayout', () => savedGridLayout.value.home)
+const momentsGridColumns = useLayoutEditSettingValue('page.moments.gridColumns', () => settings.value.momentsGridColumns)
+const watchLaterLayoutMode = useLayoutEditSettingValue('page.watchLater.layout', () => settings.value.watchLaterLayoutMode)
+const layout = computed(() => props.gridLayout ?? (page.value === AppPage.Home ? homeGridLayout.value : 'adaptive'))
 const href = useCurrentLocationHref()
 const view = computed(() => normalizeNotificationRoute(href.value).view)
 const { gridClass } = useGridLayout(() => 'adaptive')
@@ -39,7 +43,7 @@ const momentContent = ref<HTMLElement>()
 const { width } = useElementSize(momentContent)
 const momentColumns = computed(() => resolveMomentGridColumnCount({
   containerWidth: width.value,
-  preferredColumns: Number(settings.value.momentsGridColumns),
+  preferredColumns: Number(momentsGridColumns.value),
   minCardWidth: MOMENT_GRID_DIMENSIONS.minCardWidth,
   gap: MOMENT_GRID_DIMENSIONS.gap,
 }))
@@ -117,9 +121,9 @@ const emptyItems: never[] = []
         </LibraryBleedStrip>
       </section>
       <!-- The library heads are rows of hero cards, the next one peeking (one for Watch Later). -->
-      <LibraryHeroSkeleton v-if="[AppPage.Favorites, AppPage.History, AppPage.WatchLater].includes(page)" :single="page === AppPage.WatchLater" />
+      <LibraryHeroSkeleton v-if="[AppPage.Favorites, AppPage.WatchLater].includes(page)" :single="page === AppPage.WatchLater" />
       <HistoryGroupSkeleton v-if="page === AppPage.History" />
-      <VideoListSkeleton v-else-if="page === AppPage.WatchLater && settings.watchLaterLayoutMode === 'list'" :count="5" :action-count="3" />
+      <VideoListSkeleton v-else-if="page === AppPage.WatchLater && watchLaterLayoutMode === 'list'" :count="5" :action-count="3" />
       <LibraryVideoGridSkeleton v-else-if="page === AppPage.WatchLater" />
       <VideoCardGrid
         v-else :items="emptyItems" :transform-item="() => undefined" :get-item-key="(_, index) => index ?? 0" grid-layout="adaptive"
@@ -132,7 +136,7 @@ const emptyItems: never[] = []
         <SkeletonBlock width="min(100%, 300px)" height="var(--bew-control-height)" radius="control" />
       </div>
       <HistoryGroupSkeleton v-if="page === AppPage.History" />
-      <VideoListSkeleton v-else-if="page === AppPage.WatchLater && settings.watchLaterLayoutMode === 'list'" :count="5" :action-count="3" />
+      <VideoListSkeleton v-else-if="page === AppPage.WatchLater && watchLaterLayoutMode === 'list'" :count="5" :action-count="3" />
       <LibraryVideoGridSkeleton v-else-if="page === AppPage.WatchLater" />
       <div v-else-if="page === AppPage.Anime" class="bew-page-async-loading__anime">
         <AnimeTimeTableSkeleton />

@@ -92,7 +92,6 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
       <SettingsItem
         setting-id="navigation.dock.collapseMode"
         :title="$t('settings.dock_collapse_mode')"
-        :desc="$t('settings.dock_collapse_mode_desc')"
         right-width="auto"
       >
         <Select
@@ -101,7 +100,7 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
           w="160px"
         />
       </SettingsItem>
-      <SettingsItem setting-id="navigation.dock.position" :title="$t('settings.dock_position')" :desc="$t('settings.dock_position_desc')" right-width="auto">
+      <SettingsItem setting-id="navigation.dock.position" :title="$t('settings.dock_position')" right-width="auto">
         <Select
           v-model="settings.dockPosition"
           :options="dockPositions"
@@ -175,7 +174,6 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
       </SettingsItem>
       <SettingsItem
         setting-id="settings.show_bewly_or_bili_page_switcher" :title="$t('settings.show_bewly_or_bili_page_switcher')"
-        :desc="$t('settings.show_bewly_or_bili_page_switcher_desc')"
         right-width="auto"
       >
         <Radio v-model="settings.showBewlyOrBiliPageSwitcher" />
@@ -186,12 +184,12 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
       <SettingsItem v-if="settings.showDockBackToTop" setting-id="navigation.dock.actionButtons" :title="$t('settings.back_to_top_and_refresh_buttons_are_separated')" right-width="auto">
         <Radio v-model="settings.backToTopAndRefreshButtonsAreSeparated" />
       </SettingsItem>
-      <SettingsItem setting-id="navigation.dock.undoRefresh" :title="$t('settings.enable_undo_refresh_button')" :desc="$t('settings.enable_undo_refresh_button_desc')" right-width="auto">
+      <SettingsItem setting-id="navigation.dock.undoRefresh" :title="$t('settings.enable_undo_refresh_button')" right-width="auto">
         <Radio v-model="settings.enableUndoRefreshButton" />
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup data-setting-id="settings.group_sidebar" :title="$t('settings.group_sidebar')" :desc="$t('settings.group_sidebar_desc')">
+    <SettingsItemGroup data-setting-id="settings.group_sidebar" :title="$t('settings.group_sidebar')">
       <SettingsItem setting-id="navigation.sidebar.position" :title="$t('settings.sidebar_position')" right-width="auto">
         <Select v-model="settings.sidebarPosition" :options="sidebarPositions" w="160px" />
       </SettingsItem>

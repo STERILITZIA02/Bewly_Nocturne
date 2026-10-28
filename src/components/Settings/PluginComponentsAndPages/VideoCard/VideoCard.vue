@@ -44,7 +44,6 @@ import VideoCardContextMenuEditor from './VideoCardContextMenuEditor.vue'
 
     <SettingsItemGroup
       data-setting-id="settings.group_video_card_content" :title="$t('settings.group_video_card_content')"
-      :desc="$t('settings.group_video_card_content_desc')"
     >
       <VideoCardContentEditor />
     </SettingsItemGroup>

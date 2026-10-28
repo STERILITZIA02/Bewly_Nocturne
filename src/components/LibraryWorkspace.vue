@@ -3,14 +3,16 @@ import { useId } from 'vue'
 
 import { useSidebarRail } from '~/composables/useSidebarHost'
 import { settings } from '~/logic'
+import { useLayoutEditSettingValue } from '~/logic/layoutEdit'
 
 defineProps<{ label: string }>()
 const contentId = `library-content-${useId()}`
 const sidebarHost = useSidebarRail()
+const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () => settings.value.dockPosition)
 </script>
 
 <template>
-  <div class="library-workspace" :class="{ 'library-workspace--solid': settings.disableFrostedGlass, 'library-workspace--bottom-dock': settings.dockPosition === 'bottom' }">
+  <div class="library-workspace" :class="{ 'library-workspace--solid': settings.disableFrostedGlass, 'library-workspace--bottom-dock': dockPosition === 'bottom' }">
     <div v-if="sidebarHost" aria-hidden="true" />
     <Teleport :to="sidebarHost?.rail.value ?? 'body'" :disabled="!sidebarHost?.rail.value">
       <aside class="library-workspace__rail" :class="{ 'bew-sidebar-hosted': sidebarHost }" :aria-label="label">

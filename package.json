@@ -2,7 +2,7 @@
   "name": "bewly-nocturne",
   "displayName": "Bewly Nocturne",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "packageManager": "pnpm@12.14.0",
   "description": "A personal browser extension for a customized Bilibili experience.",
   "homepage": "https://github.com/STERILITZIA02/Bewly_Nocturne",

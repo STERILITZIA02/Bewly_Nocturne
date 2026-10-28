@@ -54,8 +54,6 @@ export const DOCK_LAYOUT = {
 export const LAYOUT_EDITOR_LAYOUT = {
   actionMenuWidth: 288,
   actionMenuFallbackHeight: 176,
-  contextMenuWidth: 224,
-  contextMenuFallbackHeight: 104,
 } as const
 
 /** Keep aligned with --bew-media-episode-menu-max-height. */

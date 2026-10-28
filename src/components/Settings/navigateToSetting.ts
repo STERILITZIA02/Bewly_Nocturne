@@ -29,7 +29,7 @@ function expand(target: HTMLElement, root: HTMLElement) {
       (element as HTMLDetailsElement).open = true
     const control = element.matches('.b-settings-item-group')
       ? element.querySelector<HTMLElement>(':scope > .group-heading[aria-expanded="false"]')
-      : element.matches('section') ? element.querySelector<HTMLElement>(':scope > .settings-section-heading[aria-expanded="false"]') : undefined
+      : undefined
     if (control)
       controls.add(control)
   }

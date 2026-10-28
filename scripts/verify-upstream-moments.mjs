@@ -33,13 +33,12 @@ function clock() {
 }
 
 export function registerUpstreamMomentChecks(check, { Vue, flush, compileComponent }) {
-  check('moments projection: stable render keys, raw unread IDs and merged visible counts remain separate', async () => {
+  check('moments projection: stable render keys, raw unread IDs and merged unread rows remain separate', async () => {
     const moments = Vue.reactive([])
     const store = await loadSourceFunctions('../src/stores/topBarStore.ts', ['acceptTopBarMoments', 'mergeCollaborativeVideos', 'extractBvid', 'normalizeAuthor', 'collectAuthors', 'mergeAuthors', 'updateMomentCollaborative', 'isNewMoment'], {
       moments,
       collaborativeVideoMap: new Map(),
       entryUnreadIds: new Set(['200', '190']),
-      visibleNewMomentsCount: Vue.ref(0),
       settings: Vue.ref({ filterArticlesInMoments: false }),
       recordUploaderLatestVideoTimes() {},
       parseTopBarPublicationTime: () => 0,
@@ -54,10 +53,10 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
     assert.equal(moments[0].authors.length, 2)
     assert.equal(store.isNewMoment(0), true)
     assert.equal(store.isNewMoment(1), false)
-    assert.equal(store.visibleNewMomentsCount.value, 1)
     store.entryUnreadIds.add('205')
     store.acceptTopBarMoments([item('205', 'BVsecond', 4)], 'video', '200')
-    assert.equal(store.visibleNewMomentsCount.value, 2, 'an unread collaborator joins an existing visible video without adding a row')
+    assert.equal(moments.length, 2, 'a collaborator joins an existing visible video without adding a row')
+    assert.equal(store.isNewMoment(1), true, 'an unread collaborator marks the existing video new')
     store.acceptTopBarMoments([item('220', 'BVnew', 4)], 'video', '200')
     assert.deepEqual(moments.map(item => item.dynamicId), ['220', '200', '180'])
   })

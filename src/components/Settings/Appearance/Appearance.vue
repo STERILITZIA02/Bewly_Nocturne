@@ -214,7 +214,7 @@ async function importTheme(event: Event) {
 
 <template>
   <div class="appearance-settings" :style="previewStyle">
-    <SettingsSectionHeading data-setting-id="settings.menu_appearance" :title="$t('settings.visual_style.title')" :desc="$t('settings.visual_style.description')" />
+    <SettingsSectionHeading data-setting-id="settings.menu_appearance" :title="$t('settings.visual_style.title')" />
 
     <SettingsItemGroup>
       <SettingsItem setting-id="appearance.theme" :title="$t('settings.theme')">
@@ -222,7 +222,7 @@ async function importTheme(event: Event) {
           <AppearanceModePicker :model-value="settings.theme" :apply="selectMode" />
         </template>
       </SettingsItem>
-      <SettingsItem v-if="settings.theme === 'scheduled'" setting-id="settings.theme_schedule" :title="$t('settings.theme_schedule')" :desc="$t('settings.theme_schedule_desc')" right-width="auto">
+      <SettingsItem v-if="settings.theme === 'scheduled'" setting-id="settings.theme_schedule" :title="$t('settings.theme_schedule')" right-width="auto">
         <div class="theme-schedule">
           <input v-model="themeScheduleStart" type="time" :aria-label="$t('settings.visual_style.schedule_start')" @blur="saveThemeSchedule">
           <span>–</span>
@@ -256,7 +256,7 @@ async function importTheme(event: Event) {
       <SettingsItem setting-id="settings.visual_style.editing_mode" :title="$t('settings.visual_style.editing_mode')" :desc="$t('settings.visual_style.editing_mode_desc')" right-width="auto">
         <SettingsSegmentedControl v-model="selectedScheme" :label="$t('settings.visual_style.editing_mode')" :options="[{ value: 'light', label: $t('settings.theme_opt.light') }, { value: 'dark', label: $t('settings.theme_opt.dark') }]" />
       </SettingsItem>
-      <SettingsItem setting-id="settings.visual_style.separate_accent" :title="$t('settings.visual_style.separate_accent')" :desc="$t('settings.visual_style.separate_accent_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.visual_style.separate_accent" :title="$t('settings.visual_style.separate_accent')" right-width="auto">
         <Radio v-model="separateModes" commit-after-motion />
       </SettingsItem>
       <Transition v-bind="paletteTransition" mode="out-in">
@@ -268,7 +268,7 @@ async function importTheme(event: Event) {
               neutral @update:model-value="colorActions.accent"
             />
           </SettingsItem>
-          <SettingsItem setting-id="settings.visual_style.background" :title="$t('settings.visual_style.background')" :desc="$t('settings.visual_style.background_desc')" right-width="auto">
+          <SettingsItem setting-id="settings.visual_style.background" :title="$t('settings.visual_style.background')" right-width="auto">
             <AppearanceColorField
               :key="`background-${editingScheme}`" :model-value="palette.background" :label="$t('settings.visual_style.background')" :fallback="editingScheme === 'dark' ? '#202020' : '#ffffff'" automatic
               :swatch-color="`var(--bew-appearance-preview-${editingScheme}-bg)`"
@@ -311,10 +311,10 @@ async function importTheme(event: Event) {
             unit="px"
           />
         </SettingsItem>
-        <SettingsItem setting-id="settings.video_card_title_font_size" :title="$t('settings.video_card_title_font_size')" :desc="$t('settings.video_card_title_font_size_desc')" right-width="auto">
+        <SettingsItem setting-id="settings.video_card_title_font_size" :title="$t('settings.video_card_title_font_size')" right-width="auto">
           <Select v-model="settings.videoCardTitleFontSize" commit-after-leave :options="videoCardFontSizeOptions" class="appearance-settings__select" />
         </SettingsItem>
-        <SettingsItem setting-id="settings.video_card_author_font_size" :title="$t('settings.video_card_author_font_size')" :desc="$t('settings.video_card_author_font_size_desc')" right-width="auto">
+        <SettingsItem setting-id="settings.video_card_author_font_size" :title="$t('settings.video_card_author_font_size')" right-width="auto">
           <Select v-model="settings.videoCardAuthorFontSize" commit-after-leave :options="videoCardFontSizeOptions" class="appearance-settings__select" />
         </SettingsItem>
         <SettingsItem setting-id="settings.customize_font" :title="$t('settings.customize_font')" right-width="auto">
@@ -342,7 +342,7 @@ async function importTheme(event: Event) {
         </SettingsItem>
       </SettingsItemSubgroup>
       <SettingsItemSubgroup :title="$t('settings.group_visual_effects')">
-        <SettingsItem setting-id="settings.disable_frosted_glass_and_top_bar_gradient" :title="$t('settings.disable_frosted_glass_and_top_bar_gradient')" :desc="$t('settings.disable_frosted_glass_and_top_bar_gradient_desc')" right-width="auto">
+        <SettingsItem setting-id="settings.disable_frosted_glass_and_top_bar_gradient" :title="$t('settings.disable_frosted_glass_and_top_bar_gradient')" right-width="auto">
           <Radio v-model="frostedGlassEnabled" commit-after-motion />
         </SettingsItem>
         <SettingsItem v-if="frostedGlassEnabled" setting-id="settings.frosted_glass_blur_intensity" :title="$t('settings.frosted_glass_blur_intensity')" right-width="auto">
@@ -358,7 +358,7 @@ async function importTheme(event: Event) {
         <SettingsItem setting-id="settings.gradient_theme_color_background" :title="$t('settings.gradient_theme_color_background')" :desc="$t('settings.gradient_theme_color_background_desc')" right-width="auto">
           <Radio v-model="settings.useLinearGradientThemeColorBackground" commit-after-motion />
         </SettingsItem>
-        <SettingsItem setting-id="settings.visual_style.motion" :title="$t('settings.visual_style.motion')" :desc="$t('settings.visual_style.motion_desc')" right-width="auto">
+        <SettingsItem setting-id="settings.visual_style.motion" :title="$t('settings.visual_style.motion')" right-width="auto">
           <SettingsSegmentedControl v-model="selectedMotion" :label="$t('settings.visual_style.motion')" :options="[{ value: 'system', label: $t('settings.visual_style.motion_system') }, { value: 'reduce', label: $t('settings.visual_style.motion_on') }, { value: 'full', label: $t('settings.visual_style.motion_off') }]" />
         </SettingsItem>
       </SettingsItemSubgroup>
@@ -366,7 +366,7 @@ async function importTheme(event: Event) {
         <SettingsItem setting-id="settings.adapt_to_other_page_styles" :title="$t('settings.adapt_to_other_page_styles')" :desc="$t('settings.adapt_to_other_page_styles_desc')" right-width="auto">
           <Radio v-model="settings.adaptToOtherPageStyles" commit-after-motion />
         </SettingsItem>
-        <SettingsItem setting-id="settings.video_page_dark_mode" :title="$t('settings.video_page_dark_mode')" :desc="$t('settings.video_page_dark_mode_desc')" right-width="auto">
+        <SettingsItem setting-id="settings.video_page_dark_mode" :title="$t('settings.video_page_dark_mode')" right-width="auto">
           <Radio v-model="settings.videoPageDarkMode" commit-after-motion />
         </SettingsItem>
       </SettingsItemSubgroup>

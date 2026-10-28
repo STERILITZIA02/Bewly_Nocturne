@@ -69,7 +69,8 @@ import { RANDOM_PLAY_VIDEO_RETRY_MAX, shouldRetryRandomPlayVideo } from '../src/
 import { getRangeProgress } from '../src/utils/range'
 import { sanitizeSearchHighlight } from '../src/utils/searchHighlight'
 import { isActualHomepage, resolveSearchOpenAction } from '../src/utils/searchNavigationCore'
-import { getPluginSearchResultsUrl } from '../src/utils/searchUrl'
+import { parseSearchShortcuts } from '../src/utils/searchShortcuts'
+import { buildPluginSearchResultsUrl, EMPTY_SEARCH_VIDEO_FILTERS, getPluginSearchResultsUrl, readSearchVideoFilters } from '../src/utils/searchUrl'
 import { createSelectOptionKey } from '../src/utils/selectOptionKey'
 import { canStartSettingsDependentBoot, shouldShowBewlyBootOverlay } from '../src/utils/settingsBootPolicy'
 import {
@@ -1752,7 +1753,6 @@ async function verifyComponentContracts() {
   assert.match(dockPageModeStyles, /background: transparent;/)
   assert.match(dockPageModeStyles, /box-shadow: none;/)
   assert.match(sidebar, /sidebar-theme-toggle/)
-  assert.match(sidebar, /sidebar-auto-hide/)
   assert.doesNotMatch(dock, /layout-edit-button|toggleLayoutEditMode|showLayoutEditButton/)
   assert.doesNotMatch(sidebar, /layout-edit-button|toggleLayoutEditMode|showLayoutEditButton/)
   assert.doesNotMatch(dockSettings, /showLayoutEditButton|show_layout_edit_button/)
@@ -1768,7 +1768,7 @@ async function verifyComponentContracts() {
 
   assert.doesNotMatch(slider, /ref\(props\.modelValue\)/)
   assert.doesNotMatch(slider, /addEventListener\('input'/)
-  assert.match(slider, /v-model\.number="model"/)
+  assert.match(slider, /v-model\.number="(?:rangeModel|model)"/)
   assert.match(slider, /--slider-progress/)
 
   assert.match(watchLater, /function playAndRemove/)
@@ -1901,7 +1901,7 @@ async function verifyComponentContracts() {
 
   assert.match(historyPop, /watch\(currentAccountId/)
   assert.match(historyPop, /async function deleteHistoryItem[\s\S]*isAccountRequestCurrent/)
-  assert.match(userPanelPop, /watch\(\[currentAccountId, shouldLoadLoginLog\]/)
+  assert.match(userPanelPop, /watch\(\[currentAccountId, showLastLogin\]/)
   assert.match(userPanelPop, /function clearAccountData/)
   assert.match(player, /PLAYBACK_RATE_USER_INTENT_DURATION_MS/)
   assert.match(player, /bpx-player-ctrl-playbackrate-menu-item/)
@@ -1918,7 +1918,6 @@ async function verifyComponentContracts() {
     'dock-undo-refresh-action',
     'dock-forward-refresh-action',
     'sidebar-theme-toggle',
-    'sidebar-auto-hide',
   ]) {
     assert.match(layoutEdit, new RegExp(`id: '${id}'`))
   }
@@ -2226,6 +2225,7 @@ async function verifyP2AccessibilityAndLocales() {
   assert.match(searchBar, /role="option"/)
   assert.match(searchBar, /:aria-selected=/)
   assert.match(searchBar, /keyword\.value = value\n {2}suggestions\.length = 0/)
+  assert.match(searchBar, /case 'Tab':[\s\S]{0,240}moveScope\(event\.shiftKey \? -1 : 1\)/, 'Tab moves the scope while the panel is open')
   assert.match(searchBar, /event\.isComposing \|\| event\.keyCode === 229/)
   for (const key of ['ArrowDown', 'ArrowUp', 'Enter', 'Escape'])
     assert.match(searchBar, new RegExp(`case '${key}'`))
@@ -3578,6 +3578,36 @@ function verifyUpstreamReliabilityPolicies() {
   assert.equal(nativeSearchUrl.searchParams.get('order_sort'), '1')
   assert.equal(nativeSearchUrl.searchParams.get('user_type'), '2')
 
+  // Search bar scope and pre-filters: a filtered combined search opens the video
+  // results, carries through both result pages, and the native URL maps back.
+  assert.equal(new URL(buildPluginSearchResultsUrl('k', 'live')).searchParams.get('category'), 'live')
+  assert.equal(new URL(buildPluginSearchResultsUrl('k')).searchParams.has('category'), false)
+  const filteredSearch = new URL(buildPluginSearchResultsUrl('k', 'all', { ...EMPTY_SEARCH_VIDEO_FILTERS, order: 'click', duration: 2, timeRange: 'week', tids: 17 }))
+  assert.equal(filteredSearch.searchParams.get('category'), 'video')
+  assert.deepEqual(readSearchVideoFilters(filteredSearch.searchParams), { order: 'click', duration: 2, timeRange: 'week', customStartDate: '', customEndDate: '', tids: 17 })
+  assert.equal(new URL(buildPluginSearchResultsUrl('k', 'user', { ...EMPTY_SEARCH_VIDEO_FILTERS, order: 'click' })).searchParams.has('order'), false, 'video filters stay off other scopes')
+  const nativeFiltered = new URL(buildNativeSearchUrl(filteredSearch.href))
+  assert.equal(nativeFiltered.pathname, '/video')
+  assert.equal(nativeFiltered.searchParams.get('order'), 'click')
+  assert.equal(nativeFiltered.searchParams.get('duration'), '2')
+  assert.equal(nativeFiltered.searchParams.get('tids'), '17')
+  assert.ok(Number(nativeFiltered.searchParams.get('pubtime_end_s')) - Number(nativeFiltered.searchParams.get('pubtime_begin_s')) === 7 * 24 * 3600)
+  const nativeToPlugin = new URL(getPluginSearchResultsUrl('https://search.bilibili.com/all?keyword=k&order=dm&duration=4&tids=3')!)
+  assert.equal(nativeToPlugin.searchParams.get('category'), 'video')
+  assert.equal(nativeToPlugin.searchParams.get('order'), 'dm')
+  assert.equal(nativeToPlugin.searchParams.get('duration'), '4')
+  assert.equal(nativeToPlugin.searchParams.get('tids'), '3')
+  assert.equal(new URL(getPluginSearchResultsUrl('https://search.bilibili.com/pgc?keyword=k')!).searchParams.get('category'), 'media_ft')
+  assert.equal(readSearchVideoFilters(new URLSearchParams('order=bogus&duration=9&time_range=custom')).timeRange, 'all')
+
+  assert.deepEqual(parseSearchShortcuts('bv1GJ411x7h7').map(item => item.url), ['https://www.bilibili.com/video/BV1GJ411x7h7'])
+  assert.deepEqual(parseSearchShortcuts('BV1Il411x7h7'), [], 'base58 has no I or l')
+  assert.deepEqual(parseSearchShortcuts('ep12').map(item => item.url), ['https://www.bilibili.com/bangumi/play/ep12'])
+  assert.deepEqual(parseSearchShortcuts('uid: 2').map(item => item.url), ['https://space.bilibili.com/2'])
+  assert.deepEqual(parseSearchShortcuts('2').map(item => item.kind), ['space', 'live'])
+  assert.deepEqual(parseSearchShortcuts('https://evil.example/b23.tv'), [])
+  assert.deepEqual(parseSearchShortcuts('原神'), [])
+
   assert.equal(resolveStableMomentKey({ id_str: 'dynamic-1', rid: 2 }, 'moment'), 'moment:api:dynamic-1')
   assert.equal(resolveStableMomentKey({ type: 8, rid: 2 }, 'moment'), 'moment:8:2')
   assert.equal(resolveStableMomentKey({ roomid: 7 }, 'live'), 'live:live:7')
@@ -3625,7 +3655,7 @@ async function verifyUpstreamReliabilityContracts() {
     'UserSearchPage.vue',
     'VideoSearchPage.vue',
   ].map(file => readFile(`${root}/src/contentScripts/views/SearchResults/pages/${file}`, 'utf8')))
-  const [adaptedStyles, topicStyles, topBarUrls, necessaryWatchers, topBar, removeTopBarStyles, bilibiliTopBar, bewlyWidescreen, screenshotControl, playerTooltip, videoPlayerStyles, topBarStore, topBarVisualConfig, searchCatalog, topBarHeader, variables, popoverCards, favoritesPopSource, historyPopSource, watchLaterPopSource, cmnCn, cmnTw, jyut, en] = await Promise.all([
+  const [adaptedStyles, topicStyles, topBarUrls, necessaryWatchers, topBar, removeTopBarStyles, bilibiliTopBar, bewlyWidescreen, screenshotControl, playerTooltip, videoPlayerStyles, topBarStore, topBarVisualConfig, searchCatalog, topBarHeader, variables, popoverCards, favoritesPopSource, historyPopSource, watchLaterPopSource, cmnCn, cmnTw, jyut, en, topBarRight] = await Promise.all([
     readFile(`${root}/src/styles/adaptedStyles/index.ts`, 'utf8'),
     readFile(`${root}/src/styles/adaptedStyles/pages/topicPage.scss`, 'utf8'),
     readFile(`${root}/src/components/TopBar/constants/urls.ts`, 'utf8'),
@@ -3650,6 +3680,7 @@ async function verifyUpstreamReliabilityContracts() {
     readFile(`${root}/src/_locales/cmn-TW.yml`, 'utf8'),
     readFile(`${root}/src/_locales/jyut.yml`, 'utf8'),
     readFile(`${root}/src/_locales/en.yml`, 'utf8'),
+    readFile(`${root}/src/components/TopBar/components/TopBarRight.vue`, 'utf8'),
   ])
 
   assert.match(app, /onSettled\(\)\s*\{[\s\S]{0,400}scheduleLoadMoreSentinelCheck\(\)/)
@@ -3663,7 +3694,8 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(watchLater, /handleReachBottom\.value === handleWatchLaterReachBottom/)
   assert.match(watchLater, /async function handleWatchLaterReachBottom\(\): Promise<boolean> \{[^}]*return getData\(\)\s*\}/)
   assert.match(watchLater, /payload\.list\.map\(normalizeWatchLaterItem\)/)
-  assert.match(watchLater, /mergedList\.length >= payload\.count[\s\S]{0,80}!madeProgress/)
+  assert.match(watchLater, /mergedList\.length >= payload\.count/)
+  assert.match(watchLater, /list\.length > 0 && !madeProgress/)
   assert.match(watchLater, /let watchLaterExtensionContextInvalidated = false/)
   assert.match(watchLater, /function settleExtensionContextInvalidation\(error: unknown\): boolean/)
   const watchLaterLoadSection = watchLater.slice(
@@ -3716,14 +3748,12 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(favoritesPop, /if \(!data \|\| !\('medias' in data\)\)/)
   assert.match(favoritesPop, /rawMedias\.every\(isValidFavoriteResource\)/)
 
-  assert.match(videoCardGrid, /--video-card-cover-max-width/)
-  assert.match(videoCard, /max-width: var\(--video-card-cover-max-width, 400px\)/)
-  assert.match(videoCard, /flex: var\(--video-card-cover-flex, 50\) 1 0/)
+  assert.match(videoCardGrid, /VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH/)
+  assert.match(videoCard, /max-width: var\(--bew-video-card-horizontal-cover-max-width\)/)
+  assert.match(videoCard, /flex: 1 1 0/)
   assert.match(videoCard, /:skeleton="infoSkeleton"/)
   assert.match(videoCardSkeleton, /v-if="skeleton"/)
   assert.match(videoCardSkeleton, /<SkeletonBlock/)
-  assert.match(videoCard, /--video-card-cover-flex/)
-  assert.match(videoCard, /--video-card-info-flex/)
   assert.doesNotMatch(videoCard, /highlightTags|durationTag/)
   // Covers carry no view/like/danmaku/duration overlay (album-art presentation).
   assert.doesNotMatch(videoCardCover, /video-card-cover-stats|cover-stat-/)
@@ -3788,15 +3818,22 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(topBarStore, /isLoadingMomentsCount/)
   assert.match(topBarStore, /requestGeneration === momentsCountRequestGeneration/)
   assert.match(topBarStore, /unread: item\.bewlyUnread === true \|\| entryUnreadIds\.has\(item\.id_str\)/)
-  assert.match(topBarStore, /visibleNewMomentsCount = ref\(0\)/)
 
   assert.match(topBarVisualConfig, /key: 'favorites',[\s\S]{0,120}supportsBadge: false/)
   assert.match(topBarVisualConfig, /key: 'history',[\s\S]{0,120}supportsBadge: false/)
   assert.match(storage, /key: 'favorites', visible: true, badgeType: 'none'/)
   assert.match(storage, /key: 'history', visible: true, badgeType: 'none'/)
-  assert.match(storage, /unsupportedBadgeKeys[\s\S]{0,500}badgeType: unsupportedBadgeKeys\.has\(component\.key\) \? 'none'/)
-  assert.match(searchCatalog, /\['moments', 'topbar\.moments'\],[\s\S]{0,100}\['watchLater', 'topbar\.watch_later'\],\n {2}\]/)
-  assert.match(searchCatalog, /\['favorites', 'topbar\.favorites'\],[\s\S]{0,100}\['history',[\s\S]{0,300}keywordKeys: \['settings\.visibility'\]/)
+  // The top bar shows no counts: Moments has an unread dot, Watch Later no mark.
+  assert.match(topBarVisualConfig, /key: 'watchLater',[\s\S]{0,120}supportsBadge: false/)
+  assert.match(topBarVisualConfig, /type BadgeType = 'dot' \| 'none'/)
+  assert.match(storage, /key: 'moments', visible: true, badgeType: 'dot'/)
+  assert.match(storage, /key: 'watchLater', visible: true, badgeType: 'none'/)
+  assert.match(storage, /new Set\(\['favorites', 'history', 'watchLater'\]\)/)
+  assert.match(storage, /unsupportedBadgeKeys\.has\(component\.key\) \? 'none' : component\.badgeType === 'none' \? 'none' : 'dot'/)
+  assert.doesNotMatch(topBarRight, /CountBadge|watchLaterCount/)
+  assert.match(topBarRight, /<div v-if="newMomentsCount > 0 && shouldShowBadge\('moments'\)" class="unread-dot" \/>/)
+  assert.match(searchCatalog, /createEntries\(topBarRoute, \['topbar\.moments'\], \{\n {4}keywordKeys: \['settings\.visibility', 'settings\.badge_type'/)
+  assert.match(searchCatalog, /\['favorites', 'topbar\.favorites'\],[\s\S]{0,100}\['watchLater', 'topbar\.watch_later'\],[\s\S]{0,300}keywordKeys: \['settings\.visibility'\]/)
   const gradientCondition = topBarHeader.match(/v-if="[^"]*useLinearGradientThemeColorBackground[^"]*"/)?.[0] ?? ''
   assert.doesNotMatch(gradientCondition, /forceWhiteIcon/)
   assert.match(gradientCondition, /disableFrostedGlass/)
@@ -3805,10 +3842,21 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(variables, /--bew-media-pop-title-line-height: var\(--bew-line-height-title\)/)
   assert.match(variables, /--bew-media-pop-title-font-weight: var\(--bew-font-weight-regular\)/)
   assert.match(popoverCards, /\.popover-card__title[\s\S]{0,260}var\(--bew-media-pop-title-font-size\)[\s\S]{0,160}var\(--bew-media-pop-title-line-height\)/)
-  assert.match(favoritesPopSource, /\.favorites-pop[\s\S]{0,120}width: 450px/)
-  assert.match(historyPopSource, /\.history-pop[\s\S]{0,120}width: 380px/)
-  assert.match(momentsPop, /\.moments-pop[\s\S]{0,120}width: 380px/)
-  assert.match(watchLaterPopSource, /\.watchLater-pop[\s\S]{0,120}width: 380px/)
+  // The glass panels share one roomy size (user request); favorites adds its folder column.
+  assert.match(variables, /--bew-popover-panel-width: 440px;/)
+  assert.match(variables, /--bew-popover-panel-height: min\(640px, var\(--bew-popover-max-height\)\);/)
+  assert.match(favoritesPopSource, /\.favorites-pop \{\s*width: var\(--bew-popover-panel-wide-width\);\s*height: var\(--bew-popover-panel-height\);/)
+  for (const [source, block] of [[historyPopSource, 'history-pop'], [momentsPop, 'moments-pop'], [watchLaterPopSource, 'watchLater-pop']] as const)
+    assert.match(source, new RegExp(`\\.${block} \\{[\\s\\S]{0,120}width: var\\(--bew-popover-panel-width\\);\\s*height: var\\(--bew-popover-panel-height\\);`))
+
+  // Glass popovers and the search panel dim the page under the top bar, as modal windows do.
+  assert.match(app, /<div v-if="pageDimmed" class="page-dim" aria-hidden="true" \/>/)
+  assert.match(app, /\.page-dim \{\s*@include modalWindow\.backdrop;[\s\S]{0,120}z-index: var\(--bew-z-page-dim\);\s*\/\/[^\n]*\n\s*pointer-events: none;/)
+  assert.match(topBar, /usePageDim\(\(\) => \(\['userPanel', 'moments', 'favorites', 'history', 'watchLater'\] as const\)\.some/)
+  assert.match(searchBar, /usePageDim\(\(\) => isFocus\.value && uiActive\.value\)/)
+  // Over the page group the page dims at once; an open popover rises above the docked home search.
+  assert.match(app, /'top-bar-host--popover-open': topBarPopoverOpen/)
+  assert.match(app, /\.top-bar-host--popover-open \.top-bar-layer \{\s*z-index: calc\(var\(--bew-z-topbar-host\) \+ 1\);/)
 
   assert.match(playerTooltip, /createPlayerControlTooltip/)
   assert.match(playerTooltip, /tooltip && tooltip\.textContent !== label/)
@@ -4167,7 +4215,7 @@ async function verifyIncrementalCorrectnessContracts() {
     assert.match(locale, /folder_visibility:/)
     assert.match(locale, /folder_public:/)
     assert.match(locale, /folder_private:/)
-    assert.match(locale, /folder_public_desc:/)
+    assert.doesNotMatch(locale, /folder_public_desc:/)
   }
 
   assert.match(momentCard, /:data-user-profile-id="moment\.author\.mid \|\| undefined"/)

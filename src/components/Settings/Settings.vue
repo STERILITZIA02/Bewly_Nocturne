@@ -122,13 +122,6 @@ onDeactivated(deactivateSettingsModal)
 useEventListener(() => settingsModalActive.value ? window : undefined, 'keydown', trapSettingsFocus, { capture: true })
 
 provide('startQuickLayoutEdit', startQuickLayoutEdit)
-// The open page of a category with pages (SettingsCategoryLayout reports
-// it); the header shows the path to it.
-const pageTitle = ref<string>()
-provide('setSettingsPageTitle', (title?: string) => {
-  pageTitle.value = title
-})
-
 const asyncSettings = createAsyncPageRegistry()
 const settingsMenu = {
   [MenuType.General]: asyncSettings.define(() => import('./PluginComponentsAndPages/General/General.vue'), {}),
@@ -151,6 +144,18 @@ const activatedMenuItem = ref<MenuType>(
     ? initialMenuItem
     : MenuType.General,
 )
+// The open page of each category with pages (its SettingsCategoryLayout
+// reports it); the header shows the path to it. Kept per category so the path
+// is complete the moment a category opens again, not dropped and re-added
+// once its page mounts.
+const pageTitles = reactive<Partial<Record<MenuType, string>>>({})
+const pageTitle = computed(() => pageTitles[activatedMenuItem.value])
+provide('setSettingsPageTitle', () => {
+  const menuItem = activatedMenuItem.value
+  return (title?: string) => {
+    pageTitles[menuItem] = title
+  }
+})
 const contentTransition = useReadyPageTransition(() => settingsMenu[activatedMenuItem.value], asyncSettings.preload)
 watch(
   () => props.navigationRequest?.id,
@@ -246,7 +251,6 @@ provide('scrollSettingsContentToTop', () => {
 watch(
   () => activatedMenuItem.value,
   (menuItem) => {
-    pageTitle.value = undefined
     sessionStorage.setItem(settingsMenuStorageKey, menuItem)
     scrollViewportRef.value?.scrollTo({ top: 0 })
   },
@@ -580,8 +584,8 @@ function changeMenuItem(menuItem: MenuType) {
           <span class="settings-header__crumb">{{ $t('settings.title') }}</span>
           <i class="settings-header__separator" i-tabler:chevron-right aria-hidden="true" />
           <span class="settings-header__crumb" :class="{ 'is-current': !pageTitle }">{{ getMenuTitle(activatedMenuItem) }}</span>
-          <Transition name="settings-crumb" mode="out-in">
-            <span v-if="pageTitle" :key="pageTitle" class="settings-header__page">
+          <Transition name="settings-crumb">
+            <span v-if="pageTitle" class="settings-header__page">
               <i class="settings-header__separator" i-tabler:chevron-right aria-hidden="true" />
               <span class="settings-header__crumb is-current">{{ pageTitle }}</span>
             </span>

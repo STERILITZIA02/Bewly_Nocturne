@@ -3,8 +3,8 @@ import { useWindowFocus } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 
 import ALink from '~/components/ALink.vue'
-import CountBadge from '~/components/CountBadge.vue'
 import OpenTabsDialog from '~/components/WatchLater/OpenTabsDialog.vue'
+import { usePageDim } from '~/composables/usePageDim'
 import { settings } from '~/logic'
 import { getTopBarItemLayoutEditableId, vLayoutEditable } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -13,7 +13,7 @@ import { reportRuntimeFailure } from '~/utils/messaging'
 import { holdMotion } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
-import { isComponentVisible, shouldShowBadge, shouldShowDotBadge, shouldShowNumberBadge } from '~/utils/topBarBadge'
+import { isComponentVisible, shouldShowBadge } from '~/utils/topBarBadge'
 
 import { resetTopBarTransientInteraction, useTopBarInteraction } from '../composables/useTopBarInteraction'
 import { MESSAGE_URL } from '../constants/urls'
@@ -26,6 +26,10 @@ import UserPanelPop from './pops/UserPanelPop.vue'
 import WatchLaterPop from './pops/WatchLaterPop.vue'
 
 const topBarStore = useTopBarStore()
+// Over the page buttons the page dims at once and stays dim between them
+// (user request), not only while a popover is open.
+const pagesGroupHovered = ref(false)
+usePageDim(pagesGroupHovered)
 const showOpenTabsDialog = ref(false)
 function openTabsDialog() {
   resetTopBarTransientInteraction()
@@ -36,7 +40,6 @@ const {
   isLogin,
   userInfo,
   newMomentsCount,
-  watchLaterCount,
   popupVisible,
   hasBCoinToReceive,
 } = storeToRefs(topBarStore)
@@ -149,18 +152,8 @@ function showPageItem(key: 'moments' | 'favorites' | 'history' | 'watchLater') {
   return isComponentVisible(key) && !isCurrentTopBarItemPage(key)
 }
 
-// 判断分割线是否应该显示：左右两组至少各有一个可见时才显示
-const shouldShowDivider = computed(() => {
-  const leftSideVisible = showPageItem('moments')
-    || showPageItem('favorites')
-    || showPageItem('history')
-    || showPageItem('watchLater')
-    || isComponentVisible('creatorCenter')
-
-  const rightSideVisible = isComponentVisible('upload')
-
-  return leftSideVisible && rightSideVisible
-})
+const showPageGroup = computed(() => (['moments', 'favorites', 'history', 'watchLater'] as const).some(showPageItem))
+const showCreateGroup = computed(() => isComponentVisible('creatorCenter') || isComponentVisible('upload'))
 </script>
 
 <template>
@@ -180,32 +173,26 @@ const shouldShowDivider = computed(() => {
           }}
         </a>
       </div>
-      <!-- Everything but the avatar shares one glass capsule, balancing the logo circle. -->
-      <div v-if="isLogin" class="top-bar-tools">
-        <div class="hidden lg:flex" gap-1>
+      <!-- Three groups (user-specified), each its own glass capsule like the logo
+           circle: the pages, creating, the avatar. Small windows keep only the
+           More menu in the first. -->
+      <div
+        v-if="isLogin" v-layout-editable="'topbar'" class="top-bar-tools" :class="{ 'top-bar-tools--small-only': !showPageGroup }"
+        @pointerenter="pagesGroupHovered = true" @pointerleave="pagesGroupHovered = false"
+      >
+        <div class="top-bar-tools__pages hidden lg:flex">
           <!-- Moments -->
           <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
             <div
               v-if="showPageItem('moments')"
               :ref="el => moments = (el as HTMLElement | null)"
-              v-layout-editable="getTopBarItemLayoutEditableId('moments')"
               class="right-side-item"
-              :data-layout-editable-id="getTopBarItemLayoutEditableId('moments')"
               :class="{ active: popupVisible?.moments }"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'moments')"
             >
-              <template v-if="newMomentsCount > 0 && shouldShowBadge('moments')">
-                <CountBadge
-                  v-if="shouldShowNumberBadge('moments')"
-                  class="unread-num-dot"
-                  :count="newMomentsCount"
-                />
-                <div
-                  v-else-if="shouldShowDotBadge('moments')"
-                  class="unread-dot"
-                />
-              </template>
+              <div v-if="newMomentsCount > 0 && shouldShowBadge('moments')" class="unread-dot" />
               <ALink
+                v-layout-editable="getTopBarItemLayoutEditableId('moments')"
                 class="top-bar-trigger"
                 :href="getTopBarItemHref('moments', 'https://t.bilibili.com')"
                 :title="$t('topbar.moments')"
@@ -232,13 +219,12 @@ const shouldShowDivider = computed(() => {
             <div
               v-if="showPageItem('favorites')"
               :ref="el => favorites = (el as HTMLElement | null)"
-              v-layout-editable="getTopBarItemLayoutEditableId('favorites')"
               class="right-side-item"
-              :data-layout-editable-id="getTopBarItemLayoutEditableId('favorites')"
               :class="{ active: popupVisible?.favorites }"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'favorites')"
             >
               <ALink
+                v-layout-editable="getTopBarItemLayoutEditableId('favorites')"
                 class="top-bar-trigger"
                 :href="getTopBarItemHref('favorites', `https://space.bilibili.com/${mid}/favlist`)"
                 :title="$t('topbar.favorites')"
@@ -265,13 +251,12 @@ const shouldShowDivider = computed(() => {
             <div
               v-if="showPageItem('history')"
               :ref="el => history = (el as HTMLElement | null)"
-              v-layout-editable="getTopBarItemLayoutEditableId('history')"
               class="right-side-item"
-              :data-layout-editable-id="getTopBarItemLayoutEditableId('history')"
               :class="{ active: popupVisible?.history }"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'history')"
             >
               <ALink
+                v-layout-editable="getTopBarItemLayoutEditableId('history')"
                 class="top-bar-trigger"
                 :href="getTopBarItemHref('history', 'https://www.bilibili.com/history')"
                 :title="$t('topbar.history')"
@@ -298,24 +283,12 @@ const shouldShowDivider = computed(() => {
             <div
               v-if="showPageItem('watchLater')"
               :ref="el => watchLater = (el as HTMLElement | null)"
-              v-layout-editable="getTopBarItemLayoutEditableId('watchLater')"
               class="right-side-item"
-              :data-layout-editable-id="getTopBarItemLayoutEditableId('watchLater')"
               :class="{ active: popupVisible?.watchLater }"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'watchLater')"
             >
-              <template v-if="watchLaterCount > 0 && shouldShowBadge('watchLater')">
-                <CountBadge
-                  v-if="shouldShowNumberBadge('watchLater')"
-                  class="unread-num-dot"
-                  :count="watchLaterCount"
-                />
-                <div
-                  v-else-if="shouldShowDotBadge('watchLater')"
-                  class="unread-dot"
-                />
-              </template>
               <ALink
+                v-layout-editable="getTopBarItemLayoutEditableId('watchLater')"
                 class="top-bar-trigger"
                 :href="getTopBarItemHref('watchLater', 'https://www.bilibili.com/watchlater/list')"
                 :title="$t('topbar.watch_later')"
@@ -337,38 +310,17 @@ const shouldShowDivider = computed(() => {
               </Transition>
             </div>
           </Transition>
-
-          <!-- Creative center -->
-          <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
-            <div
-              v-if="isComponentVisible('creatorCenter')"
-              v-layout-editable="getTopBarItemLayoutEditableId('creatorCenter')"
-              class="right-side-item"
-              :data-layout-editable-id="getTopBarItemLayoutEditableId('creatorCenter')"
-            >
-              <a
-                class="top-bar-trigger"
-                href="https://member.bilibili.com/platform/home"
-                target="_blank"
-                :title="$t('topbar.creative_center')"
-                @click="resetTopBarTransientInteraction"
-              >
-                <div i-tabler:bulb />
-              </a>
-            </div>
-          </Transition>
         </div>
 
         <!-- More -->
         <div
           :ref="el => more = (el as HTMLElement | null)"
-          v-layout-editable="'topbar-more'"
           class="right-side-item lg:!hidden flex"
-          data-layout-editable-id="topbar-more"
           :class="{ active: popupVisible?.more }"
           @click="(event: MouseEvent) => handleClickTopBarItem(event, 'more')"
         >
           <button
+            v-layout-editable="'topbar-more'"
             type="button"
             class="top-bar-icon-button top-bar-trigger"
             :title="$t('video_card.operation.more_options')"
@@ -387,49 +339,58 @@ const shouldShowDivider = computed(() => {
             />
           </Transition>
         </div>
+      </div>
 
-        <div class="hidden lg:flex" gap-1 items-center>
-          <!-- Divider -->
-          <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
-            <div
-              v-if="shouldShowDivider"
-              w-2px h-16px bg="$bew-separator-color" mx-1
-              rounded="$bew-radius-tiny"
-            />
-          </Transition>
-
-          <!-- Upload -->
-          <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
-            <div
-              v-if="isComponentVisible('upload')"
-              :ref="el => upload = (el as HTMLElement | null)"
-              v-layout-editable="getTopBarItemLayoutEditableId('upload')"
-              class="right-side-item"
-              :data-layout-editable-id="getTopBarItemLayoutEditableId('upload')"
-              :class="{ active: popupVisible?.upload }"
-              @click="(event: MouseEvent) => handleClickTopBarItem(event, 'upload')"
+      <!-- Creating: the creative center and upload share the second capsule. -->
+      <div v-if="isLogin && showCreateGroup" class="top-bar-tools top-bar-tools--wide-only">
+        <!-- Creative center -->
+        <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
+          <div
+            v-if="isComponentVisible('creatorCenter')"
+            class="right-side-item"
+          >
+            <a
+              v-layout-editable="getTopBarItemLayoutEditableId('creatorCenter')"
+              class="top-bar-trigger"
+              href="https://member.bilibili.com/platform/home"
+              target="_blank"
+              :title="$t('topbar.creative_center')"
+              @click="resetTopBarTransientInteraction"
             >
-              <a
-                class="upload top-bar-trigger"
-                href="https://member.bilibili.com/platform/upload/video/frame"
-                target="_blank"
-                :title="$t('topbar.upload')"
-                @click="resetTopBarTransientInteraction"
-              >
-                <div i-tabler:upload flex-shrink-0 />
-              </a>
+              <div i-tabler:bulb />
+            </a>
+          </div>
+        </Transition>
+        <!-- Upload -->
+        <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
+          <div
+            v-if="isComponentVisible('upload')"
+            :ref="el => upload = (el as HTMLElement | null)"
+            class="right-side-item"
+            :class="{ active: popupVisible?.upload }"
+            @click="(event: MouseEvent) => handleClickTopBarItem(event, 'upload')"
+          >
+            <a
+              v-layout-editable="getTopBarItemLayoutEditableId('upload')"
+              class="upload top-bar-trigger"
+              href="https://member.bilibili.com/platform/upload/video/frame"
+              target="_blank"
+              :title="$t('topbar.upload')"
+              @click="resetTopBarTransientInteraction"
+            >
+              <div i-tabler:upload flex-shrink-0 />
+            </a>
 
-              <Transition name="slide-in">
-                <UploadPop
-                  v-show="popupVisible?.upload"
-                  ref="uploadPopRef"
-                  class="bew-popover"
-                  @click.stop="() => {}"
-                />
-              </Transition>
-            </div>
-          </Transition>
-        </div>
+            <Transition name="slide-in">
+              <UploadPop
+                v-show="popupVisible?.upload"
+                ref="uploadPopRef"
+                class="bew-popover"
+                @click.stop="() => {}"
+              />
+            </Transition>
+          </div>
+        </Transition>
       </div>
 
       <!-- Avatar: its own glass circle; a click opens the user panel below it. -->

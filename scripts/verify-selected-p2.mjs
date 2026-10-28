@@ -13,6 +13,7 @@ import { registerAccountTransactionChecks } from './verify-account-transactions.
 import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
 import { registerCommentReadingChecks } from './verify-comment-reading.mjs'
 import { registerCompatibleAChecks } from './verify-compatible-a.mjs'
+import { registerControlChecks } from './verify-controls.mjs'
 import { registerDataConsistencyChecks } from './verify-data-consistency.mjs'
 import { registerDesignImplementationChecks } from './verify-design-implementation.mjs'
 import { registerDockGlassChecks } from './verify-dock-glass.mjs'
@@ -22,7 +23,6 @@ import { registerFrostedGlassSurfaceChecks } from './verify-frosted-glass-surfac
 import { registerGlobalResourceChecks } from './verify-global-resources.mjs'
 import { registerHomeLoadingRegressionChecks } from './verify-home-loading-regressions.mjs'
 import { registerImageViewerChecks } from './verify-image-viewer.mjs'
-import { registerImmersiveAndControlChecks } from './verify-immersive-and-controls.mjs'
 import { registerLibraryMemoryChecks } from './verify-library-memory.mjs'
 import { registerLibraryToolChecks } from './verify-library-tools.mjs'
 import { registerLoadingSkeletonChecks } from './verify-loading-skeletons.mjs'
@@ -68,6 +68,7 @@ import { registerUpstreamTransactionChecks } from './verify-upstream-transaction
 import { registerUserProfileChecks } from './verify-user-profile.mjs'
 import { registerViewLifetimeChecks } from './verify-view-lifetimes.mjs'
 import { registerVisualConsistencyChecks } from './verify-visual-consistency.mjs'
+import { registerVisualEditorChecks } from './verify-visual-editor.mjs'
 import { registerWatchLaterOwnershipChecks } from './verify-watch-later-ownership.mjs'
 import { registerWhisperInteractionChecks } from './verify-whisper-interactions.mjs'
 
@@ -166,7 +167,8 @@ registerUpstreamMenuChecks(check, { Vue, flush, compileComponent })
 registerUpstreamSettingsChecks(check, { Vue, flush, compileComponent })
 registerRecommendationRuntimeChecks(check, { Vue, flush, compileComponent })
 registerRecommendationConfigChecks(check, { Vue, flush, compileComponent })
-registerImmersiveAndControlChecks(check, { Vue, flush, compileComponent })
+registerControlChecks(check, { Vue, flush, compileComponent })
+registerVisualEditorChecks(check, { Vue, flush, compileComponent })
 function noop() {}
 async function flush() {
   for (let turn = 0; turn < 8; turn++)
@@ -494,8 +496,8 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   const exports = {}
   const modules = {
     'vue': Vue,
+    '~/logic/layoutEdit': { vLayoutEditable: {} },
     '~/composables/useCardRemoval': await import('../src/composables/useCardRemoval'),
-    '~/utils/immersivePlayback': await import('../src/utils/immersivePlayback'),
     '~/utils/accountLifetime': await import('../src/utils/accountLifetime'),
     '~/components/VideoCard/utils': await import('../src/components/VideoCard/utils'),
     '~/composables/useSidebarHost': await import('../src/composables/useSidebarHost'),
@@ -567,6 +569,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/composables/useGlassPanelMotion': await import('../src/composables/useGlassPanelMotion'),
     ...mocks,
   }
+  modules['~/logic/layoutEdit'] = { vLayoutEditable: {}, useLayoutEditSettingValue: (_id, get) => Vue.computed(get), ...modules['~/logic/layoutEdit'] }
   if (file.endsWith('/VideoCardGrid.vue')) {
     modules['~/stores/topBarStore'] ??= { useTopBarStore: () => ({ isLogin: false, userInfo: { mid: 0 } }) }
     modules['~/utils/main'] ??= { getUserID: () => '' }
@@ -798,6 +801,8 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     HTMLMediaElement: window.HTMLMediaElement,
     location: window.location,
     history: window.history,
+    URL,
+    URLSearchParams,
     CustomEvent,
     Document,
     Element,

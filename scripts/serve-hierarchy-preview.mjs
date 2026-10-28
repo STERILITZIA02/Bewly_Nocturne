@@ -54,14 +54,14 @@ createApp({setup(){
  h('section',{class:'fixture-tools',style:'padding:20px;border-radius:12px;background:repeating-linear-gradient(105deg,#d6c7ab 0 6px,#466e7c 6px 12px,#242935 12px 18px)'},[h('span',{style:'color:#fff;background:#111;padding:4px 8px;border-radius:6px'},'未读胶囊 · 实际 CountBadge'),...[1,28,120,0].map(count=>h(CountBadge,{count}))]),
  h('div',{class:'fixture-grid'},[
  h('section',{class:'fixture-settings'},[
- h(Heading,{title:'通用',desc:'语言、交互与内容显示偏好'}),
+ h(Heading,{title:'通用'}),
  h(Group,{title:'语言'},()=>item('界面语言','选择界面显示语言',h(Select,{options:[{value:'zh',label:'简体中文'},{value:'en',label:'English'}],modelValue:language.value,'onUpdate:modelValue':v=>language.value=v}))),
  h(Group,{title:'交互与布局',desc:'保持现有操作、尺寸与页面布局。'},()=>[
  item('历史记录搜索','内嵌输入区低于内容面，焦点仍有清楚的细线反馈。',h(Input,{modelValue:query.value,'onUpdate:modelValue':v=>query.value=v,placeholder:'输入关键词'})),
  h(Subgroup,{title:'默认显示',desc:'子分组与行标题使用同一阅读层级。'},()=>item('名称','说明按帮助文字角色排版。',h(Input,{modelValue:name.value,'onUpdate:modelValue':v=>name.value=v})))])]),
  h('aside',[
  h('section',{class:'fixture-dialog'},[h('p',{class:'dialog__title bew-subheading'},'确认更改'),h('p',{class:'dialog__description bew-help'},'普通弹窗标题与设置区块共用标题角色。'),h('p',{class:'fixture-body'},'正文保持 15/24。浮层需要从内容中分离，内部控件不会继续逐级变亮。'),h('div',{class:'fixture-actions'},[h('button','取消'),h('button',{class:'primary'},'确认')])]),
- h('section',{class:'fixture-card'},[h(Section,{title:'区块标题',desc:'来自实际 SettingsSectionHeading 组件。'}),h('p','内容面保持安静，弱化标签与正文层级清楚。')])])])]);
+ h('section',{class:'fixture-card'},[h(Section,{title:'区块标题'}),h('p','内容面保持安静，弱化标签与正文层级清楚。')])])])]);
 }}).mount('#app');
 `
 

@@ -1,3 +1,4 @@
+@use "../../../styles/breakpoints";
 @use "../../../styles/sidebarSurface";
 
 .top-bar-enter-active,
@@ -39,10 +40,27 @@
 }
 
 .right-side {
+  // As much room between buttons as fits (user request): on the Moments page
+  // the whole right side stays inside the hot-search card's left edge. There it
+  // holds five buttons (three pages, two creating), two capsule insets and the
+  // avatar circle, i.e. 3 × (control + primary height), with five gaps, the two
+  // between groups a space-1 wider. Narrow windows keep the space-1 minimum.
+  --top-bar-tools-gap: clamp(
+    var(--bew-space-1),
+    calc(
+      (
+          var(--bew-moments-hot-search-width) - 3 *
+            (var(--bew-control-height) + var(--bew-top-bar-primary-control-height)) - 2 * var(--bew-space-1)
+        ) /
+        5
+    ),
+    var(--bew-space-2)
+  );
+
   .others {
     display: flex;
     align-items: center;
-    gap: var(--bew-space-2);
+    gap: calc(var(--top-bar-tools-gap) + var(--bew-space-1));
     height: var(--bew-top-bar-primary-control-height);
   }
 
@@ -52,7 +70,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: var(--bew-space-1);
+    gap: var(--top-bar-tools-gap);
     box-sizing: border-box;
     height: var(--bew-top-bar-primary-control-height);
     padding-inline: calc((var(--bew-top-bar-primary-control-height) - var(--bew-control-height)) / 2);
@@ -65,16 +83,34 @@
       content: "";
     }
 
+    .top-bar-tools__pages {
+      gap: var(--top-bar-tools-gap);
+    }
+
     // Zero specificity, so the enter/leave states below can collapse the slot.
     :where(.right-side-item) {
       width: var(--bew-control-height);
+    }
+
+    // Small windows fold the page and creating groups into the More menu, the
+    // only button left in the first capsule.
+    &.top-bar-tools--wide-only {
+      @media (width < breakpoints.$grid-lg) {
+        display: none;
+      }
+    }
+
+    &.top-bar-tools--small-only {
+      @media (width >= breakpoints.$grid-lg) {
+        display: none;
+      }
     }
 
     .top-bar-item-enter-from,
     .top-bar-item-leave-to {
       width: 0;
       // Cancel the flex gap that would otherwise remain beside an empty slot.
-      margin-inline: 0 calc(-1 * var(--bew-space-1));
+      margin-inline: 0 calc(-1 * var(--top-bar-tools-gap));
       opacity: 0;
     }
   }
@@ -249,16 +285,18 @@
     }
   }
 
-  .unread-num-dot {
-    position: absolute;
-    top: calc(-1 * var(--bew-space-0-5));
-    right: calc(-1 * var(--bew-space-0-5));
-    z-index: 6;
-  }
-
+  // The top bar shows no counts (user request): unread is only this dot.
   .unread-dot {
-    --uno: "w-8px h-8px bg-$bew-theme-color rounded-$bew-pill-radius absolute right-2px top-2px";
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 6;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     corner-shape: var(--bew-corner-shape-round);
+    background: var(--bew-accent-marker);
+    pointer-events: none;
   }
 
   .right-side-item {

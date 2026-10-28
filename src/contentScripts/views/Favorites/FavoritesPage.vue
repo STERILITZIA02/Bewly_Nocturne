@@ -26,8 +26,10 @@ import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCardRemoval } from '~/composables/useCardRemoval'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
+import { usePageSearchIntent } from '~/composables/usePageSearchIntent'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { LIBRARY_HERO_RENDER_RADIUS } from '~/constants/library'
+import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import type { Media as FavoriteItem } from '~/models/video/favorite'
 import type { List as CategoryItem } from '~/models/video/favoriteCategory'
@@ -396,6 +398,18 @@ function selectRailFilter(key: string, value: string) {
 onMounted(() => {
   initPageAction()
   void initData()
+})
+// A keyword from the search bar searches every folder; before the folders
+// arrive, the first load already reads it.
+usePageSearchIntent(AppPage.Favorites, (query) => {
+  if (favoriteView.value !== 'video')
+    handleFavoriteViewChange('video')
+  keyword.value = query
+  searchScope.value = 'all'
+  if (categoryState.loaded)
+    handleSearch()
+  else
+    filterKeyword.value = query
 })
 
 onScopeDispose(() => {
@@ -1075,9 +1089,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
                 :aria-pressed="isSelectedFavoriteResource(item)"
                 @click.prevent.stop="toggleFavoriteResourceSelection(item)"
               >
-                <Tooltip :content="$t('favorites.batch_select_item')" placement="bottom-left" type="dark">
-                  <div :class="isSelectedFavoriteResource(item) ? 'i-tabler:checkbox' : 'i-tabler:square'" />
-                </Tooltip>
+                <div :class="isSelectedFavoriteResource(item) ? 'i-tabler:checkbox' : 'i-tabler:square'" aria-hidden="true" />
               </button>
             </template>
           </VideoCardGrid>

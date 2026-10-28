@@ -179,7 +179,6 @@ function handleToggleHomeTab(tab: any) {
       <SettingsItem
         setting-id="page.home.gridLayout"
         :title="$t('settings.home_grid_layout')"
-        :desc="$t('settings.home_grid_layout_desc')"
         right-width="auto"
       >
         <SettingsSegmentedControl
@@ -204,8 +203,7 @@ function handleToggleHomeTab(tab: any) {
 
       <SettingsItem
         setting-id="page.home.recommendationSwitcher"
-        :title="$t('settings.show_recommendation_mode_switcher')"
-        :desc="$t('settings.show_recommendation_mode_switcher_desc')" right-width="auto"
+        :title="$t('settings.show_recommendation_mode_switcher')" right-width="auto"
       >
         <Radio v-model="settings.showRecommendationModeSwitcher" />
       </SettingsItem>
@@ -246,45 +244,23 @@ function handleToggleHomeTab(tab: any) {
         <Radio v-model="settings.autoSwitchRecommendationMode" />
       </SettingsItem>
 
-      <SettingsItem setting-id="settings.preserve_for_you_state" :title="$t('settings.preserve_for_you_state')" :desc="$t('settings.preserve_for_you_state_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.preserve_for_you_state" :title="$t('settings.preserve_for_you_state')" right-width="auto">
         <Radio v-model="settings.preserveForYouState" />
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup data-setting-id="settings.immersive_mode" :title="$t('settings.immersive_mode')">
-      <SettingsItem setting-id="settings.immersive_entry" :title="$t('settings.immersive_entry')" right-width="auto">
-        <Radio v-model="settings.showImmersiveModeEntry" />
-      </SettingsItem>
-      <template v-if="settings.showImmersiveModeEntry">
-        <SettingsItem setting-id="settings.immersive_wheel" :title="$t('settings.immersive_wheel')" right-width="auto">
-          <Radio v-model="settings.immersiveWheelSwitch" />
-        </SettingsItem>
-        <SettingsItem setting-id="settings.immersive_keyboard" :title="$t('settings.immersive_keyboard')" right-width="auto">
-          <Radio v-model="settings.immersiveKeyboardSwitch" />
-        </SettingsItem>
-        <SettingsItem setting-id="settings.immersive_autoplay" :title="$t('settings.immersive_autoplay')" right-width="auto">
-          <Radio v-model="settings.immersiveAutoPlay" />
-        </SettingsItem>
-        <SettingsItem setting-id="settings.immersive_auto_next" :title="$t('settings.immersive_auto_next')" right-width="auto">
-          <Radio v-model="settings.immersiveAutoNext" />
-        </SettingsItem>
-        <SettingsItem setting-id="settings.immersive_preload" :title="$t('settings.immersive_preload')" :desc="$t('settings.immersive_preload_desc')" right-width="auto">
-          <Radio v-model="settings.immersivePreloadNext" />
-        </SettingsItem>
-      </template>
-    </SettingsItemGroup>
     <SettingsItemGroup
       data-setting-id="settings.group_recommendation_filters" :title="$t('settings.group_recommendation_filters')"
       collapsible
       default-collapsed
     >
-      <SettingsItem setting-id="settings.disable_filters_for_followed_users" :title="$t('settings.disable_filters_for_followed_users')" :desc="$t('settings.disable_filters_for_followed_users_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.disable_filters_for_followed_users" :title="$t('settings.disable_filters_for_followed_users')" right-width="auto">
         <Radio v-model="settings.disableFilterForFollowedUser" />
       </SettingsItem>
       <SettingsItem setting-id="settings.filter_out_vertical_videos" :title="$t('settings.filter_out_vertical_videos')" right-width="auto">
         <Radio v-model="settings.filterOutVerticalVideos" />
       </SettingsItem>
-      <SettingsItem setting-id="settings.filter_by_view_count" :title="$t('settings.filter_by_view_count')" :desc="$t('settings.filter_by_view_count_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.filter_by_view_count" :title="$t('settings.filter_by_view_count')" right-width="auto">
         <div class="filter-control" :class="{ 'filter-control--enabled': settings.enableFilterByViewCount }" flex="~ justify-end">
           <Input
             v-if="settings.enableFilterByViewCount"
@@ -312,7 +288,7 @@ function handleToggleHomeTab(tab: any) {
           <Radio v-model="settings.enableFilterByLikeCount" />
         </div>
       </SettingsItem>
-      <SettingsItem setting-id="settings.filter_by_duration" :title="$t('settings.filter_by_duration')" :desc="$t('settings.filter_by_duration_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.filter_by_duration" :title="$t('settings.filter_by_duration')" right-width="auto">
         <div class="filter-control" :class="{ 'filter-control--enabled': settings.enableFilterByDuration }" flex="~ justify-end">
           <Input
             v-if="settings.enableFilterByDuration"
@@ -515,10 +491,10 @@ function handleToggleHomeTab(tab: any) {
       <SettingsItem setting-id="settings.following_tab_show_livestreaming_videos" :title="$t('settings.following_tab_show_livestreaming_videos')" right-width="auto">
         <Radio v-model="settings.followingTabShowLivestreamingVideos" />
       </SettingsItem>
-      <SettingsItem setting-id="settings.following_filter_charging_videos" :title="$t('settings.following_filter_charging_videos')" :desc="$t('settings.following_filter_charging_videos_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.following_filter_charging_videos" :title="$t('settings.following_filter_charging_videos')" right-width="auto">
         <Radio v-model="settings.followingFilterChargingVideos" />
       </SettingsItem>
-      <SettingsItem setting-id="settings.following_filter_dynamic_videos" :title="$t('settings.following_filter_dynamic_videos')" :desc="$t('settings.following_filter_dynamic_videos_desc')" right-width="auto">
+      <SettingsItem setting-id="settings.following_filter_dynamic_videos" :title="$t('settings.following_filter_dynamic_videos')" right-width="auto">
         <Radio v-model="settings.followingFilterDynamicVideos" />
       </SettingsItem>
     </SettingsItemGroup>

@@ -91,7 +91,6 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 
       <SettingsItemSubgroup
         data-setting-id="settings.group_playback_memory" :title="t('settings.group_playback_memory')"
-        :desc="t('settings.group_playback_memory_desc')"
       >
         <div class="video-setting-tags" role="group" :aria-label="t('settings.group_playback_memory')">
           <SettingsToggleTag
@@ -109,11 +108,9 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 
       <SettingsItemSubgroup
         data-setting-id="settings.group_video_page_actions" :title="t('settings.group_video_page_actions')"
-        :desc="t('settings.group_video_page_actions_desc')"
       >
         <SettingsItem
           setting-id="settings.enlarge_favorite_dialog" :title="t('settings.enlarge_favorite_dialog')"
-          :desc="t('settings.enlarge_favorite_dialog_desc')"
           right-width="auto"
         >
           <Radio v-model="settings.enlargeFavoriteDialog" />
@@ -121,7 +118,6 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 
         <SettingsItem
           setting-id="settings.external_watch_later_button" :title="t('settings.external_watch_later_button')"
-          :desc="t('settings.external_watch_later_button_desc')"
           right-width="auto"
         >
           <Radio v-model="settings.externalWatchLaterButton" />
@@ -129,7 +125,6 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 
         <SettingsItem
           setting-id="settings.show_vertical_video_zoom_button" :title="t('settings.show_vertical_video_zoom_button')"
-          :desc="t('settings.show_vertical_video_zoom_button_desc')"
           right-width="auto"
         >
           <Radio v-model="settings.showVerticalVideoZoomButton" />
@@ -137,7 +132,7 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 
         <SettingsItem
           setting-id="settings.show_video_screenshot_button" :title="t('settings.show_video_screenshot_button')"
-          :desc="`${t('settings.show_video_screenshot_button_desc')} ${t('settings.player_extra_controls_hint')}`"
+          :desc="t('settings.player_extra_controls_hint')"
           right-width="auto"
         >
           <Radio v-model="settings.showVideoScreenshotButton" />

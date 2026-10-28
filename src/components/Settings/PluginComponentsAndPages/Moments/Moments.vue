@@ -101,7 +101,6 @@ const gridColumnOptions = computed(() => [
       <SettingsItem
         setting-id="settings.original_moments_visible_components"
         :title="$t('settings.moments_visible_components')"
-        :desc="$t('settings.moments_visible_components_original_desc')"
       >
         <template #bottom>
           <div class="moment-setting-tags" role="group" :aria-label="$t('settings.moments_visible_components')">
@@ -118,14 +117,9 @@ const gridColumnOptions = computed(() => [
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup
-      data-setting-id="settings.group_new_moments_page" :title="$t('settings.group_new_moments_page')"
-      :desc="$t('settings.group_new_moments_page_desc')"
-      warning-desc
-    >
+    <SettingsItemGroup data-setting-id="settings.group_new_moments_page" :title="$t('settings.group_new_moments_page')">
       <SettingsItem
         setting-id="page.moments.sidebar" :title="$t('settings.moments_visible_components')"
-        :desc="$t('settings.moments_visible_components_plugin_desc')"
       >
         <template #bottom>
           <div class="moment-setting-tags" role="group" :aria-label="$t('settings.moments_visible_components')">
@@ -161,14 +155,12 @@ const gridColumnOptions = computed(() => [
       </SettingsItem>
       <SettingsItem
         setting-id="settings.moments_enable_live_preview" :title="$t('settings.moments_enable_live_preview')"
-        :desc="$t('settings.moments_enable_live_preview_desc')"
         right-width="auto"
       >
         <Radio v-model="settings.momentsEnableLivePreview" />
       </SettingsItem>
       <SettingsItem
         setting-id="settings.moments_enable_video_preview" :title="$t('settings.moments_enable_video_preview')"
-        :desc="$t('settings.moments_enable_video_preview_desc')"
         right-width="auto"
       >
         <Radio v-model="settings.momentsEnableVideoPreview" />
