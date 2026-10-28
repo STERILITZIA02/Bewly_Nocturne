@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import IconButton from '~/components/IconButton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useComposerPicker } from '~/composables/useComposerPicker'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -286,9 +287,9 @@ onBeforeUnmount(() => {
       <span>
         {{ title }}
       </span>
-      <button type="button" :disabled="editLocked" :aria-label="t('moment_card.reply_cancel_target')" @click="close(); focusInput()">
-        <i i-tabler-x />
-      </button>
+      <IconButton class="moment-reply__tool" :disabled="editLocked" :label="t('moment_card.reply_cancel_target')" @click="close(); focusInput()">
+        <i i-tabler-x aria-hidden="true" />
+      </IconButton>
     </header>
     <form @submit.prevent="submit">
       <textarea
@@ -300,21 +301,21 @@ onBeforeUnmount(() => {
       <div v-if="richComment && pictures.length" class="moment-reply__pictures">
         <div v-for="(picture, index) in pictures" :key="picture.url">
           <img :src="picture.url" :alt="picture.file.name">
-          <button type="button" :disabled="pending" :aria-label="t('moment_card.reply_remove_image')" @click="removePicture(index)">
-            <i i-tabler-x />
-          </button>
+          <IconButton class="moment-reply__remove" shape="smooth-rect" :disabled="pending" :label="t('moment_card.reply_remove_image')" @click="removePicture(index)">
+            <i i-tabler-x aria-hidden="true" />
+          </IconButton>
         </div>
       </div>
       <div class="moment-reply__tools">
-        <button type="button" :disabled="pending || uncertain" :aria-label="t('moment_card.reply_emoji')" :aria-expanded="picker === 'emoji'" @click="togglePicker('emoji')">
-          <i i-tabler-mood-smile />
-        </button>
-        <button type="button" :disabled="pending || uncertain" :aria-label="t('moment_card.reply_mention')" :aria-expanded="picker === 'mention'" @click="togglePicker('mention')">
-          <i i-tabler-at />
-        </button>
-        <button v-if="richComment" type="button" :disabled="pending || addingImages || uncertain" :aria-label="t('moment_card.reply_image')" @click="imageInput?.click()">
-          <i i-tabler-photo />
-        </button>
+        <IconButton class="moment-reply__tool" :disabled="pending || uncertain" :label="t('moment_card.reply_emoji')" :aria-expanded="picker === 'emoji'" @click="togglePicker('emoji')">
+          <i i-tabler-mood-smile aria-hidden="true" />
+        </IconButton>
+        <IconButton class="moment-reply__tool" :disabled="pending || uncertain" :label="t('moment_card.reply_mention')" :aria-expanded="picker === 'mention'" @click="togglePicker('mention')">
+          <i i-tabler-at aria-hidden="true" />
+        </IconButton>
+        <IconButton v-if="richComment" class="moment-reply__tool" :disabled="pending || addingImages || uncertain" :label="t('moment_card.reply_image')" @click="imageInput?.click()">
+          <i i-tabler-photo aria-hidden="true" />
+        </IconButton>
         <input
           ref="imageInput" type="file" accept="image/jpeg,image/png" multiple hidden
           @change="addImages"
@@ -388,34 +389,28 @@ onBeforeUnmount(() => {
   margin-top: var(--bew-space-2);
   flex-wrap: wrap;
 }
-.moment-reply button:not(.bew-send-button) {
-  display: inline-grid;
-  place-items: center;
-  min-width: var(--bew-control-height-sm);
-  min-height: var(--bew-control-height-sm);
-  border-radius: var(--bew-interactive-radius);
-  color: var(--bew-text-2);
+.moment-reply__tool {
+  @include composer.tool;
 }
-.moment-reply button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.moment-reply button:not(.bew-send-button, .moment-reply__sync):not(:disabled):hover {
-  background: var(--bew-hover-bg);
-  color: var(--bew-text-1);
-}
-.moment-reply button.moment-reply__sync {
+.moment-reply__sync {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--bew-space-1);
+  min-height: var(--bew-control-height-sm);
   padding-inline: var(--bew-space-2);
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
   font-size: var(--bew-font-size-caption);
   color: var(--bew-text-3);
   background: transparent;
   transition: color var(--bew-duration-fast) ease;
 }
-.moment-reply .moment-reply__sync[aria-pressed="true"] {
+.moment-reply__sync:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.moment-reply__sync[aria-pressed="true"] {
   color: var(--bew-text-1);
 }
 .moment-reply .moment-reply__sync:not(:disabled):hover {
@@ -461,11 +456,13 @@ onBeforeUnmount(() => {
   object-fit: cover;
   border-radius: var(--bew-thumb-radius);
 }
-.moment-reply__pictures button {
+// In the thumbnail's corner, concentric with it: thumb radius 12 − inset 4 = 8.
+.moment-reply__remove {
+  @include composer.attachment-remove;
   position: absolute;
-  top: 0;
-  right: 0;
-  background: var(--bew-content-solid);
+  top: var(--bew-space-1);
+  right: var(--bew-space-1);
+  border-radius: var(--bew-interactive-radius);
 }
 .moment-reply__error {
   margin-top: var(--bew-space-2);

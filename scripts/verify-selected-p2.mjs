@@ -21,6 +21,7 @@ import { registerFourFeatureChecks } from './verify-four-features.mjs'
 import { registerFrostedGlassSurfaceChecks } from './verify-frosted-glass-surfaces.mjs'
 import { registerGlobalResourceChecks } from './verify-global-resources.mjs'
 import { registerHomeLoadingRegressionChecks } from './verify-home-loading-regressions.mjs'
+import { registerImageViewerChecks } from './verify-image-viewer.mjs'
 import { registerImmersiveAndControlChecks } from './verify-immersive-and-controls.mjs'
 import { registerLibraryMemoryChecks } from './verify-library-memory.mjs'
 import { registerLibraryToolChecks } from './verify-library-tools.mjs'
@@ -122,6 +123,7 @@ registerMomentsMaintenanceChecks(check, { Vue, compileComponent, flush })
 registerMomentReplyChecks(check, { Vue, compileComponent, flush })
 registerNativeAppearanceChecks(check, { Vue, compileComponent, flush })
 registerLibraryToolChecks(check, { Vue, compileComponent, flush })
+registerImageViewerChecks(check, { Vue, compileComponent, flush })
 registerSidebarContinuityChecks(check, { Vue, compileComponent, flush })
 registerTypographyChecks(check)
 registerLibraryMemoryChecks(check, { Vue, compileComponent, flush })

@@ -1,6 +1,6 @@
 import type { DisplayMoment, DisplayRichTextSegment } from '~/components/MomentCard/types'
-import { formatCount } from '~/components/MomentCard/utils'
 import type { DataItem } from '~/models/moment/moment'
+import { numFormatter } from '~/utils/dataFormatter'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '~/utils/momentAdditionalPolicy'
 import { resolveMomentTextSources } from '~/utils/momentDescription'
 import { resolveMomentMoreCapability } from '~/utils/momentMoreCapability'
@@ -207,7 +207,7 @@ export function createMomentAdapter(
       || {}
     const liveArea = pickText(live?.area_name, live?.desc_first)
     const livePopularity = live?.online
-      ? t('moments.live_popularity', { count: formatCount(Number(live.online)) })
+      ? t('moments.live_popularity', { count: numFormatter(live.online) })
       : pickText(live?.desc_second)
 
     const chargeBadge = pickText(iconBadge.text, isChargeExclusive ? t('moments.charge_exclusive') : '')

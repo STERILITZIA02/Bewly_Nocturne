@@ -18,3 +18,7 @@ export const IFRAME_TOP_BAR_CHANGE = 'iframeTopBarChange'
 export const IFRAME_NAVIGATION_REQUEST = 'bewlyIframeNavigationRequest'
 export const IFRAME_NAVIGATION_ACK = 'bewlyIframeNavigationAck'
 export const IFRAME_PLAYER_CONTEXT = 'bewlyIframePlayerContext'
+/** An embedded page asks its Bewly parent to show the shared image viewer. */
+export const IFRAME_IMAGE_VIEWER_OPEN = 'BEWLY_OPUS_IMAGE_VIEWER_OPEN'
+export const IFRAME_IMAGE_VIEWER_ACK = 'BEWLY_OPUS_IMAGE_VIEWER_ACK'
+export const IFRAME_IMAGE_VIEWER_CLOSE = 'BEWLY_OPUS_IMAGE_VIEWER_CLOSE'

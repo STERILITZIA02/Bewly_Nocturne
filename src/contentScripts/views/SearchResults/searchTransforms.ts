@@ -1,11 +1,7 @@
 import type { Video } from '~/components/VideoCard/types'
 import { isBilibiliAdvertisement, toAdvertisementCard } from '~/utils/advertising'
-import { numFormatter, parseStatNumber } from '~/utils/dataFormatter'
+import { parseStatNumber } from '~/utils/dataFormatter'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
-
-export function formatNumber(num?: number): string {
-  return numFormatter(num ?? 0)
-}
 
 export function removeHighlight(text?: string): string {
   if (typeof text !== 'string' || !text)

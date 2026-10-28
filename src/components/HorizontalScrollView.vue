@@ -1,58 +1,68 @@
 <script setup lang="ts">
-import type { Ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { settings } from '~/logic'
-import { normalizeWheelDelta } from '~/utils/wheelStep'
+import { createElasticWheelScroll } from '~/utils/elasticScroll'
 
-const scrollListWrap = ref<HTMLElement>() as Ref<HTMLElement>
-const showScrollMask = ref<boolean>(true)
-
-watch([() => settings.value.enableHorizontalScrolling, scrollListWrap], ([enabled, element], _previous, onCleanup) => {
-  if (!enabled || !element)
-    return
-
-  element.addEventListener('wheel', handleMouseScroll, { passive: false })
-  onCleanup(() => element.removeEventListener('wheel', handleMouseScroll))
+/**
+ * A sideways row with the shared horizontal behaviour: trackpad swipes scroll
+ * it with elastic ends (`elasticScroll`), and its ends fade only while more of
+ * the row lies beyond them (`scrollEdgeFade.horizontal`). With the horizontal
+ * scrolling preference on, vertical mouse wheels scroll it too, handing back
+ * to the page once the row reaches that end.
+ */
+const scroller = ref<HTMLElement>()
+const track = ref<HTMLElement>()
+let elastic: ReturnType<typeof createElasticWheelScroll> | undefined
+onMounted(() => {
+  elastic = createElasticWheelScroll(scroller.value!, track.value!)
 })
+onBeforeUnmount(() => elastic?.dispose())
 
-function handleMouseScroll(event: WheelEvent) {
-  const element = event.currentTarget as HTMLElement
-  if (event.ctrlKey || event.defaultPrevented || Math.abs(event.deltaX) > Math.abs(event.deltaY))
+function handleWheel(event: WheelEvent) {
+  const element = scroller.value
+  if (!element)
     return
-  const maxScrollLeft = element.scrollWidth - element.clientWidth
-  if (maxScrollLeft <= 0 || event.deltaY === 0
-    || (event.deltaY < 0 && element.scrollLeft <= 0)
-    || (event.deltaY > 0 && element.scrollLeft >= maxScrollLeft)) {
-    return
+  if (Math.abs(event.deltaY) >= Math.abs(event.deltaX)) {
+    const end = element.scrollWidth - element.clientWidth
+    if (!settings.value.enableHorizontalScrolling
+      || (event.deltaY < 0 && element.scrollLeft <= 0)
+      || (event.deltaY > 0 && element.scrollLeft >= end - 1)) {
+      return
+    }
   }
-
-  event.preventDefault()
-  element.scrollLeft += normalizeWheelDelta(event.deltaY, event.deltaMode, element.clientWidth)
+  elastic?.handleWheel(event)
 }
 
-defineExpose({ getScrollElement: () => scrollListWrap.value })
+defineExpose({ getScrollElement: () => scroller.value ?? null })
 </script>
 
 <template>
-  <div relative>
-    <div
-      ref="scrollListWrap"
-      w="[calc(100%+80px)]"
-      h="[calc(100%+40px)]"
-      m="x--40px y--20px" p="x-40px y-20px"
-      overflow-x-scroll
-      overflow-y-hidden
-      relative
-      :class="{ 'scroll-mask': showScrollMask }"
-    >
-      <slot />
+  <div class="horizontal-scroll-view">
+    <div ref="scroller" class="horizontal-scroll-view__scroller" @wheel="handleWheel">
+      <div ref="track">
+        <slot />
+      </div>
     </div>
   </div>
 </template>
 
-<style lang="scss" scoped>
-.scroll-mask {
-  mask-image: linear-gradient(to right, transparent 0, black 40px, black calc(100% - 40px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0, black 40px, black calc(100% - 40px), transparent 100%);
+<style scoped lang="scss">
+@use "../styles/scrollEdgeFade";
+
+.horizontal-scroll-view {
+  position: relative;
+}
+
+// The scroller reaches past the row on every side so hover lifts and shadows
+// of the cards are not clipped; the padding returns the content to its place.
+.horizontal-scroll-view__scroller {
+  position: relative;
+  width: calc(100% + var(--bew-space-10) * 2);
+  margin: calc(var(--bew-space-5) * -1) calc(var(--bew-space-10) * -1);
+  padding: var(--bew-space-5) var(--bew-space-10);
+  overflow: auto hidden;
+  overscroll-behavior-x: contain;
+  @include scrollEdgeFade.horizontal;
 }
 </style>

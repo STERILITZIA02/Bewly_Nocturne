@@ -207,7 +207,7 @@ export interface Settings {
   maxPrivateMessagesPerConversation: 100 | 200 | 500
   maxCachedPrivateConversations: 5 | 10 | 20
   privateMessageMobileOpenMode: PrivateMessageMobileOpenMode
-  hideTopBarUserPanelLv6LastLoginLocation: boolean
+  hideTopBarUserPanelLastLogin: boolean
   showBCoinReceiveReminder: boolean
   autoReceiveBCoinCoupon: boolean
   autoReceiveVipExp: boolean
@@ -492,7 +492,7 @@ export const originalSettings: Settings = {
   maxPrivateMessagesPerConversation: 200,
   maxCachedPrivateConversations: 10,
   privateMessageMobileOpenMode: 'list',
-  hideTopBarUserPanelLv6LastLoginLocation: false,
+  hideTopBarUserPanelLastLogin: false,
   showBCoinReceiveReminder: true,
   autoReceiveBCoinCoupon: false,
   autoReceiveVipExp: false,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Button from '~/components/Button.vue'
+import FrameActions from '~/components/FrameActions.vue'
 import { useDark } from '~/composables/useDark'
 import { applyAppearanceStyle } from '~/utils/appearance'
 import { applyMotionPreference } from '~/utils/reducedMotion'
@@ -111,9 +111,10 @@ async function openPipWindow() {
   }
 }
 
-function handleOpenInNewTab() {
-  window.open(currentUrl.value, '_blank')
-  handleClose()
+function openInNewTab(event: MouseEvent) {
+  event.preventDefault()
+  window.open(currentUrl.value, '_blank', 'noopener,noreferrer')
+  void handleClose()
 }
 
 async function handleClose() {
@@ -161,33 +162,7 @@ async function releaseIframeResources() {
         w-full h="$bew-top-bar-height"
         pointer-events-none
       >
-        <Button
-          style="
-              --b-button-color: var(--bew-elevated-solid);
-              --b-button-color-hover: var(--bew-elevated-solid-hover);
-            "
-          pointer-events-auto
-          @click="handleOpenInNewTab"
-        >
-          <template #left>
-            <i i-tabler:external-link />
-          </template>
-          {{ $t('iframe_drawer.open_in_new_tab') }}
-        </Button>
-        <Button
-          style="
-            --b-button-color: var(--bew-elevated-solid);
-            --b-button-color-hover: var(--bew-elevated-solid-hover);
-          "
-          pointer-events-auto
-          mr-8
-          @click="handleClose"
-        >
-          <template #left>
-            <i i-tabler:x />
-          </template>
-          {{ $t('iframe_drawer.close') }}
-        </Button>
+        <FrameActions :href="currentUrl" mr-8 @open="openInNewTab" @close="handleClose" />
       </div>
       <iframe
         ref="iframeRef"

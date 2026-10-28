@@ -11,6 +11,7 @@ import Dock from '~/components/Dock/Dock.vue'
 import ElementSettingsContextMenu from '~/components/ElementSettingsContextMenu.vue'
 import IframeDrawer from '~/components/IframeDrawer.vue'
 import IframePage from '~/components/IframePage.vue'
+import ImageViewerHost from '~/components/ImageViewer/ImageViewerHost.vue'
 import LayoutEditorOverlay from '~/components/LayoutEditorOverlay.vue'
 import LocalLoudnessPanel from '~/components/LocalLoudnessPanel.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
@@ -1043,6 +1044,7 @@ onBeforeUnmount(stopUrlCleaner)
       :message="activeConfirmDialog.message"
       @finish="confirmDialogHost.finish"
     />
+    <ImageViewerHost />
   </div>
 </template>
 

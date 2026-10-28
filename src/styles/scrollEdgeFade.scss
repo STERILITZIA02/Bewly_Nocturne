@@ -63,6 +63,51 @@
   }
 }
 
+// Sideways twin for horizontal rows: the start and end fade only while more
+// of the row lies beyond them, driven by the inline scroll timeline with the
+// same registered numbers and keyframes as the vertical edges.
+@mixin horizontal {
+  --bew-scroll-edge-size: min(var(--bew-space-10), 12%);
+  --bew-scroll-edge-ramp: var(--bew-space-6);
+  --bew-scroll-edge-start-mask: linear-gradient(
+    90deg,
+    rgb(0 0 0 / var(--bew-scroll-edge-top-clear)) 0,
+    transparent var(--bew-scroll-edge-size)
+  );
+  --bew-scroll-edge-end-mask: linear-gradient(
+    270deg,
+    rgb(0 0 0 / var(--bew-scroll-edge-bottom-clear)) 0,
+    transparent var(--bew-scroll-edge-size)
+  );
+  --bew-scroll-edge-base-mask: linear-gradient(
+    90deg,
+    transparent 0,
+    rgb(0 0 0 / 16%) calc(var(--bew-scroll-edge-size) * 0.18),
+    rgb(0 0 0 / 48%) calc(var(--bew-scroll-edge-size) * 0.45),
+    rgb(0 0 0 / 78%) calc(var(--bew-scroll-edge-size) * 0.73),
+    #000 var(--bew-scroll-edge-size),
+    #000 calc(100% - var(--bew-scroll-edge-size)),
+    rgb(0 0 0 / 78%) calc(100% - var(--bew-scroll-edge-size) * 0.73),
+    rgb(0 0 0 / 48%) calc(100% - var(--bew-scroll-edge-size) * 0.45),
+    rgb(0 0 0 / 16%) calc(100% - var(--bew-scroll-edge-size) * 0.18),
+    transparent 100%
+  );
+
+  @supports (animation-timeline: scroll()) {
+    -webkit-mask-image:
+      var(--bew-scroll-edge-start-mask), var(--bew-scroll-edge-end-mask), var(--bew-scroll-edge-base-mask);
+    mask-image: var(--bew-scroll-edge-start-mask), var(--bew-scroll-edge-end-mask), var(--bew-scroll-edge-base-mask);
+    mask-repeat: no-repeat;
+    animation:
+      bew-scroll-edge-top linear both,
+      bew-scroll-edge-bottom linear both;
+    animation-timeline: scroll(self inline), scroll(self inline);
+    animation-range:
+      0 var(--bew-scroll-edge-ramp),
+      calc(100% - var(--bew-scroll-edge-ramp)) 100%;
+  }
+}
+
 // Left rails (user-specified) never fade: a mask dims their rows' icons and
 // washes out previews and covers at the edges. Instead, while more of the list
 // lies beyond an edge, a hairline closes that edge (`--bew-separator-color`),

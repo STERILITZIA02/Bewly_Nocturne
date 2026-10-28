@@ -552,7 +552,8 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       './useConversationViewport': await loadSourceModule(`${path}useConversationViewport.ts`, { vue: Vue, './conversationExpansion': await import(`${path}conversationExpansion`) }, clock),
       './useConversationPresentation': await loadSourceModule(`${path}useConversationPresentation.ts`, { vue: Vue, '~/constants/layout': await import('../src/constants/layout'), './conversationExpansion': await import(`${path}conversationExpansion`) }, clock),
       './experimental/MessageComposer.vue': { default: Composer },
-      './PrivateMessageImageViewer.vue': { default: blank },
+      '~/composables/useImageViewer': { useImageViewer: () => ({ isOpen: Vue.ref(false), open: () => true, close() {} }) },
+      '~/utils/imageViewer': await import('../src/utils/imageViewer'),
       './PrivateMessageItem.vue': { default: Item },
     }, { globals: clock })
     const host = document.body.appendChild(document.createElement('div'))

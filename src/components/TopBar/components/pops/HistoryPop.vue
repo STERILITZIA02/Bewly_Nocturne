@@ -355,10 +355,10 @@ defineExpose({
                   <span v-else-if="activatedTab !== 1">{{ useDateFormat(historyItem.view_at * 1000, 'MM-DD HH:mm').value }}</span>
                 </p>
                 <div class="popover-card__actions">
-                  <Tooltip :content="$t('common.operation.delete')" placement="top" teleport>
+                  <Tooltip :content="$t('history.remove_from_history')" placement="top" teleport>
                     <IconButton
                       class="popover-card__interactive bew-popover__action bew-popover__action--danger"
-                      :label="$t('common.operation.delete')"
+                      :label="$t('history.remove_from_history')"
                       :disabled="pendingRemovals.has(`${currentAccountId}:${getHistoryItemKey(historyItem)}`)"
                       @click.stop.prevent="deleteHistoryItem(historyItem, $event)"
                     >

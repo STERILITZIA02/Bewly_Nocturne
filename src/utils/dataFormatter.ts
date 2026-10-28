@@ -40,7 +40,11 @@ export function parseStatNumber(value?: number | string | null): number | undefi
   return numeric * multiplier
 }
 
-export function numFormatter(num: number | string): string {
+/** A compact count in the interface language (1.2 万, 1.2K); input that is not a count is shown as given. */
+export function numFormatter(num: number | string | null | undefined): string {
+  const value = parseStatNumber(num)
+  if (value === undefined)
+    return typeof num === 'string' && num.trim() ? num.trim() : '0'
   const digits = 1 // specify number of digits after decimal
   let lookup
 
@@ -69,14 +73,10 @@ export function numFormatter(num: number | string): string {
     ]
   }
   const rx = /\.0+$|(\.\d*[1-9])0+$/
-  if (typeof num === 'string') {
-    const parsed = parseStatNumber(num)
-    num = typeof parsed === 'number' ? parsed : Number(num)
-  }
   const item = lookup.slice().reverse().find((item) => {
-    return num >= item.value
+    return value >= item.value
   })
-  return item ? (num / item.value).toFixed(digits).replace(rx, '$1') + item.symbol : '0'
+  return item ? (value / item.value).toFixed(digits).replace(rx, '$1') + item.symbol : '0'
 }
 
 export function calcTimeSince(date: number | string | Date) {

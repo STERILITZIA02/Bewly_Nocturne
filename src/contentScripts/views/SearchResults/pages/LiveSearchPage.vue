@@ -10,13 +10,14 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { useUserRelations } from '~/composables/useUserRelations'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
+import { numFormatter } from '~/utils/dataFormatter'
 
 import Pagination from '../components/Pagination.vue'
 import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useLoadMore } from '../composables/useLoadMore'
 import { refreshSearchPage, usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
-import { convertLiveRoomData, convertUserCardData, formatNumber } from '../searchTransforms'
+import { convertLiveRoomData, convertUserCardData } from '../searchTransforms'
 import type { LiveSearchFilters } from '../types'
 import { dedupeByKey } from '../utils/searchHelpers'
 
@@ -137,7 +138,7 @@ const showEmptyState = computed(() => {
 })
 
 function formatResultCount(count: number): string {
-  return formatNumber(count)
+  return numFormatter(count)
 }
 
 // Transform 函数：数据已经转换过了，直接返回

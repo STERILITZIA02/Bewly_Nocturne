@@ -395,19 +395,6 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 }
 
 .message-composer__action {
-  flex: 0 0 auto;
-  width: var(--bew-control-height-sm);
-  height: var(--bew-control-height-sm);
-  color: var(--bew-text-2);
-  background: transparent;
-}
-
-.message-composer__action:hover:not(:disabled) {
-  color: var(--bew-text-1);
-  background: var(--bew-hover-bg);
-}
-
-.message-composer__action i {
-  font-size: var(--bew-icon-size-sm);
+  @include composer.tool;
 }
 </style>

@@ -403,7 +403,7 @@ const entries: SettingsSearchEntry[] = [
   }),
   ...createEntries(topBarRoute, [
     'settings.topbar_user_menu',
-    'settings.hide_lv6_last_login_location_in_top_bar_user_pop',
+    'settings.hide_last_login_in_top_bar_user_pop',
   ]),
   ...createEntries(topBarRoute, [
     'settings.group_link_opening_behavior',

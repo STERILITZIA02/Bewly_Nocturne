@@ -4,17 +4,18 @@ import { useI18n } from 'vue-i18n'
 import ChevronIcon from '~/components/ChevronIcon.vue'
 import Empty from '~/components/Empty.vue'
 import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
+import { useImageViewer } from '~/composables/useImageViewer'
 import { useSurfaceMorph } from '~/composables/useSurfaceMorph'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { normalizeImageViewerUrl } from '~/utils/imageViewer'
 
 import ConversationFind from './ConversationFind.vue'
 import MessageComposer from './experimental/MessageComposer.vue'
 import type { DisplayPrivateMessage as OptimisticPrivateMessage } from './experimental/privateMessageTransactions'
 import type { PrivateMessageWritesController as PrivateMessageWriteController } from './experimental/privateMessageWriteTypes'
 import type { DisplayPrivateMessage } from './privateMessage'
-import PrivateMessageImageViewer from './PrivateMessageImageViewer.vue'
 import PrivateMessageItem from './PrivateMessageItem.vue'
 import type { TransientPrivateRecipient } from './privateRecipientSearch'
 import type { DisplayPrivateSession } from './privateSession'
@@ -63,7 +64,6 @@ const composerRef = ref<HTMLElement | null>(null)
 const navigationRef = ref<HTMLElement | null>(null)
 useSurfaceMorph(navigationRef, () => props.searchMode)
 
-const previewImage = ref('')
 const highlightedMessage = ref('')
 let searchViewportOwned = Boolean(props.searchMode)
 const searchContext = computed(() => props.searchMode && props.historySearch?.state.context?.talkerId === talkerId.value ? props.historySearch.state.context : null)
@@ -99,6 +99,20 @@ const timelineItems = computed<Array<DisplayPrivateMessage | OptimisticPrivateMe
   ))
 })
 const galleryImages = computed(() => [...new Set(timelineItems.value.flatMap(message => message.content.type === 'image' || message.content.type === 'emoticon' ? [message.content.src] : []))])
+// The gallery is a snapshot: trimming older messages never drops the image in view.
+const imageViewer = useImageViewer()
+let previewGallery: string[] = []
+function previewImage(src: string, trigger: HTMLElement) {
+  previewGallery = galleryImages.value
+  imageViewer.open({
+    urls: previewGallery,
+    index: Math.max(0, previewGallery.indexOf(src)),
+    trigger,
+    getOrigin: (_index, url) => Array.from(conversationViewRef.value?.querySelectorAll<HTMLElement>('[data-image-src]') ?? [])
+      .find(button => normalizeImageViewerUrl(button.dataset.imageSrc) === url)
+      ?.getBoundingClientRect(),
+  })
+}
 const draft = computed({
   get: () => writeState.value?.draft ?? '',
   set: value => props.writeController?.setDraft(talkerId.value, value),
@@ -398,7 +412,7 @@ function handleEscape() {
 
 watch(talkerId, (_, previousTalkerId) => {
   saveViewportState(undefined, undefined, previousTalkerId)
-  previewImage.value = ''
+  imageViewer.close()
   highlightedMessage.value = ''
   activationGeneration++
   conversationActivationPending = true
@@ -435,13 +449,14 @@ watch(() => [props.searchMode, props.historySearch?.state.selectedKey, props.his
   }
 }, { flush: 'post' })
 watch(() => writeState.value?.imageDraft?.objectUrl ?? '', (nextUrl, previousUrl) => {
-  if (previousUrl && previewImage.value === previousUrl && nextUrl !== previousUrl)
-    previewImage.value = ''
+  // A replaced draft revokes its object URL; a viewer still showing it would break.
+  if (previousUrl && nextUrl !== previousUrl && previewGallery.includes(previousUrl))
+    imageViewer.close()
 })
 
 watch(() => props.active, (active) => {
   if (!active) {
-    previewImage.value = ''
+    imageViewer.close()
     highlightedMessage.value = ''
     activationGeneration++
     conversationActivationPending = false
@@ -557,7 +572,7 @@ defineExpose({
                   :sender-avatar-url="message.isSelf ? selfAvatarUrl : avatarUrl"
                   :sender-name="message.isSelf ? selfDisplayName : displayName"
                   @delete-failed="deleteFailed"
-                  @preview="previewImage = $event"
+                  @preview="previewImage"
                   @retry-failed="retryFailed"
                 />
               </div>
@@ -631,13 +646,6 @@ defineExpose({
         </span>
       </div>
     </footer>
-
-    <PrivateMessageImageViewer
-      v-if="previewImage"
-      :src="previewImage"
-      :images="galleryImages"
-      @close="previewImage = ''"
-    />
   </section>
 </template>
 

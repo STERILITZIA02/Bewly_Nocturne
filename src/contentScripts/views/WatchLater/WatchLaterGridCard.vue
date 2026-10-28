@@ -80,10 +80,10 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
             <span class="watch-later-grid-card__icon i-tabler:list-check" aria-hidden="true" />
           </IconButton>
         </Tooltip>
-        <Tooltip :content="$t('watch_later.remove_from_watch_later')" placement="top" teleport>
+        <Tooltip :content="$t('common.remove_from_watch_later')" placement="top" teleport>
           <IconButton
             class="watch-later-grid-card__action"
-            :label="$t('watch_later.remove_from_watch_later')"
+            :label="$t('common.remove_from_watch_later')"
             :disabled="disabled"
             @click="emit('remove', item)"
           >

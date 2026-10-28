@@ -24,7 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'deleteFailed', localId: string, msgType: number): void
-  (event: 'preview', src: string): void
+  (event: 'preview', src: string, trigger: HTMLElement): void
   (event: 'retryFailed', localId: string, msgType: number): void
 }>()
 
@@ -104,7 +104,7 @@ const deliveryLabel = computed(() => {
         :auto-load-images="autoLoadImages"
         :content="message.content"
         :is-self="message.isSelf"
-        @preview="emit('preview', $event)"
+        @preview="(src, trigger) => emit('preview', src, trigger)"
       />
       <span v-if="message.source" class="private-message-item__source">{{ sourceLabel }}</span>
     </div>
@@ -137,7 +137,7 @@ const deliveryLabel = computed(() => {
             :auto-load-images="autoLoadImages"
             :content="message.content"
             :is-self="message.isSelf"
-            @preview="emit('preview', $event)"
+            @preview="(src, trigger) => emit('preview', src, trigger)"
           />
 
           <div v-if="message.source || displayTime || message.isSelf" class="private-message-item__metadata">

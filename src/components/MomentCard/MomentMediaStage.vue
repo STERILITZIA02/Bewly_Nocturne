@@ -3,7 +3,9 @@ import type { ComponentPublicInstance } from 'vue'
 import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import LiveMark from '~/components/LiveMark.vue'
 import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
+import { useImageViewer } from '~/composables/useImageViewer'
 import { usePictureReveal } from '~/composables/usePictureReveal'
 import { getCrossfadeDuration, showCrossfadeLayer } from '~/utils/crossfadeLayers'
 import { createElasticWheelScroll } from '~/utils/elasticScroll'
@@ -14,7 +16,7 @@ import { isPortraitRatio, PORTRAIT_MAX_CLEAR_HEIGHT } from '~/utils/portraitMedi
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { createSideSwipe } from '~/utils/sideSwipe'
 
-import { getMomentThumbnailSrcset, getMomentThumbnailUrl } from './utils'
+import { getMomentOriginalImageUrl, getMomentThumbnailSrcset, getMomentThumbnailUrl } from './utils'
 
 // The media at the top of a moment card, and of a quoted moment inside one: a
 // video or live cover, or an image post's images, edge to edge with its top
@@ -58,7 +60,6 @@ const {
 const emit = defineEmits<{
   shown: [index: number]
   firstLoad: [event: Event]
-  preview: [index: number, trigger: HTMLElement]
   coverClick: [event: MouseEvent]
   coverEnter: [event: MouseEvent]
   coverLeave: []
@@ -178,10 +179,21 @@ function handleImageLoad(index: number, event: Event) {
     showImage(index)
 }
 
+// The full-size images open in the shared viewer, growing out of this stage;
+// closing shows the last viewed image here, so the viewer lands back on it.
+const imageViewer = useImageViewer()
 function handleImageClick(index: number, event: MouseEvent) {
   if (imageSwipe.consumeClick())
     return
-  emit('preview', index, event.currentTarget as HTMLElement)
+  const trigger = event.currentTarget as HTMLElement
+  imageViewer.open({
+    urls: images.map(getMomentOriginalImageUrl),
+    index,
+    trigger,
+    label: authorName || undefined,
+    getOrigin: () => trigger.isConnected ? trigger.getBoundingClientRect() : undefined,
+    onClose: requestImage,
+  })
 }
 
 function handleImageKeydown(event: KeyboardEvent) {
@@ -300,10 +312,7 @@ function getImageLabel(index: number) {
         <!-- The hover preview, from the host. -->
         <slot />
         <!-- Like video cards the cover carries no stats; LIVE alone marks a live room. -->
-        <span v-if="live" class="moment-media__live-mark">
-          LIVE
-          <span i-svg-spinners:pulse-3 aria-hidden="true" />
-        </span>
+        <LiveMark v-if="live" class="moment-media__live-mark" />
       </div>
       <ProgressiveBlur v-if="blur" edge="bottom" class="moment-media__blur" :visible="!previewing" sample-within=".moment-media__stage" />
     </div>
@@ -405,17 +414,6 @@ function getImageLabel(index: number) {
   top: var(--bew-cover-overlay-inset);
   left: var(--bew-cover-overlay-inset);
   z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-1);
-  padding: var(--bew-space-1) var(--bew-space-2);
-  border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-capsule);
-  color: var(--bew-text-1);
-  background: var(--bew-selected-bg);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-regular);
-  letter-spacing: 0.02em;
 }
 
 // A short gradient blur, strongest at the cover's bottom edge, then a colour

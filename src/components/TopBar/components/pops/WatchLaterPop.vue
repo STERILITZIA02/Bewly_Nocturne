@@ -7,7 +7,7 @@ import ALink from '~/components/ALink.vue'
 import CardRemovalPanel from '~/components/CardRemovalPanel.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
-import Picture from '~/components/Picture.vue'
+import LazyPicture from '~/components/LazyPicture.vue'
 import Progress from '~/components/Progress.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
@@ -225,7 +225,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
           />
           <section class="popover-card__content" :inert="!!removals.get(item) || undefined">
             <div class="popover-card__media">
-              <Picture
+              <LazyPicture
                 class="watch-later-pop__cover"
                 aspect-ratio="auto"
                 :src="`${removeHttpFromUrl(item.pic)}@256w_144h_1c`"
@@ -274,10 +274,10 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
                       <i i-tabler:external-link />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip :content="$t('common.operation.delete')" placement="top" teleport>
+                  <Tooltip :content="$t('common.remove_from_watch_later')" placement="top" teleport>
                     <IconButton
                       class="popover-card__interactive bew-popover__action bew-popover__action--danger"
-                      :label="$t('common.operation.delete')"
+                      :label="$t('common.remove_from_watch_later')"
                       :disabled="pendingActions.has(item.aid)"
                       @click.stop.prevent="confirmRemoval(item)"
                     >

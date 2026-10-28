@@ -44,6 +44,39 @@
   }
 }
 
+// The icon tools of every composer toolbar (emoji, @, image, cancel reply)
+// and the remove control of an attached image: one quiet round control on an
+// IconButton, brightened on hover.
+@mixin tool {
+  flex: 0 0 auto;
+  width: var(--bew-control-height-sm);
+  height: var(--bew-control-height-sm);
+  color: var(--bew-text-2);
+  background: transparent;
+  font-size: var(--bew-icon-size-sm);
+
+  &:hover:not(:disabled) {
+    color: var(--bew-text-1);
+    background: var(--bew-hover-bg);
+  }
+}
+
+// A remove control placed on an attached image's corner: the same tool on a
+// solid backing so it stays legible over any picture.
+@mixin attachment-remove {
+  @include tool;
+  width: var(--bew-icon-button-size-sm);
+  height: var(--bew-icon-button-size-sm);
+  color: var(--bew-text-1);
+  background: var(--bew-elevated-solid);
+  box-shadow: var(--bew-shadow-1);
+  font-size: var(--bew-icon-size-xs);
+
+  &:hover:not(:disabled) {
+    background: var(--bew-elevated-solid-hover);
+  }
+}
+
 @mixin picker {
   position: fixed;
   z-index: var(--bew-z-dialog);

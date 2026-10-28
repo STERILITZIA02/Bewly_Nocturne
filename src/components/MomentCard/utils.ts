@@ -73,10 +73,6 @@ export function getAvatarThumbnailUrl(url = '') {
   return `${normalized}@48w_48h_1c.webp`
 }
 
-export function formatCount(value: number) {
-  return value > 9999 ? `${(value / 10000).toFixed(1)}万` : value || 0
-}
-
 /** 卡片文字预览：展示正文开头，不出现“点击查看详情”类占位 */
 export function getCardPreviewText(moment: DisplayMoment) {
   const text = (moment.text || '').trim()

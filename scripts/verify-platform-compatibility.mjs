@@ -175,6 +175,7 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
   })
 
   check('Platform: horizontal lists normalize pixel, line and page wheels without consuming zoom or edge scrolling', async () => {
+    window.matchMedia ??= () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
     const enabled = Vue.ref({ enableHorizontalScrolling: true })
     const Horizontal = await compileComponent('../src/components/HorizontalScrollView.vue', { '~/logic': { settings: enabled } })
     const host = document.body.appendChild(document.createElement('div'))
@@ -182,7 +183,7 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
     try {
       app.mount(host)
       await flush()
-      const scroller = host.querySelector('.scroll-mask')
+      const scroller = host.querySelector('.horizontal-scroll-view__scroller')
       Object.defineProperties(scroller, { clientWidth: { value: 400 }, scrollWidth: { value: 2000 } })
       const wheel = (options) => {
         const event = new window.WheelEvent('wheel', { cancelable: true, ...options })
@@ -194,12 +195,16 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
       wheel({ deltaY: 1, deltaMode: 2 })
       assert.equal(scroller.scrollLeft, 468)
       assert.equal(wheel({ deltaY: 100, ctrlKey: true }).defaultPrevented, false)
-      assert.equal(wheel({ deltaX: 50, deltaY: 10 }).defaultPrevented, false)
+      assert.equal(wheel({ deltaX: 50, deltaY: 10 }).defaultPrevented, true, 'trackpad swipes scroll through the shared elastic handler')
+      assert.equal(scroller.scrollLeft, 518)
       scroller.scrollLeft = 0
-      assert.equal(wheel({ deltaY: -100 }).defaultPrevented, false)
+      assert.equal(wheel({ deltaY: -100 }).defaultPrevented, false, 'the start hands vertical wheels back to the page')
+      scroller.scrollLeft = 1600
+      assert.equal(wheel({ deltaY: 100 }).defaultPrevented, false, 'so does the end')
       enabled.value.enableHorizontalScrolling = false
       await flush()
-      assert.equal(wheel({ deltaY: 100 }).defaultPrevented, false, 'disabled lists release the listener')
+      assert.equal(wheel({ deltaY: 100 }).defaultPrevented, false, 'with the preference off, vertical wheels scroll the page')
+      assert.equal(wheel({ deltaX: 40 }).defaultPrevented, true, 'sideways swipes still scroll the row')
     }
     finally {
       app.unmount()
