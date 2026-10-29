@@ -41,11 +41,12 @@ export function resolveHomeSearchStage(shortViewport: boolean) {
   }
 }
 
-/** Keep aligned with --bew-dock-control-size, --bew-dock-control-size-lg and the shell's 6px rim on each side. */
+/** Keep aligned with --bew-dock-item-height, --bew-dock-item-height-icon-only and the shell's 4px rim on each side. */
 export const DOCK_LAYOUT = {
-  controlSize: 36,
-  controlSizeLarge: 44,
-  shellPadding: 12,
+  controlSize: 56,
+  // Names hidden (showDockItemNames off).
+  iconOnlyControlSize: 48,
+  shellPadding: 8,
   actionControlSize: 45,
   controlGap: 8,
 } as const

@@ -261,11 +261,7 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       fixture.store.member = true
       fixture.member.resolve(true)
       await flush()
-      await first
-      assert.equal(fixture.sends.length, 0, 'membership reads lead to confirmation, never an implicit removal')
-      const removing = fixture.card.watchLaterRemoval.value.run()
-      await flush()
-      assert.equal(fixture.sends.length, 1)
+      assert.equal(fixture.sends.length, 1, 'a card already in Watch Later removes it on press')
       assert.equal(fixture.sends[0].action, 'removeFromWatchLater')
       fixture.store.member = false
       fixture.props.value = { ...fixture.props.value, video: { ...fixture.props.value.video, view: 999 } }
@@ -275,7 +271,7 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       fixture.store.userInfo.mid = 2
       fixture.setCookie('2')
       fixture.write.resolve({ code: 0 })
-      await removing
+      await first
       assert.equal(fixture.sends.length, 1)
       assert.equal(fixture.commits.length, 0, 'account 2 must not receive account 1 completion')
       assert.deepEqual(fixture.errors, [])

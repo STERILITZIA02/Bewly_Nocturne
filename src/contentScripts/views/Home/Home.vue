@@ -763,6 +763,6 @@ watch(tabContentLoading, (loading) => {
 }
 
 .home-header-fixed {
-  --uno: "sticky top-[calc(var(--bew-top-bar-height)+10px)]";
+  --uno: "sticky top-[calc(var(--bew-top-bar-height)+var(--bew-space-3))]";
 }
 </style>

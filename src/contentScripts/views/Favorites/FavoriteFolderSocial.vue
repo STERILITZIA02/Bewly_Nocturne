@@ -89,6 +89,7 @@ const { t } = useI18n()
       font-size: var(--bew-icon-size-sm);
     }
     span:last-child {
+      font-family: var(--bew-fonts-monospace);
       font-variant-numeric: tabular-nums;
     }
   }

@@ -90,6 +90,7 @@ const content = computed(() => {
 .video-card-info__separator,
 .video-card-info__time {
   flex: none;
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
 }
 </style>

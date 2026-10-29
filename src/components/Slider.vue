@@ -184,6 +184,7 @@ const labelWidthSample = computed(() => {
   min-width: 0;
   :deep(input) {
     text-align: right;
+    font-family: var(--bew-fonts-monospace);
     font-variant-numeric: tabular-nums;
   }
 }
@@ -196,6 +197,7 @@ const labelWidthSample = computed(() => {
   display: grid;
   flex: none;
   text-align: right;
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 
@@ -217,6 +219,10 @@ input[type="range"] {
 
   &::-webkit-slider-thumb:hover {
     --uno: "ring-$bew-focus-ring-color";
+  }
+
+  &:focus-visible::-webkit-slider-thumb {
+    background: var(--bew-text-2);
   }
 }
 </style>

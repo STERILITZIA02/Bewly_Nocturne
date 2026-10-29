@@ -240,6 +240,7 @@ function resetPreview(event: FocusEvent) {
 .wheel-selector__badge {
   flex: 0 0 auto;
   font-size: var(--bew-font-size-caption);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
   opacity: 0;
   transition: opacity var(--bew-duration-moderate) var(--bew-ease-standard);

@@ -2,6 +2,8 @@ import { fileURLToPath } from 'node:url'
 
 import { defineConfig, presetAttributify, presetIcons, presetTypography, presetWind3, transformerDirectives } from 'unocss'
 
+import { DOCK_ICONS } from './src/assets/icons/dockIcons'
+
 const remRE = /(-?[.\d]+)rem/g
 const spacingTokens: Record<number, string> = {
   0.125: '0-5',
@@ -90,6 +92,8 @@ export default defineConfig({
     presetWind3(),
     presetAttributify(),
     presetIcons({
+      // The Dock's own tab glyphs (`i-bew-dock:*`); every other icon is Tabler.
+      collections: { 'bew-dock': DOCK_ICONS },
       customizations: {
         customize(defaults, icon, name) {
           if (name.startsWith('tabler:'))

@@ -9,11 +9,13 @@ import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import TagRemoveButton from '~/components/TagRemoveButton.vue'
+import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { getUserID } from '~/utils/main'
+import { dissolveElements, isDissolving } from '~/utils/particleDissolve'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
@@ -131,6 +133,15 @@ onDeactivated(() => {
   serverSettings.reset()
 })
 onScopeDispose(serverSettings.dispose)
+
+// A removed word breaks apart while the server confirms; the rest then close the gap.
+const blockWordsRef = ref<HTMLElement | null>(null)
+useLayoutMotion(blockWordsRef, () => serverSettings.state.blockWords.words, { enabled: isDissolving })
+async function removeBlockWord(word: string, event: MouseEvent) {
+  const dissolve = dissolveElements((event.currentTarget as Element).closest('.message-block-word'))
+  if (!await serverSettings.deleteBlockWord(word))
+    dissolve.restore()
+}
 </script>
 
 <template>
@@ -284,13 +295,13 @@ onScopeDispose(serverSettings.dispose)
           <div v-if="serverSettings.state.blockWords.loading && !serverSettings.state.blockWords.words.length" class="message-block-words" role="status" :aria-label="$t('common.loading')">
             <SkeletonBlock v-for="index in 3" :key="index" width="80px" height="var(--bew-control-height-sm)" radius="full" />
           </div>
-          <div v-if="serverSettings.state.blockWords.words.length" class="message-block-words">
-            <span v-for="word in serverSettings.state.blockWords.words" :key="word" class="message-block-word">
+          <div v-if="serverSettings.state.blockWords.words.length" ref="blockWordsRef" class="message-block-words">
+            <span v-for="word in serverSettings.state.blockWords.words" :key="word" class="message-block-word" :data-motion-key="word">
               <span>{{ word }}</span>
               <TagRemoveButton
                 :disabled="blockWordsUnavailable"
                 :label="$t('settings.messages_server_block_words_remove', { word })"
-                @click="serverSettings.deleteBlockWord(word)"
+                @click="removeBlockWord(word, $event)"
               />
             </span>
           </div>

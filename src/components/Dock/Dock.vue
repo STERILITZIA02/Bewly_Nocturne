@@ -17,7 +17,7 @@ import {
   shouldAutoCollapseDock,
   shouldShowDockCollapseButton,
 } from '~/constants/dock'
-import { DOCK_LAYOUT, GRID_BREAKPOINTS } from '~/constants/layout'
+import { DOCK_LAYOUT } from '~/constants/layout'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
@@ -39,7 +39,6 @@ import CountBadge from '../CountBadge.vue'
 import IconButton from '../IconButton.vue'
 import LiquidSegmentIndicator from '../LiquidSegmentIndicator.vue'
 import PageModeSwitcherButton from '../PageModeSwitcherButton.vue'
-import Tooltip from '../Tooltip.vue'
 import type { HoveringDockItem } from './types'
 
 const props = defineProps<{
@@ -64,7 +63,7 @@ const { t } = useI18n()
 // Read the same account-scoped authority as TopBar; Dock never starts polling
 // or acknowledges messages merely because its badge is visible.
 const dockBadges = computed<Partial<Record<AppPage, { count: number, label: string }>>>(() => {
-  if (!topBarStore.isLogin)
+  if (!topBarStore.isLogin || !settings.value.showDockBadges)
     return {}
   const result: Partial<Record<AppPage, { count: number, label: string }>> = {}
   const sources = [
@@ -154,8 +153,6 @@ const hoveringDockItem = reactive<HoveringDockItem>({
 })
 const currentDockItems = ref<DockItem[]>([])
 const dockIndicatorRef = ref<InstanceType<typeof LiquidSegmentIndicator> | null>(null)
-
-const tooltipPlacement = computed(() => dockPosition.value === 'right' ? 'left' : 'top')
 
 const dockCollapseIcon = computed(() => dockPosition.value === 'bottom'
   ? 'i-tabler:chevrons-left'
@@ -707,6 +704,8 @@ const dockTransformStyle = computed((): CSSProperties => {
   }[position] || 'center center'
 
   return {
+    // Hidden names take no room, so the tabs and shell get shorter.
+    ...(settings.value.showDockItemNames ? {} : { '--bew-dock-item-height': 'var(--bew-dock-item-height-icon-only)' }),
     transform: `scale(${scale})`,
     transformOrigin: origin,
     ...(preservedSize
@@ -722,9 +721,9 @@ const dockShellGeometry = computed(() => {
   const measuredSize = dockPosition.value === 'bottom'
     ? expandedDockShellHeight.value
     : expandedDockShellWidth.value
-  const controlSize = windowWidth.value >= GRID_BREAKPOINTS.lg
-    ? DOCK_LAYOUT.controlSizeLarge
-    : DOCK_LAYOUT.controlSize
+  const controlSize = settings.value.showDockItemNames
+    ? DOCK_LAYOUT.controlSize
+    : DOCK_LAYOUT.iconOnlyControlSize
   const expectedDockShellSize = controlSize + DOCK_LAYOUT.shellPadding
   const collapsedSize = resolveDockCollapsedShellSize(measuredSize, expectedDockShellSize)
   const longSide = collapsedSize * 2
@@ -820,115 +819,95 @@ onUnmounted(() => {
           @wheel="handleDockWheel"
         >
           <div v-layout-editable="'dock-items'" class="dock-page-navigation bew-segment-control">
-            <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator bew-shape-circle" :active-key="activeDockItemPage" />
+            <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator" :active-key="activeDockItemPage" />
 
-            <template v-for="dockItem in currentDockItems" :key="dockItem.page">
-              <Tooltip :content="dockBadges[dockItem.page]?.label || $t(dockItem.i18nKey)" :placement="tooltipPlacement">
-                <button
-                  v-layout-editable="getDockItemLayoutEditableId(dockItem.page)"
-                  type="button"
-                  class="dock-page-navigation__item bew-segment-control__item bew-segment-control__item--icon bew-shape-circle"
-                  :class="{ inactive: hoveringDockItem.themeMode && isDark }"
-                  data-segment-item
-                  :data-active="isDockItemActivated(dockItem) ? 'true' : undefined"
-                  :aria-label="dockBadges[dockItem.page]?.label || $t(dockItem.i18nKey)"
-                  :aria-current="isDockItemActivated(dockItem) ? 'page' : undefined"
-                  @click="handleDockItemClick($event, dockItem)"
-                  @click.middle="openDockItemInNewTab(dockItem)"
-                >
-                  <span
-                    class="dock-page-navigation__icon"
-                    :class="isDockItemActivated(dockItem) ? dockItem.iconActivated : dockItem.icon"
-                    aria-hidden="true"
-                  />
-                  <CountBadge v-if="dockBadges[dockItem.page]" :count="dockBadges[dockItem.page]!.count" class="dock-count-badge" aria-hidden="true" />
-                </button>
-              </Tooltip>
-            </template>
+            <button
+              v-for="dockItem in currentDockItems"
+              :key="dockItem.page"
+              v-layout-editable="getDockItemLayoutEditableId(dockItem.page)"
+              type="button"
+              class="dock-tab"
+              :class="{ inactive: hoveringDockItem.themeMode && isDark }"
+              data-segment-item
+              :data-active="isDockItemActivated(dockItem) ? 'true' : undefined"
+              :aria-label="dockBadges[dockItem.page]?.label ?? $t(dockItem.i18nKey)"
+              :aria-current="isDockItemActivated(dockItem) ? 'page' : undefined"
+              @click="handleDockItemClick($event, dockItem)"
+              @click.middle="openDockItemInNewTab(dockItem)"
+            >
+              <span class="dock-tab__glyph">
+                <span class="dock-tab__icon" :class="dockItem.dockIcon" aria-hidden="true" />
+                <CountBadge v-if="dockBadges[dockItem.page]" :count="dockBadges[dockItem.page]!.count" class="dock-count-badge" aria-hidden="true" />
+              </span>
+              <span v-if="settings.showDockItemNames" class="dock-tab__label" aria-hidden="true">{{ $t(dockItem.i18nKey) }}</span>
+            </button>
           </div>
 
-          <!-- dividing line -->
+          <!-- A hairline sets the pages apart from the Dock's own controls. -->
           <div class="divider" />
 
           <PageModeSwitcherButton
             v-if="settings.showBewlyOrBiliPageSwitcher"
             :activated-page="activatedPage"
-            :placement="tooltipPlacement"
             variant="dock"
+            :label="settings.showDockItemNames ? $t('settings.page_mode') : undefined"
           />
 
-          <Tooltip
+          <button
             v-if="!settings.disableLightDarkModeSwitcherOnDock"
-            :content="isDark ? $t('dock.dark_mode') : $t('dock.light_mode')" :placement="tooltipPlacement"
-            class="group"
-            pointer-events-none
+            v-layout-editable="'dock-theme-toggle'"
+            type="button"
+            class="dock-tab dock-tab--theme group"
+            :aria-label="isDark ? $t('dock.dark_mode') : $t('dock.light_mode')"
+            @click="toggleDark"
+            @mouseenter="hoveringDockItem.themeMode = true"
+            @mouseleave="hoveringDockItem.themeMode = false"
           >
-            <!-- moon: the signature theme-toggle moonlight is the one kept glow -->
-            <div
-              v-if="isDark"
-              class="bew-shape-circle"
-              pos="absolute top-0 left-0 group-hover:top-2px group-hover:left--4px"
-              w-full h-full bg-white
-              z--2 pointer-events-none
-              shadow="group-hover:[-8px_4px_160px_20px_hsla(226deg,85%,77%,1),-8px_4px_100px_12px_hsla(226deg,85%,77%,0.8),-8px_4px_60px_10px_hsla(226deg,85%,77%,0.6),-8px_4px_20px_4px_hsla(226deg,85%,77%,0.4),-4px_2px_8px_0_hsla(226deg,85%,77%,0.8)]"
-              opacity-0 group-hover:opacity-100
-              duration-300
-            />
+            <span class="dock-tab__glyph">
+              <!-- moon: the signature theme-toggle moonlight is the one kept glow -->
+              <span
+                v-if="isDark"
+                class="bew-shape-circle"
+                pos="absolute top-0 left-0 group-hover:top-2px group-hover:left--4px"
+                w-full h-full bg-white
+                z--1 pointer-events-none
+                shadow="group-hover:[-8px_4px_160px_20px_hsla(226deg,85%,77%,1),-8px_4px_100px_12px_hsla(226deg,85%,77%,0.8),-8px_4px_60px_10px_hsla(226deg,85%,77%,0.6),-8px_4px_20px_4px_hsla(226deg,85%,77%,0.4),-4px_2px_8px_0_hsla(226deg,85%,77%,0.8)]"
+                opacity-0 group-hover:opacity-100
+                duration-300
+              />
+              <Icon v-if="isDark" class="dock-tab__icon" icon="tabler:moon" aria-hidden="true" />
+              <Icon v-else class="dock-tab__icon" icon="tabler:sun" aria-hidden="true" />
+            </span>
+            <span v-if="settings.showDockItemNames" class="dock-tab__label" aria-hidden="true">{{ isDark ? $t('dock.dark_mode') : $t('dock.light_mode') }}</span>
+          </button>
 
-            <button
-              v-layout-editable="'dock-theme-toggle'"
-              type="button"
-              class="dock-item dock-item--icon-only bew-shape-circle"
-              :aria-label="isDark ? $t('dock.dark_mode') : $t('dock.light_mode')"
-              pointer-events-auto
-              @click="toggleDark"
-              @mouseenter="hoveringDockItem.themeMode = true"
-              @mouseleave="hoveringDockItem.themeMode = false"
-            >
-              <Transition name="fade">
-                <div v-show="hoveringDockItem.themeMode" absolute>
-                  <Icon v-if="isDark" icon="tabler:moon" />
-                  <Icon v-else icon="tabler:sun" />
-                </div>
-              </Transition>
-              <Transition name="fade">
-                <div v-show="!hoveringDockItem.themeMode" absolute>
-                  <Icon v-if="isDark" icon="tabler:moon" />
-                  <Icon v-else icon="tabler:sun" />
-                </div>
-              </Transition>
-            </button>
-          </Tooltip>
+          <button
+            type="button"
+            class="dock-tab dock-tab--settings"
+            :class="{ inactive: hoveringDockItem.themeMode && isDark }"
+            :aria-label="$t('dock.settings')"
+            @click="openSettings"
+          >
+            <span class="dock-tab__glyph">
+              <span class="dock-tab__icon i-tabler:settings" aria-hidden="true" />
+            </span>
+            <span v-if="settings.showDockItemNames" class="dock-tab__label" aria-hidden="true">{{ $t('dock.settings') }}</span>
+          </button>
 
-          <Tooltip :content="$t('dock.settings')" :placement="tooltipPlacement">
-            <button
-              type="button"
-              class="dock-item dock-item--icon-only group bew-shape-circle"
-              :class="{
-                inactive: hoveringDockItem.themeMode && isDark,
-              }"
-              :aria-label="$t('dock.settings')"
-              @click="openSettings"
-            >
-              <span class="dock-item__icon i-tabler:settings" group-hover:rotate-180 transition="transform duration-400 ease-out" aria-hidden="true" />
-            </button>
-          </Tooltip>
-
-          <Tooltip
+          <button
             v-if="shouldShowDockCollapseButton(settings.dockCollapseMode)"
-            :content="$t('dock.collapse_dock')"
-            :placement="tooltipPlacement"
+            v-layout-editable="'dock-collapse-toggle'"
+            type="button"
+            class="dock-tab"
+            :class="{ inactive: hoveringDockItem.themeMode && isDark }"
+            :aria-label="$t('dock.collapse_dock')"
+            @click="collapseDock"
           >
-            <button
-              v-layout-editable="'dock-collapse-toggle'"
-              type="button"
-              class="dock-item bew-shape-circle"
-              :aria-label="$t('dock.collapse_dock')"
-              @click="collapseDock"
-            >
-              <span class="dock-item__icon" :class="dockCollapseIcon" aria-hidden="true" />
-            </button>
-          </Tooltip>
+            <span class="dock-tab__glyph">
+              <span class="dock-tab__icon" :class="dockCollapseIcon" aria-hidden="true" />
+            </span>
+            <span v-if="settings.showDockItemNames" class="dock-tab__label" aria-hidden="true">{{ $t('dock.collapse_dock') }}</span>
+          </button>
         </div>
 
         <IconButton
@@ -1047,7 +1026,7 @@ onUnmounted(() => {
 </template>
 
 <style lang="scss" scoped>
-@use "../../styles/breakpoints";
+@use "../../styles/dockTab";
 
 .dock-wrap {
   z-index: var(--bew-z-base-overlay);
@@ -1101,18 +1080,22 @@ onUnmounted(() => {
   }
 
   .divider {
-    --uno: "my-1 mx-3 h-3px bg-$bew-separator-color rounded-$bew-pill-radius";
-    corner-shape: var(--bew-corner-shape-capsule);
+    flex: none;
+    height: var(--bew-hairline);
+    margin: var(--bew-space-1) var(--bew-space-3);
+    background: var(--bew-separator-color);
   }
 
   &.bottom .divider {
-    --uno: "w-3px h-auto my-3 mx-1";
+    width: var(--bew-hairline);
+    height: auto;
+    margin: var(--bew-space-3) var(--bew-space-1);
   }
 
   .dock-content-inner {
-    --dock-shell-control-size: var(--bew-dock-control-size);
-    // User-chosen optical rim between 4px and 8px; deliberately off the 4px grid.
-    --dock-shell-rim: 6px;
+    --dock-shell-control-size: var(--bew-dock-item-height);
+    // The selected plate sits this close to the shell's edge (user-specified).
+    --dock-shell-rim: var(--bew-space-1);
     --dock-shell-size: calc(var(--dock-shell-control-size) + var(--dock-shell-rim) * 2);
     --dock-shell-radius: calc(var(--dock-shell-control-size) / 2 + var(--dock-shell-rim));
     --uno: "m-2 relative flex shrink-0";
@@ -1161,7 +1144,8 @@ onUnmounted(() => {
     display: flex;
     flex: 0 0 auto;
     flex-direction: column;
-    gap: var(--bew-space-2);
+    // Tabs sit edge to edge like an iOS tab bar; their padding spaces them.
+    gap: 0;
     min-width: max-content;
     visibility: hidden;
     opacity: 0;
@@ -1288,60 +1272,78 @@ onUnmounted(() => {
     }
   }
 
-  // Selection is a neutral translucent plate under a filled black/white icon.
+  // Tabs share one width per Dock (the widest name), like an iOS tab bar.
+  // Selection is a darker borderless plate; the glyph and name take the accent.
   .dock-page-navigation {
     --bew-liquid-indicator-bg: var(--bew-dock-navigation-active-bg);
-    // The plate keeps the default hairline edge (user-specified), not the glass rim.
+    --bew-liquid-indicator-shadow: none;
 
-    flex-direction: column;
+    display: grid;
+    grid-auto-flow: row;
     width: auto;
     height: auto;
     padding: 0;
-    gap: var(--bew-space-2);
+    gap: 0;
     overflow: visible;
   }
 
   &.bottom .dock-page-navigation {
-    flex-direction: row;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
   }
 
-  .dock-page-navigation__item {
-    position: relative;
-    overflow: visible;
-    width: var(--bew-dock-control-size);
-    height: var(--bew-dock-control-size);
-    color: var(--bew-text-1);
-    transition:
-      color var(--bew-duration-normal) var(--bew-ease-standard),
-      transform var(--bew-duration-moderate) var(--bew-ease-emphasized);
+  // A side Dock is one column: every control takes the tabs' width.
+  &.right .dock-expanded-content {
+    align-items: stretch;
+  }
 
-    &:hover:not([data-active="true"]):not(:disabled) {
-      transform: scale(1.1);
-    }
+  .dock-tab {
+    @include dockTab.item(".dock-tab__glyph");
 
     &[data-active="true"] {
       color: var(--bew-dock-navigation-active-color);
     }
 
-    &:hover:not([data-active="true"]):not(:disabled),
-    &:focus-visible:not([data-active="true"]):not(:disabled) {
-      background: transparent;
-      box-shadow: none;
-    }
-
-    &:focus-visible:not([data-active="true"]):not(:disabled) {
-      outline: var(--bew-focus-ring, 1px solid CanvasText);
-      outline-offset: var(--bew-space-0-5);
-    }
-
-    &:active:not(:disabled) {
-      transform: scale(0.9);
-    }
-
     &.inactive {
       opacity: 0.8;
-      box-shadow: none !important;
     }
+  }
+
+  .dock-tab__glyph {
+    // Keeps the moonlight disc and the badge inside the glyph's own layer.
+    isolation: isolate;
+  }
+
+  .dock-tab__icon {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  // The 深色模式 toggle keeps its earlier look (user-specified): primary at rest,
+  // and hover springs its glyph under the moonlight.
+  .dock-tab--theme {
+    color: var(--bew-text-1);
+
+    .dock-tab__glyph {
+      transition: transform var(--bew-duration-moderate) var(--bew-ease-emphasized);
+    }
+
+    &:hover .dock-tab__glyph {
+      transform: translateY(calc(-1 * var(--bew-space-0-5))) scale(1.12);
+    }
+  }
+
+  .dock-tab--settings:hover .dock-tab__icon {
+    transform: rotate(180deg);
+  }
+
+  .dock-tab--settings .dock-tab__icon {
+    transition: transform 400ms var(--bew-ease-out);
+  }
+
+  .dock-tab__label {
+    @include dockTab.label;
   }
 
   .dock-page-navigation__indicator {
@@ -1349,21 +1351,11 @@ onUnmounted(() => {
   }
 
   .dock-count-badge {
-    // Optical overlap clears the icon while staying within the shell's padding.
+    // An extra 2px optical overlap anchors the badge to the glyph's upper right.
     position: absolute;
-    top: calc(-1 * var(--bew-space-0-5));
-    right: calc(-1 * var(--bew-space-1));
+    top: calc(-1 * var(--bew-space-1));
+    left: calc(100% - var(--bew-space-1) - var(--bew-space-0-5));
     z-index: 2;
-    box-shadow: 0 0 0 1px var(--bew-content-solid);
-  }
-
-  // Every Dock glyph except the protected theme toggle shares the idle nav icon.
-  .dock-page-navigation__icon,
-  .dock-item__icon {
-    display: block;
-    width: var(--bew-icon-size-md);
-    height: var(--bew-icon-size-md);
-    font-size: var(--bew-icon-size-md);
   }
 
   .back-to-top-or-refresh-btn {
@@ -1399,57 +1391,6 @@ onUnmounted(() => {
   }
 }
 
-.dock-item {
-  --uno: "relative transform active:important-scale-90 hover:scale-110";
-  width: var(--bew-dock-control-size);
-  height: var(--bew-dock-control-size);
-  line-height: var(--bew-dock-control-size);
-  --uno: "p-0 flex items-center justify-center";
-  --uno: "aspect-square relative";
-  --uno: "leading-0";
-  --uno: "rounded-$bew-pill-radius antialiased";
-  --uno: "bg-$bew-fill-alt hover:bg-$bew-fill-2 cursor-pointer";
-  --uno: "dark:bg-$bew-fill-1 dark-hover:bg-$bew-fill-4";
-  corner-shape: var(--bew-corner-shape-capsule);
-
-  box-shadow: var(--bew-shadow-1);
-  transition:
-    transform 300ms var(--bew-ease-emphasized, cubic-bezier(0.34, 1.3, 0.64, 1)),
-    background 300ms ease,
-    color 300ms ease,
-    box-shadow 300ms ease,
-    opacity 300ms ease;
-
-  &:hover {
-    box-shadow:
-      0 0 0 2px var(--bew-fill-2),
-      var(--bew-shadow-2);
-  }
-
-  &.dock-item--icon-only {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-
-    &:hover {
-      background: transparent;
-      box-shadow: none;
-    }
-  }
-
-  &.inactive {
-    --uno: "opacity-80 !shadow-none";
-  }
-
-  svg {
-    width: var(--bew-dock-control-icon-size);
-    height: var(--bew-dock-control-icon-size);
-    display: block;
-    vertical-align: middle;
-  }
-}
-
 .back-to-top-or-refresh-btn {
   aspect-ratio: 1;
   border-radius: 50%;
@@ -1462,29 +1403,16 @@ onUnmounted(() => {
   }
 }
 
-@media (min-width: breakpoints.$grid-lg) {
-  .dock-content .dock-page-navigation__item {
-    width: var(--bew-dock-control-size-lg);
-    height: var(--bew-dock-control-size-lg);
-  }
-
-  .dock-item {
-    width: var(--bew-dock-control-size-lg);
-    height: var(--bew-dock-control-size-lg);
-    line-height: var(--bew-dock-control-size-lg);
-
-    svg {
-      width: var(--bew-dock-control-icon-size-lg);
-      height: var(--bew-dock-control-icon-size-lg);
-    }
-  }
-
-  .dock-content .dock-content-inner {
-    --dock-shell-control-size: var(--bew-dock-control-size-lg);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
+  .dock-content .dock-tab--settings .dock-tab__icon {
+    transition: none;
+  }
+
+  .dock-content .dock-tab--settings:hover .dock-tab__icon,
+  .dock-content .dock-tab--theme:hover .dock-tab__glyph {
+    transform: none;
+  }
+
   .dock-content .dock-shell-surface,
   .dock-content .dock-expanded-content,
   .dock-content .dock-collapsed-trigger {

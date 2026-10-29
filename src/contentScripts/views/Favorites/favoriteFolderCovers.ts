@@ -67,13 +67,14 @@ export function createFavoriteFolderCoverLoader(fetchCover: (id: number, signal:
   return {
     covers,
     invalidate(ids: readonly number[]) {
+      const invalidated = new Set(ids)
       for (const id of ids) {
         delete covers[id]
         requested.delete(id)
       }
       for (const lane of Object.values(lanes)) {
-        lane.queue = lane.queue.filter(id => !ids.includes(id))
-        if (lane.current !== undefined && ids.includes(lane.current))
+        lane.queue = lane.queue.filter(id => !invalidated.has(id))
+        if (lane.current !== undefined && invalidated.has(lane.current))
           lane.controller?.abort()
       }
     },

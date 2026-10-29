@@ -7,7 +7,9 @@ function animationFixture() {
   const matchMedia = window.matchMedia
   const records = []
   let reduced = false
-  window.matchMedia = () => ({ matches: reduced, addEventListener() {}, removeEventListener() {} })
+  window.matchMedia = () => ({ get matches() {
+    return reduced
+  }, addEventListener() {}, removeEventListener() {} })
   Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value(frames, options) {
     let resolve
     let reject
@@ -39,6 +41,7 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
   check('Page continuity: interrupted Anime sections resume independently while completed empty sections stay cached', async () => {
     const { providePageViewState } = await import('../src/composables/usePageViewState')
     const requests = { watch: [], popular: [], recommendations: 0 }
+    const signals = []
     const deferred = (list) => {
       let resolve
       const promise = new Promise(done => resolve = done)
@@ -52,8 +55,14 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
       '~/models/anime/watchList': await import('../src/models/anime/watchList'),
       '~/utils/accountScope': await import('../src/utils/accountScope'),
       '~/utils/api': { default: { anime: {
-        getAnimeWatchList: () => deferred(requests.watch),
-        getPopularAnimeList: () => deferred(requests.popular),
+        getAnimeWatchList: (_params, options) => {
+          signals.push(options.signal)
+          return deferred(requests.watch)
+        },
+        getPopularAnimeList: (_params, options) => {
+          signals.push(options.signal)
+          return deferred(requests.popular)
+        },
         getRecommendAnimeList: async () => {
           requests.recommendations++
           return { code: 0, data: { items: [], has_next: false, coursor: 0 } }
@@ -76,10 +85,12 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
       await flush()
       active.value = false
       await flush()
+      assert.ok(signals.every(signal => signal.aborted), 'leaving aborts unfinished requests, not just their UI commits')
       active.value = true
       await flush()
       assert.equal(requests.watch.length, 2)
       assert.equal(requests.popular.length, 2)
+      assert.equal(signals.at(-1).aborted, false, 'the returning view owns a fresh request lifetime')
       assert.equal(requests.recommendations, 1, 'a completed valid empty result must not be mistaken for an unfinished section')
       requests.watch[0]({ code: 0, data: { list: [{ title: 'stale' }] } })
       requests.popular[0]({ code: 0, result: { list: [{ title: 'stale' }] } })
@@ -272,6 +283,8 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
     let account = 100
     const requests = []
     const dependencies = {
+      getGroupInterval: () => 'day',
+      getSortOrder: () => 'newest',
       getAccountId: () => account,
       getCSRF: () => '',
       haveScrollbar: async () => true,
@@ -280,7 +293,7 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
         getHistoryPauseStatus: async () => ({ code: 0, data: false }),
         getHistoryList: async (params) => {
           requests.push(params)
-          return { code: 0, data: { list: Array.from({ length: 20 }, (_, index) => ({ title: String(account), view_at: (params.view_at || 200) - index - 1, duration: 100, progress: 10, history: { business: 'archive', oid: requests.length * 100 + index, dt: 2 } })) } }
+          return { code: 0, data: { list: Array.from({ length: 20 }, (_, index) => ({ title: String(account), view_at: (params.view_at || 200) - index - 1, duration: 100, progress: 10, history: { business: 'archive', oid: requests.length * 100 + index, dt: 2 } })), cursor: { max: requests.length * 100 + 19, view_at: (params.view_at || 200) - 20, business: 'archive' } } }
         },
       },
     }
@@ -298,7 +311,7 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
       assert.equal(second.historyList.length, 20)
       assert.equal(second.keyword.value, 'unfinished search')
       await second.load()
-      assert.equal(requests[1].view_at, saved.cursor)
+      assert.equal(requests[1].view_at, saved.cursor.view_at)
       assert.equal(second.historyList.length, 40)
       account = 200
       second.activate(saved)

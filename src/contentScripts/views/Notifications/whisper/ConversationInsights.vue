@@ -257,6 +257,7 @@ const privateShare = computed(() => {
   }
   dd {
     margin: 0;
+    font-family: var(--bew-fonts-monospace);
     font-variant-numeric: tabular-nums;
   }
 }
@@ -269,6 +270,7 @@ const privateShare = computed(() => {
   line-height: 1;
   color: var(--bew-text-1);
   font-weight: var(--bew-font-weight-regular);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
 }
 
@@ -302,6 +304,7 @@ const privateShare = computed(() => {
   line-height: 1;
   color: var(--bew-text-1);
   font-weight: var(--bew-font-weight-regular);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
 }
 .conversation-insights__caption {

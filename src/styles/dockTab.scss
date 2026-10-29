@@ -1,0 +1,82 @@
+@use "breakpoints";
+
+// A Dock tab (user-specified, the iOS tab bar): a glyph over its name
+// in a capsule rectangle. At rest glyph and name are secondary (text-2); hover
+// fades them back to primary (text-1), with no plate and no hover name. The
+// selected tab sits on the Dock's sliding plate (LiquidSegmentIndicator) and
+// its glyph and name take the accent.
+// `$glyph` is the host's glyph selector.
+@mixin item($glyph) {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  // Optical gap: the name sits close under the glyph.
+  gap: var(--bew-space-0-5);
+  box-sizing: border-box;
+  min-width: var(--bew-dock-item-min-width);
+  height: var(--bew-dock-item-height);
+  padding: 0 var(--bew-space-3);
+  border: 0;
+  border-radius: var(--bew-pill-radius);
+  corner-shape: var(--bew-corner-shape-capsule);
+  appearance: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--bew-text-2);
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    color var(--bew-duration-normal) var(--bew-ease-standard),
+    opacity var(--bew-duration-normal) var(--bew-ease-standard);
+
+  #{$glyph} {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: var(--bew-dock-icon-size);
+    height: var(--bew-dock-icon-size);
+    transition: transform var(--bew-duration-moderate) var(--bew-ease-emphasized);
+  }
+
+  &:hover:not(:disabled, [data-active="true"]) {
+    color: var(--bew-text-1);
+  }
+
+  &:active:not(:disabled) #{$glyph} {
+    transform: scale(0.9);
+  }
+
+  &:focus-visible {
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
+    outline-offset: var(--bew-space-0-5);
+  }
+
+  @media (min-width: breakpoints.$grid-lg) {
+    min-width: var(--bew-dock-item-min-width-lg);
+
+    #{$glyph} {
+      width: var(--bew-dock-icon-size-lg);
+      height: var(--bew-dock-icon-size-lg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #{$glyph} {
+      transition: none;
+    }
+
+    &:active:not(:disabled) #{$glyph} {
+      transform: none;
+    }
+  }
+}
+
+@mixin label {
+  display: block;
+  font-size: var(--bew-font-size-caption);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-line-height-caption);
+  white-space: nowrap;
+}

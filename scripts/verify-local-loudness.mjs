@@ -290,6 +290,11 @@ export function registerLocalLoudnessChecks(check, { Vue, flush }) {
         return Promise.resolve()
       }
 
+      suspend() {
+        this.state = 'suspended'
+        return Promise.resolve()
+      }
+
       close() {
         this.state = 'closed'
         return Promise.resolve()
@@ -434,15 +439,20 @@ export function registerLocalLoudnessChecks(check, { Vue, flush }) {
         await fixture.settle()
       }
       assert.equal(fixture.count(), 1)
-      const lateProcessorError = nodes.at(-1).onprocessorerror
       media.paused = true
       media.dispatchEvent(new Event('pause'))
-      assert.equal(nodes.at(-1).port.closed, true, 'pause removes idle DSP work, keeping the source bypass')
+      assert.equal(nodes.at(-1).port.closed, false, 'pause parks the processor for reuse')
+      assert.equal(contexts[0].state, 'suspended', 'paused playback does no idle audio processing')
+      assert.ok(nodes.at(-1).port.messages.some(message => message.type === 'configure' && message.active === false))
       assert.equal(fixture.source().connections.has(contexts[0].destination), true)
       media.paused = false
       media.dispatchEvent(new Event('play', { bubbles: true }))
       await fixture.settle()
       assert.equal(fixture.count(), 1)
+      const lateProcessorError = nodes.at(-1).onprocessorerror
+      controller.update({ enabled: false, target: -18, strength: 75 })
+      controller.update({ enabled: true, target: -18, strength: 75 })
+      await fixture.settle()
       lateProcessorError()
       assert.equal(nodes.at(-1).port.closed, false, 'a retired processor cannot fail a newer processor on the same media')
       controller.showPanel(false)
@@ -530,7 +540,7 @@ export function registerLocalLoudnessChecks(check, { Vue, flush }) {
       fixture.controller.update({ enabled: true, target: -18, strength: 75 })
       await fixture.settle()
       fixture.controller.update({ enabled: false, target: -18, strength: 75 })
-      assert.equal(fixture.urls.size, 0, 'disable revokes the URL even if addModule has not settled')
+      assert.equal(fixture.urls.size, 1, 'the context-shared module keeps its URL until addModule settles')
       resolve()
       await fixture.settle()
       assert.equal(fixture.count(), 0)

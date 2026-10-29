@@ -159,22 +159,33 @@ watch(() => props.session.avatar, () => {
 }
 
 .conversation-list-item__menu {
-  position: relative;
+  position: absolute;
+  inset-inline-end: var(--bew-space-3);
   z-index: 1;
   width: var(--bew-control-height-sm);
   height: var(--bew-control-height-sm);
   flex: none;
   opacity: 0;
+  pointer-events: none;
   color: inherit;
-  transition: opacity var(--bew-duration-fast) ease;
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
 }
 .conversation-list-item:is(:hover, :focus-within) .conversation-list-item__menu,
 .conversation-list-item__menu[aria-expanded="true"] {
   opacity: 1;
+  pointer-events: auto;
+}
+.conversation-list-item:has(.conversation-list-item__menu):is(:hover, :focus-within) .conversation-list-item__body,
+.conversation-list-item:has(.conversation-list-item__menu[aria-expanded="true"]) .conversation-list-item__body {
+  @include truncateFade.reveal(calc(var(--bew-control-height-sm) + var(--bew-space-1)));
 }
 @media (hover: none) {
   .conversation-list-item__menu {
     opacity: 1;
+    pointer-events: auto;
+  }
+  .conversation-list-item:has(.conversation-list-item__menu) .conversation-list-item__body {
+    @include truncateFade.reveal(calc(var(--bew-control-height-sm) + var(--bew-space-1)));
   }
 }
 
@@ -289,6 +300,16 @@ watch(() => props.session.avatar, () => {
   display: grid;
   flex: 1 1 auto;
   gap: var(--bew-space-1);
+  @include truncateFade.line;
+  transition: truncateFade.$transition;
+}
+
+// Only the outer text block makes room for the overlaid button. Inner text
+// keeps its ordinary overflow fade instead of inheriting a second control mask.
+.conversation-list-item__heading,
+.conversation-list-item__meta {
+  --bew-truncate-fade-end: 0px;
+  --bew-truncate-fade-cover: 0;
 }
 
 .conversation-list-item__heading,
@@ -300,6 +321,8 @@ watch(() => props.session.avatar, () => {
 
 .conversation-list-item__name {
   display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   min-width: 0;
   gap: var(--bew-space-1);
   align-items: center;
@@ -307,7 +330,7 @@ watch(() => props.session.avatar, () => {
 
 .conversation-list-item__assistant-label {
   flex: 0 0 auto;
-  max-width: 50%;
+  max-width: 100%;
   padding: 0 var(--bew-space-1);
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
@@ -329,6 +352,7 @@ watch(() => props.session.avatar, () => {
 
 .conversation-list-item strong {
   min-width: 0;
+  max-width: 100%;
   font-size: var(--bew-font-size-title);
   color: var(--bew-text-1);
   font-weight: var(--bew-font-weight-regular);
@@ -345,8 +369,11 @@ watch(() => props.session.avatar, () => {
 }
 
 .conversation-list-item time {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
   margin-left: auto;
+  @include truncateFade.line;
 }
 
 .conversation-list-item__summary {
@@ -365,6 +392,7 @@ watch(() => props.session.avatar, () => {
 }
 
 .conversation-list-item__badge {
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
   display: inline-grid;
   place-items: center;
@@ -396,7 +424,9 @@ watch(() => props.session.avatar, () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .conversation-list-item {
+  .conversation-list-item,
+  .conversation-list-item__body,
+  .conversation-list-item__menu {
     transition: none;
   }
 }

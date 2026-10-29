@@ -5,7 +5,6 @@ import { useToast } from 'vue-toastification'
 
 import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
-import LibraryBleedStrip from '~/components/LibraryBleedStrip.vue'
 import LibraryDateRange from '~/components/LibraryDateRange.vue'
 import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
 import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
@@ -15,7 +14,6 @@ import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import LoadingFill from '~/components/LoadingFill.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 import Progress from '~/components/Progress.vue'
-import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import SmoothLoading from '~/components/SmoothLoading.vue'
 import type { Video } from '~/components/VideoCard/types'
 import VideoCard from '~/components/VideoCard/VideoCard.vue'
@@ -45,13 +43,15 @@ import { getHistoryUrl, getHistoryVideoIdentity } from '~/utils/historyTarget'
 import { normalizeIntlLocale } from '~/utils/locale'
 import { getCSRF, getUserID, removeHttpFromUrl } from '~/utils/main'
 import { retiringTransition } from '~/utils/motionPresence'
+import { dissolveElements } from '~/utils/particleDissolve'
 import { clearVideoVisitHistory, getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
 
+import HistoryDayNode from './HistoryDayNode.vue'
 import type { HistoryFilters, HistorySortOrder } from './historyFilters'
 import { hasHistoryFilters, historyRangeBounds } from './historyFilters'
 import HistoryGroupRow from './HistoryGroupRow.vue'
 import type { HistoryGroup } from './historyGroups'
-import { HISTORY_GROUP_INTERVALS, historyGroupHours, historyItemKey } from './historyGroups'
+import { HISTORY_GROUP_INTERVALS, historyGroupHours, historyGroupPeriod, historyItemKey } from './historyGroups'
 import HistoryGroupSkeleton from './HistoryGroupSkeleton.vue'
 import { useHistoryTimeline } from './useHistoryTimeline'
 
@@ -65,6 +65,11 @@ const viewState = usePageViewState('history')
 const sortOrder = viewState.ref<HistorySortOrder>('sort', 'newest')
 const interval = computed(() => settings.value.historyGroupInterval)
 const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
+const historyContainer = ref<HTMLElement | null>(null)
+function historyCards(items: readonly HistoryItem[]) {
+  const keys = new Set(items.map(historyItemKey))
+  return Array.from(historyContainer.value?.querySelectorAll<HTMLElement>('[data-history-key]') ?? []).filter(card => keys.has(card.dataset.historyKey!))
+}
 const timeline = useHistoryTimeline({
   api: api.history,
   getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null,
@@ -73,6 +78,9 @@ const timeline = useHistoryTimeline({
   onWriteError: () => toast.error(t('common.operation_failed')),
   onDeleted: (items) => { void removeVideoVisitHistory(items.map(getHistoryVideoIdentity)) },
   onCleared: () => { void clearVideoVisitHistory() },
+  async beforeRemove(items) {
+    await dissolveElements(historyCards(items)).released
+  },
   getGroupInterval: () => interval.value,
   getSortOrder: () => sortOrder.value,
 })
@@ -105,7 +113,7 @@ function saveStripSnapshot(key: string, snapshot: CardWindowSnapshot) {
   if (historyGroups.value.some(group => `group:${group.key}` === key))
     stripSnapshots.set(key, snapshot)
 }
-// The group the list starts at, chosen in the day strip; choosing the first
+// The group the list starts at, chosen in the rail's day tree; choosing the first
 // day brings back the whole list. Only the plain newest-first list starts late.
 const startGroupKey = ref<string>()
 const plainList = computed(() => !submittedKeyword.value && sortOrder.value === 'newest' && !hasHistoryFilters(filters.value))
@@ -114,10 +122,15 @@ const shownGroups = computed(() => {
   const start = plainList.value ? groups.findIndex(group => group.key === startGroupKey.value) : -1
   return start > 0 ? groups.slice(start) : groups
 })
+// A part of a day: its named period (morning, afternoon, night) or its hour.
+function partLabel(group: HistoryGroup) {
+  const period = historyGroupPeriod(group)
+  return period ? t(`history.period_${period}`) : historyGroupHours(group)
+}
 function groupLabel(group: HistoryGroup) {
   if (!group.start)
     return t('history.unknown_date')
-  return [dateFormatter.value.format(group.start), historyGroupHours(group)].filter(Boolean).join(' ')
+  return [dateFormatter.value.format(group.start), partLabel(group)].filter(Boolean).join(' ')
 }
 const batch = useLibraryBatchSelection({
   keys: () => shownGroups.value.filter(group => !collapsedGroups.value.has(group.key)).flatMap(group => group.items.map(mutationKey)),
@@ -196,11 +209,11 @@ function selectRailContent(value: string) {
 }
 
 const historyContent = ref<HTMLElement | null>(null)
-const historyContainer = ref<HTMLElement | null>(null)
 // Cards slide into place when one leaves its row.
 const layoutMotion = useLayoutMotion(historyContainer, () => String(timeline.contentRevision.value), {
   selector: '[data-history-key]',
   key: 'data-history-key',
+  scroller: scrollViewportRef,
 })
 // The group interval works like batch management (user-specified): its rail
 // button fades out for the choices, and a choice brings it back.
@@ -251,8 +264,10 @@ type RenderedHistoryRow = { kind: 'group', key: string, group: HistoryGroup } | 
 const renderedRows = computed(() => cardWindow.ranges.value.flatMap<RenderedHistoryRow>(range => range.height !== undefined
   ? [{ kind: 'spacer' as const, key: `spacer:${range.start}`, height: range.height }]
   : shownGroups.value.slice(range.start, range.end).map(group => ({ kind: 'group' as const, key: `group:${group.key}`, group }))))
-// The day strip over the content: each loaded day, starting the list at its first group.
+// The rail's day tree (user-specified): each loaded day over the periods of
+// the chosen interval; a day or a period starts the list at it.
 const dayFormatter = computed(() => new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), { month: 'short', day: 'numeric', weekday: 'short' }))
+interface HistoryDay { key: string, label: string, groupKey: string, periods: { key: string, label: string }[] }
 const historyDays = computed(() => {
   const now = new Date()
   const dayKey = (offset: number) => {
@@ -260,23 +275,41 @@ const historyDays = computed(() => {
     return `${day.getFullYear()}-${day.getMonth() + 1}-${day.getDate()}`
   }
   const [today, yesterday] = [dayKey(0), dayKey(1)]
-  const days = new Map<string, { key: string, label: string }>()
+  const days = new Map<string, HistoryDay>()
   for (const group of historyGroups.value) {
-    if (group.dayKey === 'unknown' || days.has(group.dayKey))
-      continue
-    const [year, month, day] = group.dayKey.split('-').map(Number)
-    const label = group.dayKey === today
-      ? t('history.filters.period_today')
-      : group.dayKey === yesterday ? t('history.filters.period_yesterday') : dayFormatter.value.format(new Date(year, month - 1, day))
-    days.set(group.dayKey, { key: group.dayKey, label })
+    let day = days.get(group.dayKey)
+    if (!day) {
+      const label = !group.start
+        ? t('history.unknown_date')
+        : group.dayKey === today
+          ? t('history.filters.period_today')
+          : group.dayKey === yesterday ? t('history.filters.period_yesterday') : dayFormatter.value.format(group.start)
+      day = { key: group.dayKey, label, groupKey: group.key, periods: [] }
+      days.set(group.dayKey, day)
+    }
+    const part = partLabel(group)
+    if (part)
+      day.periods.push({ key: group.key, label: part })
   }
   return [...days.values()]
 })
-function jumpToDay(dayKey: string) {
-  const group = historyGroups.value.find(group => group.dayKey === dayKey)
-  if (group)
-    selectStartGroup(group.key)
+const collapsedDays = viewState.ref('collapsedDays', new Set<string>())
+function toggleDay(key: string) {
+  const next = new Set(collapsedDays.value)
+  if (!next.delete(key))
+    next.add(key)
+  collapsedDays.value = next
 }
+// Only days that arrive after the tree shows grow into place: not the first
+// ones, nor those shown again after choosing an interval.
+const dayTree = ref<HTMLElement | null>(null)
+const dayTreeShown = ref(false)
+watch(dayTree, (tree) => {
+  dayTreeShown.value = false
+  if (tree)
+    void nextTick(() => dayTreeShown.value = true)
+}, { flush: 'post' })
+const currentStartGroup = computed(() => plainList.value ? startGroupKey.value ?? historyGroups.value[0]?.key : undefined)
 // The list below starts at the chosen group (user-specified): its history
 // loads in place of the scroll, the later pages following as usual.
 function selectStartGroup(groupKey: string) {
@@ -286,8 +319,6 @@ function selectStartGroup(groupKey: string) {
   batch.clearSelection()
   startGroupKey.value = groupKey === historyGroups.value[0]?.key ? undefined : groupKey
 }
-// The day strip shows with a second day, or held by skeletons on the first page.
-const showDayStrip = computed(() => historyDays.value.length > 1 || (showSkeletons.value && !historyList.length))
 function toggleHistoryGroup(key: string) {
   if (controlsDisabled.value)
     return
@@ -326,10 +357,19 @@ watch(keyword, (value) => {
   if (!value.trim() && submittedKeyword.value)
     clearSearch()
 })
+// One press removes it: the card breaks apart while the write runs (the
+// timeline's commit joins this dissolve), and a failed write brings it back.
+async function removeHistoryItem(record: HistoryItem) {
+  if (timeline.deleting.has(mutationKey(record)))
+    return
+  const dissolve = dissolveElements(historyCards([record]))
+  if (!await timeline.deleteHistoryItem(record))
+    dissolve.restore()
+}
 // Removing one record is in the card's shared menu (user-specified), not on the card.
 function getHistoryMenuGroups(item: unknown): VideoCardContextMenuExtraOption[][] {
   const record = item as HistoryItem
-  return [[{ key: 'history:remove', name: t('history.remove_from_history'), icon: 'i-tabler:trash', color: 'text-$bew-error-color', run: () => void timeline.deleteHistoryItem(record) }]]
+  return [[{ key: 'history:remove', name: t('history.remove_from_history'), icon: 'i-tabler:trash', color: 'text-$bew-error-color', run: () => void removeHistoryItem(record) }]]
 }
 
 function formatHistoryTime(item: HistoryItem) {
@@ -474,17 +514,6 @@ function jumpToLoginPage() {
 <template>
   <LibraryWorkspace v-if="getCSRF()" :label="t('history.title')">
     <main ref="historyContent" class="history-content" :style="cardWidth ? { '--history-card-width': `${cardWidth}px`, '--history-card-height': `${cardHeight}px` } : undefined">
-      <!-- The first unfiltered page holds the strip with chips of the same height. -->
-      <section v-if="showDayStrip" class="history-day-strip" :aria-label="t('library_tools.days')" :aria-busy="historyDays.length <= 1">
-        <LibraryBleedStrip v-if="historyDays.length <= 1" :label="t('library_tools.days')" compact>
-          <SkeletonBlock v-for="index in 6" :key="index" width="calc(var(--bew-space-12) + var(--bew-space-4))" height="var(--bew-control-height)" radius="full" />
-        </LibraryBleedStrip>
-        <LibraryBleedStrip v-else :label="t('library_tools.days')" compact>
-          <button v-for="day in historyDays" :key="day.key" type="button" class="history-day-strip__day" @click="jumpToDay(day.key)">
-            {{ day.label }}
-          </button>
-        </LibraryBleedStrip>
-      </section>
       <p v-if="submittedKeyword" class="history-query-summary" role="status">
         {{ t('library_tools.search_results', { query: submittedKeyword }) }}
       </p>
@@ -497,7 +526,7 @@ function jumpToLoginPage() {
       <HistoryGroupSkeleton v-else-if="showSkeletons && !historyList.length" :cards="cardColumns + 1" />
 
       <!-- One row per group; a new interval or starting group (chosen in the
-           day strip) fades the rows over. -->
+           rail's day tree) fades the rows over. -->
       <Transition v-else name="page-fade" mode="out-in" v-bind="retiringTransition">
         <div :key="`${interval}:${startGroupKey ?? ''}`" ref="historyContainer" class="history-groups">
           <template v-for="entry in renderedRows" :key="entry.key">
@@ -563,118 +592,130 @@ function jumpToLoginPage() {
             :open="filters.period === 'custom'" :title="t('library_tools.date_range')" :start="filters.startDate" :end="filters.endDate"
             :invalid="invalidRange" :disabled="controlsDisabled" @update="updateFilterDate"
           />
-          <Transition name="page-fade" mode="out-in" v-bind="retiringTransition">
-            <div
-              v-if="choosingInterval" key="intervals" class="library-rail-actions" role="radiogroup" :aria-label="t('settings.history_group_interval')"
-              @keydown.esc.stop="choosingInterval = false"
-            >
-              <Button
-                v-for="value in HISTORY_GROUP_INTERVALS" :key="value" class="library-sidebar-action" :type="value === interval ? 'primary' : 'default'"
-                role="radio" :aria-checked="value === interval" @click="selectInterval(value)"
-              >
-                <template #left>
-                  <i :class="INTERVAL_ICONS[value]" />
-                </template>
-                {{ t(`history.group_${value}`) }}
-              </Button>
-            </div>
+          <div class="library-rail-actions">
             <Button
-              v-else key="interval" class="library-sidebar-action" :disabled="batch.managing.value" aria-haspopup="true"
-              @click="choosingInterval = true"
+              class="library-sidebar-action" :type="batch.managing.value ? 'primary' : 'default'"
+              role="switch" :aria-checked="batch.managing.value" @click="choosingInterval = false; batch.toggleManaging()"
+            >
+              <template #left>
+                <i :class="batch.managing.value ? 'i-tabler:check' : 'i-tabler:list-check'" />
+              </template>
+              {{ t('watch_later.batch_manage') }}
+            </Button>
+            <Transition name="page-fade" mode="out-in" v-bind="retiringTransition">
+              <div v-if="batch.managing.value" key="selection" class="library-rail-actions">
+                <Button class="library-sidebar-action" :disabled="!historyList.length" :aria-pressed="batch.allSelected.value" @click="batch.toggleAll">
+                  <template #left>
+                    <i i-tabler:checks />
+                  </template>
+                  {{ t(batch.allSelected.value ? 'watch_later.unselect_all' : 'history.select_results') }}
+                </Button>
+                <Button class="library-sidebar-action" type="primary" :disabled="!batch.selected.value.size" @click="batch.removeSelected">
+                  <template #left>
+                    <LoadingRing :loading="batch.busy.value">
+                      <i i-tabler:trash />
+                    </LoadingRing>
+                  </template>
+                  {{ t('watch_later.remove_selected', { count: batch.selected.value.size }) }}
+                </Button>
+                <p v-if="batch.failed.value" class="history-batch-error" role="alert">
+                  {{ t('common.operation_failed') }}
+                </p>
+              </div>
+              <div v-else key="actions" class="library-rail-actions">
+                <Button
+                  class="library-sidebar-action history-refresh-button" :disabled="isLoading"
+                  :aria-busy="isLoading" @click="!isLoading && handleHistoryPageRefresh()"
+                >
+                  <template #left>
+                    <LoadingRing :loading="isLoading">
+                      <i i-tabler:refresh aria-hidden="true" />
+                    </LoadingRing>
+                  </template>
+                  {{ t('history.refresh') }}
+                </Button>
+                <Button
+                  v-if="historyStatus === undefined"
+                  class="library-sidebar-action" :disabled="timeline.isReadingStatus.value"
+                  @click="timeline.getHistoryPauseStatus"
+                >
+                  <template #left>
+                    <LoadingRing :loading="timeline.isReadingStatus.value">
+                      <i i-tabler:refresh />
+                    </LoadingRing>
+                  </template>
+                  {{ t('history.retry_recording_status') }}
+                </Button>
+                <Button
+                  v-else-if="!historyStatus"
+                  class="library-sidebar-action"
+                  :disabled="timeline.isUpdatingStatus.value" :aria-busy="timeline.isUpdatingStatus.value"
+                  @click="handlePauseWatchHistory"
+                >
+                  <template #left>
+                    <div i-tabler:player-pause />
+                  </template>
+                  {{ $t('history.pause_watch_history') }}
+                </Button>
+                <Button
+                  v-else
+                  class="library-sidebar-action history-action--success"
+                  :disabled="timeline.isUpdatingStatus.value" :aria-busy="timeline.isUpdatingStatus.value"
+                  @click="handleTurnOnWatchHistory"
+                >
+                  <template #left>
+                    <div i-tabler:player-play />
+                  </template>
+                  {{ $t('history.turn_on_watch_history') }}
+                </Button>
+                <Button
+                  class="library-sidebar-action history-action--danger"
+                  :disabled="isClearingHistory"
+                  @click="handleClearAllWatchHistory"
+                >
+                  <template #left>
+                    <div i-tabler:trash />
+                  </template>
+                  {{ $t('history.clear_all_watch_history') }}
+                </Button>
+              </div>
+            </Transition>
+          </div>
+          <!-- The grouping is the tree's root (user-specified): opening it hides
+               its value and lists the intervals as its children in place of the days. -->
+          <section class="history-days">
+            <Button
+              class="library-sidebar-action" :disabled="batch.managing.value" :aria-expanded="choosingInterval"
+              @click="choosingInterval = !choosingInterval"
             >
               <template #left>
                 <i :class="INTERVAL_ICONS[interval]" />
               </template>
-              {{ t('history.group_button', { interval: t(`history.group_${interval}`) }) }}
+              {{ choosingInterval ? t('history.group_label') : t('history.group_button', { interval: t(`history.group_${interval}`) }) }}
             </Button>
-          </Transition>
-          <Button
-            class="library-sidebar-action" :type="batch.managing.value ? 'primary' : 'default'"
-            role="switch" :aria-checked="batch.managing.value" @click="choosingInterval = false; batch.toggleManaging()"
-          >
-            <template #left>
-              <i :class="batch.managing.value ? 'i-tabler:check' : 'i-tabler:list-check'" />
-            </template>
-            {{ t('watch_later.batch_manage') }}
-          </Button>
-          <Transition name="page-fade" mode="out-in" v-bind="retiringTransition">
-            <div v-if="batch.managing.value" key="selection" class="library-rail-actions">
-              <Button class="library-sidebar-action" :disabled="!historyList.length" :aria-pressed="batch.allSelected.value" @click="batch.toggleAll">
-                <template #left>
-                  <i i-tabler:checks />
-                </template>
-                {{ t(batch.allSelected.value ? 'watch_later.unselect_all' : 'history.select_results') }}
-              </Button>
-              <Button class="library-sidebar-action" type="primary" :disabled="!batch.selected.value.size" @click="batch.removeSelected">
-                <template #left>
-                  <LoadingRing :loading="batch.busy.value">
-                    <i i-tabler:trash />
-                  </LoadingRing>
-                </template>
-                {{ t('watch_later.remove_selected', { count: batch.selected.value.size }) }}
-              </Button>
-              <p v-if="batch.failed.value" class="history-batch-error" role="alert">
-                {{ t('common.operation_failed') }}
-              </p>
-            </div>
-            <div v-else key="actions" class="library-rail-actions">
-              <Button
-                class="library-sidebar-action history-refresh-button" :disabled="isLoading"
-                :aria-busy="isLoading" @click="!isLoading && handleHistoryPageRefresh()"
+            <Transition name="page-fade" mode="out-in" v-bind="retiringTransition">
+              <ul
+                v-if="choosingInterval" key="intervals" class="history-days__tree" role="radiogroup" :aria-label="t('settings.history_group_interval')"
+                @keydown.esc.stop="choosingInterval = false"
               >
-                <template #left>
-                  <LoadingRing :loading="isLoading">
-                    <i i-tabler:refresh aria-hidden="true" />
-                  </LoadingRing>
-                </template>
-                {{ t('history.refresh') }}
-              </Button>
-              <Button
-                v-if="historyStatus === undefined"
-                class="library-sidebar-action" :disabled="timeline.isReadingStatus.value"
-                @click="timeline.getHistoryPauseStatus"
-              >
-                <template #left>
-                  <LoadingRing :loading="timeline.isReadingStatus.value">
-                    <i i-tabler:refresh />
-                  </LoadingRing>
-                </template>
-                {{ t('history.retry_recording_status') }}
-              </Button>
-              <Button
-                v-else-if="!historyStatus"
-                class="library-sidebar-action history-action--warning"
-                :disabled="timeline.isUpdatingStatus.value" :aria-busy="timeline.isUpdatingStatus.value"
-                @click="handlePauseWatchHistory"
-              >
-                <template #left>
-                  <div i-tabler:player-pause />
-                </template>
-                {{ $t('history.pause_watch_history') }}
-              </Button>
-              <Button
-                v-else
-                class="library-sidebar-action history-action--success"
-                :disabled="timeline.isUpdatingStatus.value" :aria-busy="timeline.isUpdatingStatus.value"
-                @click="handleTurnOnWatchHistory"
-              >
-                <template #left>
-                  <div i-tabler:player-play />
-                </template>
-                {{ $t('history.turn_on_watch_history') }}
-              </Button>
-              <Button
-                class="library-sidebar-action history-action--danger"
-                :disabled="isClearingHistory"
-                @click="handleClearAllWatchHistory"
-              >
-                <template #left>
-                  <div i-tabler:trash />
-                </template>
-                {{ $t('history.clear_all_watch_history') }}
-              </Button>
-            </div>
-          </Transition>
+                <li v-for="value in HISTORY_GROUP_INTERVALS" :key="value">
+                  <button
+                    type="button" class="library-sidebar-action history-days__option" role="radio" :aria-checked="value === interval"
+                    @click="selectInterval(value)"
+                  >
+                    <span class="keep-one-line">{{ t(`history.group_${value}`) }}</span>
+                  </button>
+                </li>
+              </ul>
+              <ul v-else-if="historyDays.length" ref="dayTree" key="days" class="history-days__tree" :aria-label="t('library_tools.days')">
+                <HistoryDayNode
+                  v-for="day in historyDays" :key="day.key" :label="day.label" :group-key="day.groupKey" :periods="day.periods"
+                  :current="currentStartGroup" :expanded="!collapsedDays.has(day.key)" :animate-in="dayTreeShown"
+                  @select="selectStartGroup" @toggle="toggleDay(day.key)"
+                />
+              </ul>
+            </Transition>
+          </section>
         </fieldset>
       </div>
     </template>
@@ -686,15 +727,13 @@ function jumpToLoginPage() {
 </template>
 
 <style lang="scss" scoped>
-@use "../../../styles/bleedStrip";
-.history-action--warning {
-  --bew-library-action-foreground: var(--bew-warning-foreground);
-}
+@use "../../../styles/railSection";
+@use "./historyTree";
 .history-action--success {
   --bew-library-action-foreground: var(--bew-success-foreground);
 }
 .history-action--danger {
-  --bew-library-action-foreground: var(--bew-error-foreground);
+  --bew-library-action-foreground: var(--bew-destructive-foreground);
 }
 .history-controls {
   min-width: 0;
@@ -713,41 +752,26 @@ function jumpToLoginPage() {
 }
 .history-content,
 .history-groups {
-  // Later and positioned: it slides up over the pinned day strip.
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--bew-space-12);
   min-width: 0;
 }
-// Each loaded day, starting the list at it; pinned like the Moments up-list.
-.history-day-strip {
-  @include bleedStrip.bar(var(--bew-control-height), var(--bew-space-6));
+// The interval and the day tree close the rail, so loading days only grows its end.
+.history-days {
+  @include railSection.flat($bottom: false);
+  display: grid;
 }
-.history-day-strip__day {
-  flex: none;
-  height: var(--bew-control-height);
-  padding-inline: var(--bew-space-3);
-  border: 0;
-  border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-capsule);
-  background: var(--bew-fill-1);
-  color: var(--bew-text-2);
-  font: inherit;
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background-color var(--bew-duration-fast) var(--bew-ease-standard),
-    color var(--bew-duration-fast) var(--bew-ease-standard);
-  &:hover {
-    background: var(--bew-fill-2);
-    color: var(--bew-text-1);
-  }
-  &:focus-visible {
-    outline: var(--bew-focus-ring, 1px solid CanvasText);
-    outline-offset: var(--bew-space-0-5);
+// The days and the intervals hang a level in, their line under the root's icon.
+.history-days__tree {
+  @include historyTree.branches(calc(var(--bew-sidebar-label-inset) + var(--bew-space-4)));
+  display: grid;
+  min-width: 0;
+}
+.history-days__option {
+  font-family: inherit;
+  &[aria-checked="true"] {
+    background: var(--bew-sidebar-selected-bg);
   }
 }
 // A card of the group's strip, as wide as an adaptive-grid column.
@@ -760,12 +784,6 @@ function jumpToLoginPage() {
   contain-intrinsic-size: auto var(--history-card-width, var(--bew-video-card-min-width)) auto
     var(--history-card-height, 224px);
 }
-@media (prefers-reduced-motion: reduce) {
-  .history-day-strip__day {
-    transition: none;
-  }
-}
-
 .history-load-more-error {
   display: flex;
   min-height: var(--bew-control-height);

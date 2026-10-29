@@ -228,7 +228,9 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
         addEventListener: window.addEventListener.bind(window),
         removeEventListener: window.removeEventListener.bind(window),
         dispatchEvent: window.dispatchEvent.bind(window),
-        matchMedia: () => ({ matches: reduced }),
+        matchMedia: () => ({ get matches() {
+          return reduced
+        } }),
         setInterval: (callback) => {
           intervals.set(++id, callback)
           return id
@@ -272,6 +274,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     try {
       button.click()
       await flush()
+      // Transition suppression in the page and the Shadow DOM, plus the reveal's stacking rule.
       assert.equal(styles(), 3)
       button.click()
       await flush()
@@ -279,11 +282,11 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       assert.equal(styles(), 3)
       fixture.transitions[1].ready.resolve()
       await flush()
-      assert.equal(fixture.animations[0].options.duration, 300)
+      assert.equal(fixture.animations[0].options.duration, 200)
       assert.equal(fixture.animations[0].options.fill, 'forwards')
       fixture.animations[0].finished.resolve()
       await flush()
-      assert.equal(styles(), 4, 'the final clip and transition suppression outlive animation.finished until browser snapshots disappear')
+      assert.equal(styles(), 3, 'the final clip and transition suppression outlive animation.finished until browser snapshots disappear')
       assert.equal(fixture.animations[0].canceled, 0)
       assert.ok(fixture.animations[0].frames.clipPath.every(value => value.includes('125px 120px')), 'keyboard activation originates at the trigger')
       fixture.transitions[1].finished.reject(new Error('interrupted'))

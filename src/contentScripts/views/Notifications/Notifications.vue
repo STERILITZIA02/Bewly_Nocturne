@@ -11,6 +11,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { getCSRF, getUserID } from '~/utils/main'
 import { buildBewlyNotificationUrl, normalizeNotificationRoute } from '~/utils/notificationRoute'
+import { dissolveElements } from '~/utils/particleDissolve'
 import type { PrivateConversationRoute } from '~/utils/privateConversationRoute'
 import {
   buildPrivateConversationUrl,
@@ -63,6 +64,7 @@ const { activatedPage, handlePageRefresh, openSettingsAt, scrollViewportRef, act
 const routeState = useRouteState()
 const topBarStore = useTopBarStore()
 
+const pageRoot = ref<HTMLElement | null>(null)
 const currentView = ref<NotificationView>('whisper')
 const routeReady = ref(false)
 const nativeFeedRef = ref<NativeNotificationFeedExposed | null>(null)
@@ -119,7 +121,8 @@ const privateSessionActions = usePrivateSessionActions(currentMid, {
   report: input => api.privateMessage.reportPrivateUser(input),
   messages: talkerId => api.privateMessage.getPrivateMessages({ talkerId, size: 20 }),
   reconcile: privateSessions.reconcileSessionSettings,
-  blocked: (session) => {
+  blocked: async (session) => {
+    await dissolveElements(pageRoot.value?.querySelector(`[data-session-key="${CSS.escape(session.key)}"]`)).released
     if (privateSessions.selectedSessionKey.value === session.key)
       closePrivateConversation()
     privateSessions.removeSession(session.key)
@@ -542,10 +545,12 @@ onBeforeUnmount(() => {
 
 <template>
   <main
+    ref="pageRoot"
     class="notifications-page notifications-page--workspace"
     :class="{
       'notifications-page--dock-bottom': isBottomDock,
     }"
+    :style="{ '--notifications-dock-item-height': settings.showDockItemNames ? 'var(--bew-dock-item-height)' : 'var(--bew-dock-item-height-icon-only)' }"
   >
     <div v-if="!routeReady" class="notifications-page__route-loading" aria-busy="true">
       <NotificationsPageSkeleton :label="t('common.loading')" :view="currentView" />
@@ -627,19 +632,15 @@ onBeforeUnmount(() => {
 }
 
 .notifications-page--workspace.notifications-page--dock-bottom {
-  --notifications-composer-dock-shift: var(--bew-dock-bottom-shift, 0px);
-  --notifications-detail-bottom-space: calc(var(--bew-dock-control-size) + var(--bew-space-8));
+  // Shell = item + two 4px rims; leave the same 8px above and below it.
+  --notifications-detail-bottom-space: calc(
+    var(--notifications-dock-item-height) + var(--bew-space-2) + var(--bew-space-2) * 2
+  );
 }
 
 .notifications-page__workspace {
   height: 100%;
   min-width: 0;
   min-height: 0;
-}
-
-@media (min-width: breakpoints.$grid-lg) {
-  .notifications-page--workspace.notifications-page--dock-bottom {
-    --notifications-detail-bottom-space: calc(var(--bew-dock-control-size-lg) + var(--bew-space-8));
-  }
 }
 </style>

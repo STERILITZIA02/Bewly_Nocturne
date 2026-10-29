@@ -343,7 +343,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       background: var(--bew-elevated-solid, rgb(255 255 255 / 96%));
       background: color-mix(in oklab, var(--bew-elevated-solid, white) 90%, transparent);
       background: var(--bew-glass-tint, color-mix(in oklab, var(--bew-elevated-solid, white) 90%, transparent));
-      border: var(--bew-glass-edge-width, 1px) solid var(--bew-glass-edge-color, rgb(255 255 255 / 70%));
+      border: var(--bew-glass-edge-width, 1px) solid var(--bew-glass-edge-color, rgb(230 230 230 / 80%));
       border-radius: var(--bew-surface-radius, 16px);
       box-shadow: var(--bew-shadow-3, 0 8px 30px rgb(0 0 0 / 18%));
       backdrop-filter: var(--bew-filter-glass-1, blur(12px));

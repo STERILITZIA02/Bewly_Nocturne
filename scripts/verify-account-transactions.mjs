@@ -14,68 +14,6 @@ function deferred() {
 }
 
 export function registerAccountTransactionChecks(check, { Vue, compileComponent, flush }) {
-  check('card removal: view slots survive member deletion, unknown writes reconcile before retry, and old scopes cannot submit', async () => {
-    const { useCardRemoval } = await import('../src/composables/useCardRemoval')
-    const scope = Vue.effectScope()
-    const items = Vue.shallowRef([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
-    const view = Vue.ref('account-1:folder-1')
-    const removals = scope.run(() => useCardRemoval({ items: () => items.value, key: item => item.id, scope: () => view.value }))
-    let member = true
-    let writes = 0
-    let resolveWrite
-    const item = items.value[1]
-    removals.begin(item, {
-      current: () => true,
-      write: async (added, current) => {
-        await new Promise(resolve => resolveWrite = resolve)
-        if (!current())
-          return 'cancelled'
-        writes++
-        member = added
-        return writes === 1 ? 'unknown' : 'success'
-      },
-      read: async () => member,
-      accepted: added => items.value = added ? [item, ...items.value] : items.value.filter(entry => entry.id !== item.id),
-    })
-    try {
-      const state = removals.get(item)
-      assert.equal(state.claimFocus(), true)
-      assert.equal(state.claimFocus(), false, 'recycled cards do not steal focus')
-      const removing = state.run()
-      resolveWrite()
-      await removing
-      assert.equal(state.phase, 'verify')
-      await state.run()
-      assert.equal(writes, 1, 'checking an uncertain result never repeats the mutation')
-      assert.deepEqual(items.value.map(item => item.id), ['a', 'c'])
-      assert.deepEqual(removals.displayItems.value.map(item => item.id), ['a', 'b', 'c'])
-      const restoring = state.run()
-      resolveWrite()
-      await restoring
-      assert.equal(member, true)
-      assert.equal(removals.get(item), undefined)
-      assert.deepEqual(items.value.map(item => item.id), ['b', 'a', 'c'], 'server order is accepted instead of restoring an old index')
-      for (const id of ['c', 'a']) {
-        const target = items.value.find(item => item.id === id)
-        removals.begin(target, { current: () => true, write: async () => 'success', read: async () => false, accepted: () => items.value = items.value.filter(item => item.id !== id) })
-        await removals.get(target).run()
-      }
-      assert.deepEqual(removals.displayItems.value.map(item => item.id), ['b', 'a', 'c'], 'adjacent removals keep their identity order even when removed from right to left')
-      removals.begin(item, { current: () => true, write: async (_added, current) => {
-        await flush()
-        if (current())
-          writes++
-        return 'cancelled'
-      }, read: async () => true, accepted() {} })
-      const old = removals.get(item)
-      const pending = old.run()
-      view.value = 'account-2:folder-2'
-      await pending
-      assert.equal(writes, 2)
-      assert.equal(removals.get(item), undefined)
-    }
-    finally { scope.stop() }
-  })
   check('A03/A20 real HistoryPage resets on account reconciliation and rejects a confirmation from the old account', async () => {
     const timelineModule = await import('../src/contentScripts/views/History/useHistoryTimeline')
     const accountScope = await import('../src/utils/accountScope')
@@ -429,7 +367,7 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
         return request.promise
       },
     }
-    const timeline = useHistoryTimeline({ api, getAccountId: () => account, getCSRF: () => 'csrf', haveScrollbar: async () => true, onWriteError: error => errors.push(error) })
+    const timeline = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api, getAccountId: () => account, getCSRF: () => 'csrf', haveScrollbar: async () => true, onWriteError: error => errors.push(error) })
     timeline.activate()
     const item = { history: { business: 'archive', oid: 1 }, view_at: 5 }
     timeline.historyList.push(item)

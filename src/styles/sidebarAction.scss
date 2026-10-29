@@ -7,16 +7,22 @@
   margin-inline: var(--bew-sidebar-action-inset);
 }
 
+// Rows touch, so a row's placeholder is a bar of its text height, centered.
+.library-sidebar-action-skeleton {
+  margin-block: calc((var(--bew-sidebar-action-height) - var(--bew-line-height-control)) / 2);
+}
+
 .library-rail-content .library-sidebar-action {
   --b-button-width: calc(100% - var(--bew-sidebar-action-inset) * 2);
   --b-button-color: transparent;
   --b-button-shadow-hover: none;
   --b-button-padding: var(--bew-sidebar-action-padding);
+  --b-button-height: var(--bew-sidebar-action-height);
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: var(--bew-space-2);
-  min-height: var(--bew-control-height);
+  min-height: var(--bew-sidebar-action-height);
   padding-inline: var(--bew-sidebar-action-padding);
   border: 0;
   border-radius: var(--bew-pill-radius);

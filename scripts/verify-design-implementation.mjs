@@ -189,7 +189,9 @@ export function registerDesignImplementationChecks(check, { Vue, compileComponen
     }
     let reduce = false
     const module = await loadSourceFunctions('../src/contentScripts/views/Anime/components/AnimeTimeTable.vue', ['scrollHorizontally', 'scrollToToday', 'updateScrollBounds'], {
-      window: { matchMedia: () => ({ matches: reduce }) },
+      window: { matchMedia: () => ({ get matches() {
+        return reduce
+      } }) },
       scrollViewport: Vue.ref(viewport),
       animeTimeTableWrap: Vue.ref(list),
       atStart: Vue.ref(true),

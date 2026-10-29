@@ -118,6 +118,7 @@ input[type="checkbox"] {
   &:focus-visible + .radio-switch {
     outline: var(--bew-focus-ring, 1px solid CanvasText);
     outline-offset: var(--bew-space-0-5);
+    background: var(--bew-fill-3);
   }
 
   &:hover + .radio-switch {
@@ -130,13 +131,15 @@ input[type="checkbox"] {
 
   &:checked + .radio-switch {
     background: var(--bew-theme-color);
-    border-color: var(--bew-theme-color);
   }
 
   &:checked:hover + .radio-switch {
     background: var(--bew-theme-color);
-    border-color: var(--bew-theme-color);
     box-shadow: var(--bew-shadow-1);
+  }
+
+  &:checked:focus-visible + .radio-switch {
+    background: color-mix(in srgb, var(--bew-theme-color), var(--bew-switch-thumb-active) 16%);
   }
 
   & + .radio-switch,

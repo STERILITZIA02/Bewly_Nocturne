@@ -270,6 +270,7 @@ function selectFilter(key: string, value: string) {
     line-height: var(--bew-line-height-heading);
     color: var(--bew-text-1);
     font-weight: var(--bew-font-weight-regular);
+    font-family: var(--bew-fonts-monospace);
     font-variant-numeric: tabular-nums;
     @include truncateFade.line;
   }
@@ -318,13 +319,15 @@ function selectFilter(key: string, value: string) {
   > span {
     margin-inline-start: auto;
     color: var(--bew-text-2);
+    font-family: var(--bew-fonts-monospace);
     font-variant-numeric: tabular-nums;
   }
 }
 // A rail never fades (user-specified, see scrollEdgeFade.lines): its rows
-// carry live icons and playing previews. Edge to edge, padded back in.
+// carry live icons and playing previews. Edge to edge, padded back in. The
+// list ends at the rail's bottom, the screen edge, so it draws no bottom line.
 .moments-live-card__list {
-  @include scrollEdgeFade.lines;
+  @include scrollEdgeFade.lines($bottom: false);
   display: grid;
   box-sizing: border-box;
   margin-inline: calc(-1 * var(--bew-sidebar-inline-padding));

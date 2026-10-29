@@ -479,7 +479,6 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     const tabState = await import('../src/composables/useHomeTabState')
     const cardTypes = await import('../src/components/VideoCard/types')
     const gridPolicy = await import('../src/utils/gridLayout')
-    const coverPolicy = await import('../src/utils/videoCardLayout')
     const events = await import('../src/constants/globalEvents')
     const settings = Vue.ref({ autoSwitchListLayout: false, videoCardCoverRatioOneColumn: 40, videoCardCoverRatioTwoColumns: 50, showVideoCardAuthorName: true })
     const relationWindows = []
@@ -498,7 +497,6 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       '~/logic/layoutEdit': { isLayoutEditing: editing },
       '~/utils/gridLayout': gridPolicy,
       '~/utils/mitt': { default: { on: () => {}, off: () => {} } },
-      '~/utils/videoCardLayout': coverPolicy,
       '~/utils/viewportGeometry': await import('../src/utils/viewportGeometry'),
       './SmoothLoading.vue': { default: { render: () => null } },
     })

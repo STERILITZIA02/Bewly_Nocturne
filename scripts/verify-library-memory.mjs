@@ -164,7 +164,7 @@ export function registerLibraryMemoryChecks(check, { Vue, compileComponent, flus
     const { LIBRARY_AUTOFILL_PAGE_LIMIT } = await import('../src/constants/library')
     let historyReads = 0
     let articleReads = 0
-    const history = useHistoryTimeline({ api: { getHistoryList: async () => {
+    const history = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api: { getHistoryList: async () => {
       historyReads++
       return { code: 0, data: { list: Array.from({ length: 20 }, (_, i) => ({ title: String(i), view_at: 10_000 - historyReads * 20 - i, history: { oid: historyReads * 20 + i, business: 'archive' } })) } }
     } }, getAccountId: () => 1, getCSRF: () => '', haveScrollbar: async () => false, onWriteError: assert.fail })

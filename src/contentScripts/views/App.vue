@@ -996,7 +996,7 @@ onBeforeUnmount(stopUrlCleaner)
               <div
                 class="bewly-page-content"
                 :class="{ 'bewly-page-content--messages': displayedPage === AppPage.Notifications, 'bewly-page-content--library': isLibraryPage, 'bewly-page-content--home': displayedPage === AppPage.Home }"
-                p="t-[calc(var(--bew-top-bar-height)+10px)]" m-auto
+                p="t-[calc(var(--bew-top-bar-height)+var(--bew-space-3))]" m-auto
                 w="lg:[calc(100%-200px)] [calc(100%-150px)]"
                 :style="{
                   minHeight: pageContentMinHeight === undefined ? undefined : `${pageContentMinHeight}px`,

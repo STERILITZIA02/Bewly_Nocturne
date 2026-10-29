@@ -182,17 +182,6 @@ player_screenshot:
   saved: Screenshot saved
   failed: Failed to capture screenshot
   video_unavailable: The current video frame is unavailable
-card_removal:
-  verify_failed: The result could not be verified. Check again.
-  watchLater: Remove from Watch Later?
-  favorite: Remove from this folder?
-  confirm: Remove
-  removing: Removing
-  removed: Removed
-  restore: Add again
-  restoring: Adding again
-  verify: Result not yet confirmed
-  reconcile: Check result
 player_adjustment:
   title: Picture and sound
   enable: Enable temporary picture and sound adjustments
@@ -251,6 +240,9 @@ settings:
   resume_from_preview_position_desc: 'Adds the preview position to video links. Preview memory, history resume and existing link times are preserved when disabled.'
   show_dock_back_to_top: Show Back to top in Dock
   show_dock_back_to_top_desc: Controls Back to top; refresh and undo remain available.
+  show_dock_item_names: Show names in Dock
+  show_dock_badges: Show badges in Dock
+  show_dock_badges_desc: Display only; nothing is marked as read.
   show_search_identity_switcher: Show search identity shortcut
   show_search_identity_switcher_desc: Switch between account and guest requests without signing out. Keywords and filters are preserved.
   search_identity: Search identity
@@ -604,7 +596,7 @@ settings:
     By default, Bilibili will specifically handle Chinese punctuation to achieve
     left alignment. If you are using a custom font, it is recommended to remove
     the indent.
-  disable_frosted_glass_and_top_bar_gradient: Frosted glass and top bar gradient
+  frosted_glass: Frosted glass
   frosted_glass_blur_intensity: Frosted glass blur intensity
   disable_shadow: Disable shadow
   link_opening_behavior_opt:
@@ -731,7 +723,7 @@ settings:
   theme_color_opt:
     neutral: No theme color
   gradient_theme_color_background: Use a neutral gradient in dark mode
-  gradient_theme_color_background_desc: Apply a neutral gradient to the page background and top bar without using the theme color.
+  gradient_theme_color_background_desc: Applies to the page background only, without using the theme color.
   logo_color: Logo color
   logo_color_opt:
     white: White
@@ -1699,9 +1691,13 @@ anime:
       sun: SUN
 history:
   group_hour: Hourly
-  group_period: Every 8 hours
+  group_period: By period
   group_day: Daily
   group_button: 'Group: {interval}'
+  group_label: 'Group:'
+  period_morning: Morning
+  period_afternoon: Afternoon
+  period_night: Night
   remove_from_history: Remove from history
   refresh: Refresh history
   sort_newest: Most recently watched (loaded records)

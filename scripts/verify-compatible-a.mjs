@@ -80,7 +80,9 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       },
       clearTimeout: id => timers.delete(id),
       getComputedStyle: () => ({ getPropertyValue: () => '.2s' }),
-      window: { matchMedia: () => ({ matches: reduced }) },
+      window: { matchMedia: () => ({ get matches() {
+        return reduced
+      } }) },
     })
     const frame = async () => {
       await flush()
@@ -542,7 +544,7 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       }, matches: data => data.documentId === 'current' }) },
       '~/utils/iframeMessage': { getIframeMessageData: event => event.data },
       '~/utils/iframeSearch': search,
-      '~/utils/searchNavigation': { resolveSearchNavigationTarget: keyword => `https://www.bilibili.com/?page=SearchResults&keyword=${keyword}`, openSearchResultsInCurrentTab: target => navigations.push(target) },
+      '~/utils/searchNavigation': { resolveSearchNavigationTarget: (await import('../src/utils/searchUrl')).buildPluginSearchResultsUrl, openSearchResultsInCurrentTab: target => navigations.push(target) },
     }, { window: { addEventListener: (_type, callback) => receive = callback, removeEventListener: () => receive = undefined } })
     scope.run(() => host.useIframeDocumentHost(Vue.ref(document.createElement('iframe')), () => active))
     const data = { type: search.IFRAME_SEARCH_REQUEST, documentId: 'current', keyword: 'test', category: 'user', intent: 'currentTab', requestId: 1 }

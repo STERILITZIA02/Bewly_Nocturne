@@ -6,6 +6,7 @@ import { computed, getCurrentInstance, nextTick, reactive, ref, shallowRef, watc
 import ALink from '~/components/ALink.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import Tooltip from '~/components/Tooltip.vue'
+import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { usePageDim } from '~/composables/usePageDim'
 import type { SearchCommand } from '~/composables/useSearchCommands'
 import { useSearchCommands } from '~/composables/useSearchCommands'
@@ -21,6 +22,7 @@ import { isInIframe } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
+import { dissolveElements } from '~/utils/particleDissolve'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
 import { openSearchResults, resolveSearchNavigationTarget, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
@@ -63,6 +65,9 @@ const emit = defineEmits<{
 const HISTORY_DISPLAY_LIMIT = 8
 
 const searchWrapRef = ref<HTMLElement>()
+// Removed history rows break apart; the rows below then close the gap.
+const historyRemovals = ref(0)
+useLayoutMotion(searchWrapRef, historyRemovals, { selector: '.search-panel__row[id]', key: 'id' })
 const { left: searchWrapLeft, top: searchWrapTop } = useElementBounding(searchWrapRef)
 const keywordRef = ref<HTMLInputElement>()
 const searchBarInstanceId = getCurrentInstance()?.uid ?? 0
@@ -448,22 +453,26 @@ function handleCommandClick(command: SearchCommand, event: MouseEvent) {
   runCommand(command)
 }
 
-async function changeHistory(operation: () => Promise<HistoryItem[]>) {
+async function changeHistory(operation: () => Promise<HistoryItem[]>, removedRows?: Iterable<Element | null | undefined> | Element | null) {
   if (historyChanging.value || !settings.value.enableSearchHistory)
     return
   const requestId = ++focusRequestId
   historyLoading.value = false
   historyChanging.value = true
   historyError.value = false
+  const dissolve = dissolveElements(removedRows)
   try {
     const next = await operation()
+    await dissolve.released
     if (!searchBarDisposed && requestId === focusRequestId) {
+      historyRemovals.value++
       searchHistory.value = next
       resetKeyboardSelection()
     }
   }
   catch (error) {
     reportSearchBarFailure('search-history-write', error)
+    dissolve.restore()
     if (!searchBarDisposed && requestId === focusRequestId)
       historyError.value = true
   }
@@ -473,7 +482,8 @@ async function changeHistory(operation: () => Promise<HistoryItem[]>) {
 }
 
 function handleDelete(value: string) {
-  return changeHistory(() => removeSearchHistory(value))
+  const id = getSearchOptionId('history', value)
+  return changeHistory(() => removeSearchHistory(value), searchWrapRef.value?.querySelector(`[id="${CSS.escape(id)}"]`))
 }
 
 function resetKeyboardSelection() {
@@ -559,7 +569,7 @@ function handleComboboxKeyDown(event: KeyboardEvent) {
 }
 
 function handleClearSearchHistory() {
-  return changeHistory(clearAllSearchHistory)
+  return changeHistory(clearAllSearchHistory, searchWrapRef.value?.querySelectorAll('.history-item'))
 }
 
 function handleFocusOut(event: FocusEvent) {
@@ -1216,6 +1226,7 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
     color: var(--bew-text-3);
     font-size: var(--bew-font-size-caption);
     line-height: var(--bew-line-height-caption);
+    font-family: var(--bew-fonts-monospace);
     font-variant-numeric: tabular-nums;
     text-align: center;
   }

@@ -11,24 +11,22 @@ const count = computed(() => Number.isFinite(props.count) ? Math.max(0, Math.flo
 .bew-count-badge {
   display: inline-flex;
   flex: 0 0 auto;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
   min-width: var(--bew-space-5);
   height: var(--bew-space-5);
   padding-inline: var(--bew-space-1);
   border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-capsule);
-  // Solid fallback for browsers without backdrop filtering.
-  background: var(--bew-elevated-solid);
-  color: var(--bew-text-1);
+  background: var(--bew-accent-solid);
+  color: var(--bew-on-accent-solid);
+  border: 0;
+  font-family: var(--bew-fonts-monospace);
+  font-variant-numeric: tabular-nums;
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-regular);
   white-space: nowrap;
   pointer-events: none;
-
-  // Explicitly requested for the Dock and top-bar unread capsules, including
-  // over the Dock's glass shell; do not generalize this to other nested controls.
-  @supports (backdrop-filter: blur(1px)) {
-    background: var(--bew-count-badge-bg);
-    backdrop-filter: var(--bew-filter-glass-1);
-  }
 }
 </style>

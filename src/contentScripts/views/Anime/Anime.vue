@@ -22,7 +22,7 @@ import { reportRuntimeFailure } from '~/utils/messaging'
 import AnimeTimeTable from './components/AnimeTimeTable.vue'
 
 const viewState = usePageViewState('anime')
-const animeWatchList = reactive(viewState.read<WatchListItem[]>('watchList', []))
+const animeWatchList = shallowReactive(viewState.read<WatchListItem[]>('watchList', []))
 const { t } = useI18n()
 
 function getWatchProgressLabel(item: WatchListItem) {
@@ -33,8 +33,14 @@ function getWatchProgressLabel(item: WatchListItem) {
     : undefined
   return time ? t('anime.watched_until', { time }) : item.progress || t('anime.havent_seen')
 }
-const recommendAnimeList = reactive(viewState.read<RecommendationItem[]>('recommendations', []))
-const popularAnimeList = reactive(viewState.read<PopularAnimeItem[]>('popular', []))
+function recommendationKey(item: RecommendationItem) {
+  return item.episode_id ? `ep:${item.episode_id}` : item.season_id ? `ss:${item.season_id}` : item.link || `${item.card_style}:${item.title}:${item.cover}`
+}
+const recommendAnimeList = shallowReactive(viewState.read<RecommendationItem[]>('recommendations', []))
+const popularAnimeList = shallowReactive(viewState.read<PopularAnimeItem[]>('popular', []))
+const recommendationKeys = new Set(recommendAnimeList.map(recommendationKey))
+const recommendationCursors = new Set(viewState.read<number[]>('recommendationCursors', []))
+viewState.capture('recommendationCursors', () => [...recommendationCursors])
 viewState.capture('watchList', () => animeWatchList)
 viewState.capture('recommendations', () => recommendAnimeList)
 viewState.capture('popular', () => popularAnimeList)
@@ -54,6 +60,7 @@ const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 const topBarStore = useTopBarStore()
 let requestGeneration = 0
 let animeMounted = false
+let animeController = new AbortController()
 
 const isLoading = computed(() => {
   return isLoadingAnimeWatchList.value || isLoadingPopularAnime.value || isLoadingRecommendAnime.value
@@ -80,6 +87,7 @@ onMounted(() => {
 onScopeDispose(() => {
   animeMounted = false
   requestGeneration++
+  animeController.abort()
   if (handleReachBottom.value === handleAnimeReachBottom)
     handleReachBottom.value = undefined
   if (handlePageRefresh.value === handleAnimePageRefresh)
@@ -105,9 +113,13 @@ function isAnimeRequestCurrent(generation: number, requestAccountId: ReturnType<
 function reloadAnimePage() {
   const generation = ++requestGeneration
   const requestAccountId = getAnimeAccountId()
+  animeController.abort()
+  animeController = new AbortController()
   animeWatchList.length = 0
   recommendAnimeList.length = 0
   popularAnimeList.length = 0
+  recommendationKeys.clear()
+  recommendationCursors.clear()
   cursor.value = 0
   watchListLoaded.value = false
   popularLoaded.value = false
@@ -153,7 +165,7 @@ async function getAnimeWatchList(generation = requestGeneration, requestAccountI
       pn: 1,
       follow_status: 2,
       ps: 30,
-    })
+    }, { signal: animeController.signal })
     if (!isAnimeRequestCurrent(generation, requestAccountId))
       return
     if (response.code !== 0 || !Array.isArray(response.data?.list)) {
@@ -177,27 +189,42 @@ async function getRecommendAnimeList(
   generation = requestGeneration,
   requestAccountId = getAnimeAccountId(),
 ): Promise<boolean> {
-  if (!isAnimeRequestCurrent(generation, requestAccountId) || isLoadingRecommendAnime.value)
+  if (!isAnimeRequestCurrent(generation, requestAccountId) || isLoadingRecommendAnime.value || noMoreContent.value)
     return false
   recommendRequestFailed.value = false
   isLoadingRecommendAnime.value = true
+  const requestedCursor = cursor.value
   try {
     const response: RecommendationResult = await api.anime.getRecommendAnimeList({
-      coursor: cursor.value,
-    })
+      coursor: requestedCursor,
+    }, { signal: animeController.signal })
     if (!isAnimeRequestCurrent(generation, requestAccountId))
       return false
     if (response.code !== 0) {
       recommendRequestFailed.value = true
-      return true
+      return false
     }
 
-    const items = Array.isArray(response.data?.items) ? response.data.items : []
-    const subItems = Array.isArray(items[0]?.sub_items) ? items[0].sub_items : []
-    recommendAnimeList.push(...subItems)
-    cursor.value = response.data.coursor
-    noMoreContent.value = !response.data.has_next || subItems.length === 0
+    const data = response.data
+    if (!data || !Array.isArray(data.items) || typeof data.has_next !== 'boolean' || !Number.isFinite(data.coursor))
+      throw new Error('Anime recommendation page unavailable')
+    const subItems = Array.isArray(data.items[0]?.sub_items) ? data.items[0].sub_items : []
+    const added = subItems.filter((item) => {
+      const key = recommendationKey(item)
+      if (recommendationKeys.has(key))
+        return false
+      recommendationKeys.add(key)
+      return true
+    })
+    recommendAnimeList.push(...added)
     recommendationsLoaded.value = true
+    if (data.has_next && (!added.length || data.coursor === requestedCursor || recommendationCursors.has(data.coursor))) {
+      recommendRequestFailed.value = true
+      return false
+    }
+    cursor.value = data.coursor
+    recommendationCursors.add(data.coursor)
+    noMoreContent.value = !data.has_next
     return true
   }
   catch (error) {
@@ -205,7 +232,7 @@ async function getRecommendAnimeList(
       recommendRequestFailed.value = true
       reportRuntimeFailure('Failed to load anime recommendations', error)
     }
-    return true
+    return false
   }
   finally {
     if (animeMounted && generation === requestGeneration)
@@ -219,7 +246,7 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
   isLoadingPopularAnime.value = true
   popularRequestFailed.value = false
   try {
-    const response: PopularAnimeResult = await api.anime.getPopularAnimeList()
+    const response: PopularAnimeResult = await api.anime.getPopularAnimeList(undefined, { signal: animeController.signal })
     if (!isAnimeRequestCurrent(generation, requestAccountId))
       return
     if (response.code !== 0 || !Array.isArray(response.result?.list))
@@ -394,7 +421,7 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
         <div grid="~ 2xl:cols-6 xl:cols-5 lg:cols-4 md:cols-3 sm:cols-2 cols-1 gap-6">
           <BangumiCard
             v-for="item in recommendAnimeList"
-            :key="item.episode_id"
+            :key="recommendationKey(item)"
             :bangumi="{
               url: item.link ?? '',
               cover: item.cover,

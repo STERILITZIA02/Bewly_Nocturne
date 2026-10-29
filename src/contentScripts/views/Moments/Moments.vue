@@ -21,6 +21,7 @@ import MomentReadMarker from '~/components/MomentReadMarker.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
+import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { usePageSearchIntent } from '~/composables/usePageSearchIntent'
 import { usePageViewState } from '~/composables/usePageViewState'
@@ -41,6 +42,7 @@ import { createMomentCommentSessionCache, MOMENT_COMMENT_SESSIONS } from '~/util
 import { resolveHorizontalScrollState } from '~/utils/momentsLayout'
 import type { MomentGap, MomentJoinStatus, MomentUnreadSnapshot } from '~/utils/momentsReadPosition'
 import { dynamicId, isNotNewerMoment, keepMomentAnchorInterval, MOMENTS_LATEST_OFFSET } from '~/utils/momentsReadPosition'
+import { dissolveElements } from '~/utils/particleDissolve'
 import type { ScrollCardAnchor, ScrollPositionClaim } from '~/utils/scrollIntent'
 import { canRestoreScrollPosition, claimScrollPosition, scrollToPosition } from '~/utils/scrollIntent'
 import { getRemainingScroll, invalidateViewportGeometry, readViewportGeometry } from '~/utils/viewportGeometry'
@@ -590,10 +592,22 @@ function isMomentDeleted(id: string) {
   return deletedMomentAccount !== null && deletedMomentAccount === getMomentActionAccount() && deletedMomentIds.has(id)
 }
 
-function removeMomentFromViews(id: string) {
+// A deleted card breaks into particles; the cards below it then close the gap.
+const momentRemovals = ref(0)
+useLayoutMotion(gridRef, momentRemovals, { selector: '[data-moment-id]', key: 'data-moment-id', scroller: scrollViewportRef })
+
+function momentCard(id: string) {
+  return gridRef.value?.querySelector(`[data-moment-id="${CSS.escape(id)}"]`)
+}
+
+async function removeMomentFromViews(id: string) {
   const account = getMomentActionAccount()
   if (account === null)
     return
+  await dissolveElements(momentCard(id)).released
+  if (account !== getMomentActionAccount())
+    return
+  momentRemovals.value++
   if (deletedMomentAccount !== account) {
     deletedMomentIds.clear()
     deletedMomentAccount = account
@@ -617,8 +631,12 @@ async function requestMomentDelete(moment: DisplayMoment) {
   if (!await confirmMomentAction(t('moment_card.delete_confirm')) || account !== getMomentActionAccount())
     return
   const current = findMoment(moment.id)
-  if (current)
-    void momentActions.deleteMoment(current)
+  if (!current)
+    return
+  // The card breaks apart once confirmed; removal from the views joins this dissolve.
+  const dissolve = dissolveElements(momentCard(moment.id))
+  if (await momentActions.deleteMoment(current) !== 'succeeded')
+    dissolve.restore()
 }
 
 function requestMomentReport(moment: DisplayMoment) {
@@ -1540,6 +1558,7 @@ function appendMoments(items: DisplayMoment[]) {
         <CloseButton
           class="moment-detail-frame__close"
           data-dialog-initial-focus
+          variant="floating"
           :label="t('common.close')"
           @click="detailDialogRef?.close()"
         />
@@ -1932,9 +1951,11 @@ function appendMoments(items: DisplayMoment[]) {
     transform 0.2s ease;
 }
 .moment-detail-frame__close {
+  // A space-2 inside the frame's corner, its corner nested in the frame's.
+  --bew-close-button-radius: calc(var(--bew-surface-radius) - var(--bew-space-2));
   position: absolute;
-  top: var(--bew-space-3);
-  right: var(--bew-space-3);
+  top: var(--bew-space-2);
+  right: var(--bew-space-2);
   z-index: 4;
 }
 .moment-detail-frame__open:hover {

@@ -171,7 +171,7 @@ function acknowledgeCurrentVersion() {
 
 .version-reminder-dialog__link {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  grid-template-columns: var(--bew-control-height-lg) minmax(0, 1fr) var(--bew-icon-size-md);
   gap: var(--bew-space-3);
   align-items: center;
   padding: var(--bew-space-3);
@@ -182,9 +182,9 @@ function acknowledgeCurrentVersion() {
   border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   transition:
-    color 160ms ease,
-    background-color 160ms ease,
-    border-color 160ms ease;
+    color var(--bew-duration-fast) var(--bew-ease-standard),
+    background-color var(--bew-duration-fast) var(--bew-ease-standard),
+    border-color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
 .version-reminder-dialog__link:hover {
@@ -193,8 +193,8 @@ function acknowledgeCurrentVersion() {
 }
 
 .version-reminder-dialog__link-icon {
-  width: 38px;
-  height: 38px;
+  width: var(--bew-control-height-lg);
+  height: var(--bew-control-height-lg);
   padding: var(--bew-space-2);
   background: currentColor;
   border-radius: var(--bew-interactive-radius);
@@ -215,8 +215,8 @@ function acknowledgeCurrentVersion() {
 }
 
 .version-reminder-dialog__arrow {
-  width: 18px;
-  height: 18px;
+  width: var(--bew-icon-size-md);
+  height: var(--bew-icon-size-md);
 }
 
 .version-reminder-dialog__hint {

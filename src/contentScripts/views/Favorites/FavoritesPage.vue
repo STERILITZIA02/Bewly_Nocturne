@@ -24,8 +24,8 @@ import Tooltip from '~/components/Tooltip.vue'
 import type { FavoriteResource } from '~/components/TopBar/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
-import { useCardRemoval } from '~/composables/useCardRemoval'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
+import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { usePageSearchIntent } from '~/composables/usePageSearchIntent'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { LIBRARY_HERO_RENDER_RADIUS } from '~/constants/library'
@@ -38,7 +38,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { isFavoriteFolderPrivate } from '~/utils/favoriteFolder'
-import { getFavoriteResourceKey, getFavoriteSourceKey, isPlayableFavoriteVideo } from '~/utils/favoriteResource'
+import { getFavoriteResourceKey, getFavoriteSourceKey } from '~/utils/favoriteResource'
 import {
   FAVORITE_FOLDER_PAGE_SIZE,
   FAVORITE_SEASON_PAGE_SIZE,
@@ -46,7 +46,8 @@ import {
 } from '~/utils/favoriteSeason'
 import { getCSRF, getUserID, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
 import { retiringTransition } from '~/utils/motionPresence'
-import { captureVideoFavoriteRemoval } from '~/utils/videoFavoriteSelection'
+import type { ParticleDissolve } from '~/utils/particleDissolve'
+import { dissolveElements } from '~/utils/particleDissolve'
 
 import { transformFavoriteArticle, transformFavoriteItem } from './favoriteAdapters'
 import type { FavoriteFilterQuery } from './favoriteFilter'
@@ -120,12 +121,27 @@ function selectStripUploader(mid?: number) {
 // The hero's cover: the folder's own, else its first item's.
 const heroImage = computed(() => folderInfo.value?.cover || visibleResources.value[0]?.cover || '')
 const ownFolder = computed(() => Boolean(folderInfo.value && String(folderInfo.value.mid || folderInfo.value.upper.mid) === String(accountId.value)))
-const removals = useCardRemoval<FavoriteResource>({
-  items: () => (filterActive.value ? filterScan.items.value : visibleResources.value) as FavoriteResource[],
-  key: item => filterActive.value ? filterScan.getItemKey(item as unknown as FavoriteItem) : getFavoriteResourceKey(item),
-  scope: () => JSON.stringify([accountId.value, contentVersion.value, favoriteView.value, selectedCategory.value?.id, selectedSeason.value?.id, keyword.value, searchScope.value, videoOrder.value, filterScan.applied.value]),
-})
+const resourceGrid = ref<{ $el: HTMLElement }>()
+const sidebarNav = ref<HTMLElement | null>(null)
+// Removed folders and subscriptions close their gap in the rail.
+const sidebarRemovals = ref(0)
+useLayoutMotion(sidebarNav, sidebarRemovals)
+// Each confirmed row breaks apart on its own, so a partial failure brings back only its rows.
+function dissolveSidebarRows<T>(items: readonly T[], key: (item: T) => string) {
+  return items.map(item => dissolveElements(sidebarNav.value?.querySelector(`[data-motion-key="${CSS.escape(key(item))}"]`)))
+}
+async function settleSidebarRows(dissolves: ParticleDissolve[], removed: boolean[]) {
+  dissolves.forEach((dissolve, index) => removed[index] || dissolve.restore())
+  await Promise.all(dissolves.filter((_, index) => removed[index]).map(dissolve => dissolve.released))
+}
+const gridItems = computed(() => (filterActive.value ? filterScan.items.value : visibleResources.value) as FavoriteResource[])
 
+function resourceCards(resourceKeys: readonly string[]) {
+  const keys = new Set(resourceKeys)
+  const gridKey = (item: FavoriteResource) => String(filterActive.value ? filterScan.getItemKey(item as unknown as FavoriteItem) : getFavoriteResourceKey(item))
+  const wanted = new Set(gridItems.value.filter(item => keys.has(getFavoriteResourceKey(item))).map(gridKey))
+  return Array.from(resourceGrid.value?.$el.querySelectorAll<HTMLElement>('[data-motion-key]') ?? []).filter(card => wanted.has(card.dataset.motionKey!))
+}
 const isResolvingSeasonPlayAll = ref<boolean>(false)
 const isBatchManaging = ref<boolean>(false)
 const isBatchOperating = computed(() => folders.pending.value)
@@ -552,9 +568,14 @@ async function deleteFolders(ids: number[]) {
   const transaction = writes.prepare({ kind: 'folders', ids: [...ids] })
   if (!await showConfirmDialog(t('favorites.delete_folders_confirm', { count: ids.length })))
     return false
+  const dissolves = dissolveSidebarRows(ids, id => `video:${id}`)
   const result = await writes.execute(transaction)
-  if (!result || result.kind !== 'folders')
+  if (!result || result.kind !== 'folders') {
+    dissolves.forEach(dissolve => dissolve.restore())
     return false
+  }
+  await settleSidebarRows(dissolves, ids.map(id => result.succeeded.includes(id)))
+  sidebarRemovals.value++
   data.removeFolders(result.succeeded)
   selectedFolderIds.value = selectedFolderIds.value.filter(id => !result.succeeded.includes(id))
   notifyTopBarFavoritesChanged()
@@ -565,11 +586,16 @@ async function unfavSeasons(sources: FavoriteSource[]) {
   const transaction = writes.prepare({ kind: 'seasons', sources })
   if (!await showConfirmDialog(t('favorites.unfav_seasons_confirm', { count: sources.length })))
     return
+  const dissolves = dissolveSidebarRows(sources, getFavoriteSourceKey)
   const result = await writes.execute(transaction)
-  if (!result || result.kind !== 'seasons')
+  if (!result || result.kind !== 'seasons') {
+    dissolves.forEach(dissolve => dissolve.restore())
     return
-  data.removeSeasons(result.succeeded)
+  }
   const succeeded = new Set(result.succeeded.map(getFavoriteSourceKey))
+  await settleSidebarRows(dissolves, sources.map(source => succeeded.has(getFavoriteSourceKey(source))))
+  sidebarRemovals.value++
+  data.removeSeasons(result.succeeded)
   selectedSeasonKeys.value = selectedSeasonKeys.value.filter(key => !succeeded.has(key))
   if (result.succeeded.length)
     notifyTopBarFavoritesChanged()
@@ -815,30 +841,8 @@ async function handleUnfavorite(resource: FavoriteResource) {
     : searchScope.value === 'current' ? selectedCategory.value?.id : undefined
   if (!sourceId)
     return
-  if (resource.type !== 2 || !favoriteCategories.some(folder => folder.id === sourceId)) {
-    await runResourceWrite({ kind: 'delete', sourceId, resourceKeys: [getFavoriteResourceKey(resource)] }, true)
-    return
-  }
-  const owner = data.capture()
-  const version = contentVersion.value
-  removals.begin(resource, { restorable: isPlayableFavoriteVideo(resource), ...captureVideoFavoriteRemoval({ aid: resource.id }, sourceId, {
-    account: () => getUserID() === String(accountId.value) ? accountId.value : null,
-    csrf: getCSRF,
-    resolveAid: async () => resource.id,
-    read: (rid, account, signal) => api.favorite.getFavoriteCategories({ up_mid: String(account), rid, type: 2 }, { signal }),
-    write: command => api.favorite.updateVideoFavorites(command),
-    changed: () => topBarStore.notifyFavoritesChanged({ sourceIds: [sourceId], handledBy: viewOwner }),
-  }, owner.isCurrent, async (added) => {
-    if (!owner.isCurrent())
-      return
-    const command = { kind: added ? 'restore' as const : 'delete' as const, sourceId, resourceKeys: [getFavoriteResourceKey(resource)] }
-    const reconciliation = applyResourceChange(command)
-    if (added)
-      await reconciliation
-    if (version === contentVersion.value) {
-      selectedResourceKeys.value = selectedResourceKeys.value.filter(key => !command.resourceKeys.includes(key))
-    }
-  }) })
+  // One press removes it: the card breaks apart while the write runs.
+  await runResourceWrite({ kind: 'delete', sourceId, resourceKeys: [getFavoriteResourceKey(resource)] })
 }
 
 function applyResourceChange(command: Parameters<typeof data.applyResourceWrite>[0]) {
@@ -943,9 +947,13 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   const transaction = writes.prepare(command)
   if (confirm && !await showConfirmDialog(t('favorites.batch_unfavorite_confirm', { count: command.resourceKeys.length })))
     return
+  // The confirmed write drops the cards; the particles take over from there.
+  const dissolve = command.kind === 'delete' || command.kind === 'move' ? dissolveElements(resourceCards(command.resourceKeys)) : undefined
   const result = await writes.execute(transaction)
-  if (!result)
+  if (!result) {
+    dissolve?.restore()
     return
+  }
   if (version === contentVersion.value && selection === selectedResourceKeys.value) {
     selectedResourceKeys.value = selection.filter(key => !command.resourceKeys.includes(key))
     if (command.targetId === targetCategory.value?.id) {
@@ -1056,10 +1064,11 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
           />
           <VideoCardGrid
             v-else
+            ref="resourceGrid"
             :key="favoriteGridStateKey"
             text-only-states
             :state-key="favoriteGridStateKey"
-            :items="removals.displayItems.value"
+            :items="gridItems"
             :transform-item="transformFavoriteItem"
             :get-item-key="filterActive ? filterScan.getItemKey : getFavoriteResourceKey"
             grid-layout="adaptive"
@@ -1073,7 +1082,6 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
             :empty-description="$t(keyword.trim() || filterActive ? 'library_tools.no_matches' : 'common.no_data')"
             :context-menu="favoriteView === 'video' && (searchScope === 'current' || filterActive) && !isBatchManaging"
             :get-menu-extra-groups="getFavoriteMenuGroups"
-            :get-removal="removals.get"
             :hide-author="favoriteView === 'season' && selectedSeason?.type === 21"
             :card-click-handler="isBatchManaging ? handleFavoriteCardClick : undefined"
             :cover-top-left-always-visible="isBatchManaging"
@@ -1197,11 +1205,11 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
             </Tooltip>
           </div>
         </div>
-        <nav class="favorites-old-nav" :aria-label="selectedContentTitle">
+        <nav ref="sidebarNav" class="favorites-old-nav" :aria-label="selectedContentTitle">
           <FavoriteSidebarSkeleton v-if="isInitialSidebarLoading" />
           <ul v-else-if="favoriteView === 'video' && categoryState.loaded" class="category-list">
             <FavoriteSidebarItem
-              v-for="item in favoriteCategories" :key="`video:${item.id}`"
+              v-for="item in favoriteCategories" :key="`video:${item.id}`" :data-motion-key="`video:${item.id}`"
               :title="item.title" :count="item.media_count" :cover="folderCovers[item.id]"
               :expanded="!isManagingFolder && selectedCategory?.id === item.id"
               :selected="isManagingFolder && selectedFolderIds.includes(item.id)" :managing="isManagingFolder"
@@ -1238,7 +1246,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
           <ul v-else-if="favoriteView === 'season' && visibleSubscriptions.length" class="category-list" @scroll.passive="handleSubscriptionDirectoryScroll">
             <FavoriteSidebarItem
-              v-for="item in visibleSubscriptions" :key="getFavoriteSourceKey(item)"
+              v-for="item in visibleSubscriptions" :key="getFavoriteSourceKey(item)" :data-motion-key="getFavoriteSourceKey(item)"
               :title="item.title" :count="item.media_count" :cover="item.cover"
               :expanded="Boolean(selectedSeason && getFavoriteSourceKey(selectedSeason) === getFavoriteSourceKey(item))"
               :selected="isManagingSeason && selectedSeasonKeys.includes(getFavoriteSourceKey(item))" :managing="isManagingSeason"

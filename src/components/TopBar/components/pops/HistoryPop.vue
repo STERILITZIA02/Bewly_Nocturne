@@ -22,6 +22,7 @@ import { captureListRemovalFocus } from '~/utils/listRemovalFocus'
 import { getCSRF, removeHttpFromUrl, scrollToTop } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { retiringListTransition } from '~/utils/motionPresence'
+import { dissolveElements } from '~/utils/particleDissolve'
 import { getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
 
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
@@ -220,6 +221,8 @@ async function deleteHistoryItem(historyItem: HistoryItem, event?: MouseEvent) {
   if (pendingRemovals.has(pendingKey))
     return
   const restoreFocus = captureListRemovalFocus(event?.currentTarget)
+  // The row breaks apart on press; a failed write brings it back.
+  const dissolve = dissolveElements((event?.currentTarget as Element | null)?.closest('.popover-card'))
   pendingRemovals.add(pendingKey)
   try {
     const res = await api.history.deleteHistoryItem({
@@ -229,11 +232,15 @@ async function deleteHistoryItem(historyItem: HistoryItem, event?: MouseEvent) {
     if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
       return
     if (res.code !== 0) {
+      dissolve.restore()
       toast.error(t('common.load_failed'))
       return
     }
 
     void removeVideoVisitHistory(getHistoryVideoIdentity(historyItem))
+    await dissolve.released
+    if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
+      return
     const currentIndex = historys.findIndex(item => getHistoryItemKey(item) === itemKey)
     if (currentIndex >= 0)
       historys.splice(currentIndex, 1)
@@ -241,6 +248,7 @@ async function deleteHistoryItem(historyItem: HistoryItem, event?: MouseEvent) {
     restoreFocus()
   }
   catch (error) {
+    dissolve.restore()
     if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
       return
     console.error('Failed to delete history item:', error)

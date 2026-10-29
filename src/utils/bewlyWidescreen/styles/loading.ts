@@ -16,7 +16,7 @@ export function injectLoadingStyle() {
       overflow: hidden;
       color: var(--bew-text-2, #61666d);
       background: var(--bew-bg, #f6f7f8);
-      font-family: var(--bew-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+      font-family: var(--bew-fonts-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
       opacity: 1;
       transition: opacity ${LOADING_FADE_DURATION}ms ease;
       ${CARD_LAYOUT_PROPERTIES}

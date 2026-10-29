@@ -12,6 +12,8 @@ export default {
     'scripts/verify-private-message.ts',
     'scripts/verify-targeted-fixes.ts',
     'scripts/verify-selected-p2.mjs',
+    'scripts/verify-visual-editor-browser.mjs',
+    'scripts/fixtures/visual-editor.browser.ts',
     'scripts/verify-color-policy.ts',
     'scripts/verify-style-invalidation.ts',
     'scripts/verify-bundle-licenses.ts',

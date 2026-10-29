@@ -410,7 +410,7 @@ watch(unavailable, (disabled) => {
   transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
 }
 
-.select-trigger:hover {
+.select-trigger:is(:hover, :focus-visible) {
   background-color: var(--bew-input-bg-hover);
 }
 
@@ -453,6 +453,11 @@ watch(unavailable, (disabled) => {
   &[aria-selected="true"] {
     color: var(--bew-on-theme-surface);
     background: var(--bew-theme-surface);
+  }
+
+  &:focus-visible {
+    background: var(--bew-pressed-bg);
+    color: var(--bew-text-1);
   }
 
   i {

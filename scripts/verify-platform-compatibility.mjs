@@ -349,7 +349,9 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
     const firstFrames = []
     try {
       for (const reduced of [false, true]) {
-        window.matchMedia = media => ({ media, matches: reduced, addEventListener() {}, removeEventListener() {} })
+        window.matchMedia = media => ({ media, get matches() {
+          return reduced
+        }, addEventListener() {}, removeEventListener() {} })
         const Wheel = await compileComponent('../src/components/WheelSelector.vue')
         for (const time of ['200ms', '.2s']) {
           const value = Vue.ref('a')

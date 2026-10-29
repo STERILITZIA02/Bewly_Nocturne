@@ -243,7 +243,7 @@ check('P2-01/02 history clear invalidates old reads; submitted query owns pagina
       return { code: 0, data: { list: Array.from({ length: 20 }, (_, i) => ({ view_at: i, history: { business: 'archive', oid: options.pn * 20 + i } })) } }
     },
   }
-  const timeline = useHistoryTimeline({ api, getAccountId: () => 1, getCSRF: () => 'fixture', haveScrollbar: async () => true, onWriteError: error => errors.push(error) })
+  const timeline = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api, getAccountId: () => 1, getCSRF: () => 'fixture', haveScrollbar: async () => true, onWriteError: error => errors.push(error) })
   const reading = timeline.load()
   const clearing = timeline.clearAllHistory()
   cleared.resolve({ code: 0 })
@@ -497,11 +497,14 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   const modules = {
     'vue': Vue,
     '~/logic/layoutEdit': { vLayoutEditable: {} },
-    '~/composables/useCardRemoval': await import('../src/composables/useCardRemoval'),
+    '~/utils/particleDissolve': await import('../src/utils/particleDissolve'),
     '~/utils/accountLifetime': await import('../src/utils/accountLifetime'),
     '~/components/VideoCard/utils': await import('../src/components/VideoCard/utils'),
     '~/composables/useSidebarHost': await import('../src/composables/useSidebarHost'),
     '~/composables/usePageViewState': await import('../src/composables/usePageViewState'),
+    '~/composables/useCardWindow': await import('../src/composables/useCardWindow'),
+    '~/composables/useMotionValue': await import('../src/composables/useMotionValue'),
+    '~/composables/usePageDim': await import('../src/composables/usePageDim'),
     '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
     '~/utils/homeRoute': await import('../src/utils/homeRoute'),
     '~/utils/iframeDrawerHistory': await import('../src/utils/iframeDrawerHistory'),
@@ -523,7 +526,16 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
       : await import('../src/utils/asyncPage'),
     '~/composables/useLayoutMotion': await import('../src/composables/useLayoutMotion'),
     '~/composables/useSurfaceMorph': await import('../src/composables/useSurfaceMorph'),
-    '~/composables/useSpringValue': await import('../src/composables/useSpringValue'),
+    '~/composables/useSpringValue': await loadSourceModule('../src/composables/useSpringValue.ts', {
+      'vue': Vue,
+      '~/utils/motionPriority': await import('../src/utils/motionPriority'),
+      '~/utils/spring': await import('../src/utils/spring'),
+      './useReducedMotion': await loadSourceModule('../src/composables/useReducedMotion.ts', {
+        'vue': Vue,
+        '@vueuse/core': VueUse,
+        '~/logic': mocks['~/logic'] ?? { settings: Vue.ref({ motionPreference: 'system' }) },
+      }),
+    }),
     '~/composables/useSettingsMotion': await import('../src/composables/useSettingsMotion'),
     '~/composables/useSourcePanelMotion': await import('../src/composables/useSourcePanelMotion'),
     '~/composables/usePanelOrigin': await import('../src/composables/usePanelOrigin'),
@@ -547,6 +559,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/utils/viewportGeometry': await import('../src/utils/viewportGeometry'),
     '~/utils/motionPriority': await import('../src/utils/motionPriority'),
     '~/utils/motionTiming': await import('../src/utils/motionTiming'),
+    '~/utils/reducedMotion': await import('../src/utils/reducedMotion'),
     '~/utils/wheelStep': await import('../src/utils/wheelStep'),
     '~/utils/searchHandoff': await import('../src/utils/searchHandoff'),
     '~/utils/elasticScroll': await import('../src/utils/elasticScroll'),
@@ -570,6 +583,13 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     ...mocks,
   }
   modules['~/logic/layoutEdit'] = { vLayoutEditable: {}, useLayoutEditSettingValue: (_id, get) => Vue.computed(get), ...modules['~/logic/layoutEdit'] }
+  if (modules['~/logic/watchLaterState']) {
+    modules['~/logic/watchLaterState'] = {
+      captureWatchLaterReadGeneration: () => 0,
+      isWatchLaterReadCurrent: () => true,
+      ...modules['~/logic/watchLaterState'],
+    }
+  }
   if (file.endsWith('/VideoCardGrid.vue')) {
     modules['~/stores/topBarStore'] ??= { useTopBarStore: () => ({ isLogin: false, userInfo: { mid: 0 } }) }
     modules['~/utils/main'] ??= { getUserID: () => '' }
@@ -612,8 +632,6 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     modules['./HistoryGroupRow.vue'] = { default: await compileComponent('../src/contentScripts/views/History/HistoryGroupRow.vue') }
   if (text.includes('\'./HistoryGroupSkeleton.vue\'') && !modules['./HistoryGroupSkeleton.vue'])
     modules['./HistoryGroupSkeleton.vue'] = { default: { props: ['rows', 'cards'], setup: props => () => Vue.h('div', { 'class': 'history-group-skeleton', 'data-bew-skeleton': '', 'data-rows': props.rows ?? 2 }) } }
-  if (text.includes('\'./useWatchLaterBatch\'') && !modules['./useWatchLaterBatch'])
-    modules['./useWatchLaterBatch'] = await import('../src/contentScripts/views/WatchLater/useWatchLaterBatch')
   if (text.includes('\'./WatchLaterSelectionOverlay.vue\'') && !modules['./WatchLaterSelectionOverlay.vue'])
     modules['./WatchLaterSelectionOverlay.vue'] = { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterSelectionOverlay.vue') }
   if (text.includes('\'~/contentScripts/views/SearchResults/components/DatePicker.vue\'')) {
@@ -804,6 +822,12 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     URL,
     URLSearchParams,
     CustomEvent,
+    Event,
+    KeyboardEvent,
+    MouseEvent,
+    FocusEvent,
+    MutationObserver,
+    SVGElement,
     Document,
     Element,
     ShadowRoot,
@@ -1160,10 +1184,21 @@ registerGlobalResourceChecks(check, { Vue, flush })
 try {
   const selected = process.argv[2] ? checks.filter(check => check.name.includes(process.argv[2])) : checks
   assert.ok(selected.length, 'No checks matched the requested filter')
+  const failed = []
   for (const { name, run } of selected) {
-    await run()
-    console.log(`PASS ${name}`)
+    try {
+      await run()
+      console.log(`PASS ${name}`)
+    }
+    catch (error) {
+      failed.push(name)
+      console.error(`FAIL ${name}`)
+      console.error(error instanceof Error ? error.stack : error)
+    }
   }
+  console.log(`Selected P2: ${selected.length - failed.length} passed, ${failed.length} failed`)
+  if (failed.length)
+    process.exitCode = 1
 }
 finally {
   dom.window.close()

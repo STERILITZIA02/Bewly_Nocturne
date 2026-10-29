@@ -107,7 +107,7 @@ function goToNextPage() {
       </span>
       <button
         v-else
-        class="pagination-btn"
+        class="pagination-btn pagination-btn--page"
         :class="{ active: page === currentPage, loading: loading && page === currentPage }"
         :disabled="disabled || loading"
         :aria-label="t('search.pagination.page', { page })"
@@ -115,7 +115,7 @@ function goToNextPage() {
         @click="handlePageChange(page)"
       >
         <LoadingRing :loading="Boolean(loading && page === currentPage)">
-          <span>{{ page }}</span>
+          <span>{{ page }}<span v-if="page === currentPage" class="pagination-total"> / {{ totalPages }}</span></span>
         </LoadingRing>
       </button>
     </template>
@@ -133,19 +133,20 @@ function goToNextPage() {
 
 <style scoped lang="scss">
 .pagination {
+  container-type: inline-size;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 2rem 0;
+  gap: var(--bew-space-2);
+  padding: var(--bew-space-8) 0;
   user-select: none;
 }
 
 .pagination-btn {
   position: relative;
-  min-width: 2.5rem;
-  height: 2.5rem;
-  padding: 0 0.75rem;
+  min-width: var(--bew-control-height-lg);
+  height: var(--bew-control-height-lg);
+  padding: 0 var(--bew-space-3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -153,28 +154,30 @@ function goToNextPage() {
   border: var(--bew-hairline) solid var(--bew-edge-color);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
-  background-color: var(--bew-elevated-1);
+  background-color: var(--bew-content-solid);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-body);
+  font-family: var(--bew-fonts-monospace);
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition:
     background-color var(--bew-duration-moderate) var(--bew-ease-out),
     color var(--bew-duration-moderate) var(--bew-ease-out),
-    border-color var(--bew-duration-moderate) var(--bew-ease-out),
-    box-shadow var(--bew-duration-moderate) var(--bew-ease-out),
-    transform var(--bew-duration-moderate) var(--bew-ease-out);
+    opacity var(--bew-duration-moderate) var(--bew-ease-out);
 
   &:hover:not(:disabled):not(.active) {
-    background-color: var(--bew-elevated-2);
-    border-color: var(--bew-selected-bg);
+    background-color: var(--bew-hover-bg);
   }
 
   &.active {
     background-color: var(--bew-selected-bg);
     color: var(--bew-text-1);
-    border-color: var(--bew-selected-bg);
+  }
+
+  &:focus-visible:not(:disabled) {
+    background-color: var(--bew-pressed-bg);
   }
 
   &:disabled {
@@ -191,9 +194,25 @@ function goToNextPage() {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.5rem;
-  height: 2.5rem;
+  min-width: var(--bew-control-height-lg);
+  height: var(--bew-control-height-lg);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-body);
+}
+
+.pagination-total {
+  display: none;
+}
+
+// The full row contains up to eleven targets. A narrow container keeps the
+// current/total count and both navigation buttons without shrinking hit areas.
+@container (max-width: 560px) {
+  .pagination-btn--page:not(.active),
+  .pagination-ellipsis {
+    display: none;
+  }
+  .pagination-total {
+    display: inline;
+  }
 }
 </style>

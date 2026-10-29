@@ -189,7 +189,9 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     const runs = []
     const originalMatchMedia = window.matchMedia
     const originalAnimate = HTMLElement.prototype.animate
-    window.matchMedia = () => ({ matches: reduce.value })
+    window.matchMedia = () => ({ get matches() {
+      return reduce.value
+    } })
     HTMLElement.prototype.animate = function (keyframes, options) {
       let settle
       const finished = new Promise((resolve, reject) => settle = { resolve, reject })
@@ -729,8 +731,8 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     const toneStyles = (await readFile(fileURLToPath(new URL('../src/styles/imageTone.scss', import.meta.url)), 'utf8'))
     const tonedMixin = toneStyles.slice(toneStyles.indexOf('@mixin toned-surface {'), toneStyles.indexOf('}', toneStyles.indexOf('@mixin toned-surface {')))
     assert.match(tonedMixin, /--bew-glass-tint-solid: color-mix\(in srgb, var\(--moment-tone-fg\) 10%, var\(--moment-tone\)\);/)
-    assert.match(tonedMixin, /--bew-glass-tint: rgb\(from var\(--bew-glass-tint-solid\) r g b \/ var\(--bew-content-opacity\)\);/)
-    assert.match(tonedMixin, /--bew-glass-tint-hover: rgb\(from var\(--bew-glass-tint-solid-hover\) r g b \/ var\(--bew-content-opacity\)\);/)
+    assert.match(tonedMixin, /--bew-glass-tint: rgb\(from var\(--bew-glass-tint-solid\) r g b \/ var\(--bew-glass-opacity\)\);/)
+    assert.match(tonedMixin, /--bew-glass-tint-hover: rgb\(from var\(--bew-glass-tint-solid-hover\) r g b \/ var\(--bew-glass-opacity\)\);/)
     assert.doesNotMatch(tonedMixin, /--bew-glass-tint-solid: var\(--bew-glass-tint\)/)
     const composerStyles = await read('styles/composer.scss')
     assert.match(composerStyles, /background: var\(--bew-glass-tint-solid\);[\s\S]*?background: var\(--bew-glass-tint\);\s*backdrop-filter: var\(--bew-filter-glass-1\);/)
@@ -828,7 +830,9 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
       getMotionDuration,
       holdAnimation: animation => held.push(animation),
       nextTick: () => Promise.resolve(),
-      window: { matchMedia: () => ({ matches: reduced }) },
+      window: { matchMedia: () => ({ get matches() {
+        return reduced
+      } }) },
       getComputedStyle: target => ({
         opacity: String(target.drawn),
         getPropertyValue: name => ({ '--bew-duration-moderate': '300ms', '--bew-ease-standard': 'cubic-bezier(0.2, 0, 0, 1)' })[name] ?? '',
@@ -1014,12 +1018,15 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.deepEqual(['--bew-separator-color', '--bew-edge-color', '--bew-field-edge-color', '--bew-field-edge-color-hover'].map(token => amount(light, token)), [12, 14, 18, 20.5])
     assert.deepEqual(['--bew-separator-color', '--bew-edge-color', '--bew-field-edge-color', '--bew-field-edge-color-hover'].map(token => amount(dark, token)), [12, 16, 18, 20.5])
     assert.match(variables, /prefers-contrast: more[\s\S]*?--bew-edge-color: color-mix\(in srgb, var\(--bew-neutral-fg\) 32%/)
-    assert.match(light, /--bew-glass-edge-width: 1px;\n {2}--bew-glass-edge-color: rgb\(255 255 255 \/ 70%\);/, 'glass rim: thicker and brighter than surface edges')
-    assert.match(dark, /--bew-glass-edge-color: rgb\(255 255 255 \/ 26%\);/)
-    assert.match(variables, /:root\.disable-frosted-glass \{\n[^}]*--bew-glass-edge-width: var\(--bew-hairline\);\n {2}--bew-glass-edge-color: var\(--bew-edge-color\);/, 'solid surfaces fall back to the hairline edge')
+    assert.match(light, /--bew-glass-edge-width: var\(--bew-hairline\);\n {2}--bew-glass-edge-color: rgb\(230 230 230 \/ 80%\);/, 'one hairline glass edge, lighter than surface edges')
+    assert.match(dark, /--bew-glass-edge-color: rgb\(255 255 255 \/ 24%\);/)
+    assert.match(variables, /:root\.disable-frosted-glass \{\n[^}]*--bew-glass-edge-color: var\(--bew-edge-color\);/, 'solid surfaces fall back to the hairline edge')
     const rail = await read('components/PersistentSidebar.vue')
-    assert.match(rail, /\.persistent-sidebar__surface \{[^}]*border: var\(--bew-hairline\) solid var\(--bew-edge-color\);/, 'the left rail keeps the ordinary edge')
-    assert.match(await read('components/TopBar/components/TopBarLogo.vue'), /\.logo-circle \{[^}]*border: var\(--bew-hairline\) solid var\(--bew-edge-color\);/, 'so does the circle it folds into')
+    // Every frosted surface draws the same hairline glass edge (user-specified, 2026-10-29).
+    assert.match(rail, /\.persistent-sidebar__surface \{[^}]*border: var\(--bew-glass-edge-width\) solid var\(--bew-glass-edge-color\);/, 'the left rail draws the glass edge')
+    assert.doesNotMatch(await read('components/TopBar/components/TopBarLogo.vue'), /\.logo-circle \{[^}]*border: var\(--bew-hairline\)/, 'so does the circle it folds into (from sidebarSurface.floating)')
+    assert.match(await read('components/LibraryWorkspace.vue'), /border-inline-end: var\(--bew-glass-edge-width\) solid var\(--bew-glass-edge-color\);/)
+    assert.match(await read('contentScripts/views/Moments/MomentsHotSearch.vue'), /border: var\(--bew-glass-edge-width\) solid var\(--bew-glass-edge-color\);/)
     const searchBar = await read('components/SearchBar/SearchBar.vue')
     assert.match(searchBar, /\n {4}input \{\n {6}@include card-content;\n {6}appearance: none;\n[^}]*border: var\(--bew-glass-edge-width\) solid var\(--bew-glass-edge-color\);/, 'the top bar and home search capsule draws the glass rim')
     assert.doesNotMatch(searchBar, /border-hairline|border-\$bew-edge-color/, 'no ordinary edge competes with the rim')
@@ -1029,7 +1036,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(await read('styles/sidebarSurface.scss'), /@mixin floating\(\$shape: capsule\) \{[^}]*box-shadow: var\(--bew-glass-shadow\);/, 'capsule, logo circle and avatar share it')
     assert.equal((await read('components/Dock/Dock.vue')).match(/--dock-surface-shadow: var\(--bew-glass-shadow\);/g)?.length, 2, 'and the Dock')
     assert.match(await read('components/SidebarSearchControl.vue'), /border: 1px solid var\(--bew-field-edge-color\);/, 'the sidebar search keeps its field edge')
-    assert.doesNotMatch(await read('components/Dock/Dock.vue'), /--bew-liquid-indicator-shadow:/, 'the Dock selection keeps the default hairline edge')
+    assert.match(await read('components/Dock/Dock.vue'), /--bew-liquid-indicator-shadow: none;/, 'the Dock selection is a borderless darker plate (user-specified)')
     assert.match(variables, /--bew-segment-item-active-shadow: inset 0 0 0 var\(--bew-hairline\) var\(--bew-edge-color\);/)
     const files = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', 'src'], { cwd: fileURLToPath(new URL('..', import.meta.url)) })
       .stdout
@@ -1179,7 +1186,8 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(history, /const historyGroups = computed\(\(\) => groupHistoryItems\(sortedHistory\.value, interval\.value\)\)/)
     assert.match(history, /<HistoryGroupRow[\s\S]*?<VideoCard\s+:video="getHistoryVideo\(item\)" :menu-item="item" :get-menu-extra-groups="getHistoryMenuGroups"/)
     assert.match(history, /<template v-if="hasWatchProgress\(item\)" #coverBottom>/)
-    assert.match(history, /<Transition name="page-fade" mode="out-in" v-bind="retiringTransition">\s*<div\s+v-if="choosingInterval" key="intervals"[\s\S]*?role="radiogroup"[\s\S]*?<Button\s+v-else key="interval"/)
+    assert.match(history, /:aria-expanded="choosingInterval"\s+@click="choosingInterval = !choosingInterval"[\s\S]*?\{\{ choosingInterval \? t\('history\.group_label'\) : t\('history\.group_button'/, 'open, the root hides its value')
+    assert.match(history, /<Transition name="page-fade" mode="out-in" v-bind="retiringTransition">\s*<ul\s+v-if="choosingInterval" key="intervals" class="history-days__tree" role="radiogroup"[\s\S]*?<ul v-else-if="historyDays\.length" ref="dayTree" key="days" class="history-days__tree"/, 'the intervals take the days\' place as the root\'s children')
     assert.match(history, /function selectInterval\(value: HistoryGroupInterval\) \{\s*choosingInterval\.value = false/)
     assert.match(history, /v-if="batch\.managing\.value" key="selection"/)
     assert.doesNotMatch(history, /SettingsSegmentedControl|historyLayout/, 'rows replace the list and grid layouts')
@@ -1206,18 +1214,30 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
       assert.match(source, /<template #filter>\s*<LibraryFilterMenu :label="t\('library_tools\.filters'\)" :groups="filterGroups"/)
       assert.match(source, new RegExp(`<LibraryDateRange\\s+${custom.source}`))
     }
-    // Strips under the rail glass, pinned and covered like the Moments up-list.
-    // The first unfiltered page holds the strips with skeletons of the same size.
-    assert.match(history, /const showDayStrip = computed\(\(\) => historyDays\.value\.length > 1 \|\| \(showSkeletons\.value && !historyList\.length\)\)/)
-    assert.match(history, /<section v-if="showDayStrip" class="history-day-strip"[\s\S]*?<LibraryBleedStrip/)
-    assert.match(history, /\.history-day-strip \{\s*@include bleedStrip\.bar\(/)
-    // A day starts the list at its first group; the first day brings back the whole list.
-    assert.match(history, /function jumpToDay\(dayKey: string\) \{[\s\S]*?selectStartGroup\(group\.key\)/)
+    // History's days are a tree on the rail (user-specified), under the
+    // grouping button that closes the rail: each day over its periods, a branch
+    // line from each parent; no day strip over the content.
+    assert.doesNotMatch(history, /history-day-strip|showDayStrip|jumpToDay/)
+    assert.match(history, /<section class="history-days">[\s\S]*?<ul v-else-if="historyDays\.length"[\s\S]*?<HistoryDayNode[\s\S]*?@select="selectStartGroup"/)
+    assert.match(history, /\.history-days \{\s*@include railSection\.flat\(\$bottom: false\);/)
+    assert.match(history, /const part = partLabel\(group\)\s*if \(part\)\s*day\.periods\.push\(\{ key: group\.key, label: part \}\)/, 'a whole-day interval has no periods')
+    // Branch lines (user-specified): a little thicker than a hairline, curving into the last child.
+    const tree = await read('contentScripts/views/History/historyTree.scss')
+    assert.match(tree, /border-inline-start: var\(--bew-tree-line-width\) solid var\(--bew-edge-color\);/)
+    assert.match(tree, /> li:last-child::before \{[^}]*height: calc\(var\(--bew-sidebar-action-height\) \/ 2\);[^}]*border-end-start-radius:/)
+    assert.match(history, /\.history-days__tree \{\s*@include historyTree\.branches\(/)
+    const dayNode = await read('contentScripts/views/History/HistoryDayNode.vue')
+    assert.match(dayNode, /<button\s+v-if="periods\.length" type="button" class="history-day-node__chevron"[\s\S]*?<ChevronIcon \/>/, 'only a day with periods folds')
+    assert.match(dayNode, /useMeasuredDisclosure\(fold, periodList, computed\(\(\) => props\.expanded\)/)
+    assert.match(dayNode, /\.history-day-node__periods \{\s*@include historyTree\.branches\(/)
+    // A day from a later page grows the tree into place, then follows its content freely.
+    assert.match(dayNode, /const entrance = useMeasuredDisclosure\(node, computed\(\(\) => appeared\.value \? null : body\.value\), shown,/)
+    assert.match(history, /:expanded="!collapsedDays\.has\(day\.key\)" :animate-in="dayTreeShown"/)
     assert.match(favorites, /<section v-if="showUploaderStrip \|\| uploaderStripPending" class="favorite-uploader-strip"[\s\S]*?<LibraryBleedStrip v-if="!showUploaderStrip"[\s\S]*?<SkeletonBlock width="var\(--favorite-uploader-tile\)"/)
     assert.match(favoritesLayout, /\.favorite-uploader-strip \{[^}]*@include bleedStrip\.bar\(/)
     assert.match(favorites, /mids: mid === undefined \|\| isStripUploader\(mid\) \? \[\] : \[mid\]/, 'an uploader is a one-tap filter, again to clear it')
     // Immersive heroes; the hero never fades as a whole (its blur would stop).
-    // History has no hero row (user request): the day strip leads straight into the rows.
+    // History has no hero row (user request): the rows start at the top.
     assert.doesNotMatch(history, /LibraryHero|history-hero|heroCards/)
     assert.match(watchLater, /<LibraryHeroCarousel v-if="!batch\.managing\.value" :items="\[\{ key: 'queue'[\s\S]*?<LibraryHero\s+:image="currentWatchLaterList\[0\]\?\.pic"[\s\S]*?<WatchLaterPlayAllCard/)
     assert.match(favorites, /<LibraryHeroCarousel\s+:items="heroItems" :current="heroKey"[\s\S]*?<LibraryHero v-bind="getHeroCard/)
@@ -1285,7 +1305,6 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     // range starts after the scroll that brings it to the top (the strip above).
     assert.match(await read('styles/bleedStrip.scss'), /@mixin bar\(\$height, \$gap: var\(--bew-space-8\), \$start: 0px\) \{[\s\S]*?animation-range: calc\(#\{\$start\} \+ #\{\$gap\}\) calc\(#\{\$start\} \+ #\{\$gap\} \+ #\{\$height\}\);/)
     assert.match(carousel, /@include bleedStrip\.bar\(\s*var\(--bew-library-hero-height\),\s*var\(--library-hero-gap, var\(--bew-space-6\)\),\s*var\(--library-hero-pin, 0px\)\s*\);/)
-    assert.match(history, /:style="showDayStrip \? \{ '--library-hero-pin': 'calc\(var\(--bew-control-height\) \+ var\(--bew-space-6\) \* 2\)' \} : undefined"/)
     assert.match(favorites, /:style="showUploaderStrip \|\| uploaderStripPending \? \{ '--library-hero-pin': 'calc\(var\(--bew-library-uploader-tile-size\) \+ var\(--bew-space-2\) \+ var\(--bew-line-height-control\) \+ var\(--bew-space-6\)\)' \} : undefined"/)
     assert.match(favorites, /\/\/ Positioned and later: it slides up over the pinned hero\.\s*position: relative;/)
     for (const source of [history, watchLater, favoritesLayout])
@@ -1402,9 +1421,12 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
   check('glass: one material (tint, opacity, blur, edge) for every glass surface; dark glass is tinted lower', async () => {
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
     const variables = await read('styles/variables.scss')
-    assert.match(variables, /--bew-glass-tint-solid: var\(--bew-neutral-raised\);/)
-    assert.match(variables, /--bew-glass-tint: rgb\(from var\(--bew-glass-tint-solid\) r g b \/ var\(--bew-content-opacity\)\);/)
-    assert.match(variables, /:root\.dark \{[\s\S]*?--bew-glass-tint-solid: color-mix\(in srgb, var\(--bew-neutral-fg\) 6%, var\(--bew-neutral-bg\)\);/, 'dark glass sits below raised surfaces (8%)')
+    assert.match(variables, /--bew-glass-tint-solid: color-mix\(in srgb, var\(--bew-neutral-fg\) 3%, var\(--bew-neutral-raised\)\);/)
+    assert.match(variables, /--bew-glass-tint: rgb\(from var\(--bew-glass-tint-solid\) r g b \/ var\(--bew-glass-opacity\)\);/)
+    // Dark glass over pure black reads #20211f (user-specified): tint × opacity.
+    const darkTint = variables.match(/:root\.dark \{[\s\S]*?--bew-glass-tint-solid: rgb\(([\d.]+) ([\d.]+) ([\d.]+)\);\s*--bew-glass-opacity: ([\d.]+);/)
+    assert.ok(darkTint, 'dark glass tint and opacity')
+    assert.deepEqual(darkTint.slice(1, 4).map(channel => Math.round(Number(channel) * Number(darkTint[4]))), [0x20, 0x21, 0x1F])
     for (const alias of ['--bew-sidebar-background: var(--bew-glass-tint);', '--bew-popover-surface-background: var(--bew-glass-tint);'])
       assert.ok(variables.includes(alias), alias)
     const sources = await Promise.all((await listStylePolicyFiles()).map(async file => ({ file, source: await readFile(file, 'utf8') })))

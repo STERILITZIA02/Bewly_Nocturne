@@ -756,6 +756,7 @@ const weekDays = computed(() => [
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
   font-weight: var(--bew-font-weight-regular);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition:

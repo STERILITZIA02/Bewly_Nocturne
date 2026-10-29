@@ -5,7 +5,9 @@ import { useI18n } from 'vue-i18n'
 import Input from '~/components/Input.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
+import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { calcTimeSince } from '~/utils/dataFormatter'
+import { isDissolving } from '~/utils/particleDissolve'
 
 import FollowingGroupActions from './FollowingGroupActions.vue'
 import type { FollowingGroup, FollowingGroupMutation, FollowingUploader } from './model'
@@ -34,6 +36,8 @@ const { t } = useI18n()
 const scroller = ref<HTMLElement | null>(null)
 const listRef = ref<HTMLElement | null>(null)
 const actions = ref<InstanceType<typeof FollowingGroupActions>>()
+// Rows left by an unfollow or a deleted group slide into place.
+useLayoutMotion(listRef, () => [props.uploaders, props.groups], { enabled: isDissolving })
 const unread = computed(() => props.uploaders.filter(user => user.hasUpdate).length)
 const keyword = computed(() => query.value.trim().toLocaleLowerCase())
 const matching = (user: FollowingUploader) => !keyword.value || user.name.toLocaleLowerCase().includes(keyword.value)
@@ -130,7 +134,7 @@ onMounted(() => emit('scrollElement', scroller.value))
       <ul ref="listRef" class="following-sidebar__list">
         <template v-for="windowRow in visibleRows" :key="windowRow.key">
           <li v-if="windowRow.height !== undefined" :style="{ height: `${windowRow.height}px` }" aria-hidden="true" />
-          <li v-for="row in windowRow.rows" :key="row.key" :ref="element => rowWindow.setElement(row.key, element)">
+          <li v-for="row in windowRow.rows" :key="row.key" :ref="element => rowWindow.setElement(row.key, element)" :data-motion-key="row.key">
             <button
               v-if="row.type === 'all'" type="button" class="following-sidebar__uploader" :class="{ active: selected === null }" :aria-pressed="selected === null"
               @click="emit('select', null)"

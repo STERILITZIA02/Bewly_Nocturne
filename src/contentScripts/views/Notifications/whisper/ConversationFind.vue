@@ -120,6 +120,7 @@ async function close() {
   flex: none;
   font-size: var(--bew-font-size-caption);
   color: var(--bew-text-2);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
 }
 .conversation-find--external .conversation-find__count {

@@ -8,6 +8,7 @@ import { clearMissingCommentParents, isMissingCommentParentMutationNode, MISSING
 import { moveCommentReplyParts } from '~/inject/commentReplyDomOrder'
 import { getCommentReplyBranchPath, getCommentReplyBranchToggleY } from '~/inject/commentReplyGeometry'
 import { patchCommentReplyInteraction } from '~/inject/commentReplyInteraction'
+import { createCommentReplyMotion } from '~/inject/commentReplyMotion'
 import { createCommentReplyPaginationController } from '~/inject/commentReplyPagination'
 import { createNativeCommentReplyReader } from '~/inject/commentReplyReader'
 import { createCommentReplyReadingController, getCommentReplyGuideCoordinates } from '~/inject/commentReplyReading'
@@ -31,7 +32,7 @@ import { buildCommentTree } from '~/utils/commentTree'
 import { getUserID, isElectron } from '~/utils/main'
 import type { PageSettingsPayload } from '~/utils/pageSettingsProtocol'
 import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
-import { prefersReducedMotion, reducedMotionCss } from '~/utils/reducedMotion'
+import { reducedMotionCss } from '~/utils/reducedMotion'
 import { COMMENT_TEXT_AUTOSPACE_CSS } from '~/utils/textAutospace'
 
 const pageScriptGlobal = globalThis as typeof globalThis & {
@@ -234,18 +235,7 @@ else if (shouldInitializePageScript) {
   /** topology: relations changed; content: one reply's own data; geometry: sizes only. */
   type CommentReplyTreeUpdateKind = 'geometry' | 'content' | 'topology'
 
-  interface CommentReplyMotionState {
-    animation?: Animation
-    cleanupTimer?: number
-    fromHeight: number
-    previousHeight: string
-    previousOverflow: string
-    target: HTMLElement
-  }
-
-  const COMMENT_REPLY_MOTION_FALLBACK_DURATION = 300
-  const COMMENT_REPLY_MOTION_CLEANUP_BUFFER = 80
-  const commentReplyMotionStates = new WeakMap<HTMLElement, CommentReplyMotionState>()
+  const { captureCommentReplyMotion, animateCommentReplyMotion } = createCommentReplyMotion(scheduleCommentReplyTreeLayoutUpdate)
   const pendingCommentReplyTreeLayoutUpdates = new Map<object, CommentReplyTreeUpdateKind>()
   const pendingCommentReplyContentRenderers = new WeakMap<object, HTMLElement>()
 
@@ -686,148 +676,6 @@ else if (shouldInitializePageScript) {
     style.id = id
     style.textContent = css
     root.appendChild(style)
-  }
-
-  function getCommentReplyMotionTarget(component: HTMLElement): HTMLElement | null {
-    const rootNode = component.getRootNode()
-    if (
-      rootNode instanceof ShadowRoot
-      && rootNode.host instanceof HTMLElement
-      && rootNode.host.localName === 'bili-comment-thread-renderer'
-    ) {
-      return rootNode.host
-    }
-
-    return component.shadowRoot?.querySelector<HTMLElement>('#expander') ?? null
-  }
-
-  function restoreCommentReplyMotionStyle(target: HTMLElement, property: 'height' | 'overflow', value: string) {
-    if (value)
-      target.style.setProperty(property, value)
-    else
-      target.style.removeProperty(property)
-  }
-
-  function finishCommentReplyMotion(
-    component: HTMLElement,
-    motionState: CommentReplyMotionState,
-    relayout: boolean,
-  ) {
-    if (commentReplyMotionStates.get(component) !== motionState)
-      return
-
-    commentReplyMotionStates.delete(component)
-    if (motionState.cleanupTimer !== undefined)
-      window.clearTimeout(motionState.cleanupTimer)
-    if (motionState.animation) {
-      motionState.animation.onfinish = null
-      motionState.animation.oncancel = null
-      motionState.animation.cancel()
-    }
-    restoreCommentReplyMotionStyle(motionState.target, 'height', motionState.previousHeight)
-    restoreCommentReplyMotionStyle(motionState.target, 'overflow', motionState.previousOverflow)
-    if (relayout && component.isConnected)
-      scheduleCommentReplyTreeLayoutUpdate(component)
-  }
-
-  function captureCommentReplyMotion(component: any) {
-    if (!(component instanceof HTMLElement))
-      return
-
-    const target = getCommentReplyMotionTarget(component)
-    if (!target)
-      return
-
-    const fromHeight = target.getBoundingClientRect().height
-    if (!Number.isFinite(fromHeight) || fromHeight <= 0)
-      return
-
-    const runningMotion = commentReplyMotionStates.get(component)
-    const previousHeight = runningMotion?.previousHeight ?? target.style.height
-    const previousOverflow = runningMotion?.previousOverflow ?? target.style.overflow
-    if (runningMotion)
-      finishCommentReplyMotion(component, runningMotion, false)
-
-    target.style.height = `${fromHeight}px`
-    target.style.overflow = 'hidden'
-    commentReplyMotionStates.set(component, {
-      fromHeight,
-      previousHeight,
-      previousOverflow,
-      target,
-    })
-  }
-
-  function parseCommentReplyMotionDuration(rawValue: string): number {
-    const value = Number.parseFloat(rawValue)
-    if (!Number.isFinite(value) || value < 0)
-      return COMMENT_REPLY_MOTION_FALLBACK_DURATION
-    if (rawValue.trim().endsWith('ms'))
-      return value
-    if (rawValue.trim().endsWith('s'))
-      return value * 1000
-    return COMMENT_REPLY_MOTION_FALLBACK_DURATION
-  }
-
-  function animateCommentReplyMotion(component: any) {
-    if (!(component instanceof HTMLElement))
-      return
-
-    const motionState = commentReplyMotionStates.get(component)
-    if (!motionState)
-      return
-
-    const { target } = motionState
-    if (!target.isConnected) {
-      finishCommentReplyMotion(component, motionState, false)
-      return
-    }
-
-    restoreCommentReplyMotionStyle(target, 'height', motionState.previousHeight)
-    restoreCommentReplyMotionStyle(target, 'overflow', motionState.previousOverflow)
-    const targetHeight = target.getBoundingClientRect().height
-    target.style.height = `${motionState.fromHeight}px`
-    target.style.overflow = 'hidden'
-
-    const reducedMotion = prefersReducedMotion()
-    if (
-      reducedMotion
-      || !Number.isFinite(targetHeight)
-      || Math.abs(targetHeight - motionState.fromHeight) < 1
-      || typeof target.animate !== 'function'
-    ) {
-      finishCommentReplyMotion(component, motionState, true)
-      return
-    }
-
-    const style = getComputedStyle(target)
-    const duration = parseCommentReplyMotionDuration(
-      style.getPropertyValue('--bew-duration-moderate'),
-    )
-    const easing = style.getPropertyValue('--bew-ease-standard').trim()
-      || 'cubic-bezier(0.22, 0.61, 0.36, 1)'
-    target.style.height = `${targetHeight}px`
-
-    try {
-      const animation = target.animate([
-        { height: `${motionState.fromHeight}px` },
-        { height: `${targetHeight}px` },
-      ], {
-        duration,
-        easing,
-      })
-      motionState.animation = animation
-      const finish = () => finishCommentReplyMotion(component, motionState, true)
-      animation.onfinish = finish
-      animation.oncancel = finish
-      motionState.cleanupTimer = window.setTimeout(
-        finish,
-        Math.ceil(duration) + COMMENT_REPLY_MOTION_CLEANUP_BUFFER,
-      )
-    }
-    catch {
-      finishCommentReplyMotion(component, motionState, true)
-    }
   }
 
   function isInsideBewlyWidescreen(element: Element): boolean {

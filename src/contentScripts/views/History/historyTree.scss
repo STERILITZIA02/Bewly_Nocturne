@@ -1,0 +1,29 @@
+// Branch lines of the rail's tree (user-specified, like Claude's session tree):
+// a line drops from the parent along its children and curves into the last
+// one, stopping short of its row. `$indent` is the children's start from the
+// list's edge; the line runs a space-2 before them.
+@mixin branches($indent) {
+  margin: 0;
+  padding: 0 0 0 $indent;
+  list-style: none;
+
+  > li {
+    position: relative;
+  }
+  > li::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: calc(-1 * var(--bew-space-2) - var(--bew-tree-line-width) / 2);
+    border-inline-start: var(--bew-tree-line-width) solid var(--bew-edge-color);
+    pointer-events: none;
+  }
+  > li:last-child::before {
+    bottom: auto;
+    width: calc(var(--bew-space-2) - var(--bew-space-0-5));
+    height: calc(var(--bew-sidebar-action-height) / 2);
+    border-block-end: var(--bew-tree-line-width) solid var(--bew-edge-color);
+    // Clamped to the arm's length, so the turn is a full quarter circle.
+    border-end-start-radius: var(--bew-interactive-radius);
+  }
+}

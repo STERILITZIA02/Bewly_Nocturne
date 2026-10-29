@@ -89,6 +89,12 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
       <SettingsItem setting-id="settings.show_dock_back_to_top" :title="$t('settings.show_dock_back_to_top')" :desc="$t('settings.show_dock_back_to_top_desc')" right-width="auto">
         <Radio v-model="settings.showDockBackToTop" />
       </SettingsItem>
+      <SettingsItem setting-id="settings.show_dock_item_names" :title="$t('settings.show_dock_item_names')" right-width="auto">
+        <Radio v-model="settings.showDockItemNames" />
+      </SettingsItem>
+      <SettingsItem setting-id="settings.show_dock_badges" :title="$t('settings.show_dock_badges')" :desc="$t('settings.show_dock_badges_desc')" right-width="auto">
+        <Radio v-model="settings.showDockBadges" />
+      </SettingsItem>
       <SettingsItem
         setting-id="navigation.dock.collapseMode"
         :title="$t('settings.dock_collapse_mode')"

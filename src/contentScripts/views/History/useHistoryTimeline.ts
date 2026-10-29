@@ -19,9 +19,15 @@ interface HistoryDependencies {
   haveScrollbar: () => Promise<boolean>
   onWriteError: (error: unknown) => void
   onDeleted?: (items: HistoryItem[]) => void
+  /** Plays the delete effect; the items leave the list once it resolves. */
+  beforeRemove?: (items: readonly HistoryItem[]) => Promise<void>
   onCleared?: () => void
   getGroupInterval: () => HistoryGroupInterval
   getSortOrder: () => HistorySortOrder
+}
+
+function initialCursor(end?: number) {
+  return { max: 0, view_at: end !== undefined && Number.isFinite(end) ? end : 0, business: '' }
 }
 
 /** Owns the timeline, paging cursor and writes for one mounted account view. */
@@ -41,7 +47,8 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     contentRevision.value++
   }
   const stopGrouping = watch([dependencies.getGroupInterval, dependencies.getSortOrder], resetGroups)
-  const batchedDeletes = new Set<string>()
+  const confirmedDeletes = new Set<string>()
+  let clearConfirmed = false
   const keyword = ref('')
   const submittedKeyword = ref('')
   const filters = ref(createHistoryFilters())
@@ -67,11 +74,11 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     readController?.abort()
     readController = undefined
     historyList.length = 0
-    batchedDeletes.clear()
+    confirmedDeletes.clear()
+    clearConfirmed = false
     resetGroups()
     seenReadKeys.clear()
-    const end = historyRangeBounds(filters.value)?.end
-    cursor = { max: 0, view_at: end !== undefined && Number.isFinite(end) ? end : 0, business: '' }
+    cursor = initialCursor(historyRangeBounds(filters.value)?.end)
     seenCursors.clear()
     page = 1
     noMoreContent.value = false
@@ -96,7 +103,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     const draft = refresh ? [] : historyList
     const sourceKeys = refresh ? new Set<string>() : seenReadKeys
     let nextPage = refresh ? 1 : page
-    let nextCursor = refresh ? { max: 0, view_at: bounds?.end ?? 0, business: '' } : cursor
+    let nextCursor = refresh ? initialCursor(bounds?.end) : cursor
     const cursors = refresh ? new Set<string>() : seenCursors
     let ended = false
     const isCurrent = () => owner.isCurrent() && version === generation
@@ -220,14 +227,18 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     return load(true)
   }
 
-  function commitDeletes(keys: readonly string[]) {
+  async function commitDeletes(keys: readonly string[]) {
     if (!keys.length)
       return
+    const owner = lifetime.capture()
+    const items = keys.flatMap(key => groupIndex.get(key) ?? [])
+    await dependencies.beforeRemove?.(items)
+    if (!owner.isCurrent())
+      return
     const removed = new Set(keys)
-    dependencies.onDeleted?.(keys.flatMap(key => groupIndex.get(key) ?? []))
     historyList.splice(0, historyList.length, ...historyList.filter(item => !removed.has(`${item.history.business}_${item.history.oid}`)))
     groups.value = groupIndex.remove(keys)
-    keys.forEach(key => batchedDeletes.delete(key))
+    keys.forEach(key => confirmedDeletes.delete(key))
     contentRevision.value++
   }
 
@@ -252,9 +263,10 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
       if (response.code !== 0)
         throw response
       if (version === generation) {
-        if (batched)
-          batchedDeletes.add(kid)
-        else commitDeletes([kid])
+        confirmedDeletes.add(kid)
+        dependencies.onDeleted?.([item])
+        if (!batched)
+          await commitDeletes([kid])
       }
       return true
     }
@@ -336,8 +348,12 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
         return
       if (response.code !== 0)
         throw response
-      resetListState()
+      clearConfirmed = true
       dependencies.onCleared?.()
+      await dependencies.beforeRemove?.(historyList)
+      if (!owner.isCurrent() || version !== generation)
+        return
+      resetListState()
       noMoreContent.value = true
     }
     catch (error) {
@@ -366,20 +382,21 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
   }
 
   function snapshot() {
-    commitDeletes([...batchedDeletes])
+    // Server-confirmed writes belong in the parked state even while their
+    // visible rows are finishing an exit animation.
     return {
       accountId: dependencies.getAccountId(),
-      items: historyList.slice(),
+      items: clearConfirmed ? [] : historyList.filter(item => !confirmedDeletes.has(`${item.history.business}_${item.history.oid}`)),
       keyword: keyword.value,
       submittedKeyword: submittedKeyword.value,
       filters: { ...filters.value },
       contentType: contentType.value,
-      noMoreContent: noMoreContent.value,
+      noMoreContent: clearConfirmed || noMoreContent.value,
       cursor,
       page,
       seenReadKeys: [...seenReadKeys],
       seenCursors: [...seenCursors],
-      hasLoaded,
+      hasLoaded: hasLoaded && ![...deleting].some(key => !confirmedDeletes.has(key)) && !(isClearingHistory.value && !clearConfirmed),
     }
   }
 
@@ -400,7 +417,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
       hasLoaded = saved.hasLoaded
     }
     if (!hasLoaded)
-      void load()
+      void load(Boolean(saved && saved.accountId === dependencies.getAccountId()))
     void getHistoryPauseStatus()
   }
 
@@ -411,7 +428,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
       const item = groupIndex.get(key)
       return item ? deleteHistoryItem(item, true) : Promise.resolve(true)
     },
-    commitSelectedHistoryItems: () => commitDeletes([...batchedDeletes]),
+    commitSelectedHistoryItems: () => commitDeletes([...confirmedDeletes]),
     isLoading,
     requestFailed,
     requestStalled,
@@ -440,7 +457,6 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     resetAccount,
     capture: lifetime.capture,
     dispose() {
-      commitDeletes([...batchedDeletes])
       stopGrouping()
       lifetime.dispose()
       seenReadKeys.clear()

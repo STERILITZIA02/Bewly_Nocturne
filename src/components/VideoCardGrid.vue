@@ -9,8 +9,6 @@ import { isBangumiVideo } from '~/components/VideoCard/utils'
 import VideoCard from '~/components/VideoCard/VideoCard.vue'
 import type { VideoCardContextMenuExtraOption } from '~/components/VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
-import type { CardRemoval } from '~/composables/useCardRemoval'
-import { useCardRemoval } from '~/composables/useCardRemoval'
 import type { CardWindowSnapshot } from '~/composables/useCardWindow'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useGridLayout } from '~/composables/useGridLayout'
@@ -23,13 +21,9 @@ import { VIDEO_CARD_COVER_ASPECT_RATIO, VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH } 
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 import { isLayoutEditing, vLayoutEditable } from '~/logic/layoutEdit'
-import { useTopBarStore } from '~/stores/topBarStore'
-import { createAccountLifetime } from '~/utils/accountLifetime'
 import { getAdaptiveGridColumnCount, getListGridColumnCount } from '~/utils/gridLayout'
-import { getUserID } from '~/utils/main'
 import emitter from '~/utils/mitt'
 import { getRemainingScroll, readViewportGeometry } from '~/utils/viewportGeometry'
-import { captureWatchLaterRemoval } from '~/utils/watchLater'
 
 import SmoothLoading from './SmoothLoading.vue'
 
@@ -92,7 +86,6 @@ interface VideoCardGridProps<T = any> {
    * 页面专属的卡片菜单项，追加在通用菜单之后
    */
   getMenuExtraGroups?: (item: T) => VideoCardContextMenuExtraOption[][]
-  getRemoval?: (item: T) => CardRemoval | undefined
 
   /**
    * 是否隐藏作者信息
@@ -235,18 +228,7 @@ const emit = defineEmits<{
   (e: 'login'): void
 }>()
 
-const membership = useTopBarStore()
 const layoutEditableGridId = inject('layoutEditableGridId', '')
-const removalLifetime = createAccountLifetime(() => membership.isLogin && String(membership.userInfo.mid) === getUserID() ? membership.userInfo.mid : null)
-const watchLaterRemovals = useCardRemoval({
-  items: () => props.items,
-  key: (item: T) => String(props.getItemKey(item)),
-  scope: () => `${membership.userInfo.mid}:${props.stateKey ?? ''}`,
-})
-onScopeDispose(() => removalLifetime.dispose())
-function requestWatchLaterRemoval(item: T, aid: number) {
-  watchLaterRemovals.begin(item, captureWatchLaterRemoval(aid, removalLifetime.capture(), membership))
-}
 
 // Grid 容器 ref
 const gridContainerRef = ref<HTMLElement | null>(null)
@@ -990,7 +972,7 @@ const renderItems = computed(() => {
   return result
 })
 // Keyed by the data, not the window: scrolling must not measure every card.
-useLayoutMotion(gridContainerRef, () => props.layoutMotion ? props.items.map((item, index) => props.getItemKey(item, index)).join(',') : '', { enabled: () => Boolean(props.layoutMotion) })
+useLayoutMotion(gridContainerRef, () => props.layoutMotion ? props.items.map((item, index) => props.getItemKey(item, index)).join(',') : '', { enabled: () => Boolean(props.layoutMotion), scroller: computed(() => bewlyApp?.scrollViewportRef.value) })
 
 // One stable function for every card; the menu builds its page groups only while open.
 function getCardMenuExtraGroups(item: unknown): VideoCardContextMenuExtraOption[][] {
@@ -1187,9 +1169,6 @@ function getUniqueKey(item: T, index: number): string | number {
           :context-menu="contextMenu"
           :menu-item="renderItem.card.item"
           :get-menu-extra-groups="getCardMenuExtraGroups"
-          :removal="getRemoval?.(renderItem.card.item) ?? watchLaterRemovals.get(renderItem.card.item)"
-          :removal-kind="getRemoval?.(renderItem.card.item) ? 'favorite' : 'watchLater'"
-          :request-watch-later-removal="aid => requestWatchLaterRemoval(renderItem.card!.item, aid)"
           :hide-author="hideAuthor"
           :disable-content-visibility="props.disableContentVisibility || recycleCards"
           :is-following-page="props.isFollowingPage"

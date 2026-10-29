@@ -596,7 +596,7 @@ const unfollowUser = () => writeRelation(2)
 }
 
 .item-icon {
-  --uno: "inline-block color-$bew-text-color-2";
+  --uno: "inline-block color-$bew-text-2";
 
   margin-right: var(--bew-space-2);
 }
