@@ -3114,8 +3114,8 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.match(conversationSource, /\.conversation-card__top-edge,[\s\S]{0,180}position:\s*fixed/)
   assert.match(conversationSource, /left: var\(--bew-messages-sidebar-width\)/)
   // Scroll edges are gradient blurs (no single masked layer), shown while the conversation is expanded.
-  assert.ok(conversationSource.includes('<ProgressiveBlur class="conversation-card__top-edge" edge="top" :visible="conversationExpanded" />'))
-  assert.ok(conversationSource.includes('<ProgressiveBlur class="conversation-card__bottom-edge" edge="bottom" :visible="conversationExpanded" />'))
+  assert.match(conversationSource, /<ProgressiveBlur\s[^>]*class="conversation-card__top-edge"[^>]*edge="top"[^>]*:visible="conversationExpanded"[^>]*\/>/)
+  assert.match(conversationSource, /<ProgressiveBlur\s[^>]*class="conversation-card__bottom-edge"[^>]*edge="bottom"[^>]*:visible="conversationExpanded"[^>]*\/>/)
   assert.equal(conversationSource.includes('MutationObserver'), false)
   assert.equal(pageHeaderSource.includes('<ALink'), false)
   assert.equal(pageHeaderSource.includes('<Button'), false)

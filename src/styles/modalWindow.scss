@@ -38,8 +38,12 @@ $inset: var(--bew-space-5);
   gap: var(--bew-space-3);
   box-sizing: border-box;
   min-height: calc(var(--bew-control-height) + var(--bew-space-2) * 2);
-  padding: var(--bew-space-2) var(--bew-space-3) var(--bew-space-2) $inset;
+  padding: var(--bew-space-2) var(--bew-space-2) var(--bew-space-2) $inset;
   border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
+  // The close button sits a space-2 inside the window's top-right corner, so
+  // its corner is the window's minus that inset.
+  --bew-close-button-size: var(--bew-control-height);
+  --bew-close-button-radius: calc(var(--bew-modal-radius) - var(--bew-space-2));
 }
 
 @mixin title {

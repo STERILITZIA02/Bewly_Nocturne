@@ -814,7 +814,7 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
     const fixture = await watchLaterFixture()
     const { broker, reads, updates } = fixture
     const page = list => ({ code: 0, data: { count: 30, list: list.map(aid => ({ aid })) } })
-    await broker.readPage(100, async () => page([1, 2, 3]))
+    await broker.readPage(100, 'fixture-page', async () => page([1, 2, 3]))
     const partial = updates.at(-1).snapshot
     assert.equal(partial.complete, false)
     assert.deepEqual(partial.entries.map(item => item.aid), [1, 2, 3])
@@ -824,12 +824,12 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
     assert.equal(reads.length, 0, 'preview deletion does not fetch the full membership or an extra count')
     let attempts = 0
     const current = { code: 0, data: { count: 29, list: [{ aid: 1 }, { aid: 3 }, { aid: 4 }] } }
-    const result = await broker.readPage(100, async () => ++attempts === 1 ? page([1, 2, 3]) : current)
+    const result = await broker.readPage(100, 'fixture-page', async () => ++attempts === 1 ? page([1, 2, 3]) : current)
     assert.deepEqual(result.data.list, current.data.list)
     assert.equal(attempts, 2, 'same-revision stale server pages are retried without shortening the page')
     assert.equal(reads.length, 0)
     fixture.setTruth(Array.from({ length: 29 }, (_, index) => ({ aid: index + 3 })))
-    await assert.rejects(broker.readPage(100, async () => page([1, 2, 3])), /changed during read/)
+    await assert.rejects(broker.readPage(100, 'fixture-page', async () => page([1, 2, 3])), /changed during read/)
     assert.equal(updates.at(-1).snapshot.entries.some(item => item.aid === 2), false)
     await broker.write(100, 'csrf-100', { type: 'clear' }, async () => ({ code: 0 }))
     await broker.write(100, 'csrf-100', { type: 'add', entry: { aid: 50 } }, async () => ({ code: 0 }))
@@ -837,7 +837,7 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
     const before = reads.length
     assert.deepEqual(structuredClone((await broker.readMembership(100, true)).entries), [{ aid: 50 }])
     assert.equal(reads.length - before, 1, 'a confirmed clear followed by an add matches the final server set')
-    const newer = await broker.readPage(100, async () => ({ code: 0, data: { count: 1, list: [{ aid: 50 }] } }))
+    const newer = await broker.readPage(100, 'fixture-page', async () => ({ code: 0, data: { count: 1, list: [{ aid: 50 }] } }))
     assert.equal(newer.data.list[0].aid, 50)
   })
 
@@ -869,7 +869,7 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
       } } },
     }, { document })
     assert.equal(client.isInWatchLater({ aid: 1 }), undefined)
-    await fixture.broker.readPage(100, async () => ({ code: 0, data: { count: 30, list: [{ aid: 1, bvid: 'BV1NyeA6zESV', epid: 11 }] } }))
+    await fixture.broker.readPage(100, 'fixture-page', async () => ({ code: 0, data: { count: 30, list: [{ aid: 1, bvid: 'BV1NyeA6zESV', epid: 11 }] } }))
     client.applyWatchLaterUpdate(fixture.updates.at(-1))
     assert.equal(client.isInWatchLater({ bvid: 'BV1NyeA6zESV' }), true)
     assert.equal(client.isInWatchLater({ aid: 2 }), undefined, 'a partial list cannot prove absence')
@@ -919,7 +919,7 @@ export function registerDataConsistencyChecks(check, { Vue, flush }) {
     assert.deepEqual(Object.keys(stored.records).sort(), ['av:1', 'av:2'])
     assert.equal(writes - before, 2)
     assert.equal(Object.keys(updates.at(-1).records).length, 1, 'a one-record patch never broadcasts the complete table')
-    await owner.handle({ type: 'remove', epoch: initial.epoch, identity: { aid: 1 } })
+    await owner.handle({ type: 'remove', epoch: initial.epoch, identities: [{ aid: 1 }] })
     await owner.handle(command(1, 'tab-a:late', initial.epoch, 0))
     assert.equal('av:1' in stored.records, false)
     const cleared = await owner.handle({ type: 'clear', epoch: initial.epoch })

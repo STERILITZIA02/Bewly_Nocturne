@@ -5,7 +5,9 @@ import Button from '~/components/Button.vue'
 import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
 import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
+import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { usePageViewState } from '~/composables/usePageViewState'
+import { isDissolving } from '~/utils/particleDissolve'
 
 import ConversationListItem from './ConversationListItem.vue'
 import ConversationListSkeleton from './ConversationListSkeleton.vue'
@@ -61,6 +63,8 @@ const typeFilterGroups = computed<LibraryFilterGroup[]>(() => [{
   options: (Object.keys(TYPE_FILTER_ICONS) as PrivateSessionTypeFilter[]).map(value => ({ value, label: t(`notifications.whisper.type_filters.${value}`), icon: TYPE_FILTER_ICONS[value] })),
 }])
 const itemsRef = ref<HTMLElement | null>(null)
+// A blocked conversation breaks apart; the rows below then close the gap.
+useLayoutMotion(itemsRef, () => props.items, { selector: '[data-session-key]', key: 'data-session-key', enabled: isDissolving })
 const searchInputRef = ref<InstanceType<typeof LibrarySearchField> | null>(null)
 const sentinelRef = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null

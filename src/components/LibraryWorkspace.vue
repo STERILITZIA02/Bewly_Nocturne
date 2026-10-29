@@ -59,7 +59,7 @@ const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () =>
   min-width: 0;
   padding: var(--bew-top-bar-height) var(--bew-sidebar-inline-padding) var(--bew-space-3);
   overflow: hidden;
-  border-inline-end: var(--bew-hairline) solid var(--bew-edge-color);
+  border-inline-end: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
 }
 .library-workspace__rail-scroll {
   @include sidebarSurface.vertical-scroll;
@@ -132,7 +132,7 @@ const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () =>
 }
 .library-rail-actions {
   display: grid;
-  gap: var(--bew-space-2);
+  gap: 0;
   min-width: 0;
 }
 .library-rail-content .library-rail-segments {

@@ -61,10 +61,6 @@ export function closeImageViewer(id?: number) {
   current.onClose?.(index.value)
 }
 
-export function isImageViewerOpen() {
-  return open.value
-}
-
 /** State for the App-level host only. */
 export function useImageViewerHost() {
   return {

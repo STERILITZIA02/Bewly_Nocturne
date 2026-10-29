@@ -1,10 +1,10 @@
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
 interface BatchOptions<Key extends string | number> {
   keys: () => Key[]
   captureOwner: () => { isCurrent: () => boolean }
   remove: (key: Key) => Promise<boolean>
-  commit?: (keys: readonly Key[]) => void
+  commit?: (keys: readonly Key[]) => void | Promise<void>
 }
 
 /** Only the currently loaded result set can be selected; paging never selects new rows. */
@@ -15,10 +15,10 @@ export function useLibraryBatchSelection<Key extends string | number>(options: B
   const failed = ref(false)
   const available = computed(() => new Set(options.keys()))
   const keys = computed(() => [...available.value])
-  const allSelected = computed(() => keys.value.length > 0 && keys.value.every(key => selected.value.has(key)))
+  const allSelected = computed(() => selected.value.size > 0 && selected.value.size === keys.value.length && keys.value.every(key => selected.value.has(key)))
   let generation = 0
   function reconcileSelection() {
-    if (busy.value)
+    if (busy.value || !selected.value.size)
       return
     const next = new Set([...selected.value].filter(key => available.value.has(key)))
     if (next.size !== selected.value.size)
@@ -87,16 +87,22 @@ export function useLibraryBatchSelection<Key extends string | number>(options: B
         failed.value = true
     }
     finally {
-      if (current()) {
-        options.commit?.(removedKeys)
-        const remaining = new Set(selected.value)
-        removedKeys.forEach(key => remaining.delete(key))
-        selected.value = remaining
+      try {
+        if (current()) {
+          await options.commit?.(removedKeys)
+          if (current()) {
+            const remaining = new Set(selected.value)
+            removedKeys.forEach(key => remaining.delete(key))
+            selected.value = remaining
+          }
+        }
       }
-      if (version === generation)
-        busy.value = false
+      finally {
+        if (version === generation)
+          busy.value = false
+      }
     }
   }
-  onBeforeUnmount(reset)
+  onScopeDispose(reset)
   return { managing, selected, busy, failed, allSelected, clearSelection, reset, toggleManaging, toggle, toggleAll, removeSelected }
 }

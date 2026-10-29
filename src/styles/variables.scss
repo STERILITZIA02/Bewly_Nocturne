@@ -189,6 +189,8 @@
   // A small inset from the search edge, bounded by its capsule corner radius.
   --bew-sidebar-label-inset: min(var(--bew-space-2), calc(var(--bew-control-height) / 2));
   --bew-sidebar-action-padding: var(--bew-space-2);
+  // Rail rows sit close (user-specified: half the old gap between their texts).
+  --bew-sidebar-action-height: var(--bew-space-8);
   --bew-sidebar-action-inset: calc(var(--bew-sidebar-label-inset) - var(--bew-sidebar-action-padding));
   --bew-sidebar-action-hover: var(--bew-hover-bg);
   --bew-sidebar-selected-bg: var(--bew-control-selected-background);
@@ -247,6 +249,8 @@
   --bew-z-layout-editor: 10005;
   --bew-z-critical-dialog: 10012;
   --bew-z-toast: 10020;
+  // Particles of a deleted element; above every surface a deletion can start from.
+  --bew-z-dissolve: calc(var(--bew-z-toast) - 1);
   --bew-z-native-detail: 99999;
   --bew-z-native-overlay: 100000;
   --bew-z-drawer: 999999;
@@ -266,6 +270,8 @@
   --bew-sidebar-morph-duration: 540ms;
   --bew-page-exit-duration: 60ms;
   --bew-page-enter-duration: 150ms;
+  // Deleted element breaking into drifting particles (`utils/particleDissolve.ts`).
+  --bew-dissolve-duration: 760ms;
   --bew-ease-in: ease-in;
   --bew-ease-standard: cubic-bezier(0.22, 0.61, 0.36, 1);
   --bew-ease-out: ease-out;
@@ -319,13 +325,20 @@
   --bew-image-viewer-control-pressed: rgb(255 255 255 / 18%);
   --bew-image-viewer-text-1: rgb(255 255 255 / 96%);
   --bew-image-viewer-text-2: rgb(255 255 255 / 64%);
-  --bew-dock-control-size: 36px;
-  --bew-dock-control-size-lg: 44px;
+  // Dock tabs (user-specified, iOS tab bar): a glyph over its caption name in a
+  // capsule rectangle; shorter when names are hidden (`showDockItemNames`).
+  --bew-dock-item-height: 56px;
+  --bew-dock-item-height-icon-only: 48px;
+  --bew-dock-item-min-width: 72px;
+  --bew-dock-item-min-width-lg: 80px;
+  --bew-dock-icon-size: var(--bew-icon-size-lg);
+  // Between the lg (24px) and xl (32px) icon steps; the Dock's own glyph size.
+  --bew-dock-icon-size-lg: 28px;
   --bew-floating-control-icon-size: var(--bew-icon-size-md);
-  --bew-dock-control-icon-size: 18px;
-  --bew-dock-control-icon-size-lg: 22px;
+  // Selection is a darker borderless plate; its glyph and name take the accent
+  // exactly as chosen (not the contrast-darkened link foreground, user-specified).
   --bew-dock-navigation-active-bg: var(--bew-fill-3);
-  --bew-dock-navigation-active-color: var(--bew-custom-foreground, #000);
+  --bew-dock-navigation-active-color: var(--bew-accent-solid);
   // #endregion
 
   // Search and logo stay one step larger (still full capsule/circle)
@@ -348,9 +361,7 @@
   --bew-top-bar-brand-logo-width: 84px;
   --bew-top-bar-brand-logo-height: 28px;
   --bew-top-bar-brand-logo-compact-size: 24px;
-  --bew-top-bar-solid-background: var(--bew-elevated-solid);
   --bew-top-bar-solid-background-force-white: hsl(0 0% 0%);
-  --bew-top-bar-solid-shadow: var(--bew-shadow-1);
 
   // Interaction tokens aligned with home tab buttons
   --bew-segment-item-hover-bg: var(--bew-hover-bg);
@@ -511,6 +522,9 @@
 
   --bew-error-color: hsl(358 75% 59%);
   --bew-error-foreground: color-mix(in srgb, var(--bew-error-color) 84%, black);
+  // Text of an irreversible action (clear all): a plain alarm red rather than
+  // the softer error tone (user-specified); Apple's high-contrast system red.
+  --bew-destructive-foreground: #d70015;
   --bew-error-color-10: color-mix(in oklab, var(--bew-error-color), transparent 90%);
   --bew-error-color-20: color-mix(in oklab, var(--bew-error-color), transparent 80%);
   --bew-error-color-30: color-mix(in oklab, var(--bew-error-color), transparent 70%);
@@ -557,11 +571,14 @@
   // One frosted-glass material for every glass surface (rail, logo circle,
   // top-bar capsule, Dock, popovers, menus, dialogs, settings, composer, native
   // page bars): the same tint, opacity, blur (--bew-filter-glass-1) and edge.
-  // The tint goes solid when frosted glass is off (opacity 1).
-  --bew-glass-tint-solid: var(--bew-neutral-raised);
+  // The tint goes solid when frosted glass is off (opacity 1). Tuned after iOS
+  // (user-specified, 2026-10-29): a clearer pane with a faint grey body, so it
+  // still reads on a white page; the dark values are set under .dark.
+  --bew-glass-tint-solid: color-mix(in srgb, var(--bew-neutral-fg) 3%, var(--bew-neutral-raised));
   --bew-glass-tint-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-glass-tint-solid));
-  --bew-glass-tint: rgb(from var(--bew-glass-tint-solid) r g b / var(--bew-content-opacity));
-  --bew-glass-tint-hover: rgb(from var(--bew-glass-tint-solid-hover) r g b / var(--bew-content-opacity));
+  --bew-glass-opacity: 0.72;
+  --bew-glass-tint: rgb(from var(--bew-glass-tint-solid) r g b / var(--bew-glass-opacity));
+  --bew-glass-tint-hover: rgb(from var(--bew-glass-tint-solid-hover) r g b / var(--bew-glass-opacity));
   --bew-sidebar-background-solid: var(--bew-glass-tint-solid);
   --bew-sidebar-background: var(--bew-glass-tint);
   --bew-content-opacity: 0.68;
@@ -591,10 +608,6 @@
   --bew-elevated-alt: rgb(from var(--bew-elevated-alt-solid) r g b / var(--bew-content-opacity));
   --bew-elevated-alt-hover: rgb(from var(--bew-elevated-alt-solid-hover) r g b / var(--bew-content-opacity));
 
-  // Small unread numerals need a stronger tint over arbitrary page artwork.
-  // The shared opacity still reaches 1 when frosted glass is disabled.
-  --bew-count-badge-bg: rgb(from var(--bew-glass-tint-solid) r g b / max(0.76, var(--bew-content-opacity)));
-
   --bew-fill-1: color-mix(in srgb, var(--bew-neutral-fg) 5%, transparent);
   --bew-fill-2: color-mix(in srgb, var(--bew-neutral-fg) 9%, transparent);
   --bew-fill-3: color-mix(in srgb, var(--bew-neutral-fg) 14%, transparent);
@@ -608,18 +621,21 @@
   // device pixel); fields keep 1px. Keep 11.5–20.5% so lines stay quieter than
   // text; dark mode, where shadows barely read, gives edges more weight.
   --bew-hairline: 1px;
+  // The rail tree's branch lines (user-specified): a little thicker than a hairline.
+  --bew-tree-line-width: calc(var(--bew-hairline) * 2);
   --bew-separator-color: color-mix(in srgb, var(--bew-neutral-fg) calc(12% + var(--bew-contrast-boost)), transparent);
   --un-default-border-color: var(--bew-separator-color);
   --bew-edge-color: color-mix(in srgb, var(--bew-neutral-fg) calc(14% + var(--bew-contrast-boost)), transparent);
   // Album-art hairline (Apple Music): drawn over covers, so it is tuned for
   // arbitrary images rather than the neutral canvas.
   --bew-media-edge-color: rgb(0 0 0 / 14%);
-  // Glass rim (user-specified): thicker and brighter than surface edges, the lit
-  // lip of a pane of glass. 1px at every density, twice the hairline on HiDPI.
-  --bew-glass-edge-width: 1px;
-  --bew-glass-edge-color: rgb(255 255 255 / 70%);
+  // Glass edge (user-specified, 2026-10-29): every frosted surface (rails, logo
+  // circle, Dock, search, floating buttons) draws the same hairline, lighter
+  // than a surface edge like iOS glass: a pale line over white, a lit one over art.
+  --bew-glass-edge-width: var(--bew-hairline);
+  --bew-glass-edge-color: rgb(230 230 230 / 80%);
   // One lift for every floating glass control (Dock, top bar search, capsule,
-  // logo circle, avatar): the same rim and the same shadow (user-specified).
+  // logo circle, avatar): the same edge and shadow (user-specified).
   --bew-glass-shadow: var(--bew-shadow-2);
   --bew-input-bg: var(--bew-neutral-inset);
   --bew-input-bg-hover: color-mix(in srgb, var(--bew-neutral-fg) 3%, var(--bew-neutral-inset));
@@ -668,11 +684,11 @@
   --bew-success-foreground: color-mix(in srgb, var(--bew-success-color) 80%, white);
   --bew-warning-foreground: var(--bew-warning-color);
   --bew-error-foreground: color-mix(in srgb, var(--bew-error-color) 84%, white);
+  --bew-destructive-foreground: #ff453a;
   // A dark page needs more dimming to set the raised window apart.
   --bew-modal-backdrop: rgb(0 0 0 / 56%);
-  // Dark glass is tinted below raised surfaces (6% vs 8% foreground) so it
-  // reads dark rather than grey.
-  --bew-glass-tint-solid: color-mix(in srgb, var(--bew-neutral-fg) 6%, var(--bew-neutral-bg));
+  // Dark glass over pure black reads #20211f (user-specified): tint × opacity.
+  --bew-glass-tint-solid: rgb(44.44 45.83 43.06);
   --bew-sidebar-action-hover: color-mix(in srgb, var(--bew-neutral-bg) 18%, transparent);
   // The rail is lighter than solid content here, so a solid selected plate would
   // sink below it; lift the rail instead.
@@ -682,14 +698,15 @@
   --bew-message-pinned-background: color-mix(in srgb, var(--bew-neutral-bg) 24%, transparent);
   --bew-message-pinned-hover-background: color-mix(in srgb, var(--bew-neutral-bg) 36%, transparent);
   --bew-wheel-text: rgb(from var(--bew-custom-foreground, #fff) r g b / 67%);
-  --bew-dock-navigation-active-color: var(--bew-custom-foreground, #fff);
+  // Darker than the dark glass, not lighter (user-specified).
+  --bew-dock-navigation-active-bg: rgb(0 0 0 / 36%);
 
   // Dark: shadows barely read, so surface edges carry the layering.
   --bew-separator-color: color-mix(in srgb, var(--bew-neutral-fg) calc(12% + var(--bew-contrast-boost)), transparent);
   --bew-edge-color: color-mix(in srgb, var(--bew-neutral-fg) calc(16% + var(--bew-contrast-boost)), transparent);
   // A light rim on artwork, brighter than surface edges.
   --bew-media-edge-color: rgb(255 255 255 / 22%);
-  --bew-glass-edge-color: rgb(255 255 255 / 26%);
+  --bew-glass-edge-color: rgb(255 255 255 / 24%);
   --bew-field-edge-color: color-mix(in srgb, var(--bew-neutral-fg) calc(18% + var(--bew-contrast-boost)), transparent);
   --bew-field-edge-color-hover: color-mix(
     in srgb,
@@ -750,9 +767,9 @@
 
 :host(.disable-frosted-glass),
 :root.disable-frosted-glass {
-  // Solid surfaces have no glass lip: their edge is the ordinary hairline.
-  --bew-glass-edge-width: var(--bew-hairline);
+  // Solid surfaces have no lit glass edge: their edge is the ordinary hairline.
   --bew-glass-edge-color: var(--bew-edge-color);
+  --bew-glass-opacity: 1;
   --bew-content-opacity: 1;
   --bew-elevated-alt: var(--bew-elevated-alt-solid);
   --bew-elevated-alt-hover: var(--bew-elevated-alt-solid-hover);

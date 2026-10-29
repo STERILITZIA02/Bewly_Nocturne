@@ -12,20 +12,21 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     const layout = await import('../src/constants/layout')
     const activeItem = await import('../src/utils/dockActiveItem')
     const undoState = Vue.ref(0)
-    const item = { page: AppPage.Home, visible: true, icon: '', iconActivated: '', i18nKey: 'Home' }
+    const item = { page: AppPage.Home, visible: true, icon: '', dockIcon: '', i18nKey: 'Home' }
     const items = [item, ...[AppPage.Notifications, AppPage.Moments, AppPage.WatchLater].map(page => ({ ...item, page, i18nKey: page }))]
     const topBarStore = Vue.reactive({ isLogin: true, unReadMessageCount: 120, newMomentsCount: 3, watchLaterCount: 12 })
-    const settings = Vue.ref({ dockPosition: 'bottom', dockCollapseMode: 'button', dockItemsConfig: [item], pageMode: 'bewly', useSearchPageModeOnHomePage: true, showBewlyOrBiliPageSwitcher: true, disableFrostedGlass: false, frostedGlassBlurIntensity: 20 })
+    const settings = Vue.ref({ dockPosition: 'bottom', dockCollapseMode: 'button', dockItemsConfig: [item], pageMode: 'bewly', useSearchPageModeOnHomePage: true, showBewlyOrBiliPageSwitcher: true, showDockItemNames: true, showDockBadges: true, disableFrostedGlass: false, frostedGlassBlurIntensity: 20 })
     const passthrough = { setup: (_props, { slots }) => () => Vue.h('div', slots.default?.()) }
     settings.value.dockItemsConfig = items
     const Badge = await compileComponent('../src/components/CountBadge.vue')
     const Dock = await compileComponent('../src/components/Dock/Dock.vue', {
       'vue-i18n': { useI18n: () => ({ t: (key, params) => `${key}:${params.count}` }) },
       '@iconify/vue': { Icon: { render: () => Vue.h('svg') } },
-      // 56px = the large Dock control (44px) plus its 6px rim on each side.
-      '@vueuse/core': { useElementSize: () => ({ width: Vue.ref(600), height: Vue.ref(56) }), useWindowSize: () => ({ width: Vue.ref(1280), height: Vue.ref(900) }), usePreferredReducedMotion: () => Vue.ref('reduce') },
+      // 64px = the Dock tab (56px) plus its 4px rim on each side.
+      '@vueuse/core': { useElementSize: () => ({ width: Vue.ref(600), height: Vue.ref(64) }), useWindowSize: () => ({ width: Vue.ref(1280), height: Vue.ref(900) }), usePreferredReducedMotion: () => Vue.ref('reduce') },
       '~/composables/useAppProvider': { UndoForwardState: { ShowUndo: 1, ShowForward: 2 }, useBewlyApp: () => ({ reachTop: Vue.ref(true), homeActivatedPage: Vue.ref(HomeSubPage.ForYou), undoForwardState: undoState, canRefreshHomeSubPage: Vue.ref(true), getDockPageHref: () => '/' }) },
       '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), toggleDark: () => {} }) },
+      '~/composables/useReducedMotion': { useReducedMotion: () => Vue.ref(true) },
       '~/composables/useDelayedHover': { useDelayedHover: () => Vue.ref(null) },
       '~/constants/dock': dockPolicy,
       '~/constants/layout': layout,
@@ -74,6 +75,17 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     topBarStore.newMomentsCount = Number.NaN
     await flush()
     assert.deepEqual([...host.querySelectorAll('.dock-count-badge')].map(badge => badge.textContent), ['12'])
+    settings.value.showDockBadges = false
+    await flush()
+    assert.equal(host.querySelectorAll('.dock-count-badge').length, 0, 'badges can be turned off')
+    settings.value.showDockBadges = true
+    settings.value.showDockItemNames = false
+    await flush()
+    assert.equal(host.querySelectorAll('.dock-tab__label').length, 0, 'names can be hidden')
+    assert.equal(host.querySelector('.dock-content').style.getPropertyValue('--bew-dock-item-height'), 'var(--bew-dock-item-height-icon-only)', 'hidden names shorten the tabs')
+    assert.equal(host.querySelector('.dock-page-navigation .dock-tab').getAttribute('aria-label'), 'Home', 'hidden names stay readable')
+    settings.value.showDockItemNames = true
+    await flush()
     topBarStore.isLogin = false
     await flush()
     assert.equal(host.querySelectorAll('.dock-count-badge').length, 0, 'sign-out hides account counts without a new Dock request')
@@ -85,6 +97,12 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     assert.notEqual(frostedShadow, 'none')
     const buttons = host.querySelectorAll('button').length
     assert.equal(host.querySelector('.dock-shell-surface').children.length, 0, 'the shell paints its own backdrop without optical children')
+    // One capsule: a hairline divider sets the pages apart from page mode, theme, settings and collapse.
+    const divider = host.querySelector('.dock-expanded-content > .divider')
+    assert.ok(divider && divider.nextElementSibling)
+    assert.ok(host.querySelector('.dock-content-inner [aria-label="dock.settings"]'))
+    const dividerWidth = [...style.sheet.cssRules].findLast(rule => rule.selectorText && !rule.selectorText.includes(':deep') && rule.style.getPropertyValue('width') && divider.matches(rule.selectorText))?.style.getPropertyValue('width')
+    assert.equal(dividerWidth, 'var(--bew-hairline)', 'the divider is a hairline')
     const backdropOf = owner => [...style.sheet.cssRules].findLast(rule => rule.selectorText && rule.style.getPropertyValue('backdrop-filter') && owner.matches(rule.selectorText))?.style.getPropertyValue('backdrop-filter')
     settings.value.enableUndoRefreshButton = true
     undoState.value = 1
@@ -108,14 +126,18 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     undoState.value = 0
     await flush()
     const collapsedTrigger = host.querySelector('.dock-collapsed-trigger')
+    // Dock tabs name themselves under the glyph (no hover tooltips).
+    const collapseButton = () => [...host.querySelectorAll('button')].find(button => button.textContent.trim() === 'dock.collapse_dock')
+    assert.equal(host.querySelector('.b-tooltip, [role="tooltip"]'), null)
+    assert.deepEqual([...host.querySelectorAll('.dock-page-navigation .dock-tab__label')].map(label => label.textContent), items.map(item => item.i18nKey))
     assert.equal(collapsedTrigger.querySelectorAll('.dock-collapsed-mark__dot').length, 3)
     assert.ok(collapsedTrigger.querySelector('.dock-collapsed-mark__line'))
-    host.querySelector('[aria-label="dock.collapse_dock"]').click()
+    collapseButton().click()
     await flush()
     const geometry = host.querySelector('.dock-content-inner').style
-    assert.equal(geometry.getPropertyValue('--dock-collapsed-width'), '112px')
-    assert.ok(Math.abs(Number.parseFloat(geometry.getPropertyValue('--dock-collapsed-height')) - 56 / 3) < 0.01)
-    assert.ok(Math.abs(bottomShifts.at(-1) - (56 - 56 / 3)) < 0.01, 'composer uses the actual scaled height released by Dock')
+    assert.equal(geometry.getPropertyValue('--dock-collapsed-width'), '128px')
+    assert.ok(Math.abs(Number.parseFloat(geometry.getPropertyValue('--dock-collapsed-height')) - 64 / 3) < 0.01)
+    assert.ok(Math.abs(bottomShifts.at(-1) - (64 - 64 / 3)) < 0.01, 'composer uses the actual scaled height released by Dock')
     const ended = new window.Event('transitionend', { bubbles: true })
     Object.defineProperty(ended, 'propertyName', { value: 'transform' })
     shell.dispatchEvent(ended)
@@ -125,9 +147,9 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     assert.equal(bottomShifts.at(-1), 0, 'expansion returns the composer to its original clearance')
     settings.value.dockPosition = 'right'
     await flush()
-    host.querySelector('[aria-label="dock.collapse_dock"]').click()
+    collapseButton().click()
     await flush()
-    const expectedSideShell = layout.DOCK_LAYOUT.controlSizeLarge + layout.DOCK_LAYOUT.shellPadding
+    const expectedSideShell = layout.DOCK_LAYOUT.controlSize + layout.DOCK_LAYOUT.shellPadding
     assert.equal(Number.parseFloat(geometry.getPropertyValue('--dock-collapsed-width')), expectedSideShell / 3)
     assert.equal(Number.parseFloat(geometry.getPropertyValue('--dock-collapsed-height')), expectedSideShell * 2)
     assert.equal(Number.parseFloat(geometry.getPropertyValue('--dock-collapsed-mark-length')), expectedSideShell * 2 - expectedSideShell / 3)

@@ -240,6 +240,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
 
 .watch-later-grid-card__times {
   @include contentCard.video-subtitle;
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
 }
 .watch-later-grid-card__owner {

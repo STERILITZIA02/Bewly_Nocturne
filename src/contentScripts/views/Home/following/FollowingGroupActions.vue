@@ -8,6 +8,7 @@ import ContextMenu from '~/components/ContextMenu.vue'
 import Dialog from '~/components/Dialog.vue'
 import Input from '~/components/Input.vue'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
+import { dissolveElements } from '~/utils/particleDissolve'
 import { changeUserRelation } from '~/utils/userRelation'
 
 import type { FollowingGroup, FollowingGroupMutation, FollowingUploader } from './model'
@@ -121,6 +122,24 @@ function errorLabel(result: FollowingGroupWriteResult) {
     return t('common.please_log_in_first')
   return result.error || t('common.operation_failed')
 }
+/** The rows break apart while the write runs; the directory drops them on success. */
+async function removeRows<T>(rows: Iterable<Element | null>, run: () => Promise<T>, removed: (result: T) => boolean) {
+  const dissolve = dissolveElements(rows)
+  try {
+    const result = await run()
+    if (!removed(result))
+      dissolve.restore()
+    return result
+  }
+  catch (error) {
+    dissolve.restore()
+    throw error
+  }
+}
+function uploaderRows(mid: number) {
+  return Array.from(trigger.value?.closest('ul')?.querySelectorAll(`[data-uploader-mid="${mid}"]`) ?? [], button => button.closest('li'))
+}
+
 async function write(operation: FollowingGroupMutation) {
   const result = await props.write(operation)
   if (!result.applied)
@@ -167,7 +186,7 @@ async function select(value: string | number) {
       try {
         if (!await confirm(t('video_card.unfollow_user_confirm.message', { name: uploader.name }), signal) || signal.aborted || account !== props.accountId)
           return
-        const response = await changeUserRelation(account, uploader.mid, 2)
+        const response = await removeRows(uploaderRows(uploader.mid), () => changeUserRelation(account, uploader.mid, 2), response => response.code === 0)
         if (signal.aborted || account !== props.accountId)
           return
         if (response.code !== 0)
@@ -193,7 +212,7 @@ async function select(value: string | number) {
     confirmPending.value = true
     try {
       if (await confirm(t('home.following_delete_group_confirm', { name: snapshot.value.name }), signal) && !signal.aborted && account === props.accountId)
-        await write({ kind: 'delete', groupId: snapshot.value.tagid })
+        await removeRows([trigger.value?.closest('li') ?? null], () => write({ kind: 'delete', groupId: snapshot.value.tagid }), result => result.success)
     }
     finally { confirmPending.value = false }
   }

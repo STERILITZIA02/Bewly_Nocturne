@@ -140,6 +140,7 @@ polyline {
   transform: translateY(-50%);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-caption);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
 }
 .loudness-note {

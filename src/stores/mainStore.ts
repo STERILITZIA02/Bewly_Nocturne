@@ -1,3 +1,4 @@
+// @unocss-include
 import { defineStore } from 'pinia'
 
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
@@ -8,7 +9,8 @@ import { getDefaultCustomUseOriginalBiliPage } from '~/utils/pageMode'
 export interface DockItem {
   i18nKey: string
   icon: string
-  iconActivated: string
+  /** The Dock's filled tab glyph; `icon` is the Tabler line icon used elsewhere. */
+  dockIcon: string
   page: AppPage
   openInNewTab: boolean
   useOriginalBiliPage: boolean
@@ -27,7 +29,7 @@ export const useMainStore = defineStore('main', () => {
       {
         i18nKey: 'dock.home',
         icon: 'i-tabler:home',
-        iconActivated: 'i-tabler:home-filled',
+        dockIcon: 'i-bew-dock:home',
         page: AppPage.Home,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Home),
@@ -37,7 +39,7 @@ export const useMainStore = defineStore('main', () => {
       {
         i18nKey: 'dock.search',
         icon: 'i-tabler:zoom',
-        iconActivated: 'i-tabler:zoom-filled',
+        dockIcon: 'i-bew-dock:search',
         page: AppPage.Search,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Search),
@@ -47,7 +49,7 @@ export const useMainStore = defineStore('main', () => {
       {
         i18nKey: 'dock.anime',
         icon: 'i-tabler:device-tv',
-        iconActivated: 'i-tabler:device-tv-filled',
+        dockIcon: 'i-bew-dock:anime',
         page: AppPage.Anime,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Anime),
@@ -57,7 +59,7 @@ export const useMainStore = defineStore('main', () => {
       {
         i18nKey: 'dock.favorites',
         icon: 'i-tabler:star',
-        iconActivated: 'i-tabler:star-filled',
+        dockIcon: 'i-bew-dock:favorites',
         page: AppPage.Favorites,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Favorites),
@@ -67,7 +69,7 @@ export const useMainStore = defineStore('main', () => {
       {
         i18nKey: 'dock.history',
         icon: 'i-tabler:clock',
-        iconActivated: 'i-tabler:clock-filled',
+        dockIcon: 'i-bew-dock:history',
         page: AppPage.History,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.History),
@@ -77,7 +79,7 @@ export const useMainStore = defineStore('main', () => {
       {
         i18nKey: 'dock.watch_later',
         icon: 'i-tabler:playlist',
-        iconActivated: 'i-tabler:playlist',
+        dockIcon: 'i-bew-dock:watch-later',
         page: AppPage.WatchLater,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.WatchLater),
@@ -87,7 +89,7 @@ export const useMainStore = defineStore('main', () => {
       {
         i18nKey: 'dock.moments',
         icon: 'i-tabler:windmill',
-        iconActivated: 'i-tabler:windmill-filled',
+        dockIcon: 'i-bew-dock:moments',
         page: AppPage.Moments,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Moments),
@@ -97,7 +99,7 @@ export const useMainStore = defineStore('main', () => {
       {
         i18nKey: 'dock.notifications',
         icon: 'i-tabler:message-circle',
-        iconActivated: 'i-tabler:message-circle-filled',
+        dockIcon: 'i-bew-dock:notifications',
         page: AppPage.Notifications,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Notifications),

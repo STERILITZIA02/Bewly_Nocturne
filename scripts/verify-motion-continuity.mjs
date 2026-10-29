@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { compileString } from 'sass'
 
 import { loadSourceFunctions } from './sourceFunctionHarness'
+import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerMotionContinuityChecks(check, { Vue, flush }) {
   check('Motion: dialog source survives menu removal, uses Shadow DOM activation and expires after its event', async () => {
@@ -496,7 +497,7 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
   })
 
   check('Motion: critical spring is frame-rate independent and settles after reversal', async () => {
-    const { stepCriticalSpring } = await import('../src/composables/useSpringValue')
+    const { stepCriticalSpring } = await import('../src/utils/spring')
     const outcomes = [30, 60, 120].map((rate) => {
       let state = { position: 0, velocity: 0 }
       for (let frame = 0; frame < rate; frame++)
@@ -576,6 +577,216 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     window.matchMedia = previousMatchMedia
   })
 
+  check('Motion: every deletion dissolves through the one particle effect, and restores on failure', async () => {
+    const { dissolveElements, isDissolving } = await import('../src/utils/particleDissolve')
+    const previous = document.documentElement.dataset.bewMotion
+    document.documentElement.dataset.bewMotion = 'reduce'
+    const row = document.body.appendChild(document.createElement('article'))
+    row.inert = false
+    const fades = []
+    row.animate = (frames, options) => {
+      const fade = { frames, options, cancelled: false, cancel() {
+        this.cancelled = true
+      } }
+      fades.push(fade)
+      return fade
+    }
+    const dissolve = dissolveElements(row)
+    assert.equal(dissolveElements(row).released, dissolve.released, 'a second request joins the running dissolve')
+    assert.equal(row.inert, true)
+    assert.equal(fades[0].frames.at(-1).opacity, 0, 'reduced motion only fades out')
+    assert.equal(fades[0].options.fill, 'forwards', 'the element stays hidden until its owner removes it')
+    assert.equal(isDissolving(), false, 'no particles under reduced motion')
+    await dissolve.released
+    dissolve.restore()
+    assert.equal(fades[0].cancelled, true)
+    assert.equal(row.inert, false)
+    row.remove()
+    await dissolveElements(row).released
+    assert.equal(fades.length, 1, 'detached elements release at once')
+    if (previous === undefined)
+      delete document.documentElement.dataset.bewMotion
+    else document.documentElement.dataset.bewMotion = previous
+
+    // Full motion: one bounded canvas of particles that outlives the element.
+    document.documentElement.dataset.bewMotion = 'full'
+    const globals = ['HTMLImageElement', 'HTMLVideoElement', 'HTMLCanvasElement', 'OffscreenCanvas', 'requestAnimationFrame']
+    const saved = Object.fromEntries(globals.map(name => [name, globalThis[name]]))
+    for (const name of globals.slice(0, 3))
+      globalThis[name] = window[name]
+    const getContext = HTMLCanvasElement.prototype.getContext
+    let draws = 0
+    const context = () => new Proxy({}, { get: (_, key) => key === 'getImageData' ? (_x, _y, width, height) => ({ data: new Uint8ClampedArray(width * height * 4).fill(255) }) : key === 'drawImage' ? () => draws++ : () => {}, set: () => true })
+    globalThis.OffscreenCanvas = class {
+      constructor(width, height) {
+        Object.assign(this, { width, height })
+      }
+
+      getContext() { return context() }
+    }
+    HTMLCanvasElement.prototype.getContext = context
+    globalThis.requestAnimationFrame = callback => setTimeout(() => callback(performance.now()), 16)
+    const card = document.body.appendChild(document.createElement('article'))
+    card.style.backgroundColor = 'rgb(20, 20, 20)'
+    card.inert = false
+    card.getBoundingClientRect = () => ({ left: 100, top: 100, width: 320, height: 280, right: 420, bottom: 380 })
+    card.animate = () => ({ cancel() {} })
+    try {
+      const full = dissolveElements(card)
+      const canvas = document.body.querySelector('canvas')
+      assert.ok(canvas && Number.parseFloat(canvas.style.width) > 320, 'the canvas covers the element plus its drift')
+      assert.equal(isDissolving(), true)
+      await full.released
+      card.remove()
+      await new Promise(resolve => setTimeout(resolve, 600))
+      assert.ok(draws > 100, 'cells of the element are drawn as particles')
+      assert.equal(document.body.querySelector('canvas'), null, 'the canvas leaves when the particles end')
+      assert.equal(isDissolving(), false)
+    }
+    finally {
+      card.remove()
+      HTMLCanvasElement.prototype.getContext = getContext
+      Object.assign(globalThis, saved)
+      if (previous === undefined)
+        delete document.documentElement.dataset.bewMotion
+      else document.documentElement.dataset.bewMotion = previous
+    }
+
+    const source = await readFile('src/utils/particleDissolve.ts', 'utf8')
+    assert.match(source, /holdMotion\(duration\)/, 'the particle clock registers with motion priority')
+    assert.match(source, /PARTICLE_BUDGET = \d+/, 'particles are bounded across running dissolves')
+    assert.match(source, /canvas\.remove\(\)\s*canvas\.width = 0/, 'the canvas is released when the particles end')
+    const entries = [
+      'src/components/TopBar/components/pops/HistoryPop.vue',
+      'src/components/TopBar/components/pops/WatchLaterPop.vue',
+      'src/contentScripts/views/WatchLater/WatchLater.vue',
+      'src/contentScripts/views/History/History.vue',
+      'src/contentScripts/views/Favorites/FavoritesPage.vue',
+      'src/contentScripts/views/Moments/Moments.vue',
+      'src/components/MomentCard/MomentCommentSection.vue',
+      'src/components/SearchBar/SearchBar.vue',
+      'src/contentScripts/views/Home/following/FollowingGroupActions.vue',
+      'src/contentScripts/views/Notifications/Notifications.vue',
+      'src/components/Settings/PluginComponentsAndPages/MessagesPage/MessagesPage.vue',
+      'src/components/Settings/PluginComponentsAndPages/Home/components/FilterByTitleTable.vue',
+      'src/components/Settings/PluginComponentsAndPages/Home/components/FilterByUserTable.vue',
+    ]
+    for (const file of entries)
+      assert.match(await readFile(file, 'utf8'), /dissolveElements\(/, `${file} dissolves what it deletes`)
+    assert.doesNotMatch(await readFile('src/styles/transitionAndTransitionGroup.scss', 'utf8'), /library-list-leave/, 'no per-page removal fade')
+  })
+
+  check('Motion: extracted native comment motion preserves interruption, compressed duration and original inline styles', async () => {
+    const { createCommentReplyMotion } = await import('../src/inject/commentReplyMotion')
+    const preference = document.documentElement.dataset.bewMotion
+    document.documentElement.dataset.bewMotion = 'full'
+    const host = document.body.appendChild(document.createElement('div'))
+    const target = document.createElement('div')
+    target.id = 'expander'
+    host.attachShadow({ mode: 'open' }).append(target)
+    target.style.setProperty('--bew-duration-moderate', '.3s')
+    target.style.overflow = 'auto'
+    let height = 120
+    let settled = 0
+    const animations = []
+    target.getBoundingClientRect = () => ({ height })
+    target.animate = (frames, timing) => {
+      const animation = { frames, timing, cancel() {
+        this.cancelled = true
+      } }
+      animations.push(animation)
+      return animation
+    }
+    const motion = createCommentReplyMotion(() => settled++)
+    try {
+      motion.captureCommentReplyMotion(host)
+      height = 260
+      motion.animateCommentReplyMotion(host)
+      assert.equal(animations[0].timing.duration, 300)
+      assert.deepEqual(animations[0].frames, [{ height: '120px' }, { height: '260px' }])
+      height = 180
+      motion.captureCommentReplyMotion(host)
+      assert.equal(animations[0].cancelled, true)
+      height = 80
+      motion.animateCommentReplyMotion(host)
+      animations[1].onfinish()
+      assert.equal(target.style.height, '')
+      assert.equal(target.style.overflow, 'auto')
+      assert.equal(settled, 1)
+      document.documentElement.dataset.bewMotion = 'reduce'
+      motion.captureCommentReplyMotion(host)
+      height = 200
+      motion.animateCommentReplyMotion(host)
+      assert.equal(animations.length, 2)
+      assert.equal(settled, 2)
+    }
+    finally {
+      host.remove()
+      if (preference === undefined)
+        delete document.documentElement.dataset.bewMotion
+      else document.documentElement.dataset.bewMotion = preference
+    }
+  })
+
+  check('Motion: concurrent deletion stays within the global particle budget and hidden pages release every canvas and frame', async () => {
+    const { dissolveElements, isDissolving } = await import('../src/utils/particleDissolve')
+    const preference = document.documentElement.dataset.bewMotion
+    const hidden = Object.getOwnPropertyDescriptor(document, 'hidden')
+    const names = ['HTMLImageElement', 'HTMLVideoElement', 'HTMLCanvasElement', 'OffscreenCanvas', 'requestAnimationFrame', 'cancelAnimationFrame']
+    const saved = Object.fromEntries(names.map(name => [name, globalThis[name]]))
+    for (const name of names.slice(0, 3))
+      globalThis[name] = window[name]
+    const getContext = HTMLCanvasElement.prototype.getContext
+    const frames = new Map()
+    let sequence = 0
+    let draws = 0
+    const context = () => new Proxy({}, { get: (_, key) => key === 'getImageData' ? (_x, _y, width, height) => ({ data: new Uint8ClampedArray(width * height * 4).fill(255) }) : key === 'drawImage' ? () => draws++ : () => {}, set: () => true })
+    globalThis.OffscreenCanvas = class {
+      constructor(width, height) { Object.assign(this, { width, height }) }
+      getContext() { return context() }
+    }
+    HTMLCanvasElement.prototype.getContext = context
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.set(++sequence, callback)
+      return sequence
+    }
+    globalThis.cancelAnimationFrame = id => frames.delete(id)
+    document.documentElement.dataset.bewMotion = 'full'
+    const cards = Array.from({ length: 4 }, () => {
+      const card = document.body.appendChild(document.createElement('article'))
+      card.style.backgroundColor = 'rgb(20, 20, 20)'
+      card.getBoundingClientRect = () => ({ left: 100, top: 100, width: 320, height: 280, right: 420, bottom: 380 })
+      card.animate = () => ({ cancel() {} })
+      return card
+    })
+    const runs = []
+    try {
+      cards.forEach(card => runs.push(dissolveElements(card)))
+      const pending = [...frames.values()]
+      frames.clear()
+      pending.forEach(callback => callback(performance.now()))
+      assert.equal(draws, 2400, 'four concurrent deletions still draw at most the one global budget')
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+      assert.equal(isDissolving(), false)
+      assert.equal(document.querySelectorAll('canvas').length, 0)
+      assert.equal(frames.size, 0, 'no RAF waits for the hidden page to resume')
+      await Promise.all(runs.map(run => run.released))
+    }
+    finally {
+      runs.forEach(run => run.restore())
+      cards.forEach(card => card.remove())
+      HTMLCanvasElement.prototype.getContext = getContext
+      Object.assign(globalThis, saved)
+      if (hidden)
+        Object.defineProperty(document, 'hidden', hidden)
+      else delete document.hidden
+      if (preference === undefined)
+        delete document.documentElement.dataset.bewMotion
+      else document.documentElement.dataset.bewMotion = preference
+    }
+  })
+
   check('Motion: card and sidebar lists fade only inner edges with more content; screen edges and composers stay crisp', async () => {
     const css = compileString('@use "scrollEdgeFade"; @include scrollEdgeFade.global;', { loadPaths: ['src/styles'] }).css
     assert.match(css, /@property --bew-scroll-edge-top-clear\s*\{[^}]*initial-value: 1/, 'a list that fits keeps both edges opaque')
@@ -597,7 +808,7 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     const rails = {
       'src/components/LibraryWorkspace.vue': ['.library-workspace__rail-scroll', '($bottom: false)'],
       'src/contentScripts/views/Home/following/FollowingSidebar.vue': ['.following-sidebar__scroll', '($bottom: false)'],
-      'src/contentScripts/views/Moments/MomentsSidebar.vue': ['.moments-live-card__list {', ';'],
+      'src/contentScripts/views/Moments/MomentsSidebar.vue': ['.moments-live-card__list {', '($bottom: false)'],
     }
     for (const [file, [selector, args]] of Object.entries(rails)) {
       const source = await readFile(file, 'utf8')
@@ -647,7 +858,12 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
   check('Motion: interaction motion plays first; swaps fade across it and mount only after it settles', async () => {
     const priority = await import('../src/utils/motionPriority')
     const { useReadyPageTransition } = await import('../src/composables/useReadyPageTransition')
-    const { useSpringValue } = await import('../src/composables/useSpringValue')
+    const { useSpringValue } = await loadSourceModule('../src/composables/useSpringValue.ts', {
+      'vue': Vue,
+      '~/utils/motionPriority': await import('../src/utils/motionPriority'),
+      '~/utils/spring': await import('../src/utils/spring'),
+      './useReducedMotion': { useReducedMotion: () => Vue.ref(false) },
+    })
     assert.equal(priority.getMotionRemaining(), 0)
     await priority.afterMotion()
     const release = priority.holdMotion(60_000)

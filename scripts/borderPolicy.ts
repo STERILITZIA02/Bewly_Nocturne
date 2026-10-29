@@ -12,8 +12,9 @@ const everywhere: Array<[RegExp, string]> = [
   [new RegExp(`(?:--|\\$)bew-(?:${RETIRED.join('|')})(?![\\w-])`), 'retired border token'],
 ]
 const bewly: Array<[RegExp, string]> = [
-  // Component width parameters (switch, segment control) stay allowed.
-  [/border(?:-[a-z]+)*:\s*(?!var\(--(?:bew-hairline|b-[\w-]+|bew-control-border-width)\b)[^\s;]+\s+solid\s+var\(--bew-(?:separator|edge)-color/, 'separator / edge width must be var(--bew-hairline)'],
+  // Component width parameters (switch, segment control) and the rail tree's
+  // branch lines (user-specified, a little thicker) stay allowed.
+  [/border(?:-[a-z]+)*:\s*(?!var\(--(?:bew-hairline|b-[\w-]+|bew-control-border-width|bew-tree-line-width)\b)[^\s;]+\s+solid\s+var\(--bew-(?:separator|edge)-color/, 'separator / edge width must be var(--bew-hairline)'],
   [/border(?:-[a-z]+)*:\s*(?!var\(--bew-glass-edge-width)[^\s;]+\s+solid\s+var\(--bew-glass-edge-color/, 'the glass rim pairs var(--bew-glass-edge-width) with its colour'],
   [/\b(?:un-)?border(?:-[trblxy])?="(?:[^"]*\s)?(?:[trblxy]-)?\d[^"]*\$bew-(?:separator|edge)-color|\bborder-(?:[trblxy]-)?\d+\s+border-\$bew-(?:separator|edge)-color/, 'UnoCSS separator / edge must use hairline'],
 ]

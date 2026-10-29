@@ -65,3 +65,7 @@
 .bewly-design.modify-fonts .bili-video-card .bili-video-card__info--tit {
   font-family: var(--bew-fonts);
 }
+
+.bewly-design.modify-fonts :is(code, pre, samp) {
+  font-family: var(--bew-fonts-monospace);
+}

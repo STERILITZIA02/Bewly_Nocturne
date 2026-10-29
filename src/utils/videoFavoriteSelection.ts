@@ -163,36 +163,3 @@ export function createVideoFavoriteSelection(video: Partial<Video>, deps: Depend
     lifetime.dispose()
   } }
 }
-
-/** A single owned folder uses the same editor/write lock as the folder dialog. */
-export function captureVideoFavoriteRemoval(video: Partial<Video>, folderId: number, deps: Dependencies, current: () => boolean, accepted: (added: boolean) => void | Promise<void>) {
-  const selection = createVideoFavoriteSelection(video, deps)
-  return {
-    current,
-    accepted,
-    dispose: selection.close,
-    async read() {
-      if (!await selection.load())
-        return
-      const folder = selection.folders.value.find(item => item.id === folderId)
-      return folder ? folder.fav_state === 1 : undefined
-    },
-    async write(added: boolean, viewCurrent: () => boolean) {
-      if (!current() || !viewCurrent())
-        return 'cancelled' as const
-      if (!await selection.load())
-        return selection.needsVerification.value ? 'unknown' as const : 'failed' as const
-      if (!current() || !viewCurrent())
-        return 'cancelled' as const
-      const folder = selection.folders.value.find(item => item.id === folderId)
-      if (!folder)
-        return 'failed' as const
-      if (selection.selected.value.includes(folderId) !== added)
-        selection.toggle(folder)
-      if (selection.selected.value.includes(folderId) !== added)
-        return 'failed' as const
-      const saved = await selection.save()
-      return saved ? 'success' as const : selection.needsVerification.value ? 'unknown' as const : 'failed' as const
-    },
-  }
-}

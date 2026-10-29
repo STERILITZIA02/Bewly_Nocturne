@@ -34,8 +34,8 @@ $tone-transition:
   // tints were resolved against the page's solid tint, so all four are set.
   --bew-glass-tint-solid: color-mix(in srgb, var(--moment-tone-fg) 10%, var(--moment-tone));
   --bew-glass-tint-solid-hover: color-mix(in srgb, var(--moment-tone-fg) 7%, var(--bew-glass-tint-solid));
-  --bew-glass-tint: rgb(from var(--bew-glass-tint-solid) r g b / var(--bew-content-opacity));
-  --bew-glass-tint-hover: rgb(from var(--bew-glass-tint-solid-hover) r g b / var(--bew-content-opacity));
+  --bew-glass-tint: rgb(from var(--bew-glass-tint-solid) r g b / var(--bew-glass-opacity));
+  --bew-glass-tint-hover: rgb(from var(--bew-glass-tint-solid-hover) r g b / var(--bew-glass-opacity));
   color: var(--bew-text-1);
   color-scheme: var(--moment-tone-scheme);
 }

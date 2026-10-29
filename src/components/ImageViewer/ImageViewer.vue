@@ -972,6 +972,7 @@ onBeforeUnmount(() => {
   min-width: 5ch;
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }

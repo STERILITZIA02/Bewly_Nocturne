@@ -12,7 +12,10 @@ type TooltipPlacement = 'left' | 'right' | 'top' | 'bottom' | 'bottom-left' | 'b
 
 const props = defineProps<{
   activatedPage: AppPage
-  placement: TooltipPlacement
+  /** Sidebar only: the Dock names the control under its glyph instead. */
+  placement?: TooltipPlacement
+  /** Dock only: the name under the glyph (absent when the Dock hides names). */
+  label?: string
   variant: 'dock' | 'sidebar'
 }>()
 
@@ -34,7 +37,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
 </script>
 
 <template>
-  <Tooltip :content="tooltip" :placement="placement">
+  <component :is="variant === 'sidebar' ? Tooltip : 'div'" v-bind="variant === 'sidebar' ? { content: tooltip, placement } : {}">
     <button
       v-layout-editable="layoutEditableId"
       type="button"
@@ -50,12 +53,14 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
           <span :key="displayedIcon" :class="displayedIcon" aria-hidden="true" />
         </Transition>
       </span>
+      <span v-if="label" class="page-mode-switcher__label" aria-hidden="true">{{ label }}</span>
     </button>
-  </Tooltip>
+  </component>
 </template>
 
 <style lang="scss" scoped>
 @use "../styles/breakpoints";
+@use "../styles/dockTab";
 
 .page-mode-switcher__glyph {
   position: relative;
@@ -128,21 +133,6 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
     transform: none;
   }
 
-  &--dock {
-    // Matches the Dock navigation glyphs at every breakpoint.
-    --page-mode-icon-size: var(--bew-icon-size-md);
-    width: var(--bew-dock-control-size);
-    height: var(--bew-dock-control-size);
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-
-    &:hover:not(:disabled) {
-      background: transparent;
-      box-shadow: none;
-    }
-  }
-
   &--sidebar {
     --page-mode-icon-size: var(--bew-floating-control-icon-size);
     width: var(--bew-floating-control-size);
@@ -164,21 +154,24 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
   }
 }
 
-:global(.dark) .page-mode-switcher--dock:hover:not(:disabled) {
-  background: transparent;
-  box-shadow: none;
-}
+// The Dock draws it as one of its tabs: glyph over name, glyph-only hover.
+.page-mode-switcher.page-mode-switcher--dock {
+  @include dockTab.item(".page-mode-switcher__glyph");
+  aspect-ratio: auto;
 
-.page-mode-switcher--dock:disabled,
-.page-mode-switcher--dock:disabled:hover {
-  box-shadow: none;
-}
-
-@media (min-width: breakpoints.$grid-lg) {
-  .page-mode-switcher--dock {
-    width: var(--bew-dock-control-size-lg);
-    height: var(--bew-dock-control-size-lg);
+  &:hover:not(:disabled),
+  &:active:not(:disabled) {
+    transform: none;
   }
+
+  &:disabled,
+  &:disabled:hover {
+    box-shadow: none;
+  }
+}
+
+.page-mode-switcher__label {
+  @include dockTab.label;
 }
 
 @media (prefers-reduced-motion: reduce) {

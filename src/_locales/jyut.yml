@@ -182,17 +182,6 @@ player_screenshot:
   saved: 截圖已儲存
   failed: 截圖失敗
   video_unavailable: 而家嘅影片畫面用唔到
-card_removal:
-  verify_failed: 暫時確認唔到結果，請再核對。
-  watchLater: 移出稍後再睇？
-  favorite: 喺呢個收藏夾取消收藏？
-  confirm: 移除
-  removing: 移除中
-  removed: 已移除
-  restore: 重新加入
-  restoring: 重新加入中
-  verify: 結果仲未確認
-  reconcile: 核對結果
 player_adjustment:
   title: 畫面同聲音調整
   enable: 啟用臨時畫面同聲音調整
@@ -251,6 +240,9 @@ settings:
   resume_from_preview_position_desc: 只控制連結嘅預覽時間，保留預覽記憶、歷史續播同原有時間參數。
   show_dock_back_to_top: 顯示 Dock 回頂按鈕
   show_dock_back_to_top_desc: 只控制回頂入口，重新整理同復原仍然可用。
+  show_dock_item_names: 顯示 Dock 名稱
+  show_dock_badges: 顯示 Dock 角標
+  show_dock_badges_desc: 只係控制顯示，唔會標做已讀。
   show_search_identity_switcher: 顯示搜尋身份快速切換
   show_search_identity_switcher_desc: 喺搜尋結果切換帳號或者訪客請求，唔會登出，保留關鍵字同篩選。
   search_identity: 搜尋身份
@@ -617,7 +609,7 @@ settings:
   remove_the_indent_from_chinese_punctuation: 移除中文標點符號嘅縮排
   remove_the_indent_from_chinese_punctuation_desc: |
     Bilibili 預設會專登執吓中文標點符號，令到佢可以左對齊。如果你係用緊自訂字字型，最好係移除縮排。
-  disable_frosted_glass_and_top_bar_gradient: 毛玻璃同頂欄漸層
+  frosted_glass: 毛玻璃
   frosted_glass_blur_intensity: 毛玻璃模糊強度
   disable_shadow: 閂咗陰影
   link_opening_behavior_opt:
@@ -711,7 +703,7 @@ settings:
   theme_color_opt:
     neutral: 無主題色
   gradient_theme_color_background: 喺深色模式下使用中性漸變
-  gradient_theme_color_background_desc: 同時套用喺網頁背景同頂欄，唔使用主題色。
+  gradient_theme_color_background_desc: 只套用喺網頁背景，唔使用主題色。
   logo_color: Logo 顏色
   logo_color_opt:
     white: 白
@@ -1672,9 +1664,13 @@ anime:
       sun: 週日
 history:
   group_hour: 每個鐘
-  group_period: 每 8 個鐘
+  group_period: 每個時段
   group_day: 每日
   group_button: '分組：{interval}'
+  group_label: 分組：
+  period_morning: 上晝時段
+  period_afternoon: 下晝時段
+  period_night: 夜晚時段
   remove_from_history: 喺觀看記錄刪除
   refresh: 重新整理紀錄
   sort_newest: 最近睇過（已載入紀錄）

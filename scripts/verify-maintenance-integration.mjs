@@ -59,7 +59,6 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
       '~/utils/gridLayout': await import('../src/utils/gridLayout'),
       '~/utils/range': await import('../src/utils/range'),
-      '~/utils/videoCardLayout': await import('../src/utils/videoCardLayout'),
       '~/utils/videoScreenshotShortcut': await import('../src/utils/videoScreenshotShortcut'),
       './appAuthStorage': {},
     })
@@ -223,20 +222,24 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     }
   })
 
-  check('maintenance 10 model: history groups by the hour, eight hours or the day, in the order records reach them', async () => {
-    const { groupHistoryItems, historyGroupHours } = await import('../src/contentScripts/views/History/historyGroups')
+  check('maintenance 10 model: history groups by the hour, the named period or the day, in the order records reach them', async () => {
+    const { createHistoryGroupIndex, historyGroupHours, historyGroupPeriod } = await import('../src/contentScripts/views/History/historyGroups')
     const at = (day, hour, minute = 0) => new Date(2026, 9, day, hour, minute).getTime() / 1000
     const item = (id, viewAt) => ({ kid: id, view_at: viewAt, history: { business: 'archive', oid: id } })
-    const items = [item(1, at(25, 23, 30)), item(2, at(25, 17)), item(3, at(25, 9)), item(4, at(25, 8, 59)), item(5, at(24, 7)), item(6, Number.NaN)]
-    const keys = interval => groupHistoryItems(items, interval).map(group => [group.key, group.items.map(record => record.kid)])
-    assert.deepEqual(keys('day'), [['2026-10-25', [1, 2, 3, 4]], ['2026-10-24', [5]], ['unknown', [6]]])
-    assert.deepEqual(keys('period'), [['2026-10-25T16', [1, 2]], ['2026-10-25T8', [3, 4]], ['2026-10-24T0', [5]], ['unknown', [6]]])
-    assert.deepEqual(keys('hour'), [['2026-10-25T23', [1]], ['2026-10-25T17', [2]], ['2026-10-25T9', [3]], ['2026-10-25T8', [4]], ['2026-10-24T7', [5]], ['unknown', [6]]])
-    const [evening] = groupHistoryItems(items, 'period')
-    assert.equal(evening.dayKey, '2026-10-25')
-    assert.equal(historyGroupHours(evening), '16:00–24:00')
-    assert.equal(historyGroupHours(groupHistoryItems(items, 'day')[0]), '', 'a day heading is the date alone')
-    assert.equal(groupHistoryItems(items, 'day').at(-1).start, null)
+    const items = [item(1, at(25, 23, 30)), item(2, at(25, 17)), item(3, at(25, 9)), item(4, at(25, 8, 59)), item(7, at(25, 2)), item(5, at(24, 7)), item(6, Number.NaN)]
+    const groups = interval => createHistoryGroupIndex().reset(items, interval, 'newest')
+    const keys = interval => groups(interval).map(group => [group.key, group.items.map(record => record.kid)])
+    assert.deepEqual(keys('day'), [['2026-10-25', [1, 2, 3, 4, 7]], ['2026-10-24', [5]], ['unknown', [6]]])
+    // Periods start at 04:00 (user-specified): the small hours stay with the night before.
+    assert.deepEqual(keys('period'), [['2026-10-25T20', [1]], ['2026-10-25T12', [2]], ['2026-10-25T4', [3, 4]], ['2026-10-24T20', [7]], ['2026-10-24T4', [5]], ['unknown', [6]]])
+    assert.deepEqual(keys('hour'), [['2026-10-25T23', [1]], ['2026-10-25T17', [2]], ['2026-10-25T9', [3]], ['2026-10-25T8', [4]], ['2026-10-25T2', [7]], ['2026-10-24T7', [5]], ['unknown', [6]]])
+    const periods = groups('period')
+    assert.deepEqual(periods.map(historyGroupPeriod), ['night', 'afternoon', 'morning', 'night', 'morning', undefined])
+    assert.equal(periods[3].dayKey, '2026-10-24')
+    assert.equal(historyGroupHours(periods[0]), '', 'a period is named, not timed')
+    assert.equal(historyGroupHours(groups('hour')[0]), '23:00–24:00')
+    assert.equal(historyGroupHours(groups('day')[0]), '', 'a day heading is the date alone')
+    assert.equal(groups('day').at(-1).start, null)
   })
 
   check('maintenance 10 component: actual History windows 1000 records as group rows, regroups without reading, and deletes from the card menu', async () => {

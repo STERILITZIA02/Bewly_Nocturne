@@ -287,6 +287,7 @@ const awayScore = computed(() => {
 }
 
 .score {
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
   font-size: var(--bew-font-size-data-emphasis);
   font-weight: var(--bew-font-weight-regular);

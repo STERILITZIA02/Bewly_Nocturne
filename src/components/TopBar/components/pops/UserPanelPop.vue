@@ -409,6 +409,7 @@ function handleClickChannel() {
   margin: 0;
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
 }
 
@@ -478,6 +479,7 @@ function handleClickChannel() {
 .user-panel__caption {
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
 }
 
@@ -505,6 +507,7 @@ function handleClickChannel() {
   min-width: 0;
   margin: 0;
   color: var(--bew-text-2);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
   @include truncateFade.line;
 }
@@ -528,6 +531,7 @@ function handleClickChannel() {
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-heading);
     line-height: var(--bew-line-height-heading);
+    font-family: var(--bew-fonts-monospace);
     font-variant-numeric: tabular-nums;
   }
 }

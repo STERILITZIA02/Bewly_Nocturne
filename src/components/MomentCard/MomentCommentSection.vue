@@ -7,6 +7,7 @@ import { useToast } from 'vue-toastification'
 import IconButton from '~/components/IconButton.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 import { confirmDialogKey } from '~/composables/useConfirmDialog'
+import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { buildMomentCommentPermalink } from '~/utils/commentPermalink'
@@ -17,6 +18,7 @@ import { getCSRF, getUserID } from '~/utils/main'
 import { createMomentCommentSessionCache, DEFAULT_MOMENT_COMMENT_SORT, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
 import type { MomentCommentTarget } from '~/utils/momentCommentTarget'
 import { readMomentCommentTarget, resolveMomentCommentTarget } from '~/utils/momentCommentTarget'
+import { dissolveElements } from '~/utils/particleDissolve'
 
 import type { MomentCommentViewNode } from './commentThreadLayout'
 import { buildMomentCommentThread } from './commentThreadLayout'
@@ -70,6 +72,8 @@ const sessionLease = shallowRef<ReturnType<typeof sessions.open>>(null)
 let sessionSource = ''
 let hasLoaded = false
 const listRef = ref<HTMLElement | null>(null)
+const commentRemovals = ref(0)
+useLayoutMotion(listRef, commentRemovals, { selector: '.moment-comments__item', key: 'data-comment-id' })
 let restoredScrollTop = 0
 const resolvingTarget = ref(false)
 const comments = ref<MomentCommentItem[]>([])
@@ -574,6 +578,9 @@ async function deleteComment(comment: MomentCommentItem) {
   })
   if (!operation)
     return
+  // The comment breaks apart once confirmed; a root takes its whole thread with it.
+  const item = listRef.value?.querySelector(`[data-comment-id="${CSS.escape(comment.id)}"]`)
+  const dissolve = dissolveElements(isRootComment(comment) ? item?.closest('.moment-comments__thread') : item)
   let outcome: 'deleted' | 'failed' | 'uncertain' = 'failed'
   let message = ''
   try {
@@ -596,9 +603,15 @@ async function deleteComment(comment: MomentCommentItem) {
     outcome = verified === 'deleted' ? 'deleted' : verified === 'present' ? 'failed' : 'uncertain'
   }
   const applied = sessions.finishDelete(operation, outcome === 'deleted')
+  if (!applied)
+    dissolve.restore()
   if (!isCurrent())
     return
   if (applied) {
+    await dissolve.released
+    if (!isCurrent())
+      return
+    commentRemovals.value++
     applyCommentDeletion(comment)
     removedCount.value += operation.state.target.removedCount
     emit('removed', operation.state.target.removedCount)

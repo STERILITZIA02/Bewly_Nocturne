@@ -192,7 +192,7 @@ export function injectLayoutStyle() {
       z-index: var(--bew-z-widescreen);
       color: var(--bew-text-1);
       background: transparent;
-      font-family: var(--bew-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+      font-family: var(--bew-fonts-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
       pointer-events: none;
       --bewly-widescreen-sidebar-bg: transparent;
       --bewly-widescreen-text-primary: var(--bew-text-1, #18191c);
@@ -1015,7 +1015,7 @@ export function injectLayoutStyle() {
       height: var(--bewly-widescreen-controls-glass-height) !important;
       z-index: calc(var(--bew-z-popover) - 1) !important;
       background: var(--bewly-widescreen-danmaku-bar-bg) !important;
-      border: var(--bew-glass-edge-width, 1px) solid var(--bew-glass-edge-color, rgb(255 255 255 / 70%)) !important;
+      border: var(--bew-glass-edge-width, 1px) solid var(--bew-glass-edge-color, rgb(230 230 230 / 80%)) !important;
       border-radius: var(--bewly-widescreen-shell-radius) !important;
       corner-shape: var(--bew-corner-shape);
       box-shadow: none !important;
@@ -1046,7 +1046,7 @@ export function injectLayoutStyle() {
 
     ${DANMAKU_SURFACE_SELECTOR}.${DANMAKU_SOURCE_HOST_CLASS} {
       z-index: var(--bew-z-popover) !important;
-      font-family: var(--bew-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif) !important;
+      font-family: var(--bew-fonts-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif) !important;
     }
 
     /* 只让最外层提示承担表面，匹配截图按钮的单层 Tooltip。 */
@@ -1539,7 +1539,7 @@ export function injectLayoutStyle() {
       background: transparent !important;
       border: 0 !important;
       color: var(--bew-text-1) !important;
-      font-family: var(--bew-font-family) !important;
+      font-family: var(--bew-fonts-ui) !important;
       font-size: var(--bew-font-size-control, 13px) !important;
       font-weight: var(--bew-font-weight-regular, 400) !important;
       line-height: var(--bew-line-height-control, 18px) !important;
@@ -3353,7 +3353,7 @@ export function injectLayoutStyle() {
       box-shadow: none;
       backdrop-filter: none;
       cursor: pointer;
-      font-family: var(--bew-font-family);
+      font-family: var(--bew-fonts-ui);
       font-size: var(--bew-font-size-control, 13px);
       font-weight: var(--bew-font-weight-regular, 400);
       line-height: var(--bew-line-height-control, 18px);

@@ -532,6 +532,7 @@ async function handleFollowClick(e: Event) {
 }
 
 .sample-duration {
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
   position: absolute;
   bottom: var(--bew-space-2);
@@ -627,6 +628,7 @@ async function handleFollowClick(e: Event) {
 }
 
 .user-card__compact-stats {
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
   flex-wrap: wrap;
   row-gap: var(--bew-space-1);

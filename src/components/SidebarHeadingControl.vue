@@ -88,6 +88,7 @@ const items = computed(() => props.options.map(item => ({ ...item, ariaLabel: it
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
 }
 </style>

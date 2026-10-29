@@ -173,6 +173,11 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
     iframeDocument.dispose()
   })
 
+  // Bilibili's own page may rebuild its native content on its theme event. Sent
+  // inside a View Transition, that work would hold back the new snapshot, so
+  // while a theme reveal runs the event waits until the reveal has finished.
+  let nativeThemeAfter: Promise<void> | undefined
+
   // Apply appearance only when an effective theme input changes. The settings
   // adapter replaces its object on every write, so a getter returning an array
   // would otherwise fire for unrelated settings as well.
@@ -214,8 +219,13 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
       }
     }
 
-    if (syncNativeTheme)
-      syncBilibiliTheme(isDark.value, !parentTheme.value)
+    if (syncNativeTheme) {
+      const syncNativeThemeNow = () => syncBilibiliTheme(isDark.value, !parentTheme.value)
+      if (nativeThemeAfter)
+        void nativeThemeAfter.then(syncNativeThemeNow)
+      else
+        syncNativeThemeNow()
+    }
 
     // Only used as a temporary solution, which will eventually be removed
     // It seems like Bilibili already supports dark mode when the `bili_dark` class is added to the `html` element
@@ -270,16 +280,21 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
       Math.max(y, innerHeight - y),
     )
     let transitionStyle: HTMLStyleElement | undefined
+    const suppressionStyles: HTMLStyleElement[] = []
     let active = true
     let committed = false
     let transition: ViewTransition | undefined
     let animation: Animation | undefined
+    let finished: Promise<void> | undefined
     const cleanup = () => {
+      if (nativeThemeAfter === finished)
+        nativeThemeAfter = undefined
       if (!active)
         return
       active = false
       animation?.cancel()
       transitionStyle?.remove()
+      suppressionStyles.forEach(style => style.remove())
       if (cancelAppearanceTransition === cancel)
         cancelAppearanceTransition = undefined
     }
@@ -294,6 +309,19 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
           return
         applyingAppearance = true
         try {
+          // The new view under the reveal is live: without this, every colour,
+          // background and shadow transition the theme flip starts would run on
+          // the main thread during the reveal and drop its frames. Mounted with
+          // the flip, so it costs no restyle of its own; removed after the reveal.
+          for (const parent of [document.head, document.getElementById('bewly')?.shadowRoot]) {
+            if (!parent)
+              continue
+            const style = document.createElement('style')
+            style.dataset.bewlyThemeTransition = ''
+            style.textContent = '*, *::before, *::after { transition: none !important; }'
+            parent.appendChild(style)
+            suppressionStyles.push(style)
+          }
           committed = true
           update()
           await nextTick()
@@ -326,7 +354,9 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
         if (active)
           transition?.skipTransition()
       })
-      return transition.finished.then(cleanup, cleanup)
+      finished = transition.finished.then(cleanup, cleanup)
+      nativeThemeAfter = finished
+      return finished
     }
     catch {
       cleanup()

@@ -2,9 +2,7 @@
 import { onKeyStroke } from '@vueuse/core'
 import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue'
 
-import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
-import { useDark } from '~/composables/useDark'
 import { usePageDim } from '~/composables/usePageDim'
 import { BEWLY_IFRAME_DRAWER_HOST_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
@@ -21,7 +19,6 @@ import TopBarHeader from './components/TopBarHeader.vue'
 import TopBarLogo from './components/TopBarLogo.vue'
 import { resetTopBarTransientInteraction, useTopBarInteraction } from './composables/useTopBarInteraction'
 
-const { reachTop } = useBewlyApp()
 // 顶栏状态管理
 const topBarStore = useTopBarStore()
 // The glass panels (profile and the media popovers) dim the page; the small
@@ -32,8 +29,6 @@ const { forceWhiteIcon, hasOpenClickPopup } = useTopBarInteraction()
 
 const conflictingHeaderSelectors = ['.fixed-author-header', '.fixed-top-header']
 const spaceNavbarSelector = '.nav-bar.space-navbar'
-
-const { isDark } = useDark()
 
 // 顶栏始终显示，只在两种情况下让位：Bewly 宽屏播放页，或原页面自己的固定页头
 // （含个人空间的吸顶导航）出现时，避免两层页头重叠。
@@ -359,9 +354,6 @@ onKeyStroke('Escape', (event: KeyboardEvent) => {
       >
         <TopBarHeader
           :active="hostAllowsUiReads && !hideTopBar && !usesNativeTopBar"
-          :force-white-icon="forceWhiteIcon"
-          :reach-top="reachTop"
-          :is-dark="isDark"
         />
       </header>
     </Transition>

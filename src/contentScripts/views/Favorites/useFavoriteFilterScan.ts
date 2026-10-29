@@ -56,6 +56,7 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
   if (typeof document !== 'undefined')
     document.addEventListener('visibilitychange', updateVisibility)
   let tasks: ScanTask[] = []
+  const taskOrder = new Map<string, number>()
   let identity = ''
   let generation = 0
   let controller: AbortController | undefined
@@ -94,11 +95,23 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     sourceByItem = new WeakMap()
   }
 
+  function removeRecords(matches: (record: FavoriteFilterRecord) => boolean) {
+    const retained = records.filter((record) => {
+      if (!matches(record))
+        return true
+      recordKeys.delete(getFavoriteFilterRecordKey(record.sourceId, getFavoriteResourceKey(record.item)))
+      return false
+    })
+    if (retained.length !== records.length)
+      records.splice(0, records.length, ...retained)
+  }
+
   function reset() {
     generation++
     cancelRead()
     clearResults()
     tasks = []
+    taskOrder.clear()
     identity = ''
     status.value = 'idle'
   }
@@ -113,6 +126,8 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     predicate = compileFavoriteFilter(applied.value, dependencies.getNormalQuery())
     const tids = applied.value.tids.length ? applied.value.tids : [null]
     tasks = dependencies.getSourceIds().flatMap(sourceId => tids.map(tid => ({ sourceId, tid, page: 0, done: false, pages: new Map(), keys: new Set() })))
+    taskOrder.clear()
+    tasks.forEach((task, index) => taskOrder.set(`${task.sourceId}:${task.tid}`, index))
     status.value = tasks.length ? 'scanning' : 'complete'
     void pump(generation)
   }
@@ -204,23 +219,18 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
       }
       if (repairFrom !== undefined) {
         const stale = new Set([...task.pages].filter(([pn]) => pn >= repairFrom).flatMap(([, keys]) => keys))
-        for (let index = records.length - 1; index >= 0; index--) {
-          const record = records[index]
-          if (record.sourceId === task.sourceId && record.tid === task.tid && stale.has(getFavoriteResourceKey(record.item))) {
-            recordKeys.delete(getFavoriteFilterRecordKey(record.sourceId, getFavoriteResourceKey(record.item)))
-            records.splice(index, 1)
-          }
-        }
+        removeRecords(record => record.sourceId === task.sourceId && record.tid === task.tid && stale.has(getFavoriteResourceKey(record.item)))
         for (const pn of task.pages.keys()) {
           if (pn >= repairFrom)
             task.pages.delete(pn)
         }
         task.repairThrough = undefined
       }
-      const taskIndex = tasks.indexOf(task)
-      let insertAt = repairFrom === undefined ? records.length : records.findIndex(record => tasks.findIndex(entry => entry.sourceId === record.sourceId && entry.tid === record.tid) > taskIndex)
+      const taskIndex = taskOrder.get(`${task.sourceId}:${task.tid}`)!
+      let insertAt = repairFrom === undefined ? records.length : records.findIndex(record => taskOrder.get(`${record.sourceId}:${record.tid}`)! > taskIndex)
       if (insertAt < 0)
         insertAt = records.length
+      const added: FavoriteFilterRecord[] = []
       for (const item of medias) {
         const record: FavoriteFilterRecord = { item, sourceId: task.sourceId, tid: task.tid }
         if (!predicate(record))
@@ -229,9 +239,11 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
         if (!recordKeys.has(key)) {
           recordKeys.add(key)
           sourceByItem.set(item, task.sourceId)
-          records.splice(insertAt++, 0, record)
+          added.push(record)
         }
       }
+      if (added.length)
+        records.splice(insertAt, 0, ...added)
       task.page = page
       task.keys = sourceKeys
       repairedPages.forEach((keys, pn) => task.pages.set(pn, keys))
@@ -291,13 +303,8 @@ export function useFavoriteFilterScan(dependencies: FavoriteFilterScanDependenci
     cancelRead()
     const keys = new Set(command.resourceKeys)
     const removes = command.kind === 'delete' || command.kind === 'move'
-    for (let index = records.length - 1; index >= 0; index--) {
-      const record = records[index]
-      if (removes && record.sourceId === command.sourceId && keys.has(getFavoriteResourceKey(record.item))) {
-        recordKeys.delete(getFavoriteFilterRecordKey(record.sourceId, getFavoriteResourceKey(record.item)))
-        records.splice(index, 1)
-      }
-    }
+    if (removes)
+      removeRecords(record => record.sourceId === command.sourceId && keys.has(getFavoriteResourceKey(record.item)))
     for (const task of tasks) {
       if (!affected.has(task.sourceId))
         continue

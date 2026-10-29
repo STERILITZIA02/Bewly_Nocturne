@@ -98,28 +98,6 @@ export async function updateOwnedWatchLater(
   }
 }
 
-/** Explicit remove/add intent with a read-before-retry boundary after transport failure. */
-export function captureWatchLaterRemoval(aid: number, owner: WatchLaterMutationOwner, membership: WatchLaterMembership & { syncWatchLaterState: (force?: boolean) => Promise<unknown> }, accepted: (added: boolean) => void | Promise<void> = () => {}) {
-  const csrf = getCSRF()
-  return {
-    current: () => owner.isCurrent() && !!csrf && getCSRF() === csrf,
-    async write(added: boolean, current: () => boolean) {
-      try {
-        const result = await updateOwnedWatchLater({ aid }, added ? 'add' : 'remove', { accountId: owner.accountId, isCurrent: current }, membership)
-        return result.status === 'unavailable' ? 'failed' as const : result.status
-      }
-      catch { return 'unknown' as const }
-    },
-    async read() {
-      if (!await membership.ensureWatchLaterState(true))
-        return
-      await membership.syncWatchLaterState(true)
-      return owner.isCurrent() ? membership.isInWatchLater(aid) : undefined
-    },
-    accepted,
-  }
-}
-
 export function getDirectWatchLaterAid(target: WatchLaterIdentity): number | undefined {
   if (target.roomid)
     return undefined

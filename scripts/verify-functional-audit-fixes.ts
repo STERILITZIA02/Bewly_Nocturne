@@ -246,7 +246,7 @@ async function verifySharedVideoStyles() {
   }
   // History rows render the shared video card itself, not a look-alike.
   const history = await readFile(new URL('../src/contentScripts/views/History/History.vue', import.meta.url), 'utf8')
-  assert.match(history, /<VideoCard\s+:video="getHistoryVideo\(item\)"/)
+  assert.match(history, /<VideoCard\b[\s\S]{0,400}:video="getHistoryVideo\(item\)"/)
   assert.doesNotMatch(history, /history-list-card/)
 }
 

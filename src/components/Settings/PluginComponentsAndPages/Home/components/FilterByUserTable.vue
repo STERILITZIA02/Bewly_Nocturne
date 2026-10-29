@@ -7,7 +7,9 @@ import Button from '~/components/Button.vue'
 import Input from '~/components/Input.vue'
 import List from '~/components/List/List.vue'
 import ListItem from '~/components/List/ListItem.vue'
+import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { settings } from '~/logic'
+import { dissolveElements } from '~/utils/particleDissolve'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -73,7 +75,16 @@ function handleConfirmFilter(index: number) {
     editingIndex.value = -1
 }
 
-function handleDeleteFilter(index: number) {
+// A deleted rule breaks apart; the rows below then close the gap.
+const listRef = ref<{ $el: HTMLElement }>()
+const removals = ref(0)
+useLayoutMotion(computed(() => listRef.value?.$el), removals)
+async function handleDeleteFilter(keyword: string, event: MouseEvent) {
+  await dissolveElements((event.currentTarget as Element).closest('.b-list-item')).released
+  const index = settings.value.filterByUser.findIndex(item => item.keyword === keyword)
+  if (index < 0)
+    return
+  removals.value++
   settings.value.filterByUser.splice(index, 1)
 }
 
@@ -123,6 +134,7 @@ onKeyStroke('Escape', (e: KeyboardEvent) => {
       </Button>
     </div>
     <List
+      ref="listRef"
       highlight-first
       pin-top
       w-full max-h-400px overflow-overlay
@@ -139,7 +151,7 @@ onKeyStroke('Escape', (e: KeyboardEvent) => {
       </ListItem>
 
       <ListItem
-        v-for="(item, index) in settings.filterByUser" :key="item.keyword"
+        v-for="(item, index) in settings.filterByUser" :key="item.keyword" :data-motion-key="item.keyword"
         :style="{
           background: editingIndex === index ? 'var(--bew-theme-surface) !important' : '',
         }"
@@ -192,7 +204,7 @@ onKeyStroke('Escape', (e: KeyboardEvent) => {
                 <i i-tabler:edit />
               </template>
             </Button>
-            <Button size="small" type="tertiary" @click="handleDeleteFilter(index)">
+            <Button size="small" type="tertiary" @click="handleDeleteFilter(item.keyword, $event)">
               <template #left>
                 <i i-tabler:trash />
               </template>

@@ -225,6 +225,7 @@ onBeforeUnmount(controller.invalidate)
 .moment-vote__percentage {
   margin-left: auto;
   flex: none;
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
 }
 .moment-vote button {

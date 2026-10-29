@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 
 import { countOpenTabsTask, selectOpenTabsTaskItems } from '../src/constants/openTabsWatchLater'
-import { createHistoryFilters, historyDateBounds, historyRangeBounds, matchesHistoryFilters, sortHistoryItems } from '../src/contentScripts/views/History/historyFilters'
+import { createHistoryFilters, historyDateBounds, historyRangeBounds, matchesHistoryFilters } from '../src/contentScripts/views/History/historyFilters'
+import { createHistoryGroupIndex } from '../src/contentScripts/views/History/historyGroups'
 import { createWatchLaterFilters, filterWatchLaterItems, sortWatchLaterItems, watchLaterAddedBounds, watchLaterPlaybackState } from '../src/contentScripts/views/WatchLater/watchLaterFilters'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
@@ -88,7 +89,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     const reads = []
     const errors = []
     let posts = 0
-    const timeline = useHistoryTimeline({ api: {
+    const timeline = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api: {
       getHistoryPauseStatus: () => new Promise(resolve => reads.push(resolve)),
       setHistoryPauseStatus: async () => {
         posts++
@@ -158,20 +159,25 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     const { useHistoryTimeline } = await import('../src/contentScripts/views/History/useHistoryTimeline')
     const reads = []
     const item = id => ({ view_at: id, title: String(id), history: { business: 'archive', oid: id } })
-    const timeline = useHistoryTimeline({ api: { getHistoryList: params => new Promise(resolve => reads.push({ params, resolve })) }, getAccountId: () => 1, getCSRF: () => '', haveScrollbar: async () => true, onWriteError: assert.fail })
+    const timeline = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api: { getHistoryList: params => new Promise(resolve => reads.push({ params, resolve })) }, getAccountId: () => 1, getCSRF: () => '', haveScrollbar: async () => true, onWriteError: assert.fail })
     try {
       const initial = timeline.load()
-      reads[0].resolve({ code: 0, data: { list: [item(1)] } })
+      reads[0].resolve({ code: 0, data: { list: [item(1)], cursor: { max: 1, view_at: 1, business: 'archive' } } })
       await initial
+      const tail = timeline.load()
+      reads[1].resolve({ code: 0, data: { list: [], cursor: { max: 0, view_at: 0, business: '' } } })
+      await tail
       assert.equal(timeline.noMoreContent.value, true)
       const refresh = timeline.refreshCurrentMode()
       assert.equal(timeline.historyList[0].history.oid, 1)
-      reads[1].resolve({ code: -503 })
+      reads[2].resolve({ code: -503 })
       await refresh
       assert.equal(timeline.historyList[0].history.oid, 1)
       const retry = timeline.retry()
-      assert.equal(reads[2].params.view_at, 0)
-      reads[2].resolve({ code: 0, data: { list: [item(2)] } })
+      assert.equal(reads[3].params.view_at, 0)
+      reads[3].resolve({ code: 0, data: { list: [item(2)], cursor: { max: 2, view_at: 2, business: 'archive' } } })
+      await flush()
+      reads[4].resolve({ code: 0, data: { list: [], cursor: { max: 0, view_at: 0, business: '' } } })
       await retry
       assert.deepEqual(timeline.historyList.map(item => item.history.oid), [2])
     }
@@ -200,6 +206,10 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
       isRefreshing: Vue.ref(false),
       refreshFailed: Vue.ref(false),
       requestFailed: Vue.ref(false),
+      requestStalled: Vue.ref(false),
+      captureWatchLaterReadGeneration: () => 0,
+      isWatchLaterReadCurrent: () => true,
+      sourcePages: Vue.ref({}),
       noMoreContent: Vue.ref(false),
       pendingAction: Vue.ref(null),
       batch: { busy: Vue.ref(false) },
@@ -357,7 +367,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     const yesterday = historyRangeBounds({ ...createHistoryFilters(), period: 'yesterday' }, new Date(2026, 9, 11, 14))
     assert.deepEqual(yesterday, historyDateBounds('2026-10-10'))
     const input = [{ ...item, view_at: 20 }, { ...item, view_at: 10 }]
-    assert.deepEqual(sortHistoryItems(input, 'oldest').map(item => item.view_at), [10, 20])
+    assert.deepEqual(createHistoryGroupIndex().reset(input, 'day', 'oldest').flatMap(group => group.items.map(item => item.view_at)), [10, 20])
     assert.deepEqual(input.map(item => item.view_at), [20, 10])
   })
   check('history batch deduplicates business keys, retains failed selection and stops pending writes on account change', async () => {
@@ -516,7 +526,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     assert.deepEqual(items.map(item => item.aid), [1, 2, 3, 4])
   })
   check('Watch Later batch stops on failure, retains remaining selection and cancels across accounts/unmount', async () => {
-    const { useWatchLaterBatch } = await import('../src/contentScripts/views/WatchLater/useWatchLaterBatch')
+    const { useLibraryBatchSelection } = await import('../src/composables/useLibraryBatchSelection')
     const ids = Vue.ref([1, 2, 3])
     const calls = []
     let account = 1
@@ -527,8 +537,8 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     let batch
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ setup() {
-      batch = useWatchLaterBatch({
-        visibleIds: () => ids.value,
+      batch = useLibraryBatchSelection({
+        keys: () => ids.value,
         captureOwner: () => {
           const owner = account
           return { isCurrent: () => owner === account }
@@ -657,7 +667,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     const { useHistoryTimeline } = await import('../src/contentScripts/views/History/useHistoryTimeline')
     let release
     let signal
-    const timeline = useHistoryTimeline({ api: {
+    const timeline = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api: {
       getHistoryList: (_params, options) => new Promise((resolve) => {
         release = resolve
         signal = options.signal
@@ -680,13 +690,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     const { useHistoryTimeline } = await import('../src/contentScripts/views/History/useHistoryTimeline')
     const reads = []
     const request = kind => (params, options) => new Promise(resolve => reads.push({ kind, params, options, resolve }))
-    const timeline = useHistoryTimeline({
-      api: { getHistoryList: request('list'), searchHistoryList: request('search'), getHistoryPauseStatus: async () => ({ code: 0, data: false }) },
-      getAccountId: () => 1,
-      getCSRF: () => 'csrf',
-      haveScrollbar: async () => true,
-      onWriteError: assert.fail,
-    })
+    const timeline = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api: { getHistoryList: request('list'), searchHistoryList: request('search'), getHistoryPauseStatus: async () => ({ code: 0, data: false }) }, getAccountId: () => 1, getCSRF: () => 'csrf', haveScrollbar: async () => true, onWriteError: assert.fail })
     try {
       timeline.activate()
       timeline.keyword.value = 'music'
@@ -721,7 +725,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     const { useHistoryTimeline } = await import('../src/contentScripts/views/History/useHistoryTimeline')
     let requests = 0
     let pending
-    const timeline = useHistoryTimeline({ api: {
+    const timeline = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api: {
       getHistoryList: async (_params, options) => {
         requests++
         if (requests === 4)
@@ -743,7 +747,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
   check('history automatic continuation resumes sparse scans and stops repeated search pages without spinning', async () => {
     const { useHistoryTimeline } = await import('../src/contentScripts/views/History/useHistoryTimeline')
     let calls = 0
-    const timeline = useHistoryTimeline({ api: {
+    const timeline = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api: {
       getHistoryList: async () => {
         calls++
         return { code: 0, data: { list: calls === 4 ? [historyItem(100, 'live', 900)] : Array.from({ length: 20 }, (_, i) => historyItem(calls * 20 + i, 'archive', 1000 - calls * 20 - i)) } }

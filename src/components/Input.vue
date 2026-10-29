@@ -118,6 +118,10 @@ defineExpose({ focus })
   }
 }
 
+.b-input:has(input:focus-visible) {
+  background-color: var(--bew-input-bg-hover);
+}
+
 .b-input--small input {
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);

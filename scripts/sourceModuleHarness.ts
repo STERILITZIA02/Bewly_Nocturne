@@ -17,8 +17,8 @@ export function globalComponentFixture(path: string, vue: typeof import('vue')) 
 /** Executes the complete production module; only its external dependencies are substituted. */
 export async function loadSourceModule(file: string, imports: Record<string, unknown>, globals: Record<string, unknown> = {}) {
   const source = await readFile(new URL(file, import.meta.url), 'utf8')
-  if (source.includes('from \'~/composables/useCardRemoval\'') && !('~/composables/useCardRemoval' in imports))
-    imports = { '~/composables/useCardRemoval': await import('../src/composables/useCardRemoval'), ...imports }
+  if (source.includes('from \'~/utils/particleDissolve\'') && !('~/utils/particleDissolve' in imports))
+    imports = { '~/utils/particleDissolve': await import('../src/utils/particleDissolve'), ...imports }
   if (source.includes('from \'~/utils/bewlyWidescreen/appHost\'') && !('~/utils/bewlyWidescreen/appHost' in imports)) {
     imports = { '~/utils/bewlyWidescreen/appHost': await loadSourceModule('../src/utils/bewlyWidescreen/appHost.ts', {
       '~/styles/reset.css?raw': imports['~/styles/reset.css?raw'] ?? { default: '' },
@@ -54,7 +54,7 @@ export async function loadSourceModule(file: string, imports: Record<string, unk
   }
   // Dependency-free helpers; fixtures may still override them. They run in the
   // fixture's own sandbox so defaults such as `location.href` read its globals.
-  for (const name of ['momentsReadPosition', 'scrollIntent', 'bilibiliLocale', 'bilibiliLiveContext', 'viewSnapshotBudget', 'fullscreenChange', 'pageBridgeChannel', 'videoMetadataBridge', 'playbackTab', 'themeColor', 'motionPriority', 'reducedMotion', 'cssSelectors', 'htmlDecode', 'uriParse', 'textAutospace', 'viewportGeometry']) {
+  for (const name of ['abort', 'appearance', 'appearanceThemes', 'appearancePresets', 'momentsReadPosition', 'scrollIntent', 'bilibiliLocale', 'bilibiliLiveContext', 'viewSnapshotBudget', 'fullscreenChange', 'pageBridgeChannel', 'videoMetadataBridge', 'playbackTab', 'themeColor', 'motionPriority', 'reducedMotion', 'cssSelectors', 'htmlDecode', 'uriParse', 'textAutospace', 'viewportGeometry']) {
     for (const path of [`~/utils/${name}`, `../utils/${name}`, `./${name}`]) {
       if (source.includes(`from '${path}'`) && !(path in imports))
         imports = { [path]: await loadSourceModule(`../src/utils/${name}.ts`, {}, globals), ...imports }

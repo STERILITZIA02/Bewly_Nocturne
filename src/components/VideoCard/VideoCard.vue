@@ -2,10 +2,8 @@
 import { computed, ref, watch } from 'vue'
 
 import ALink from '~/components/ALink.vue'
-import CardRemovalPanel from '~/components/CardRemovalPanel.vue'
 import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
-import type { CardRemoval } from '~/composables/useCardRemoval'
 import { useUserRelations } from '~/composables/useUserRelations'
 import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import { settings } from '~/logic'
@@ -43,15 +41,11 @@ interface Props {
   isFollowingPage?: boolean
   customClickHandler?: (event: MouseEvent) => void
   coverTopLeftAlwaysVisible?: boolean
-  removal?: CardRemoval
-  removalKind?: 'watchLater' | 'favorite'
-  requestWatchLaterRemoval?: (aid: number) => void
 }
 
 // 数据现在在转换阶段已经完成 HTML 解码，直接使用 props
 const logic = useVideoCardLogic(props, props.persistentState)
-const cardRemoval = computed(() => props.removal ?? logic.watchLaterRemoval.value)
-defineExpose({ canRecycle: computed(() => !cardRemoval.value && !logic.showVideoOptions.value && !logic.isPreviewFullscreen.value && !logic.isPreviewScrubbing.value && !logic.isHover.value && !logic.isUpdatingWatchLater.value && !logic.isUndoing.value) })
+defineExpose({ canRecycle: computed(() => !logic.showVideoOptions.value && !logic.isPreviewFullscreen.value && !logic.isPreviewScrubbing.value && !logic.isHover.value && !logic.isUpdatingWatchLater.value && !logic.isUndoing.value) })
 const { mainAppRef } = useBewlyApp()
 const { userRelations, retainUserRelations } = useUserRelations()
 watch(() => {
@@ -127,7 +121,7 @@ const infoSkeleton = computed(() => props.skeleton)
 
 function handleContextMenu(event: MouseEvent) {
   // Shift keeps the browser menu, and a text selection keeps native copy.
-  if (cardRemoval.value || !props.contextMenu || !props.video || props.skeleton || logic.removed.value || event.shiftKey || document.getSelection()?.toString())
+  if (!props.contextMenu || !props.video || props.skeleton || logic.removed.value || event.shiftKey || document.getSelection()?.toString())
     return
   event.preventDefault()
   logic.openContextMenu(event)
@@ -163,7 +157,6 @@ provide('getVideoType', () => props.type!)
     <ProgressiveBlur v-if="haloActive && !skeleton" class="video-card-halo" edge="center" radius="var(--bew-card-hover-blur-radius)" />
     <div
       class="video-card group"
-      :inert="!!cardRemoval || undefined"
       w="full"
       rounded-inherit
     >
@@ -228,8 +221,6 @@ provide('getVideoType', () => props.type!)
         />
       </component>
     </div>
-
-    <CardRemovalPanel v-if="cardRemoval" :state="cardRemoval" :kind="removalKind ?? 'watchLater'" />
 
     <!-- context menu -->
     <Teleport

@@ -83,6 +83,7 @@ import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributors
 import { playbackFunctions, readPlaybackSource } from './playbackSource'
 import { FAVORITES_SOURCE_FILES, FOR_YOU_SOURCE_FILES, MOMENTS_SOURCE_FILES, readSourceFiles } from './refactoredSources'
 import { loadSourceFunctions } from './sourceFunctionHarness'
+import { verifyAuditOptimizations } from './verify-audit-optimizations'
 import { verifyFunctionalAuditFixes } from './verify-functional-audit-fixes'
 import { verifyMomentPlayerPorts } from './verify-moment-player-ports'
 
@@ -1737,21 +1738,26 @@ async function verifyComponentContracts() {
 
   assert.match(dock, /ref="dockIndicatorRef"/)
   assert.match(dock, /updateIndicator\(false\)/)
-  assert.match(dock, /:aria-label="dockBadges\[dockItem\.page\]\?\.label \|\| \$t\(dockItem\.i18nKey\)"/)
+  // Dock tabs (user-specified, iOS tab bar): every control names itself under
+  // its glyph, there are no hover names, and only the glyph reacts to hover.
+  assert.match(dock, /:aria-label="dockBadges\[dockItem\.page\]\?\.label \?\? \$t\(dockItem\.i18nKey\)"/)
+  assert.match(dock, /<span v-if="settings\.showDockItemNames" class="dock-tab__label" aria-hidden="true">\{\{ \$t\(dockItem\.i18nKey\) \}\}<\/span>/)
+  assert.match(dock, /!settings\.value\.showDockBadges/, 'badges can be turned off')
+  assert.doesNotMatch(dock, /<Tooltip|import Tooltip/)
   assert.match(dock, /dock-theme-toggle/)
   assert.match(dock, /dock-collapse-toggle/)
   assert.match(dock, /dock-refresh-back-to-top-action/)
-  assert.equal((dock.match(/class="dock-item dock-item--icon-only/g) ?? []).length, 2)
-  const dockUtilityStyles = dock.slice(dock.indexOf('&.dock-item--icon-only {'), dock.indexOf('&.active {', dock.indexOf('&.dock-item--icon-only {')))
-  assert.match(dockUtilityStyles, /border: 0;/)
-  assert.match(dockUtilityStyles, /background: transparent;/)
-  assert.match(dockUtilityStyles, /box-shadow: none;/)
+  assert.equal((dock.match(/class="dock-tab[ "]/g) ?? []).length, 4, 'tabs, theme, settings and collapse are all Dock tabs')
+  assert.match(dock, /@include dockTab\.item\("\.dock-tab__glyph"\);/)
+  const dockTab = await readFile(`${root}/src/styles/dockTab.scss`, 'utf8')
+  assert.match(dockTab, /border: 0;[\s\S]*background: transparent;\s*box-shadow: none;/)
+  assert.match(dockTab, /color: var\(--bew-text-2\);/, 'tabs rest at secondary emphasis')
+  assert.match(dockTab, /&:hover:not\(:disabled, \[data-active="true"\]\) \{\s*color: var\(--bew-text-1\);/, 'hover restores primary emphasis')
+  assert.match(dockTab, /prefers-reduced-motion: reduce[\s\S]*transform: none;/)
   const dockThemeButton = dock.slice(dock.indexOf(`v-layout-editable="'dock-theme-toggle'"`), dock.indexOf('</button>', dock.indexOf(`v-layout-editable="'dock-theme-toggle'"`)))
   assert.doesNotMatch(dockThemeButton, /\s(?:bg|:shadow)=/)
-  const dockPageModeStyles = pageModeSwitcherButton.slice(pageModeSwitcherButton.indexOf('&--dock {'), pageModeSwitcherButton.indexOf('&--sidebar {'))
-  assert.match(dockPageModeStyles, /border: 0;/)
-  assert.match(dockPageModeStyles, /background: transparent;/)
-  assert.match(dockPageModeStyles, /box-shadow: none;/)
+  assert.match(pageModeSwitcherButton, /@include dockTab\.item\("\.page-mode-switcher__glyph"\);/)
+  assert.match(dock, /:label="settings\.showDockItemNames \? \$t\('settings\.page_mode'\) : undefined"/)
   assert.match(sidebar, /sidebar-theme-toggle/)
   assert.doesNotMatch(dock, /layout-edit-button|toggleLayoutEditMode|showLayoutEditButton/)
   assert.doesNotMatch(sidebar, /layout-edit-button|toggleLayoutEditMode|showLayoutEditButton/)
@@ -2236,7 +2242,7 @@ async function verifyP2AccessibilityAndLocales() {
   assert.match(select, /:aria-selected="Object\.is\(option\.value, modelValue\)"/)
   for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', 'Escape'])
     assert.match(select, new RegExp(`case '${key}'`))
-  assert.match(select, /nextTick\(\(\) => triggerRef\.value\?\.focus\(\)\)/)
+  assert.match(select, /if \(restoreFocus\)\s+triggerRef\.value\?\.focus\(\{ preventScroll: true \}\)/)
 
   // Card actions live in the right-click menu; the info row has no more button.
   assert.doesNotMatch(videoInfo, /video-card__more-btn|aria-haspopup/)
@@ -2720,7 +2726,7 @@ async function verifyP2WidescreenControl() {
   assert.match(skeletonPaint, /background(?:-color)?: var\(--bew-skeleton/)
   assert.match(playbackPageLoadingSection, /background: var\(--bew-elevated-alt-solid\)/)
   assert.doesNotMatch(playbackPageLoadingSection, /backdrop-filter: var\(--bew-filter-glass-1\)/)
-  assert.match(playbackPageLoadingSection, /@media \(prefers-reduced-motion: reduce\)/)
+  assert.match(playbackPageLoadingSection, /reducedMotionCss\(/)
   // The skeleton mirrors the split layout: the square pane with controls,
   // then the column with the info on top.
   assert.doesNotMatch(playbackPageLoadingSection, /data-sidebar-layout|sidebar-user-width|skeleton-column|card-radius/)
@@ -2733,7 +2739,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /Object\.assign\(info\.style, \{ flex: 'none', height: `\$\{infoHeight\}px`, maxHeight: 'none' \}\)/)
   assert.match(playbackPageLoadingSection, /overlay\.dataset\.sidebarPosition = settings\.value\.bewlyWidescreenSidebarPosition/)
   assert.doesNotMatch(playbackPageLoadingSection, /loading\.gif|bewly-widescreen-loading-icon/)
-  assert.match(widescreen, /@media \(prefers-reduced-motion: reduce\)/)
+  assert.match(widescreen, /reducedMotionCss\(/)
   assert.doesNotMatch(widescreen, /\.bewly-widescreen-panel-danmaku \.bui-collapse-header[\s\S]{0,80}display: none !important/)
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bui-collapse-header \{[^}]*background: var\(--bewly-widescreen-sidebar-bg\) !important/)
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bui-collapse-arrow[\s\S]{0,80}display: none !important/)
@@ -2826,7 +2832,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /\.bewly-watch-later-btn \{[\s\S]{0,1000}background: var\(--bewly-widescreen-control-bg\) !important;/)
   assert.match(widescreen, /:is\(\.video-toolbar-left-item, \.video-toolbar-right-item\):is\(\.on, \.active, \.liked, \.collected, \.is-active\) \{\s*background: var\(--bew-selected-bg\) !important;/)
   assert.match(widescreen, /\.bewly-watch-later-btn\):active,\s*#\$\{ROOT_ID\} \.bewly-widescreen-up-slot \.upinfo-btn-panel > \.default-btn:active \{\s*scale: 0\.97;/)
-  assert.match(widescreen, /prefers-reduced-motion: reduce[\s\S]*\.default-btn:active \{\s*scale: none;/)
+  assert.match(widescreen, /reducedMotionCss\([\s\S]*\.default-btn:active`, 'scale:none;'/)
   assert.match(widescreen, /\.follow-btn\.not-follow:hover \{\s*filter: brightness\(1\.08\);/)
   // Professional-app pass: one author line, quiet tags, one list row for the
   // rail, the viewer count as status in the meta line.
@@ -2939,7 +2945,7 @@ async function verifyP2WidescreenControl() {
   assert.match(feedbackStyles, /background: var\(--bew-input-bg\) !important;\s*border: 1px solid var\(--bew-field-edge-color\) !important;/)
   // No rule keys on a bare element type or `*`, which would test every element on the page.
   assert.doesNotMatch(feedbackStyles, /:where\(div|> \*|\) \* \{|\[class\*=/)
-  assert.match(widescreen, /prefers-reduced-motion: reduce[\s\S]*\.b-back-panel :is\(\.b-back-submit[^)]*\):active \{\s*scale: none;/)
+  assert.match(widescreen, /reducedMotionCss\([\s\S]*\.b-back-panel :is\(\.b-back-submit[^)]*\):active`, 'scale:none;'/)
   // The flush pane has no card border, on the player or on the skeleton.
   assert.doesNotMatch(widescreen, /\.bewly-widescreen-loading-skeleton-player::after/)
   assert.match(widescreen, /sidebar\.appendChild\(createLoadingSkeletonBlock\('bewly-widescreen-loading-skeleton-composer'\)\)/)
@@ -2969,7 +2975,7 @@ async function verifyP2WidescreenControl() {
   assert.match(fillToggleSection, /stopWidescreenZoom\(currentState\)\s*releaseRestMode\(currentState\)/)
   assert.match(fillToggleSection, /resolveWidescreenZoomFrame\(painted, layout, layoutContentWidth\)/)
   assert.doesNotMatch(fillToggleSection, /radius|borderRadius/)
-  assert.match(fillToggleSection, /prefers-reduced-motion: reduce/)
+  assert.match(fillToggleSection, /prefersReducedMotion\(\)/)
   assert.match(fillToggleSection, /holdAnimation\(motion\)/)
   assert.match(fillToggleSection, /getMotionDuration\(style, '--bew-duration-moderate', 300\)/)
   // Motion is transform-only so the compositor runs it through main-thread
@@ -3030,7 +3036,7 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuSurfaceBackgroundStyles, /left: var\(--bewly-widescreen-controls-glass-inset\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /width: auto !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /height: var\(--bewly-widescreen-controls-glass-height\) !important/)
-  assert.match(danmakuSurfaceBackgroundStyles, /border: var\(--bew-glass-edge-width, 1px\) solid var\(--bew-glass-edge-color, rgb\(255 255 255 \/ 70%\)\) !important/, 'the control bar glass draws the glass rim')
+  assert.match(danmakuSurfaceBackgroundStyles, /border: var\(--bew-glass-edge-width, 1px\) solid var\(--bew-glass-edge-color, rgb\(230 230 230 \/ 80%\)\) !important/, 'the control bar glass draws the glass rim')
   assert.match(danmakuSurfaceBackgroundStyles, /border-radius: var\(--bewly-widescreen-shell-radius\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /corner-shape: var\(--bew-corner-shape\)/)
   assert.doesNotMatch(danmakuSurfaceBackgroundStyles, /border-top: var\(--bew-hairline(?:, 1px)?\) solid var\(--bew-separator-color\) !important/)
@@ -3313,7 +3319,7 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-input {`),
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-setting-wrap {`),
   )
-  assert.match(danmakuInputStyles, /font-family: var\(--bew-font-family\) !important/)
+  assert.match(danmakuInputStyles, /font-family: var\(--bew-fonts-ui\) !important/)
   assert.match(danmakuInputStyles, /::placeholder[\s\S]{0,160}color: var\(--bew-text-3\) !important/)
   const danmakuSettingWrapStyles = widescreen.slice(
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-setting-wrap {`),
@@ -3834,9 +3840,8 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(topBarRight, /<div v-if="newMomentsCount > 0 && shouldShowBadge\('moments'\)" class="unread-dot" \/>/)
   assert.match(searchCatalog, /createEntries\(topBarRoute, \['topbar\.moments'\], \{\n {4}keywordKeys: \['settings\.visibility', 'settings\.badge_type'/)
   assert.match(searchCatalog, /\['favorites', 'topbar\.favorites'\],[\s\S]{0,100}\['watchLater', 'topbar\.watch_later'\],[\s\S]{0,300}keywordKeys: \['settings\.visibility'\]/)
-  const gradientCondition = topBarHeader.match(/v-if="[^"]*useLinearGradientThemeColorBackground[^"]*"/)?.[0] ?? ''
-  assert.doesNotMatch(gradientCondition, /forceWhiteIcon/)
-  assert.match(gradientCondition, /disableFrostedGlass/)
+  // There is no bar: the header paints neither a gradient nor a solid band.
+  assert.doesNotMatch(topBarHeader, /useLinearGradientThemeColorBackground|top-bar-header--solid|disableFrostedGlass/)
 
   assert.match(variables, /--bew-media-pop-title-font-size: var\(--bew-font-size-title\)/)
   assert.match(variables, /--bew-media-pop-title-line-height: var\(--bew-line-height-title\)/)
@@ -3907,11 +3912,13 @@ async function verifyIncrementalInteractionContracts() {
   assert.doesNotMatch(injectScript, /bewly-comment-replies-skeleton|bew-comment-replies-mask-bg|bew-comment-replies-loading-animation/)
   assert.match(injectScript, /#spinner \{[\s\S]{0,420}position: relative !important;[\s\S]{0,420}display: grid;[\s\S]{0,420}min-height: var\(--bew-comment-replies-loading-height, var\(--bew-space-12, 48px\)\) !important;[\s\S]{0,420}background-color: transparent !important;/)
   assert.match(injectScript, /beforeUpdate\?: \(component: any\) => void/)
-  assert.match(injectScript, /function captureCommentReplyMotion/)
-  assert.match(injectScript, /function animateCommentReplyMotion/)
-  assert.match(injectScript, /--bew-duration-moderate/)
-  assert.match(injectScript, /--bew-ease-standard/)
-  assert.match(injectScript, /target\.animate\(\[[\s\S]{0,260}height: `\$\{motionState\.fromHeight\}px`[\s\S]{0,260}height: `\$\{targetHeight\}px`/)
+  const replyMotion = await readFile(`${root}/src/inject/commentReplyMotion.ts`, 'utf8')
+  assert.match(injectScript, /createCommentReplyMotion\(scheduleCommentReplyTreeLayoutUpdate\)/)
+  assert.match(replyMotion, /function captureCommentReplyMotion/)
+  assert.match(replyMotion, /function animateCommentReplyMotion/)
+  assert.match(replyMotion, /getMotionDuration\(style, '--bew-duration-moderate'/)
+  assert.match(replyMotion, /--bew-ease-standard/)
+  assert.match(replyMotion, /target\.animate\(\[[\s\S]{0,260}height: `\$\{motionState\.fromHeight\}px`[\s\S]{0,260}height: `\$\{targetHeight\}px`/)
   const branchReplyMotionSection = injectScript.slice(
     injectScript.indexOf('function toggleCommentReplyTreeBranch'),
     injectScript.indexOf('function toggleCommentReplyTreeTail'),
@@ -4507,6 +4514,7 @@ async function verifyTrackSegmentControls() {
 }
 
 async function verify() {
+  await verifyAuditOptimizations()
   verifyAccountScopes()
   await verifyTrackSegmentControls()
   await verifyForYouInitialDataLifecycle()

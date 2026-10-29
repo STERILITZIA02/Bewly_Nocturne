@@ -98,26 +98,18 @@ const emptyItems: never[] = []
               v-for="index in (page === AppPage.History ? 4 : 5)" :key="index"
               class="library-sidebar-action-skeleton"
               width="calc(100% - var(--bew-sidebar-action-inset) * 2)"
-              height="var(--bew-control-height)" radius="full"
+              height="var(--bew-line-height-control)" radius="full"
             />
           </div>
         </div>
       </template>
-      <!-- The strips over the content: History's day chips, a folder's uploaders. -->
-      <section
-        v-if="page === AppPage.History || page === AppPage.Favorites" class="bew-page-async-loading__strip"
-        :class="page === AppPage.History ? 'bew-page-async-loading__strip--days' : 'bew-page-async-loading__strip--uploaders'" aria-hidden="true"
-      >
-        <LibraryBleedStrip :label="$t('common.loading')" :compact="page === AppPage.History">
-          <template v-if="page === AppPage.History">
-            <SkeletonBlock v-for="index in 6" :key="index" width="calc(var(--bew-space-12) + var(--bew-space-4))" height="var(--bew-control-height)" radius="full" />
-          </template>
-          <template v-else>
-            <span v-for="index in 10" :key="index" class="bew-page-async-loading__uploader">
-              <SkeletonBlock width="var(--bew-library-uploader-tile-size)" height="var(--bew-library-uploader-tile-size)" radius="media" />
-              <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
-            </span>
-          </template>
+      <!-- The strip over a folder's content: its uploaders. -->
+      <section v-if="page === AppPage.Favorites" class="bew-page-async-loading__strip--uploaders" aria-hidden="true">
+        <LibraryBleedStrip :label="$t('common.loading')">
+          <span v-for="index in 10" :key="index" class="bew-page-async-loading__uploader">
+            <SkeletonBlock width="var(--bew-library-uploader-tile-size)" height="var(--bew-library-uploader-tile-size)" radius="media" />
+            <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
+          </span>
         </LibraryBleedStrip>
       </section>
       <!-- The library heads are rows of hero cards, the next one peeking (one for Watch Later). -->
@@ -232,10 +224,6 @@ const emptyItems: never[] = []
     align-content: start;
     gap: var(--bew-space-2);
   }
-}
-.bew-page-async-loading__strip--days {
-  // The History column also has a space-6 gap after the strip's own.
-  @include bleedStrip.bar(var(--bew-control-height), calc(var(--bew-space-6) * 2));
 }
 .bew-page-async-loading__strip--uploaders {
   @include bleedStrip.bar(

@@ -342,7 +342,7 @@ async function importTheme(event: Event) {
         </SettingsItem>
       </SettingsItemSubgroup>
       <SettingsItemSubgroup :title="$t('settings.group_visual_effects')">
-        <SettingsItem setting-id="settings.disable_frosted_glass_and_top_bar_gradient" :title="$t('settings.disable_frosted_glass_and_top_bar_gradient')" right-width="auto">
+        <SettingsItem setting-id="settings.frosted_glass" :title="$t('settings.frosted_glass')" right-width="auto">
           <Radio v-model="frostedGlassEnabled" commit-after-motion />
         </SettingsItem>
         <SettingsItem v-if="frostedGlassEnabled" setting-id="settings.frosted_glass_blur_intensity" :title="$t('settings.frosted_glass_blur_intensity')" right-width="auto">

@@ -65,7 +65,7 @@ function handleClick(evt: MouseEvent) {
   --b-button-icon-size: var(--bew-control-icon-size);
   --b-button-width: fit-content;
   --b-button-height: var(--bew-control-height);
-  --b-button-border-width: 1px;
+  --b-button-border-width: var(--bew-hairline);
   --b-button-border-color: var(--bew-edge-color);
   --b-button-shadow: none;
   --b-button-shadow-hover: var(--b-button-shadow);
@@ -96,6 +96,7 @@ function handleClick(evt: MouseEvent) {
   &:focus-visible {
     outline: var(--bew-focus-ring, 1px solid CanvasText);
     outline-offset: var(--bew-space-0-5);
+    background-color: var(--b-button-color-hover);
   }
 
   &:disabled {
@@ -114,7 +115,10 @@ function handleClick(evt: MouseEvent) {
     --b-button-color: var(--bew-accent-solid);
     --b-button-color-hover: var(--bew-accent-solid);
     --b-button-text-color: var(--bew-on-accent-solid);
-    --b-button-shadow-hover: inset 0 0 0 1px color-mix(in srgb, var(--bew-on-theme-color) 30%, transparent);
+
+    &:focus-visible {
+      background-color: color-mix(in srgb, var(--bew-accent-solid), var(--bew-on-accent-solid) 12%);
+    }
 
     @supports (color: contrast-color(white)) {
       --b-button-text-color: contrast-color(var(--bew-accent-solid));
@@ -138,6 +142,10 @@ function handleClick(evt: MouseEvent) {
     --b-button-color: color-mix(in oklab, var(--bew-error-color), black 14%);
     --b-button-color-hover: color-mix(in oklab, var(--bew-error-color), black 14%);
     --b-button-text-color: white;
+
+    &:focus-visible {
+      background-color: color-mix(in srgb, var(--b-button-color), var(--b-button-text-color) 12%);
+    }
   }
 
   &--size-small {

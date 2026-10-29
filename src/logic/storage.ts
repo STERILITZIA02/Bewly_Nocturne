@@ -261,6 +261,10 @@ export interface Settings {
   disableLightDarkModeSwitcherOnDock: boolean
   backToTopAndRefreshButtonsAreSeparated: boolean
   showDockBackToTop: boolean
+  // Names under the Dock glyphs; off gives a shorter Dock.
+  showDockItemNames: boolean
+  // Unread counts on the Dock glyphs (display only, never read state).
+  showDockBadges: boolean
   enableUndoRefreshButton: boolean // 添加撤销刷新按钮配置项
 
   sidebarPosition: 'left' | 'right'
@@ -533,6 +537,8 @@ export const originalSettings: Settings = {
   disableLightDarkModeSwitcherOnDock: false,
   backToTopAndRefreshButtonsAreSeparated: true,
   showDockBackToTop: true,
+  showDockItemNames: true,
+  showDockBadges: true,
   enableUndoRefreshButton: true, // 默认开启撤销刷新按钮
 
   sidebarPosition: 'right',
@@ -738,7 +744,7 @@ function normalizeSettings(value: Settings) {
 
   // Missing category switches preserve Nocturne's existing reminders. They
   // change badge presentation only, never the server's read/unread state.
-  for (const field of ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount', 'rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters', 'playerAdjustmentEnabled', 'showPlayerAdjustmentButton', 'resumeFromPreviewPosition', 'showDockBackToTop', 'showSearchIdentitySwitcher'] as const) {
+  for (const field of ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount', 'rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters', 'playerAdjustmentEnabled', 'showPlayerAdjustmentButton', 'resumeFromPreviewPosition', 'showDockBackToTop', 'showDockItemNames', 'showDockBadges', 'showSearchIdentitySwitcher'] as const) {
     if (typeof record[field] !== 'boolean')
       record[field] = originalSettings[field]
   }

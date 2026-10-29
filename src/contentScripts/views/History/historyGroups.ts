@@ -24,13 +24,21 @@ function dayKeyOf(date: Date) {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
 }
 
+// Periods start at 04:00 (user-specified): morning 04–12, afternoon 12–20 and
+// night 20–04, so a night's small hours stay with the day before.
+const PERIOD_START_HOUR = 4
+const PERIOD_NAMES = ['morning', 'afternoon', 'night'] as const
+
 function describeGroup(item: HistoryItem, interval: HistoryGroupInterval): Omit<HistoryGroup, 'items'> {
   const hours = INTERVAL_HOURS[interval]
-  const date = new Date(item.view_at * 1000)
-  const valid = Number.isFinite(date.getTime())
-  const dayKey = valid ? dayKeyOf(date) : 'unknown'
-  const hour = valid ? Math.floor(date.getHours() / hours) * hours : 0
-  return { key: !valid || hours === 24 ? dayKey : `${dayKey}T${hour}`, dayKey, start: valid ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour) : null, hours }
+  const offset = interval === 'period' ? PERIOD_START_HOUR : 0
+  const viewed = new Date(item.view_at * 1000)
+  if (!Number.isFinite(viewed.getTime()))
+    return { key: 'unknown', dayKey: 'unknown', start: null, hours }
+  const date = new Date(viewed.getFullYear(), viewed.getMonth(), viewed.getDate(), viewed.getHours() - offset)
+  const dayKey = dayKeyOf(date)
+  const hour = Math.floor(date.getHours() / hours) * hours
+  return { key: hours === 24 ? dayKey : `${dayKey}T${hour + offset}`, dayKey, start: new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour + offset), hours }
 }
 
 /** The timeline sends committed additions/removals; untouched groups keep their arrays. */
@@ -140,11 +148,16 @@ export function createHistoryGroupIndex() {
   }
 }
 
-/** The hours a group covers, as `08:00–16:00`; empty for a whole day. */
+/** The named period of an eight-hour group, undefined otherwise. */
+export function historyGroupPeriod(group: HistoryGroup) {
+  return group.start && group.hours === 8 ? PERIOD_NAMES[Math.floor((group.start.getHours() - PERIOD_START_HOUR) / 8)] : undefined
+}
+
+/** The hours an hourly group covers, as `08:00–09:00`; empty otherwise. */
 export function historyGroupHours(group: HistoryGroup) {
-  if (!group.start || group.hours === 24)
+  if (!group.start || group.hours !== 1)
     return ''
   const hour = group.start.getHours()
   const format = (value: number) => `${String(value).padStart(2, '0')}:00`
-  return `${format(hour)}–${format(hour + group.hours)}`
+  return `${format(hour)}–${format(hour + 1)}`
 }

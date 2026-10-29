@@ -966,7 +966,6 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
         getVideoPlaybackProgress: (_identity, progress, duration) => ({ progress, duration }),
       },
       '~/components/WatchLater/OpenTabsDialog.vue': { default: blank },
-      '~/components/CardRemovalPanel.vue': { default: await compileComponent('../src/components/CardRemovalPanel.vue') },
       '@vueuse/core': { useDateFormat: () => Vue.ref('date'), useResizeObserver() {} },
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       '~/components/IconButton.vue': { default: { props: ['label'], setup: (props, { slots }) => () => Vue.h('button', { 'aria-label': props.label }, slots.default?.()) } },
@@ -997,10 +996,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       '~/utils/playbackProgress': await import('../src/utils/playbackProgress'),
       '~/utils/tabs': {},
-      '~/utils/watchLater': { captureWatchLaterRemoval: (_aid, owner, _membership, accepted) => ({ current: owner.isCurrent, read: async () => true, accepted, write: async () => {
-        writeRequests++
-        return (await pending.promise).status
-      } }), updateOwnedWatchLater: () => {
+      '~/utils/watchLater': { updateOwnedWatchLater: () => {
         writeRequests++
         return pending.promise
       } },
@@ -1100,20 +1096,12 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       const first = root.querySelector('.watch-later-list-card')
       first.querySelector('a').focus()
       first.querySelector('[aria-label="common.remove_from_watch_later"]').click()
-      assert.equal(writeRequests, 0, 'single removal first opens the card confirmation')
       await flush()
-      first.querySelector('.card-removal button:last-child').click()
-      await flush()
-      assert.equal(writeRequests, 1)
-      root.scrollTop = 19000
-      root.dispatchEvent(new Event('scroll'))
-      await settle()
-      assert.ok(first.isConnected)
-      assert.equal(root.querySelector('.watch-later-list-card'), first)
+      assert.equal(writeRequests, 1, 'single removal writes on press, with no confirmation step')
       pending.resolve({ status: 'cancelled' })
       await flush()
-      first.querySelector('.card-removal').blur()
-      root.scrollTop++
+      assert.equal(root.querySelector('.watch-later-list-card'), first, 'a write that did not happen keeps the card')
+      root.scrollTop = 19000
       root.dispatchEvent(new Event('scroll'))
       await settle()
       assert.equal(first.isConnected, false)

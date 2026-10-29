@@ -75,7 +75,7 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
   max-height: var(--bew-moments-hot-search-max-height);
   overflow: hidden;
   padding: var(--bew-space-4);
-  border: var(--bew-hairline) solid var(--bew-edge-color);
+  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
   border-radius: var(--bew-surface-radius);
   corner-shape: var(--bew-corner-shape);
   color: var(--bew-text-1);
@@ -155,6 +155,7 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
   flex: 0 0 var(--bew-space-5);
   color: var(--bew-text-2);
   font-weight: var(--bew-font-weight-regular);
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }

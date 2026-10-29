@@ -3,8 +3,6 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
-import type { CardRemoval } from '~/composables/useCardRemoval'
-import { useCardRemoval } from '~/composables/useCardRemoval'
 import { DELAYED_MEDIA_PREVIEW_MS } from '~/constants/mediaPreview'
 import { settings } from '~/logic'
 import { findLayoutEditableTarget } from '~/logic/layoutEdit'
@@ -24,7 +22,7 @@ import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { openLinkInBackground } from '~/utils/tabs'
 import { onUserRelationChange } from '~/utils/userRelation'
 import { getVideoPreviewIdentity, getVideoPreviewPage } from '~/utils/videoPreviewProgress'
-import { captureWatchLaterRemoval, resolveWatchLaterAid, updateOwnedWatchLater } from '~/utils/watchLater'
+import { resolveWatchLaterAid, updateOwnedWatchLater } from '~/utils/watchLater'
 
 import type { Video, VideoCardState } from '../types'
 import { createVideoCardState } from '../types'
@@ -38,8 +36,6 @@ interface VideoCardProps {
   showWatchLater?: boolean
   horizontal?: boolean
   showPreview?: boolean
-  requestWatchLaterRemoval?: (aid: number) => void
-  removal?: CardRemoval
 }
 
 export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps>, savedState?: VideoCardState) {
@@ -54,14 +50,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     const accountId = resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid)
     return String(accountId) === getUserID() ? accountId : null
   })
-  const localRemovals = props.value.requestWatchLaterRemoval
-    ? undefined
-    : useCardRemoval<Video>({
-        items: () => props.value.video ? [props.value.video] : [],
-        key: video => `${video.aid ?? ''}:${video.bvid ?? ''}:${video.epid ?? ''}`,
-        scope: () => `${topBarStore.userInfo.mid}:${props.value.video?.aid}:${props.value.video?.bvid}:${props.value.video?.epid}`,
-      })
-  const watchLaterRemoval = computed(() => props.value.video && localRemovals?.get(props.value.video))
   let watchLaterWriteId: symbol | null = null
 
   // Inject selectedUploader from Following component (if available)
@@ -324,7 +312,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
 
   // Methods
   async function toggleWatchLater() {
-    if (!props.value.video || isUpdatingWatchLater.value || props.value.removal || localRemovals?.get(props.value.video))
+    if (!props.value.video || isUpdatingWatchLater.value)
       return
 
     const video = props.value.video
@@ -339,14 +327,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       const loaded = await topBarStore.ensureWatchLaterState()
       if (!owner.isCurrent() || !loaded || !aid || !csrf || csrf !== getCSRF())
         return
-      if (topBarStore.isInWatchLater(aid)) {
-        clearPreviewVideoUrl()
-        if (props.value.requestWatchLaterRemoval)
-          props.value.requestWatchLaterRemoval(aid)
-        else localRemovals?.begin(video, captureWatchLaterRemoval(aid, owner, topBarStore))
-        return
-      }
-      const result = await updateOwnedWatchLater(video, 'add', owner, topBarStore, async () => aid)
+      const result = await updateOwnedWatchLater(video, topBarStore.isInWatchLater(aid) ? 'remove' : 'add', owner, topBarStore, async () => aid)
       if (!owner.isCurrent())
         return
       if (result.status === 'unavailable') {
@@ -540,7 +521,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     removed,
     videoCurrentTime,
     isInWatchLater,
-    watchLaterRemoval,
     isHover,
     isPreviewFullscreen,
     isPreviewScrubbing,

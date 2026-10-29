@@ -152,8 +152,8 @@ function finishEdit() {
 }
 .appearance-color-field__picker {
   position: relative;
-  width: var(--bew-icon-size-md);
-  height: var(--bew-icon-size-md);
+  width: var(--bew-icon-button-size-sm);
+  height: var(--bew-icon-button-size-sm);
   border-radius: 50%;
   overflow: hidden;
   border: var(--bew-hairline) solid var(--bew-edge-color);
@@ -167,11 +167,14 @@ function finishEdit() {
   opacity: 0;
   cursor: pointer;
 }
-.appearance-color-field__picker:focus-within {
-  box-shadow: 0 0 0 var(--bew-space-1) var(--bew-selected-bg);
+.appearance-color-field__value:has(input[type="color"]:focus-visible) {
+  background: var(--bew-hover-bg);
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
 }
 .appearance-color-field__hex {
   width: 9ch;
+  font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
 }
 .appearance-color-field__name {

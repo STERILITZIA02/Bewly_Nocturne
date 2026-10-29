@@ -629,7 +629,9 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       '~/utils/bewlyWidescreenPolicy': policy,
       '~/utils/motionPriority': { holdAnimation: animation => holds.push(animation) },
       '~/utils/motionTiming': await import('../src/utils/motionTiming'),
-    }, { window: { matchMedia: () => ({ matches: reducedMotion }) } })
+    }, { window: { matchMedia: () => ({ get matches() {
+      return reducedMotion
+    } }) } })
     const flushMicrotasks = () => new Promise(resolve => setTimeout(resolve, 0))
     const parseTransform = (value) => {
       const match = /^translate\((\S+)px, (\S+)px\) scale\((\S+)\)$/.exec(value)

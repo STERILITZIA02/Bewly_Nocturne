@@ -122,7 +122,8 @@ html.dark.bewly-design {
   line-height: var(--bew-line-height-body);
   font-weight: var(--bew-font-weight-regular);
 
-  :where(time, input[type="number"], input[inputmode="numeric"]) {
+  :where(time, input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"]) {
+    font-family: var(--bew-fonts-monospace);
     font-variant-numeric: tabular-nums;
   }
 
@@ -201,30 +202,31 @@ html.dark.bewly-design {
   code {
     display: inline-block;
     background-color: var(--bew-fill-1);
-    padding: 0 0.5em;
-    margin: 0.14em 0.2em;
+    padding: 0 var(--bew-space-2);
+    // Inline boxes need the optical 2px step to clear the text baseline.
+    margin: var(--bew-space-0-5) var(--bew-space-1);
     border-radius: var(--bew-radius-tiny);
     corner-shape: var(--bew-corner-shape);
     font-weight: var(--bew-font-weight-regular);
-    line-height: 1.24;
+    line-height: var(--bew-line-height-body);
   }
 
   kbd {
     display: inline-block;
     background-color: var(--bew-fill-1);
-    padding: 0 0.5em;
-    margin: 0.14em 0.2em;
+    padding: 0 var(--bew-space-2);
+    margin: var(--bew-space-0-5) var(--bew-space-1);
     border-radius: var(--bew-radius-tiny);
     corner-shape: var(--bew-corner-shape);
     box-shadow:
-      0 0 0 1px var(--bew-separator-color),
-      0 1.4px 0 0 var(--bew-fill-2);
-    line-height: 1.24;
+      0 0 0 var(--bew-hairline) var(--bew-separator-color),
+      0 var(--bew-space-0-5) 0 0 var(--bew-fill-2);
+    line-height: var(--bew-line-height-body);
     cursor: pointer;
     transition:
-      background-color 0.2s ease,
-      box-shadow 0.2s ease,
-      translate 0.2s ease;
+      background-color var(--bew-duration-normal) var(--bew-ease-standard),
+      box-shadow var(--bew-duration-normal) var(--bew-ease-standard),
+      translate var(--bew-duration-normal) var(--bew-ease-standard);
 
     &:hover {
       background-color: var(--bew-fill-2);
@@ -232,10 +234,10 @@ html.dark.bewly-design {
 
     &:active {
       background-color: var(--bew-fill-3);
-      translate: 0 1.4px;
+      translate: 0 var(--bew-space-0-5);
       box-shadow:
-        0 0 0 1px var(--bew-separator-color),
-        0 -1.4px 0 0 var(--bew-fill-2);
+        0 0 0 var(--bew-hairline) var(--bew-separator-color),
+        0 calc(-1 * var(--bew-space-0-5)) 0 0 var(--bew-fill-2);
     }
   }
 

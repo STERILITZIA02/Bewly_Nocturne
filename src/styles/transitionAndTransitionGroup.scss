@@ -46,14 +46,6 @@
   pointer-events: none;
 }
 
-.library-list-leave-active {
-  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
-  pointer-events: none;
-}
-.library-list-leave-to {
-  opacity: 0;
-}
-
 .dropdown-enter-active,
 .dropdown-leave-active,
 .dropdown-up-enter-active,
@@ -94,7 +86,6 @@
   .list-enter-active,
   .list-leave-active,
   .list-move,
-  .library-list-leave-active,
   .dropdown-enter-active,
   .dropdown-leave-active,
   .dropdown-up-enter-active,

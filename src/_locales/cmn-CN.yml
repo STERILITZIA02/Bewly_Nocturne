@@ -182,17 +182,6 @@ player_screenshot:
   saved: 截图已保存
   failed: 截图失败
   video_unavailable: 当前视频画面不可用
-card_removal:
-  verify_failed: 暂时无法确认结果，请再次核对。
-  watchLater: 移出稍后再看？
-  favorite: 从此收藏夹取消收藏？
-  confirm: 移除
-  removing: 正在移除
-  removed: 已移除
-  restore: 重新加入
-  restoring: 正在重新加入
-  verify: 结果尚未确认
-  reconcile: 核对结果
 player_adjustment:
   title: 画面与声音调整
   enable: 启用临时画面与声音调整
@@ -251,6 +240,9 @@ settings:
   resume_from_preview_position_desc: 仅控制链接中的预览时间，保留预览记忆、历史续播及已有时间参数。
   show_dock_back_to_top: 显示 Dock 回顶按钮
   show_dock_back_to_top_desc: 只控制回顶入口，刷新和撤销仍可使用。
+  show_dock_item_names: 显示 Dock 名称
+  show_dock_badges: 显示 Dock 角标
+  show_dock_badges_desc: 只控制显示，不会标记已读。
   show_search_identity_switcher: 显示搜索身份快捷切换
   show_search_identity_switcher_desc: 在搜索结果中切换账号或游客请求，不退出账号，保留关键词和筛选。
   search_identity: 搜索身份
@@ -596,7 +588,7 @@ settings:
   remove_the_indent_from_chinese_punctuation: 移除中文标点符号的缩进
   remove_the_indent_from_chinese_punctuation_desc: |
     Bilibili 默认会专门处理中文标点符号以实现左对齐。 如果你正在使用自定义字体，建议移除缩进。
-  disable_frosted_glass_and_top_bar_gradient: 毛玻璃与顶栏渐变
+  frosted_glass: 毛玻璃
   frosted_glass_blur_intensity: 毛玻璃模糊强度
   disable_shadow: 禁用阴影
   link_opening_behavior_opt:
@@ -796,7 +788,7 @@ settings:
   theme_color_opt:
     neutral: 无主题色
   gradient_theme_color_background: 在深色模式下使用中性渐变
-  gradient_theme_color_background_desc: 同时应用于网页背景和顶栏，不使用主题色。
+  gradient_theme_color_background_desc: 只应用于网页背景，不使用主题色。
   logo_color: Logo 颜色
   logo_color_opt:
     white: 白
@@ -1672,9 +1664,13 @@ anime:
       sun: 周日
 history:
   group_hour: 每小时
-  group_period: 每 8 小时
+  group_period: 每时段
   group_day: 每天
   group_button: '分组：{interval}'
+  group_label: 分组：
+  period_morning: 上午时段
+  period_afternoon: 下午时段
+  period_night: 午夜时段
   remove_from_history: 从观看历史中删除
   refresh: 刷新历史
   sort_newest: 最近观看（已载入记录）

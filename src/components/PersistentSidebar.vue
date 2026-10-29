@@ -222,8 +222,8 @@ export default defineComponent({
   width: calc(100% + 1px);
   height: calc(100% + 2px);
   box-sizing: border-box;
-  // The left rail keeps the ordinary surface edge, not the glass rim (user-specified).
-  border: var(--bew-hairline) solid var(--bew-edge-color);
+  // The same glass edge as every frosted surface (user-specified).
+  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
   pointer-events: none;
 
   &::after {
