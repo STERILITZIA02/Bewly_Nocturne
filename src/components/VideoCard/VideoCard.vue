@@ -1,9 +1,10 @@
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 
 import ALink from '~/components/ALink.vue'
 import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useHoverHalo } from '~/composables/useHoverHalo'
 import { useUserRelations } from '~/composables/useUserRelations'
 import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import { settings } from '~/logic'
@@ -128,7 +129,7 @@ function handleContextMenu(event: MouseEvent) {
 }
 
 // The gradient-blur halo exists only while a mouse is over the card.
-const haloActive = ref(false)
+const halo = useHoverHalo(logic.cardRootRef)
 
 const watchLaterMenuState = computed(() => props.showWatchLater && !props.video?.roomid
   ? { added: logic.isInWatchLater.value, toggle: logic.toggleWatchLater }
@@ -151,10 +152,10 @@ provide('getVideoType', () => props.type!)
       ? { contentVisibility: 'visible', containIntrinsicSize: 'none' }
       : undefined"
     @contextmenu="handleContextMenu"
-    @pointerenter="haloActive = $event.pointerType === 'mouse'"
-    @pointerleave="haloActive = false"
+    @pointerenter="halo.enter"
+    @pointerleave="halo.leave"
   >
-    <ProgressiveBlur v-if="haloActive && !skeleton" class="video-card-halo" edge="center" radius="var(--bew-card-hover-blur-radius)" />
+    <ProgressiveBlur v-if="halo.mounted.value && !skeleton" class="video-card-halo" edge="center" radius="var(--bew-card-hover-blur-radius)" :visible="halo.visible.value" />
     <div
       class="video-card group"
       w="full"
@@ -265,6 +266,14 @@ provide('getVideoType', () => props.type!)
 
 .video-card-halo {
   @include contentCard.hover-halo-layer;
+  // In and out over the card's own scale time.
+  --bew-progressive-blur-fade: var(--bew-duration-moderate);
+}
+
+@starting-style {
+  .video-card-halo :deep(.bew-progressive-blur__layer) {
+    opacity: 0;
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {

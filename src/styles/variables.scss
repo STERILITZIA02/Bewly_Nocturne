@@ -267,11 +267,11 @@
   --bew-duration-normal: 200ms;
   --bew-duration-moderate: 300ms;
   // Persistent rail folding into / growing out of the home logo circle.
-  --bew-sidebar-morph-duration: 540ms;
+  --bew-sidebar-morph-duration: 300ms;
   --bew-page-exit-duration: 60ms;
   --bew-page-enter-duration: 150ms;
   // Deleted element breaking into drifting particles (`utils/particleDissolve.ts`).
-  --bew-dissolve-duration: 760ms;
+  --bew-dissolve-duration: 300ms;
   --bew-ease-in: ease-in;
   --bew-ease-standard: cubic-bezier(0.22, 0.61, 0.36, 1);
   --bew-ease-out: ease-out;

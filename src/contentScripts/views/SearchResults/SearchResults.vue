@@ -13,6 +13,7 @@ import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { reportRuntimeFailure } from '~/utils/messaging'
+import { createMotionScope } from '~/utils/motionPriority'
 
 import SearchCategoryTabs from './components/SearchCategoryTabs.vue'
 import SearchLiveFilters from './components/SearchLiveFilters.vue'
@@ -188,6 +189,8 @@ const categories = computed<ReadonlyArray<SearchCategoryOption>>(() => [
 // TODO: 分类数量等待真实聚合接口后再展示。
 
 const searchResultsPanelRef = ref<InstanceType<typeof SearchResultsPanel>>()
+// The results swap waits only for the category tabs' slider.
+const categoryMotion = createMotionScope('search-category')
 
 // 监听 URL 变化（前进/后退或 pushstate）
 async function handleUrlChange() {
@@ -391,6 +394,7 @@ onBeforeUnmount(() => {
     <SearchCategoryTabs
       :categories="categories"
       :current-category="currentCategory"
+      :motion-scope="categoryMotion"
       @select="switchCategory"
     />
 
@@ -423,6 +427,7 @@ onBeforeUnmount(() => {
       :key="searchTransportScope"
       ref="searchResultsPanelRef"
       :current-category="currentCategory"
+      :motion-scope="categoryMotion"
       :keyword="normalizedKeyword"
       :video-filters="videoFilters"
       :user-filters="userFilters"

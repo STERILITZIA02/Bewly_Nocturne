@@ -3,9 +3,9 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { LIBRARY_HERO_RENDER_RADIUS } from '~/constants/library'
-import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
+import { springTiming } from '~/utils/spring'
 import { normalizeWheelDelta } from '~/utils/wheelStep'
 
 /**
@@ -48,7 +48,12 @@ const WHEEL_IDLE_MS = 140
 // Past an end the row follows at this fraction of the gesture.
 const EDGE_RESISTANCE = 0.3
 
-interface Drag { base: number, offset: number, step: number, frame: number, idle?: ReturnType<typeof setTimeout> }
+// The release speed counts only movement this recent (ms); an older last
+// move means the gesture had already come to rest.
+const RELEASE_VELOCITY_WINDOW_MS = 80
+
+/** `velocity`: the offset's speed in px/s at the last move, at `movedAt`. */
+interface Drag { base: number, offset: number, step: number, frame: number, velocity: number, movedAt: number, idle?: ReturnType<typeof setTimeout> }
 let drag: Drag | undefined
 let settling: Animation | undefined
 let touch: { id: number, x: number, y: number, lastX: number, horizontal?: boolean } | undefined
@@ -91,7 +96,7 @@ function beginDrag() {
   if (drag || !element || !canMove())
     return drag
   const style = getComputedStyle(element)
-  drag = { base: new DOMMatrixReadOnly(style.transform).m41, offset: 0, step: trackGeometry(element, style).step, frame: 0 }
+  drag = { base: new DOMMatrixReadOnly(style.transform).m41, offset: 0, step: trackGeometry(element, style).step, frame: 0, velocity: 0, movedAt: performance.now() }
   return drag
 }
 // `delta` > 0 brings the next card in. The row is written once a frame.
@@ -99,7 +104,16 @@ function moveDrag(delta: number) {
   const current = drag ?? beginDrag()
   if (!current || !current.step)
     return
+  const previous = current.offset
   current.offset = Math.max(-current.step, Math.min(current.step, current.offset + delta))
+  const now = performance.now()
+  const elapsed = now - current.movedAt
+  if (elapsed > 0) {
+    // Smoothed over the last few events, so one jittery sample cannot fling it.
+    const sample = (current.offset - previous) / elapsed * 1000
+    current.velocity = elapsed > RELEASE_VELOCITY_WINDOW_MS ? sample : current.velocity * 0.5 + sample * 0.5
+  }
+  current.movedAt = now
   if (current.frame)
     return
   current.frame = requestAnimationFrame(() => {
@@ -120,9 +134,13 @@ function endDrag() {
   clearTimeout(current.idle)
   const direction = Math.abs(current.offset) > current.step / 2 ? Math.sign(current.offset) : 0
   const target = props.items[index.value + direction] ? index.value + direction : index.value
-  settle(target, current.step)
+  // The row moves against the offset, slowed past an end like the drag itself.
+  const resting = performance.now() - current.movedAt > RELEASE_VELOCITY_WINDOW_MS
+  const resistance = props.items[current.offset > 0 ? index.value + 1 : index.value - 1] ? 1 : EDGE_RESISTANCE
+  settle(target, resting ? 0 : -current.velocity * resistance)
 }
-async function settle(target: number, step?: number) {
+/** `velocity`: the row's speed in px/s when it is let go, carried into the settle. */
+async function settle(target: number, velocity = 0) {
   const element = track.value
   const targetKey = props.items[target]?.key
   if (!element || targetKey === undefined || disposed)
@@ -137,27 +155,23 @@ async function settle(target: number, step?: number) {
     const from = element.style.transform || style.transform
     const fromX = new DOMMatrixReadOnly(from).m41
     const toX = -target * geometry.step + (props.items.length > 1 && target === props.items.length - 1 ? geometry.endShift : 0)
-    const reduced = prefersReducedMotion()
-    const full = reduced ? 0 : getMotionDuration(style, '--bew-duration-moderate', 300)
+    const response = prefersReducedMotion() ? 0 : getMotionDuration(style, '--bew-duration-normal', 200)
     element.style.transform = ''
-    // The rest of the way takes its share of the time, never too abrupt.
-    const share = step ? Math.min(1, Math.max(0.35, Math.abs(toX - fromX) / step)) : 1
     const finish = () => {
       if (version === operation && !disposed && !props.disabled && props.scope === scope && props.current === origin
         && props.items.some(item => item.key === targetKey) && targetKey !== origin) {
         emit('select', targetKey)
       }
     }
-    if (!full || Math.abs(toX - fromX) < 1) {
+    if (!response || Math.abs(toX - fromX) < 1) {
       finish()
       return
     }
+    // A spring from the released speed: the row keeps the gesture's momentum.
     animation = settling = element.animate([{ transform: `translateX(${fromX}px)` }, { transform: `translateX(${toX}px)` }], {
-      duration: full * share,
-      easing: 'cubic-bezier(0.2, 0, 0, 1)',
+      ...springTiming(response / 1000, toX - fromX, velocity),
       fill: 'forwards',
     })
-    holdAnimation(animation)
     await animation.finished
     finish()
     // Hold the end frame until the committed key has moved the row there.

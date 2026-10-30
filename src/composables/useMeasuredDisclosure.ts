@@ -2,7 +2,6 @@ import { useResizeObserver } from '@vueuse/core'
 import type { Ref } from 'vue'
 import { nextTick, onScopeDispose, ref, watch } from 'vue'
 
-import { holdMotion } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { getLayoutHeight } from '~/utils/viewportGeometry'
@@ -21,11 +20,8 @@ export function useMeasuredDisclosure(
   let settleTimer: ReturnType<typeof setTimeout> | undefined
   let disposed = false
   let revision = 0
-  let releaseMotion: (() => void) | undefined
 
   function finish() {
-    releaseMotion?.()
-    releaseMotion = undefined
     clearTimeout(settleTimer)
     settleTimer = undefined
     if (disposed)
@@ -65,9 +61,6 @@ export function useMeasuredDisclosure(
       onMotionChange(true)
     }
     height.value = target
-    const previous = releaseMotion
-    releaseMotion = holdMotion(duration)
-    previous?.()
     // A detached/hidden tab or reduced-motion change can cancel transitionend.
     settleTimer = setTimeout(() => version === revision && finish(), duration * 1.5)
   }
@@ -94,7 +87,6 @@ export function useMeasuredDisclosure(
     revision++
     cancelAnimationFrame(frame)
     clearTimeout(settleTimer)
-    releaseMotion?.()
     if (moving.value)
       onMotionChange(false)
   })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMotionValue } from '~/composables/useMotionValue'
-import { holdMotion } from '~/utils/motionPriority'
+import { createMotionScope, holdMotion } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 
@@ -18,15 +18,17 @@ const props = withDefaults(defineProps<{
 })
 
 const collapsed = ref(props.defaultCollapsed)
+// Collapsing waits only for this group's own chevron.
+const motion = createMotionScope('settings-group')
 const requestedCollapsed = props.collapsible
   ? useMotionValue(() => collapsed.value, (value) => {
       collapsed.value = value
-    })
+    }, motion)
   : collapsed
 let releaseMotion: (() => void) | undefined
 function toggle(event: MouseEvent) {
   const previous = releaseMotion
-  releaseMotion = holdMotion(prefersReducedMotion() ? 0 : getMotionDuration(getComputedStyle(event.currentTarget as HTMLElement), '--bew-duration-normal'))
+  releaseMotion = holdMotion(prefersReducedMotion() ? 0 : getMotionDuration(getComputedStyle(event.currentTarget as HTMLElement), '--bew-duration-normal'), motion)
   previous?.()
   requestedCollapsed.value = !requestedCollapsed.value
 }

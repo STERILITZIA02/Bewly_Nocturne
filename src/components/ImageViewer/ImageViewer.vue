@@ -12,9 +12,9 @@ import type { ActiveImageViewer } from '~/composables/useImageViewer'
 import { restoreOverlayFocus } from '~/utils/dialogFocus'
 import type { ImageViewerPoint, ImageViewerRect, ImageViewerSize } from '~/utils/imageViewer'
 import { clampPan, clampScale, getDetailScale, getFitScale, getMaxScale, getOriginMorph, getPanBounds, IMAGE_VIEWER_ZOOM_STEP, isUsableOrigin, resistPan, wrapImageViewerIndex, zoomPanAt } from '~/utils/imageViewer'
-import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
+import { springTiming } from '~/utils/spring'
 import { subscribeViewportFrame } from '~/utils/viewportGeometry'
 import { createWheelStepper, normalizeWheelDelta } from '~/utils/wheelStep'
 
@@ -232,7 +232,6 @@ let closing = false
 const running = new Set<Animation>()
 function track(animation: Animation) {
   running.add(animation)
-  holdAnimation(animation)
   void animation.finished.catch(() => {}).finally(() => running.delete(animation))
   return animation
 }
@@ -336,6 +335,9 @@ watch(() => props.open, (value) => {
 
 // --- Layers ------------------------------------------------------------------
 
+// A committed swipe's speed (px/s), handed to the leaving layer.
+let swipeVelocity = 0
+
 function slideIn(element: Element, done: () => void) {
   if (!direction || !animated) {
     done()
@@ -348,14 +350,20 @@ function slideIn(element: Element, done: () => void) {
   void animation.finished.catch(() => {}).finally(done)
 }
 function slideOut(element: Element, done: () => void) {
+  const velocity = swipeVelocity
+  swipeVelocity = 0
   if (!direction || !animated) {
     done()
     return
   }
   const from = getComputedStyle(element).transform
+  const fromX = from === 'none' ? 0 : new DOMMatrixReadOnly(from).m41
+  const toX = direction * -0.14 * (element as HTMLElement).offsetWidth
+  // A swiped layer leaves at the finger's speed; a button or key starts it from rest.
+  const timing = velocity ? springTiming(duration('--bew-duration-moderate', 300) / 1000, toX - fromX, velocity) : { duration: duration('--bew-duration-moderate', 300), easing: easing() }
   const animation = track(element.animate(
-    [{ transform: from === 'none' ? 'translateX(0)' : from, opacity: 1 }, { transform: `translateX(${direction * -14}%)`, opacity: 0 }],
-    { duration: duration('--bew-duration-moderate', 300), easing: easing(), fill: 'forwards' },
+    [{ transform: `translateX(${fromX}px)`, opacity: 1 }, { transform: `translateX(${toX}px)`, opacity: 0 }],
+    { ...timing, fill: 'forwards' },
   ))
   void animation.finished.catch(() => {}).finally(done)
 }
@@ -379,6 +387,37 @@ interface Gesture {
 }
 const pointers = new Map<number, ImageViewerPoint>()
 let gesture: Gesture | undefined
+// A release counts the finger's speed only if it moved this recently (ms).
+const RELEASE_VELOCITY_WINDOW_MS = 80
+// The glide back after a gesture: a spring that starts at the finger's speed,
+// used by the CSS transitions until it has played.
+const settleTiming = ref<{ duration: number, easing: string }>()
+let settleTimer: ReturnType<typeof setTimeout> | undefined
+/** The finger's speed in px/s at release, or 0 if it had come to rest. */
+function releaseVelocity(finished: Gesture, event: PointerEvent): ImageViewerPoint {
+  return event.timeStamp - finished.last.time > RELEASE_VELOCITY_WINDOW_MS
+    ? { x: 0, y: 0 }
+    : { x: finished.velocity.x * 1000, y: finished.velocity.y * 1000 }
+}
+function settleFrom(velocity: ImageViewerPoint, from: ImageViewerPoint, to: ImageViewerPoint) {
+  clearTimeout(settleTimer)
+  settleTimer = undefined
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const distance = Math.hypot(dx, dy)
+  if (distance < 1) {
+    settleTiming.value = undefined
+    return
+  }
+  // Only the speed along the way back carries into it.
+  const along = (velocity.x * dx + velocity.y * dy) / distance
+  const timing = springTiming(duration('--bew-duration-moderate', 300) / 1000, distance, along)
+  settleTiming.value = timing
+  settleTimer = setTimeout(() => settleTiming.value = undefined, timing.duration)
+}
+const settleStyle = computed(() => settleTiming.value
+  ? { '--bew-image-viewer-settle-duration': `${settleTiming.value.duration}ms`, '--bew-image-viewer-settle-easing': settleTiming.value.easing }
+  : undefined)
 let lastTap: (ImageViewerPoint & { time: number }) | undefined
 const dragging = ref(false)
 
@@ -403,6 +442,8 @@ function handlePointerDown(event: PointerEvent) {
   if (!target.closest('.bew-image-viewer__stage'))
     return
   event.preventDefault()
+  clearTimeout(settleTimer)
+  settleTiming.value = undefined
   root.value?.setPointerCapture(event.pointerId)
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
   if (pointers.size === 2 && natural.value) {
@@ -516,25 +557,34 @@ function handlePointerUp(event: PointerEvent) {
     }
   }
   else if (finished.kind === 'pan') {
-    pan.value = clampPan(pan.value, bounds())
+    const target = clampPan(pan.value, bounds())
+    settleFrom(releaseVelocity(finished, event), pan.value, target)
+    pan.value = target
   }
   else if (finished.kind === 'swipe') {
     const commit = !cancelled && (Math.abs(dx) > viewport.width * SWIPE_DISTANCE || Math.abs(finished.velocity.x) > FLICK_VELOCITY)
     if (commit) {
       // The outgoing layer keeps its swipe offset and continues from there.
       const step = dx < 0 ? 1 : -1
+      swipeVelocity = releaseVelocity(finished, event).x
       go(step)
       swipeX.value = 0
+      // Only this swipe's leaving layer; a later key or button starts from rest.
+      void nextTick(() => swipeVelocity = 0)
     }
     else {
+      settleFrom(releaseVelocity(finished, event), { x: swipeX.value, y: 0 }, { x: 0, y: 0 })
       swipeX.value = 0
     }
   }
   else if (finished.kind === 'dismiss') {
-    if (!cancelled && (Math.abs(dy) > viewport.height * DISMISS_DISTANCE || Math.abs(finished.velocity.y) > FLICK_VELOCITY))
+    if (!cancelled && (Math.abs(dy) > viewport.height * DISMISS_DISTANCE || Math.abs(finished.velocity.y) > FLICK_VELOCITY)) {
       emit('close')
-    else
+    }
+    else {
+      settleFrom(releaseVelocity(finished, event), { x: 0, y: dismissY.value }, { x: 0, y: 0 })
       dismissY.value = 0
+    }
   }
 }
 
@@ -644,6 +694,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   stopViewport?.()
+  clearTimeout(settleTimer)
   releaseGesture()
   running.forEach(animation => animation.cancel())
   if (!closing)
@@ -661,6 +712,7 @@ onBeforeUnmount(() => {
     :aria-label="t('image_viewer.title')"
     tabindex="-1"
     :data-motion="smooth && !dragging ? 'smooth' : 'instant'"
+    :style="settleStyle"
     :data-zoomed="fitted ? undefined : ''"
     :data-dragging="dragging ? '' : undefined"
     @keydown="handleKeydown"
@@ -819,14 +871,17 @@ onBeforeUnmount(() => {
 }
 
 // Programmatic changes (buttons, keys, settle after a gesture) glide; direct
-// manipulation (drag, wheel, pinch) follows the pointer without lag.
+// manipulation (drag, wheel, pinch) follows the pointer without lag. The settle
+// after a gesture is a spring from the finger's speed (`settleFrom`).
 .bew-image-viewer[data-motion="smooth"] {
   .bew-image-viewer__image,
   .bew-image-viewer__layer {
-    transition: transform var(--bew-duration-moderate) var(--bew-ease-standard);
+    transition: transform var(--bew-image-viewer-settle-duration, var(--bew-duration-moderate))
+      var(--bew-image-viewer-settle-easing, var(--bew-ease-standard));
   }
   .bew-image-viewer__scrim {
-    transition: opacity var(--bew-duration-moderate) var(--bew-ease-standard);
+    transition: opacity var(--bew-image-viewer-settle-duration, var(--bew-duration-moderate))
+      var(--bew-image-viewer-settle-easing, var(--bew-ease-standard));
   }
 }
 

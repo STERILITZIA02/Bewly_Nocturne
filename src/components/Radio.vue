@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { FORM_FIELD_LABEL_ID } from '~/components/formFieldLabel'
 import { useMotionValue } from '~/composables/useMotionValue'
-import { holdMotion } from '~/utils/motionPriority'
+import { createMotionScope, holdMotion } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 
@@ -19,7 +19,9 @@ const fieldLabelId = inject(FORM_FIELD_LABEL_ID, undefined)
 
 const switchRef = ref<HTMLElement>()
 let releaseMotion: (() => void) | undefined
-const deferred = props.commitAfterMotion ? useMotionValue(() => props.modelValue, value => emit('update:modelValue', value)) : undefined
+// The commit waits only for this switch's own thumb.
+const motion = createMotionScope('switch')
+const deferred = props.commitAfterMotion ? useMotionValue(() => props.modelValue, value => emit('update:modelValue', value), motion) : undefined
 const model = computed({
   get: () => deferred?.value ?? props.modelValue,
   set: (value: boolean) => {
@@ -30,7 +32,7 @@ const model = computed({
       return
     }
     const previous = releaseMotion
-    releaseMotion = holdMotion(prefersReducedMotion() || !switchRef.value ? 0 : getMotionDuration(getComputedStyle(switchRef.value), '--bew-duration-normal'))
+    releaseMotion = holdMotion(prefersReducedMotion() || !switchRef.value ? 0 : getMotionDuration(getComputedStyle(switchRef.value), '--bew-duration-normal'), motion)
     previous?.()
     deferred.value = value
   },

@@ -3,7 +3,6 @@ import { useI18n } from 'vue-i18n'
 
 import ChevronIcon from '~/components/ChevronIcon.vue'
 import Empty from '~/components/Empty.vue'
-import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import { useImageViewer } from '~/composables/useImageViewer'
 import { useSurfaceMorph } from '~/composables/useSurfaceMorph'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
@@ -585,9 +584,6 @@ defineExpose({
       </div>
     </div>
 
-    <ProgressiveBlur class="conversation-card__top-edge" edge="top" :visible="conversationExpanded" sample-within=".conversation-view" />
-    <ProgressiveBlur class="conversation-card__bottom-edge" edge="bottom" :visible="conversationExpanded" sample-within=".conversation-view" />
-
     <Transition name="conversation-latest">
       <div
         v-if="showLatestButton || (searchMode && entryPhase !== 'opening')"
@@ -872,25 +868,6 @@ defineExpose({
   corner-shape: var(--bew-corner-shape);
 }
 
-// Scroll-edge gradient blur (ProgressiveBlur); geometry and layering unchanged.
-.conversation-card__top-edge,
-.conversation-card__bottom-edge {
-  position: fixed;
-  right: 0;
-  left: var(--bew-messages-sidebar-width);
-  z-index: var(--bew-z-topbar);
-  height: var(--bew-space-12);
-  overflow: hidden;
-}
-
-.conversation-card__top-edge {
-  top: 0;
-}
-
-.conversation-card__bottom-edge {
-  bottom: 0;
-}
-
 .conversation-view__floating-composer,
 .conversation-view__new-messages {
   translate: 0 var(--notifications-composer-dock-shift, 0px);
@@ -1133,11 +1110,6 @@ defineExpose({
   .conversation-card {
     height: 100%;
     transform: none;
-  }
-
-  .conversation-card__top-edge,
-  .conversation-card__bottom-edge {
-    display: none;
   }
 }
 

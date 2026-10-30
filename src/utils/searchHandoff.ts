@@ -1,6 +1,6 @@
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 
-import { holdAnimation } from './motionPriority'
+import { holdAnimation, PAGE_MOTION } from './motionPriority'
 import { getMotionDuration } from './motionTiming'
 
 /** A departure older than this is not the counterpart of the next arrival. */
@@ -33,9 +33,9 @@ export function arriveSearchAt(element: HTMLElement) {
     return
   const style = getComputedStyle(element)
   holdAnimation(element.animate([{ translate: `${x}px ${y}px` }, { translate: '0 0' }], {
-    duration: getMotionDuration(style, '--bew-sidebar-morph-duration', 540),
+    duration: getMotionDuration(style, '--bew-sidebar-morph-duration', 300),
     easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out',
     // Compose with the element's own translate (the home dock's scroll animation).
     composite: 'add',
-  }))
+  }), PAGE_MOTION)
 }

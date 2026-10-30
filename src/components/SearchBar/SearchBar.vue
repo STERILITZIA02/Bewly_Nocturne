@@ -20,7 +20,6 @@ import { debugLog } from '~/utils/debug'
 import { hasNavigationModifier } from '~/utils/linkNavigation'
 import { isInIframe } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
-import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { dissolveElements } from '~/utils/particleDissolve'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
@@ -614,7 +613,6 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
     easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out',
     fill: entering ? 'none' : 'forwards',
   })
-  holdAnimation(animation)
   animation.finished.then(done, done)
 }
 </script>

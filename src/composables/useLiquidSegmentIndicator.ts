@@ -2,8 +2,10 @@ import { useResizeObserver } from '@vueuse/core'
 import type { MaybeRefOrGetter, Ref } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toValue, watch } from 'vue'
 
+import type { MotionScope } from '~/utils/motionPriority'
 import { holdMotion } from '~/utils/motionPriority'
 import { getTravelDuration } from '~/utils/motionTiming'
+import { landingResponse, SPRING_VISIBLE_LANDING, stepCriticalSpring } from '~/utils/spring'
 
 import { useReducedMotion } from './useReducedMotion'
 
@@ -58,27 +60,9 @@ function calculateLiquidSegmentRect({
 }
 
 /** Duration of a one-item move; longer travel scales up via `getTravelDuration`. */
-export const LIQUID_MOVE_DURATION_MS = 300
-
-function lerp(from: number, to: number, progress: number) {
-  return from + (to - from) * progress
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
-
-function easeOutQuadratic(t: number) {
-  const p = clamp(t, 0, 1)
-  return 1 - (1 - p) ** 2
-}
-
-interface LiquidGeometry {
-  x: number
-  y: number
-  width: number
-  height: number
-}
+export const LIQUID_MOVE_DURATION_MS = 220
+/** The leading edge's spring response relative to the trailing edge's. */
+const LEADING_EDGE_RESPONSE = 0.7
 
 /** Travel measured in items along the move axis, so wide tabs count as one step. */
 function getLiquidTravelSteps(from: LiquidSegmentRect, to: LiquidSegmentRect) {
@@ -89,91 +73,66 @@ function getLiquidTravelSteps(from: LiquidSegmentRect, to: LiquidSegmentRect) {
   return itemSize > 0 ? (horizontal ? dx : dy) / itemSize : 1
 }
 
-/**
- * Liquid capsule morph: always keeps full item-sized rounded pill.
- * Never collapses into a ball or compresses on the cross-axis.
- * The sticky feel comes only from stretching along the travel direction.
- */
-function computeLiquidGeometry(from: LiquidSegmentRect, to: LiquidSegmentRect, t: number): LiquidGeometry {
-  const progress = clamp(t, 0, 1)
+interface Edge {
+  position: number
+  velocity: number
+  target: number
+  response: number
+}
 
-  if (progress <= 0.001) {
-    return { x: from.x, y: from.y, width: from.width, height: from.height }
-  }
-  if (progress >= 0.999) {
-    return { x: to.x, y: to.y, width: to.width, height: to.height }
-  }
+type Edges = Record<'left' | 'right' | 'top' | 'bottom', Edge>
 
-  const dx = (to.x + to.width / 2) - (from.x + from.width / 2)
-  const dy = (to.y + to.height / 2) - (from.y + from.height / 2)
-  const dist = Math.hypot(dx, dy)
-  const isHoriz = Math.abs(dx) >= Math.abs(dy)
+function edgesOf(rect: LiquidSegmentRect): Edges {
+  const edge = (position: number): Edge => ({ position, velocity: 0, target: position, response: 1 })
+  return { left: edge(rect.x), right: edge(rect.x + rect.width), top: edge(rect.y), bottom: edge(rect.y + rect.height) }
+}
 
-  // Keep enough travel in the latter half of the animation so the capsule does
-  // not appear to arrive early and spend the remaining time only shrinking.
-  const posT = easeOutQuadratic(progress)
-  const baseW = lerp(from.width, to.width, posT)
-  const baseH = lerp(from.height, to.height, posT)
-  const baseCx = lerp(from.x + from.width / 2, to.x + to.width / 2, posT)
-  const baseCy = lerp(from.y + from.height / 2, to.y + to.height / 2, posT)
-
-  // Start and end at the exact item geometry. The old remaining-distance
-  // envelope jumped from zero to almost maximum stretch on the first frame.
-  const envelope = Math.sin(Math.PI * progress)
-  const stretch = Math.min(dist * 0.22, Math.max(baseW, baseH) * 0.5) * envelope
-
-  if (isHoriz) {
-    const width = baseW + stretch
-    return {
-      x: baseCx - width / 2,
-      y: baseCy - baseH / 2,
-      width,
-      height: baseH,
-    }
-  }
-
-  const height = baseH + stretch
+function rectOf(edges: Edges): LiquidSegmentRect {
   return {
-    x: baseCx - baseW / 2,
-    y: baseCy - height / 2,
-    width: baseW,
-    height,
+    x: edges.left.position,
+    y: edges.top.position,
+    width: Math.max(0, edges.right.position - edges.left.position),
+    height: Math.max(0, edges.bottom.position - edges.top.position),
   }
 }
 
 /**
- * Sliding liquid indicator for segmented controls / dock.
+ * Sliding liquid indicator for segmented controls / dock. Each edge rides its
+ * own critically damped spring; the edge in the direction of travel answers
+ * faster, so the capsule stretches ahead and the trailing edge catches up. A
+ * new target keeps every edge's position and velocity, and the springs advance
+ * by real elapsed time, so the motion is the same at any refresh rate.
  */
 export function useLiquidSegmentIndicator(options: {
   containerRef: Ref<HTMLElement | null | undefined>
+  indicatorRef: Ref<HTMLElement | null | undefined>
   activeKey: MaybeRefOrGetter<unknown>
   itemSelector?: string
   activeItemSelector?: string
+  /** Content swaps of this scope wait for the slide; without one nothing waits. */
+  motionScope?: MotionScope
 }) {
   const itemSelector = options.itemSelector ?? '[data-segment-item]'
   const activeItemSelector = options.activeItemSelector ?? `${itemSelector}[data-active="true"]`
 
-  const rect = ref<LiquidSegmentRect>({ x: 0, y: 0, width: 0, height: 0 })
   const visible = ref(false)
   const isMoving = ref(false)
-  const scrubbing = ref(false)
 
+  let edges: Edges | undefined
   let rafId: number | undefined
+  let lastFrame = 0
   let measureFrameId: number | undefined
-  let ready = false
-  let fromRect: LiquidSegmentRect | null = null
-  let previewTarget: HTMLElement | null = null
-  let previewProgress = 0
-  let animToken = 0
   let pendingImmediateMeasure = false
   let disposed = false
   let releaseMotionHold: (() => void) | undefined
   const prefersReducedMotion = useReducedMotion()
 
-  // Content swaps wait for this slide (see utils/motionPriority).
+  // Content swaps of `motionScope` wait until the slide has visibly landed (see utils/motionPriority).
   function holdSlide(duration: number) {
+    if (!options.motionScope)
+      return
     const previous = releaseMotionHold
-    releaseMotionHold = holdMotion(duration)
+    releaseMotionHold = holdMotion(duration * SPRING_VISIBLE_LANDING, options.motionScope)
     previous?.()
   }
 
@@ -182,15 +141,19 @@ export function useLiquidSegmentIndicator(options: {
     releaseMotionHold = undefined
   }
 
-  const indicatorStyle = computed(() => {
-    const { x, y, width, height } = rect.value
-    return {
-      width: `${Math.max(width, 0)}px`,
-      height: `${Math.max(height, 0)}px`,
-      opacity: visible.value ? '1' : '0',
-      transform: `translate3d(${x}px, ${y}px, 0)`,
-    } as Record<string, string | undefined>
-  })
+  // Only the rarely changing visibility goes through Vue; geometry is written
+  // straight to the element once a frame.
+  const indicatorStyle = computed(() => ({ opacity: visible.value ? '1' : '0' }))
+
+  function paint() {
+    const element = options.indicatorRef.value
+    if (!element || !edges)
+      return
+    const { x, y, width, height } = rectOf(edges)
+    element.style.width = `${width}px`
+    element.style.height = `${height}px`
+    element.style.transform = `translate3d(${x}px, ${y}px, 0)`
+  }
 
   function cancelRaf() {
     if (rafId !== undefined) {
@@ -206,22 +169,59 @@ export function useLiquidSegmentIndicator(options: {
     }
   }
 
-  function markMoving() {
-    isMoving.value = true
+  function settle(rect: LiquidSegmentRect) {
+    cancelRaf()
+    edges = edgesOf(rect)
+    paint()
+    isMoving.value = false
+    releaseSlide()
   }
 
-  function applyGeometry(geo: LiquidGeometry) {
-    rect.value = {
-      x: geo.x,
-      y: geo.y,
-      width: geo.width,
-      height: geo.height,
+  function tick(time: number) {
+    if (!edges)
+      return
+    const seconds = Math.max(0, (time - lastFrame) / 1000)
+    lastFrame = time
+    let settled = true
+    for (const edge of Object.values(edges)) {
+      const next = stepCriticalSpring(edge.position, edge.velocity, edge.target, seconds, edge.response)
+      edge.position = next.position
+      edge.velocity = next.velocity
+      if (Math.abs(edge.target - edge.position) > 0.1 || Math.abs(edge.velocity) > 1)
+        settled = false
     }
+    if (settled) {
+      rafId = undefined
+      const { left, right, top, bottom } = edges
+      settle({ x: left.target, y: top.target, width: right.target - left.target, height: bottom.target - top.target })
+      return
+    }
+    paint()
+    rafId = requestAnimationFrame(tick)
   }
 
-  function applySettled(next: LiquidSegmentRect) {
-    rect.value = { ...next }
-    fromRect = { ...next }
+  function slideTo(to: LiquidSegmentRect) {
+    if (!edges)
+      return
+    const from = rectOf(edges)
+    const travel = getTravelDuration(LIQUID_MOVE_DURATION_MS, getLiquidTravelSteps(from, to)) / 1000
+    holdSlide(travel * 1000)
+    isMoving.value = true
+    // Per axis, the edge on the side the capsule is heading answers faster.
+    const aim = (near: Edge, far: Edge, nearTarget: number, farTarget: number) => {
+      const direction = Math.sign((nearTarget + farTarget) - (near.position + far.position))
+      near.target = nearTarget
+      far.target = farTarget
+      const response = landingResponse(travel)
+      near.response = direction < 0 ? response * LEADING_EDGE_RESPONSE : response
+      far.response = direction > 0 ? response * LEADING_EDGE_RESPONSE : response
+    }
+    aim(edges.left, edges.right, to.x, to.x + to.width)
+    aim(edges.top, edges.bottom, to.y, to.y + to.height)
+    if (rafId === undefined) {
+      lastFrame = performance.now()
+      rafId = requestAnimationFrame(tick)
+    }
   }
 
   function readItemRect(container: HTMLElement, el: HTMLElement): LiquidSegmentRect {
@@ -239,95 +239,36 @@ export function useLiquidSegmentIndicator(options: {
     })
   }
 
-  function animateMorph(from: LiquidSegmentRect, to: LiquidSegmentRect) {
-    cancelRaf()
-    const token = ++animToken
-    const start = performance.now()
-    const duration = getTravelDuration(LIQUID_MOVE_DURATION_MS, getLiquidTravelSteps(from, to))
-    holdSlide(duration)
-    markMoving()
-    fromRect = { ...from }
-
-    const tick = (now: number) => {
-      if (token !== animToken)
-        return
-      const t = clamp((now - start) / duration, 0, 1)
-      applyGeometry(computeLiquidGeometry(from, to, t))
-      if (t < 1) {
-        rafId = requestAnimationFrame(tick)
-      }
-      else {
-        rafId = undefined
-        applySettled(to)
-        isMoving.value = false
-        releaseSlide()
-      }
-    }
-    rafId = requestAnimationFrame(tick)
-  }
-
   function measure(immediate = false) {
     const container = options.containerRef.value
-    if (!container) {
-      releaseSlide()
+    const activeEl = container?.querySelector(activeItemSelector) as HTMLElement | null
+    if (!container || !activeEl) {
       cancelRaf()
-      visible.value = false
-      isMoving.value = false
-      return
-    }
-
-    const activeEl = container.querySelector(activeItemSelector) as HTMLElement | null
-    if (!activeEl) {
       releaseSlide()
-      cancelRaf()
       visible.value = false
       isMoving.value = false
       return
     }
 
     const activeRect = readItemRect(container, activeEl)
-
-    if (previewTarget && previewProgress > 0 && container.contains(previewTarget)) {
-      releaseSlide()
-      const targetRect = readItemRect(container, previewTarget)
-      applyGeometry(computeLiquidGeometry(activeRect, targetRect, previewProgress))
+    if (immediate || prefersReducedMotion.value || !edges || !visible.value) {
+      settle(activeRect)
       visible.value = true
-      isMoving.value = true
       return
     }
 
-    if (immediate || prefersReducedMotion.value || !ready || !visible.value || !fromRect) {
-      cancelRaf()
-      animToken++
-      applySettled(activeRect)
-      visible.value = true
-      ready = true
-      isMoving.value = false
-      releaseSlide()
+    // Same target as the springs already hold: nothing to start.
+    const current = edges
+    const unchanged = Math.abs(current.left.target - activeRect.x) <= 0.5
+      && Math.abs(current.top.target - activeRect.y) <= 0.5
+      && Math.abs(current.right.target - (activeRect.x + activeRect.width)) <= 0.5
+      && Math.abs(current.bottom.target - (activeRect.y + activeRect.height)) <= 0.5
+    if (unchanged) {
+      if (rafId === undefined)
+        settle(activeRect)
       return
     }
-
-    // Continue from the currently painted geometry when a rapid second click
-    // interrupts an in-flight morph. Restarting from the last settled tab
-    // caused the indicator to visibly jump backwards.
-    const origin = rafId !== undefined ? { ...rect.value } : fromRect
-    const changed = Math.abs(activeRect.x - origin.x) > 0.5
-      || Math.abs(activeRect.y - origin.y) > 0.5
-      || Math.abs(activeRect.width - origin.width) > 0.5
-      || Math.abs(activeRect.height - origin.height) > 0.5
-
-    if (!changed) {
-      cancelRaf()
-      animToken++
-      applySettled(activeRect)
-      isMoving.value = false
-      releaseSlide()
-      return
-    }
-
-    animateMorph(origin, activeRect)
-    visible.value = true
-    ready = true
+    slideTo(activeRect)
   }
 
   async function updateIndicator(immediate = false) {
@@ -353,50 +294,10 @@ export function useLiquidSegmentIndicator(options: {
       void updateIndicator(true)
   })
 
-  function setPreview(targetEl: HTMLElement | null, progress: number) {
-    if (!targetEl || progress <= 0) {
-      clearPreview()
-      return
-    }
-
-    cancelRaf()
-    animToken++
-    previewTarget = targetEl
-    previewProgress = clamp(progress, 0, 1)
-    scrubbing.value = true
-    isMoving.value = true
-    measure(true)
-  }
-
-  function clearPreview(animateBack = true) {
-    const hadPreview = previewProgress > 0 || !!previewTarget
-    const container = options.containerRef.value
-    const activeEl = container?.querySelector(activeItemSelector) as HTMLElement | null
-    const currentGeo: LiquidSegmentRect = { ...rect.value }
-
-    previewTarget = null
-    previewProgress = 0
-    scrubbing.value = false
-
-    if (!hadPreview)
-      return
-
-    if (animateBack && container && activeEl) {
-      const activeRect = readItemRect(container, activeEl)
-      animateMorph(currentGeo, activeRect)
-    }
-    else {
-      void updateIndicator(true)
-    }
-  }
-
   watch(() => toValue(options.activeKey), () => {
-    previewTarget = null
-    previewProgress = 0
-    scrubbing.value = false
-    // The morph starts a frame later; hold now so a swap triggered by the same
+    // The slide starts a frame later; hold now so a swap triggered by the same
     // input already sees the slide when it schedules its fade.
-    if (ready && visible.value && !prefersReducedMotion.value)
+    if (edges && visible.value && !prefersReducedMotion.value)
       holdSlide(LIQUID_MOVE_DURATION_MS)
     void updateIndicator(false)
   })
@@ -419,10 +320,6 @@ export function useLiquidSegmentIndicator(options: {
   return {
     indicatorStyle,
     isMoving,
-    scrubbing,
     updateIndicator,
-    setPreview,
-    clearPreview,
-    moveDurationMs: LIQUID_MOVE_DURATION_MS,
   }
 }

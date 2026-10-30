@@ -6,6 +6,7 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { usePageScrollPositions } from '~/composables/usePageViewState'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { settings } from '~/logic'
+import type { MotionScope } from '~/utils/motionPriority'
 
 import AllSearchPage from '../pages/AllSearchPage.vue'
 import ArticleSearchPage from '../pages/ArticleSearchPage.vue'
@@ -18,6 +19,7 @@ import type { SearchCategory } from '../types'
 
 const props = defineProps<{
   currentCategory: SearchCategory
+  motionScope: MotionScope
   keyword: string
   videoFilters: {
     order: string
@@ -93,6 +95,7 @@ function restoreScroll() {
   })
 }
 const transition = useReadyPageTransition(() => pages[props.currentCategory], async () => {}, {
+  motion: props.motionScope,
   onStart() {
     if (!switching.value)
       scrollPositions.set(displayedKey, scrollViewportRef.value?.scrollTop ?? 0)

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
+import type { MotionScope } from '~/utils/motionPriority'
 
 import type { SearchCategory, SearchCategoryOption } from '../types'
 
 const props = defineProps<{
   categories: ReadonlyArray<SearchCategoryOption>
   currentCategory: SearchCategory
+  motionScope: MotionScope
 }>()
 
 const emit = defineEmits<{
@@ -20,7 +22,7 @@ function handleSelect(category: SearchCategory) {
 <template>
   <div class="search-categories" mb-4>
     <div class="search-category-control bew-segment-control bew-segment-control--surface bew-segment-control--track" role="group" :aria-label="$t('search.page_title')">
-      <LiquidSegmentIndicator :active-key="props.currentCategory" />
+      <LiquidSegmentIndicator :active-key="props.currentCategory" :motion-scope="props.motionScope" />
       <button
         v-for="category in props.categories"
         :key="category.value"

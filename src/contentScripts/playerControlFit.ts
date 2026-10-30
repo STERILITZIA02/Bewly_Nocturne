@@ -1,4 +1,4 @@
-import { getMotionRemaining, MAX_MOTION_WAIT_MS } from '~/utils/motionPriority'
+import { getMotionRemaining, MAX_MOTION_WAIT_MS, PLAYER_DISPLAY_MOTION } from '~/utils/motionPriority'
 import { getPlayerRoot } from '~/utils/playerMedia'
 
 import { observePlayerDom } from './playerDomLifecycle'
@@ -197,7 +197,7 @@ function settleResize() {
   resizeFrame = undefined
   quietFrames = observedVersion === resizeVersion ? quietFrames + 1 : 0
   observedVersion = resizeVersion
-  if ((quietFrames >= 2 && getMotionRemaining() <= 0) || performance.now() - resizeStarted >= MAX_MOTION_WAIT_MS) {
+  if ((quietFrames >= 2 && getMotionRemaining(PLAYER_DISPLAY_MOTION) <= 0) || performance.now() - resizeStarted >= MAX_MOTION_WAIT_MS) {
     schedule()
     return
   }

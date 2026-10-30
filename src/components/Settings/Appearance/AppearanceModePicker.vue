@@ -4,9 +4,12 @@ import { useI18n } from 'vue-i18n'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import { useMotionValue } from '~/composables/useMotionValue'
 import type { Settings } from '~/logic/storage'
+import { createMotionScope } from '~/utils/motionPriority'
 
 const props = defineProps<{ modelValue: Settings['theme'], apply: (value: Settings['theme']) => Promise<void> }>()
-const selected = useMotionValue(() => props.modelValue, value => props.apply(value))
+// The theme applies after this picker's slider only.
+const motion = createMotionScope('appearance-mode')
+const selected = useMotionValue(() => props.modelValue, value => props.apply(value), motion)
 const { t } = useI18n()
 const modes = computed(() => [
   { value: 'auto' as const, label: t('settings.theme_opt.auto'), icon: 'i-tabler:device-desktop' },
@@ -28,7 +31,7 @@ function onKey(event: KeyboardEvent, index: number) {
 
 <template>
   <div class="appearance-modes bew-segment-control bew-segment-control--surface bew-segment-control--track bew-segment-control--rect" role="radiogroup" :aria-label="$t('settings.theme')">
-    <LiquidSegmentIndicator :active-key="selected" />
+    <LiquidSegmentIndicator :active-key="selected" :motion-scope="motion" />
     <button
       v-for="(mode, index) in modes" :key="mode.value" type="button" class="appearance-modes__option bew-segment-control__item"
       data-segment-item :data-active="selected === mode.value ? 'true' : undefined"

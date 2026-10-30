@@ -26,6 +26,7 @@ import { homeTabStateKey } from '~/utils/homeRoute'
 import { normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import emitter from '~/utils/mitt'
 import { retiringTransition } from '~/utils/motionPresence'
+import { createMotionScope } from '~/utils/motionPriority'
 import { scrollToPosition } from '~/utils/scrollIntent'
 import { arriveSearchAt, departSearchFrom } from '~/utils/searchHandoff'
 import { subscribeViewportFrame } from '~/utils/viewportGeometry'
@@ -162,7 +163,10 @@ const pages = computed(() => ({
   [HomeSubPage.Weekly]: weeklyPage,
   [HomeSubPage.Live]: livePage,
 }))
+// The tab swap waits only for the tab bar's own slider.
+const tabMotion = createMotionScope('home-tabs')
 const tabTransition = useReadyPageTransition(() => pages.value[activatedPage.value], asyncPages.preload, {
+  motion: tabMotion,
   onSwap: restoreTabScrollPosition,
   rise: () => false,
 })
@@ -481,6 +485,7 @@ watch(tabContentLoading, (loading) => {
                 <LiquidSegmentIndicator
                   ref="tabsIndicatorRef"
                   :active-key="activatedPage"
+                  :motion-scope="tabMotion"
                 />
                 <button
                   v-for="tab in currentTabs" :key="tab.page"

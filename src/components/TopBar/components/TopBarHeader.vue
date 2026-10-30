@@ -108,7 +108,8 @@ const sidebarHost = useSidebarHost()
 
 // With the rail open the search (and the channels after it) start right after
 // the rail instead of after the logo. Shifted, not re-laid out, so it glides with
-// the rail's fold; the rail width itself transitions between page kinds.
+// the rail's fold. Between page kinds the rail width steps once and this
+// translate transition carries the search to the new edge.
 .top-bar-header {
   --top-bar-logo-slot: var(--bew-top-bar-primary-control-height);
   --top-bar-rail-offset: max(

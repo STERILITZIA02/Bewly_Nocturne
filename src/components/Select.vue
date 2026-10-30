@@ -7,9 +7,6 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 import { DIALOG_FOCUS_OWNER } from '~/utils/dialogFocus'
-import { holdMotion } from '~/utils/motionPriority'
-import { getMotionDuration } from '~/utils/motionTiming'
-import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { createSelectOptionKey } from '~/utils/selectOptionKey'
 
 type SelectValue = string | number | boolean | null | undefined
@@ -59,7 +56,6 @@ const triggerRef = ref<HTMLButtonElement | null>(null)
 const containerRef = ref<HTMLElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 let pendingSelection: OptionType | undefined
-let releaseMotion: (() => void) | undefined
 const {
   position: dropdownPosition,
   scheduleUpdate: schedulePositionUpdate,
@@ -131,18 +127,7 @@ function commitSelection(option: OptionType) {
   emit('change', option.value)
 }
 
-function holdMenuMotion(element: Element) {
-  const duration = keyboardOpened.value || prefersReducedMotion() ? 0 : getMotionDuration(getComputedStyle(element), '--bew-duration-fast')
-  const previous = releaseMotion
-  releaseMotion = holdMotion(duration)
-  previous?.()
-}
-function settleMenuMotion() {
-  releaseMotion?.()
-  releaseMotion = undefined
-}
 function finishLeave() {
-  settleMenuMotion()
   const selection = pendingSelection
   pendingSelection = undefined
   if (selection && !unavailable.value && props.options.some(option => Object.is(option.value, selection.value)))
@@ -153,7 +138,6 @@ watch(() => props.modelValue, () => {
 }, { flush: 'sync' })
 onScopeDispose(() => {
   pendingSelection = undefined
-  settleMenuMotion()
 })
 
 function handleTriggerKeyDown(event: KeyboardEvent) {
@@ -335,9 +319,7 @@ watch(unavailable, (disabled) => {
     <Teleport :to="mainAppRef">
       <Transition
         :name="dropdownPosition.openUp ? 'dropdown-up' : 'dropdown'" :css="!keyboardOpened"
-        @enter="holdMenuMotion" @leave="holdMenuMotion"
-        @after-enter="settleMenuMotion" @after-leave="finishLeave"
-        @enter-cancelled="settleMenuMotion" @leave-cancelled="settleMenuMotion"
+        @after-leave="finishLeave"
       >
         <div
           v-if="showOptions"

@@ -1,11 +1,14 @@
 <script setup lang="ts" generic="T extends string">
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
+import type { MotionScope } from '~/utils/motionPriority'
 
 const props = defineProps<{
   modelValue: T
   options: readonly { label: string, value: T }[]
   label: string
   disabled?: boolean
+  /** A deferred commit (`useMotionValue`) waiting for this slider. */
+  motionScope?: MotionScope
 }>()
 
 const emit = defineEmits<{
@@ -44,6 +47,7 @@ function handleKeydown(event: KeyboardEvent, index: number) {
   >
     <LiquidSegmentIndicator
       :active-key="modelValue"
+      :motion-scope="motionScope"
     />
 
     <button

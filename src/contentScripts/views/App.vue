@@ -34,7 +34,7 @@ import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { onRouteChange } from '~/composables/useRouteState'
 import { useSettingsMotion } from '~/composables/useSettingsMotion'
 import { useSettingsPanel } from '~/composables/useSettingsPanel'
-import { provideSidebarHost, registerSidebarWidth } from '~/composables/useSidebarHost'
+import { provideSidebarHost } from '~/composables/useSidebarHost'
 import { BEWLY_MOUNTED, OVERLAY_SCROLL_BAR_SCROLL, OVERLAY_SCROLL_STATE_CHANGE } from '~/constants/globalEvents'
 import { PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { setupWatchLaterAutoRemove } from '~/contentScripts/features/watchLaterAutoRemove'
@@ -66,6 +66,7 @@ import { readIframeDrawerHistory } from '~/utils/iframeDrawerHistory'
 import { isSentinelWithinLoadThreshold } from '~/utils/loadMoreSentinel'
 import { getUserID, isHomePage, isInIframe, isVideoOrBangumiPage, openLinkToNewTab, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
+import { PAGE_MOTION } from '~/utils/motionPriority'
 import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pageMode'
 import { cancelScrollIntent, scrollToPosition } from '~/utils/scrollIntent'
@@ -77,7 +78,6 @@ import PlaybackCommentComposer from './PlaybackCommentComposer.vue'
 import PlaybackRailTabsIndicator from './PlaybackRailTabsIndicator.vue'
 
 const mainStore = useMainStore()
-registerSidebarWidth()
 const settingsStore = useSettingsStore()
 const topBarStore = useTopBarStore()
 // An open top bar popover rises above the home search, which docks into the
@@ -403,6 +403,7 @@ function restorePageScroll() {
     cancelPageScrollRestore()
 }
 const pageTransition = useReadyPageTransition(() => showBewlyPage.value ? pages[activatedPage.value as keyof typeof pages] : undefined, asyncPages.preload, {
+  motion: PAGE_MOTION,
   onStart() {
     const viewport = scrollViewportRef.value
     if (!isPageSwitching.value && viewport)
@@ -954,7 +955,7 @@ onBeforeUnmount(stopUrlCleaner)
 
     <!-- The destination page (not the one still displayed) drives the rail, so it
          folds or unfolds before the incoming page mounts. -->
-    <PersistentSidebar :active="showBewlyPage && RAIL_PAGES.includes(activatedPage)" />
+    <PersistentSidebar :active="showBewlyPage && RAIL_PAGES.includes(activatedPage)" :wide="displayedPage === AppPage.Notifications" />
 
     <!-- TopBar -->
     <div
@@ -1058,18 +1059,13 @@ onBeforeUnmount(stopUrlCleaner)
 
 <style lang="scss" scoped>
 @use "../../styles/modalWindow";
+// Steps once, at the page swap, while the page content is out: a transition
+// here would restyle the whole app every frame. The rail glass glides instead.
 .bewly-wrapper {
-  --bew-active-sidebar-width: var(--bew-sidebar-base-width);
-  --bew-messages-sidebar-width: var(--bew-active-sidebar-width);
-  transition: --bew-active-sidebar-width var(--bew-duration-normal) var(--bew-ease-standard);
+  --bew-messages-sidebar-width: var(--bew-sidebar-base-width);
 }
 .bewly-wrapper--wide-sidebar {
-  --bew-active-sidebar-width: var(--bew-sidebar-message-width);
-}
-@media (prefers-reduced-motion: reduce) {
-  .bewly-wrapper {
-    transition: none;
-  }
+  --bew-messages-sidebar-width: var(--bew-sidebar-message-width);
 }
 .top-bar-layer {
   z-index: var(--bew-z-topbar-host);

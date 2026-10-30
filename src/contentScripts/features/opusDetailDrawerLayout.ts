@@ -387,7 +387,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-g
   transform: translate3d(-66.6667%, 0, 0);
 }
 html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-gallery__track.is-animating {
-  transition: transform 0.32s cubic-bezier(0.22, 0.61, 0.36, 1) !important;
+  transition: transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) !important;
 }
 html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-gallery__slide {
   flex: 0 0 33.3333% !important;

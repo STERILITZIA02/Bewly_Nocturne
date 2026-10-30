@@ -1,11 +1,13 @@
 import { onScopeDispose, readonly, ref, watch } from 'vue'
 
+import type { MotionScope } from '~/utils/motionPriority'
 import { holdMotion } from '~/utils/motionPriority'
-import { stepCriticalSpring } from '~/utils/spring'
+import { landingResponse, SPRING_VISIBLE_LANDING, stepCriticalSpring } from '~/utils/spring'
 
 import { useReducedMotion } from './useReducedMotion'
 
-export function useSpringValue(target: () => number, response: () => number) {
+/** Follows `target` with a spring that lands within `duration()` seconds; `scope` swaps wait for it. */
+export function useSpringValue(target: () => number, duration: () => number, scope?: MotionScope) {
   const value = ref(target())
   const reduced = useReducedMotion()
   let velocity = 0
@@ -35,15 +37,16 @@ export function useSpringValue(target: () => number, response: () => number) {
     }
   }
   watch([target, reduced], () => {
-    responseSeconds = Math.max(0.001, response())
+    const seconds = Math.max(0.001, duration())
+    responseSeconds = landingResponse(seconds)
     if (reduced.value) {
       stop()
       value.value = target()
     }
     else {
-      // Visually settled after ~1.2 responses; content swaps wait for it.
+      // Content swaps of `scope` wait until it has visibly landed, not for the tail.
       releaseHold?.()
-      releaseHold = holdMotion(responseSeconds * 1200)
+      releaseHold = scope && holdMotion(seconds * SPRING_VISIBLE_LANDING * 1000, scope)
       if (frame === undefined) {
         lastTime = performance.now()
         frame = requestAnimationFrame(tick)

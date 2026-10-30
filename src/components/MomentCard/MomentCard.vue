@@ -22,7 +22,6 @@ import { releaseElementImages } from '~/utils/mediaResources'
 import { supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { isMomentDescriptionOverflowing } from '~/utils/momentDescription'
 import { isMomentVideoUrl } from '~/utils/momentUrl'
-import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { isPortraitRatio } from '~/utils/portraitMedia'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
@@ -595,7 +594,6 @@ async function toggleDescription() {
     { duration, easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease', fill: 'forwards' },
   )
   descriptionAnimation = animation
-  holdAnimation(animation)
   try {
     await animation.finished
   }

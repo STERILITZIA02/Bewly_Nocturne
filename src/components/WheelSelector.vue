@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, useId, watch } from 'vue'
 
 import { useSpringValue } from '~/composables/useSpringValue'
+import { SIDEBAR_HEADING_MOTION } from '~/utils/motionPriority'
 import { getMotionDuration, getTravelDuration } from '~/utils/motionTiming'
 import { createWheelStepper } from '~/utils/wheelStep'
 
@@ -30,9 +31,9 @@ const cursorIndex = computed(() => wrapIndex(cursor.value))
 const position = useSpringValue(() => cursor.value, () => {
   const duration = root.value ? getMotionDuration(getComputedStyle(root.value), '--bew-duration-normal') : 200
   // Read when the target changes: multi-step jumps (Home/End, external
-  // selection) settle more slowly than a single step.
+  // selection) take longer than a single step, up to the 300ms ceiling.
   return getTravelDuration(duration, Math.abs(cursor.value - position.value)) / 1000
-})
+}, SIDEBAR_HEADING_MOTION)
 const wheelStepper = createWheelStepper()
 let interactionGeneration = 0
 

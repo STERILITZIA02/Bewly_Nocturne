@@ -79,6 +79,7 @@ import {
   resolveSettingsCloudSyncEnableDecision,
   SETTINGS_CLOUD_SYNC_SCHEMA_VERSION,
 } from '../src/utils/settingsCloudSyncProtocol'
+import { springTiming, stepCriticalSpring } from '../src/utils/spring'
 import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributorsCache'
 import { playbackFunctions, readPlaybackSource } from './playbackSource'
 import { FAVORITES_SOURCE_FILES, FOR_YOU_SOURCE_FILES, MOMENTS_SOURCE_FILES, readSourceFiles } from './refactoredSources'
@@ -2976,7 +2977,7 @@ async function verifyP2WidescreenControl() {
   assert.match(fillToggleSection, /resolveWidescreenZoomFrame\(painted, layout, layoutContentWidth\)/)
   assert.doesNotMatch(fillToggleSection, /radius|borderRadius/)
   assert.match(fillToggleSection, /prefersReducedMotion\(\)/)
-  assert.match(fillToggleSection, /holdAnimation\(motion\)/)
+  assert.match(fillToggleSection, /holdAnimation\(motion, PLAYER_DISPLAY_MOTION\)/, 'only control fitting waits for the zoom')
   assert.match(fillToggleSection, /getMotionDuration\(style, '--bew-duration-moderate', 300\)/)
   // Motion is transform-only so the compositor runs it through main-thread
   // work; the clip animates separately on the same timing.
@@ -4513,6 +4514,59 @@ async function verifyTrackSegmentControls() {
   assert.equal(playbackRailTabs.value, null)
 }
 
+async function verifyRefreshRateMotion() {
+  // Springs are pure functions of elapsed time: one 1/30 s step equals two 1/60 s steps.
+  const coarse = stepCriticalSpring(0, 0, 100, 1 / 30, 0.3)
+  const half = stepCriticalSpring(0, 0, 100, 1 / 60, 0.3)
+  const fine = stepCriticalSpring(half.position, half.velocity, 100, 1 / 60, 0.3)
+  assert.ok(Math.abs(coarse.position - fine.position) < 1e-9 && Math.abs(coarse.velocity - fine.velocity) < 1e-9)
+
+  const previousCSS = globalThis.CSS
+  Object.defineProperty(globalThis, 'CSS', { configurable: true, value: { supports: () => true } })
+  try {
+    const curve = (timing: { easing: string }) => timing.easing.slice('linear('.length, -1).split(', ').map(Number)
+    const rest = springTiming(0.3, 100)
+    assert.equal(rest.duration, 300, 'a spring lands within its stated duration')
+    assert.equal(springTiming(0.6, 100).duration, 300, 'no animation runs longer than 300ms')
+    assert.ok(curve(rest).at(-2)! > 0.999, 'the last sampled point is already on the target')
+    assert.match(rest.easing, /^linear\(0, /)
+    assert.equal(curve(rest).at(-1), 1)
+    assert.ok(curve(rest).every(point => point >= 0 && point <= 1), 'from rest a critically damped spring never overshoots')
+    const flung = curve(springTiming(0.3, 100, 1e6))
+    assert.ok(Math.max(...flung) <= 1.026, 'a fling overshoots at most 2.5%')
+    assert.ok(flung[1] > curve(rest)[1], 'the release speed carries into the start')
+    assert.ok(Math.min(...curve(springTiming(0.3, 100, -1000))) < 0, 'an interrupted reverse first keeps its momentum')
+  }
+  finally {
+    Object.defineProperty(globalThis, 'CSS', { configurable: true, value: previousCSS })
+  }
+
+  const root = process.cwd()
+  const [indicator, indicatorView, carousel, viewer, elastic, halo, card, app] = await Promise.all([
+    'src/composables/useLiquidSegmentIndicator.ts',
+    'src/components/LiquidSegmentIndicator.vue',
+    'src/components/LibraryHeroCarousel.vue',
+    'src/components/ImageViewer/ImageViewer.vue',
+    'src/utils/elasticScroll.ts',
+    'src/composables/useHoverHalo.ts',
+    'src/components/VideoCard/VideoCard.vue',
+    'src/contentScripts/views/App.vue',
+  ].map(file => readFile(`${root}/${file}`, 'utf8')))
+  assert.match(indicator, /stepCriticalSpring\(edge\.position, edge\.velocity, edge\.target, seconds, edge\.response\)/, 'each slider edge rides its own spring')
+  assert.match(indicator, /response \* LEADING_EDGE_RESPONSE/, 'the leading edge answers faster, so the capsule stretches')
+  assert.match(indicator, /const response = landingResponse\(travel\)/, 'each edge lands within the travel time')
+  assert.match(indicator, /element\.style\.transform = `translate3d/, 'slider geometry is written straight to the element')
+  assert.doesNotMatch(indicatorView, /:style="indicatorStyle"[\s\S]*width/)
+  assert.match(carousel, /\.\.\.springTiming\(response \/ 1000, toX - fromX, velocity\)/, 'the hero row settles with the released speed')
+  assert.match(viewer, /settleFrom\(releaseVelocity\(finished, event\), pan\.value, target\)/, 'a pan settles from the finger speed')
+  assert.match(viewer, /var\(--bew-image-viewer-settle-easing, var\(--bew-ease-standard\)\)/)
+  assert.match(elastic, /springTiming\(response, -from\)/)
+  assert.match(halo, /frame = requestAnimationFrame\(\(\) => \{\s*frame = undefined\s*mounted\.value = true/, 'the halo mounts a frame after the pointer enters')
+  assert.match(card, /:visible="halo\.visible\.value"/)
+  assert.match(card, /@starting-style \{\s*\.video-card-halo :deep\(\.bew-progressive-blur__layer\) \{\s*opacity: 0;/)
+  assert.doesNotMatch(app, /registerSidebarWidth|--bew-active-sidebar-width/, 'no inherited width transition on the app wrapper')
+}
+
 async function verify() {
   await verifyAuditOptimizations()
   verifyAccountScopes()
@@ -4568,6 +4622,7 @@ async function verify() {
   await verifySecurityContracts()
   await verifyMomentPlayerPorts()
   await verifyFunctionalAuditFixes()
+  await verifyRefreshRateMotion()
   console.log('Targeted fix verification passed.')
 }
 

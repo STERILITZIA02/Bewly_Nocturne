@@ -2,7 +2,6 @@
 import { useI18n } from 'vue-i18n'
 
 import { settings } from '~/logic'
-import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 
@@ -37,7 +36,6 @@ function play(keys: string[], frames: Keyframe[], duration: number, easing: stri
     // Replaced only after the new one starts, so nothing flashes in between.
     animations.get(element)?.cancel()
     animations.set(element, animation)
-    holdAnimation(animation)
     return animation.finished.catch(() => {})
   }))
 }
@@ -59,8 +57,9 @@ async function sync() {
     shownJump.value = jump
     shownLatest.value = latest
     await nextTick()
+    // Out then in: the two phases together stay within the 300ms ceiling.
     if (animate)
-      await play(keys, [HIDDEN, SHOWN], getMotionDuration(style, '--bew-duration-moderate', 300), style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out')
+      await play(keys, [HIDDEN, SHOWN], getMotionDuration(style, '--bew-duration-fast', 150), style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out')
   }
   // Hover, press and the solid fallback own the buttons again.
   for (const animation of animations.values())

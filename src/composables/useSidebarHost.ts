@@ -42,20 +42,3 @@ export function useSidebarRail() {
   })
   return host
 }
-
-// Register once per document, including when more than one Bewly root is mounted.
-// A registered length lets CSS retarget an interrupted transition without JS
-// frame loops or a second writable geometry state.
-let widthRegistered = false
-export function registerSidebarWidth() {
-  if (widthRegistered || typeof CSS === 'undefined' || !CSS.registerProperty)
-    return
-  try {
-    CSS.registerProperty({ name: '--bew-active-sidebar-width', syntax: '<length>', inherits: true, initialValue: '0px' })
-  }
-  catch (error) {
-    if (!(error instanceof DOMException) || error.name !== 'InvalidModificationError')
-      throw error
-  }
-  widthRegistered = true
-}
