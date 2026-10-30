@@ -10,7 +10,7 @@ import { getTopBarItemLayoutEditableId, vLayoutEditable } from '~/logic/layoutEd
 import { useTopBarStore } from '~/stores/topBarStore'
 import { getUserID, isInIframe, removeHttpFromUrl } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
-import { holdMotion } from '~/utils/motionPriority'
+import { holdMotion, PAGE_MOTION } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { isComponentVisible, shouldShowBadge } from '~/utils/topBarBadge'
@@ -142,9 +142,9 @@ function holdItemMotion(element: Element, entering: boolean) {
   if (prefersReducedMotion())
     return
   const style = getComputedStyle(element)
-  const fade = getMotionDuration(style, '--top-bar-item-fade', 150)
-  const resize = getMotionDuration(style, '--top-bar-item-resize', 300)
-  holdMotion(entering ? fade * 2 + resize : fade + resize)
+  const fade = getMotionDuration(style, '--top-bar-item-fade', 75)
+  const resize = getMotionDuration(style, '--top-bar-item-resize', 150)
+  holdMotion(entering ? fade * 2 + resize : fade + resize, PAGE_MOTION)
 }
 
 // A page's own action is redundant while that page is already open.

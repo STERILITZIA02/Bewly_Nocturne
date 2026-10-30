@@ -615,6 +615,7 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     for (const name of globals.slice(0, 3))
       globalThis[name] = window[name]
     const getContext = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.animate = () => ({ cancel() {} })
     let draws = 0
     const context = () => new Proxy({}, { get: (_, key) => key === 'getImageData' ? (_x, _y, width, height) => ({ data: new Uint8ClampedArray(width * height * 4).fill(255) }) : key === 'drawImage' ? () => draws++ : () => {}, set: () => true })
     globalThis.OffscreenCanvas = class {
@@ -646,6 +647,7 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     finally {
       card.remove()
       HTMLCanvasElement.prototype.getContext = getContext
+      delete HTMLCanvasElement.prototype.animate
       Object.assign(globalThis, saved)
       if (previous === undefined)
         delete document.documentElement.dataset.bewMotion
@@ -653,7 +655,7 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     }
 
     const source = await readFile('src/utils/particleDissolve.ts', 'utf8')
-    assert.match(source, /holdMotion\(duration\)/, 'the particle clock registers with motion priority')
+    assert.doesNotMatch(source, /holdMotion|holdAnimation/, 'nothing waits on the particles')
     assert.match(source, /PARTICLE_BUDGET = \d+/, 'particles are bounded across running dissolves')
     assert.match(source, /canvas\.remove\(\)\s*canvas\.width = 0/, 'the canvas is released when the particles end')
     const entries = [
@@ -737,6 +739,7 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     for (const name of names.slice(0, 3))
       globalThis[name] = window[name]
     const getContext = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.animate = () => ({ cancel() {} })
     const frames = new Map()
     let sequence = 0
     let draws = 0
@@ -765,7 +768,7 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
       const pending = [...frames.values()]
       frames.clear()
       pending.forEach(callback => callback(performance.now()))
-      assert.equal(draws, 2400, 'four concurrent deletions still draw at most the one global budget')
+      assert.equal(draws, 3600, 'four concurrent deletions still draw at most the one global budget')
       Object.defineProperty(document, 'hidden', { configurable: true, value: true })
       document.dispatchEvent(new Event('visibilitychange'))
       assert.equal(isDissolving(), false)
@@ -777,6 +780,7 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
       runs.forEach(run => run.restore())
       cards.forEach(card => card.remove())
       HTMLCanvasElement.prototype.getContext = getContext
+      delete HTMLCanvasElement.prototype.animate
       Object.assign(globalThis, saved)
       if (hidden)
         Object.defineProperty(document, 'hidden', hidden)
@@ -855,7 +859,7 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     assert.doesNotMatch(card, /scrollEdgeFade|vertical-scroll/, 'the glass card never carries the mask')
   })
 
-  check('Motion: interaction motion plays first; swaps fade across it and mount only after it settles', async () => {
+  check('Motion: a swap waits only for its own scope, at most 300ms, and mounts once that motion settles', async () => {
     const priority = await import('../src/utils/motionPriority')
     const { useReadyPageTransition } = await import('../src/composables/useReadyPageTransition')
     const { useSpringValue } = await loadSourceModule('../src/composables/useSpringValue.ts', {
@@ -864,32 +868,38 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
       '~/utils/spring': await import('../src/utils/spring'),
       './useReducedMotion': { useReducedMotion: () => Vue.ref(false) },
     })
-    assert.equal(priority.getMotionRemaining(), 0)
-    await priority.afterMotion()
-    const release = priority.holdMotion(60_000)
-    assert.ok(priority.getMotionRemaining() <= priority.MAX_MOTION_WAIT_MS, 'a hold can never block loading beyond the cap')
+    const tabs = priority.createMotionScope('tabs')
+    const other = priority.createMotionScope('other')
+    assert.equal(priority.MAX_MOTION_WAIT_MS, 300)
+    assert.equal(priority.getMotionRemaining(tabs), 0)
+    await priority.afterMotion(tabs)
+    const release = priority.holdMotion(60_000, tabs)
+    assert.ok(priority.getMotionRemaining(tabs) <= priority.MAX_MOTION_WAIT_MS, 'a hold can never block loading beyond the cap')
+    assert.equal(priority.getMotionRemaining(other), 0, 'unrelated motion never delays another swap')
     let waited = false
-    const wait = priority.afterMotion().then(() => waited = true)
+    const wait = priority.afterMotion(tabs).then(() => waited = true)
+    await priority.afterMotion(other)
     await flush()
     assert.equal(waited, false)
     release()
     release()
     await wait
-    assert.equal(priority.getMotionRemaining(), 0)
+    assert.equal(priority.getMotionRemaining(tabs), 0)
 
     const target = Vue.ref(0)
     const springScope = Vue.effectScope()
-    springScope.run(() => useSpringValue(() => target.value, () => 0.2))
+    springScope.run(() => useSpringValue(() => target.value, () => 0.2, tabs))
     target.value = 3
-    assert.ok(priority.getMotionRemaining() > 0, 'a moving wheel spring holds content swaps')
+    const remaining = priority.getMotionRemaining(tabs)
+    assert.ok(remaining > 0 && remaining <= 125, 'a wheel spring holds its scope only until it visibly lands')
     springScope.stop()
-    assert.equal(priority.getMotionRemaining(), 0, 'disposal releases the spring hold')
+    assert.equal(priority.getMotionRemaining(tabs), 0, 'disposal releases the spring hold')
 
     const previousMatchMedia = window.matchMedia
     window.matchMedia = () => ({ matches: false })
     const component = Vue.shallowRef({ id: 'a' })
     const scope = Vue.effectScope()
-    const hooks = scope.run(() => useReadyPageTransition(() => component.value, () => Promise.resolve()))
+    const hooks = scope.run(() => useReadyPageTransition(() => component.value, () => Promise.resolve(), { motion: tabs }))
     const root = document.body.appendChild(document.createElement('section'))
     const durations = []
     root.animate = (_frames, options) => {
@@ -898,7 +908,8 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     }
     try {
       await flush()
-      const slide = priority.holdMotion(300)
+      priority.holdMotion(300, other)
+      const slide = priority.holdMotion(300, tabs)
       let finished = 0
       component.value = { id: 'b' }
       hooks.onLeave(root, () => finished++)

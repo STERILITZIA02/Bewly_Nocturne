@@ -111,6 +111,7 @@ export function registerImageViewerChecks(check, { Vue, compileComponent, flush 
       '~/components/MomentCard/utils': { getMomentThumbnailUrl: source => source },
       '~/utils/imageViewer': await import('../src/utils/imageViewer'),
       '~/utils/reducedMotion': { prefersReducedMotion: () => true },
+      '~/utils/spring': await import('../src/utils/spring'),
     }, { globals: { Image: FakeImage, queueMicrotask } })
 
     const index = Vue.ref(0)

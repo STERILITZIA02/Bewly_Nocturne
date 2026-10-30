@@ -1,7 +1,6 @@
 import { nextTick } from 'vue'
 
 import { waitWithSignal, withRequestDeadline } from '~/utils/abort'
-import { afterMotion } from '~/utils/motionPriority'
 
 function nextFrame(signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
@@ -75,7 +74,7 @@ export async function navigateToSetting(options: {
         signal.throwIfAborted()
         expand(target, root)
         await nextTick()
-        await waitWithSignal(afterMotion(), signal)
+        // The expansion's own transitions are sampled below with the rest.
         await nextFrame(signal)
         // Vue starts CSS enter transitions on its second animation frame.
         // Sample active animations after that boundary, not after a guessed delay.

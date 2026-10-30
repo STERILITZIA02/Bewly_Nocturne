@@ -3,13 +3,13 @@ import { useI18n } from 'vue-i18n'
 
 import ALink from '~/components/ALink.vue'
 import Empty from '~/components/Empty.vue'
-import ProgressiveBlur from '~/components/ProgressiveBlur.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { useSidebarRail } from '~/composables/useSidebarHost'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { SIDEBAR_HEADING_MOTION } from '~/utils/motionPriority'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { MarkAllMessagesReadController } from '../composables/useMarkAllMessagesRead'
@@ -83,7 +83,8 @@ const searchQuery = viewState.ref('query', '')
 const searchMode = viewState.ref<'people' | 'messages'>('mode', 'people')
 const searchTypeFilter = viewState.ref<PrivateSessionTypeFilter>('type', 'all')
 const historyWasRunning = viewState.ref('historyWasRunning', false)
-const outletTransition = useReadyPageTransition(() => props.view, async () => {})
+// The view swap waits only for the sidebar heading's wheel.
+const outletTransition = useReadyPageTransition(() => props.view, async () => {}, { motion: SIDEBAR_HEADING_MOTION })
 const sessionActions = inject(privateSessionActionsKey, undefined)
 const menuOpen = ref(false)
 const menuTrigger = ref<HTMLElement | null>(null)
@@ -478,11 +479,6 @@ defineExpose({ refresh })
       tabindex="0"
       :aria-label="t(`notifications.sections.${view}.label`)"
     >
-      <!-- Feed scroll-edge gradient blur; geometry and layering unchanged. -->
-      <template v-if="view !== 'whisper'">
-        <ProgressiveBlur class="whisper-workspace__feed-edge whisper-workspace__feed-edge--top" edge="top" sample-within=".whisper-workspace__detail" />
-        <ProgressiveBlur class="whisper-workspace__feed-edge whisper-workspace__feed-edge--bottom" edge="bottom" sample-within=".whisper-workspace__detail" />
-      </template>
       <Transition mode="out-in" v-bind="outletTransition">
         <div :key="view" class="whisper-workspace__outlet-page">
           <slot v-if="view !== 'whisper'" />
@@ -637,22 +633,6 @@ defineExpose({ refresh })
 .whisper-workspace__detail--feed,
 .whisper-workspace__detail:has(> .conversation-insights) {
   padding: 0;
-}
-
-.whisper-workspace__feed-edge {
-  position: fixed;
-  right: 0;
-  left: var(--bew-messages-sidebar-width);
-  z-index: var(--bew-z-topbar);
-  height: var(--bew-space-12);
-}
-
-.whisper-workspace__feed-edge--top {
-  top: 0;
-}
-
-.whisper-workspace__feed-edge--bottom {
-  bottom: 0;
 }
 
 .whisper-workspace--solid .whisper-workspace__fallback {

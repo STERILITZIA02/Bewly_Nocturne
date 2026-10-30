@@ -632,6 +632,7 @@ onBeforeUnmount(() => {
 }
 
 .notifications-page--workspace.notifications-page--dock-bottom {
+  --notifications-composer-dock-shift: var(--bew-dock-bottom-shift, 0px);
   // Shell = item + two 4px rims; leave the same 8px above and below it.
   --notifications-detail-bottom-space: calc(
     var(--notifications-dock-item-height) + var(--bew-space-2) + var(--bew-space-2) * 2

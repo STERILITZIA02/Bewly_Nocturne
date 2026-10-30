@@ -16,6 +16,7 @@ import type { VideoCardFontSizeSetting } from '~/logic/storage'
 import type { AppearancePalette, AppearancePreferences, ColorScheme } from '~/utils/appearance'
 import { defaultAppearanceColors, getAppearanceStyle, INTERFACE_FONT_SIZE, normalizeAppearanceColors, resolveAppearanceAccent } from '~/utils/appearance'
 import { ACCENT_COLORS, APPEARANCE_PRESETS, appearancePresetPatch, matchingAppearancePreset, parseAppearance, serializeAppearance } from '~/utils/appearanceThemes'
+import { createMotionScope } from '~/utils/motionPriority'
 import { clampThemeColor, DEFAULT_THEME_COLOR, getThemeColorTokens, normalizeHexColor } from '~/utils/themeColor'
 
 import SettingsItem from '../components/SettingsItem.vue'
@@ -31,16 +32,20 @@ const { t } = useI18n()
 const toast = useToast()
 const { isDark, transitionAppearance } = useDark()
 const editingScheme = ref<ColorScheme>(isDark.value ? 'dark' : 'light')
+// Each choice commits after its own slider only.
+const schemeMotion = createMotionScope('appearance-scheme')
+const motionPreferenceMotion = createMotionScope('appearance-motion')
+const autospaceMotion = createMotionScope('appearance-autospace')
 const selectedScheme = useMotionValue(() => editingScheme.value, (value) => {
   editingScheme.value = value
-})
+}, schemeMotion)
 const paletteTransition = useReadyPageTransition(() => editingScheme.value, async () => {})
 const selectedMotion = useMotionValue(() => settings.value.motionPreference, (value) => {
   settings.value.motionPreference = value
-})
+}, motionPreferenceMotion)
 const selectedAutospace = useMotionValue(() => settings.value.textAutospaceMode, (value) => {
   settings.value.textAutospaceMode = value
-})
+}, autospaceMotion)
 const importFile = ref<HTMLInputElement>()
 const importing = ref(false)
 let importGeneration = 0
@@ -254,7 +259,7 @@ async function importTheme(event: Event) {
         </div>
       </SettingsItem>
       <SettingsItem setting-id="settings.visual_style.editing_mode" :title="$t('settings.visual_style.editing_mode')" :desc="$t('settings.visual_style.editing_mode_desc')" right-width="auto">
-        <SettingsSegmentedControl v-model="selectedScheme" :label="$t('settings.visual_style.editing_mode')" :options="[{ value: 'light', label: $t('settings.theme_opt.light') }, { value: 'dark', label: $t('settings.theme_opt.dark') }]" />
+        <SettingsSegmentedControl v-model="selectedScheme" :motion-scope="schemeMotion" :label="$t('settings.visual_style.editing_mode')" :options="[{ value: 'light', label: $t('settings.theme_opt.light') }, { value: 'dark', label: $t('settings.theme_opt.dark') }]" />
       </SettingsItem>
       <SettingsItem setting-id="settings.visual_style.separate_accent" :title="$t('settings.visual_style.separate_accent')" right-width="auto">
         <Radio v-model="separateModes" commit-after-motion />
@@ -335,7 +340,7 @@ async function importTheme(event: Event) {
           <Radio v-model="settings.overrideDanmakuFont" commit-after-motion />
         </SettingsItem>
         <SettingsItem setting-id="settings.enable_text_autospace" :title="$t('settings.enable_text_autospace')" :desc="$t('settings.enable_text_autospace_desc')" right-width="auto">
-          <SettingsSegmentedControl v-model="selectedAutospace" :label="$t('settings.enable_text_autospace')" :options="[{ value: 'default', label: $t('settings.text_autospace_default') }, { value: 'on', label: $t('settings.text_autospace_on') }, { value: 'off', label: $t('settings.text_autospace_off') }]" />
+          <SettingsSegmentedControl v-model="selectedAutospace" :motion-scope="autospaceMotion" :label="$t('settings.enable_text_autospace')" :options="[{ value: 'default', label: $t('settings.text_autospace_default') }, { value: 'on', label: $t('settings.text_autospace_on') }, { value: 'off', label: $t('settings.text_autospace_off') }]" />
         </SettingsItem>
         <SettingsItem setting-id="settings.remove_the_indent_from_chinese_punctuation" :title="$t('settings.remove_the_indent_from_chinese_punctuation')" :desc="$t('settings.remove_the_indent_from_chinese_punctuation_desc')" right-width="auto">
           <Radio v-model="settings.removeTheIndentFromChinesePunctuation" commit-after-motion />
@@ -359,7 +364,7 @@ async function importTheme(event: Event) {
           <Radio v-model="settings.useLinearGradientThemeColorBackground" commit-after-motion />
         </SettingsItem>
         <SettingsItem setting-id="settings.visual_style.motion" :title="$t('settings.visual_style.motion')" right-width="auto">
-          <SettingsSegmentedControl v-model="selectedMotion" :label="$t('settings.visual_style.motion')" :options="[{ value: 'system', label: $t('settings.visual_style.motion_system') }, { value: 'reduce', label: $t('settings.visual_style.motion_on') }, { value: 'full', label: $t('settings.visual_style.motion_off') }]" />
+          <SettingsSegmentedControl v-model="selectedMotion" :motion-scope="motionPreferenceMotion" :label="$t('settings.visual_style.motion')" :options="[{ value: 'system', label: $t('settings.visual_style.motion_system') }, { value: 'reduce', label: $t('settings.visual_style.motion_on') }, { value: 'full', label: $t('settings.visual_style.motion_off') }]" />
         </SettingsItem>
       </SettingsItemSubgroup>
       <SettingsItemSubgroup :title="$t('settings.group_page_style')">

@@ -121,8 +121,9 @@
   // buttons fade in. A swap therefore never grows and shrinks at once. Only
   // these small items lay out during the change.
   .top-bar-tools {
-    --top-bar-item-fade: var(--bew-duration-fast);
-    --top-bar-item-resize: var(--bew-duration-moderate);
+    // Fade out, resize, fade in: the three phases fit the 300ms motion ceiling.
+    --top-bar-item-fade: 75ms;
+    --top-bar-item-resize: 150ms;
   }
 
   .top-bar-item-enter-active,

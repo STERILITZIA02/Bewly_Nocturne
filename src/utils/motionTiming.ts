@@ -10,11 +10,14 @@ export function getMotionDuration(style: CSSStyleDeclaration, property: string, 
   return Number.isFinite(duration) ? duration : fallback
 }
 
+/** No one-shot animation runs longer than this (user-specified); loops are exempt. */
+export const MAX_MOTION_MS = 300
+
 /**
  * Duration for a move across `steps` discrete positions. One step keeps the
- * base duration; longer travel always takes longer, growing sublinearly so a
- * distant jump stays responsive instead of crawling.
+ * base duration; longer travel takes longer, growing sublinearly, up to
+ * `MAX_MOTION_MS`.
  */
 export function getTravelDuration(base: number, steps: number): number {
-  return base * Math.max(1, steps) ** 0.4
+  return Math.min(MAX_MOTION_MS, base * Math.max(1, steps) ** 0.4)
 }

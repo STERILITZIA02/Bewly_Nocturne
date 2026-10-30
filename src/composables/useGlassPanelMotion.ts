@@ -3,7 +3,6 @@ import { onScopeDispose } from 'vue'
 
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 
-import { holdAnimation } from '../utils/motionPriority'
 import { getMotionDuration } from '../utils/motionTiming'
 
 /** Keep glass and its ancestors opaque: opacity changes the backdrop sampling root. */
@@ -62,8 +61,6 @@ export function useGlassPanelMotion(selector: string, collapsedTransform?: (pane
       ], { duration, easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out', fill: 'both' })
       // Register immediately: a later paint layer can fail independently.
       running.set(element, animation)
-      // Content swaps behind or inside the panel wait for its scale.
-      holdAnimation(animation)
       fades.set(element, paintAnimations)
       // Fade actual paint layers, never a glass ancestor: the backdrop stays sampled
       // from the same root from first frame to last. Exit is invisible before arrival.

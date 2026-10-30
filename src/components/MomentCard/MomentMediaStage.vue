@@ -9,7 +9,6 @@ import { useImageViewer } from '~/composables/useImageViewer'
 import { usePictureReveal } from '~/composables/usePictureReveal'
 import { getCrossfadeDuration, showCrossfadeLayer } from '~/utils/crossfadeLayers'
 import { createElasticWheelScroll } from '~/utils/elasticScroll'
-import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { hasLoadedPicture, rememberLoadedPicture } from '~/utils/pictureRevealMemory'
 import { isPortraitRatio, PORTRAIT_MAX_CLEAR_HEIGHT } from '~/utils/portraitMedia'
@@ -143,7 +142,6 @@ function fadeImageLayer(index: number, to: 0 | 1) {
     fill: 'forwards',
   })
   imageFades.set(index, animation)
-  holdAnimation(animation)
   animation.finished.then(settleImageLayers, () => {})
 }
 

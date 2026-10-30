@@ -2,11 +2,14 @@ import type { TransitionProps } from 'vue'
 import { nextTick, onScopeDispose, watch } from 'vue'
 
 import { restoreRetiringElement, retiringTransition } from '~/utils/motionPresence'
+import type { MotionScope } from '~/utils/motionPriority'
 import { afterMotion, getMotionRemaining } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 
 interface ReadyPageTransitionOptions {
+  /** The interaction motion this swap waits for (its tab slider, the Dock); none swaps at once. */
+  motion?: MotionScope
   onStart?: () => void
   onSwap?: () => void
   onEnter?: (element: Element) => void
@@ -16,9 +19,9 @@ interface ReadyPageTransitionOptions {
 
 /**
  * Code readiness gates the 60ms exit; only the incoming content enters for 150ms.
- * Interaction motion goes first: while a slide, wheel or panel scale is still
- * running (utils/motionPriority), the old view fades out over that time and the
- * new view mounts only after it settles, so mounting never drops its frames.
+ * Interaction motion of `options.motion` goes first: while that slide, wheel or
+ * sidebar is still running (utils/motionPriority), the old view fades out over
+ * that time and the new view mounts only after it settles (at most 300ms).
  */
 export function useReadyPageTransition<T>(source: () => T, prepare: (component: T) => Promise<unknown>, options: ReadyPageTransitionOptions = {}): TransitionProps {
   let generation = 0
@@ -66,14 +69,15 @@ export function useReadyPageTransition<T>(source: () => T, prepare: (component: 
     const from = opacity(element)
     leaveAnimation?.cancel()
     // Stretch the exit across the triggering slide instead of idling blank.
-    const animation = animate(element, [{ opacity: from }, { opacity: 0 }], false, getMotionRemaining())
+    const animation = animate(element, [{ opacity: from }, { opacity: 0 }], false, options.motion ? getMotionRemaining(options.motion) : 0)
     leaveAnimation = animation
     if (animation) {
       await animation.finished.catch(() => undefined)
       if (version !== generation || finishLeave !== done)
         return
     }
-    await afterMotion()
+    if (options.motion)
+      await afterMotion(options.motion)
     if (version !== generation || finishLeave !== done)
       return
     finishLeave = undefined

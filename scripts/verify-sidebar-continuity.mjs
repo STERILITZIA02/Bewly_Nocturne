@@ -177,7 +177,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
   })
   check('sidebar: the closed rail folds into the home logo circle and grows back out of it', async () => {
     const sidebar = await import('../src/composables/useSidebarHost')
-    const { getMotionRemaining } = await import('../src/utils/motionPriority')
+    const { getMotionRemaining, PAGE_MOTION } = await import('../src/utils/motionPriority')
     const common = {
       '~/composables/useSidebarHost': sidebar,
       '~/logic': { settings: Vue.ref({ disableFrostedGlass: false, dockPosition: 'bottom' }) },
@@ -237,7 +237,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
       assert.equal(shape(fold.keyframes.at(0)), '-1px -1px 281px 902px 0px', 'starts as the rail')
       assert.equal(shape(fold.keyframes.at(-1)), '48px 9px 46px 46px 23px', 'ends exactly on the logo circle')
       assert.ok(fold.keyframes.length > 3, 'the fold passes through liquid column and drop shapes')
-      assert.ok(getMotionRemaining() > 0, 'page content waits for the fold')
+      assert.ok(getMotionRemaining(PAGE_MOTION) > 0, 'page content waits for the fold')
       fold.finish()
       await flush()
       assert.equal(host.morphing.value, false)
@@ -445,12 +445,14 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
       read('components/PersistentSidebar.vue'),
       read('components/TopBar/components/TopBarRight.vue'),
     ])
-    assert.match(app, /<PersistentSidebar :active="showBewlyPage && RAIL_PAGES\.includes\(activatedPage\)" \/>/, 'the destination page drives the rail, not the page still displayed')
+    assert.match(app, /<PersistentSidebar :active="showBewlyPage && RAIL_PAGES\.includes\(activatedPage\)" :wide="displayedPage === AppPage\.Notifications" \/>/, 'the destination page drives the rail, not the page still displayed')
+    assert.doesNotMatch(app, /transition:[^;]*--bew-(?:active|messages)-sidebar-width/, 'the rail width steps at the swap instead of restyling the app every frame')
+    assert.match(rail, /target\.animate\(\[\{ transform: `scaleX\(\$\{before \/ after\}\)` \}, \{ transform: 'none' \}\]/, 'only the rail glass glides to the new width, on the compositor')
     assert.match(rail, /watch\(\(\) => props\.active, open => void morph\(open\), \{ flush: 'sync' \}\)/)
     const morph = rail.slice(rail.indexOf('async function morph'), rail.indexOf('host.railOpen.value = props.active'))
-    assert.ok(morph.indexOf('holdMotion(duration)') > 0 && morph.indexOf('holdMotion(duration)') < morph.indexOf('await nextTick()'), 'the hold exists before the first await')
+    assert.ok(morph.indexOf('holdMotion(duration, PAGE_MOTION)') > 0 && morph.indexOf('holdMotion(duration, PAGE_MOTION)') < morph.indexOf('await nextTick()'), 'the hold exists before the first await')
     assert.equal((right.match(/<Transition name="top-bar-item" @before-enter="holdItemMotion\(\$event, true\)" @before-leave="holdItemMotion\(\$event, false\)">/g) || []).length, 7)
-    assert.match(right, /holdMotion\(entering \? fade \* 2 \+ resize : fade \+ resize\)/)
+    assert.match(right, /holdMotion\(entering \? fade \* 2 \+ resize : fade \+ resize, PAGE_MOTION\)/)
   })
   check('top bar: the avatar circle nudges on hover, opens its panel on click and travels into the panel', async () => {
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
@@ -751,8 +753,9 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     const tone = await read('utils/imageTone.ts')
     assert.match(tone, /image\.crossOrigin = 'anonymous'/)
     assert.match(tone, /foreground: getContrastingForeground\(color\)/)
-    // Long text opens and closes with a height animation the masonry waits for.
-    assert.match(card, /async function toggleDescription\(\)[\s\S]*?element\.animate\([\s\S]*?holdAnimation\(animation\)/)
+    // Long text opens and closes with a height animation; the masonry pauses through `disclosureMotion`.
+    assert.match(card, /async function toggleDescription\(\)[\s\S]*?element\.animate\(/)
+    assert.doesNotMatch(card, /holdAnimation/, 'nothing else waits on the card')
     assert.match(card, /watch\(\(\) => disclosureMoving\.value \|\| descriptionMoving\.value, moving => emit\('disclosureMotion', moving\)/)
     // Portrait (≥ 1:1) media carry one marker, reserved for an upcoming design.
     assert.match(portrait, /ratio > 0 && ratio <= 1/)
@@ -1066,9 +1069,9 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(page, /:jump="showJumpToLastSeen"/, 'the template reads a boolean, so scrolling past cards does not re-render the page')
     assert.doesNotMatch(page.slice(page.indexOf('<template>')), /interactionTarget|lastInteraction|interactionInView|readingAnchorId|readingBookmark/, 'no per-card reading state in the template')
     assert.doesNotMatch(buttons, /TransitionGroup|-move \{|transition:[^;]*grid-template-columns/, 'no FLIP or column transition: both lay out while the feed scrolls')
-    assert.match(buttons, /await play\(keys, \[SHOWN, HIDDEN\][\s\S]*shownJump\.value = jump\n {4}shownLatest\.value = latest\n {4}await nextTick\(\)\n {4}if \(animate\)\n {6}await play\(keys, \[HIDDEN, SHOWN\]/, 'changed buttons shrink away first, then the new layout floats in')
+    assert.match(buttons, /await play\(keys, \[SHOWN, HIDDEN\][\s\S]*shownJump\.value = jump\n {4}shownLatest\.value = latest\n {4}await nextTick\(\)\n {4}\/\/ [^\n]*\n {4}if \(animate\)\n {6}await play\(keys, \[HIDDEN, SHOWN\]/, 'changed buttons shrink away first, then the new layout floats in')
     assert.match(buttons, /const SHOWN = \{ opacity: 1, transform: 'none' \}\nconst HIDDEN = \{ opacity: 0, transform: 'scale\(0\.92\)' \}/, 'compositor-only keyframes')
-    assert.match(buttons, /holdAnimation\(animation\)/, 'registered with motion priority')
+    assert.doesNotMatch(buttons, /holdAnimation/, 'nothing waits on the buttons')
     assert.match(buttons, /\.moments-reading__buttons \{\n {2}contain: layout size style;\n {2}height: calc\(2 \* var\(--bew-control-height\) \+ var\(--bew-space-2\)\);/, 'a fixed-size layout boundary')
     assert.match(buttons, /class="moments-reading__row"[\s\S]*data-reading-key="latest"[\s\S]*data-reading-key="refresh"/, 'latest and refresh share the second row; refresh always shows')
     assert.match(buttons, /\.moments-reading__row--single \.moments-reading__refresh \{\n {2}grid-column: 1 \/ -1;/, 'refresh fills the row without latest')
@@ -1266,8 +1269,8 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(history, /keys: computed\(\(\) => shownGroups\.value\.map\(group => `group:\$\{group\.key\}`\)\)/)
     assert.match(history, /<div :key="`\$\{interval\}:\$\{startGroupKey \?\? ''\}`" ref="historyContainer" class="history-groups">/)
     assert.doesNotMatch(history, /new IntersectionObserver|jumpToGroup/)
-    // Motion first, then content: the row slides (registered), then selects.
-    assert.match(carousel, /holdAnimation\(animation\)\s*void animation\.finished\.then\(async \(\) => \{\s*finish\(\)/)
+    // Motion first, then content: the row slides, then selects.
+    assert.match(carousel, /await animation\.finished\s*finish\(\)/)
     // Stepless: the row follows the gesture (written once a frame, directly on
     // the track, no inherited variable), then settles on the neighbour only
     // past halfway, else back.

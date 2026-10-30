@@ -7,7 +7,7 @@ import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState, WidescreenZoom } from '~/utils/bewlyWidescreen/types'
 import type { WidescreenDisplayMode, WidescreenRect, WidescreenZoomFrame, WidescreenZoomVisual } from '~/utils/bewlyWidescreenPolicy'
 import { interpolateWidescreenZoomFrame, resolveWidescreenContentWidth, resolveWidescreenZoomFrame, resolveWidescreenZoomVisual, WIDESCREEN_IDENTITY_ZOOM_FRAME } from '~/utils/bewlyWidescreenPolicy'
-import { holdAnimation } from '~/utils/motionPriority'
+import { holdAnimation, PLAYER_DISPLAY_MOTION } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 
@@ -209,7 +209,7 @@ export function setWidescreenDisplayMode(
     const shape = playerEl.animate([{ clipPath: frameClip(from) }, { clipPath: frameClip(to) }], timing)
     const zoom: WidescreenZoom = { mode, layout, layoutContentWidth, from, to, motion, shape }
     currentState.zoom = zoom
-    holdAnimation(motion)
+    holdAnimation(motion, PLAYER_DISPLAY_MOTION)
     const settle = () => {
       if (currentState.zoom !== zoom)
         return

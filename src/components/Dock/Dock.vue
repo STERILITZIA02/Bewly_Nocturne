@@ -33,6 +33,7 @@ import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveActiveDockItemPage } from '~/utils/dockActiveItem'
 import { isHomePage, openLinkToNewTab } from '~/utils/main'
+import { PAGE_MOTION } from '~/utils/motionPriority'
 import { createWheelStepper } from '~/utils/wheelStep'
 
 import CountBadge from '../CountBadge.vue'
@@ -819,7 +820,7 @@ onUnmounted(() => {
           @wheel="handleDockWheel"
         >
           <div v-layout-editable="'dock-items'" class="dock-page-navigation bew-segment-control">
-            <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator" :active-key="activeDockItemPage" />
+            <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator" :active-key="activeDockItemPage" :motion-scope="PAGE_MOTION" />
 
             <button
               v-for="dockItem in currentDockItems"
@@ -1339,7 +1340,7 @@ onUnmounted(() => {
   }
 
   .dock-tab--settings .dock-tab__icon {
-    transition: transform 400ms var(--bew-ease-out);
+    transition: transform var(--bew-duration-moderate) var(--bew-ease-out);
   }
 
   .dock-tab__label {

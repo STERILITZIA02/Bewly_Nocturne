@@ -1,4 +1,3 @@
-import { holdMotion } from './motionPriority'
 import { getMotionDuration } from './motionTiming'
 import { prefersReducedMotion } from './reducedMotion'
 
@@ -12,15 +11,21 @@ import { prefersReducedMotion } from './reducedMotion'
  */
 
 /** Particles across every running dissolve; each call gets a share. */
-const PARTICLE_BUDGET = 2400
-const CALL_PARTICLES = 1600
-const MIN_CELL = 3
+const PARTICLE_BUDGET = 3600
+const CALL_PARTICLES = 2400
+const MIN_CELL = 2
 const NODE_BUDGET = 400
 /** Furthest a particle travels, in CSS px. */
-const DRIFT = 96
-/** Fractions of the duration: the element fades out, then its data may go. */
-const ELEMENT_FADE = 0.24
-const RELEASE = 0.4
+const DRIFT = 112
+/** The particle layer blurs toward this as the dust thins into mist. */
+const MIST_BLUR = 3
+/**
+ * Fractions of the duration: the element fades out, then its data may go and
+ * the rest close the gap. Nothing waits on the particles: they play on their
+ * own layer and never delay a page or tab change.
+ */
+const ELEMENT_FADE = 0.2
+const RELEASE = 0.3
 
 interface Box { x: number, y: number, w: number, h: number }
 interface Clip extends Box { r: number }
@@ -209,13 +214,12 @@ function run(elements: HTMLElement[]): ParticleDissolve {
   const availableParticles = Math.max(0, PARTICLE_BUDGET - activeParticles)
   if (prefersReducedMotion() || typeof OffscreenCanvas === 'undefined' || availableParticles === 0 || document.hidden) {
     const duration = getMotionDuration(getComputedStyle(elements[0]), '--bew-duration-fast', 150)
-    holdMotion(duration)
     return { released: new Promise(resolve => setTimeout(resolve, duration)), restore: fadeElements(elements, duration) }
   }
   const viewport = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight }
   // Reads first: every rect and style before any canvas or animation exists.
   const rootStyle = getComputedStyle(elements[0])
-  const duration = getMotionDuration(rootStyle, '--bew-dissolve-duration', 760)
+  const duration = getMotionDuration(rootStyle, '--bew-dissolve-duration', 300)
   const zIndex = rootStyle.getPropertyValue('--bew-z-dissolve').trim()
   const visible = elements.flatMap((element) => {
     const box = intersect(toBox(element.getBoundingClientRect()), viewport)
@@ -266,8 +270,8 @@ function run(elements: HTMLElement[]): ParticleDissolve {
           piece.box.y - frame.y + row * piece.cell,
           delay,
           life,
-          DRIFT * (0.35 + Math.random() * 0.65),
-          -DRIFT * (0.2 + Math.random() * 0.7),
+          DRIFT * (0.3 + Math.random() * 0.7),
+          -DRIFT * (0.15 + Math.random() * 0.75),
           Math.random() * Math.PI * 2,
           piece.cell,
         )
@@ -295,7 +299,8 @@ function run(elements: HTMLElement[]): ParticleDissolve {
   ;(host instanceof ShadowRoot ? host : document.body).append(canvas)
   const context = canvas.getContext('2d')!
   context.setTransform(ratio, 0, 0, ratio, 0, 0)
-  const releaseHold = holdMotion(duration)
+  // Mist: the whole layer softens as the cells crumble (a composited filter).
+  const mist = canvas.animate([{ filter: 'blur(0px)' }, { filter: `blur(${MIST_BLUR}px)` }], { duration, easing: 'ease-in', fill: 'forwards' })
   const start = performance.now()
   const resting = new Float32Array(sources.length)
   let frameId = 0
@@ -309,10 +314,10 @@ function run(elements: HTMLElement[]): ParticleDissolve {
     activeRuns--
     activeParticles -= count
     cancelAnimationFrame(frameId)
+    mist.cancel()
     activeFinishes.delete(finish)
     if (!activeFinishes.size)
       document.removeEventListener('visibilitychange', stopHiddenParticles)
-    releaseHold()
     canvas.remove()
     canvas.width = 0
     for (const { picture } of sources)
@@ -342,10 +347,12 @@ function run(elements: HTMLElement[]): ParticleDissolve {
       let size = cell
       if (p > 0) {
         const eased = p * p * (3 - 2 * p)
-        size = cell * (1 - 0.6 * p)
-        x += particles[offset + 7] * eased + Math.sin(particles[offset + 9] + p * 6) * 6 * p + (cell - size) / 2
-        y += particles[offset + 8] * eased + (cell - size) / 2
-        context.globalAlpha = (1 - p) ** 1.4
+        // A cell crumbles into a finer grain at once, then thins out as it drifts.
+        size = cell * (1 - 0.45 * Math.min(1, p * 4) - 0.35 * p)
+        const sway = Math.sin(particles[offset + 9] + p * 7) * 10 * p
+        x += particles[offset + 7] * eased + sway + (cell - size) / 2
+        y += particles[offset + 8] * eased + Math.cos(particles[offset + 9] + p * 5) * 4 * p + (cell - size) / 2
+        context.globalAlpha = 0.9 * (1 - p) ** 1.6
       }
       else {
         context.globalAlpha = resting[particles[offset]]

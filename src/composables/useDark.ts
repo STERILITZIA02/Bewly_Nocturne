@@ -8,7 +8,6 @@ import { applyAppearanceStyle, getAppearanceStyle, resolveAppearanceAccent } fro
 import { createIframeDocumentClient } from '~/utils/iframeDocument'
 import { getParentMessageData } from '~/utils/iframeMessage'
 import { isVideoPlaybackPage, setCookie } from '~/utils/main'
-import { holdAnimation } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { applyMotionPreference, prefersReducedMotion } from '~/utils/reducedMotion'
 
@@ -348,7 +347,6 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
           fill: 'forwards',
           pseudoElement: !event || isDarkNow ? '::view-transition-new(root)' : '::view-transition-old(root)',
         })
-        holdAnimation(animation)
         return animation.finished
       }).catch(() => {
         if (active)

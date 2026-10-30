@@ -2,9 +2,12 @@
 import { onMounted, ref } from 'vue'
 
 import { useLiquidSegmentIndicator } from '~/composables/useLiquidSegmentIndicator'
+import type { MotionScope } from '~/utils/motionPriority'
 
 const props = defineProps<{
   activeKey: unknown
+  /** The content swap that waits for this slide (a page or tab transition). */
+  motionScope?: MotionScope
 }>()
 
 const indicatorRef = ref<HTMLElement | null>(null)
@@ -19,21 +22,16 @@ onMounted(() => {
 const {
   indicatorStyle,
   isMoving,
-  scrubbing,
   updateIndicator,
-  setPreview,
-  clearPreview,
-  moveDurationMs,
 } = useLiquidSegmentIndicator({
   containerRef,
+  indicatorRef,
   activeKey: () => props.activeKey,
+  motionScope: props.motionScope,
 })
 
 defineExpose({
   updateIndicator,
-  setPreview,
-  clearPreview,
-  moveDurationMs,
 })
 </script>
 
@@ -41,10 +39,7 @@ defineExpose({
   <div
     ref="indicatorRef"
     class="bew-liquid-indicator"
-    :class="{
-      'is-moving': isMoving,
-      'is-scrubbing': scrubbing,
-    }"
+    :class="{ 'is-moving': isMoving }"
     :style="indicatorStyle"
     aria-hidden="true"
   />

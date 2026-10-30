@@ -3,7 +3,7 @@ import { defineComponent, h, nextTick, onScopeDispose, shallowRef, Teleport, wat
 
 import { useSidebarHost } from '~/composables/useSidebarHost'
 import { settings } from '~/logic'
-import { holdMotion } from '~/utils/motionPriority'
+import { holdMotion, PAGE_MOTION } from '~/utils/motionPriority'
 import { getMotionDuration } from '~/utils/motionTiming'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 
@@ -61,13 +61,14 @@ function column(circle: Frame, rail: Frame, widthScale: number): Frame {
 }
 
 export default defineComponent({
-  props: { active: { type: Boolean, default: true } },
+  props: { active: { type: Boolean, default: true }, wide: { type: Boolean, default: false } },
   setup(props) {
     const host = useSidebarHost()!
     const surface = shallowRef<HTMLElement | null>(null)
     // Closed into the logo circle; without a logo the rail slides off-screen instead.
     const docked = shallowRef(false)
     let running: Animation[] = []
+    let resizing: Animation | undefined
     let generation = 0
     let releaseMotion = () => {}
 
@@ -87,6 +88,7 @@ export default defineComponent({
       const from = running.length && target ? readFrame(target) : null
       const fromOpacity = running.length && content ? Number(getComputedStyle(content).opacity) : null
       stop()
+      resizing?.cancel()
       host.railOpen.value = open
       const logo = host.logo.value
       if (!logo || !target?.animate || !content || prefersReducedMotion()) {
@@ -98,8 +100,8 @@ export default defineComponent({
       host.morphing.value = true
       // Claim motion priority now, in the same flush as the navigation, so the
       // incoming page mounts (and starts loading) only after the morph.
-      const duration = getMotionDuration(getComputedStyle(target), '--bew-sidebar-morph-duration', 540)
-      releaseMotion = holdMotion(duration)
+      const duration = getMotionDuration(getComputedStyle(target), '--bew-sidebar-morph-duration', 300)
+      releaseMotion = holdMotion(duration, PAGE_MOTION)
       await nextTick()
       if (run !== generation)
         return
@@ -131,9 +133,45 @@ export default defineComponent({
     host.railOpen.value = props.active
     // Synchronous: the motion hold must exist before the page transition checks for it.
     watch(() => props.active, open => void morph(open), { flush: 'sync' })
+
+    // The rail width steps between page kinds while the page content is swapped
+    // out, so nothing re-lays out frame by frame; only the glass, still on screen,
+    // glides from its last laid-out width, scaled on the compositor.
+    let laidOutWidth = 0
+    const widthObserver = typeof ResizeObserver === 'undefined'
+      ? undefined
+      : new ResizeObserver(([entry]) => {
+          laidOutWidth = entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width
+        })
+    watch(surface, (element, previous) => {
+      if (previous)
+        widthObserver?.unobserve(previous)
+      if (element)
+        widthObserver?.observe(element)
+    })
+    watch(() => props.wide, async () => {
+      resizing?.cancel()
+      resizing = undefined
+      const before = laidOutWidth
+      await nextTick()
+      const target = surface.value
+      if (!target?.animate || !before || !props.active || docked.value || host.morphing.value || prefersReducedMotion())
+        return
+      const after = target.offsetWidth
+      if (!after || Math.abs(after - before) < 1)
+        return
+      const style = getComputedStyle(target)
+      resizing = target.animate([{ transform: `scaleX(${before / after})` }, { transform: 'none' }], {
+        duration: getMotionDuration(style, '--bew-duration-normal'),
+        easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out',
+      })
+    })
+
     onScopeDispose(() => {
       generation++
       stop()
+      resizing?.cancel()
+      widthObserver?.disconnect()
       host.morphing.value = false
     })
 
@@ -224,6 +262,8 @@ export default defineComponent({
   box-sizing: border-box;
   // The same glass edge as every frosted surface (user-specified).
   border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
+  // A width change between page kinds scales the glass from the screen edge.
+  transform-origin: left center;
   pointer-events: none;
 
   &::after {

@@ -1,7 +1,7 @@
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 
-import { holdAnimation } from './motionPriority'
 import { getMotionDuration } from './motionTiming'
+import { springTiming } from './spring'
 import { normalizeWheelDelta } from './wheelStep'
 
 /** The furthest (px) content can be pulled past an edge. */
@@ -44,12 +44,9 @@ export function createElasticWheelScroll(scroller: HTMLElement, content: HTMLEle
     render()
     if (typeof content.animate !== 'function' || prefersReducedMotion())
       return
-    const style = getComputedStyle(content)
-    settle = content.animate([{ translate: `${from}px 0` }, { translate: '0 0' }], {
-      duration: getMotionDuration(style, '--bew-duration-moderate', 300),
-      easing: style.getPropertyValue('--bew-ease-out').trim() || 'ease-out',
-    })
-    holdAnimation(settle)
+    // Input has paused, so the band springs back from rest.
+    const response = getMotionDuration(getComputedStyle(content), '--bew-duration-moderate', 300) / 1000
+    settle = content.animate([{ translate: `${from}px 0` }, { translate: '0 0' }], springTiming(response, -from))
   }
 
   /** Picks up a spring-back in flight from where it is drawn. */
