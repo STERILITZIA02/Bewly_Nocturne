@@ -50,35 +50,6 @@ export function canCommitWidescreenLayout({
   return pageReady && playerReady && contentReady === true
 }
 
-export interface WidescreenControlSurfaceStateInput {
-  bottomControlsFocused: boolean
-  textEditingActive: boolean
-  bottomControlsHovered: boolean
-  danmakuControlsReady: boolean
-  nativeControlsHidden: boolean
-  nativeControlsReady: boolean
-  pointerInsidePlayer: boolean
-}
-
-export function resolveWidescreenControlSurfaceState({
-  bottomControlsFocused,
-  textEditingActive,
-  bottomControlsHovered,
-  danmakuControlsReady,
-  nativeControlsHidden,
-  nativeControlsReady,
-  pointerInsidePlayer,
-}: WidescreenControlSurfaceStateInput) {
-  const ready = danmakuControlsReady && nativeControlsReady
-  return {
-    // 页面任意文字编辑或底部控件持有焦点时，暂停原生闲置隐藏。
-    // 失焦后重新采用原生空闲/指针状态，不冻结上一帧结果。
-    hidden: !ready
-      || (!textEditingActive && !bottomControlsFocused && !bottomControlsHovered && (pointerInsidePlayer ? nativeControlsHidden : true)),
-    ready,
-  }
-}
-
 /**
  * hydrating: the loading state shows. pending: the budget is spent but the
  * native comment request is still in flight, so loading still shows.
@@ -113,67 +84,8 @@ export function resolveWidescreenSidebarHydrationPhase({
   return elapsed < WIDESCREEN_SIDEBAR_HYDRATION_RECOVERY_LIMIT ? 'recovering' : 'stopped'
 }
 
-export const WIDESCREEN_PLAYER_CONTROL_HOVER_GUARD_HEIGHT = 96
-export const WIDESCREEN_BOTTOM_CONTROL_HOVER_ENTRY_TOLERANCE = 4
-export const WIDESCREEN_BOTTOM_CONTROL_HOVER_EXIT_TOLERANCE = 16
-export const WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY = 240
 /** Narrowest comment / danmaku / recommendation column beside the video card. */
 export const WIDESCREEN_SIDEBAR_MIN_WIDTH = 360
-
-export interface WidescreenPlayerControlHoverInput {
-  playerBottom: number
-  playerTop: number
-  pointerY: number
-}
-
-export function isWidescreenPlayerControlHoverRegion({
-  playerBottom,
-  playerTop,
-  pointerY,
-}: WidescreenPlayerControlHoverInput): boolean {
-  if (![playerBottom, playerTop, pointerY].every(Number.isFinite))
-    return false
-
-  const top = Math.min(playerTop, playerBottom)
-  const bottom = Math.max(playerTop, playerBottom)
-  const guardHeight = Math.min(WIDESCREEN_PLAYER_CONTROL_HOVER_GUARD_HEIGHT, bottom - top)
-  return pointerY >= bottom - guardHeight && pointerY <= bottom
-}
-
-export interface WidescreenBottomControlHoverInput {
-  currentlyHovered: boolean
-  pointerX: number
-  pointerY: number
-  surfaceHeight: number
-  viewportBottom: number
-  viewportLeft: number
-  viewportRight: number
-}
-
-export function isWidescreenBottomControlHoverRegion({
-  currentlyHovered,
-  pointerX,
-  pointerY,
-  surfaceHeight,
-  viewportBottom,
-  viewportLeft,
-  viewportRight,
-}: WidescreenBottomControlHoverInput): boolean {
-  if (![pointerX, pointerY, surfaceHeight, viewportBottom, viewportLeft, viewportRight].every(Number.isFinite))
-    return false
-
-  const left = Math.min(viewportLeft, viewportRight)
-  const right = Math.max(viewportLeft, viewportRight)
-  if (pointerX < left || pointerX > right)
-    return false
-
-  const tolerance = currentlyHovered
-    ? WIDESCREEN_BOTTOM_CONTROL_HOVER_EXIT_TOLERANCE
-    : WIDESCREEN_BOTTOM_CONTROL_HOVER_ENTRY_TOLERANCE
-  const bottom = viewportBottom + tolerance
-  const top = viewportBottom - Math.max(0, surfaceHeight) - tolerance
-  return pointerY >= top && pointerY <= bottom
-}
 
 export type WidescreenDisplayMode = 'card' | 'fill'
 

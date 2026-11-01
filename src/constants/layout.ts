@@ -1,3 +1,9 @@
+/**
+ * Lengths here are the 14-inch design's px. Anything measured against the
+ * scaled CSS tokens converts them with `uiPx` (composables/useUiScale.ts).
+ * Breakpoints are viewport widths and stay fixed.
+ */
+
 /** Keep these values aligned one-to-one with src/styles/_breakpoints.scss. */
 export const GRID_BREAKPOINTS = {
   sm: 640,
@@ -30,20 +36,22 @@ const HOME_SEARCH_STAGE_TAIL_HEIGHT = 64
 export const TOP_BAR_PRIMARY_CONTROL_HEIGHT = 46
 /** Keep aligned with --bew-top-bar-height. */
 export const TOP_BAR_HEIGHT = 64
-export function resolveHomeSearchStage(shortViewport: boolean) {
-  const lead = shortViewport ? 96 : HOME_SEARCH_STAGE_LEAD_HEIGHT
-  const tail = shortViewport ? 32 : HOME_SEARCH_STAGE_TAIL_HEIGHT
+/** `px` converts design lengths for this display (`uiPx`), matching the scaled tokens. */
+export function resolveHomeSearchStage(shortViewport: boolean, px: (length: number) => number) {
+  const lead = px(shortViewport ? 96 : HOME_SEARCH_STAGE_LEAD_HEIGHT)
+  const tail = px(shortViewport ? 32 : HOME_SEARCH_STAGE_TAIL_HEIGHT)
+  const control = px(TOP_BAR_PRIMARY_CONTROL_HEIGHT)
   return {
     lead,
     tail,
-    height: lead + TOP_BAR_PRIMARY_CONTROL_HEIGHT + tail,
-    stickyScrollTop: Math.max(0, lead - (TOP_BAR_HEIGHT - TOP_BAR_PRIMARY_CONTROL_HEIGHT) / 2),
+    height: lead + control + tail,
+    stickyScrollTop: Math.max(0, lead - (px(TOP_BAR_HEIGHT) - control) / 2),
   }
 }
 
-/** Keep aligned with --bew-dock-item-height, --bew-dock-item-height-icon-only and the shell's 4px rim on each side. */
+/** Keep aligned with the two Dock item heights and the shell's 4px rim on each side. */
 export const DOCK_LAYOUT = {
-  controlSize: 56,
+  controlSize: 54,
   // Names hidden (showDockItemNames off).
   iconOnlyControlSize: 48,
   shellPadding: 8,

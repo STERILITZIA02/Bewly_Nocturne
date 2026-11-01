@@ -32,6 +32,7 @@
 - 右栏标签（2026-10-20）：评论 / 弹幕 / 选集标签栏与首页标签同为轨道滑块（`.bew-segment-control--track`，滑块内缩 2px，hover 只提亮文字）。壳层只维护 `data-active` 并经 `railTabs.ts` 发布标签栏与当前项，`App.vue` 的 `PlaybackRailTabsIndicator.vue` 把共享 `LiquidSegmentIndicator` Teleport 进标签栏；壳层拆除前清空发布，无应用时选中项自绘底板。
 - 纯黑模式（2026-10-20）：播放页暂按普通深色显示（`useDark` 在视频播放 URL 上不启用 `oled-dark`），纯黑设计待补充。
 - 评论唤醒（2026-10-20）：Bilibili 加载后会整体重渲染评论应用，新 `bili-comments` 可能在折叠线下无限等待懒加载。评论缺失时每次水合经 page bridge（`COMMENT_LIST_WAKE`）由 MAIN 释放其懒加载等待；首屏在 12s 预算后仍转圈时每个预算请求一次原生 `reload()`（应对挂起的请求）。
+- 右栏细节（2026-11-01）：Bpx 的弹幕面板在同一个 `.bpx-player-filter-wrap` 下切换列表 / 屏蔽设定 / 高级弹幕三个视图，显示时写内联 `display: block`、隐藏时清空，默认样式为 none；列表需要的 flex 列布局只能加在带该内联值的列表上，否则切到屏蔽设定后列表仍盖在上面。原生推荐卡片的 `.video-awesome-img` 自带 `top: 10px`，在 120px 缩略图里会露出顶部灰条，需归零。原生评论排序与“点击查看”是 `bili-text-button`，颜色、高度与内距经其 `--_label-text-color(-hover)`、`--_container-height`、`--_leading/trailing-space` 变量设置，悬停色默认取 `--brand_blue`（Bewly 映射为主题色）。楼层分隔线是 `bili-comment-thread-renderer` 内的 `#div`。
 - 弹幕按用户排序（2026-10-20）：弹幕列表表头在“发送时间”前增加“用户”列（`syncDanmakuSenderOrderButton`），经 `DANMAKU_SENDER_ORDER` 让 MAIN 在原生“发送时间”点击期间替换一次弹幕数组的比较器：按 `uhash` 分组、弹幕多者在前、组内按时间，再点反转；之后点击原生表头照常从升序开始。
 - 评论加载（2026-10-20）：评论面板、加载遮罩右栏与原生 `bili-comments-spinner` 统一为单个加载圆环（面板就绪时先闭合再淡出）。
 - 信息模块与右栏不再绘制毛玻璃、实色阅读面、边框或圆角裁切，直接位于背板的页面底色上；加载骨架的右栏同样上下贯穿，圆环按整栏高度居中，与面板加载圆环位置一致。

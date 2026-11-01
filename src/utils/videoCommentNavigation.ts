@@ -1,8 +1,8 @@
 import type { VideoInfo } from '~/models/video/videoInfo'
 import { waitForDelay } from '~/utils/abort'
-import api from '~/utils/api'
 import { isCommentRootUsable } from '~/utils/bewlyWidescreen/nativeDom'
 import { parsePlaybackTabUrl } from '~/utils/playbackTab'
+import { getPlaybackVideoInfo } from '~/utils/playbackVideoInfo'
 import { readVideoPageMetadata } from '~/utils/videoMetadataBridge'
 
 const COMMENT_ROOT = '#commentapp, #comment-module, #comment-body, .commentapp, .comment-container, .bili-comment-container, .bb-comment'
@@ -52,7 +52,7 @@ export function createVideoCommentNavigation(currentKey: () => string, isWide: (
     const controller = new AbortController()
     const { signal } = controller
     const identifier = 'aid' in target ? { aid: String(target.aid) } : { bvid: target.bvid }
-    const request = api.video.getVideoInfo(identifier, { signal }) as Promise<VideoInfo>
+    const request = getPlaybackVideoInfo(identifier, signal)
     const task = { key, controller, request }
     owner = task
     const current = () => !signal.aborted && owner === task && currentKey() === key

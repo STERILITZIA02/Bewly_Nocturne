@@ -126,7 +126,8 @@ export default defineConfig({
               const token = spacingTokens[Math.abs(num)]
               if (token)
                 return num < 0 ? `calc(var(--bew-space-${token}) * -1)` : `var(--bew-space-${token})`
-              return `${num * 16}px`
+              // The `ui()` Sass function: scaled by display, snapped to device pixels.
+              return `round(${num * 16}px * var(--bew-ui-scale), var(--bew-ui-pixel))`
             })
           }
         })

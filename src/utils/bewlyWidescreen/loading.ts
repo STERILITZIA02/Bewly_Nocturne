@@ -224,10 +224,9 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
         boxSizing: 'border-box',
       })
     }
-    // The info flows at the top of the pinned column; taking the real info's
-    // height puts the skeleton tabs where the real tabs are.
+    // Align the list placeholders with the bottom of the real overview info.
     const info = loadingOverlay.querySelector<HTMLElement>('.bewly-widescreen-loading-skeleton-info')
-    const infoHeight = currentState.infoEl.getBoundingClientRect().height
+    const infoHeight = currentState.sidebarTop.getBoundingClientRect().height
     if (info && infoHeight > 0)
       Object.assign(info.style, { flex: 'none', height: `${infoHeight}px`, maxHeight: 'none' })
   }

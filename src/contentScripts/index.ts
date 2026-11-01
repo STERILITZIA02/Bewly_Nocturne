@@ -5,7 +5,9 @@ import type { App as VueApp } from 'vue'
 import { createApp } from 'vue'
 
 import { stopDarkState, useDark } from '~/composables/useDark'
+import { setupPlaybackTrail } from '~/composables/usePlaybackTrail'
 import { onRouteChange, stopRouteObserver } from '~/composables/useRouteState'
+import { applyUiScale, setupUiScale } from '~/composables/useUiScale'
 import { CONTENT_SCRIPT_COMMIT, CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG, isContentScriptTargetUrl } from '~/constants/contentScript'
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
 import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_MOUNTED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
@@ -24,7 +26,7 @@ import { applyAppearanceStyle } from '~/utils/appearance'
 import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyPlaybackLayoutReady, isBewlyPlaybackNavigationPending, isBewlyWidescreenActive, isBewlyWidescreenEngaged, prepareBewlyPlaybackPageNavigation, prepareBewlyWidescreenLoading, refreshBewlyPlaybackPageNavigation } from '~/utils/bewlyWidescreen'
 import { shouldSuppressWidescreenAutoEntry } from '~/utils/bewlyWidescreenPolicy'
 import { isConfirmedLiveEmbeddedFrame } from '~/utils/bilibiliLiveContext'
-import { getBilibiliLogicalPathname, toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
+import { toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, restoreOriginalBilibiliTopBarParent, restorePreparedOriginalBilibiliTopBars } from '~/utils/bilibiliTopBar'
 import { readBrowserFontScale } from '~/utils/browserFontScale'
 import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveIframeEscapeAction } from '~/utils/drawerEscape'
@@ -55,7 +57,7 @@ import { SVG_ICONS } from '~/utils/svgIcons'
 import { openLinkInBackground } from '~/utils/tabs'
 import { initVerticalVideoZoom, resetVerticalVideoZoom } from '~/utils/verticalVideoZoom'
 import { createVideoCommentNavigation } from '~/utils/videoCommentNavigation'
-import { isNativeVideoComponentReady, isPgcPlaybackPage, parseVideoMetadataEvent, readVideoPageMetadata, validateVideoPageMetadata, VIDEO_COMPONENT_CHANGED, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
+import { isNativeVideoComponentReady, isPgcPlaybackPage, parseVideoMetadataEvent, readNativeMediaSnapshot, readVideoPageMetadata, validateVideoPageMetadata, VIDEO_COMPONENT_CHANGED, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
 import { recordVideoVisitFromUrl } from '~/utils/videoVisitHistory'
 import { ensureResponsiveViewport } from '~/utils/viewportMeta'
 import { mountWatchLaterButtonWhenToolbarReady, removeWatchLaterButton } from '~/utils/watchLaterButton'
@@ -331,6 +333,8 @@ if (isElectronEnv) {
 else if (shouldInitializeContentScript) {
   const contentScriptSignal = contentScriptAbortController!.signal
   contentScriptDisposers.push(setupCommentReplyApiBridge())
+  // Before the boot overlay: it draws with the root tokens.
+  contentScriptDisposers.push(setupUiScale())
   const pageLoading = getPageLoadingGuard()
   const bootOverlay = pageLoading.active && shouldShowBewlyBootOverlay(location.href, isInIframe())
     ? mountBewlyBootOverlay(document)
@@ -472,6 +476,8 @@ else if (shouldInitializeContentScript) {
     if (contentScriptSignal.aborted)
       return
     playerModeSettingsReady = true
+    if (window === window.top)
+      contentScriptDisposers.push(setupPlaybackTrail())
     contentScriptDisposers.push(setupVideoWatchProgress())
     contentScriptDisposers.push(setupVideoQualityMemory())
     contentScriptDisposers.push(setupLocalLoudnessControl())
@@ -743,7 +749,9 @@ else if (shouldInitializeContentScript) {
     if (!video)
       return undefined
     const source = video.currentSrc || video.getAttribute('src') || ''
-    if (awaitingNavigationMedia && video === navigationVideo && source === navigationMediaSource)
+    // MSE can keep both the element and blob URL across a native video switch.
+    // MAIN only returns a manifest unit when video, manuscript and part match.
+    if (awaitingNavigationMedia && video === navigationVideo && source === navigationMediaSource && !readNativeMediaSnapshot(video)?.unit)
       return undefined
     if (video.readyState < HTMLMediaElement.HAVE_METADATA)
       return undefined
@@ -1100,7 +1108,7 @@ else if (shouldInitializeContentScript) {
   }
 
   const videoCommentNavigation = createVideoCommentNavigation(
-    () => getVideoNavigationKey(location.href),
+    () => location.pathname,
     isBewlyWidescreenActive,
   )
   contentScriptDisposers.push(videoCommentNavigation.cancel)
@@ -1141,14 +1149,14 @@ else if (shouldInitializeContentScript) {
     clearPlayerModeRetry()
     // 只把当前视频的原生侧栏节点暂时归还给 B 站路由。Bewly 播放页 shell、
     // 侧栏宽度/开合状态与底部控制状态保持挂载，URL 提交后增量换入新视频数据。
-    prepareBewlyPlaybackPageNavigation()
+    prepareBewlyPlaybackPageNavigation(targetUrl)
   }
 
   function checkForUrlChanges() {
     if (location.href !== lastUrl) {
       iframePlayerContext.request()
       const currentVideoNavigationKey = getVideoNavigationKey(location.href)
-      videoCommentNavigation.cancelIfChanged(currentVideoNavigationKey)
+      videoCommentNavigation.cancelIfChanged(location.pathname)
       const isMeaningfulVideoNavigation = currentVideoNavigationKey !== lastVideoNavigationKey
       if (isMeaningfulVideoNavigation) {
         userExitedWidescreenNavigationKey = undefined
@@ -1204,16 +1212,11 @@ else if (shouldInitializeContentScript) {
           || isBewlyWidescreenActive()
           || resolveApplicablePlayerMode() === 'bewlyWidescreen'
         clearPendingWidescreenReloadNavigation()
-        const navigationVideoInfoRequest = shouldReloadWidescreenNavigation
-          ? videoCommentNavigation.start(currentVideoNavigationKey)
-          : undefined
-        if (shouldReloadWidescreenNavigation && !navigationVideoInfoRequest && !getBilibiliLogicalPathname().startsWith('/bangumi/play/')) {
-          exitBewlyWidescreen()
-          window.location.reload()
-          return
-        }
         const retainedBewlyPlaybackPage = shouldReloadWidescreenNavigation
           && prepareBewlyPlaybackPageNavigation()
+        const navigationVideoInfoRequest = shouldReloadWidescreenNavigation && retainedBewlyPlaybackPage !== 'part'
+          ? videoCommentNavigation.start(location.pathname)
+          : undefined
         pendingNavigationVideoInfo = retainedBewlyPlaybackPage ? navigationVideoInfoRequest : undefined
         resetVerticalVideoZoom()
         removeWatchLaterButton()
@@ -1683,6 +1686,7 @@ else if (shouldInitializeContentScript) {
       container.style.setProperty('--bew-font-scale', String(fontScale))
       document.documentElement.style.setProperty('--bew-font-scale', String(fontScale))
     }
+    applyUiScale(container)
 
     const root = document.createElement('div')
     const useViewportLayout = !isInIframe() && isHomePage()

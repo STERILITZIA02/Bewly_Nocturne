@@ -1,8 +1,10 @@
 import { createMovedPgcReactBridge, getMountedPgcEventRoot } from '~/inject/movedPgcReact'
 import { selectors } from '~/utils/bewlyWidescreen/constants'
 import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
+import type { NativePlaybackUnit } from '~/utils/videoMetadataBridge'
 import {
   isPgcPlaybackPage,
+  matchesPlaybackUnit,
   parseVideoMetadataEvent,
   parseVideoPageIdentity,
   validateVideoPageMetadata,
@@ -23,6 +25,11 @@ interface NativeVideoData {
 }
 
 interface NativeVideoApp {
+  $el?: Element
+  $children?: NativeVideoApp[]
+  player?: NativePlayer
+  cidMap?: Record<string, { aid: number, bvid: string, cids: Record<number, number> }>
+  switchVideo?: (target: { aid: number, bvid: string, cid: number, p: number, t?: number }) => void
   videoData?: NativeVideoData
   isSection?: boolean
   $watch?: (getter: () => string, callback: () => void) => () => void
@@ -130,7 +137,7 @@ export function setupVideoMetadataBridge(channelId: string) {
       detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, metadata }),
     }))
   }, { signal })
-  const nativeComponentSelector = [...selectors.upPanel, ...selectors.toolbar, ...selectors.description, ...selectors.tags, ...selectors.mediaInfo, ...selectors.playlist].join(',')
+  const nativeComponentSelector = [...selectors.upPanel, ...selectors.toolbar, ...selectors.description, ...selectors.tags, ...selectors.mediaInfo, ...selectors.playlist, ...selectors.recommend].join(',')
   document.addEventListener(VIDEO_COMPONENT_REQUEST, (event) => {
     const request = parseVideoMetadataEvent(event)
     const node = event.target
@@ -139,6 +146,40 @@ export function setupVideoMetadataBridge(channelId: string) {
     if (request?.channelId !== channelId || !Number.isSafeInteger(request.requestId)
       || request.href !== location.href || (!parseVideoPageIdentity(location.href) && !isPgcPlaybackPage())
       || !(node instanceof HTMLElement) || !node.isConnected || (!node.matches(nativeComponentSelector) && !nativeMedia && !favoriteDialog)) {
+      return
+    }
+    if (nativeMedia && request.switchPlayback) {
+      const destination = request.switchPlayback as { href?: string, unit?: NativePlaybackUnit }
+      const href = destination.href
+      const target = typeof href === 'string' && parseVideoPageIdentity(href)
+      let switched: NativePlaybackUnit | 'needs-unit' | undefined
+      if (href && target && new URL(href).origin === location.origin && parseVideoPageIdentity(location.href)) {
+        // Vue 2's router wrappers share their root element with the mounted
+        // video component. Follow that branch without traversing player UI.
+        let owner = getApp()
+        while (owner && !owner.switchVideo)
+          owner = owner.$children?.find(child => child.$el === owner?.$el)
+        const url = new URL(href)
+        const page = Number(url.searchParams.get('p') || 1)
+        const known = owner?.cidMap?.[target.bvid ?? String(target.aid)]
+        const unit = known?.cids[page] ? { aid: known.aid, bvid: known.bvid, cid: known.cids[page], page } : destination.unit
+        try {
+          if (owner?.switchVideo && owner.player?.mediaElement?.() === node) {
+            if (!unit) {
+              switched = 'needs-unit'
+            }
+            else if (/^BV[0-9a-z]{10}$/i.test(unit.bvid ?? '') && matchesPlaybackUnit(href, unit)) {
+              const time = Number(url.searchParams.get('t'))
+              owner.switchVideo({ aid: unit.aid, bvid: unit.bvid!, cid: unit.cid, p: unit.page, t: Number.isFinite(time) && time > 0 ? time : undefined })
+              switched = unit
+            }
+          }
+        }
+        catch { /* A retired native owner leaves the caller its browser destination. */ }
+      }
+      node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
+        detail: JSON.stringify({ channelId, requestId: request.requestId, href: request.href, switched }),
+      }))
       return
     }
     if (favoriteDialog) {

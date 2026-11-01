@@ -3,6 +3,7 @@ import { ref } from 'vue'
 
 import Logo from '~/components/Logo.vue'
 import SearchBar from '~/components/SearchBar/SearchBar.vue'
+import { uiPx } from '~/composables/useUiScale'
 import { settings } from '~/logic'
 
 const searchInput = ref<string>('')
@@ -18,7 +19,7 @@ const searchInput = ref<string>('')
     m="t-20vh"
   >
     <Logo
-      v-if="settings.searchPageShowLogo" :size="180" :color="settings.searchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
+      v-if="settings.searchPageShowLogo" :size="uiPx(180)" :color="settings.searchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
       mb-12 z-1
     />
     <SearchBar

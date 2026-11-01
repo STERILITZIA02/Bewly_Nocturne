@@ -342,7 +342,7 @@ const showCreateGroup = computed(() => isComponentVisible('creatorCenter') || is
       </div>
 
       <!-- Creating: the creative center and upload share the second capsule. -->
-      <div v-if="isLogin && showCreateGroup" class="top-bar-tools top-bar-tools--wide-only">
+      <div v-if="isLogin && showCreateGroup" data-top-bar-creation class="top-bar-tools top-bar-tools--wide-only">
         <!-- Creative center -->
         <Transition name="top-bar-item" @before-enter="holdItemMotion($event, true)" @before-leave="holdItemMotion($event, false)">
           <div

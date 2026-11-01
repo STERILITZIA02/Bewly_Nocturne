@@ -76,6 +76,8 @@ const LOCAL_ONLY_SETTINGS_FIELDS = new Set([
   ...RETIRED_SETTINGS_FIELDS,
   // A device must opt into this experimental media-source takeover itself.
   'localLoudnessEnabled',
+  // Chosen for one display; every device keeps its own.
+  'interfaceSize',
 ])
 
 // These values describe transient playback state on one device. Syncing them

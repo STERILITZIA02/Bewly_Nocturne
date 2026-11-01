@@ -231,11 +231,16 @@ export const selectors = {
   recommend: [
     '[class*="recommend_wrap"]',
     '.recommend-list-v1',
+    '.recommend-list-pr',
     '.recommend-list',
     '.rec-list',
     '.next-play',
   ],
 }
+
+// These UGC lists render their cover images only after the owning Vue instance
+// mounts. Inner layout wrappers such as .rec-list do not own components.
+export const NATIVE_VIDEO_LIST_COMPONENT_SELECTOR = '.video-pod, .multi-page-v1, .recommend-list-v1, .recommend-list-pr'
 
 export const SIDEBAR_CONTENT_SELECTOR = [
   NATIVE_MUSIC_ENTRY_SELECTOR,

@@ -384,6 +384,11 @@ settings:
     advanced: 高级
     interface_font_size: 界面基础字号
     interface_font_size_desc: 按比例调整现有文字层级，并保留系统与浏览器的文字缩放。
+    interface_size: 界面尺寸
+    interface_size_desc: '按屏幕的像素密度与观看距离缩小界面，文字缩得更少。当前 {scale}。'
+    interface_size_compact: 紧凑
+    interface_size_standard: 标准
+    interface_size_comfortable: 宽松
     shadows: 界面阴影
     motion: 减少动态效果
     schedule_start: 浅色模式开始时间
@@ -489,6 +494,7 @@ settings:
   topbar_actions: 顶栏功能图标
   topbar_user_menu: 顶栏用户菜单
   topbar_display_settings: 顶栏显示与行为
+  collapse_top_bar_search: 自动收起顶栏搜索框
   group_dock: Dock 栏
   group_sidebar: 侧边栏
   group_color: 颜色
@@ -1886,6 +1892,7 @@ watch_later:
   play_and_remove: 播放并移除
   play_in_watch_later: 列表播放
 widescreen:
+  overview: 简介
   panel_load_incomplete: 内容未能完成加载，可刷新页面或退出 Bewly 播放页后重试
   reload_page: 刷新页面
   enter: 进入 Bewly 播放页
@@ -1903,6 +1910,9 @@ widescreen:
   playlist: 选集
   recommendations: 推荐
   up_next: 接下来播放
+  playback_navigation: 视频播放导航
+  previous_video: 上一个看过的视频
+  next_video: 下一个看过的视频
   collapse: 收起
   expand_more: 展开更多
   comments_loading: 评论区加载中
@@ -1919,6 +1929,7 @@ widescreen:
 search_bar:
   history_unavailable: 暂时无法读取或确认搜索历史，请重新读取。
   input_label: 搜索
+  collapsible_placeholder: 搜索动效…
   clear_keyword: 清空搜索内容
   submit: 搜索
   suggestions_label: 搜索建议

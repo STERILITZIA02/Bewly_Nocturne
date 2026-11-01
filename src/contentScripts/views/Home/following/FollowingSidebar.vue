@@ -6,6 +6,7 @@ import Input from '~/components/Input.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
+import { uiPx } from '~/composables/useUiScale'
 import { calcTimeSince } from '~/utils/dataFormatter'
 import { isDissolving } from '~/utils/particleDissolve'
 
@@ -72,8 +73,8 @@ const rowWindow = useCardWindow({
   container: listRef,
   keys: computed(() => allRows.value.map(row => row.key)),
   columns: ref(1),
-  gap: ref(8),
-  estimatedHeight: ref(52),
+  gap: computed(() => uiPx(8)),
+  estimatedHeight: computed(() => uiPx(52)),
   layout: ref('following-directory'),
   enabled: computed(() => allRows.value.length > CARD_WINDOW_THRESHOLD),
   canRelease: () => !props.busy && !actions.value?.interactionActive,

@@ -40,6 +40,41 @@ export function registerPlaybackContentChecks(check) {
     }
   })
 
+  check('playback content: the overview owns info and playlists; keyboard and clicks select exclusive panels', async () => {
+    const session = { current: null }
+    const shell = await loadSourceModule('../src/utils/bewlyWidescreen/shell.ts', {
+      '~/utils/bewlyWidescreen/constants': await import('../src/utils/bewlyWidescreen/constants'),
+      '~/utils/bewlyWidescreen/geometry': { schedulePlayerResizeSync() {} },
+      '~/utils/bewlyWidescreen/labels': { t: key => key },
+      '~/utils/bewlyWidescreen/nativeDom': { getTitleText: () => 'Video', restoreCommentPrewarm() {} },
+      '~/utils/bewlyWidescreen/railTabs': { publishRailTabs() {} },
+      '~/utils/bewlyWidescreen/session': { session },
+    })
+    const state = shell.createRoot()
+    session.current = { ...state, hydratedTabs: new Set(), hydrateSidebar() {} }
+    try {
+      const { overview, comment, danmaku } = state.tabButtons
+      assert.deepEqual(Array.from(overview.parentElement.children), [overview, comment, danmaku])
+      assert.equal(state.panels.overview.firstElementChild, state.sidebarTop)
+      assert.equal(state.sidebarTop.nextElementSibling, state.playlistSlot)
+      const visible = () => Object.keys(state.panels).filter(tab => !state.panels[tab].hidden)
+      shell.setActiveTab('overview')
+      assert.deepEqual(visible(), ['overview'])
+      overview.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+      assert.deepEqual(visible(), ['comment'])
+      assert.equal(document.activeElement, comment)
+      danmaku.click()
+      assert.deepEqual(visible(), ['danmaku'])
+      danmaku.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+      assert.equal(document.activeElement, overview)
+      assert.deepEqual(visible(), ['overview'])
+    }
+    finally {
+      state.root.remove()
+      state.backdrop.remove()
+    }
+  })
+
   async function fixture(pgc = false) {
     const constants = await import('../src/utils/bewlyWidescreen/constants')
     const ready = new WeakMap()
@@ -60,11 +95,13 @@ export function registerPlaybackContentChecks(check) {
     const playerEl = document.body.appendChild(document.createElement('div'))
     playerEl.id = 'bilibili-player'
     const sidebarTop = root.appendChild(document.createElement('header'))
-    const state = { root, playerEl, sidebarTop, movedNodes: [], descriptionExpanded: false, activeTab: 'comment', controlsLayoutReady: true, hydratedTabs: new Set() }
+    const state = { root, playerEl, sidebarTop, movedNodes: [], descriptionExpanded: false, activeTab: 'overview', controlsLayoutReady: true, hydratedTabs: new Set(), initialScrollResetTabs: new Set() }
     for (const name of ['upSlot', 'toolbarSlot', 'descriptionSlot', 'tagsSlot', 'metadataSlot'])
       state[name] = sidebarTop.appendChild(document.createElement('div'))
-    state.panels = Object.fromEntries(['comment', 'danmaku', 'playlist'].map(name => [name, root.appendChild(document.createElement('section'))]))
-    state.tabButtons = Object.fromEntries(['comment', 'danmaku', 'playlist'].map(name => [name, document.createElement('button')]))
+    state.panels = Object.fromEntries(['overview', 'comment', 'danmaku'].map(name => [name, root.appendChild(document.createElement('section'))]))
+    state.panels.overview.append(sidebarTop)
+    state.playlistSlot = state.panels.overview.appendChild(document.createElement('div'))
+    state.tabButtons = Object.fromEntries(['overview', 'comment', 'danmaku'].map(name => [name, document.createElement('button')]))
     state.panels.comment.innerHTML = '<div class="commentapp"><div class="reply-list">Native comments</div></div>'
     const origin = document.body.appendChild(document.createElement('main'))
     origin.innerHTML = '<div class="up-info-container">Native author</div><div id="arc_toolbar_report" class="video-toolbar-container"><button>Like</button><button>Coin</button><button>Favorite</button><button>Share</button></div><div id="v_desc" class="video-desc-container"><div class="basic-desc-info"></div></div><div class="video-tag-container"><a href="#tag">Native tag</a></div>'
@@ -280,8 +317,8 @@ export function registerPlaybackContentChecks(check) {
       assert.equal(f.native.isWidescreenTransferContentReady(), true)
       f.native.moveOrReplaceNode(f.constants.selectors.mediaInfo, f.state.metadataSlot, f.state.movedNodes)
       f.native.moveOrReplaceNode(f.constants.selectors.toolbar, f.state.toolbarSlot, f.state.movedNodes)
-      f.native.moveOrReplaceNode(f.constants.selectors.playlist, f.state.panels.playlist, f.state.movedNodes)
-      assert.equal(f.state.panels.playlist.firstElementChild, playlist)
+      f.native.moveOrReplaceNode(f.constants.selectors.playlist, f.state.playlistSlot, f.state.movedNodes)
+      assert.equal(f.state.playlistSlot.firstElementChild, playlist)
       assert.equal(playlist.querySelectorAll('button').length, 2, 'sort and page tabs stay in the same native event boundary')
       buttons.forEach(button => button.click())
       assert.deepEqual(clicks, ['Follow', 'Share', 'Sort', '1-50'])
@@ -289,7 +326,7 @@ export function registerPlaybackContentChecks(check) {
       assert.equal(info.parentElement, f.origin)
       assert.equal(toolbar.parentElement, f.origin)
       assert.equal(playlist.parentElement, f.origin)
-      f.native.moveOrReplaceNode(f.constants.selectors.playlist, f.state.panels.playlist, f.state.movedNodes)
+      f.native.moveOrReplaceNode(f.constants.selectors.playlist, f.state.playlistSlot, f.state.movedNodes)
       playlist.remove()
       f.ready.set(playlist, false)
       f.native.restoreMovedNodes(f.state.movedNodes)
@@ -445,9 +482,31 @@ export function registerPlaybackContentChecks(check) {
     try {
       const toolbar = f.origin.querySelector('#arc_toolbar_report')
       toolbar.remove()
+      const serverRecommendations = f.origin.appendChild(document.createElement('div'))
+      serverRecommendations.className = 'recommend-list-v1'
+      serverRecommendations.innerHTML = '<div class="rec-title"><button class="continuous-btn"></button></div><div class="rec-list"><a class="video-awesome-img"></a></div>'
+      const serverEpisodes = f.origin.appendChild(document.createElement('div'))
+      serverEpisodes.className = 'video-pod'
+      serverEpisodes.innerHTML = '<div class="video-pod__body"><div class="normal-base-item"><div class="cover"></div></div></div>'
+      f.ready.set(serverEpisodes, false)
+      f.ready.set(serverRecommendations, false)
+      sidebar.startSidebarHydration(state)
+      assert.equal(state.playlistSlot.children.length, 0, 'leave both unmounted shells and their inner wrappers at the native origin')
+      assert.ok(serverRecommendations.querySelector('.continuous-btn'))
+      const recommendation = f.origin.appendChild(document.createElement('div'))
+      recommendation.className = 'recommend-list-v1'
+      recommendation.innerHTML = '<div class="rec-list"><a class="video-awesome-img"><img src="/recommend.jpg"></a></div>'
+      const episodes = f.origin.appendChild(document.createElement('div'))
+      episodes.className = 'video-pod'
+      episodes.innerHTML = '<div class="normal-base-item"><div class="cover"><img src="/episode.jpg"></div></div>'
+      const images = [episodes.querySelector('img'), recommendation.querySelector('img')]
       state.videoInfoData = { title: 'Known video', stat: { like: 1 } }
       state.toolbarSlot.innerHTML = '<div class="bewly-widescreen-fallback-stats">Known counters</div>'
       sidebar.startSidebarHydration(state)
+      assert.deepEqual(Array.from(state.playlistSlot.children), [episodes, recommendation])
+      assert.deepEqual(Array.from(state.playlistSlot.querySelectorAll('img')), images, 'transfer the mounted images themselves')
+      assert.equal(state.sidebarTop.nextElementSibling, state.playlistSlot)
+      assert.equal(state.panels.comment.contains(episodes), false)
       assert.equal(state.root.dataset.sidebarCommentReady, 'true')
       assert.equal(state.root.dataset.sidebarTopReady, 'false')
       assert.equal(state.root.dataset.sidebarContentReady, 'false')
@@ -465,6 +524,21 @@ export function registerPlaybackContentChecks(check) {
       assert.equal(state.sidebarTop.querySelector('.bewly-widescreen-panel-error'), null)
       assert.equal(timers.size, 0)
       assert.equal(commentWakes, 0, 'ready comments never wake or reload the native list')
+      f.ready.set(episodes, false)
+      f.ready.set(recommendation, false)
+      const nextEpisodes = f.origin.appendChild(episodes.cloneNode(true))
+      const nextRecommendation = f.origin.appendChild(recommendation.cloneNode(true))
+      sidebar.startSidebarHydration(state)
+      assert.deepEqual(Array.from(state.playlistSlot.children), [nextEpisodes, nextRecommendation], 'a native rebuild replaces both retired lists')
+      const comments = state.panels.comment.firstElementChild
+      const info = state.videoInfoData
+      state.panels.comment.scrollTop = 64
+      sidebar.suspendSidebarForVideoNavigation(state, 'part')
+      assert.ok(comments)
+      assert.equal(state.panels.comment.firstElementChild, comments)
+      assert.equal(state.panels.comment.scrollTop, 64)
+      assert.equal(state.videoInfoData, info)
+      assert.equal(state.toolbarSlot.querySelector('#arc_toolbar_report'), toolbar)
     }
     finally {
       sidebar.clearSidebarHydration(state)

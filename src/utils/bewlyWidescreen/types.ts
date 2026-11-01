@@ -1,7 +1,7 @@
 import type { Data as VideoInfoData } from '~/models/video/videoInfo'
 import type { WidescreenDisplayMode, WidescreenRect, WidescreenZoomFrame } from '~/utils/bewlyWidescreenPolicy'
 
-export type BewlyWidescreenTab = 'comment' | 'danmaku' | 'playlist'
+export type BewlyWidescreenTab = 'overview' | 'comment' | 'danmaku'
 
 export interface MovedNode {
   node: HTMLElement
@@ -10,7 +10,7 @@ export interface MovedNode {
 }
 
 export interface WidescreenSidebarReadiness {
-  top: boolean
+  overview: boolean
   comment: boolean
   danmaku: boolean
   playlist: boolean
@@ -52,8 +52,7 @@ export interface BewlyWidescreenState {
   playerFrame: HTMLElement
   danmakuDock: HTMLElement
   sidebarEl: HTMLElement
-  /** Title, author, actions and description under the video card. */
-  infoEl: HTMLElement
+  playlistSlot: HTMLElement
   sidebarTop: HTMLElement
   metadataSlot: HTMLElement
   upSlot: HTMLElement
@@ -117,9 +116,9 @@ export interface BewlyWidescreenState {
   danmakuSemanticsSource?: HTMLElement
   danmakuSourceHost?: HTMLElement
   danmakuGlass?: HTMLElement
-  controlsGlassAppliedHeight?: number
   auxiliaryControlsElement?: HTMLElement
   controlsLayoutReady: boolean
+  measuredControls?: HTMLElement
   controlsLayoutSignature?: string
   controlsLayoutStableSince?: number
   onInitialLayoutReady?: () => void
@@ -140,9 +139,9 @@ export interface BewlyWidescreenState {
   panelScrollFrames: Map<BewlyWidescreenTab, number>
   videoInfoData?: VideoInfoData
   videoInfoIdentity?: string
-  navigationPending: boolean
-  bottomControlsHovered: boolean
-  playerPointerInside: boolean
+  playbackHref: string
+  navigationPending: false | 'part' | 'video'
+  playerControlsActive: boolean
 }
 
 export interface ExitBewlyWidescreenOptions {

@@ -1,4 +1,4 @@
-import { COMMENT_CONTENT_MARKER_SELECTOR, COMMENT_NESTED_UI_SELECTOR, COMMENT_ROOT_ID_SELECTOR, COMMENT_SHADOW_HOST_SELECTOR, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, ROOT_ID, selectors, SIDEBAR_CONTENT_SELECTOR, SIDEBAR_RELEVANT_SELECTOR } from '~/utils/bewlyWidescreen/constants'
+import { COMMENT_CONTENT_MARKER_SELECTOR, COMMENT_NESTED_UI_SELECTOR, COMMENT_ROOT_ID_SELECTOR, COMMENT_SHADOW_HOST_SELECTOR, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, NATIVE_VIDEO_LIST_COMPONENT_SELECTOR, ROOT_ID, selectors, SIDEBAR_CONTENT_SELECTOR, SIDEBAR_RELEVANT_SELECTOR } from '~/utils/bewlyWidescreen/constants'
 import type { BewlyWidescreenState, CommentPrewarmState, MovedNode } from '~/utils/bewlyWidescreen/types'
 import type { WidescreenMutationOrigin } from '~/utils/bewlyWidescreenPolicy'
 import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
@@ -10,7 +10,8 @@ import { isNativeVideoComponentReady, isPgcPlaybackPage, releaseNativeVideoCompo
 let commentPrewarmState: CommentPrewarmState | undefined
 const NATIVE_INFO_SELECTOR = [...selectors.upPanel, ...selectors.toolbar, ...selectors.description, ...selectors.tags, ...selectors.mediaInfo].join(',')
 function requiresNativeComponent(node: HTMLElement) {
-  return node.matches(NATIVE_INFO_SELECTOR) || (isPgcPlaybackPage() && node.matches(selectors.playlist.join(',')))
+  return node.matches(NATIVE_INFO_SELECTOR) || node.matches(NATIVE_VIDEO_LIST_COMPONENT_SELECTOR)
+    || (isPgcPlaybackPage() && node.matches(selectors.playlist.join(',')))
 }
 const NATIVE_DESCRIPTION_SELECTOR = [...selectors.description, ...selectors.tags, ...selectors.mediaInfo].join(',')
 const PLAYER_LAYOUT_SOURCE_SELECTOR = `${SIDEBAR_RELEVANT_SELECTOR},${NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR},.bpx-player-control-bottom,video,bwp-video`
@@ -129,17 +130,17 @@ export function findFirst(selectors: string[], root: ParentNode = document): HTM
   return null
 }
 
-export function findMovable(selectors: string[]): HTMLElement | null {
+export function findMovable(selectors: string[], exclude?: string): HTMLElement | null {
+  const excluded = exclude ? `#${ROOT_ID},${exclude}` : `#${ROOT_ID}`
   for (const selector of selectors) {
-    const candidates = Array.from(document.querySelectorAll<HTMLElement>(selector))
-    const element = candidates.find(candidate =>
-      !candidate.closest(`#${ROOT_ID}`)
-      && candidate.parentNode
-      && candidate.offsetParent !== null,
-    ) || candidates.find(candidate => !candidate.closest(`#${ROOT_ID}`) && candidate.parentNode)
-
-    if (element)
-      return element
+    let candidates = Array.from(document.querySelectorAll<HTMLElement>(selector)).filter(candidate => !candidate.closest(excluded))
+    if (!candidates.length)
+      continue
+    // Hydration may briefly leave both the server list and its replacement.
+    // Never fall through to an inner wrapper of an unmounted list.
+    if (candidates.length > 1 && candidates[0].matches(NATIVE_VIDEO_LIST_COMPONENT_SELECTOR))
+      candidates = candidates.filter(candidate => isNativeVideoComponentReady(candidate) === true)
+    return candidates.find(candidate => candidate.offsetParent !== null) ?? candidates[0] ?? null
   }
   return null
 }
@@ -286,12 +287,17 @@ export function removeMovedNode(node: HTMLElement, movedNodes: MovedNode[]) {
   node.remove()
 }
 
-export function moveOrReplaceNode(selectors: string[], target: HTMLElement, movedNodes: MovedNode[], allowInsideLayout = false) {
-  let existing = findFirst(selectors, target)
+export function findRetainedNode(selectors: string[], target: HTMLElement, movedNodes: MovedNode[]) {
+  const existing = findFirst(selectors, target)
   if (existing && requiresNativeComponent(existing) && isNativeVideoComponentReady(existing) === false) {
     removeMovedNode(existing, movedNodes)
-    existing = null
+    return null
   }
+  return existing
+}
+
+export function moveOrReplaceNode(selectors: string[], target: HTMLElement, movedNodes: MovedNode[], allowInsideLayout = false) {
+  const existing = findRetainedNode(selectors, target, movedNodes)
   const next = allowInsideLayout
     ? findFirst(selectors, target) || findMovable(selectors)
     : findMovable(selectors)
@@ -398,7 +404,9 @@ export function movePlaylistControls(target: HTMLElement, movedNodes: MovedNode[
   if (!findFirst(selectors.playlist, target) && !findMovable(selectors.playlist))
     return false
 
-  const control = findMovable(selectors.playlistControls)
+  // The recommendations' autoplay switch must travel with its list, including
+  // while that list is still hydrating at the native origin.
+  const control = findMovable(selectors.playlistControls, selectors.recommend.join(','))
   const playlistSelector = selectors.playlist.join(',')
   let playlistRoot = control?.closest<HTMLElement>(playlistSelector)
   while (playlistRoot?.parentElement) {
@@ -464,22 +472,6 @@ function isUpPanelTransferReady(upPanel: HTMLElement | null): boolean {
   return !buttonPanel || (buttonPanel.textContent?.trim().length ?? 0) > 0
 }
 
-function isRecommendationTransferReady(recommendation: HTMLElement | null): boolean {
-  if (!recommendation)
-    return false
-
-  const firstCard = recommendation.querySelector(
-    '.video-page-card-small, .video-page-game-card-small, .bili-video-card, .video-card',
-  )
-  return !!firstCard || (recommendation.textContent?.trim().length ?? 0) > 0
-}
-
-function isDanmakuTransferReady(danmaku: HTMLElement | null): boolean {
-  if (!danmaku)
-    return false
-  return !!danmaku.querySelector('.bui-collapse-body, .bpx-player-dm-container, .bui-long-list-wrap')
-}
-
 function isVideoMetadataTransferReady() {
   const toolbar = findMovable(selectors.toolbar)
   if (toolbar?.childElementCount)
@@ -500,16 +492,8 @@ export function isWidescreenTransferContentReady(): boolean {
     return true
 
   const upPanel = findMovable(selectors.upPanel)
-  const danmaku = findMovable(selectors.danmaku)
-  const recommendation = findMovable(selectors.recommend)
-    || findMovable(selectors.playlist)
-  const commentRoot = findCommentRoot(document, true)
   return isUpPanelTransferReady(upPanel)
     && isVideoMetadataTransferReady()
-    && isDanmakuTransferReady(danmaku)
-    && isRecommendationTransferReady(recommendation)
-    && !!commentRoot
-    && isCommentRootUsable(commentRoot)
 }
 
 export function restoreCommentPrewarm() {

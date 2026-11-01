@@ -384,6 +384,11 @@ settings:
     advanced: 進階
     interface_font_size: 介面基礎字級
     interface_font_size_desc: 按比例調整現有文字層級，保留系統同瀏覽器嘅文字縮放。
+    interface_size: 介面尺寸
+    interface_size_desc: '按螢幕嘅像素密度同觀看距離縮細介面，文字縮得少啲。而家 {scale}。'
+    interface_size_compact: 緊湊
+    interface_size_standard: 標準
+    interface_size_comfortable: 寬鬆
     shadows: 介面陰影
     motion: 減少動態效果
     schedule_start: 淺色模式開始時間
@@ -512,6 +517,7 @@ settings:
   topbar_actions: 頂欄功能圖示
   topbar_user_menu: 頂欄用戶選單
   topbar_display_settings: 頂欄顯示同操作
+  collapse_top_bar_search: 自動收起頂欄搜尋框
   group_dock: Dock
   group_sidebar: 側邊欄
   group_color: 顏色
@@ -1886,6 +1892,7 @@ watch_later:
   play_and_remove: 播放兼移除
   play_in_watch_later: 清單播
 widescreen:
+  overview: 簡介
   panel_load_incomplete: 內容未能載入完成，可以重新整理頁面或者退出 Bewly 播放頁後再試
   reload_page: 重新整理頁面
   enter: 進入 Bewly 播放頁
@@ -1903,6 +1910,9 @@ widescreen:
   playlist: 選集
   recommendations: 推介
   up_next: 跟住播
+  playback_navigation: 影片播放導覽
+  previous_video: 上一條睇過嘅片
+  next_video: 下一條睇過嘅片
   collapse: 收起
   expand_more: 展開更多
   comments_loading: 留言區載入緊
@@ -1919,6 +1929,7 @@ widescreen:
 search_bar:
   history_unavailable: 暫時讀取唔到或者確認唔到搜尋記錄，請重新讀取。
   input_label: 搜尋
+  collapsible_placeholder: 搜尋動效…
   clear_keyword: 清空搜尋內容
   submit: 搜尋
   suggestions_label: 搜尋建議

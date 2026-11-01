@@ -9,6 +9,8 @@ import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useHomeTabState } from '~/composables/useHomeTabState'
+import { uiPx } from '~/composables/useUiScale'
+import { VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import type { List as RankingVideoItem, RankingResult } from '~/models/video/ranking'
 import type { List as RankingPgcItem, RankingPgcResult } from '~/models/video/rankingPgc'
@@ -94,6 +96,7 @@ const isRankingAutoSwitchSingleColumn = computed(() => {
     props.gridLayout,
     rankingGridWidth.value,
     rankingGridGap.value,
+    uiPx(VIDEO_CARD_MIN_WIDTH),
   ) === 1
 })
 

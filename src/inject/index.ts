@@ -448,13 +448,42 @@ else if (shouldInitializePageScript) {
           line-height: var(--bew-line-height-caption) !important;
           color: var(--bew-text-3);
         }
+        /* The sort is a static segment like the dynamic cards' comment sort:
+           the chosen order sits on the selected surface and the other only
+           brightens on hover. Bilibili's divider and accent hover go. */
         :host-context(#bewly-widescreen-root) #sort-actions {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--bew-control-gap, 4px);
           margin-left: auto;
         }
+        :host-context(#bewly-widescreen-root) #sort-actions .sort-div {
+          display: none;
+        }
         :host-context(#bewly-widescreen-root) #sort-actions bili-text-button {
+          --_container-height: var(--bew-control-height-sm, 28px);
+          --_leading-space: var(--bew-control-item-padding-x, 12px);
+          --_trailing-space: var(--bew-control-item-padding-x, 12px);
+          --_label-text-color: var(--bew-text-2);
+          --_label-text-color-hover: var(--bew-segment-item-hover-color);
+          border-radius: var(--bew-control-item-radius);
+          corner-shape: var(--bew-corner-shape-capsule);
           font-size: var(--bew-font-size-control) !important;
           line-height: var(--bew-line-height-control) !important;
+          transition:
+            background-color var(--bew-duration-normal) var(--bew-ease-standard),
+            box-shadow var(--bew-duration-normal) var(--bew-ease-standard);
         }
+        :host-context(#bewly-widescreen-root) #sort-actions bili-text-button:hover {
+          background: var(--bew-segment-item-hover-bg);
+        }
+        :host-context(#bewly-widescreen-root) :is(#sort-actions.hot bili-text-button:first-child, #sort-actions.time bili-text-button:last-child) {
+          --_label-text-color: var(--bew-segment-item-active-color);
+          --_label-text-color-hover: var(--bew-segment-item-active-color);
+          background: var(--bew-segment-item-active-bg);
+          box-shadow: var(--bew-segment-item-active-shadow);
+        }
+        ${reducedMotionCss(':host-context(#bewly-widescreen-root) #sort-actions bili-text-button', 'transition:none;', 'native-shadow')}
         ${EXTERNAL_COMPOSER_HEADER_CSS}
       `,
     },
@@ -485,6 +514,14 @@ else if (shouldInitializePageScript) {
           visibility: hidden !important;
         }
 
+        /* Threads part on a hairline that starts at the text's indent (the
+           40px avatar and space-3, like the body), 16px under the thread. */
+        :host-context(#bewly-widescreen-root) #div {
+          margin-left: calc(var(--bew-control-height-lg, 40px) + var(--bew-space-3, 12px));
+          padding-bottom: var(--bew-space-4, 16px);
+          border-bottom: var(--bew-hairline, 1px) solid var(--bew-separator-color);
+        }
+
         ${COMMENT_REPLY_TREE_GUIDES_CSS}
       `,
     },
@@ -502,6 +539,12 @@ else if (shouldInitializePageScript) {
           color: var(--bew-text-3) !important;
           font-size: var(--bew-font-size-caption, 12px) !important;
           line-height: var(--bew-line-height-caption, 16px) !important;
+        }
+
+        /* "View" is a quiet action like reply: it brightens, it is not a link. */
+        :host-context(#bewly-widescreen-root) #view-more bili-text-button {
+          --_label-text-color: var(--bew-text-2);
+          --_label-text-color-hover: var(--bew-text-1);
         }
 
         #spinner {
@@ -622,12 +665,15 @@ else if (shouldInitializePageScript) {
            canvas, so it scales from its corner; it is absolutely placed and
            moves nothing), and the text starts one entity indent in. */
         :host-context(#bewly-widescreen-root) #user-avatar {
+          top: var(--bew-space-4, 16px);
           left: 0;
           scale: calc(5 / 6);
           transform-origin: 0 0;
         }
 
+        /* 16px above a thread, as below the hairline that ends the last. */
         :host-context(#bewly-widescreen-root) #body {
+          padding-top: var(--bew-space-4, 16px);
           padding-left: calc(var(--bew-control-height-lg, 40px) + var(--bew-space-3, 12px));
         }
 

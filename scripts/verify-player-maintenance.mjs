@@ -3,6 +3,184 @@ import assert from 'node:assert/strict'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
+  check('playback trail: skips non-video routes, restores the cursor and branches after going back', async () => {
+    const base = 'https://www.bilibili.com'
+    const video = id => `${base}/video/av${id}/`
+    const route = { href: video(1), applicationHref: video(1) }
+    const history = {
+      state: { site: true },
+      replaceState(state) { this.state = state },
+    }
+    const storage = new Map()
+    const assigned = []
+    const traversed = []
+    const navigation = {
+      currentEntry: { key: 'first' },
+      entries: () => [{ key: 'first', url: video(1), sameDocument: true }],
+      traverseTo(key) {
+        traversed.push(key)
+        return { committed: Promise.resolve() }
+      },
+    }
+    const playbackTab = await import('../src/utils/playbackTab')
+    const media = document.createElement('video')
+    let hasNativeSwitch = false
+    let resolveLegacy
+    const switched = []
+    const bridge = await import('../src/utils/videoMetadataBridge')
+    let sync
+    const load = () => loadSourceModule('../src/composables/usePlaybackTrail.ts', {
+      'vue': Vue,
+      '~/utils/playbackTab': playbackTab,
+      '~/utils/playbackVideoInfo': {
+        getPlaybackPart: (_url, pages) => pages[0],
+        getPlaybackVideoInfo: () => new Promise(resolve => resolveLegacy = resolve),
+      },
+      '~/utils/playerMedia': { getVideoElement: () => media },
+      '~/utils/videoMetadataBridge': {
+        ...bridge,
+        readNativeMediaSnapshot: () => undefined,
+        switchNativePlaybackVisit(_media, href, unit) {
+          if (hasNativeSwitch === 'legacy')
+            return unit ?? 'needs-unit'
+          if (hasNativeSwitch) {
+            switched.push(href)
+            return { aid: 3, bvid: 'BV14ReF6NEWN', cid: 30, page: 1 }
+          }
+        },
+      },
+      '~/composables/useRouteState': {
+        useRouteState: () => route,
+        onRouteChange(fn) {
+          sync = fn
+          fn()
+          return () => {}
+        },
+      },
+    }, {
+      history,
+      sessionStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
+      window: { navigation, location: { assign: url => assigned.push(url) }, addEventListener() {}, removeEventListener() {} },
+    })
+    function visit(href, key, state = null, applicationHref = href) {
+      Object.assign(route, { href, applicationHref })
+      navigation.currentEntry = { key }
+      history.state = state
+      sync()
+    }
+    const page = await load()
+    page.setupPlaybackTrail()
+    const firstState = history.state
+    assert.equal(firstState.site, true)
+    page.goToPlaybackVisit(-1)
+    page.goToPlaybackVisit(1)
+    assert.deepEqual(assigned, [])
+    visit(video(9), 'drawer', null, base)
+    visit(base, 'home')
+    visit(video(2), 'second')
+    visit(`${video(2)}?t=30`, 'second')
+    assert.equal(page.playbackTrail.value.visits.length, 2)
+    page.goToPlaybackVisit(-1)
+    assert.deepEqual(traversed, ['first'])
+    visit(video(1), 'first', firstState)
+    assert.equal(page.playbackTrail.value.index, 0)
+    page.goToPlaybackVisit(1)
+    assert.deepEqual(assigned, [`${video(2)}?t=30`])
+    visit(assigned[0], 'third')
+    const reloaded = await load()
+    reloaded.setupPlaybackTrail()
+    assert.equal(reloaded.playbackTrail.value.index, 1)
+    visit(video(1), 'first', firstState)
+    visit(video(3), 'fourth')
+    assert.deepEqual(Array.from(reloaded.playbackTrail.value.visits, v => v.href), [video(1), video(3)])
+    visit(video(4), 'fourth', history.state)
+    hasNativeSwitch = true
+    const previousAssignCount = assigned.length
+    reloaded.goToPlaybackVisit(-1)
+    reloaded.goToPlaybackVisit(-1)
+    assert.deepEqual(switched, [video(3)], 'repeated clicks wait for the native manifest')
+    assert.equal(reloaded.playbackTrail.value.index, 2, 'cursor moves only on route commit')
+    visit(`${base}/video/BV14ReF6NEWN/`, 'fifth')
+    assert.equal(reloaded.playbackTrail.value.index, 1, 'canonical BV commit restores the AV visit')
+    assert.equal(reloaded.playbackTrail.value.visits.length, 3)
+    assert.equal(assigned.length, previousAssignCount, 'replaced history entry reuses the current document')
+    hasNativeSwitch = 'legacy'
+    const pending = reloaded.goToPlaybackVisit(1)
+    visit(video(5), 'sixth')
+    resolveLegacy({ code: 0, data: { aid: 4, bvid: 'BV1NyeA6zESV', pages: [{ cid: 40, page: 1 }] } })
+    await pending
+    assert.equal(reloaded.playbackTrail.value.visits.at(-1).href, video(5), 'a superseded lookup cannot navigate the new page')
+    assert.equal(assigned.length, previousAssignCount)
+  })
+
+  check('playback resources: overlapping readers share a request and revisits reuse only successful same-account results', async () => {
+    const requests = []
+    let account = '1'
+    const { getPlaybackVideoInfo } = await loadSourceModule('../src/utils/playbackVideoInfo.ts', {
+      '~/utils/main': { getUserID: () => account },
+      '~/utils/api': { default: { video: { getVideoInfo: (_, { signal }) => new Promise(resolve => requests.push({ resolve, signal })) } } },
+    })
+    const params = { bvid: 'BV14ReF6NEWN' }
+    const result = { code: 0, data: { ...params, aid: 1 } }
+    const controller = new AbortController()
+    const a = getPlaybackVideoInfo(params, controller.signal)
+    const b = getPlaybackVideoInfo(params)
+    controller.abort()
+    await assert.rejects(a, { name: 'AbortError' })
+    assert.equal(requests.length, 1)
+    assert.equal(requests[0].signal.aborted, false)
+    requests[0].resolve(result)
+    assert.equal(await b, result)
+    assert.equal(await getPlaybackVideoInfo({ aid: '1' }), result)
+    account = '2'
+    const failed = getPlaybackVideoInfo(params)
+    requests[1].resolve({ code: -404 })
+    await failed
+    const retry = getPlaybackVideoInfo(params)
+    requests[2].resolve(result)
+    assert.equal(await retry, result)
+  })
+
+  check('playback author messages: page preference and native uploader changes select the exact conversation', async () => {
+    const { AppPage } = await import('../src/enums/appEnums')
+    const routes = await import('../src/utils/privateConversationRoute')
+    const original = Vue.ref(true)
+    const { bindAuthorMessageLinks } = await loadSourceModule('../src/utils/bewlyWidescreen/authorMessages.ts', {
+      'vue': Vue,
+      '~/enums/appEnums': { AppPage },
+      '~/stores/settingsStore': { useSettingsStore: () => ({ getDockItemIsUseOriginalBiliPage: (page) => {
+        assert.equal(page, AppPage.Notifications)
+        return original.value
+      } }) },
+      '~/utils/privateConversationRoute': routes,
+    })
+    const slot = document.createElement('div')
+    const link = slot.appendChild(document.createElement('a'))
+    const native = '//message.bilibili.com/?spm_id_from=333.788.upinfo.head.click#whisper/mid123'
+    link.setAttribute('href', native)
+    const stop = bindAuthorMessageLinks(slot)
+    try {
+      assert.equal(link.getAttribute('href'), native)
+      original.value = false
+      assert.deepEqual(routes.parsePrivateConversationRoute(link.href), { sessionType: 1, talkerId: '123' })
+      const next = 'https://message.bilibili.com/#/whisper/mid9007199254740993'
+      link.href = next
+      await flush()
+      assert.deepEqual(routes.parsePrivateConversationRoute(link.href), { sessionType: 1, talkerId: '9007199254740993' })
+      original.value = true
+      assert.equal(link.href, next)
+      original.value = false
+      link.remove()
+      await flush()
+      assert.equal(link.href, next)
+      slot.append(link)
+      await flush()
+      assert.equal(routes.parsePrivateConversationRoute(link.href)?.talkerId, '9007199254740993')
+    }
+    finally { stop() }
+    assert.equal(link.hostname, 'message.bilibili.com')
+  })
+
   check('playback layout: stalled readiness stops idle polling, ignores clock churn and wakes for late media without losing cleanup', async () => {
     let now = 0
     let nextId = 0
@@ -17,13 +195,14 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     const video = root.appendChild(document.createElement('video'))
     const clockNode = root.appendChild(document.createElement('span'))
     const session = { current: null, entering: false }
-    const emptyImports = Object.fromEntries(['actionEffects', 'commentComposer', 'danmaku', 'description', 'displayMode', 'geometry', 'idleProgress', 'labels', 'nativeControls', 'playlist', 'shell', 'sidebar', 'styles/layout', 'videoInfo'].map(name => [`~/utils/bewlyWidescreen/${name}`, {}]))
+    const emptyImports = Object.fromEntries(['actionEffects', 'authorMessages', 'commentComposer', 'danmaku', 'description', 'displayMode', 'geometry', 'idleProgress', 'labels', 'nativeControls', 'playlist', 'shell', 'sidebar', 'styles/layout', 'videoInfo'].map(name => [`~/utils/bewlyWidescreen/${name}`, {}]))
     emptyImports['~/utils/bewlyWidescreen/videoInfo'] = { clearViewerCount() {} }
     emptyImports['~/utils/bewlyWidescreen/railTabs'] = await import('../src/utils/bewlyWidescreen/railTabs')
     const constants = await import('../src/utils/bewlyWidescreen/constants')
     const module = await loadSourceModule('../src/utils/bewlyWidescreen.ts', {
       ...emptyImports,
       'vue': Vue,
+      '~/composables/useDark': {},
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/logic': { settings: Vue.ref({ language: 'en' }) },
       '~/utils/bewlyWidescreen/constants': constants,
@@ -416,6 +595,16 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     }, { CustomEvent: window.CustomEvent, location: window.location })
     const stop = main.setupVideoMetadataBridge('fixture-channel')
     try {
+      const switches = []
+      app.__vue__.player = window.player
+      app.__vue__.switchVideo = target => switches.push(target)
+      const unit = { aid: 2, bvid: 'BV14ReF6NEWN', page: 2, cid: 22 }
+      const next = 'https://www.bilibili.com/video/av2/?p=2&t=9'
+      assert.equal(bridge.switchNativePlaybackVisit(video, next), 'needs-unit')
+      assert.equal(bridge.switchNativePlaybackVisit(video, next, { ...unit, page: 1 }), undefined)
+      assert.equal(bridge.switchNativePlaybackVisit(video, next, unit).cid, 22)
+      assert.equal(switches.length, 1)
+      assert.deepEqual({ ...switches[0] }, { aid: 2, bvid: unit.bvid, p: 2, cid: 22, t: 9 })
       assert.equal(bridge.readNativeQualityState(video).actualQuality, 80)
       realQuality = 64
       assert.equal(bridge.readNativeQualityState(video).quality, 64)
@@ -512,7 +701,7 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     const requests = []
     const module = await loadSourceModule('../src/utils/videoCommentNavigation.ts', {
       '~/utils/abort': abort,
-      '~/utils/api': { default: { video: { getVideoInfo: (identifier, options) => new Promise(resolve => requests.push({ identifier, options, resolve })) } } },
+      '~/utils/playbackVideoInfo': { getPlaybackVideoInfo: (identifier, signal) => new Promise(resolve => requests.push({ identifier, options: { signal }, resolve })) },
       '~/utils/bewlyWidescreen/nativeDom': nativeDom,
       '~/utils/playbackTab': await import('../src/utils/playbackTab'),
       '~/utils/videoMetadataBridge': { readVideoPageMetadata: () => metadata },
@@ -1072,7 +1261,7 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     const constants = await import('../src/utils/bewlyWidescreen/constants')
     const session = { current: null }
     const module = await loadSourceModule('../src/utils/bewlyWidescreen/videoInfo.ts', {
-      '~/utils/api': { default: {} },
+      '~/utils/playbackVideoInfo': {},
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/labels': { t: key => key },
       '~/utils/bewlyWidescreen/nativeDom': {},
@@ -1141,7 +1330,7 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       '</div>',
     ].join('')
     const module = await loadSourceModule('../src/utils/bewlyWidescreen/videoInfo.ts', {
-      '~/utils/api': { default: {} },
+      '~/utils/playbackVideoInfo': {},
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/labels': { t: key => key },
       '~/utils/bewlyWidescreen/nativeDom': { findMovable: () => native },

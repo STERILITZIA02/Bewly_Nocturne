@@ -1,4 +1,4 @@
-import { watch } from 'vue'
+import { shallowRef, watch } from 'vue'
 
 import { useDark } from '~/composables/useDark'
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
@@ -7,8 +7,9 @@ import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { VideoInfo } from '~/models/video/videoInfo'
 import { clearActionGeometry, setupActionGeometryObservers, syncActionAnimationTheme } from '~/utils/bewlyWidescreen/actionEffects'
+import { bindAuthorMessageLinks } from '~/utils/bewlyWidescreen/authorMessages'
 import { setupPlaybackCommentComposer } from '~/utils/bewlyWidescreen/commentComposer'
-import { BODY_CLASS, DANMAKU_SKELETON_CLASS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, EMPTY_CLASS, INITIAL_REVEAL_TIMEOUT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_PLAYER_CLASS, PAGE_READY_FALLBACK_DELAY, READY_POLL_FAST_DURATION, READY_POLL_INTERVAL, READY_STABILITY_DELAY, selectors, SIDEBAR_RELEVANT_SELECTOR, TRANSFER_SETTLE_DELAY } from '~/utils/bewlyWidescreen/constants'
+import { BODY_CLASS, DANMAKU_SKELETON_CLASS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, EMPTY_CLASS, INITIAL_REVEAL_TIMEOUT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_PLAYER_CLASS, NATIVE_VIDEO_LIST_COMPONENT_SELECTOR, PAGE_READY_FALLBACK_DELAY, READY_POLL_FAST_DURATION, READY_POLL_INTERVAL, READY_STABILITY_DELAY, selectors, SIDEBAR_RELEVANT_SELECTOR, TRANSFER_SETTLE_DELAY } from '~/utils/bewlyWidescreen/constants'
 import { clearDanmakuActivation, syncDanmakuInputSource } from '~/utils/bewlyWidescreen/danmaku'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
 import { setupFillToggle, setWidescreenDisplayMode, stopWidescreenZoom, syncFillToggleButton } from '~/utils/bewlyWidescreen/displayMode'
@@ -17,7 +18,7 @@ import { setupIdleProgress } from '~/utils/bewlyWidescreen/idleProgress'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { createWidescreenLoading } from '~/utils/bewlyWidescreen/loading'
 import { setupActiveWidescreenControl, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
-import { classifyWidescreenMutation, disableNativeLightOffMode, findCommentRoot, isReadyForLayout, isWidescreenTransferContentReady, leaveMutuallyExclusivePlayerModes, removeMovedNode, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
+import { classifyWidescreenMutation, disableNativeLightOffMode, findCommentRoot, isReadyForLayout, isWidescreenTransferContentReady, leaveMutuallyExclusivePlayerModes, removeMovedNode, restoreCommentPrewarm, restoreMovedNodes } from '~/utils/bewlyWidescreen/nativeDom'
 import { clearEpisodeSectionMarker, setupPlaylistToggle, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
 import { clearRailTabs } from '~/utils/bewlyWidescreen/railTabs'
 import { session } from '~/utils/bewlyWidescreen/session'
@@ -32,7 +33,7 @@ import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { getPlayerRoot } from '~/utils/playerMedia'
 import type { PlayerModeApplication } from '~/utils/playerModeApplication'
 import { initVerticalVideoZoom } from '~/utils/verticalVideoZoom'
-import { isPgcPlaybackPage, parseVideoMetadataEvent, VIDEO_COMPONENT_CHANGED } from '~/utils/videoMetadataBridge'
+import { isPgcPlaybackPage, parseVideoMetadataEvent, parseVideoPageIdentity, VIDEO_COMPONENT_CHANGED } from '~/utils/videoMetadataBridge'
 
 export type { ExitBewlyWidescreenOptions } from './bewlyWidescreen/types'
 
@@ -81,9 +82,7 @@ function syncLocalizedWidescreenText(currentState = session.current) {
 
   currentState.tabButtons.comment.textContent = t('widescreen.comments')
   currentState.tabButtons.danmaku.textContent = t('widescreen.danmaku')
-  currentState.tabButtons.playlist.textContent = currentState.panels.playlist.querySelector(selectors.playlist.join(','))
-    ? t('widescreen.playlist')
-    : t('widescreen.recommendations')
+  currentState.tabButtons.overview.textContent = t('widescreen.overview')
   syncFillToggleButton(currentState)
   syncDescription(currentState)
   syncPlaylistToggleButton(currentState)
@@ -92,7 +91,7 @@ function syncLocalizedWidescreenText(currentState = session.current) {
 
   const emptyLabels: Array<[HTMLElement, string]> = [
     [currentState.panels.comment, 'widescreen.comments_loading'],
-    [currentState.panels.playlist, 'widescreen.list_loading'],
+    [currentState.playlistSlot, 'widescreen.list_loading'],
   ]
   for (const [panel, key] of emptyLabels) {
     const empty = panel.querySelector<HTMLElement>(`.${EMPTY_CLASS}`)
@@ -154,6 +153,7 @@ function setupWidescreenSettingsWatchers(currentState: BewlyWidescreenState) {
   currentState.settingsWatchCleanup = [
     stopThemeWatch,
     stopPositionWatch,
+    bindAuthorMessageLinks(currentState.upSlot),
   ]
 }
 
@@ -286,7 +286,11 @@ function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
     const origins = currentState.movedNodes
       .map(({ placeholder }) => placeholder.parentNode)
       .filter((parent): parent is Element => parent instanceof Element && parent.isConnected && !currentState.root.contains(parent))
-    const subtrees = [currentState.root, ...new Set(origins)]
+    // A server-rendered list can finish mounting after body-wide discovery
+    // ends. Keep its subtree observed until its real cover nodes arrive.
+    const pendingLists = Array.from(document.querySelectorAll(NATIVE_VIDEO_LIST_COMPONENT_SELECTOR))
+      .filter(list => !currentState.root.contains(list))
+    const subtrees = [currentState.root, ...new Set([...origins, ...pendingLists])]
       .filter((target, index, all) => !all.some((other, otherIndex) => otherIndex !== index && other !== target && other.contains(target)))
     const ancestors = new Set<Element>()
     for (const target of subtrees) {
@@ -378,7 +382,7 @@ function cleanupState(currentState: BewlyWidescreenState) {
   if (movedCommentRoot && replacementCommentRoot)
     removeMovedNode(movedCommentRoot, currentState.movedNodes)
 
-  clearEpisodeSectionMarker(currentState.panels.playlist, currentState.movedNodes)
+  clearEpisodeSectionMarker(currentState.playlistSlot, currentState.movedNodes)
   restoreMovedNodes(currentState.movedNodes)
   clearRailTabs(currentState.tabButtons.comment.parentElement!)
   currentState.root.remove()
@@ -395,12 +399,14 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   if (!player)
     return false
 
-  const { root, backdrop, stage, playerSlot, playerFrame, danmakuDock, sidebarEl, infoEl, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton } = createRoot(sidebarPosition)
+  const { root, backdrop, stage, playerSlot, playerFrame, danmakuDock, sidebarEl, playlistSlot, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton } = createRoot(sidebarPosition)
   const styleEl = injectLayoutStyle()
   root.dataset.pageKind = isPgcPlaybackPage() ? 'pgc' : 'video'
   const movedNodes: MovedNode[] = []
 
   const application = pendingApplication
+  // The Vue top bar follows the mode; player geometry and native DOM stay plain.
+  const displayMode = shallowRef<BewlyWidescreenState['displayMode']>('card')
   const nextState: BewlyWidescreenState = {
     exit: exitBewlyWidescreen,
     refreshSidebar: () => scheduleSidebarRefresh(nextState),
@@ -413,7 +419,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     playerFrame,
     danmakuDock,
     sidebarEl,
-    infoEl,
+    playlistSlot,
     sidebarTop,
     metadataSlot,
     upSlot,
@@ -425,8 +431,9 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     playlistToggleButton,
     movedNodes,
     styleEl,
-    activeTab: 'comment',
-    displayMode: 'card',
+    activeTab: 'overview',
+    get displayMode() { return displayMode.value },
+    set displayMode(mode) { displayMode.value = mode },
     sidebarPosition,
     descriptionExpanded: false,
     playlistCollapsed: false,
@@ -434,8 +441,8 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     initialScrollResetTabs: new Set(),
     panelScrollFrames: new Map(),
     navigationPending: false,
-    bottomControlsHovered: false,
-    playerPointerInside: false,
+    playbackHref: location.href,
+    playerControlsActive: false,
     controlsLayoutReady: false,
     onInitialLayoutReady: () => {
       clearTimeout(nextState.initialRevealTimer)
@@ -455,7 +462,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   setupPlaylistToggle(nextState)
   syncSidebarReadiness(nextState, {
     complete: false,
-    top: false,
+    overview: false,
     comment: false,
     danmaku: false,
     playlist: false,
@@ -488,7 +495,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
 
   player.classList.add(NATIVE_PLAYER_CLASS)
   syncAnchoredPlayerGeometry(nextState)
-  setActiveTab('comment', false)
+  setActiveTab('overview', false)
   startSidebarHydration(nextState)
   void loadFallbackVideoInfo(nextState)
   setupActionGeometryObservers(nextState)
@@ -516,7 +523,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   return true
 }
 
-function clearReadyWait({ preserveCommentPrewarm = false }: { preserveCommentPrewarm?: boolean } = {}) {
+function clearReadyWait() {
   readyObserver?.disconnect()
   readyObserver = undefined
   if (readyFrame !== undefined)
@@ -535,8 +542,6 @@ function clearReadyWait({ preserveCommentPrewarm = false }: { preserveCommentPre
     clearTimeout(pageReadyFallbackTimer)
     pageReadyFallbackTimer = undefined
   }
-  if (!preserveCommentPrewarm)
-    restoreCommentPrewarm()
   clearPageReadyHandler()
   pageReadyForLayout = false
   playerReadyForLayout = false
@@ -573,7 +578,7 @@ function waitForReadyLayout() {
       return true
     }
     if (session.current) {
-      clearReadyWait({ preserveCommentPrewarm: true })
+      clearReadyWait()
       return true
     }
     // Complete native structure commits once the DOM is parsed; images, ads
@@ -596,7 +601,7 @@ function waitForReadyLayout() {
       readinessStableSince = undefined
       return false
     }
-    clearReadyWait({ preserveCommentPrewarm: true })
+    clearReadyWait()
     return true
   }
 
@@ -613,7 +618,6 @@ function waitForReadyLayout() {
         exitBewlyWidescreen()
         return
       }
-      startCommentPrewarm()
       playerReadyForLayout = isReadyForLayout()
       structureReadyForLayout = isWidescreenTransferContentReady()
       contentReadyForLayout = structureReadyForLayout
@@ -691,13 +695,16 @@ export function applyBewlyWidescreen(
   waitForReadyLayout()
 }
 
-export function prepareBewlyPlaybackPageNavigation() {
+export function prepareBewlyPlaybackPageNavigation(href = location.href) {
   const currentState = session.current
   if (!currentState || !currentState.root.isConnected)
     return false
 
-  suspendSidebarForVideoNavigation(currentState)
-  return true
+  const previous = parseVideoPageIdentity(currentState.playbackHref)
+  const next = parseVideoPageIdentity(href)
+  const sameManuscript = previous && next && (previous.bvid ? previous.bvid === next.bvid : previous.aid === next.aid)
+  suspendSidebarForVideoNavigation(currentState, sameManuscript ? 'part' : 'video')
+  return currentState.navigationPending
 }
 
 export function refreshBewlyPlaybackPageNavigation(videoInfoRequest?: Promise<VideoInfo>) {
@@ -706,13 +713,16 @@ export function refreshBewlyPlaybackPageNavigation(videoInfoRequest?: Promise<Vi
     return false
 
   if (!currentState.navigationPending)
-    suspendSidebarForVideoNavigation(currentState)
+    prepareBewlyPlaybackPageNavigation()
+  const changedManuscript = currentState.navigationPending === 'video'
+  currentState.playbackHref = location.href
   currentState.navigationPending = false
   delete currentState.root.dataset.navigationPending
 
   ensureAnchoredPlayer(currentState)
   syncSidebarTitle(currentState)
-  void loadFallbackVideoInfo(currentState, videoInfoRequest)
+  if (changedManuscript || !currentState.videoInfoData)
+    void loadFallbackVideoInfo(currentState, videoInfoRequest)
   // A new episode/manuscript may render its native hosts anywhere again.
   currentState.restartDomDiscovery?.()
   scheduleSidebarRefresh(currentState)
@@ -732,6 +742,7 @@ export function exitBewlyWidescreen({ userInitiated = false }: ExitBewlyWidescre
   if (userInitiated)
     dispatchManualWidescreenToggle('exit')
   stopWidescreenLanguageWatch()
+  restoreCommentPrewarm()
   clearReadyWait()
   clearPageReadyHandler()
   loading.reset()
@@ -756,7 +767,7 @@ export function isBewlyPlaybackLayoutReady() {
 }
 
 export function isBewlyPlaybackNavigationPending() {
-  return session.current?.navigationPending === true
+  return Boolean(session.current?.navigationPending)
 }
 
 export function isBewlyWidescreenEngaged() {

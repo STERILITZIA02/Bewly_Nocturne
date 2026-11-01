@@ -351,7 +351,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
   check('DOM fixture: sidebar hydration spends visible time only, waits for an in-flight native request, and recovers after its notice', async () => {
     const time = clock()
     const root = document.createElement('div')
-    const panels = Object.fromEntries(['comment', 'danmaku', 'playlist'].map(tab => [tab, document.createElement('section')]))
+    const panels = Object.fromEntries(['overview', 'comment', 'danmaku'].map(tab => [tab, document.createElement('section')]))
     const sidebarTop = document.createElement('div')
     root.append(sidebarTop, ...Object.values(panels))
     document.body.append(root)
@@ -368,7 +368,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
         page.listeners.forEach(listener => listener())
       },
     }
-    let readiness = { top: true, comment: false, complete: false }
+    let readiness = { overview: true, comment: false, complete: false }
     let nativeRequestPending = false
     let prewarms = 0
     let restores = 0
@@ -447,17 +447,17 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     assert.equal(exits, 1)
 
     // A late completion ends the watch (the notice itself is cleared by fillSidebar).
-    readiness = { top: true, comment: true, complete: true }
+    readiness = { overview: true, comment: true, complete: true }
     time.tick(1_000)
     assert.equal(time.tasks.size, 0)
 
     // Without a late node, watching stops and the list goes back.
-    readiness = { top: false, comment: false, complete: false }
+    readiness = { overview: false, comment: false, complete: false }
     context.startSidebarHydration(currentState)
     time.tick(60_000)
     assert.equal(time.tasks.size, 0)
     assert.equal(restores, 1)
-    assert.ok(sidebarTop.querySelector('.bewly-widescreen-panel-error'), 'a missing top module shows its own notice')
+    assert.equal(sidebarTop.querySelector('.bewly-widescreen-panel-error'), null, 'a comment failure stays in the comment panel')
 
     currentState.navigationPending = true
     buttons[0].click()
@@ -522,6 +522,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
       sidebarRefreshFrame: undefined,
       selectors: { danmakuInput: [] },
       NATIVE_LIGHT_OFF_CONTROL_SELECTORS: [],
+      NATIVE_VIDEO_LIST_COMPONENT_SELECTOR: '.video-pod,.recommend-list-v1',
       MutationObserver: class {
         constructor(callback) {
           this.callback = callback

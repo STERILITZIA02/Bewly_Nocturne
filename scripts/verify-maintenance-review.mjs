@@ -70,6 +70,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     const viewport = document.body.appendChild(document.createElement('div'))
     const scrollViewportRef = Vue.ref(viewport)
     const activatedPage = Vue.ref('Home')
+    const playbackSession = Vue.shallowReactive({ current: null })
     const store = { showTopBar: true, popupVisible: {}, setUiActive: async value => activations.push(value), cleanup: () => activations.push(false) }
     const noUI = { render: () => null }
     const TopBar = await compileComponent('../src/components/TopBar/TopBar.vue', {
@@ -84,7 +85,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       '~/logic/layoutEdit': { isLayoutEditing: Vue.ref(false), useLayoutEditableRoot() {}, vLayoutEditable: {} },
       '~/stores/settingsStore': { useSettingsStore: () => ({ getEffectiveTopBarSource: () => 'bewly' }) },
       '~/stores/topBarStore': { useTopBarStore: () => store },
-      '~/utils/bewlyWidescreen': { isBewlyWidescreenActive: () => false },
+      '~/utils/bewlyWidescreen/session': { session: playbackSession },
       '~/utils/iframeDrawerHost': { isIframeDrawerHost: () => false },
       '~/utils/main': { isHomePage: () => true, isInIframe: () => false, isUserSpacePage: () => false, isVideoOrBangumiPage: () => false },
       '~/utils/messaging': { reportRuntimeFailure: (_context, error) => { throw error } },
@@ -115,6 +116,16 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
         await flush()
         assert.equal(nextHost.querySelector('header.hide'), null, 'the top bar never hides on scroll')
       }
+      playbackSession.current = Vue.reactive({ displayMode: 'card' })
+      await flush()
+      assert.ok(nextHost.querySelector('header:not(.hide)'))
+      playbackSession.current.displayMode = 'fill'
+      await flush()
+      assert.equal(nextHost.querySelector('header, [data-home-logo]'), null)
+      playbackSession.current.displayMode = 'card'
+      await flush()
+      assert.ok(nextHost.querySelector('header:not(.hide)'))
+      assert.ok(nextHost.querySelector('[data-home-logo]'))
     }
     finally {
       nextApp.unmount()
@@ -452,7 +463,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     }
   })
 
-  async function searchFixture() {
+  async function searchFixture(playbackHeader = false) {
     const pending = []
     const debounce = []
     let delayInput = false
@@ -510,10 +521,22 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
           return history = []
         },
       },
-    })
+    }, { globals: { CSS: window.CSS } })
     const host = document.body.appendChild(document.createElement('div'))
     const props = Vue.reactive({ modelValue: '' })
-    const app = Vue.createApp({ render: () => Vue.h(source, { ...props, 'onUpdate:modelValue': value => props.modelValue = value }) })
+    const header = playbackHeader && await compileComponent('../src/components/TopBar/components/TopBarSearch.vue', {
+      'pinia': { storeToRefs: () => ({ searchKeyword: Vue.ref('') }) },
+      '~/logic': { settings },
+      '~/components/SearchBar/SearchBar.vue': { default: source },
+      '~/stores/topBarStore': { useTopBarStore: () => ({}) },
+      '~/utils/bewlyWidescreen/session': { session: { current: { displayMode: 'card' } } },
+      '~/utils/searchHandoff': {},
+      '../composables/useTopBarInteraction': { useTopBarInteraction: () => ({ showSearchBar: Vue.ref(true), forceWhiteIcon: Vue.ref(false) }) },
+      './PlaybackHistoryControls.vue': { default: await compileComponent('../src/components/TopBar/components/PlaybackHistoryControls.vue', {
+        '~/composables/usePlaybackTrail': { playbackTrail: Vue.ref({ index: 1, visits: [{}, {}] }), goToPlaybackVisit() {} },
+      }) },
+    })
+    const app = Vue.createApp({ render: () => header ? Vue.h(header) : Vue.h(source, { ...props, 'onUpdate:modelValue': value => props.modelValue = value }) })
     app.component('ALink', { props: ['href'], setup: (props, { slots }) => () => Vue.h('a', { href: props.href }, slots.default?.()) })
     app.component('SkeletonBlock', { render: () => Vue.h('span') })
     app.component('Tooltip', { inheritAttrs: false, setup: (_props, { slots }) => () => slots.default?.() })
@@ -549,6 +572,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       fixture.failHistory(true)
       fixture.host.querySelector('.history-item__remove').click()
       await flush()
+      assert.deepEqual(fixture.errors, [])
       assert.equal(fixture.host.querySelectorAll('.history-item').length, 2)
       assert.ok(fixture.host.querySelector('[role="alert"]'))
       fixture.host.querySelector('[aria-label="search_bar.clear_history"]').click()
@@ -572,6 +596,92 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       await flush()
       assert.equal(fixture.host.querySelectorAll('.history-item').length, 2, 'the superseded read cannot replace the retained write-failure state')
       assert.ok(fixture.host.querySelector('[role="alert"]'))
+      assert.equal(fixture.errors.length, 0)
+    }
+    finally { fixture.close() }
+  })
+
+  check('playback search: hover covers the same navigation capsule and collapse restores it', async () => {
+    const f = await searchFixture(true)
+    try {
+      const search = f.host.querySelector('#search-wrap')
+      const capsule = f.host.querySelector('.playback-history-controls')
+      await flush()
+      assert.equal(capsule.hasAttribute('inert'), false)
+      assert.deepEqual(Array.from(capsule.querySelectorAll('button'), b => b.disabled), [false, true])
+      search.dispatchEvent(new window.PointerEvent('pointerenter', { pointerType: 'mouse' }))
+      await flush()
+      assert.equal(capsule.hasAttribute('inert'), true)
+      search.dispatchEvent(new window.PointerEvent('pointerleave', { pointerType: 'mouse' }))
+      await flush()
+      assert.equal(capsule.hasAttribute('inert'), false)
+      assert.equal(f.host.querySelector('.playback-history-controls'), capsule)
+      assert.deepEqual(f.errors, [])
+    }
+    finally { f.close() }
+  })
+
+  check('review search UI: the collapsible field follows focus, drafts and the home sticky threshold', async () => {
+    const fixture = await searchFixture()
+    const { host, props } = fixture
+    const input = host.querySelector('input')
+    const button = host.querySelector('.search-submit-btn')
+    try {
+      props.collapsible = true
+      props.keepExpanded = true
+      await flush()
+      assert.equal(input.tabIndex, 0)
+      props.keepExpanded = false
+      await flush()
+      assert.equal(button.getAttribute('aria-controls'), input.id)
+      assert.equal(button.getAttribute('aria-expanded'), 'false')
+      assert.equal(input.tabIndex, -1)
+      const wrap = host.querySelector('#search-wrap')
+      const point = (type, pointerType = 'mouse') => wrap.dispatchEvent(new window.PointerEvent(type, { pointerType }))
+      point('pointerenter', 'touch')
+      await flush()
+      assert.equal(button.getAttribute('aria-expanded'), 'false')
+      point('pointerenter')
+      await flush()
+      assert.equal(button.getAttribute('aria-expanded'), 'true')
+      assert.notEqual(document.activeElement, input)
+      assert.equal(input.getAttribute('aria-expanded'), 'false', 'hover leaves search suggestions closed')
+      point('pointerleave')
+      await flush()
+      assert.equal(button.getAttribute('aria-expanded'), 'false')
+      point('pointerenter')
+      button.click()
+      assert.equal(document.activeElement, input)
+      point('pointerleave')
+      await flush()
+      assert.equal(button.getAttribute('aria-expanded'), 'true')
+      input.blur()
+      await flush()
+      assert.equal(document.activeElement, button)
+      assert.equal(button.getAttribute('aria-expanded'), 'false')
+      button.click()
+      input.value = 'draft'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.blur()
+      await flush()
+      assert.equal(button.getAttribute('aria-expanded'), 'true')
+      input.focus()
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await flush()
+      assert.equal(document.activeElement, button)
+      assert.equal(button.getAttribute('aria-expanded'), 'false')
+      button.click()
+      assert.equal(input.value, 'draft')
+      props.keepExpanded = true
+      await flush()
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await flush()
+      assert.equal(input.tabIndex, 0)
+      props.collapsible = false
+      props.keepExpanded = false
+      await flush()
+      assert.equal(button.hasAttribute('aria-expanded'), false)
+      assert.equal(input.tabIndex, 0)
       assert.equal(fixture.errors.length, 0)
     }
     finally { fixture.close() }

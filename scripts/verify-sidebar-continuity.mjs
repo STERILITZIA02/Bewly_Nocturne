@@ -292,7 +292,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.doesNotMatch(logo, /translate:/, 'the icon never moves between rail and non-rail pages')
     assert.doesNotMatch(header, /ProgressiveBlur|translateX|ResizeObserver/, 'no top bar edge blur and no centring offset')
     assert.match(header, /padding-inline: var\(--bew-home-logo-inline-start\)/)
-    assert.match(header, /grid-template-columns:\s*auto minmax\(0, var\(--bew-search-bar-max-width\)\)/, 'search column follows the logo')
+    assert.match(header, /grid-template-columns:\s*auto minmax\(0, var\(--bew-search-bar-max-width\)\)/, 'search overlays playback navigation at its regular width')
     assert.match(header, /--top-bar-rail-offset: max\(\s*0px,\s*calc\(var\(--bew-messages-sidebar-width\)/, 'rail displacement has one shared value')
     assert.match(header, /\.top-bar-header--rail \{[\s\S]*?margin-inline-start: var\(--top-bar-rail-offset\);[\s\S]*?translate: var\(--top-bar-rail-offset\) 0;/, 'the grid reserves the displacement before translating search and channels')
     // The dock follows the scroll: sticky first, then the next stretch of scrolling
@@ -300,7 +300,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(app, /scroll-timeline: --bew-page-scroll block;/)
     assert.match(home, /@supports \(animation-timeline: scroll\(\)\)[\s\S]*?animation-timeline: --bew-page-scroll;[\s\S]*?animation-range: var\(--bew-layout-home-search-stage-sticky-scroll-top\)\s+calc\(var\(--bew-layout-home-search-stage-sticky-scroll-top\) \+ var\(--bew-home-search-dock-travel\)\)/)
     assert.match(home, /translate: calc\(var\(--bew-home-search-dock-start\) - var\(--bew-home-search-left, 0px\)\) 0;/)
-    assert.match(home, /'--bew-layout-home-search-stage-sticky-scroll-top': `\$\{searchStage\.value\.stickyScrollTop\}px`/)
+    assert.match(home, /'--bew-layout-home-search-stage-sticky-scroll-top': `\$\{stickyScrollTop\.value\}px`/)
     assert.match(home, /subscribeViewportFrame\(viewport, \(_geometry, reason\) => \{\s*if \(reason === 'layout'\)\s*measureSearchDock\(\)/, 'measured on layout frames only, never per scroll')
     assert.doesNotMatch(home, /home-search-stage__dock--docked|position: fixed/, 'no jump between centred and docked states')
   })
@@ -339,7 +339,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.doesNotMatch(storage, /openNotificationsPageAsDrawer|key: 'notifications'/)
     assert.match(retired, /'openNotificationsPageAsDrawer'/)
     // Three groups (user-specified): the pages, creating, the avatar.
-    assert.match(right, /<div\s+v-if="isLogin" v-layout-editable="'topbar'" class="top-bar-tools"[^>]*>[\s\S]*?showPageItem\('watchLater'\)[\s\S]*?<div v-if="isLogin && showCreateGroup" class="top-bar-tools top-bar-tools--wide-only">[\s\S]*?isComponentVisible\('creatorCenter'\)[\s\S]*?isComponentVisible\('upload'\)[\s\S]*?<\/div>\s*<!-- Avatar/, 'pages and creating are two capsules; the avatar stays outside both')
+    assert.match(right, /<div\s+v-if="isLogin" v-layout-editable="'topbar'" class="top-bar-tools"[^>]*>[\s\S]*?showPageItem\('watchLater'\)[\s\S]*?<div v-if="isLogin && showCreateGroup" data-top-bar-creation class="top-bar-tools top-bar-tools--wide-only">[\s\S]*?isComponentVisible\('creatorCenter'\)[\s\S]*?isComponentVisible\('upload'\)[\s\S]*?<\/div>\s*<!-- Avatar/, 'pages and creating are two capsules; the avatar stays outside both')
     assert.doesNotMatch(right, /shouldShowDivider/, 'groups are separate capsules, not a divider')
     assert.match(right, /usePageDim\(pagesGroupHovered\)/)
     assert.match(right, /@pointerenter="pagesGroupHovered = true" @pointerleave="pagesGroupHovered = false"/, 'the page group dims the page while hovered')
@@ -351,6 +351,30 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(logo, /\.logo-circle \{\s*@include sidebarSurface\.floating\(round\);/, 'one shared floating material for both sides; the logo circle stays a true circle')
     assert.match(surface, /@mixin floating\(\$shape: capsule\) \{/)
     assert.match(header, /padding-inline: var\(--bew-home-logo-inline-start\) var\(--bew-page-inline-inset\);/, 'avatar inset matches the page content inset')
+  })
+  check('top bar: only playback removes the creation capsule and overflow entry from layout', async () => {
+    const directory = fileURLToPath(new URL('../src/components/TopBar/', import.meta.url))
+    const filename = join(directory, 'TopBar.vue')
+    const { descriptor } = parse(await readFile(filename, 'utf8'))
+    const compiled = await compileStyleAsync({ filename, source: descriptor.styles[0].content, id: 'data-v-msg', scoped: true, preprocessLang: 'scss', preprocessOptions: { loadPaths: [directory] } })
+    assert.deepEqual(compiled.errors, [])
+    const css = document.head.appendChild(document.createElement('style'))
+    css.textContent = compiled.code
+    const host = document.body.appendChild(document.createElement('div'))
+    host.setAttribute('data-v-msg', '')
+    host.innerHTML = '<div class="right-side"><div class="top-bar-tools"></div><div class="top-bar-tools top-bar-tools--wide-only" data-top-bar-creation><a></a><a></a></div><a class="more-pop__row" data-top-bar-creation></a></div>'
+    try {
+      for (const playback of [false, true, false]) {
+        host.className = playback ? 'top-bar top-bar--over-player' : 'top-bar'
+        for (const entry of host.querySelectorAll('[data-top-bar-creation]'))
+          assert.equal(getComputedStyle(entry).display === 'none', playback)
+        assert.notEqual(getComputedStyle(host.querySelector('.top-bar-tools')).display, 'none')
+      }
+    }
+    finally {
+      host.remove()
+      css.remove()
+    }
   })
   check('top bar: the action for the page already open is hidden; the bar itself never hides', async () => {
     const read = path => readFile(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8')
@@ -1000,9 +1024,10 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     const variables = await read('styles/variables.scss')
     const tokens = Object.fromEntries([...variables.matchAll(/^ {2}(--bew-[\w-]*radius[\w-]*): ([^;]+);/gm)].map(match => [match[1], match[2]]))
     assert.equal(tokens['--bew-media-radius'], 'var(--bew-radius-lg)', 'the video cover anchor')
-    assert.equal(tokens['--bew-radius-lg'], '16px')
+    // Steps scale by display through ui() (utils/uiScale.ts); the 14-inch design values stay the anchor.
+    assert.equal(tokens['--bew-radius-lg'], '#{ui(16px)}')
     assert.equal(tokens['--bew-surface-radius'], 'var(--bew-radius-lg)', 'cards, panels and popovers')
-    assert.deepEqual(['xs', 'sm', 'md', 'lg', 'xl', '2xl'].map(step => tokens[`--bew-radius-${step}`]), ['4px', '8px', '12px', '16px', '24px', '32px'])
+    assert.deepEqual(['xs', 'sm', 'md', 'lg', 'xl', '2xl'].map(step => tokens[`--bew-radius-${step}`]), ['4px', '8px', '12px', '16px', '24px', '32px'].map(value => `#{ui(${value})}`))
     assert.match(variables, /--bew-popover-padding: var\(--bew-space-2\);/, '8px items + 8px inset = 16px popover corner')
     assert.match(variables, /--bew-library-filter-padding: var\(--bew-space-2\);/)
     const files = await listStylePolicyFiles()
@@ -1017,7 +1042,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(variables, /@media \(min-resolution: 2dppx\) \{\n {2}:host,\n {2}:root \{\n {4}--bew-hairline: 0\.5px;/)
     const light = variables.slice(0, variables.indexOf(':root.dark {'))
     const dark = variables.slice(variables.indexOf(':root.dark {'))
-    const amount = (css, token) => Number(new RegExp(`${token}: color-mix\\(in srgb, var\\(--bew-neutral-fg\\) ([\\d.]+)%`).exec(css)?.[1])
+    const amount = (css, token) => Number(new RegExp(`${token}: color-mix\\(\\s*in srgb,\\s*var\\(--bew-neutral-fg\\) calc\\(([\\d.]+)%`).exec(css)?.[1])
     assert.deepEqual(['--bew-separator-color', '--bew-edge-color', '--bew-field-edge-color', '--bew-field-edge-color-hover'].map(token => amount(light, token)), [12, 14, 18, 20.5])
     assert.deepEqual(['--bew-separator-color', '--bew-edge-color', '--bew-field-edge-color', '--bew-field-edge-color-hover'].map(token => amount(dark, token)), [12, 16, 18, 20.5])
     assert.match(variables, /prefers-contrast: more[\s\S]*?--bew-edge-color: color-mix\(in srgb, var\(--bew-neutral-fg\) 32%/)
@@ -1031,7 +1056,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(await read('components/LibraryWorkspace.vue'), /border-inline-end: var\(--bew-glass-edge-width\) solid var\(--bew-glass-edge-color\);/)
     assert.match(await read('contentScripts/views/Moments/MomentsHotSearch.vue'), /border: var\(--bew-glass-edge-width\) solid var\(--bew-glass-edge-color\);/)
     const searchBar = await read('components/SearchBar/SearchBar.vue')
-    assert.match(searchBar, /\n {4}input \{\n {6}@include card-content;\n {6}appearance: none;\n[^}]*border: var\(--bew-glass-edge-width\) solid var\(--bew-glass-edge-color\);/, 'the top bar and home search capsule draws the glass rim')
+    assert.match(searchBar, /\.search-bar::before \{[^}]*border: var\(--bew-glass-edge-width\) solid var\(--bew-glass-edge-color\);/, 'the search capsule keeps its glass rim even when the input has zero width')
     assert.doesNotMatch(searchBar, /border-hairline|border-\$bew-edge-color/, 'no ordinary edge competes with the rim')
     assert.match(searchBar, /\.search-bar::before \{[^}]*box-shadow: var\(--bew-glass-shadow\);/, 'the search bar lifts like the other floating glass')
     assert.doesNotMatch(await read('components/TopBar/styles/index.scss'), /:deep\(\.search-bar\)/, 'the top bar does not repaint the search rim or shadow')
@@ -1313,7 +1338,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     for (const source of [history, watchLater, favoritesLayout])
       assert.doesNotMatch(source, /\.(?:history|watch-later|favorites)-hero \{\s*position: relative;/, 'a page must not undo the hero\'s pin')
     assert.match(hero, /\.library-hero__media \{\s*position: relative;\s*flex: 1 1 0;/, 'the cover takes the rest')
-    assert.match(await read('styles/variables.scss'), /--bew-library-hero-height: calc\(\s*clamp\(160px, 22vw, 260px\) \+ var\(--bew-space-4\) \* 2 \+ var\(--bew-line-height-heading\) \* 2\s*\);/, 'the hero keeps its earlier height and shape')
+    assert.match(await read('styles/variables.scss'), /--bew-library-hero-height: calc\(\s*clamp\(#\{ui\(160px\)\}, 22vw, #\{ui\(260px\)\}\) \+ var\(--bew-space-4\) \* 2 \+ var\(--bew-line-height-heading\) \* 2\s*\);/, 'the hero keeps its earlier height and shape')
     assert.match(hero, /\.library-hero__body \{[^}]*flex-direction: column;\s*justify-content: space-between;/)
     assert.match(history, /eyebrow: groupLabel\(group\),\s*title: item\.show_title \|\| item\.title,/)
     assert.match(watchLater, /:title="t\('watch_later\.title'\)" :meta="t\('library_tools\.video_count'/)

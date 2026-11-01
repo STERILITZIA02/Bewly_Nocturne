@@ -384,6 +384,11 @@ settings:
     advanced: Advanced
     interface_font_size: Interface base font size
     interface_font_size_desc: Scale the existing text hierarchy while retaining system and browser text scaling.
+    interface_size: Interface size
+    interface_size_desc: "Shrinks the interface to suit the screen's pixel density and viewing distance; text shrinks less. Now {scale}."
+    interface_size_compact: Compact
+    interface_size_standard: Standard
+    interface_size_comfortable: Comfortable
     shadows: Interface shadows
     motion: Reduce motion
     schedule_start: Light mode start time
@@ -489,6 +494,7 @@ settings:
   topbar_actions: Top bar actions
   topbar_user_menu: Top bar user menu
   topbar_display_settings: Top bar display & behavior
+  collapse_top_bar_search: Automatically collapse the top bar search field
   group_dock: Dock
   group_sidebar: Sidebar
   group_color: Color
@@ -1919,6 +1925,7 @@ watch_later:
   play_and_remove: Play & remove
   play_in_watch_later: Playlist
 widescreen:
+  overview: Overview
   panel_load_incomplete: Content could not finish loading. Reload the page or exit Bewly Playback Page to try again.
   reload_page: Reload page
   enter: Open Bewly Playback Page
@@ -1936,6 +1943,9 @@ widescreen:
   playlist: Playlist
   recommendations: Recommendations
   up_next: Up next
+  playback_navigation: Playback navigation
+  previous_video: Previous video in this tab
+  next_video: Next video in this tab
   collapse: Collapse
   expand_more: Expand more
   comments_loading: Loading comments
@@ -1952,6 +1962,7 @@ widescreen:
 search_bar:
   history_unavailable: Search history could not be read or confirmed. Please reload it.
   input_label: Search
+  collapsible_placeholder: Search animations…
   clear_keyword: Clear search query
   submit: Search
   suggestions_label: Search suggestions

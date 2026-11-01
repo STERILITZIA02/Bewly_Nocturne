@@ -197,7 +197,11 @@ $line-ramp: var(--bew-space-6);
     }
   }
 
+  // The off flags inherit, so a class fade resets them: a list nested in a
+  // `--no-bottom` scroller still fades at its own bottom edge.
   .bew-scroll-edge-fade {
+    --bew-scroll-edge-top-off: 0;
+    --bew-scroll-edge-bottom-off: 0;
     @include vertical;
   }
 

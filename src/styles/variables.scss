@@ -1,4 +1,5 @@
 @use "./breakpoints";
+@use "./uiScale" as *;
 @use "./appearancePalette";
 
 .library-workspace__rail {
@@ -11,6 +12,18 @@
 
 :host,
 :root {
+  // #region Interface scale
+  // One factor per display (utils/uiScale.ts, written by composables/useUiScale.ts
+  // only when it is not 1) keeps larger and coarser screens at the density of the
+  // 14-inch design. Layout lengths take the full factor through `ui()`; text and
+  // the icons beside it take half of it. Content maxima, the 24px minimum target,
+  // hairlines, blur, shadows and durations stay fixed. Lengths snap to
+  // --bew-ui-pixel, one device pixel.
+  --bew-ui-scale: 1;
+  --bew-ui-pixel: 1px;
+  --bew-ui-text-scale: calc((1 + var(--bew-ui-scale)) / 2);
+  // #endregion
+
   --bew-page-max-width: 2280px;
 
   // #region Typography
@@ -19,7 +32,7 @@
   // The user's OS/browser preference scales every role together.
   --bew-font-scale: 1;
   --bew-interface-scale: 1;
-  --bew-effective-font-scale: calc(var(--bew-font-scale) * var(--bew-interface-scale));
+  --bew-effective-font-scale: calc(var(--bew-font-scale) * var(--bew-interface-scale) * var(--bew-ui-text-scale));
   --bew-font-size-caption: calc(11px * var(--bew-effective-font-scale));
   --bew-font-size-callout: calc(12px * var(--bew-effective-font-scale));
   --bew-font-size-control: calc(13px * var(--bew-effective-font-scale));
@@ -63,23 +76,23 @@
   // #endregion
 
   // Icon-font glyphs use their own scale and must not be mistaken for text.
-  --bew-icon-size-sm: 16px;
-  --bew-icon-size-xs: 14px;
-  --bew-icon-size-md: 20px;
-  --bew-icon-size-lg: 24px;
-  --bew-icon-size-xl: 32px;
+  --bew-icon-size-sm: #{ui-text(16px)};
+  --bew-icon-size-xs: #{ui-text(14px)};
+  --bew-icon-size-md: #{ui-text(20px)};
+  --bew-icon-size-lg: #{ui-text(24px)};
+  --bew-icon-size-xl: #{ui-text(32px)};
 
   // #region Radius
   // Anchored on the video cover (16px, --bew-media-radius): six steps plus full.
   // Components use the role tokens below, never a step or a literal value; any
   // other corner comes from a concentric formula (child radius + uniform inset).
   // scripts/radiusPolicy.ts enforces this.
-  --bew-radius-xs: 4px;
-  --bew-radius-sm: 8px;
-  --bew-radius-md: 12px;
-  --bew-radius-lg: 16px;
-  --bew-radius-xl: 24px;
-  --bew-radius-2xl: 32px;
+  --bew-radius-xs: #{ui(4px)};
+  --bew-radius-sm: #{ui(8px)};
+  --bew-radius-md: #{ui(12px)};
+  --bew-radius-lg: #{ui(16px)};
+  --bew-radius-xl: #{ui(24px)};
+  --bew-radius-2xl: #{ui(32px)};
   --bew-radius-full: 9999px;
   --bew-corner-shape: superellipse(1.7);
   // Capsules (a 9999px radius: ends sized by the height, straight top and
@@ -109,16 +122,16 @@
   // #region Spacing
   // Layout uses a 4px grid. The 2px step is reserved for borders, rings and
   // optical nudges rather than normal sibling spacing or container padding.
-  --bew-space-0-5: 2px;
-  --bew-space-1: 4px;
-  --bew-space-2: 8px;
-  --bew-space-3: 12px;
-  --bew-space-4: 16px;
-  --bew-space-5: 20px;
-  --bew-space-6: 24px;
-  --bew-space-8: 32px;
-  --bew-space-10: 40px;
-  --bew-space-12: 48px;
+  --bew-space-0-5: #{ui(2px)};
+  --bew-space-1: #{ui(4px)};
+  --bew-space-2: #{ui(8px)};
+  --bew-space-3: #{ui(12px)};
+  --bew-space-4: #{ui(16px)};
+  --bew-space-5: #{ui(20px)};
+  --bew-space-6: #{ui(24px)};
+  --bew-space-8: #{ui(32px)};
+  --bew-space-10: #{ui(40px)};
+  --bew-space-12: #{ui(48px)};
   // #endregion
 
   // #region Layout
@@ -127,8 +140,8 @@
   --bew-page-inline-inset: var(--bew-space-6);
   // 320x168 minimum: 14/15 of the former 16:9 height, with integer dimensions.
   // Keep aligned with the video cover constants in constants/layout.ts.
-  --bew-video-card-min-width: 320px;
-  --bew-video-card-horizontal-cover-max-width: 400px;
+  --bew-video-card-min-width: #{ui(320px)};
+  --bew-video-card-horizontal-cover-max-width: #{ui(400px)};
   --bew-video-cover-aspect-ratio: 40 / 21;
   --bew-card-inset: var(--bew-space-4);
   --bew-card-stack-gap: var(--bew-space-3);
@@ -145,9 +158,9 @@
   // Behind a modal window (settings, Dialog, ConfirmDialog): the page dims
   // evenly so the window reads as the one thing to act on (user-specified).
   --bew-modal-backdrop: rgb(0 0 0 / 36%);
-  --bew-layout-sidebar-width: 200px;
+  --bew-layout-sidebar-width: #{ui(200px)};
   --bew-library-filter-padding: var(--bew-space-2);
-  --bew-moments-hot-search-width: clamp(240px, 18vw, 300px);
+  --bew-moments-hot-search-width: clamp(#{ui(240px)}, 18vw, #{ui(300px)});
   // Moments up-list tiles are squares as tall as the smallest video card cover (40:21).
   --bew-moments-up-tile-size: calc(var(--bew-video-card-min-width) * 21 / 40);
   // The Favorites uploader strip's tiles (the page and its loading skeleton).
@@ -155,20 +168,20 @@
   // A library page's head (info on the left, the cover on the right) keeps the
   // height it had stacked: the cover band plus the padding and a two-line title.
   --bew-library-hero-height: calc(
-    clamp(160px, 22vw, 260px) + var(--bew-space-4) * 2 + var(--bew-line-height-heading) * 2
+    clamp(#{ui(160px)}, 22vw, #{ui(260px)}) + var(--bew-space-4) * 2 + var(--bew-line-height-heading) * 2
   );
-  --bew-moments-hot-search-compact-max-height: 240px;
+  --bew-moments-hot-search-compact-max-height: #{ui(240px)};
   --bew-moments-hot-search-max-height: calc(
     100dvh - var(--bew-top-bar-height) - var(--bew-space-4) - var(--bew-space-6)
   );
   --bew-history-timeline-color: var(--bew-wheel-text-active);
   // Keep the outer contour offset by the actual inset from the inner controls.
   --bew-library-filter-radius: calc(var(--bew-interactive-radius) + var(--bew-library-filter-padding));
-  --bew-notifications-list-max-width: 360px;
-  --bew-sidebar-base-width: calc(clamp(256px, 24vw, var(--bew-notifications-list-max-width)) * 0.9);
+  --bew-notifications-list-max-width: #{ui(360px)};
+  --bew-sidebar-base-width: calc(clamp(#{ui(256px)}, 24vw, var(--bew-notifications-list-max-width)) * 0.9);
   --bew-sidebar-message-width: calc(var(--bew-sidebar-base-width) * 1.2);
   --bew-messages-sidebar-width: var(--bew-sidebar-base-width);
-  --bew-message-composer-min-width: 256px;
+  --bew-message-composer-min-width: #{ui(256px)};
   --bew-message-input-height: calc(var(--bew-control-height) + var(--bew-space-2));
   --bew-message-icon-hover: var(--bew-custom-foreground, #000);
   --bew-message-pinned-background: var(--bew-neutral-bg);
@@ -203,28 +216,28 @@
   --bew-notifications-reference-background: var(--bew-content-alt-solid);
   --bew-insights-chart-height: calc(var(--bew-space-12) * 3);
   --bew-reading-line-length: 76ch;
-  --bew-layout-sidebar-sticky-top: 150px;
-  --bew-layout-sidebar-viewport-offset: 140px;
-  --bew-layout-dialog-width: 420px;
-  --bew-dialog-compact-width: 440px;
-  --bew-settings-label-min-width: 160px;
+  --bew-layout-sidebar-sticky-top: #{ui(150px)};
+  --bew-layout-sidebar-viewport-offset: #{ui(140px)};
+  --bew-layout-dialog-width: #{ui(420px)};
+  --bew-dialog-compact-width: #{ui(440px)};
+  --bew-settings-label-min-width: #{ui(160px)};
   --bew-settings-level-indent: var(--bew-space-2);
-  --bew-dialog-action-min-width: 120px;
-  --bew-dialog-grid-item-min-width: 260px;
+  --bew-dialog-action-min-width: #{ui(120px)};
+  --bew-dialog-grid-item-min-width: #{ui(260px)};
   --bew-layout-drawer-max-width: 1400px;
-  --bew-comment-avatar-size: 32px;
-  --bew-comment-state-min-height: 88px;
-  --bew-moment-forward-picker-width: 320px;
-  --bew-moment-reply-image-size: 64px;
-  --bew-moment-forward-picker-max-height: 320px;
-  --bew-moment-forward-picker-state-min-height: 112px;
+  --bew-comment-avatar-size: #{ui(32px)};
+  --bew-comment-state-min-height: #{ui(88px)};
+  --bew-moment-forward-picker-width: #{ui(320px)};
+  --bew-moment-reply-image-size: #{ui(64px)};
+  --bew-moment-forward-picker-max-height: #{ui(320px)};
+  --bew-moment-forward-picker-state-min-height: #{ui(112px)};
   --bew-widescreen-episode-max-height: 560px;
   --bew-media-search-max-width: 1920px;
-  --bew-search-bar-max-width: 680px;
-  --bew-media-result-cover-width: 160px;
-  --bew-media-episode-control-width: 240px;
-  --bew-layout-home-search-stage-lead-height: 128px;
-  --bew-layout-home-search-stage-tail-height: 64px;
+  --bew-search-bar-max-width: #{ui(680px)};
+  --bew-media-result-cover-width: #{ui(160px)};
+  --bew-media-episode-control-width: #{ui(240px)};
+  --bew-layout-home-search-stage-lead-height: #{ui(128px)};
+  --bew-layout-home-search-stage-tail-height: #{ui(64px)};
   --bew-layout-home-search-stage-height: calc(
     var(--bew-layout-home-search-stage-lead-height) + var(--bew-top-bar-primary-control-height) +
       var(--bew-layout-home-search-stage-tail-height)
@@ -286,7 +299,7 @@
   // #region Compact controls
   // Shared geometry and typography for top-bar controls, segmented tabs and
   // icon switchers. 36px outer - 2 * 4px padding = a 28px item target.
-  --bew-control-height: 36px;
+  --bew-control-height: #{ui(36px)};
   --bew-moment-comments-max-height: 480px;
   --bew-control-padding: var(--bew-space-1);
   --bew-control-gap: var(--bew-space-1);
@@ -299,7 +312,7 @@
   --bew-control-item-padding-x: var(--bew-space-3);
   --bew-control-item-padding-x-wide: var(--bew-space-4);
   --bew-control-item-radius: var(--bew-pill-radius);
-  --bew-control-icon-size: 16px;
+  --bew-control-icon-size: #{ui-text(16px)};
   --bew-control-label-size: var(--bew-font-size-control);
   --bew-control-label-line-height: var(--bew-line-height-control);
   // Regular, like Apple Music: medium labels read heavy at 13px.
@@ -308,12 +321,12 @@
   --bew-control-selected-background: color-mix(in srgb, var(--bew-text-1) 9%, var(--bew-content-solid));
   --bew-control-background-white: var(--bew-top-bar-solid-background-force-white);
   --bew-control-border-color: transparent;
-  --bew-floating-control-size: 40px;
-  --bew-control-height-sm: 28px;
-  --bew-control-height-lg: 40px;
+  --bew-floating-control-size: #{ui(40px)};
+  --bew-control-height-sm: #{ui(28px)};
+  --bew-control-height-lg: #{ui(40px)};
   --bew-icon-button-size-sm: 24px;
-  --bew-icon-button-size-md: 32px;
-  --bew-icon-button-size-lg: 44px;
+  --bew-icon-button-size-md: #{ui(32px)};
+  --bew-icon-button-size-lg: #{ui(44px)};
   --bew-overlay-background: rgb(0 0 0 / 72%);
   --bew-overlay-background-hover: rgb(0 0 0 / 84%);
   --bew-on-overlay-color: white;
@@ -327,13 +340,14 @@
   --bew-image-viewer-text-2: rgb(255 255 255 / 64%);
   // Dock tabs (user-specified, iOS tab bar): a glyph over its caption name in a
   // capsule rectangle; shorter when names are hidden (`showDockItemNames`).
-  --bew-dock-item-height: 56px;
-  --bew-dock-item-height-icon-only: 48px;
-  --bew-dock-item-min-width: 72px;
-  --bew-dock-item-min-width-lg: 80px;
+  --bew-dock-item-height: #{ui(54px)};
+  --bew-dock-item-height-icon-only: #{ui(48px)};
+  --bew-dock-item-width: #{ui(72px)};
+  --bew-dock-item-width-wide: #{ui(80px)};
+  --bew-dock-shell-rim: var(--bew-space-1);
   --bew-dock-icon-size: var(--bew-icon-size-lg);
   // Between the lg (24px) and xl (32px) icon steps; the Dock's own glyph size.
-  --bew-dock-icon-size-lg: 28px;
+  --bew-dock-icon-size-lg: #{ui-text(28px)};
   --bew-floating-control-icon-size: var(--bew-icon-size-md);
   // Selection is a darker borderless plate; its glyph and name take the accent
   // exactly as chosen (not the contrast-darkened link foreground, user-specified).
@@ -342,7 +356,7 @@
   // #endregion
 
   // Search and logo stay one step larger (still full capsule/circle)
-  --bew-top-bar-primary-control-height: 46px;
+  --bew-top-bar-primary-control-height: #{ui(46px)};
   // Home logo circle, on every page where it is on the rail: the icon's left edge
   // is the rail content line. The closed persistent rail folds into this box.
   --bew-home-logo-inline-start: calc(
@@ -356,11 +370,11 @@
     var(--bew-home-logo-inline-start) + var(--bew-top-bar-primary-control-height) + var(--bew-top-bar-section-gap)
   );
   // Further scrolling after the home search sticks that carries it to the dock.
-  --bew-home-search-dock-travel: 160px;
+  --bew-home-search-dock-travel: #{ui(160px)};
   --bew-home-logo-block-start: calc((var(--bew-top-bar-height) - var(--bew-top-bar-primary-control-height)) / 2);
-  --bew-top-bar-brand-logo-width: 84px;
-  --bew-top-bar-brand-logo-height: 28px;
-  --bew-top-bar-brand-logo-compact-size: 24px;
+  --bew-top-bar-brand-logo-width: #{ui-text(84px)};
+  --bew-top-bar-brand-logo-height: #{ui-text(28px)};
+  --bew-top-bar-brand-logo-compact-size: #{ui-text(24px)};
   --bew-top-bar-solid-background-force-white: hsl(0 0% 0%);
 
   // Interaction tokens aligned with home tab buttons
@@ -376,7 +390,7 @@
   --bew-liquid-indicator-fade-duration: var(--bew-duration-normal);
   --bew-liquid-indicator-paint-duration: var(--bew-duration-normal);
 
-  --bew-top-bar-height: 64px;
+  --bew-top-bar-height: #{ui(64px)};
   --bew-top-bar-inline-padding: var(--bew-space-12);
   --bew-popover-gap: var(--bew-space-1);
   --bew-popover-max-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
@@ -387,17 +401,17 @@
   // Media popovers: rows and the header title start this far in (the
   // surface radius, so content clears the rounded corners).
   --bew-popover-inset: var(--bew-space-4);
-  --bew-popover-media-width: 120px;
+  --bew-popover-media-width: #{ui(120px)};
   // The top bar's glass panels (moments, history, watch later; favorites adds
   // its folder column): roomy enough to read a list without crowding.
-  --bew-popover-panel-width: 440px;
-  --bew-popover-panel-wide-width: 560px;
-  --bew-popover-panel-height: min(640px, var(--bew-popover-max-height));
+  --bew-popover-panel-width: #{ui(440px)};
+  --bew-popover-panel-wide-width: #{ui(560px)};
+  --bew-popover-panel-height: min(#{ui(640px)}, var(--bew-popover-max-height));
   --bew-popover-card-gap: var(--bew-space-3);
   --bew-popover-row-min-height: var(--bew-control-height);
-  --bew-date-picker-input-width: 115px;
-  --bew-date-picker-panel-width: 280px;
-  --bew-date-picker-day-size: 32px;
+  --bew-date-picker-input-width: #{ui(115px)};
+  --bew-date-picker-panel-width: #{ui(280px)};
+  --bew-date-picker-day-size: #{ui(32px)};
   --bew-media-episode-menu-max-height: 400px;
   --bew-native-comment-tag-font-size: 11px;
   --bew-native-comment-tag-line-height: 1.4;

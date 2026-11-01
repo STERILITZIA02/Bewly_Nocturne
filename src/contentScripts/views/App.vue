@@ -308,6 +308,10 @@ const { stop: stopLoadMoreObserver } = useIntersectionObserver(
   },
 )
 const reachTop = ref<boolean>(true)
+const nativeHeaderPadding = computed(() => displayedPage.value !== AppPage.Notifications && !isLibraryPage.value && useOriginalBilibiliTopBar.value && !reachTop.value
+  ? 'calc(var(--bew-top-bar-height) + 120px)'
+  : undefined)
+watch(nativeHeaderPadding, () => invalidateViewportGeometry(scrollViewportRef.value), { flush: 'post' })
 /** Coalesced into the viewport's next layout frame, after the pending DOM commit. */
 function scheduleLoadMoreSentinelCheck() {
   invalidateViewportGeometry(scrollViewportRef.value)
@@ -961,7 +965,11 @@ onBeforeUnmount(stopUrlCleaner)
     <div
       v-if="showTopBar"
       class="top-bar-host"
-      :class="{ 'top-bar-host--messages': showBewlyPage && activatedPage === AppPage.Notifications, 'top-bar-host--library': showBewlyPage && isLibraryPage, 'top-bar-host--popover-open': topBarPopoverOpen }"
+      :class="{
+        'top-bar-host--messages': showBewlyPage && activatedPage === AppPage.Notifications,
+        'top-bar-host--library': showBewlyPage && isLibraryPage,
+        'top-bar-host--popover-open': topBarPopoverOpen,
+      }"
       :style="{
         opacity: hideUIForIframePhotoViewer ? 0 : 1,
         pointerEvents: hideUIForIframePhotoViewer ? 'none' : 'auto',
@@ -1001,7 +1009,7 @@ onBeforeUnmount(stopUrlCleaner)
                 w="lg:[calc(100%-200px)] [calc(100%-150px)]"
                 :style="{
                   minHeight: pageContentMinHeight === undefined ? undefined : `${pageContentMinHeight}px`,
-                  paddingTop: displayedPage !== AppPage.Notifications && !isLibraryPage && useOriginalBilibiliTopBar && !reachTop ? 'calc(var(--bew-top-bar-height) + 120px)' : undefined,
+                  paddingTop: nativeHeaderPadding,
                 }"
               >
                 <Transition appear mode="out-in" v-bind="pageTransition" @after-enter="scheduleLoadMoreSentinelCheck">

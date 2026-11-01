@@ -1,7 +1,7 @@
 import { ROOT_ID } from '~/utils/bewlyWidescreen/constants'
 import { schedulePlayerResizeSync } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
-import { getTitleText } from '~/utils/bewlyWidescreen/nativeDom'
+import { getTitleText, restoreCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
 import { publishRailTabs } from '~/utils/bewlyWidescreen/railTabs'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState, BewlyWidescreenTab } from '~/utils/bewlyWidescreen/types'
@@ -10,6 +10,8 @@ export function setActiveTab(nextTab: BewlyWidescreenTab, hydrate = true) {
   if (!session.current)
     return
 
+  if (session.current.activeTab === 'comment' && nextTab !== 'comment')
+    restoreCommentPrewarm()
   session.current.activeTab = nextTab
   session.current.sidebarHydrationTimedOut = false
   for (const [tab, button] of Object.entries(session.current.tabButtons) as Array<[BewlyWidescreenTab, HTMLButtonElement]>) {
@@ -119,10 +121,6 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
 
   const sidebar = document.createElement('aside')
   sidebar.className = 'bewly-widescreen-sidebar'
-  // Title, author, actions and description head the column, above the tabs.
-  const info = document.createElement('section')
-  info.className = 'bewly-widescreen-info'
-
   const sidebarTop = document.createElement('div')
   sidebarTop.className = 'bewly-widescreen-sidebar-top'
   const toolbar = createSidebarToolbar()
@@ -143,26 +141,25 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   descriptionCard.className = 'bewly-widescreen-description-card'
   descriptionCard.append(descriptionSlot, tagsSlot)
   sidebarTop.append(toolbar, metadataSlot, authorActions, descriptionCard)
-  info.append(sidebarTop)
 
   const tablist = document.createElement('div')
   tablist.className = 'bewly-widescreen-tabs bew-segment-control bew-segment-control--surface bew-segment-control--track'
   tablist.setAttribute('role', 'tablist')
 
   const tabButtons = {
+    overview: createTabButton('overview', t('widescreen.overview')),
     comment: createTabButton('comment', t('widescreen.comments')),
     danmaku: createTabButton('danmaku', t('widescreen.danmaku')),
-    playlist: createTabButton('playlist', t('widescreen.playlist')),
   }
-  tablist.append(tabButtons.comment, tabButtons.danmaku, tabButtons.playlist)
+  tablist.append(...Object.values(tabButtons))
 
   const panelWrap = document.createElement('div')
   panelWrap.className = 'bewly-widescreen-panels'
 
   const panels = {
+    overview: document.createElement('section'),
     comment: document.createElement('section'),
     danmaku: document.createElement('section'),
-    playlist: document.createElement('section'),
   }
 
   for (const [tab, panel] of Object.entries(panels) as Array<[BewlyWidescreenTab, HTMLElement]>) {
@@ -171,7 +168,11 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
     tabButtons[tab].id = tabId
     tabButtons[tab].tabIndex = -1
     tabButtons[tab].setAttribute('aria-controls', panelId)
-    panel.className = `bewly-widescreen-panel bewly-widescreen-panel-${tab}`
+    // Scrolled content fades out under the tabs. The bottom edge is the window
+    // (or the docked composer); the danmaku list scrolls by transform, not here.
+    panel.className = tab === 'danmaku'
+      ? `bewly-widescreen-panel bewly-widescreen-panel-${tab}`
+      : `bewly-widescreen-panel bewly-widescreen-panel-${tab} bew-scroll-edge-fade bew-scroll-edge-fade--no-bottom`
     panel.id = panelId
     panel.setAttribute('role', 'tabpanel')
     panel.setAttribute('aria-labelledby', tabId)
@@ -180,7 +181,10 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   }
 
   const playlistToggleButton = createPlaylistToggleButton()
-  panels.playlist.prepend(playlistToggleButton)
+  const playlistSlot = document.createElement('div')
+  playlistSlot.className = 'bewly-widescreen-panel-playlist'
+  playlistSlot.append(playlistToggleButton)
+  panels.overview.append(sidebarTop, playlistSlot)
 
   const tabOrder = Object.keys(tabButtons) as BewlyWidescreenTab[]
   tablist.addEventListener('keydown', (event) => {
@@ -212,11 +216,11 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
     tabButtons[nextTab].focus({ preventScroll: true })
   })
 
-  sidebar.append(info, tablist, panelWrap)
+  sidebar.append(tablist, panelWrap)
   // Grid areas place both columns; DOM order keeps the video first for focus.
   stage.append(playerSlot, sidebar)
   root.append(stage)
   document.body.append(backdrop, root)
 
-  return { root, backdrop, stage, playerSlot, playerFrame, danmakuDock, sidebarEl: sidebar, infoEl: info, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton }
+  return { root, backdrop, stage, playerSlot, playerFrame, danmakuDock, sidebarEl: sidebar, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistSlot, playlistToggleButton }
 }

@@ -7,16 +7,25 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
     const policy = await import('../src/utils/bewlyWidescreenPolicy')
     const constants = await loadSourceModule('../src/utils/bewlyWidescreen/constants.ts', {
       '~/utils/bewlyWidescreenPolicy': policy,
-      '~/utils/playerMedia': { PLAYER_MODE_CONTROL_SELECTORS: {} },
+      '~/utils/playerMedia': { PLAYER_MODE_CONTROL_SELECTORS: { full: ['.native-full'] } },
     })
-    const sessionModule = await loadSourceModule('../src/utils/bewlyWidescreen/session.ts', {})
+    const sessionModule = await loadSourceModule('../src/utils/bewlyWidescreen/session.ts', { vue: Vue })
     const events = await import('../src/constants/globalEvents')
+    let now = 0
+    let idleCallback
     const controls = await loadSourceModule('../src/utils/bewlyWidescreen/nativeControls.ts', {
       '~/constants/globalEvents': events,
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/session': sessionModule,
       '~/utils/bewlyWidescreenPolicy': policy,
       '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
+    }, {
+      performance: { now: () => now },
+      setTimeout: (callback) => {
+        idleCallback = callback
+        return 1
+      },
+      clearTimeout: () => { idleCallback = undefined },
     })
     const host = document.body.appendChild(document.createElement('div'))
     host.innerHTML = '<div class="bpx-player-container" data-ctrl-hidden="true"><div class="bpx-player-control-wrap"><button>Play</button></div><div class="danmaku"><input><button>Send</button></div></div><div class="dock"></div><div class="aux"></div><button class="outside">Outside</button>'
@@ -33,11 +42,24 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       danmakuDock: host.querySelector('.dock'),
       auxiliaryControlsElement,
       controlsLayoutReady: true,
-      bottomControlsHovered: false,
-      playerPointerInside: false,
+      playerControlsActive: false,
     }
     sessionModule.session.current = state
-    controls.setupActiveWidescreenControl(state)
+    const handles = {}
+    const listen = document.addEventListener
+    document.addEventListener = function (type, callback, options) {
+      handles[type] = callback
+      return listen.call(this, type, callback, options)
+    }
+    try {
+      controls.setupActiveWidescreenControl(state)
+    }
+    finally {
+      document.addEventListener = listen
+    }
+    // JSDOM-dispatched pointer events are always untrusted. Feed the registered
+    // capture listeners the paths the browser supplies for each interaction.
+    const activity = (type, target) => handles[type]({ isTrusted: true, composedPath: () => [target, host, document] })
     const assertHidden = (hidden) => {
       assert.equal(host.dataset.playerControlsHidden, String(hidden))
       assert.equal(document.body.classList.contains(events.BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS), hidden)
@@ -45,7 +67,26 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
     try {
       controls.syncNativePlayerControlVisibility(state)
       assertHidden(true)
+      activity('click', outside)
+      assertHidden(true)
+      activity('pointermove', state.playerEl)
+      assertHidden(false)
+      now = 2000
+      activity('pointermove', state.playerEl)
+      now = 2500
+      idleCallback()
+      assertHidden(false)
+      now = 4500
+      idleCallback()
+      assertHidden(true)
+      activity('click', state.playerEl)
+      assertHidden(false)
+      activity('pointermove', outside)
+      assertHidden(true)
+      activity('pointerdown', state.playerEl)
       input.focus()
+      now += 2500
+      idleCallback()
       assertHidden(false)
       input.dispatchEvent(new window.CompositionEvent('compositionstart', { bubbles: true }))
       for (const value of ['n', 'ni', '你好']) {
@@ -62,7 +103,11 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       source.querySelector('button').focus()
       await flush()
       assertHidden(false)
-      shadow.querySelector('button').focus()
+      const auxButton = shadow.querySelector('button')
+      // JSDOM has no keyboard modality for :focus-visible inside a shadow root.
+      const matches = auxButton.matches.bind(auxButton)
+      auxButton.matches = selector => selector === ':focus-visible' || matches(selector)
+      auxButton.focus()
       await flush()
       assertHidden(false)
       outside.focus()
@@ -93,12 +138,12 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
     }
   })
 
-  check('UI audit: page-wide and nested Shadow DOM editing pause the control idle owner and release after editing or teardown', async () => {
+  check('UI audit: comments, other editors and opaque frames cannot wake playback controls', async () => {
     const policy = await import('../src/utils/bewlyWidescreenPolicy')
     const constants = await loadSourceModule('../src/utils/bewlyWidescreen/constants.ts', {
       '~/utils/playerMedia': { PLAYER_MODE_CONTROL_SELECTORS: {} },
     })
-    const sessionModule = await loadSourceModule('../src/utils/bewlyWidescreen/session.ts', {})
+    const sessionModule = await loadSourceModule('../src/utils/bewlyWidescreen/session.ts', { vue: Vue })
     const events = await import('../src/constants/globalEvents')
     const controls = await loadSourceModule('../src/utils/bewlyWidescreen/nativeControls.ts', {
       '~/constants/globalEvents': events,
@@ -124,8 +169,7 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       danmakuSemanticsSource: root.querySelector('.danmaku'),
       danmakuDock: root.querySelector('.dock'),
       controlsLayoutReady: true,
-      bottomControlsHovered: false,
-      playerPointerInside: false,
+      playerControlsActive: false,
     }
     sessionModule.session.current = state
     try {
@@ -133,11 +177,11 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
 
       input.focus()
       await flush()
-      assert.equal(root.dataset.playerControlsHidden, 'false', 'text outside the bottom/player containers still holds the control bar')
+      assert.equal(root.dataset.playerControlsHidden, 'true', 'outside text fields cannot open the card')
       fixture.querySelector('iframe').focus()
       await flush()
       controls.syncNativePlayerControlVisibility(state)
-      assert.equal(root.dataset.playerControlsHidden, 'false', 'an opaque focused editor frame preserves the parent controls without cross-origin DOM access')
+      assert.equal(root.dataset.playerControlsHidden, 'true', 'embedded editors cannot open the card')
       for (const selector of ['.checkbox', '.read-only', '.outside-button']) {
         fixture.querySelector(selector).focus()
         await flush()
@@ -150,7 +194,7 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
         editor.textContent = text
         editor.dispatchEvent(new window.InputEvent('input', { bubbles: true, composed: true, isComposing: text !== '你好' }))
         await flush()
-        assert.equal(root.dataset.playerControlsHidden, 'false', 'the native comment editor keeps the controls through IME composition')
+        assert.equal(root.dataset.playerControlsHidden, 'true', 'composing a comment cannot open the card')
       }
       editor.dispatchEvent(new window.CompositionEvent('compositionend', { bubbles: true, composed: true }))
       editorRoot.querySelector('button').focus()
@@ -159,7 +203,7 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
 
       settingsRoot.querySelector('input').focus()
       await flush()
-      assert.equal(root.dataset.playerControlsHidden, 'false', 'editing in Bewly Shadow DOM also pauses idle hiding')
+      assert.equal(root.dataset.playerControlsHidden, 'true', 'typing in settings cannot open the card')
       settingsRoot.querySelector('button').focus()
       await flush()
       assert.equal(root.dataset.playerControlsHidden, 'true', 'focus moving within one Shadow host resumes idle hiding after editing')
@@ -270,7 +314,7 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       '~/stores/settingsStore': { useSettingsStore: () => ({}) },
       '~/stores/topBarStore': { useTopBarStore: () => store },
       '~/utils/configuredLinkNavigation': {},
-      '~/utils/main': {},
+      '~/utils/main': await import('../src/utils/main'),
       '~/utils/searchNavigation': {},
       '~/utils/tabs': {},
     }, {

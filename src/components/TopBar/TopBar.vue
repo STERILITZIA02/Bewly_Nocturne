@@ -10,7 +10,7 @@ import { useIframePageActive } from '~/logic/iframePageState'
 import { isLayoutEditing } from '~/logic/layoutEdit'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
-import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
+import { session as playbackSession } from '~/utils/bewlyWidescreen/session'
 import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
 import { isInIframe, isUserSpacePage } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
@@ -30,9 +30,7 @@ const { forceWhiteIcon, hasOpenClickPopup } = useTopBarInteraction()
 const conflictingHeaderSelectors = ['.fixed-author-header', '.fixed-top-header']
 const spaceNavbarSelector = '.nav-bar.space-navbar'
 
-// 顶栏始终显示，只在两种情况下让位：Bewly 宽屏播放页，或原页面自己的固定页头
-// （含个人空间的吸顶导航）出现时，避免两层页头重叠。
-const bewlyWidescreenActive = ref(false)
+const playbackMode = computed(() => playbackSession.current?.displayMode)
 const forceHideTopBar = ref(false)
 
 const currentLocationHref = useCurrentLocationHref()
@@ -49,8 +47,7 @@ const hasActivePopup = computed(() => {
   return Object.values(topBarStore.popupVisible).some(visible => visible)
 })
 
-const hideTopBar = computed(() => bewlyWidescreenActive.value
-  || (forceHideTopBar.value && !hasActivePopup.value && !isLayoutEditing.value))
+const hideTopBar = computed(() => !playbackMode.value && forceHideTopBar.value && !hasActivePopup.value && !isLayoutEditing.value)
 
 watch(isLayoutEditing, (editing) => {
   if (editing)
@@ -219,21 +216,6 @@ function startConflictingHeaderObservation() {
   scheduleConflictingHeaderRefresh()
 }
 
-let widescreenStateObserver: MutationObserver | undefined
-
-function updateWidescreenState() {
-  bewlyWidescreenActive.value = isBewlyWidescreenActive()
-}
-
-function startWidescreenStateObservation() {
-  widescreenStateObserver?.disconnect()
-  updateWidescreenState()
-  if (!document.body)
-    return
-  widescreenStateObserver = new MutationObserver(updateWidescreenState)
-  widescreenStateObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] })
-}
-
 function handleIframeDrawerHostChange() {
   iframeDrawerHost.value = isIframeDrawerHost()
   setupSpaceScrollListener()
@@ -269,7 +251,6 @@ onMounted(() => {
   window.addEventListener(BEWLY_IFRAME_DRAWER_HOST_CHANGE, handleIframeDrawerHostChange)
   setupSpaceScrollListener()
   startConflictingHeaderObservation()
-  startWidescreenStateObservation()
 
   // 添加全局点击事件监听器（用于触屏模式下点击外部关闭弹窗）
   document.addEventListener('click', handleClickOutsidePopup)
@@ -314,8 +295,6 @@ onUnmounted(() => {
   topBarMounted = false
 
   stopConflictingHeaderObservation()
-  widescreenStateObserver?.disconnect()
-  widescreenStateObserver = undefined
   window.removeEventListener('scroll', handleSpaceScroll)
   // 使用 store 中的方法清理定时器
   topBarStore.cleanup()
@@ -337,10 +316,9 @@ onKeyStroke('Escape', (event: KeyboardEvent) => {
 </script>
 
 <template>
-  <div class="top-bar-container">
-    <!-- The playback page frames its card from the window corner; the Dock still leads home. -->
+  <div v-if="playbackMode !== 'fill'" class="top-bar-container">
     <TopBarLogo
-      v-if="topBarStore.showTopBar && !bewlyWidescreenActive"
+      v-if="topBarStore.showTopBar"
       class="floating-home-logo"
       floating
       :force-white-icon="forceWhiteIcon && !hideTopBar"
@@ -350,7 +328,7 @@ onKeyStroke('Escape', (event: KeyboardEvent) => {
         v-if="topBarStore.showTopBar"
         class="top-bar"
         w="full" transition="opacity duration-300, transform duration-300, background-color duration-300"
-        :class="{ 'hide': hideTopBar, 'force-white-icon': forceWhiteIcon }"
+        :class="{ 'hide': hideTopBar, 'force-white-icon': forceWhiteIcon, 'top-bar--over-player': playbackMode === 'card' }"
       >
         <TopBarHeader
           :active="hostAllowsUiReads && !hideTopBar && !usesNativeTopBar"
@@ -374,5 +352,20 @@ onKeyStroke('Escape', (event: KeyboardEvent) => {
   right: 0;
   z-index: var(--bew-z-topbar);
   position: fixed;
+}
+
+.top-bar--over-player {
+  pointer-events: none;
+
+  :deep([data-top-bar-creation]) {
+    display: none !important;
+  }
+
+  :deep(#search-wrap),
+  :deep(.pinned-channels),
+  :deep(.top-bar-tools),
+  :deep(.right-side-item) {
+    pointer-events: auto;
+  }
 }
 </style>
