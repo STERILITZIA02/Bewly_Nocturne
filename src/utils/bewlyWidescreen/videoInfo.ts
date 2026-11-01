@@ -1,5 +1,4 @@
 import type { VideoInfo } from '~/models/video/videoInfo'
-import api from '~/utils/api'
 import { selectors, VIEWER_COUNT_MIRRORED_ATTRIBUTE } from '~/utils/bewlyWidescreen/constants'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { findFirst, findMovable, getTitleText, moveOrReplaceNode } from '~/utils/bewlyWidescreen/nativeDom'
@@ -9,6 +8,7 @@ import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
 import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 import { reportRuntimeFailure } from '~/utils/messaging'
+import { getPlaybackVideoInfo } from '~/utils/playbackVideoInfo'
 import { isPgcPlaybackPage } from '~/utils/videoMetadataBridge'
 
 export function syncSidebarTitle(currentState: BewlyWidescreenState) {
@@ -371,7 +371,7 @@ export async function loadFallbackVideoInfo(
   try {
     const response = pendingRequest
       ? await pendingRequest
-      : await api.video.getVideoInfo(request.params) as VideoInfo
+      : await getPlaybackVideoInfo(request.params)
     if (session.current !== currentState
       || !currentState.root.isConnected
       || currentState.videoInfoIdentity !== request.identity

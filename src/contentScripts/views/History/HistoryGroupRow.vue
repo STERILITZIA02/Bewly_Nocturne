@@ -5,6 +5,7 @@ import LibraryBleedStrip from '~/components/LibraryBleedStrip.vue'
 import type { CardWindowSnapshot } from '~/composables/useCardWindow'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useMeasuredDisclosure } from '~/composables/useMeasuredDisclosure'
+import { uiPx } from '~/composables/useUiScale'
 import { VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
 import type { List as HistoryItem } from '~/models/history/history'
 
@@ -27,13 +28,13 @@ const strip = ref<{ scroller: HTMLElement | null }>()
 const container = ref<HTMLElement | null>(null)
 const root = computed(() => strip.value?.scroller ?? null)
 const renderCards = computed(() => rendered.value || expanded.value || props.items.some(item => !props.canRelease(historyItemKey(item))))
-const cardExtent = computed(() => props.cardWidth || VIDEO_CARD_MIN_WIDTH)
+const cardExtent = computed(() => props.cardWidth || uiPx(VIDEO_CARD_MIN_WIDTH))
 const windowed = useCardWindow({
   root,
   container,
   keys: computed(() => props.items.map(historyItemKey)),
   columns: ref(1),
-  gap: ref(16),
+  gap: computed(() => uiPx(16)),
   axis: 'horizontal',
   estimatedHeight: cardExtent,
   enabled: computed(() => props.items.length > CARD_WINDOW_THRESHOLD),

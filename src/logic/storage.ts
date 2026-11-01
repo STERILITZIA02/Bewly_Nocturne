@@ -16,6 +16,8 @@ import { LOCAL_LOUDNESS_DEFAULTS, normalizeLocalLoudnessValue } from '~/utils/lo
 import type { PageMode } from '~/utils/pageMode'
 import type { MotionPreference } from '~/utils/reducedMotion'
 import { DEFAULT_THEME_COLOR, normalizeThemeColor } from '~/utils/themeColor'
+import type { InterfaceSize } from '~/utils/uiScale'
+import { INTERFACE_SIZES } from '~/utils/uiScale'
 import { DEFAULT_SCREENSHOT_SHORTCUT, isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
 export { appAuthTokens } from './appAuthStorage'
@@ -279,6 +281,8 @@ export interface Settings {
   appearanceColors: AppearanceColors
   appearanceContrast: number
   interfaceFontSize: number
+  /** Display-dependent interface scale (utils/uiScale.ts); `auto` estimates it from the screen. */
+  interfaceSize: InterfaceSize
   motionPreference: MotionPreference
   useLinearGradientThemeColorBackground: boolean
 
@@ -288,6 +292,7 @@ export interface Settings {
 
   // 热搜功能设置（统一在搜索框聚焦时显示）
   showHotSearchInTopBar: boolean
+  collapseTopBarSearch: boolean
 
   // 搜索推荐功能设置
   showSearchRecommendation: boolean
@@ -552,6 +557,7 @@ export const originalSettings: Settings = {
   appearanceColors: defaultAppearanceColors(),
   appearanceContrast: 0,
   interfaceFontSize: INTERFACE_FONT_SIZE.default,
+  interfaceSize: 'auto',
   motionPreference: 'system',
   useLinearGradientThemeColorBackground: false,
 
@@ -561,6 +567,7 @@ export const originalSettings: Settings = {
 
   // 热搜功能设置（统一在搜索框聚焦时显示）
   showHotSearchInTopBar: true,
+  collapseTopBarSearch: true,
 
   // 搜索推荐功能设置
   showSearchRecommendation: false,
@@ -716,6 +723,8 @@ function normalizeSettings(value: Settings) {
     value.appearanceColors = appearanceColors
   value.appearanceContrast = normalizeAppearanceNumber(value.appearanceContrast, 0, 100, 0)
   value.interfaceFontSize = normalizeAppearanceNumber(value.interfaceFontSize, INTERFACE_FONT_SIZE.min, INTERFACE_FONT_SIZE.max, INTERFACE_FONT_SIZE.default)
+  if (!INTERFACE_SIZES.includes(value.interfaceSize))
+    value.interfaceSize = 'auto'
   if (!['system', 'reduce', 'full'].includes(value.motionPreference))
     value.motionPreference = 'system'
   if (typeof value.autoRemoveWatchLaterOnEnd !== 'boolean')

@@ -42,11 +42,15 @@ function findEpisodeSectionNode(panel: HTMLElement, movedNodes: MovedNode[]) {
   return episodeCandidates.at(-1) ?? playlistNode
 }
 
+// The episode list scrolls inside the panel; it fades at an edge only while
+// more of it lies beyond (the shared scroll edge fade).
+const EPISODE_SECTION_CLASSES = [EPISODE_SECTION_CLASS, 'bew-scroll-edge-fade']
+
 export function clearEpisodeSectionMarker(panel: HTMLElement, movedNodes: MovedNode[]) {
   for (const { node } of movedNodes)
-    node.classList.remove(EPISODE_SECTION_CLASS)
+    node.classList.remove(...EPISODE_SECTION_CLASSES)
   panel.querySelectorAll<HTMLElement>(`.${EPISODE_SECTION_CLASS}`).forEach((node) => {
-    node.classList.remove(EPISODE_SECTION_CLASS)
+    node.classList.remove(...EPISODE_SECTION_CLASSES)
   })
 }
 
@@ -73,7 +77,7 @@ function ensurePlaylistCoverLayout(panel: HTMLElement) {
 }
 
 function placePlaylistToggleButton(currentState: BewlyWidescreenState) {
-  const panel = currentState.panels.playlist
+  const panel = currentState.playlistSlot
   const toggleButton = currentState.playlistToggleButton
   const actions = panel.querySelector<HTMLElement>('.video-pod__header .header-bottom > .right')
   const subscribeButton = actions?.querySelector<HTMLElement>('.subscribe-btn') ?? null
@@ -88,12 +92,9 @@ function placePlaylistToggleButton(currentState: BewlyWidescreenState) {
 }
 
 export function syncPlaylistToggleButton(currentState: BewlyWidescreenState) {
-  const panel = currentState.panels.playlist
+  const panel = currentState.playlistSlot
   const episodeSection = panel.querySelector<HTMLElement>(`.${EPISODE_SECTION_CLASS}`)
   const hasEpisodeSection = !!episodeSection
-  if (!hasEpisodeSection)
-    currentState.playlistCollapsed = false
-
   if (currentState.playlistToggleButton.hidden !== !hasEpisodeSection)
     currentState.playlistToggleButton.hidden = !hasEpisodeSection
   const expanded = hasEpisodeSection && !currentState.playlistCollapsed
@@ -125,7 +126,7 @@ export function setupPlaylistToggle(currentState: BewlyWidescreenState) {
     if (!event.isTrusted)
       return
 
-    const panel = currentState.panels.playlist
+    const panel = currentState.panels.overview
     if (panel.scrollTop + panel.clientHeight < panel.scrollHeight - PLAYLIST_AUTO_EXPAND_THRESHOLD)
       return
 
@@ -141,28 +142,28 @@ export function setupPlaylistToggle(currentState: BewlyWidescreenState) {
   }
 
   currentState.playlistToggleButton.addEventListener('click', handleToggle)
-  currentState.panels.playlist.addEventListener('scroll', handlePlaylistScroll, { passive: true })
+  currentState.panels.overview.addEventListener('scroll', handlePlaylistScroll, { passive: true })
   currentState.playlistToggleCleanup = () => {
     currentState.playlistToggleButton.removeEventListener('click', handleToggle)
-    currentState.panels.playlist.removeEventListener('scroll', handlePlaylistScroll)
-    currentState.panels.playlist.classList.remove('is-episode-section-collapsed')
+    currentState.panels.overview.removeEventListener('scroll', handlePlaylistScroll)
+    currentState.playlistSlot.classList.remove('is-episode-section-collapsed')
     currentState.playlistToggleButton.remove()
   }
 }
 
 export function syncEpisodeSectionMarker(currentState: BewlyWidescreenState) {
-  const panel = currentState.panels.playlist
+  const panel = currentState.playlistSlot
   const movedNodes = currentState.movedNodes
   ensurePlaylistCoverLayout(panel)
 
   const episodeSection = findEpisodeSectionNode(panel, movedNodes)
   panel.querySelectorAll(`.${EPISODE_SECTION_CLASS}`).forEach((node) => {
     if (node !== episodeSection)
-      node.classList.remove(EPISODE_SECTION_CLASS)
+      node.classList.remove(...EPISODE_SECTION_CLASSES)
   })
   if (episodeSection) {
     if (!episodeSection.classList.contains(EPISODE_SECTION_CLASS))
-      episodeSection.classList.add(EPISODE_SECTION_CLASS)
+      episodeSection.classList.add(...EPISODE_SECTION_CLASSES)
   }
   placePlaylistToggleButton(currentState)
   syncPlaylistToggleButton(currentState)

@@ -5,7 +5,7 @@ import SEGMENT_LIQUID_INDICATOR_CSS from '~/styles/segmentLiquidIndicator.scss?i
 import SEND_BUTTON_CSS from '~/styles/sendButton.scss?inline'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
 import { ACTION_ANIMATION_ATTRIBUTE, BODY_CLASS, COMMENT_COMPOSER_HEIGHT_PROPERTY, COMMENT_COMPOSER_HOST_CLASS, DANMAKU_GLASS_CLASS, DANMAKU_SOURCE_HOST_CLASS, DANMAKU_SURFACE_SELECTOR, EPISODE_SECTION_CLASS, FILL_TOGGLE_CLASS, HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS, HIGH_ENERGY_PROGRESS_PIN_SELECTOR, HOST_ZOOMING_ATTRIBUTE, MOBILE_BREAKPOINT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, NATIVE_PLAYER_ANCESTOR_CLASS, NATIVE_PLAYER_CLASS, PLAYER_DISPLAY_MODE_ATTRIBUTE, PLAYER_ZOOMING_ATTRIBUTE, PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR, ROOT_ID, VIEWER_COUNT_MIRRORED_ATTRIBUTE } from '~/utils/bewlyWidescreen/constants'
-import { CARD_LAYOUT_PROPERTIES } from '~/utils/bewlyWidescreen/styles/cardLayout'
+import { CARD_LAYOUT_PROPERTIES, playbackRailTopPadding, playbackTopBarRule } from '~/utils/bewlyWidescreen/styles/cardLayout'
 import { DANMAKU_SENDER_ORDER_BUTTON_CLASS, DANMAKU_SENDER_ORDER_CLASS } from '~/utils/danmakuSenderOrder'
 import { injectCSS } from '~/utils/main'
 import { PHOTO_VIEWER_SELECTOR } from '~/utils/photoViewer'
@@ -29,6 +29,12 @@ export function injectLayoutStyle() {
     ${SEGMENT_CONTROL_CSS}
     ${SEGMENT_LIQUID_INDICATOR_CSS}
     ${SEND_BUTTON_CSS}
+    ${playbackRailTopPadding(`#${ROOT_ID} .bewly-widescreen-sidebar`)}
+    /* Bpx anchors the whole top row here; the music overlay is its sibling. */
+    ${playbackTopBarRule(
+      `.${NATIVE_PLAYER_CLASS}[${PLAYER_DISPLAY_MODE_ATTRIBUTE}="card"] :is(.bpx-player-top-wrap, .bpx-player-music-wrap)`,
+      'top: var(--bew-top-bar-height, 64px) !important;',
+    )}
     /* The anchored box is read only by the player itself. Without inheritance a
        resize or mode switch restyles one element, not the whole Bpx tree. */
     @property --bewly-widescreen-player-top { syntax: '*'; inherits: false; }
@@ -186,6 +192,11 @@ export function injectLayoutStyle() {
       display: none !important;
     }
 
+    body.${BODY_CLASS} :is(.${NATIVE_PLAYER_CLASS}.bpx-state-paused, .${NATIVE_PLAYER_CLASS} .bpx-state-paused) .bpx-player-state-wrap {
+      inset: 50% auto auto 50% !important;
+      translate: -50% -50%;
+    }
+
     #${ROOT_ID} {
       position: fixed;
       inset: 0;
@@ -264,7 +275,7 @@ export function injectLayoutStyle() {
       pointer-events: none;
     }
 
-    /* Layout box of the video pane, square and the window's full height. The
+    /* Layout box of the video pane, square and the stage's full height. The
        native player is anchored to it (it is not a descendant) and
        letterboxes the video in it. */
     #${ROOT_ID} .bewly-widescreen-player-frame {
@@ -300,6 +311,11 @@ export function injectLayoutStyle() {
     #${ROOT_ID}:is([data-display-mode="fill"], [data-zooming="true"]) .bewly-widescreen-player-toolbar {
       visibility: hidden;
     }
+
+    ${playbackTopBarRule(
+      `#${ROOT_ID}[data-display-mode="card"] .bewly-widescreen-player-toolbar`,
+      'top: calc(var(--bew-top-bar-height, 64px) + var(--bewly-widescreen-card-inset));',
+    )}
 
     #${ROOT_ID} .bewly-widescreen-player-frame > :not(.bewly-widescreen-idle-progress) {
       width: 100% !important;
@@ -426,6 +442,15 @@ export function injectLayoutStyle() {
       opacity: var(--bewly-widescreen-controls-opacity, 0) !important;
       visibility: visible !important;
       pointer-events: auto !important;
+    }
+
+    /* Bpx already lifts bottom-aligned CC via an inline bottom. Set its final
+       anchor directly so that lift isn't added to the card clearance. */
+    body.${BODY_CLASS}:not(.${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS}) .${NATIVE_PLAYER_CLASS}:not([${PLAYER_ZOOMING_ATTRIBUTE}]) :is(
+      .bili-subtitle-x-subtitle-panel-position[data-position="bottom"],
+      .bpx-player-toast-wrap
+    ) {
+      bottom: calc(var(--bewly-widescreen-controls-glass-bottom) + var(--bewly-widescreen-controls-glass-height) + var(--bew-space-2, 8px)) !important;
     }
 
     /* 显式反超原生空闲隐藏链（data-ctrl-hidden / bpx-state-no-cursor），
@@ -1824,8 +1849,8 @@ export function injectLayoutStyle() {
     }
 
     /* The column beside the pane is layout only: no surface, border, radius,
-       shadow or glass; the content sits straight on the page. The info heads
-       it, then the tabs, then the panels, which run down to the window's
+       shadow or glass; the content sits straight on the page. The tabs head
+       the panels, which run down to the window's
        bottom edge and scroll under the docked composer. Every line starts at
        one content line, the page padding in from the column's edges. */
     #${ROOT_ID} .bewly-widescreen-sidebar {
@@ -1845,19 +1870,6 @@ export function injectLayoutStyle() {
       overflow: hidden;
       pointer-events: auto;
       transition: opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease);
-    }
-
-    /* As tall as its content up to just under half the column; longer
-       descriptions scroll inside it, so the panels keep most of the height. */
-    #${ROOT_ID} .bewly-widescreen-info {
-      position: relative;
-      display: flex;
-      flex: 0 1 auto;
-      flex-direction: column;
-      min-width: 0;
-      min-height: 0;
-      max-height: 45%;
-      padding: 0;
     }
 
     /* Filling the window shows only the video. The column only fades with the
@@ -1883,16 +1895,8 @@ export function injectLayoutStyle() {
       display: flex;
       flex-direction: column;
       gap: var(--bew-space-2);
-      flex: 1 1 auto;
-      min-height: 0;
-      overflow-x: hidden;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      scrollbar-gutter: stable;
-      /* The scroller reaches one space-1 past the content line on both sides,
-         so hover fills and focus rings at the content line are not clipped. */
-      margin-inline: calc(var(--bew-space-1) * -1);
-      padding: 0 var(--bew-space-1) var(--bew-space-3);
+      /* A section break before the collection or the recommendations. */
+      padding-bottom: var(--bew-space-6);
       background: transparent;
     }
 
@@ -2272,6 +2276,14 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-tags-slot .tag-panel .tag {
       float: none !important;
       margin: 0 !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-tags-slot .tag.not-btn-tag {
+      display: block !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-tags-slot .tag:has(> .show-more-btn) {
+      display: none !important;
     }
 
     /* Every tag is the same quiet chip; the topic keeps only its leading mark. */
@@ -3012,9 +3024,12 @@ export function injectLayoutStyle() {
       background: var(--bewly-widescreen-sidebar-bg);
     }
 
+    /* The native list spans the panel's full width, one space-1 past the
+       content line on each side, so its rows' hover fills fit; its header,
+       rows and views pad back in to the line. */
     #${ROOT_ID} .bewly-widescreen-panel-danmaku {
       position: relative;
-      padding: 0 var(--bew-space-1) var(--bewly-widescreen-rail-bottom);
+      padding: 0 0 var(--bewly-widescreen-rail-bottom);
       overflow: hidden;
       container-type: size;
     }
@@ -3056,6 +3071,7 @@ export function injectLayoutStyle() {
       align-items: center !important;
       height: auto !important;
       min-height: var(--bew-control-height-lg, 40px) !important;
+      padding-inline-start: var(--bew-space-1) !important;
       /* Reserve room for the native history label and its horizontal padding. */
       padding-inline-end: calc(var(--bew-font-size-control) * 8 + var(--bew-space-4) * 2) !important;
       background: var(--bewly-widescreen-sidebar-bg) !important;
@@ -3069,6 +3085,49 @@ export function injectLayoutStyle() {
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter {
       pointer-events: auto;
+    }
+
+    /* The view menu's name is the panel's section title, like the comment
+       header's; its glyph is a quiet control that brightens on hover. */
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter .bui-dropdown-name {
+      color: var(--bew-text-1) !important;
+      font-size: var(--bew-font-size-title) !important;
+      font-weight: var(--bew-font-weight-regular) !important;
+      line-height: var(--bew-line-height-title) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter .bui-dropdown-icon {
+      color: var(--bew-text-2) !important;
+      transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter .bui-dropdown-display:hover .bui-dropdown-icon {
+      color: var(--bew-text-1) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter .bui-dropdown-icon :is(svg, path) {
+      fill: currentColor !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter .bui-dropdown-items {
+      ${PLAYER_POPOVER_SURFACE}
+      min-width: max-content !important;
+      padding: var(--bew-popover-padding) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter .bui-dropdown-item {
+      height: var(--bew-control-height-sm) !important;
+      padding: 0 var(--bew-space-3) !important;
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+      color: var(--bew-text-1) !important;
+      font-size: var(--bew-font-size-control) !important;
+      line-height: var(--bew-control-height-sm) !important;
+      transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter .bui-dropdown-item:hover {
+      background: var(--bew-hover-bg) !important;
     }
 
     /* The list title, the first column and its header start on the column's
@@ -3100,8 +3159,14 @@ export function injectLayoutStyle() {
       background: var(--bewly-widescreen-sidebar-bg) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter-wrap.bpx-player-dm {
+    /* Bpx shows a view of this wrapper (list, block settings, advanced) with an
+       inline display: block and hides it by clearing that, so only the shown
+       list becomes a column; forcing it would keep it over the other views. */
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter-wrap.bpx-player-dm[style*="display: block"] {
       display: flex !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter-wrap.bpx-player-dm {
       height: 100% !important;
       min-height: 0 !important;
       flex: 1 1 auto;
@@ -3116,21 +3181,43 @@ export function injectLayoutStyle() {
       background: var(--bewly-widescreen-sidebar-bg) !important;
     }
 
+    /* Column labels are one caption row in text-3; each sorts its column and
+       brightens on hover. */
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-function {
+      padding-inline: var(--bew-space-1) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-function > :is(.bpx-player-dm-btn-time, .bpx-player-dm-btn-dm, .bpx-player-dm-btn-date, .${DANMAKU_SENDER_ORDER_BUTTON_CLASS}) {
+      color: var(--bew-text-3) !important;
+      font-size: var(--bew-font-size-caption) !important;
+      transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-function > :is(.bpx-player-dm-btn-time, .bpx-player-dm-btn-dm, .bpx-player-dm-btn-date, .${DANMAKU_SENDER_ORDER_BUTTON_CLASS}):hover {
+      color: var(--bew-text-1) !important;
+    }
+
+    /* The time column has one width in the header and the rows, so the
+       comment and its label start on the same line. */
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku :is(.bpx-player-dm-btn-time, .dm-info-time) {
+      box-sizing: border-box !important;
+      width: calc(var(--bew-space-12) + var(--bew-space-3)) !important;
+      flex: none !important;
+    }
+
     /* The sender column added to the native header (syncDanmakuSenderOrderButton):
        a header cell like its neighbours, before the send time. */
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .${DANMAKU_SENDER_ORDER_BUTTON_CLASS} {
       position: relative;
       flex: none;
-      height: 32px;
+      height: var(--bew-space-8);
       margin: 0;
       padding: 0 calc(var(--bew-space-4) + 2px) 0 6px;
       border: 0;
       border-radius: var(--bew-interactive-radius);
       background: transparent;
-      color: var(--bpx-aux-content-font2, var(--bew-text-2));
       font: inherit;
-      font-size: var(--bew-font-size-caption);
-      line-height: 32px;
+      line-height: var(--bew-space-8);
       cursor: pointer;
     }
 
@@ -3138,8 +3225,48 @@ export function injectLayoutStyle() {
       pointer-events: none;
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-danmaku .${DANMAKU_SENDER_ORDER_BUTTON_CLASS}:hover {
-      color: var(--bew-text-1);
+    /* Rows reach one space-1 past the content line, so the hover fill frames
+       them. The comment is reading text; time and send date are tabular
+       captions. Bpx virtualizes by its fixed row height, which stays. */
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .dm-info-row {
+      box-sizing: border-box !important;
+      padding-inline: var(--bew-space-1) !important;
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+      transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .dm-info-row:hover {
+      background: var(--bew-hover-bg) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .dm-info-row .dm-info-dm {
+      color: var(--bew-text-1) !important;
+      font-size: var(--bew-font-size-control) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .dm-info-row :is(.dm-info-time, .dm-info-date) {
+      color: var(--bew-text-3) !important;
+      font-size: var(--bew-font-size-caption) !important;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Report and block-sender appear on hover as quiet chips, not accent outlines. */
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .dm-info-row :is(.dm-info-block-btn, .dm-info-report-btn) {
+      border-color: transparent !important;
+      border-radius: var(--bew-interactive-radius) !important;
+      corner-shape: var(--bew-corner-shape);
+      background: var(--bew-fill-1) !important;
+      color: var(--bew-text-2) !important;
+      font-size: var(--bew-font-size-caption) !important;
+      transition:
+        color var(--bew-duration-fast) var(--bew-ease-standard),
+        background-color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .dm-info-row :is(.dm-info-block-btn, .dm-info-report-btn):hover {
+      background: var(--bew-fill-2) !important;
+      color: var(--bew-text-1) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .${DANMAKU_SENDER_ORDER_BUTTON_CLASS}:focus-visible {
@@ -3154,7 +3281,7 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-btn-footer {
       position: absolute !important;
       top: 0;
-      right: 0;
+      right: var(--bew-space-1);
       bottom: auto;
       display: flex;
       align-items: center;
@@ -3173,12 +3300,16 @@ export function injectLayoutStyle() {
       padding: 0 var(--bew-space-2) !important;
       border: 0 !important;
       border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
       background: var(--bew-fill-1) !important;
       color: var(--bew-text-2) !important;
       font-size: var(--bew-font-size-control) !important;
       line-height: var(--bew-control-height-sm) !important;
       white-space: nowrap;
       cursor: pointer;
+      transition:
+        color var(--bew-duration-fast) var(--bew-ease-standard),
+        background-color var(--bew-duration-fast) var(--bew-ease-standard);
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-btn-history:hover {
@@ -3191,6 +3322,8 @@ export function injectLayoutStyle() {
       outline-offset: var(--bew-space-0-5);
     }
 
+    /* The history calendar opens under its button, right-aligned (Bpx
+       centres it with a translate), on the shared player popover surface. */
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-btn-history .bpx-player-date-picker {
       top: calc(100% + var(--bew-space-2)) !important;
       right: 0 !important;
@@ -3199,9 +3332,189 @@ export function injectLayoutStyle() {
       max-height: calc(100cqh - var(--bew-control-height-lg) - var(--bew-space-4));
       overflow-y: auto;
       overscroll-behavior: contain;
-      background: var(--bew-elevated-solid) !important;
-      border-radius: var(--bew-surface-radius);
+      transform: none !important;
+      ${PLAYER_POPOVER_SURFACE}
       color: var(--bew-text-1);
+      cursor: default;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-date-picker-header {
+      border-bottom: var(--bew-hairline) solid var(--bew-separator-color) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-date-picker :is(.bpx-player-date-picker-year, .bpx-player-date-picker-month) {
+      color: var(--bew-text-1) !important;
+      font-size: var(--bew-font-size-control) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-date-picker-btn {
+      color: var(--bew-text-2) !important;
+      transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-date-picker-btn:not(.bpx-player-disabled):hover {
+      color: var(--bew-text-1) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-date-picker-btn.bpx-player-disabled {
+      color: var(--bew-text-4) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-date-picker-btn :is(svg, path) {
+      fill: currentColor !important;
+    }
+
+    /* Days are plain numerals: dates with history read in text-1 and take a
+       hover fill, the chosen one sits on the selected surface. No outlines. */
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-date-picker-day {
+      border-color: transparent !important;
+      border-radius: var(--bew-radius-tiny) !important;
+      corner-shape: var(--bew-corner-shape);
+      color: var(--bew-text-4) !important;
+      font-variant-numeric: tabular-nums;
+      transition:
+        color var(--bew-duration-fast) var(--bew-ease-standard),
+        background-color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-date-picker-week .bpx-player-date-picker-day {
+      color: var(--bew-text-3) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-date-picker-day.day-enable {
+      color: var(--bew-text-1) !important;
+      cursor: pointer;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-date-picker-day.day-enable:hover {
+      background: var(--bew-hover-bg) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-date-picker-day.bpx-player-active {
+      color: var(--bew-text-1) !important;
+      background: var(--bew-selected-bg) !important;
+    }
+
+    /* Block settings: the list's content line, type roles and quiet controls.
+       The switch keeps the accent (switches and progress may); the tabs are a
+       static segment like the comment sort. */
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block {
+      padding-inline: var(--bew-space-1) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-label {
+      color: var(--bew-text-1) !important;
+      font-size: var(--bew-font-size-control) !important;
+      font-weight: var(--bew-font-weight-regular) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-sync-btn {
+      color: var(--bew-text-2) !important;
+      transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-sync-btn:hover {
+      color: var(--bew-text-1) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-sync-btn :is(svg, path) {
+      fill: currentColor !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-add {
+      display: flex !important;
+      gap: var(--bew-space-2);
+      height: auto !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-add-input {
+      flex: 1 1 auto;
+      box-sizing: border-box;
+      height: var(--bew-control-height-sm) !important;
+      padding: 0 var(--bew-space-2) !important;
+      border: 1px solid var(--bew-field-edge-color) !important;
+      border-radius: var(--bew-interactive-radius) !important;
+      corner-shape: var(--bew-corner-shape);
+      background: var(--bew-input-bg) !important;
+      color: var(--bew-text-1) !important;
+      font-size: var(--bew-font-size-control) !important;
+      transition: border-color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-add-input:hover {
+      border-color: var(--bew-field-edge-color-hover) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-add-input::placeholder {
+      color: var(--bew-text-4);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-add-btn {
+      flex: none !important;
+      width: auto !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-add-btn .bui-button-gray {
+      height: var(--bew-control-height-sm) !important;
+      padding: 0 var(--bew-space-3) !important;
+      border: 0 !important;
+      border-radius: var(--bew-interactive-radius) !important;
+      corner-shape: var(--bew-corner-shape);
+      background: var(--bew-fill-1) !important;
+      color: var(--bew-text-1) !important;
+      font-size: var(--bew-font-size-control) !important;
+      line-height: var(--bew-control-height-sm) !important;
+      transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-add-btn .bui-button-gray:hover {
+      background: var(--bew-fill-2) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-tab .bui-tabs-header {
+      display: flex !important;
+      gap: var(--bew-control-gap);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-tab .bui-tabs-header-item {
+      height: var(--bew-control-height-sm) !important;
+      margin: 0 !important;
+      padding: 0 var(--bew-control-item-padding-x) !important;
+      border: 0 !important;
+      border-radius: var(--bew-control-item-radius);
+      corner-shape: var(--bew-corner-shape-capsule);
+      color: var(--bew-text-2) !important;
+      font-size: var(--bew-font-size-control) !important;
+      line-height: var(--bew-control-height-sm) !important;
+      transition:
+        color var(--bew-duration-fast) var(--bew-ease-standard),
+        background-color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-tab .bui-tabs-header-item:not(.bui-tabs-header-item-active):hover {
+      color: var(--bew-segment-item-hover-color) !important;
+      background: var(--bew-segment-item-hover-bg);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-tab .bui-tabs-header-item-active {
+      color: var(--bew-segment-item-active-color) !important;
+      background: var(--bew-segment-item-active-bg);
+      box-shadow: var(--bew-segment-item-active-shadow);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-list {
+      border-radius: var(--bew-interactive-radius) !important;
+      corner-shape: var(--bew-corner-shape);
+      background: var(--bew-fill-1) !important;
+    }
+
+    /* Advanced danmaku: the same content line, regular-weight field labels. */
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-adv-danmaku-group {
+      margin-inline: var(--bew-space-1) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-adv-danmaku :is(.bpx-player-adv-danmaku-title, .bui-checkbox-name) {
+      font-weight: var(--bew-font-weight-regular) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-wrap {
@@ -3284,13 +3597,20 @@ export function injectLayoutStyle() {
       overflow: visible;
     }
 
+    /* The edge fade's mask would clip the picker where it leaves the panel. */
+    #${ROOT_ID} .bewly-widescreen-panel[data-bewly-comment-emoji-open] {
+      -webkit-mask-image: none;
+      mask-image: none;
+    }
+
     #${ROOT_ID} .bewly-widescreen-panel[hidden] {
       display: none !important;
     }
 
     /* Border-box, so native padding (the collection box's) stays inside the
        column instead of pushing its right edge past the panel. */
-    #${ROOT_ID} .bewly-widescreen-panel > * {
+    #${ROOT_ID} .bewly-widescreen-panel > *,
+    #${ROOT_ID} .bewly-widescreen-panel-playlist > * {
       box-sizing: border-box !important;
       width: 100% !important;
       max-width: 100% !important;
@@ -3320,10 +3640,7 @@ export function injectLayoutStyle() {
       padding: 0 !important;
     }
 
-    /* B 站的选集组件会继承普通视频页的固定高度。Bewly 播放页中由整个
-       选集面板负责滚动，列表便可以使用直到视口底部的全部剩余空间。 */
-    #${ROOT_ID} .bewly-widescreen-panel-playlist {
-      overflow-y: auto;
+    #${ROOT_ID} .bewly-widescreen-panel-overview {
       scrollbar-gutter: stable;
     }
 
@@ -3390,6 +3707,7 @@ export function injectLayoutStyle() {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
+      box-sizing: border-box !important;
       width: auto !important;
       min-width: max-content !important;
       min-height: var(--bew-control-height-sm, 28px) !important;
@@ -3532,12 +3850,13 @@ export function injectLayoutStyle() {
       --bewly-widescreen-row-thumb-width: calc(var(--bew-space-10) * 3);
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.video-pod__item, .video-page-card-small) {
+    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.video-pod__item, .video-page-card-small, .video-page-special-card-small) {
       margin: 0 0 var(--bew-space-1) !important;
       padding: 0 !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item, .simple-base-item, .video-page-card-small .card-box) {
+    /* The promoted card heading the recommendations is one more row. */
+    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item, .simple-base-item, :is(.video-page-card-small, .video-page-special-card-small) .card-box) {
       display: flex !important;
       align-items: flex-start !important;
       gap: var(--bew-space-3) !important;
@@ -3554,11 +3873,13 @@ export function injectLayoutStyle() {
       align-items: center !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item, .simple-base-item, .video-page-card-small .card-box):hover {
+    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item, .simple-base-item, :is(.video-page-card-small, .video-page-special-card-small) .card-box):hover {
       background: var(--bew-hover-bg) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item .cover, .video-page-card-small .pic-box) {
+    /* Thumbnails are framed like every cover (contentCard.media-frame): a
+       hairline drawn over the image and the media shadow. */
+    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item .cover, :is(.video-page-card-small, .video-page-special-card-small) .pic-box) {
       position: relative !important;
       flex: 0 0 var(--bewly-widescreen-row-thumb-width) !important;
       width: var(--bewly-widescreen-row-thumb-width) !important;
@@ -3567,17 +3888,39 @@ export function injectLayoutStyle() {
       margin: 0 !important;
       border-radius: var(--bew-thumb-radius) !important;
       corner-shape: var(--bew-corner-shape);
+      box-shadow: var(--bew-media-shadow);
       overflow: hidden !important;
     }
 
+    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item .cover, :is(.video-page-card-small, .video-page-special-card-small) .pic-box)::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      border: var(--bew-hairline) solid var(--bew-media-edge-color);
+      border-radius: inherit;
+      corner-shape: inherit;
+      pointer-events: none;
+    }
+
     #${ROOT_ID} .bewly-widescreen-panel-playlist .normal-base-item .cover .cover-img,
-    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-page-card-small .pic-box :is(.pic, .framepreview-box, .video-awesome-img, .b-img, picture, img) {
+    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.video-page-card-small, .video-page-special-card-small) .pic-box :is(.pic, .framepreview-box, .video-awesome-img, .b-img, picture, img) {
       width: 100% !important;
       height: 100% !important;
       object-fit: cover;
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item .info, .video-page-card-small .info) {
+    /* Bpx offsets the picture 10px down inside its frame, which shows a grey
+       band above it and crops its bottom. */
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-page-card-small .pic-box .video-awesome-img {
+      inset: 0 !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-page-special-card-small .pic-box > .pic {
+      display: block !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item .info, :is(.video-page-card-small, .video-page-special-card-small) .info) {
       display: flex !important;
       flex: 1 1 auto !important;
       flex-direction: column !important;
@@ -3588,7 +3931,7 @@ export function injectLayoutStyle() {
       padding: 0 !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item, .simple-base-item, .video-page-card-small) .title {
+    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item, .simple-base-item, .video-page-card-small, .video-page-special-card-small) .title {
       display: -webkit-box !important;
       height: auto !important;
       max-height: none !important;
@@ -3603,10 +3946,12 @@ export function injectLayoutStyle() {
       -webkit-line-clamp: 2;
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item .stats, .video-page-card-small :is(.upname, .playinfo)) {
+    /* Caption lines under the title, spaced like the info's meta line: 4px
+       from an icon to its value, 12px between values. */
+    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item .stats, .video-page-card-small :is(.upname, .playinfo), .video-page-special-card-small .desc) {
       display: flex !important;
       align-items: center !important;
-      gap: var(--bew-space-1) var(--bew-space-2) !important;
+      gap: var(--bew-space-1) var(--bew-space-3) !important;
       height: auto !important;
       margin: 0 !important;
       color: var(--bew-text-3) !important;
@@ -3619,6 +3964,24 @@ export function injectLayoutStyle() {
       width: var(--bew-icon-size-xs) !important;
       height: var(--bew-icon-size-xs) !important;
       flex: 0 0 auto;
+      margin: 0 !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .normal-base-item .stats .stat-item,
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-page-card-small .upname a {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: var(--bew-space-1) !important;
+      margin: 0 !important;
+    }
+
+    /* The recommendation's counts are flat icon, value pairs. */
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-page-card-small .playinfo {
+      column-gap: var(--bew-space-1) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-page-card-small .playinfo svg ~ svg {
+      margin-inline-start: var(--bew-space-2) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-playlist .video-page-card-small .upname :is(a, .name) {
@@ -3633,7 +3996,7 @@ export function injectLayoutStyle() {
       background: var(--bew-selected-bg) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item, .simple-base-item).active :is(.title, .title *) {
+    #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.normal-base-item, .simple-base-item).active :is(.title, .title .title-txt) {
       color: var(--bew-text-1) !important;
     }
 
@@ -3669,8 +4032,16 @@ export function injectLayoutStyle() {
       line-height: var(--bew-line-height-caption) !important;
     }
 
-    /* Durations on thumbnails are captions too. */
+    /* Durations on thumbnails are captions too: a text label on the cover
+       scrim, one space-1 in from the corner. */
     #${ROOT_ID} .bewly-widescreen-panel-playlist .pic-box .duration {
+      right: var(--bew-space-1) !important;
+      bottom: var(--bew-space-1) !important;
+      height: auto !important;
+      padding: 0 var(--bew-space-1) !important;
+      border-radius: var(--bew-radius-tiny) !important;
+      corner-shape: var(--bew-corner-shape);
+      background: var(--bew-cover-scrim) !important;
       font-size: var(--bew-font-size-caption) !important;
       font-variant-numeric: tabular-nums;
       line-height: var(--bew-line-height-caption) !important;
@@ -3691,17 +4062,48 @@ export function injectLayoutStyle() {
       line-height: var(--bew-line-height-title) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-pod__header :is(.amt, .header-bottom > .left) {
+    /* Under the title, one caption line (views, the description popover)
+       beside the collapse and subscribe buttons, 8px down. The list below
+       needs no rule above it: its edge fades while it scrolls. */
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-pod__header .header-bottom {
+      align-items: center !important;
+      margin-top: var(--bew-space-2) !important;
+      padding: 0 !important;
+      border-bottom: 0 !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-pod__header .header-bottom > .left {
+      align-items: center !important;
+      gap: var(--bew-space-3) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-pod__header :is(.amt, .header-bottom > .left, .header-bottom > .left :is(.total-view, .description)) {
       color: var(--bew-text-3) !important;
       font-size: var(--bew-font-size-caption) !important;
       font-variant-numeric: tabular-nums;
       line-height: var(--bew-line-height-caption) !important;
     }
 
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-pod__header .header-bottom > .left .description {
+      gap: var(--bew-space-1) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .video-pod__header .header-bottom > .left .description svg {
+      width: var(--bew-icon-size-xs) !important;
+      height: var(--bew-icon-size-xs) !important;
+      margin: 0 !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .pod-description-popover {
+      ${PLAYER_POPOVER_SURFACE}
+      color: var(--bew-text-1) !important;
+    }
+
     /* Recommendations after a collection: a second group of the same rows,
-       under a hairline and its own label (the root sets the localized text). */
+       under a hairline and its own section title (the root sets the localized
+       text), 16px on either side of the line. */
     #${ROOT_ID} .bewly-widescreen-panel-playlist .video-pod ~ :is(.recommend-list-v1, .recommend-list) {
-      margin-top: var(--bew-space-3) !important;
+      margin-top: var(--bew-space-4) !important;
       padding-top: var(--bew-space-4) !important;
       border-top: var(--bew-hairline, 1px) solid var(--bew-separator-color) !important;
     }
@@ -3710,10 +4112,10 @@ export function injectLayoutStyle() {
       content: var(--bewly-widescreen-up-next-label, none);
       display: block;
       margin-bottom: var(--bew-space-3);
-      color: var(--bew-text-2);
-      font-size: var(--bew-font-size-control);
+      color: var(--bew-text-1);
+      font-size: var(--bew-font-size-title);
       font-weight: var(--bew-font-weight-regular);
-      line-height: var(--bew-line-height-control);
+      line-height: var(--bew-line-height-title);
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-playlist :is(.recommend-list-v1, .recommend-list, .rec-list) {
@@ -3831,20 +4233,27 @@ export function injectLayoutStyle() {
       ),
       body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS},
       body.${BODY_CLASS} > .bewly-widescreen-backdrop,
-      #${ROOT_ID} :is(.bewly-widescreen-info, .bewly-widescreen-sidebar, .bewly-widescreen-panel, .bewly-widescreen-panel-loading),
+      #${ROOT_ID} :is(.bewly-widescreen-sidebar, .bewly-widescreen-panel, .bewly-widescreen-panel-loading),
       #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag, .bgm-tag) > .tag-link,
       ${DANMAKU_SURFACE_SELECTOR},
       #${ROOT_ID} .bewly-widescreen-playlist-toggle::after,
       #${ROOT_ID} .bewly-widescreen-panel-playlist .${EPISODE_SECTION_CLASS},
       #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__block`, 'transition:none;animation:none;')}
 
+    ${reducedMotionCss(`#${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter :is(.bui-dropdown-icon, .bui-dropdown-item),
+      #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-function > :is(.bpx-player-dm-btn-time, .bpx-player-dm-btn-dm, .bpx-player-dm-btn-date, .${DANMAKU_SENDER_ORDER_BUTTON_CLASS}),
+      #${ROOT_ID} .bewly-widescreen-panel-danmaku .dm-info-row,
+      #${ROOT_ID} .bewly-widescreen-panel-danmaku .dm-info-row :is(.dm-info-block-btn, .dm-info-report-btn),
+      #${ROOT_ID} .bewly-widescreen-panel-danmaku :is(.bpx-player-dm-btn-history, .bpx-player-date-picker-btn, .bpx-player-date-picker-day, .bpx-player-block-sync-btn, .bpx-player-block-add-input),
+      #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-add-btn .bui-button-gray,
+      #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-block-tab .bui-tabs-header-item`, 'transition:none;')}
+
     ${reducedMotionCss(`#${ROOT_ID} .bewly-widescreen-action-slot :is(.video-toolbar-left-item, .video-toolbar-right-item, .bewly-watch-later-btn):active,
       #${ROOT_ID} .bewly-widescreen-up-slot .upinfo-btn-panel > .default-btn:active`, 'scale:none;')}
 
     ${reducedMotionCss(`body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .b-back-panel :is(.b-back-submit, .b-back-content-fail-resubmit, .b-back-content-test-submit, .b-back-content-test-fail-submit, .b-back-content-test-success-submit, .b-back-content-test-speedtest, .b-back-content-test-fail-speedtest):active`, 'scale:none;')}
 
-    /* One column: the 16:9 video pane across the top, then the column with
-       its info capped, the tabs and the panels taking the remaining height. */
+    /* One column: the 16:9 video pane above the tabs and active panel. */
     @media (max-width: ${MOBILE_BREAKPOINT}px) {
       body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS}[${PLAYER_DISPLAY_MODE_ATTRIBUTE}="fill"],
       #${ROOT_ID}[data-display-mode="fill"] .bewly-widescreen-danmaku-dock {
@@ -3872,10 +4281,6 @@ export function injectLayoutStyle() {
 
       body.${BODY_CLASS} > .bewly-widescreen-backdrop::before {
         display: none;
-      }
-
-      #${ROOT_ID} .bewly-widescreen-info {
-        max-height: 28dvh;
       }
 
       ${DANMAKU_SURFACE_SELECTOR} {

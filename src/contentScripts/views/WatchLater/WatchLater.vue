@@ -32,6 +32,7 @@ import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { useLibraryBatchSelection } from '~/composables/useLibraryBatchSelection'
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { usePageViewState } from '~/composables/usePageViewState'
+import { uiScale } from '~/composables/useUiScale'
 import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
 import { LIBRARY_AUTOFILL_PAGE_LIMIT } from '~/constants/library'
 import { settings } from '~/logic'
@@ -151,7 +152,7 @@ const cardWindow = useCardWindow({
   gap: cardGap,
   enabled: computed(() => currentWatchLaterList.value.length > CARD_WINDOW_THRESHOLD),
   estimatedHeight: computed(() => watchLaterLayoutMode.value === 'list' ? 190 : cardWidth.value / VIDEO_CARD_COVER_ASPECT_RATIO + 112),
-  layout: computed(() => `${watchLaterLayoutMode.value}:${settings.value.videoCardTitleFontSize}:${settings.value.videoCardAuthorFontSize}:${settings.value.interfaceFontSize}`),
+  layout: computed(() => `${watchLaterLayoutMode.value}:${settings.value.videoCardTitleFontSize}:${settings.value.videoCardAuthorFontSize}:${settings.value.interfaceFontSize}:${uiScale.value.scale}`),
   canRelease: key => !isLayoutEditing.value && pendingAction.value?.aid !== key,
 })
 const renderedRows = computed(() => cardWindow.ranges.value.flatMap<{ key: string, height: number | undefined, items: VideoItem[] }>(range => range.height !== undefined

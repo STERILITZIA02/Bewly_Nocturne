@@ -10,6 +10,7 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { provideHomeTabCache } from '~/composables/useHomeTabState'
 import { usePageScrollPositions } from '~/composables/usePageViewState'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
+import { uiPx } from '~/composables/useUiScale'
 import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
 import { resolveHomeSearchStage } from '~/constants/layout'
 import { AppPage } from '~/enums/appEnums'
@@ -29,7 +30,7 @@ import { retiringTransition } from '~/utils/motionPresence'
 import { createMotionScope } from '~/utils/motionPriority'
 import { scrollToPosition } from '~/utils/scrollIntent'
 import { arriveSearchAt, departSearchFrom } from '~/utils/searchHandoff'
-import { subscribeViewportFrame } from '~/utils/viewportGeometry'
+import { readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
 
 import HomeChannelsMenu from './components/HomeChannelsMenu.vue'
 import RecommendationModeSwitcher from './components/RecommendationModeSwitcher.vue'
@@ -55,18 +56,21 @@ const {
 // threshold below reaches render state.
 let cachedScrollTop = 0
 const shortViewport = useMediaQuery('(max-height: 800px)')
-const searchStage = computed(() => resolveHomeSearchStage(shortViewport.value))
+const searchStage = computed(() => resolveHomeSearchStage(shortViewport.value, uiPx))
+const homeRoot = useTemplateRef<HTMLElement>('homeRoot')
+const searchStageOffset = ref(0)
+const stickyScrollTop = computed(() => searchStageOffset.value + searchStage.value.stickyScrollTop)
 const searchStageStyle = computed(() => ({
   '--bew-layout-home-search-stage-lead-height': `${searchStage.value.lead}px`,
   '--bew-layout-home-search-stage-tail-height': `${searchStage.value.tail}px`,
-  '--bew-layout-home-search-stage-sticky-scroll-top': `${searchStage.value.stickyScrollTop}px`,
+  '--bew-layout-home-search-stage-sticky-scroll-top': `${stickyScrollTop.value}px`,
 }))
-const showHomeSearchCharacter = ref(true)
+const homeSearchStuck = ref(false)
 function setCachedScrollTop(scrollTop: number) {
   cachedScrollTop = scrollTop
-  showHomeSearchCharacter.value = scrollTop < searchStage.value.stickyScrollTop
+  homeSearchStuck.value = scrollTop >= stickyScrollTop.value
 }
-watch(() => searchStage.value.stickyScrollTop, () => setCachedScrollTop(cachedScrollTop))
+watch(stickyScrollTop, () => setCachedScrollTop(cachedScrollTop))
 
 const tabScrollPositions = usePageScrollPositions('Home:')
 const homeActive = ref(true)
@@ -98,8 +102,13 @@ function arriveHomeSearch() {
 function measureSearchDock() {
   const dock = searchDock.value
   const stage = dock?.parentElement
-  if (dock && stage)
-    dock.style.setProperty('--bew-home-search-left', `${stage.getBoundingClientRect().left + dock.offsetLeft}px`)
+  const viewport = scrollViewportRef?.value
+  if (!dock || !stage || !homeRoot.value || !viewport)
+    return
+  const geometry = readViewportGeometry(viewport)
+  // The page content can have a different top inset with a native header.
+  searchStageOffset.value = homeRoot.value.getBoundingClientRect().top - geometry.top + geometry.scrollTop
+  dock.style.setProperty('--bew-home-search-left', `${stage.getBoundingClientRect().left + dock.offsetLeft}px`)
 }
 watch([searchDock, () => scrollViewportRef?.value, homeActive], ([dock, viewport, active], _, onCleanup) => {
   if (!dock || !viewport || !active)
@@ -429,7 +438,7 @@ watch(tabContentLoading, (loading) => {
 </script>
 
 <template>
-  <div pos="relative" :style="searchStageStyle">
+  <div ref="homeRoot" pos="relative" :style="searchStageStyle">
     <main @mousedown="preventBackgroundSelection">
       <!-- Home search page mode content -->
       <Transition name="content" v-bind="retiringTransition">
@@ -438,7 +447,7 @@ watch(tabContentLoading, (loading) => {
             <Logo
               v-if="settings.searchPageShowLogo"
               class="home-search-stage__logo"
-              :size="shortViewport ? 144 : 180"
+              :size="uiPx(shortViewport ? 144 : 180)"
               :color="settings.searchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
             />
           </div>
@@ -452,7 +461,9 @@ watch(tabContentLoading, (loading) => {
             >
               <SearchBar
                 layout-editable-id="home-search"
-                :focused-character="showHomeSearchCharacter ? settings.searchPageSearchBarFocusCharacter : undefined"
+                :collapsible="settings.collapseTopBarSearch"
+                :keep-expanded="!homeSearchStuck"
+                :focused-character="homeSearchStuck ? undefined : settings.searchPageSearchBarFocusCharacter"
                 :show-hot-search="settings.showHotSearchInTopBar"
                 :top-bar-appearance="true"
               />

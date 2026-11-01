@@ -91,7 +91,7 @@ export interface NativeMediaSnapshot {
   btr: { installed: boolean, ownsMedia: boolean }
 }
 
-function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quality' | 'playback') {
+function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quality' | 'playback' | 'switchPlayback', value: unknown = true) {
   const channelId = getPageBridgeChannelId()
   const href = location.href
   if (!channelId || !node.isConnected)
@@ -101,16 +101,36 @@ function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quali
   const receive = (event: Event) => {
     const message = parseVideoMetadataEvent(event)
     if (event.target === node && message?.channelId === channelId && message.requestId === id
-      && message.href === href && location.href === href) {
+      && message.href === href && (location.href === href || operation === 'switchPlayback')) {
       response = message
     }
   }
   node.addEventListener(VIDEO_COMPONENT_RESPONSE, receive)
   try {
-    node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_REQUEST, { bubbles: true, detail: JSON.stringify({ channelId, requestId: id, href, [operation]: true }) }))
+    node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_REQUEST, { bubbles: true, detail: JSON.stringify({ channelId, requestId: id, href, [operation]: value }) }))
   }
   finally { node.removeEventListener(VIDEO_COMPONENT_RESPONSE, receive) }
   return response
+}
+
+/** AV and BV routes can name the same native manuscript; a part is a separate visit. */
+export function matchesPlaybackUnit(href: string, unit: NativePlaybackUnit) {
+  const identity = parseVideoPageIdentity(href)
+  if (!identity || !unit || !Number.isSafeInteger(unit.aid) || unit.aid <= 0
+    || !Number.isSafeInteger(unit.cid) || unit.cid <= 0 || !Number.isSafeInteger(unit.page) || unit.page < 1) {
+    return false
+  }
+  const url = new URL(href)
+  return (identity.aid ? identity.aid === unit.aid : identity.bvid === unit.bvid)
+    && Number(url.searchParams.get('p') || 1) === unit.page
+    && (!url.searchParams.has('cid') || Number(url.searchParams.get('cid')) === unit.cid)
+}
+
+export function switchNativePlaybackVisit(video: HTMLElement, href: string, unit?: NativePlaybackUnit) {
+  const accepted = readComponentSnapshot(video, 'switchPlayback', { href, unit })?.switched as NativePlaybackUnit | 'needs-unit' | undefined
+  if (accepted === 'needs-unit')
+    return accepted
+  return accepted && matchesPlaybackUnit(href, accepted) ? accepted : undefined
 }
 
 /** Source URLs are intentionally absent: MSE replacement does not change a unit. */

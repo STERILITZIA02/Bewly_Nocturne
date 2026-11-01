@@ -187,6 +187,7 @@ const autoPlayModeOptionKeys = [
 const topBarGlobalTitleKeys = [
   'settings.group_topbar',
   'settings.topbar_display_settings',
+  'settings.collapse_top_bar_search',
   'settings.open_top_bar_items_in_bewly',
 ]
 
@@ -581,6 +582,7 @@ const entries: SettingsSearchEntry[] = [
     'settings.visual_style.contrast',
     'settings.visual_style.interface_font_size',
   ]),
+  ...createEntries(appearanceRoute, ['settings.visual_style.interface_size'], { keywordKeys: ['settings.visual_style.interface_size_compact', 'settings.visual_style.interface_size_standard', 'settings.visual_style.interface_size_comfortable'] }),
   ...createEntries(appearanceRoute, ['settings.visual_style.import', 'settings.visual_style.export', 'settings.visual_style.copy'], { targetId: 'settings.visual_style.preset' }),
   ...createEntries(appearanceRoute, ['settings.visual_style.preset'], { keywordKeys: ['settings.visual_style.presets'], keywords: Object.values(CODEX_THEME_NAMES) }),
   ...createEntries(appearanceRoute, ['settings.visual_style.motion'], { keywordKeys: ['settings.visual_style.motion_system', 'settings.visual_style.motion_on', 'settings.visual_style.motion_off'] }),

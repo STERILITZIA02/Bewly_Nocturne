@@ -3,8 +3,13 @@ import vm from 'node:vm'
 
 import ts from 'typescript'
 
+/** Fixtures run on the reference display, where design lengths are unchanged. */
+const referenceUiScale = { uiScale: { value: { scale: 1, pixel: 1 } }, uiPx: (length: number) => length }
+
 /** Keep each fixture's visual child stubs when production uses explicit imports. */
 export function globalComponentFixture(path: string, vue: typeof import('vue')) {
+  if (path === '~/composables/useUiScale')
+    return referenceUiScale
   const name = /^~\/components\/(?:[^/]+\/)?([^/]+)\.vue$/.exec(path)?.[1]
   if (!name)
     return undefined
@@ -28,6 +33,8 @@ export async function loadSourceModule(file: string, imports: Record<string, unk
     imports = { '~/utils/iframeDrawerHistory': await import('../src/utils/iframeDrawerHistory'), ...imports }
   if (source.includes('from \'./privateConversationRoute\''))
     imports = { './privateConversationRoute': await import('../src/utils/privateConversationRoute'), ...imports }
+  if (source.includes('from \'~/composables/useUiScale\''))
+    imports = { '~/composables/useUiScale': referenceUiScale, ...imports }
   // Shared-state subscriptions: a page fixture has no background registry; a
   // broker fixture gets the real registry over the fixture's own `tabs`.
   if (source.includes('from \'~/utils/stateConsumer\''))

@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import type { DisplayMoment } from '~/components/MomentCard/types'
 import { getCardPreviewText, isCompactPlainTextMoment } from '~/components/MomentCard/utils'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { uiScale } from '~/composables/useUiScale'
 import { settings } from '~/logic'
 import { useLayoutEditSettingValue } from '~/logic/layoutEdit'
 import { shouldUseWideMomentCardLayout, supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
@@ -649,6 +650,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
       gridGap,
       settings.value.fontFamily,
       settings.value.interfaceFontSize,
+      uiScale.value.scale,
       textAutospaceMode.value,
       moment.title,
       getCardPreviewText(moment),
@@ -915,7 +917,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     }
   })
   watch(
-    [() => settings.value.fontFamily, textAutospaceMode, () => settings.value.interfaceFontSize],
+    [() => settings.value.fontFamily, textAutospaceMode, () => settings.value.interfaceFontSize, () => uiScale.value.scale],
     async () => {
       await nextTick()
       if (!active)

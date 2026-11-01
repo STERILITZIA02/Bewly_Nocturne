@@ -1,4 +1,5 @@
 @use "breakpoints";
+@use "truncateFade";
 
 // A Dock tab (user-specified, the iOS tab bar): a glyph over its name
 // in a capsule rectangle. At rest glyph and name are secondary (text-2); hover
@@ -12,10 +13,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  // Optical gap: the name sits close under the glyph.
-  gap: var(--bew-space-0-5);
+  gap: 0;
   box-sizing: border-box;
-  min-width: var(--bew-dock-item-min-width);
+  flex: none;
+  min-width: var(--bew-dock-item-width);
   height: var(--bew-dock-item-height);
   padding: 0 var(--bew-space-3);
   border: 0;
@@ -40,7 +41,7 @@
     transition: transform var(--bew-duration-moderate) var(--bew-ease-emphasized);
   }
 
-  &:hover:not(:disabled, [data-active="true"]) {
+  &:hover:not(:disabled, [aria-current="page"]) {
     color: var(--bew-text-1);
   }
 
@@ -54,7 +55,7 @@
   }
 
   @media (min-width: breakpoints.$grid-lg) {
-    min-width: var(--bew-dock-item-min-width-lg);
+    min-width: var(--bew-dock-item-width-wide);
 
     #{$glyph} {
       width: var(--bew-dock-icon-size-lg);
@@ -78,5 +79,6 @@
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
-  white-space: nowrap;
+  max-width: 100%;
+  @include truncateFade.line;
 }

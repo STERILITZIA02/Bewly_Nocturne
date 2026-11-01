@@ -22,8 +22,8 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     const Dock = await compileComponent('../src/components/Dock/Dock.vue', {
       'vue-i18n': { useI18n: () => ({ t: (key, params) => `${key}:${params.count}` }) },
       '@iconify/vue': { Icon: { render: () => Vue.h('svg') } },
-      // 64px = the Dock tab (56px) plus its 4px rim on each side.
-      '@vueuse/core': { useElementSize: () => ({ width: Vue.ref(600), height: Vue.ref(64) }), useWindowSize: () => ({ width: Vue.ref(1280), height: Vue.ref(900) }), usePreferredReducedMotion: () => Vue.ref('reduce') },
+      // 62px = the Dock tab (54px) plus its 4px rim on each side.
+      '@vueuse/core': { useElementSize: () => ({ width: Vue.ref(600), height: Vue.ref(62) }), useWindowSize: () => ({ width: Vue.ref(1280), height: Vue.ref(900) }), usePreferredReducedMotion: () => Vue.ref('reduce') },
       '~/composables/useAppProvider': { UndoForwardState: { ShowUndo: 1, ShowForward: 2 }, useBewlyApp: () => ({ reachTop: Vue.ref(true), homeActivatedPage: Vue.ref(HomeSubPage.ForYou), undoForwardState: undoState, canRefreshHomeSubPage: Vue.ref(true), getDockPageHref: () => '/' }) },
       '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), toggleDark: () => {} }) },
       '~/composables/useReducedMotion': { useReducedMotion: () => Vue.ref(true) },
@@ -135,9 +135,9 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     collapseButton().click()
     await flush()
     const geometry = host.querySelector('.dock-content-inner').style
-    assert.equal(geometry.getPropertyValue('--dock-collapsed-width'), '128px')
-    assert.ok(Math.abs(Number.parseFloat(geometry.getPropertyValue('--dock-collapsed-height')) - 64 / 3) < 0.01)
-    assert.ok(Math.abs(bottomShifts.at(-1) - (64 - 64 / 3)) < 0.01, 'composer uses the actual scaled height released by Dock')
+    assert.equal(geometry.getPropertyValue('--dock-collapsed-width'), '124px')
+    assert.ok(Math.abs(Number.parseFloat(geometry.getPropertyValue('--dock-collapsed-height')) - 62 / 3) < 0.01)
+    assert.ok(Math.abs(bottomShifts.at(-1) - (62 - 62 / 3)) < 0.01, 'composer uses the actual scaled height released by Dock')
     const ended = new window.Event('transitionend', { bubbles: true })
     Object.defineProperty(ended, 'propertyName', { value: 'transform' })
     shell.dispatchEvent(ended)

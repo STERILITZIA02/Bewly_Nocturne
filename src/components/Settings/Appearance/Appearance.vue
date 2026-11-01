@@ -11,6 +11,7 @@ import Tooltip from '~/components/Tooltip.vue'
 import { useDark } from '~/composables/useDark'
 import { useMotionValue } from '~/composables/useMotionValue'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
+import { uiScale } from '~/composables/useUiScale'
 import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, settings } from '~/logic'
 import type { VideoCardFontSizeSetting } from '~/logic/storage'
 import type { AppearancePalette, AppearancePreferences, ColorScheme } from '~/utils/appearance'
@@ -36,6 +37,7 @@ const editingScheme = ref<ColorScheme>(isDark.value ? 'dark' : 'light')
 const schemeMotion = createMotionScope('appearance-scheme')
 const motionPreferenceMotion = createMotionScope('appearance-motion')
 const autospaceMotion = createMotionScope('appearance-autospace')
+const interfaceSizeMotion = createMotionScope('appearance-interface-size')
 const selectedScheme = useMotionValue(() => editingScheme.value, (value) => {
   editingScheme.value = value
 }, schemeMotion)
@@ -46,6 +48,10 @@ const selectedMotion = useMotionValue(() => settings.value.motionPreference, (va
 const selectedAutospace = useMotionValue(() => settings.value.textAutospaceMode, (value) => {
   settings.value.textAutospaceMode = value
 }, autospaceMotion)
+const selectedInterfaceSize = useMotionValue(() => settings.value.interfaceSize, (value) => {
+  settings.value.interfaceSize = value
+}, interfaceSizeMotion)
+const interfaceScalePercent = computed(() => `${Math.round(uiScale.value.scale * 1000) / 10}%`)
 const importFile = ref<HTMLInputElement>()
 const importing = ref(false)
 let importGeneration = 0
@@ -308,6 +314,12 @@ async function importTheme(event: Event) {
     </SettingsItemGroup>
 
     <SettingsItemGroup :title="$t('settings.visual_style.advanced')" collapsible default-collapsed>
+      <SettingsItem setting-id="settings.visual_style.interface_size" :title="$t('settings.visual_style.interface_size')" :desc="$t('settings.visual_style.interface_size_desc', { scale: interfaceScalePercent })" right-width="auto">
+        <SettingsSegmentedControl
+          v-model="selectedInterfaceSize" :motion-scope="interfaceSizeMotion" :label="$t('settings.visual_style.interface_size')"
+          :options="[{ value: 'auto', label: $t('settings.visual_style.automatic') }, { value: 'compact', label: $t('settings.visual_style.interface_size_compact') }, { value: 'standard', label: $t('settings.visual_style.interface_size_standard') }, { value: 'comfortable', label: $t('settings.visual_style.interface_size_comfortable') }]"
+        />
+      </SettingsItem>
       <SettingsItemSubgroup :title="$t('settings.group_fonts')">
         <SettingsItem setting-id="settings.visual_style.interface_font_size" :title="$t('settings.visual_style.interface_font_size')" :desc="$t('settings.visual_style.interface_font_size_desc')" right-width="auto">
           <Slider

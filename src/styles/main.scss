@@ -9,10 +9,12 @@
 @use "./scrollEdgeFade";
 @use "./truncateFade";
 @use "./bleedStrip";
+@use "./uiScale";
 
 @include scrollEdgeFade.global;
 @include truncateFade.global;
 @include bleedStrip.global;
+@include uiScale.global;
 
 :host,
 :host *,

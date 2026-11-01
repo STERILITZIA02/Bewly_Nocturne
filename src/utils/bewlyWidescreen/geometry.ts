@@ -2,11 +2,10 @@ import { settings } from '~/logic'
 import { scheduleActionGeometrySync } from '~/utils/bewlyWidescreen/actionEffects'
 import { HIGH_ENERGY_PROGRESS_PIN_SELECTOR, HIGH_ENERGY_PROGRESS_SELECTOR, NATIVE_PLAYER_ANCESTOR_CLASS, NATIVE_PLAYER_CLASS, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, PLAYER_DISPLAY_MODE_ATTRIBUTE, PLAYER_ZOOMING_ATTRIBUTE, READY_STABILITY_DELAY, VIEWER_COUNT_MIRRORED_ATTRIBUTE } from '~/utils/bewlyWidescreen/constants'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
-import { forwardNativePlayerPointerActivity, getNativePlayerContainer, isPointerInBottomControlContainer, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
+import { getNativePlayerContainer, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
 import { exitNativeMiniPlayer } from '~/utils/bewlyWidescreen/nativeDom'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
-import { WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY } from '~/utils/bewlyWidescreenPolicy'
 import { getVideoElement, isPlayerShowingEndingRecommendation } from '~/utils/player'
 import { getPlayerRoot } from '~/utils/playerMedia'
 
@@ -85,19 +84,13 @@ export function syncControlsGlassGeometry(currentState: BewlyWidescreenState) {
     ? Math.ceil(highEnergyProgress.getBoundingClientRect().height)
     : 0
   const controlsHeight = wrapHeight + highEnergyProgressHeight
-  // 同值跳过：visibility/resize/observer 链频繁触发本函数，重复写自定义属性会重启过渡
-  if (controlsHeight === currentState.controlsGlassAppliedHeight)
-    return
-  currentState.controlsGlassAppliedHeight = controlsHeight
-  if (controlsHeight > 0) {
-    glass.style.setProperty(
-      '--bewly-widescreen-controls-glass-height',
-      `calc(var(--bewly-widescreen-bottom-controls-height) + var(--bewly-widescreen-controls-block-padding, 12px) + ${controlsHeight}px)`,
-    )
-  }
-  else {
-    glass.style.removeProperty('--bewly-widescreen-controls-glass-height')
-  }
+  const height = controlsHeight > 0
+    ? `calc(var(--bewly-widescreen-bottom-controls-height) + var(--bewly-widescreen-controls-block-padding, 12px) + ${controlsHeight}px)`
+    : ''
+  // CC and the glass share this measurement, even when the sending bar is outside the native player.
+  setGeometryProperty(currentState.playerEl, '--bewly-widescreen-controls-glass-height', height)
+  if (!currentState.playerEl.contains(glass))
+    setGeometryProperty(glass, '--bewly-widescreen-controls-glass-height', height)
 }
 
 export function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState) {
@@ -154,6 +147,7 @@ export function clearAnchoredPlayerElement(playerEl: HTMLElement) {
   playerEl.classList.remove(NATIVE_PLAYER_CLASS)
   playerEl.removeAttribute(PLAYER_DISPLAY_MODE_ATTRIBUTE)
   playerEl.removeAttribute(PLAYER_ZOOMING_ATTRIBUTE)
+  playerEl.style.removeProperty('--bewly-widescreen-controls-glass-height')
   ANCHORED_PLAYER_GEOMETRY_PROPERTIES.forEach(property => playerEl.style.removeProperty(property))
   document.querySelectorAll(`.${NATIVE_PLAYER_ANCESTOR_CLASS}`).forEach(node => node.classList.remove(NATIVE_PLAYER_ANCESTOR_CLASS))
 }
@@ -269,6 +263,7 @@ export function clearPlayerResizeSync(currentState: BewlyWidescreenState) {
 
 export function resetControlsLayout(currentState: BewlyWidescreenState) {
   currentState.controlsLayoutReady = false
+  currentState.measuredControls = undefined
   currentState.controlsLayoutSignature = undefined
   currentState.controlsLayoutStableSince = undefined
   syncNativePlayerControlVisibility(currentState)
@@ -281,10 +276,12 @@ function settleControlsLayout(currentState: BewlyWidescreenState) {
 
   syncAnchoredPlayerGeometry(currentState)
   syncControlsGlassGeometry(currentState)
-  if (currentState.controlsLayoutReady)
-    return
-
   const controls = currentState.playerEl.querySelector<HTMLElement>(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR)
+  if (currentState.controlsLayoutReady) {
+    if (controls === currentState.measuredControls)
+      return
+    resetControlsLayout(currentState)
+  }
   const source = currentState.danmakuSemanticsSource
   const viewers = source?.querySelector<HTMLElement>('.bpx-player-video-info')
   const nativeButtons = controls?.matches('.bpx-player-control-wrap')
@@ -329,6 +326,7 @@ function settleControlsLayout(currentState: BewlyWidescreenState) {
   }
 
   currentState.controlsLayoutReady = true
+  currentState.measuredControls = controls!
   syncNativePlayerControlVisibility(currentState)
   const reveal = currentState.onInitialLayoutReady
   currentState.onInitialLayoutReady = undefined
@@ -416,90 +414,13 @@ export function setupAspectObservers(currentState: BewlyWidescreenState) {
     currentState.playerStateObserver = new MutationObserver(refreshPlayerState)
     currentState.playerStateObserver.observe(playerHost, {
       attributes: true,
-      attributeFilter: ['class', 'data-screen', 'data-ctrl-hidden', 'style'],
+      attributeFilter: ['class', 'data-screen', 'style'],
     })
     syncNativePlayerControlVisibility(currentState, playerHost)
   }
   else {
     syncNativePlayerControlVisibility(currentState)
   }
-
-  let bottomControlsLeaveTimer: ReturnType<typeof setTimeout> | undefined
-  const clearBottomControlsLeaveTimer = () => {
-    if (bottomControlsLeaveTimer) {
-      clearTimeout(bottomControlsLeaveTimer)
-      bottomControlsLeaveTimer = undefined
-    }
-  }
-  const setBottomControlsHovered = (hovered: boolean) => {
-    if (currentState.bottomControlsHovered === hovered)
-      return false
-    currentState.bottomControlsHovered = hovered
-    currentState.root.dataset.bottomControlsHovered = String(hovered)
-    return true
-  }
-  const scheduleBottomControlsLeave = () => {
-    if (!currentState.bottomControlsHovered || bottomControlsLeaveTimer)
-      return
-    bottomControlsLeaveTimer = setTimeout(() => {
-      bottomControlsLeaveTimer = undefined
-      if (session.current === currentState && setBottomControlsHovered(false))
-        syncNativePlayerControlVisibility(currentState, playerHost ?? currentState.playerEl)
-    }, WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY)
-  }
-  const updateBottomControlsHover = (event: PointerEvent, playerRect: DOMRect) => {
-    const sourceHost = currentState.danmakuSourceHost
-    const pointerInBottomControlTree = event.composedPath().some(node => (
-      node === currentState.danmakuDock
-      || (node instanceof Node && currentState.danmakuDock.contains(node))
-      || node === sourceHost
-      || (node instanceof Node && !!sourceHost?.contains(node))
-    ))
-    const hovered = pointerInBottomControlTree || isPointerInBottomControlContainer(
-      currentState,
-      event.clientX,
-      event.clientY,
-      playerRect,
-    )
-    if (hovered) {
-      clearBottomControlsLeaveTimer()
-      return setBottomControlsHovered(true)
-    }
-    scheduleBottomControlsLeave()
-    return false
-  }
-
-  currentState.root.dataset.bottomControlsHovered = String(currentState.bottomControlsHovered)
-  const handleBottomPointerActivity = (event: PointerEvent) => {
-    if (!event.isTrusted)
-      return
-    // Geometry is read once, before the state writes below.
-    const pointerHost = playerHost ?? currentState.playerEl
-    const pointerRect = pointerHost.getBoundingClientRect()
-    const pointerInsidePlayer = event.clientX >= pointerRect.left
-      && event.clientX <= pointerRect.right
-      && event.clientY >= pointerRect.top
-      && event.clientY <= pointerRect.bottom
-    const bottomHoverChanged = updateBottomControlsHover(event, currentState.playerEl === pointerHost ? pointerRect : currentState.playerEl.getBoundingClientRect())
-    const playerPointerChanged = currentState.playerPointerInside !== pointerInsidePlayer
-    if (playerPointerChanged)
-      currentState.playerPointerInside = pointerInsidePlayer
-    if (bottomHoverChanged || playerPointerChanged)
-      syncNativePlayerControlVisibility(currentState, pointerHost)
-    if (playerHost && pointerInsidePlayer)
-      forwardNativePlayerPointerActivity(currentState, playerHost, event, pointerRect)
-  }
-  const clearPlayerPointerState = () => {
-    clearBottomControlsLeaveTimer()
-    const bottomHoverChanged = setBottomControlsHovered(false)
-    if (!currentState.playerPointerInside && !bottomHoverChanged)
-      return
-    currentState.playerPointerInside = false
-    syncNativePlayerControlVisibility(currentState, playerHost ?? currentState.playerEl)
-  }
-  window.addEventListener('pointermove', handleBottomPointerActivity, { passive: true })
-  window.addEventListener('blur', clearPlayerPointerState)
-  document.documentElement.addEventListener('pointerleave', clearPlayerPointerState)
 
   const onWindowResize = (event: Event) => {
     if (!event.isTrusted)
@@ -523,11 +444,6 @@ export function setupAspectObservers(currentState: BewlyWidescreenState) {
     window.visualViewport?.removeEventListener('resize', onWindowResize)
     document.removeEventListener('fullscreenchange', onFullscreenChange)
     document.removeEventListener('webkitfullscreenchange', onFullscreenChange)
-    clearBottomControlsLeaveTimer()
-    window.removeEventListener('pointermove', handleBottomPointerActivity)
-    window.removeEventListener('blur', clearPlayerPointerState)
-    document.documentElement.removeEventListener('pointerleave', clearPlayerPointerState)
-    delete currentState.root.dataset.bottomControlsHovered
   }
 
   refreshPlayerLayout(currentState)

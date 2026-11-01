@@ -1,5 +1,6 @@
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
+import { uiScale } from '~/composables/useUiScale'
 import { IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { setUselessFeedCardBlockerEnabled, shouldEnableUselessFeedCardBlocker } from '~/contentScripts/features/blockUselessFeedCards'
 import { setupNativePageKeyboard } from '~/contentScripts/features/nativePageKeyboard'
@@ -68,7 +69,7 @@ export function setupNecessarySettingsWatchers(scrollViewportRef: Ref<HTMLElemen
   }, { immediate: true })
   onScopeDispose(() => stopNativeKeyboard?.())
 
-  watch(() => settings.value.interfaceFontSize, () => {
+  watch([() => settings.value.interfaceFontSize, () => uiScale.value], () => {
     invalidateViewportGeometry(scrollViewportRef.value)
   }, { flush: 'post' })
 

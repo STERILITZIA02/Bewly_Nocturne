@@ -27,7 +27,8 @@ import { useLibraryBatchSelection } from '~/composables/useLibraryBatchSelection
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { usePageSearchIntent } from '~/composables/usePageSearchIntent'
 import { usePageViewState } from '~/composables/usePageViewState'
-import { VIDEO_CARD_COVER_ASPECT_RATIO } from '~/constants/layout'
+import { uiPx, uiScale } from '~/composables/useUiScale'
+import { VIDEO_CARD_COVER_ASPECT_RATIO, VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
 import SelectionOverlay from '~/contentScripts/views/WatchLater/WatchLaterSelectionOverlay.vue'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
@@ -230,10 +231,10 @@ function selectInterval(value: HistoryGroupInterval) {
 }
 // Cards keep the size of the adaptive video grid's columns (user-specified):
 // a row shows as many as the grid would fit across the content.
-const CARD_GAP = 16
+const cardGap = computed(() => uiPx(16))
 const containerWidth = ref(0)
-const cardColumns = computed(() => getAdaptiveGridColumnCount(containerWidth.value, CARD_GAP))
-const cardWidth = computed(() => containerWidth.value ? (containerWidth.value - CARD_GAP * (cardColumns.value - 1)) / cardColumns.value : 0)
+const cardColumns = computed(() => getAdaptiveGridColumnCount(containerWidth.value, cardGap.value, uiPx(VIDEO_CARD_MIN_WIDTH)))
+const cardWidth = computed(() => containerWidth.value ? (containerWidth.value - cardGap.value * (cardColumns.value - 1)) / cardColumns.value : 0)
 useResizeObserver(historyContent, (entries) => {
   const width = entries[0]?.contentRect.width
   if (width)
@@ -242,11 +243,11 @@ useResizeObserver(historyContent, (entries) => {
 // On the low side: a card scrolled out of its strip skips rendering at this
 // size, and must not make the row taller than its visible cards.
 const cardHeight = computed(() => Math.round(cardWidth.value / VIDEO_CARD_COVER_ASPECT_RATIO + 56))
-const HEADING_HEIGHT = 28
+const headingHeight = computed(() => uiPx(28))
 // Matches `.history-groups`' gap: wide enough that the wheel over it scrolls
 // the page rather than a row's strip (user request).
-const rowGap = ref(48)
-const rowHeight = computed(() => HEADING_HEIGHT + 12 + cardWidth.value / VIDEO_CARD_COVER_ASPECT_RATIO + 80)
+const rowGap = computed(() => uiPx(48))
+const rowHeight = computed(() => headingHeight.value + uiPx(12) + cardWidth.value / VIDEO_CARD_COVER_ASPECT_RATIO + uiPx(80))
 const groupByKey = computed(() => new Map(shownGroups.value.map(group => [`group:${group.key}`, group])))
 const cardWindow = useCardWindow({
   root: scrollViewportRef,
@@ -256,8 +257,8 @@ const cardWindow = useCardWindow({
   gap: rowGap,
   enabled: computed(() => historyList.length > CARD_WINDOW_THRESHOLD),
   estimatedHeight: rowHeight,
-  estimateHeight: key => collapsedGroups.value.has(groupByKey.value.get(String(key))?.key ?? '') ? HEADING_HEIGHT : rowHeight.value,
-  layout: computed(() => `${interval.value}:${Math.round(cardWidth.value)}:${settings.value.interfaceFontSize}`),
+  estimateHeight: key => collapsedGroups.value.has(groupByKey.value.get(String(key))?.key ?? '') ? headingHeight.value : rowHeight.value,
+  layout: computed(() => `${interval.value}:${Math.round(cardWidth.value)}:${settings.value.interfaceFontSize}:${uiScale.value.scale}`),
   canRelease: key => !groupByKey.value.get(String(key))?.items.some(item => timeline.deleting.has(mutationKey(item)) || !canReleaseCard(historyItemKey(item))),
 })
 type RenderedHistoryRow = { kind: 'group', key: string, group: HistoryGroup } | { kind: 'spacer', key: string, height: number }

@@ -1,7 +1,7 @@
 import LOADING_RING_CSS from '~/styles/loadingRing.scss?inline'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
 import { LOADING_FADE_DURATION, LOADING_ROOT_ID, MOBILE_BREAKPOINT } from '~/utils/bewlyWidescreen/constants'
-import { CARD_LAYOUT_PROPERTIES } from '~/utils/bewlyWidescreen/styles/cardLayout'
+import { CARD_LAYOUT_PROPERTIES, playbackRailTopPadding } from '~/utils/bewlyWidescreen/styles/cardLayout'
 import { injectCSS } from '~/utils/main'
 import { reducedMotionCss } from '~/utils/reducedMotion'
 
@@ -9,6 +9,7 @@ export function injectLoadingStyle() {
   return injectCSS(`
     ${SKELETON_CSS}
     ${LOADING_RING_CSS}
+    ${playbackRailTopPadding(`#${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-sidebar`)}
     #${LOADING_ROOT_ID} {
       position: fixed;
       inset: 0;
@@ -177,8 +178,7 @@ export function injectLoadingStyle() {
       corner-shape: var(--bew-corner-shape-capsule);
     }
 
-    /* Like the real column: the info, the tabs, then the list down to the
-       window's bottom edge with the composer docked above it. */
+    /* The tabs stay above the overview throughout the loading handoff. */
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-sidebar {
       position: relative;
       display: flex;
@@ -195,11 +195,10 @@ export function injectLoadingStyle() {
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-info {
       display: flex;
-      flex: 0 1 auto;
+      flex: none;
       flex-direction: column;
       min-width: 0;
       min-height: 0;
-      max-height: 45%;
       overflow: hidden;
     }
 
@@ -333,27 +332,16 @@ export function injectLoadingStyle() {
       corner-shape: var(--bew-corner-shape);
     }
 
-    #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-list {
-      flex: 1 1 0;
-      min-height: 0;
+    #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-video-row {
       display: grid;
-      place-items: center;
-      overflow: hidden;
-      color: var(--bew-text-3);
-      background: transparent;
-      --bew-loading-ring-size: var(--bew-icon-size-xl, 32px);
+      grid-template-columns: calc(var(--bew-space-10, 40px) * 3) 1fr;
+      align-items: center;
+      gap: var(--bew-space-3, 12px);
     }
 
-    /* Same box as the docked composer: two text lines, the tool row and the
-       composer surface's padding and border. */
-    #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-composer {
-      flex: 0 0 auto;
-      margin-top: auto;
-      height: calc(
-        var(--bew-line-height-body, 24px) * 2 + var(--bew-space-1, 4px) * 2 + var(--bew-space-2, 8px)
-        + var(--bew-control-height-sm, 28px) + var(--bew-space-3, 12px) * 2 + 2px
-      );
-      border-radius: var(--bew-shell-radius, 32px);
+    #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-cover {
+      aspect-ratio: 16 / 9;
+      border-radius: var(--bew-thumb-radius, 12px);
       corner-shape: var(--bew-corner-shape);
     }
 
@@ -406,10 +394,6 @@ export function injectLoadingStyle() {
 
       #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-player {
         aspect-ratio: 16 / 9;
-      }
-
-      #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-info {
-        max-height: 28dvh;
       }
 
       #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-control-label:nth-last-child(-n + 3),

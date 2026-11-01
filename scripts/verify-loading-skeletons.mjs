@@ -42,6 +42,8 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
     const module = await loadSourceModule('../src/contentScripts/features/opusDetailDrawerLayout.ts', {
       '@iconify/vue': { Icon: {} },
       'vue': Vue,
+      '~/composables/useImageViewer': { openImageViewer() {} },
+      '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/constants/layout': await import('../src/constants/layout'),
       '~/styles/skeleton.scss?inline': { default: '[data-bew-skeleton] {}' },
       '~/utils/bilibiliUrl': await import('../src/utils/bilibiliUrl'),
@@ -134,16 +136,14 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       const overlay = document.getElementById(constants.LOADING_ROOT_ID)
       assert.ok(overlay.querySelector('[data-bew-skeleton]'))
       assert.equal(overlay.dataset.sidebarPosition, 'left')
-      // The skeleton puts the square video pane beside the column, whose info
-      // comes first, above the tabs.
-      assert.ok(overlay.querySelector('.bewly-widescreen-loading-skeleton-stage > .bewly-widescreen-loading-skeleton-player + .bewly-widescreen-loading-skeleton-sidebar > .bewly-widescreen-loading-skeleton-info:first-child + .bewly-widescreen-loading-skeleton-tabs'))
+      assert.ok(overlay.querySelector('.bewly-widescreen-loading-skeleton-stage > .bewly-widescreen-loading-skeleton-player + .bewly-widescreen-loading-skeleton-sidebar > .bewly-widescreen-loading-skeleton-tabs:first-child + .bewly-widescreen-loading-skeleton-info + .bewly-widescreen-loading-skeleton-video-row'))
       assert.equal(overlay.querySelector('.bewly-widescreen-loading-skeleton-column'), null)
       assert.ok(overlay.querySelector('.bewly-widescreen-loading-skeleton-player > .bewly-widescreen-loading-skeleton-controls'))
       session.entering = false
       session.current = {
         playerFrame: { getBoundingClientRect: () => rect(0, 0, 780, 900) },
         danmakuGlass: { getBoundingClientRect: () => rect(12, 747, 756, 141) },
-        infoEl: { getBoundingClientRect: () => rect(804, 24, 732, 233) },
+        sidebarTop: { getBoundingClientRect: () => rect(804, 24, 732, 233) },
         sidebarEl: { getBoundingClientRect: () => rect(780, 0, 780, 900) },
       }
       video.dispatchEvent(new Event('playing'))
@@ -155,8 +155,7 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
         assert.equal(part.style.top, top)
         assert.equal(part.style.width, width)
       }
-      // The info stays in the pinned column's flow at the real info's height,
-      // so the skeleton tabs land on the real tabs.
+      // The rows start below the measured overview info.
       const info = overlay.querySelector('.bewly-widescreen-loading-skeleton-info')
       assert.equal(info.style.position, '')
       assert.equal(info.style.height, '233px')
@@ -253,7 +252,7 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       danmakuSemanticsSource: source,
       sidebarPosition: 'right',
       controlsLayoutReady: false,
-      playerPointerInside: true,
+      playerControlsActive: true,
     }
     state.playerFrame.getBoundingClientRect = () => rect(0, 0, 1100, 860)
     state.sidebarEl.getBoundingClientRect = () => rect(1100, 0, 340, 860)

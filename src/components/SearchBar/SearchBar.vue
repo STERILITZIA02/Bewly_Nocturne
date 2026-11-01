@@ -47,6 +47,8 @@ interface SearchOption {
 
 const props = withDefaults(defineProps<{
   active?: boolean
+  collapsible?: boolean
+  keepExpanded?: boolean
   focusedCharacter?: string
   showHotSearch?: boolean
   modelValue?: string
@@ -59,6 +61,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: string]
   'focusChange': [focused: boolean]
+  'collapseChange': [collapsed: boolean]
 }>()
 
 const HISTORY_DISPLAY_LIMIT = 8
@@ -69,7 +72,9 @@ const historyRemovals = ref(0)
 useLayoutMotion(searchWrapRef, historyRemovals, { selector: '.search-panel__row[id]', key: 'id' })
 const { left: searchWrapLeft, top: searchWrapTop } = useElementBounding(searchWrapRef)
 const keywordRef = ref<HTMLInputElement>()
+const searchButton = ref<HTMLButtonElement>()
 const searchBarInstanceId = getCurrentInstance()?.uid ?? 0
+const inputId = `search-input-${searchBarInstanceId}`
 const suggestionListId = `search-suggestion-list-${searchBarInstanceId}`
 const searchDropdownId = `search-dropdown-${searchBarInstanceId}`
 const isFocus = ref<boolean>(false)
@@ -115,6 +120,13 @@ const visibleHotSearchList = computed(() => {
 })
 const visibleHistory = computed(() => searchHistory.value.slice(0, HISTORY_DISPLAY_LIMIT))
 const hasKeyword = computed(() => keyword.value.trim().length > 0)
+const canCollapse = computed(() => props.collapsible && !props.keepExpanded)
+const dismissed = ref(false)
+const opensInput = computed(() => canCollapse.value && !isFocus.value && (!hasKeyword.value || dismissed.value))
+const hoverExpanded = ref(false)
+const collapsed = computed(() => opensInput.value && !hoverExpanded.value)
+watch(collapsed, value => emit('collapseChange', value), { immediate: true })
+const useRecommendation = computed(() => !canCollapse.value && settings.value.showSearchRecommendation)
 // On a narrow top bar the panel drops below the bar instead of growing out of the capsule.
 const panelDetached = computed(() => Boolean(props.topBarMode) && isNarrowLayout.value)
 // Dims with the panel's open state, so the page brightens as the panel leaves.
@@ -190,7 +202,7 @@ const activeDescendantId = computed(() => options.value[activeIndex.value]?.id)
 
 // 计算 placeholder 显示文本
 const placeholderText = computed(() => {
-  if (settings.value.showSearchRecommendation && searchRecommendation.value) {
+  if (useRecommendation.value && searchRecommendation.value) {
     return searchRecommendation.value.show_name || searchRecommendation.value.name
   }
   return ''
@@ -205,6 +217,7 @@ watch(() => props.modelValue, (value) => {
     suggestions.length = 0
     suggestionsLoading.value = false
     keyword.value = next
+    dismissed.value = false
   }
 })
 
@@ -290,7 +303,7 @@ onClickOutside(searchWrapRef, () => closeSearch(true))
 
 const releaseSearchExperience = acquireSearchExperience({
   hotSearch: computed(() => uiActive.value && isFocus.value && showHotSearchSetting.value),
-  recommendation: computed(() => uiActive.value && settings.value.showSearchRecommendation),
+  recommendation: computed(() => uiActive.value && useRecommendation.value),
 })
 watch(uiActive, (active) => {
   if (!active) {
@@ -394,7 +407,7 @@ function navigateToSearchResultPage(rawKeyword: string) {
   let normalized = (rawKeyword || keyword.value).trim()
 
   // 如果输入为空且启用了搜索推荐，使用推荐的搜索词
-  if (!normalized && settings.value.showSearchRecommendation && searchRecommendation.value) {
+  if (!normalized && useRecommendation.value && searchRecommendation.value) {
     normalized = extractKeywordFromUrl(searchRecommendation.value.url)
   }
 
@@ -515,10 +528,45 @@ function moveScope(step: 1 | -1) {
 }
 
 function closeSearch(blur = false) {
+  hoverExpanded.value = false
   if (blur)
     keywordRef.value?.blur()
   isFocus.value = false
   resetKeyboardSelection()
+}
+
+function focusSearch() {
+  hoverExpanded.value = false
+  dismissed.value = false
+  isFocus.value = true
+}
+
+function handleSearchButton() {
+  if (opensInput.value)
+    keywordRef.value?.focus({ preventScroll: true })
+  else
+    navigateToSearchResultPage(keyword.value)
+}
+
+function handlePointerEnter(event: PointerEvent) {
+  if (event.pointerType === 'mouse' && collapsed.value && uiActive.value)
+    hoverExpanded.value = true
+}
+
+function collapseSearch() {
+  dismissed.value = true
+  closeSearch()
+  searchButton.value?.focus({ preventScroll: true })
+}
+
+function dismissSearch(event: KeyboardEvent) {
+  if (collapsed.value || event.isComposing || event.keyCode === 229)
+    return
+  event.preventDefault()
+  if (canCollapse.value)
+    collapseSearch()
+  else
+    closeSearch(true)
 }
 
 function handleComboboxKeyDown(event: KeyboardEvent) {
@@ -561,8 +609,7 @@ function handleComboboxKeyDown(event: KeyboardEvent) {
       break
     }
     case 'Escape':
-      event.preventDefault()
-      closeSearch(true)
+      dismissSearch(event)
       break
   }
 }
@@ -576,8 +623,10 @@ function handleFocusOut(event: FocusEvent) {
   if (nextTarget && searchWrapRef.value?.contains(nextTarget))
     return
 
-  isFocus.value = false
-  resetKeyboardSelection()
+  if (canCollapse.value && isFocus.value && !hasKeyword.value && uiActive.value)
+    collapseSearch()
+  else
+    closeSearch()
 }
 
 // Pressing anywhere in the panel keeps the caret in the input.
@@ -621,11 +670,19 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
   <div
     id="search-wrap"
     ref="searchWrapRef"
-    :class="{ 'search-wrap--top-bar': topBarMode, 'search-wrap--open': panelMerged }"
+    :class="{
+      'search-wrap--top-bar': topBarMode,
+      'search-wrap--open': panelMerged,
+      'search-wrap--collapsible': collapsible,
+      'search-wrap--collapsed': collapsed,
+    }"
     :style="wrapStyle"
     w="full"
     pos="relative"
+    @pointerenter="handlePointerEnter"
+    @pointerleave="hoverExpanded = false"
     @focusout="handleFocusOut"
+    @keydown.esc="dismissSearch"
   >
     <div
       v-layout-editable="layoutEditableId ?? ''"
@@ -645,9 +702,12 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
       </Transition>
 
       <input
+        :id="inputId"
         ref="keywordRef"
         :value="keyword"
-        :placeholder="placeholderText"
+        :placeholder="placeholderText || (collapsible ? $t('search_bar.collapsible_placeholder') : '')"
+        :tabindex="collapsed ? -1 : undefined"
+        :aria-hidden="collapsed || undefined"
         role="combobox"
         :aria-label="$t('search_bar.input_label')"
         aria-autocomplete="list"
@@ -664,7 +724,7 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
         h-inherit
         spellcheck="false"
         text="$b-search-bar-normal-text-color group-focus-within:$b-search-bar-focus-text-color group-hover:$b-search-bar-hover-text-color"
-        @focus="isFocus = true"
+        @focus="focusSearch"
         @click="isFocus = true"
         @input="handleNativeInput"
         @compositionend="handleNativeInput"
@@ -674,7 +734,7 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
         v-if="isFocus && keyword"
         type="button"
         :aria-label="$t('search_bar.clear_keyword')"
-        pos="absolute right-12" bg="$bew-fill-1 hover:$bew-fill-2" text="xs" rounded="$bew-interactive-radius"
+        class="search-clear-btn" pos="absolute right-12" bg="$bew-fill-1 hover:$bew-fill-2" text="xs" rounded="$bew-interactive-radius"
         p-1
         flex="~ items-center justify-between"
         @click="handleClearKeyword"
@@ -683,16 +743,20 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
       </button>
 
       <button
+        ref="searchButton"
         type="button"
         class="search-submit-btn bew-shape-circle"
-        :aria-label="$t('search_bar.submit')"
+        :aria-label="opensInput ? $t('search_bar.input_label') : $t('search_bar.submit')"
+        :aria-expanded="canCollapse ? !collapsed : undefined"
+        :aria-controls="canCollapse ? inputId : undefined"
         p-2
         rounded="$bew-pill-radius"
         text="lg leading-0"
         border-none
         outline-none
         pos="absolute right-6px"
-        @click="navigateToSearchResultPage(keyword)"
+        @mousedown.prevent
+        @click="handleSearchButton"
       >
         <div i-tabler:search block align-middle />
       </button>
@@ -974,6 +1038,7 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
     position: absolute;
     inset: 0;
     z-index: 1;
+    border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
     border-radius: var(--b-search-bar-current-radius);
     corner-shape: var(--b-search-bar-current-corner);
     box-shadow: var(--bew-glass-shadow);
@@ -1009,8 +1074,7 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
     input {
       @include card-content;
       appearance: none;
-      // The input fills the glass capsule, so it draws the glass rim.
-      border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
+      border: 0;
       min-width: 0;
       position: relative;
       z-index: 0;
@@ -1019,8 +1083,7 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
       transition:
         background-color var(--bew-duration-normal) var(--bew-ease-standard),
         color var(--bew-duration-normal) var(--bew-ease-standard),
-        opacity var(--bew-duration-normal) var(--bew-ease-standard),
-        border-color var(--bew-duration-normal) var(--bew-ease-standard);
+        opacity var(--bew-duration-normal) var(--bew-ease-standard);
 
       &::placeholder {
         color: inherit;
@@ -1049,6 +1112,57 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
     }
   }
 
+  &.search-wrap--collapsible {
+    width: 100%;
+    transition: width var(--bew-duration-moderate) cubic-bezier(0.16, 1, 0.3, 1);
+
+    .search-submit-btn {
+      inset-inline: 0 auto;
+      display: grid;
+      place-items: center;
+      width: var(--bew-top-bar-primary-control-height);
+      height: 100%;
+      padding: 0;
+
+      &:focus-visible {
+        background: var(--bew-hover-bg);
+      }
+    }
+
+    input {
+      flex: 1;
+      margin-inline-start: var(--bew-top-bar-primary-control-height);
+      padding-inline: 0 var(--bew-control-height);
+    }
+
+    .search-clear-btn {
+      right: var(--bew-space-2);
+    }
+
+    &.search-wrap--collapsed {
+      width: var(--bew-top-bar-primary-control-height);
+
+      .search-bar {
+        --b-search-bar-current-corner: var(--bew-corner-shape-round);
+      }
+
+      input {
+        flex: none;
+        width: 0;
+        padding: 0;
+        opacity: 0;
+        pointer-events: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      &,
+      input {
+        transition: none;
+      }
+    }
+  }
+
   // Open, the capsule becomes the top of the solid panel: its glass, rim and
   // shadow give way to the panel's (no glass over glass), and it sits above it.
   &.search-wrap--open .search-bar {
@@ -1058,10 +1172,6 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
 
     &::before {
       opacity: 0;
-    }
-
-    input {
-      border-color: transparent;
     }
   }
 

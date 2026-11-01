@@ -66,6 +66,8 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
   check('Home refresh: per-tab scroll memory preserves the header geometry and late account updates do not rewind the view', async () => {
     const { HomeSubPage } = await import('../src/contentScripts/views/Home/types')
     const layout = await import('../src/constants/layout')
+    const { default: emitter } = await import('../src/utils/mitt')
+    const { OVERLAY_SCROLL_BAR_SCROLL } = await import('../src/constants/globalEvents')
     const topBar = Vue.reactive({ isLogin: false, userInfo: { mid: 0 } })
     const tabs = [HomeSubPage.ForYou, HomeSubPage.Weekly, ...Object.values(HomeSubPage).filter(page => page !== HomeSubPage.ForYou && page !== HomeSubPage.Weekly)].map(page => ({ page, visible: true, i18nKey: page }))
     const settings = Vue.ref({ useSearchPageModeOnHomePage: true, preserveForYouState: true, recommendationMode: 'web', homePageTabVisibilityList: tabs, searchPageShowLogo: true, searchPageSearchBarFocusCharacter: 'focus-character', showRecommendationModeSwitcher: true, enableGridLayoutSwitcher: true })
@@ -103,7 +105,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       '~/stores/topBarStore': { useTopBarStore: () => topBar },
       '~/utils/accountScope': await import('../src/utils/accountScope'),
       '~/utils/homeTabConfig': await import('../src/utils/homeTabConfig'),
-      '~/utils/mitt': { default: { on() {}, off() {} } },
+      '~/utils/mitt': { default: emitter },
       '~/utils/scrollIntent': await import('../src/utils/scrollIntent'),
       './components/VersionReminder.vue': { default: blank },
       './components/HomeChannelsMenu.vue': { default: { render: () => Vue.h('button', { 'data-home-channels': '' }, 'Channels') } },
@@ -117,6 +119,8 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
     app.config.globalProperties.$t = key => key
     app.component('Logo', { render: () => Vue.h('span', 'Logo') })
     app.component('SearchBar', { props: ['focusedCharacter'], setup: props => () => Vue.h('input', { 'data-search': '', 'data-character': props.focusedCharacter }) })
+    const oldMotion = document.documentElement.dataset.bewMotion
+    document.documentElement.dataset.bewMotion = 'reduce'
     try {
       app.mount(host)
       await flush()
@@ -128,7 +132,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
         state.restoreTabScrollPosition()
         assert.deepEqual({ ...state.searchStageStyle }, stageStyle, 'tab identity cannot change the search stage geometry')
         assert.equal(viewport.scrollTop, 0, 'a tab switch above the toolbar keeps the page where it is')
-        assert.equal(state.showHomeSearchCharacter, true, 'switching tabs cannot pin the search stage')
+        assert.equal(state.homeSearchStuck, false, 'switching tabs cannot pin the search stage')
         assert.equal(state.reserveRecommendationModeSwitcher, true, 'toolbar geometry cannot switch by tab')
         assert.equal(state.shouldShowRecommendationModeSwitcher, tab.page === HomeSubPage.ForYou)
         assert.equal(state.getContentScrollTop(), 238)
@@ -157,7 +161,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       await flush()
       state.restoreTabScrollPosition()
       assert.equal(viewport.scrollTop, beforeAccountReady, 'account updates after switching tabs must preserve the current position')
-      const discoveryHeight = layout.resolveHomeSearchStage(false).height
+      const discoveryHeight = layout.resolveHomeSearchStage(false, length => length).height
       const content = viewport.appendChild(document.createElement('section'))
       content.getBoundingClientRect = () => ({ height: 1600 })
       state.tabContentRef = content
@@ -220,10 +224,26 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
         assert.equal(modes.hasAttribute('inert'), tab.page !== HomeSubPage.ForYou)
         assert.equal(modes.getAttribute('aria-hidden'), tab.page !== HomeSubPage.ForYou ? 'true' : null)
       }
+      // The lead starts below the page's top padding, even before scrolling.
+      host.firstElementChild.getBoundingClientRect = () => ({ top: 76 - viewport.scrollTop })
+      const { invalidateViewportGeometry } = await import('../src/utils/viewportGeometry')
+      invalidateViewportGeometry(viewport)
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      const stickyTop = 76 + layout.resolveHomeSearchStage(false, length => length).stickyScrollTop
+      for (const [scrollTop, keepExpanded] of [[stickyTop - 1, true], [stickyTop, false], [0, true]]) {
+        viewport.scrollTop = scrollTop
+        emitter.emit(OVERLAY_SCROLL_BAR_SCROLL, scrollTop)
+        await flush()
+        assert.equal(search.getAttribute('keep-expanded'), String(keepExpanded))
+      }
     }
     finally {
       app.unmount()
       viewport.remove()
+      if (oldMotion === undefined)
+        delete document.documentElement.dataset.bewMotion
+      else
+        document.documentElement.dataset.bewMotion = oldMotion
     }
   })
 
@@ -261,7 +281,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
     const host = viewport.appendChild(document.createElement('div'))
     let state
     const app = Vue.createApp({ setup() {
-      homeTabs.provideHomeTabCache(() => 'Weekly', () => {}, () => settings.value.useSearchPageModeOnHomePage ? resolveHomeSearchStage(shortViewport.value).height : 0)
+      homeTabs.provideHomeTabCache(() => 'Weekly', () => {}, () => settings.value.useSearchPageModeOnHomePage ? resolveHomeSearchStage(shortViewport.value, length => length).height : 0)
       return () => Vue.h(Weekly, { gridLayout: 'adaptive', ref: value => state = value?.$?.setupState })
     } })
     const editions = [{ number: 42, name: '42' }, { number: 41, name: '41' }]
@@ -289,7 +309,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       videos.at(-1).resolve({ code: 0, data: { list: [] } })
       await flush()
       shortViewport.value = true
-      const stageHeight = resolveHomeSearchStage(true).height
+      const stageHeight = resolveHomeSearchStage(true, length => length).height
       viewport.scrollTop = stageHeight + 700
       state.selectSeries(editions[0])
       await flush()

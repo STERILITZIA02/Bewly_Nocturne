@@ -333,15 +333,23 @@ export function registerRecommendationRuntimeChecks(check, { Vue, flush, compile
         assert.equal(context[name], expected, `${name} ${url}`)
       }
       let overlays = 0
+      let imports = 0
+      const dev = url === 'https://message.bilibili.com/#/whisper'
+      const runtimeKey = dev ? 'fixture:runtime?dev=123' : 'fixture:runtime'
       await loadSourceModule('../src/contentScripts/pageLoading.ts', {
-        'fixture:runtime': {},
+        get [runtimeKey]() {
+          imports++
+          return {}
+        },
         '../constants/contentScript': scope,
         '../utils/bilibiliLiveContext': { isConfirmedLiveEmbeddedFrame: () => false },
         './pageLoadingGuard': { getPageLoadingGuard: () => {
           overlays++
           return { dispose() {} }
         } },
-      }, { chrome: { runtime: { getURL: () => 'fixture:runtime' } }, navigator: { userAgent: 'fixture' }, document: { URL: url } })
+      }, { __DEV__: dev, Date: { now: () => 123 }, chrome: { runtime: { getURL: () => 'fixture:runtime' } }, navigator: { userAgent: 'fixture' }, document: { URL: url } })
+      await Promise.resolve()
+      assert.equal(imports, expected ? 1 : 0)
       assert.equal(overlays, expected ? 1 : 0)
     }
   })

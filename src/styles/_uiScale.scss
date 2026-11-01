@@ -1,0 +1,99 @@
+@use "sass:string";
+
+// Interface scale (utils/uiScale.ts): a length of the 14-inch design on this
+// display, snapped to whole device pixels so edges stay crisp. At scale 1 both
+// return the length unchanged.
+@function ui($length) {
+  @return string.unquote("round(#{$length} * var(--bew-ui-scale), var(--bew-ui-pixel))");
+}
+
+// Text and the glyphs set beside it shrink half as much as the layout.
+@function ui-text($length) {
+  @return string.unquote("round(#{$length} * var(--bew-ui-text-scale), var(--bew-ui-pixel))");
+}
+
+// Every token built with ui() or ui-text() in variables.scss (kept in step by
+// scripts/verify-ui-scale.ts). Registered as lengths so a computed value reads
+// as plain px, as before the scale existed: scripts parse several of them.
+$lengths: (
+  icon-size-sm,
+  icon-size-xs,
+  icon-size-md,
+  icon-size-lg,
+  icon-size-xl,
+  radius-xs,
+  radius-sm,
+  radius-md,
+  radius-lg,
+  radius-xl,
+  radius-2xl,
+  space-0-5,
+  space-1,
+  space-2,
+  space-3,
+  space-4,
+  space-5,
+  space-6,
+  space-8,
+  space-10,
+  space-12,
+  video-card-min-width,
+  video-card-horizontal-cover-max-width,
+  layout-sidebar-width,
+  moments-hot-search-compact-max-height,
+  notifications-list-max-width,
+  message-composer-min-width,
+  layout-sidebar-sticky-top,
+  layout-sidebar-viewport-offset,
+  layout-dialog-width,
+  dialog-compact-width,
+  settings-label-min-width,
+  dialog-action-min-width,
+  dialog-grid-item-min-width,
+  comment-avatar-size,
+  comment-state-min-height,
+  moment-forward-picker-width,
+  moment-reply-image-size,
+  moment-forward-picker-max-height,
+  moment-forward-picker-state-min-height,
+  search-bar-max-width,
+  media-result-cover-width,
+  media-episode-control-width,
+  layout-home-search-stage-lead-height,
+  layout-home-search-stage-tail-height,
+  control-height,
+  control-icon-size,
+  floating-control-size,
+  control-height-sm,
+  control-height-lg,
+  icon-button-size-md,
+  icon-button-size-lg,
+  dock-item-height,
+  dock-item-height-icon-only,
+  dock-item-width,
+  dock-item-width-wide,
+  dock-icon-size-lg,
+  top-bar-primary-control-height,
+  home-search-dock-travel,
+  top-bar-brand-logo-width,
+  top-bar-brand-logo-height,
+  top-bar-brand-logo-compact-size,
+  top-bar-height,
+  popover-media-width,
+  popover-panel-width,
+  popover-panel-wide-width,
+  date-picker-input-width,
+  date-picker-panel-width,
+  date-picker-day-size
+);
+
+// @property only takes effect at document level, which the host stylesheet provides.
+@mixin global {
+  @each $name in $lengths {
+    @property --bew-#{$name} {
+      syntax: "<length>";
+      inherits: true;
+      initial-value: 0px;
+    }
+  }
+}

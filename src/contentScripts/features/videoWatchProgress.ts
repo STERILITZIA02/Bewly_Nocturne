@@ -3,9 +3,9 @@ import { watch } from 'vue'
 import { onRouteChange } from '~/composables/useRouteState'
 import { settings } from '~/logic'
 import { waitWithSignal } from '~/utils/abort'
-import api from '~/utils/api'
 import { resolvePgcEpisodeVideoIds } from '~/utils/pgcEpisode'
 import { getPlaybackNavigationKey, parsePlaybackTabUrl } from '~/utils/playbackTab'
+import { getPlaybackPart, getPlaybackVideoInfo } from '~/utils/playbackVideoInfo'
 import { getVideoElement, isPlayerAdvertisement } from '~/utils/playerMedia'
 import { isNativeVideoComponentReady, readNativePlaybackEpisodeId } from '~/utils/videoMetadataBridge'
 import type { PlaybackHistoryIdentity } from '~/utils/videoPlaybackHistory'
@@ -43,15 +43,13 @@ export function setupVideoWatchProgress() {
         if (!ids)
           return
         signal.throwIfAborted()
-        const result = await api.video.getVideoInfo('aid' in ids ? { aid: String(ids.aid) } : 'bvid' in ids ? { bvid: ids.bvid } : {}, { signal })
+        const result = await getPlaybackVideoInfo('aid' in ids ? { aid: String(ids.aid) } : 'bvid' in ids ? { bvid: ids.bvid } : {}, signal)
         if (result.code !== 0 || !result.data || !Array.isArray(result.data.pages))
           return epid ? { epid } : undefined
         const data = result.data
         if (('aid' in ids && Number(ids.aid) !== data.aid) || ('bvid' in ids && ids.bvid && ids.bvid !== data.bvid))
           return
-        const page = Number(url.searchParams.get('p') || 1)
-        const cid = Number(url.searchParams.get('cid'))
-        const selected = data.pages.find((part: { cid: number, page: number }) => cid ? part.cid === cid : part.page === page)
+        const selected = getPlaybackPart(url, data.pages)
         if (!selected || !Number.isSafeInteger(selected.cid) || selected.cid <= 0)
           return
         return { aid: data.aid, bvid: data.bvid, epid, cid: selected.cid, page: selected.page, pageCount: data.videos, duration: Number.isFinite(selected.duration) && selected.duration > 0 ? selected.duration : undefined }

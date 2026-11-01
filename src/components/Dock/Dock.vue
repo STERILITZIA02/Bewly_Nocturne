@@ -9,6 +9,7 @@ import { UndoForwardState, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'
 import { useReducedMotion } from '~/composables/useReducedMotion'
+import { uiPx } from '~/composables/useUiScale'
 import {
   getDockCollapsedStateForMode,
   getPreservedDockStageSize,
@@ -650,8 +651,8 @@ const dockScale = computed((): number => {
   const maxAllowedHeight = windowHeight.value - heightMargin
   const maxAllowedWidth = windowWidth.value - widthMargin
 
-  const buttonSize = DOCK_LAYOUT.actionControlSize
-  const buttonGap = DOCK_LAYOUT.controlGap
+  const buttonSize = uiPx(DOCK_LAYOUT.actionControlSize)
+  const buttonGap = uiPx(DOCK_LAYOUT.controlGap)
 
   // Reserve only available actions, without resizing again when scrolling reveals them.
   const availableActions = Number(canRefreshCurrentPage.value) + Number(settings.value.showDockBackToTop)
@@ -725,7 +726,7 @@ const dockShellGeometry = computed(() => {
   const controlSize = settings.value.showDockItemNames
     ? DOCK_LAYOUT.controlSize
     : DOCK_LAYOUT.iconOnlyControlSize
-  const expectedDockShellSize = controlSize + DOCK_LAYOUT.shellPadding
+  const expectedDockShellSize = uiPx(controlSize) + uiPx(DOCK_LAYOUT.shellPadding)
   const collapsedSize = resolveDockCollapsedShellSize(measuredSize, expectedDockShellSize)
   const longSide = collapsedSize * 2
   const shortSide = collapsedSize / 3
@@ -822,26 +823,30 @@ onUnmounted(() => {
           <div v-layout-editable="'dock-items'" class="dock-page-navigation bew-segment-control">
             <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator" :active-key="activeDockItemPage" :motion-scope="PAGE_MOTION" />
 
-            <button
+            <div
               v-for="dockItem in currentDockItems"
               :key="dockItem.page"
-              v-layout-editable="getDockItemLayoutEditableId(dockItem.page)"
-              type="button"
-              class="dock-tab"
-              :class="{ inactive: hoveringDockItem.themeMode && isDark }"
+              class="dock-page-slot"
               data-segment-item
               :data-active="isDockItemActivated(dockItem) ? 'true' : undefined"
-              :aria-label="dockBadges[dockItem.page]?.label ?? $t(dockItem.i18nKey)"
-              :aria-current="isDockItemActivated(dockItem) ? 'page' : undefined"
-              @click="handleDockItemClick($event, dockItem)"
-              @click.middle="openDockItemInNewTab(dockItem)"
             >
-              <span class="dock-tab__glyph">
-                <span class="dock-tab__icon" :class="dockItem.dockIcon" aria-hidden="true" />
-                <CountBadge v-if="dockBadges[dockItem.page]" :count="dockBadges[dockItem.page]!.count" class="dock-count-badge" aria-hidden="true" />
-              </span>
-              <span v-if="settings.showDockItemNames" class="dock-tab__label" aria-hidden="true">{{ $t(dockItem.i18nKey) }}</span>
-            </button>
+              <button
+                v-layout-editable="getDockItemLayoutEditableId(dockItem.page)"
+                type="button"
+                class="dock-tab"
+                :class="{ inactive: hoveringDockItem.themeMode && isDark }"
+                :aria-label="dockBadges[dockItem.page]?.label ?? $t(dockItem.i18nKey)"
+                :aria-current="isDockItemActivated(dockItem) ? 'page' : undefined"
+                @click="handleDockItemClick($event, dockItem)"
+                @click.middle="openDockItemInNewTab(dockItem)"
+              >
+                <span class="dock-tab__glyph">
+                  <span class="dock-tab__icon" :class="dockItem.dockIcon" aria-hidden="true" />
+                  <CountBadge v-if="dockBadges[dockItem.page]" :count="dockBadges[dockItem.page]!.count" class="dock-count-badge" aria-hidden="true" />
+                </span>
+                <span v-if="settings.showDockItemNames" class="dock-tab__label" aria-hidden="true">{{ $t(dockItem.i18nKey) }}</span>
+              </button>
+            </div>
           </div>
 
           <!-- A hairline sets the pages apart from the Dock's own controls. -->
@@ -1096,11 +1101,10 @@ onUnmounted(() => {
   .dock-content-inner {
     --dock-shell-control-size: var(--bew-dock-item-height);
     // The selected plate sits this close to the shell's edge (user-specified).
-    --dock-shell-rim: var(--bew-space-1);
-    --dock-shell-size: calc(var(--dock-shell-control-size) + var(--dock-shell-rim) * 2);
-    --dock-shell-radius: calc(var(--dock-shell-control-size) / 2 + var(--dock-shell-rim));
+    --dock-shell-size: calc(var(--dock-shell-control-size) + var(--bew-dock-shell-rim) * 2);
+    --dock-shell-radius: calc(var(--dock-shell-control-size) / 2 + var(--bew-dock-shell-rim));
     --uno: "m-2 relative flex shrink-0";
-    padding: var(--dock-shell-rim);
+    padding: var(--bew-dock-shell-rim);
     box-sizing: border-box;
 
     &.collapsed:hover .dock-shell-surface {
@@ -1273,14 +1277,13 @@ onUnmounted(() => {
     }
   }
 
-  // Tabs share one width per Dock (the widest name), like an iOS tab bar.
-  // Selection is a darker borderless plate; the glyph and name take the accent.
   .dock-page-navigation {
     --bew-liquid-indicator-bg: var(--bew-dock-navigation-active-bg);
     --bew-liquid-indicator-shadow: none;
 
     display: grid;
     grid-auto-flow: row;
+    justify-items: center;
     width: auto;
     height: auto;
     padding: 0;
@@ -1290,10 +1293,8 @@ onUnmounted(() => {
 
   &.bottom .dock-page-navigation {
     grid-auto-flow: column;
-    grid-auto-columns: 1fr;
   }
 
-  // A side Dock is one column: every control takes the tabs' width.
   &.right .dock-expanded-content {
     align-items: stretch;
   }
@@ -1301,12 +1302,50 @@ onUnmounted(() => {
   .dock-tab {
     @include dockTab.item(".dock-tab__glyph");
 
-    &[data-active="true"] {
+    &[aria-current="page"] {
       color: var(--bew-dock-navigation-active-color);
     }
 
     &.inactive {
       opacity: 0.8;
+    }
+  }
+
+  // The spring measures the final slot once; the button can resize independently.
+  .dock-page-slot {
+    --slot-width: var(--bew-dock-item-width);
+    display: flex;
+    justify-content: center;
+    width: var(--slot-width);
+
+    &[data-active="true"] {
+      --slot-width: var(--bew-dock-item-width-wide);
+    }
+
+    > .dock-tab {
+      width: var(--slot-width);
+      min-width: 0;
+      transition-property: color, opacity, width, translate;
+    }
+  }
+
+  &.bottom .dock-page-slot {
+    justify-content: flex-start;
+
+    // Keep the pre-selection origin for the tween as the wider slot changes sides.
+    &[data-active="true"] ~ .dock-page-slot {
+      --slot-shift: calc(var(--bew-dock-item-width-wide) - var(--bew-dock-item-width));
+    }
+
+    > .dock-tab {
+      left: calc(0px - var(--slot-shift, 0px));
+      translate: var(--slot-shift, 0px) 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dock-page-slot > .dock-tab {
+      transition: none;
     }
   }
 

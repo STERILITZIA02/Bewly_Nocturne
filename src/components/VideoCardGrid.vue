@@ -15,9 +15,10 @@ import { useGridLayout } from '~/composables/useGridLayout'
 import { useHomeTabViewState } from '~/composables/useHomeTabState'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
+import { uiPx, uiScale } from '~/composables/useUiScale'
 import { useUserRelations } from '~/composables/useUserRelations'
 import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
-import { VIDEO_CARD_COVER_ASPECT_RATIO, VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH } from '~/constants/layout'
+import { VIDEO_CARD_COVER_ASPECT_RATIO, VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH, VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 import { isLayoutEditing, vLayoutEditable } from '~/logic/layoutEdit'
@@ -674,6 +675,7 @@ const isAutoSwitchSingleColumn = computed(() => {
     props.gridLayout,
     width,
     cardColumnGap.value,
+    uiPx(VIDEO_CARD_MIN_WIDTH),
   ) === 1
 })
 
@@ -699,12 +701,14 @@ function normalizePositiveInt(value: unknown, fallback: number): number {
 }
 
 function getCurrentColumnCount(layout: GridLayoutType, width: number): number {
+  const minWidth = uiPx(VIDEO_CARD_MIN_WIDTH)
   if (layout === 'adaptive')
-    return getAdaptiveGridColumnCount(width, cardColumnGap.value)
+    return getAdaptiveGridColumnCount(width, cardColumnGap.value, minWidth)
   return getListGridColumnCount(
     layout,
     width,
     cardColumnGap.value,
+    minWidth,
   )
 }
 
@@ -890,9 +894,9 @@ const cardKeys = computed(() => displayItems.value.map(getUniqueKey))
 const estimatedCardHeight = computed(() => {
   const columns = cardColumns.value
   const width = Math.max(1, (gridContainerWidth.value || window.innerWidth) - cardColumnGap.value * (columns - 1)) / columns
-  const cover = isHorizontal.value ? Math.min(width / 2, VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH) : width
+  const cover = isHorizontal.value ? Math.min(width / 2, uiPx(VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH)) : width
   // Estimates only seed unmeasured rows; one shared measurement index owns actual geometry.
-  return isHorizontal.value ? Math.max(cover / VIDEO_CARD_COVER_ASPECT_RATIO, 130) + 16 : cover / VIDEO_CARD_COVER_ASPECT_RATIO + 110
+  return isHorizontal.value ? Math.max(cover / VIDEO_CARD_COVER_ASPECT_RATIO, uiPx(130)) + uiPx(16) : cover / VIDEO_CARD_COVER_ASPECT_RATIO + uiPx(110)
 })
 const gridContainerStyle = computed(() => ({
   // Only the content-visibility fallback uses an intrinsic estimate; windowed
@@ -910,6 +914,7 @@ const cardLayoutKey = computed(() => [
   settings.value.videoCardTitleFontSize,
   settings.value.videoCardAuthorFontSize,
   settings.value.interfaceFontSize,
+  uiScale.value.scale,
   settings.value.showVideoCardAuthorName,
   settings.value.showVideoCardPublishTime,
   props.hideAuthor,

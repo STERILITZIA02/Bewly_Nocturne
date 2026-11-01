@@ -168,6 +168,13 @@ function toggleChannel(value: string) {
       data-setting-id="settings.topbar_display_settings" :title="$t('settings.topbar_display_settings')"
     >
       <SettingsItem
+        setting-id="settings.collapse_top_bar_search"
+        :title="$t('settings.collapse_top_bar_search')"
+        right-width="auto"
+      >
+        <Radio v-model="settings.collapseTopBarSearch" :accessible-label="$t('settings.collapse_top_bar_search')" />
+      </SettingsItem>
+      <SettingsItem
         v-if="!settings.touchScreenOptimization" setting-id="settings.open_top_bar_items_in_bewly"
         :title="$t('settings.open_top_bar_items_in_bewly')"
         :desc="$t('settings.open_top_bar_items_in_bewly_desc')"
