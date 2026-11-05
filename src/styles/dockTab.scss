@@ -76,9 +76,9 @@
 
 @mixin label {
   display: block;
-  font-size: var(--bew-font-size-caption);
+  font-size: var(--bew-dock-label-size);
   font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-caption);
+  line-height: var(--bew-dock-label-line-height);
   max-width: 100%;
   @include truncateFade.line;
 }

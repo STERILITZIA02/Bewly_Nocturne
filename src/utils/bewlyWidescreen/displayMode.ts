@@ -30,8 +30,8 @@ export function syncFillToggleButton(currentState: BewlyWidescreenState) {
   else
     button.removeAttribute('aria-keyshortcuts')
   updatePlayerControlTooltip(button, filling ? `${label} (Esc)` : label)
-  const icon = button.querySelector<HTMLElement>(`.${FILL_TOGGLE_CLASS}__icon`)
-  const iconClass = `${filling ? CARD_ICON_CLASS : FILL_ICON_CLASS} ${FILL_TOGGLE_CLASS}__icon`
+  const icon = button.querySelector<HTMLElement>('.bewly-player-glyph')
+  const iconClass = `${filling ? CARD_ICON_CLASS : FILL_ICON_CLASS} bewly-player-glyph`
   if (icon && icon.className !== iconClass)
     icon.className = iconClass
 }
@@ -45,7 +45,7 @@ function createFillToggleButton(currentState: BewlyWidescreenState) {
   const iconBox = document.createElement('div')
   iconBox.className = 'bpx-player-ctrl-btn-icon'
   const icon = document.createElement('i')
-  icon.className = `${FILL_ICON_CLASS} ${FILL_TOGGLE_CLASS}__icon`
+  icon.className = `${FILL_ICON_CLASS} bewly-player-glyph`
   icon.setAttribute('aria-hidden', 'true')
   iconBox.append(icon)
   button.append(iconBox, createPlayerControlTooltip(''))
@@ -82,7 +82,8 @@ export function setupFillToggle(currentState: BewlyWidescreenState) {
     if (session.current !== currentState)
       return
     const bar = currentState.playerEl.querySelector<HTMLElement>('.bpx-player-control-bottom-right')
-    if (!bar || currentState.fillToggleButton?.parentElement === bar)
+    // Bpx mounts some of its buttons after ours; the fill control stays last.
+    if (!bar || (currentState.fillToggleButton && bar.lastElementChild === currentState.fillToggleButton))
       return
     currentState.fillToggleButton ??= createFillToggleButton(currentState)
     bar.append(currentState.fillToggleButton)

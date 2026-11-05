@@ -20,6 +20,23 @@ export const HOST_ZOOMING_ATTRIBUTE = 'data-bewly-widescreen-zooming'
 export const FILL_TOGGLE_CLASS = 'bewly-widescreen-fill-toggle'
 /** Marks Bilibili's like / coin / favourite animation containers in the toolbar. */
 export const ACTION_ANIMATION_ATTRIBUTE = 'data-bewly-action-animation'
+/** Bangumi's "more" menu (watch on phone, watch later), lifted above the shell (actionEffects.ts). */
+export const RAISED_MORE_MENU_CLASS = 'bewly-widescreen-more-menu'
+// The like / coin / collect / share chips' rolling label (actionRolls.ts).
+export const ACTION_ROLL_CLASS = 'bewly-action-roll'
+// The info card's parts that close when it folds (layout.ts, shell.ts). A
+// video keeps its title and uploader row. Bangumi's media block stands in
+// for the uploader row: its poster, series title, rating row (score,
+// uploader, the viewer's stars) and channel / follow buttons stay, and the
+// rest of its right column (stats, synopsis) closes; the block's right column
+// is its last child.
+export const INFO_FOLDING_PARTS = [
+  `#${ROOT_ID}:not([data-page-kind="pgc"]) .bewly-widescreen-metadata-slot`,
+  `#${ROOT_ID}[data-page-kind="pgc"] .bewly-widescreen-metadata-slot > * > :last-child > :not([class*="mediainfo_mediaTitle"], [class*="mediainfo_bottomBar"], [class*="mediainfo_mediaToolbar"])`,
+  '.bewly-widescreen-action-slot',
+  '.bewly-widescreen-description-card',
+  '.bewly-widescreen-up-slot .up-description',
+].join(', ')
 export const ACTION_ANIMATION_SELECTOR = [
   '.video-toolbar-left-item :is([class*="anim"], [class*="Anim"]):not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon)',
   '.toolbar-left-item-wrap > :is([class*="anim"], [class*="Anim"])',
@@ -28,6 +45,9 @@ export const ACTION_ANIMATION_SELECTOR = [
 export const COMMENT_COMPOSER_HOST_CLASS = 'bewly-widescreen-comment-composer'
 /** The docked composer's measured height, which the comment panel keeps clear at its end. */
 export const COMMENT_COMPOSER_HEIGHT_PROPERTY = '--bewly-widescreen-composer-height'
+/** The cover's average colour and its blurred colours (syncCoverTone), on the video area and the backdrop. */
+export const COVER_TONE_PROPERTY = '--bewly-widescreen-cover-tone'
+export const COVER_FIELD_PROPERTY = '--bewly-widescreen-cover-field'
 export const PGC_MEDIA_INFO_SELECTOR = '[class*="mediainfo_mediaInfoWrap"]'
 export const PGC_TOOLBAR_SELECTOR = `.player-left-components > .toolbar, #${ROOT_ID} .bewly-widescreen-action-slot > .toolbar`
 export const PGC_REACT_BRIDGE_ATTRIBUTE = 'data-bewly-react-bridge'
@@ -47,6 +67,24 @@ export const DANMAKU_GLASS_CLASS = 'bewly-widescreen-danmaku-glass'
 export const DANMAKU_SURFACE_SELECTOR = `:is(#${ROOT_ID} .bewly-widescreen-danmaku-dock, body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .${DANMAKU_SOURCE_HOST_CLASS})`
 
 export const EPISODE_SECTION_CLASS = 'bewly-widescreen-episode-section'
+
+/** The rail's fold control (disclosureToggle.ts). */
+export const DISCLOSURE_TOGGLE_CLASS = 'bewly-widescreen-disclosure-toggle'
+
+/** Class-less parts of Bilibili's dialogs, marked for their styles (actionEffects.ts markNativeDialog). */
+export const NATIVE_DIALOG_CHECK_CLASS = 'bewly-native-dialog-check'
+export const NATIVE_DIALOG_NUMERAL_CLASS = 'bewly-native-dialog-numeral'
+export const NATIVE_DIALOG_TITLE_CLASS = 'bewly-native-dialog-title'
+export const NATIVE_DIALOG_FIELD_CLASS = 'bewly-native-dialog-field'
+
+/** A bangumi directory section's fold state, "open" or "folded" (playlist.ts syncPgcSections). */
+export const PGC_SECTION_ATTRIBUTE = 'data-bewly-section'
+
+/** The shared scroll edge fades (styles/scrollEdgeFade.scss), for Bilibili's own scrollers. */
+export const SCROLL_EDGE_FADE_CLASS = 'bew-scroll-edge-fade'
+export const SCROLL_EDGE_FADE_INLINE_CLASS = 'bew-scroll-edge-fade-inline'
+/** Bangumi's related-recommendation list (an unnamed CSS-module div), laid out like a video's (markPgcRecommendations). */
+export const PGC_RECOMMEND_LIST_CLASS = 'bewly-widescreen-pgc-recommendations'
 
 /** Marks the native viewer count while the info's meta line shows it (syncViewerCount). */
 export const VIEWER_COUNT_MIRRORED_ATTRIBUTE = 'data-bewly-viewers-mirrored'
@@ -191,6 +229,8 @@ export const selectors = {
     '.danmaku-box .bui-collapse-header',
     '.danmaku-wrap .bpx-player-dm-setting-left',
     '.danmaku-box .bpx-player-dm-setting-left',
+    // Bangumi wraps the same Bpx box in its own (CSS-module) container.
+    '.bpx-player-auxiliary .bui-collapse-header',
   ],
   comment: [
     '#comment-module',
@@ -257,5 +297,8 @@ export const SIDEBAR_CONTENT_SELECTOR = [
   ...selectors.playlistControls,
   ...selectors.recommend,
 ].join(',')
+
+/** Bilibili's panel in place of a video it will not play here (region or rights). */
+export const NATIVE_PLAYBACK_BLOCKED_SELECTOR = '.big-block-panel__wrap'
 
 export const SIDEBAR_RELEVANT_SELECTOR = [...selectors.player, SIDEBAR_CONTENT_SELECTOR].join(',')

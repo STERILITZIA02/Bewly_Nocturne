@@ -19,6 +19,8 @@ export const GRID_BREAKPOINTS = {
  * Keep aligned with --bew-video-card-min-width in variables.scss.
  */
 export const VIDEO_CARD_MIN_WIDTH = 320
+/** The page grid's gutter between cards; keep aligned with --bew-grid-gutter. */
+export const GRID_GUTTER = 20
 /** Keep aligned with --bew-video-card-horizontal-cover-max-width. */
 export const VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH = 400
 

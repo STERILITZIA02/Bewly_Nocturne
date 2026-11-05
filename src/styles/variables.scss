@@ -28,11 +28,13 @@
 
   // #region Typography
   // macOS text styles: 13/16 body, 12/15 callout, 11/14 supporting labels,
+  // 10/13 caption 2 (only the Dock's smaller names, `dockLabelSize`),
   // 15/20 and 17/22 headings, 22/26 display, 26/32 large display.
   // The user's OS/browser preference scales every role together.
   --bew-font-scale: 1;
   --bew-interface-scale: 1;
   --bew-effective-font-scale: calc(var(--bew-font-scale) * var(--bew-interface-scale) * var(--bew-ui-text-scale));
+  --bew-font-size-caption-2: calc(10px * var(--bew-effective-font-scale));
   --bew-font-size-caption: calc(11px * var(--bew-effective-font-scale));
   --bew-font-size-callout: calc(12px * var(--bew-effective-font-scale));
   --bew-font-size-control: calc(13px * var(--bew-effective-font-scale));
@@ -45,6 +47,7 @@
   --bew-font-size-display: calc(22px * var(--bew-effective-font-scale));
   --bew-font-size-data: var(--bew-font-size-display);
   --bew-font-size-data-emphasis: calc(26px * var(--bew-effective-font-scale));
+  --bew-line-height-caption-2: calc(13px * var(--bew-effective-font-scale));
   --bew-line-height-caption: calc(14px * var(--bew-effective-font-scale));
   --bew-line-height-callout: calc(15px * var(--bew-effective-font-scale));
   --bew-line-height-control: calc(16px * var(--bew-effective-font-scale));
@@ -138,6 +141,13 @@
   --bew-layout-content-gap: var(--bew-space-5);
   // Content to window edge on full-width pages (Moments right column, Home feed).
   --bew-page-inline-inset: var(--bew-space-6);
+  // The page's 12-column grid (user-specified, 2026-11-03): its margins are the
+  // page inset and its gutter the content gap. Blocks start and end on whole
+  // columns; a fixed rail (the persistent sidebar) sits outside it, and the
+  // content beside the rail is its own 12 columns.
+  --bew-grid-columns: 12;
+  --bew-grid-margin: var(--bew-page-inline-inset);
+  --bew-grid-gutter: var(--bew-layout-content-gap);
   // 320x168 minimum: 14/15 of the former 16:9 height, with integer dimensions.
   // Keep aligned with the video cover constants in constants/layout.ts.
   --bew-video-card-min-width: #{ui(320px)};
@@ -149,6 +159,8 @@
   --bew-card-hover-scale: 1.07;
   // Moment cards are far larger than video cards; the same scale looks too big.
   --bew-moment-card-hover-scale: 1.05;
+  // Two-column cards in the playback rail: the lift stays inside the 12px gap.
+  --bew-compact-card-hover-scale: 1.04;
   --bew-card-hover-blur-radius: 6px;
   --bew-card-row-gap: var(--bew-space-8);
   --bew-card-avatar-size: var(--bew-space-8);
@@ -209,7 +221,8 @@
   --bew-sidebar-selected-bg: var(--bew-control-selected-background);
   --bew-wheel-text-active: var(--bew-text-1);
   --bew-wheel-text: rgb(from var(--bew-text-1) r g b / 67%);
-  --bew-notifications-feed-inline-space: var(--bew-space-4);
+  // The message pages' content keeps the page grid's margin from the rail and the window.
+  --bew-notifications-feed-inline-space: var(--bew-grid-margin);
   --bew-notifications-avatar-size: var(--bew-space-10);
   --bew-notifications-card-background: var(--bew-content-solid);
   --bew-notifications-card-background-hover: var(--bew-content-solid);
@@ -345,6 +358,9 @@
   --bew-dock-item-width: #{ui(72px)};
   --bew-dock-item-width-wide: #{ui(80px)};
   --bew-dock-shell-rim: var(--bew-space-1);
+  // Tab names: caption, or caption 2 with the smaller Dock text size (`dockLabelSize`).
+  --bew-dock-label-size: var(--bew-font-size-caption);
+  --bew-dock-label-line-height: var(--bew-line-height-caption);
   --bew-dock-icon-size: var(--bew-icon-size-lg);
   // Between the lg (24px) and xl (32px) icon steps; the Dock's own glyph size.
   --bew-dock-icon-size-lg: #{ui-text(28px)};

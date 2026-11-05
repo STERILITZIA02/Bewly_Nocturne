@@ -91,7 +91,7 @@ export interface NativeMediaSnapshot {
   btr: { installed: boolean, ownsMedia: boolean }
 }
 
-function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quality' | 'playback' | 'switchPlayback', value: unknown = true) {
+function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quality' | 'playback' | 'switchPlayback' | 'listen' | 'listenReturn' | 'listenResume', value: unknown = true) {
   const channelId = getPageBridgeChannelId()
   const href = location.href
   if (!channelId || !node.isConnected)
@@ -151,6 +151,30 @@ export function readNativeMediaSnapshot(video: HTMLVideoElement): NativeMediaSna
 
 export function getNativePlaybackUnitKey(unit: NativePlaybackUnit) {
   return `${unit.aid}:${unit.cid}:${unit.episodeId ?? ''}`
+}
+
+export function suspendNativePlayback(video: HTMLElement, unit: NativePlaybackUnit) {
+  const value = readComponentSnapshot(video, 'listen', getNativePlaybackUnitKey(unit))?.suspended
+  return value === 'interrupted' ? value : value === true
+}
+
+export interface ListenReturnRequest {
+  unit: string
+  time: number
+  rate: number
+  playing: boolean
+  muted: boolean
+  volume: number
+  bind: boolean
+}
+
+export function applyNativeListenReturn(video: HTMLElement, request: ListenReturnRequest) {
+  return readComponentSnapshot(video, 'listenReturn', request)?.applied === true
+}
+
+/** Reconnects the suspended native stream in place; false when only a reload can. */
+export function resumeNativeListen(video: HTMLElement, request: ListenReturnRequest) {
+  return readComponentSnapshot(video, 'listenResume', request)?.resumed === true
 }
 
 export function readNativeQualityState(video: HTMLElement): NativeQualityState | undefined {

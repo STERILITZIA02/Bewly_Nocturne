@@ -10,11 +10,12 @@ import { isPortraitRatio, PORTRAIT_MAX_CLEAR_HEIGHT } from '~/utils/portraitMedi
  * Below a portrait picture a moment surface takes the colour of the picture
  * just above where it is cut, with black or white text on it; beside a
  * picture (`edge: 'left'`, the picture on the right) it takes the colour of
- * the picture's left edge. Returns the inline tone colours for the surface's
+ * the picture's left edge, and around one (`edge: 'all'`) the whole picture's.
+ * Returns the inline tone colours for the surface's
  * host; the last colour stays until the next one is read, and one read before
  * applies from the first render.
  */
-export function useImageTone(source: () => { portrait: boolean, image?: string, ratio?: number | null, edge?: 'bottom' | 'left' }) {
+export function useImageTone(source: () => { portrait: boolean, image?: string, ratio?: number | null, edge?: 'bottom' | 'left' | 'all' }) {
   registerToneProperties()
   const tone = shallowRef<ImageTone | null>(null)
   watch(() => {
@@ -30,7 +31,9 @@ export function useImageTone(source: () => { portrait: boolean, image?: string, 
     const shown = isPortraitRatio(ratio) ? Math.min(1, PORTRAIT_MAX_CLEAR_HEIGHT * ratio!) : 1
     const band: [string, number, number, ImageBandAxis] = edge === 'left'
       ? [getMomentThumbnailUrl(image, 64), 0, 0.15, 'columns']
-      : [getMomentThumbnailUrl(image, 64), Math.max(0, shown - 0.15), shown, 'rows']
+      : edge === 'all'
+        ? [getMomentThumbnailUrl(image, 64), 0, 1, 'rows']
+        : [getMomentThumbnailUrl(image, 64), Math.max(0, shown - 0.15), shown, 'rows']
     const known = peekImageBandTone(...band)
     if (known) {
       tone.value = known

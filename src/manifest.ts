@@ -3,6 +3,7 @@ import type { Manifest } from 'webextension-polyfill'
 
 import type PkgType from '../package.json'
 import { isDev, isSafari, port, r } from '../scripts/utils'
+import { AUDIO_CDN_HOSTS } from './constants/audioCdn'
 import { CONTENT_SCRIPT_EXCLUDE_MATCHES, CONTENT_SCRIPT_MATCHES } from './constants/contentScript'
 import { NATIVE_SITE_FRAME_MATCHES, NATIVE_SITE_MATCHES } from './constants/nativeSites'
 
@@ -37,6 +38,7 @@ export async function getManifest() {
     host_permissions: [
       '*://*.bilibili.com/*',
       '*://*.hdslb.com/*',
+      ...AUDIO_CDN_HOSTS.filter(host => host !== '*.hdslb.com').map(host => `https://${host}/*`),
       // Official game-detail destination linked directly from game.bilibili.com.
       '*://www.biligame.com/*',
       // Public companion pages linked by the official game-center navigation.

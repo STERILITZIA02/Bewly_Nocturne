@@ -7,10 +7,12 @@ import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { VideoInfo } from '~/models/video/videoInfo'
 import { clearActionGeometry, setupActionGeometryObservers, syncActionAnimationTheme } from '~/utils/bewlyWidescreen/actionEffects'
+import { clearActionRolls } from '~/utils/bewlyWidescreen/actionRolls'
 import { bindAuthorMessageLinks } from '~/utils/bewlyWidescreen/authorMessages'
 import { setupPlaybackCommentComposer } from '~/utils/bewlyWidescreen/commentComposer'
-import { BODY_CLASS, DANMAKU_SKELETON_CLASS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, EMPTY_CLASS, INITIAL_REVEAL_TIMEOUT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_PLAYER_CLASS, NATIVE_VIDEO_LIST_COMPONENT_SELECTOR, PAGE_READY_FALLBACK_DELAY, READY_POLL_FAST_DURATION, READY_POLL_INTERVAL, READY_STABILITY_DELAY, selectors, SIDEBAR_RELEVANT_SELECTOR, TRANSFER_SETTLE_DELAY } from '~/utils/bewlyWidescreen/constants'
+import { BODY_CLASS, DANMAKU_SKELETON_CLASS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, EMPTY_CLASS, INITIAL_REVEAL_TIMEOUT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_PLAYBACK_BLOCKED_SELECTOR, NATIVE_PLAYER_CLASS, NATIVE_VIDEO_LIST_COMPONENT_SELECTOR, PAGE_READY_FALLBACK_DELAY, READY_POLL_FAST_DURATION, READY_POLL_INTERVAL, READY_STABILITY_DELAY, selectors, SIDEBAR_RELEVANT_SELECTOR, TRANSFER_SETTLE_DELAY } from '~/utils/bewlyWidescreen/constants'
 import { clearDanmakuActivation, syncDanmakuInputSource } from '~/utils/bewlyWidescreen/danmaku'
+import { clearDanmakuViews, refreshDanmakuViewLabels } from '~/utils/bewlyWidescreen/danmakuViews'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
 import { setupFillToggle, setWidescreenDisplayMode, stopWidescreenZoom, syncFillToggleButton } from '~/utils/bewlyWidescreen/displayMode'
 import { clearAnchoredPlayerElement, clearAspectObservers, clearAuxiliaryControlGeometry, clearPlayerResizeSync, ensureAnchoredPlayer, refreshPlayerLayout, schedulePlayerResizeSync, setupAspectObservers, syncAnchoredPlayerGeometry, updatePlayerLayoutState } from '~/utils/bewlyWidescreen/geometry'
@@ -20,7 +22,7 @@ import { createWidescreenLoading } from '~/utils/bewlyWidescreen/loading'
 import { setupActiveWidescreenControl, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
 import { classifyWidescreenMutation, disableNativeLightOffMode, findCommentRoot, isReadyForLayout, isWidescreenTransferContentReady, leaveMutuallyExclusivePlayerModes, removeMovedNode, restoreCommentPrewarm, restoreMovedNodes } from '~/utils/bewlyWidescreen/nativeDom'
 import { clearEpisodeSectionMarker, setupPlaylistToggle, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
-import { clearRailTabs } from '~/utils/bewlyWidescreen/railTabs'
+import { railTabs } from '~/utils/bewlyWidescreen/railTabs'
 import { session } from '~/utils/bewlyWidescreen/session'
 import { createRoot, setActiveTab } from '~/utils/bewlyWidescreen/shell'
 import { clearSidebarHydration, clearSidebarRefreshTimer, scheduleSidebarRefresh, startSidebarHydration, suspendSidebarForVideoNavigation, syncSidebarReadiness } from '~/utils/bewlyWidescreen/sidebar'
@@ -83,6 +85,7 @@ function syncLocalizedWidescreenText(currentState = session.current) {
   currentState.tabButtons.comment.textContent = t('widescreen.comments')
   currentState.tabButtons.danmaku.textContent = t('widescreen.danmaku')
   currentState.tabButtons.overview.textContent = t('widescreen.overview')
+  refreshDanmakuViewLabels(currentState.danmakuViews)
   syncFillToggleButton(currentState)
   syncDescription(currentState)
   syncPlaylistToggleButton(currentState)
@@ -120,6 +123,11 @@ function startWidescreenLanguageWatch() {
 }
 
 export function prepareBewlyWidescreenLoading(allowPlayingDismiss = false) {
+  // A video Bilibili will not play here keeps its native page and message.
+  if (isPlaybackBlocked()) {
+    loading.reset()
+    return
+  }
   startWidescreenLanguageWatch()
   loading.prepare(allowPlayingDismiss)
 }
@@ -369,6 +377,7 @@ function cleanupState(currentState: BewlyWidescreenState) {
   clearTimeout(currentState.initialRevealTimer)
   currentState.initialRevealTimer = undefined
   clearActionGeometry(currentState)
+  clearActionRolls(currentState)
   clearSidebarRefreshTimer()
   clearAnchoredPlayerElement(currentState.playerEl)
   clearAuxiliaryControlGeometry()
@@ -384,7 +393,8 @@ function cleanupState(currentState: BewlyWidescreenState) {
 
   clearEpisodeSectionMarker(currentState.playlistSlot, currentState.movedNodes)
   restoreMovedNodes(currentState.movedNodes)
-  clearRailTabs(currentState.tabButtons.comment.parentElement!)
+  railTabs.clear(currentState.tabButtons.comment.parentElement!)
+  clearDanmakuViews(currentState)
   currentState.root.remove()
   currentState.backdrop.remove()
   currentState.styleEl.remove()
@@ -399,7 +409,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   if (!player)
     return false
 
-  const { root, backdrop, stage, playerSlot, playerFrame, danmakuDock, sidebarEl, playlistSlot, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton } = createRoot(sidebarPosition)
+  const { root, backdrop, stage, playerSlot, playerFrame, danmakuDock, sidebarEl, playlistSlot, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, danmakuViews, playlistToggleButton } = createRoot(sidebarPosition)
   const styleEl = injectLayoutStyle()
   root.dataset.pageKind = isPgcPlaybackPage() ? 'pgc' : 'video'
   const movedNodes: MovedNode[] = []
@@ -428,6 +438,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     tagsSlot,
     panels,
     tabButtons,
+    danmakuViews,
     playlistToggleButton,
     movedNodes,
     styleEl,
@@ -614,7 +625,7 @@ function waitForReadyLayout() {
         clearReadyWait()
         return
       }
-      if (pendingApplication && !pendingApplication.shouldApply()) {
+      if ((pendingApplication && !pendingApplication.shouldApply()) || isPlaybackBlocked()) {
         exitBewlyWidescreen()
         return
       }
@@ -638,7 +649,7 @@ function waitForReadyLayout() {
     // Clock/danmaku text and our loading decoration do not change readiness.
     const relevant = records.some(record => (record.target instanceof Element && record.target.matches(SIDEBAR_RELEVANT_SELECTOR))
       || [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node => node instanceof Element
-        && (node.matches(`${SIDEBAR_RELEVANT_SELECTOR},video,bwp-video`) || !!node.querySelector(`${SIDEBAR_RELEVANT_SELECTOR},video,bwp-video`))))
+        && (node.matches(`${SIDEBAR_RELEVANT_SELECTOR},${NATIVE_PLAYBACK_BLOCKED_SELECTOR},video,bwp-video`) || !!node.querySelector(`${SIDEBAR_RELEVANT_SELECTOR},${NATIVE_PLAYBACK_BLOCKED_SELECTOR},video,bwp-video`))))
     if (relevant)
       scheduleAttempt()
   })
@@ -675,6 +686,10 @@ function waitForReadyLayout() {
   scheduleAttempt()
 }
 
+function isPlaybackBlocked() {
+  return !!document.querySelector(NATIVE_PLAYBACK_BLOCKED_SELECTOR)
+}
+
 export function applyBewlyWidescreen(
   sidebarPosition: 'left' | 'right' = 'right',
   showLoading = true,
@@ -682,6 +697,11 @@ export function applyBewlyWidescreen(
 ) {
   if (application && !application.shouldApply())
     return
+  // A video Bilibili will not play here keeps its native page and message.
+  if (isPlaybackBlocked()) {
+    loading.reset()
+    return
+  }
   startWidescreenLanguageWatch()
   if (session.current || session.entering || waitingForLoad || readyObserver || readyFrame !== undefined)
     return

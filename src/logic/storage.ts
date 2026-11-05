@@ -267,6 +267,8 @@ export interface Settings {
   showDockItemNames: boolean
   // Unread counts on the Dock glyphs (display only, never read state).
   showDockBadges: boolean
+  /** Dock tab names: caption (`standard`) or the one step smaller caption 2 (`small`). */
+  dockLabelSize: 'standard' | 'small'
   enableUndoRefreshButton: boolean // 添加撤销刷新按钮配置项
 
   sidebarPosition: 'left' | 'right'
@@ -544,6 +546,7 @@ export const originalSettings: Settings = {
   showDockBackToTop: true,
   showDockItemNames: true,
   showDockBadges: true,
+  dockLabelSize: 'standard',
   enableUndoRefreshButton: true, // 默认开启撤销刷新按钮
 
   sidebarPosition: 'right',
@@ -725,6 +728,8 @@ function normalizeSettings(value: Settings) {
   value.interfaceFontSize = normalizeAppearanceNumber(value.interfaceFontSize, INTERFACE_FONT_SIZE.min, INTERFACE_FONT_SIZE.max, INTERFACE_FONT_SIZE.default)
   if (!INTERFACE_SIZES.includes(value.interfaceSize))
     value.interfaceSize = 'auto'
+  if (value.dockLabelSize !== 'small')
+    value.dockLabelSize = 'standard'
   if (!['system', 'reduce', 'full'].includes(value.motionPreference))
     value.motionPreference = 'system'
   if (typeof value.autoRemoveWatchLaterOnEnd !== 'boolean')

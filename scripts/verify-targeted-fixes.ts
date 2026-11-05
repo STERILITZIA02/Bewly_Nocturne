@@ -30,7 +30,6 @@ import { getPageBridgeTargetOrigin, isPageBridgeMessage, matchesPageBridgeEvent,
 import { createForYouInitialDataCoordinator } from '../src/contentScripts/views/Home/forYouInitialData'
 import { AppPage } from '../src/enums/appEnums'
 import { applyCommentReplyInteractionOverrides, loadCommentReplyPagesSequentially, mergeCommentReplyLists } from '../src/inject/commentReplyPagination'
-import { sortNativeDanmakuListBySender } from '../src/inject/danmakuSenderOrder'
 import { wakeNativeCommentLists } from '../src/inject/nativeCommentWake'
 import { isAccountRequestCurrent } from '../src/utils/accountScope'
 import { createBooleanSingleFlight, resolveAppAccessTokenFreshness, resolveAppAuthorizationState } from '../src/utils/appAuthTokenPolicy'
@@ -401,60 +400,10 @@ function verifyWidescreenEngagementPolicy() {
   finally {
     ;(globalThis as { document?: unknown }).document = previousDocument
   }
-  verifyDanmakuSenderOrder()
   assert.equal(resolveInterfaceLanguage('zh-CN', []), 'cmn-CN')
   assert.equal(resolveInterfaceLanguage('zh-TW', ['zh-HK', 'zh-TW']), 'jyut')
   assert.equal(resolveInterfaceLanguage('zh-TW', ['zh-TW']), 'cmn-TW')
   assert.equal(resolveInterfaceLanguage('en-NZ', ['en-NZ']), 'en')
-}
-
-// Bpx's header click (dmFunctionClick + order) as the sender order drives it.
-function verifyDanmakuSenderOrder() {
-  const nativeSort = Array.prototype.sort
-  const allDm = [{ uhash: 'b', stime: 3 }, { uhash: 'a', stime: 2 }, { uhash: 'b', stime: 1 }, { uhash: 'c', stime: 0 }]
-  const native = { orderby: 'stime', positive: true }
-  let className = 'bpx-player-dm-function'
-  let otherSorted: number[] = []
-  const carrier = {
-    click() {
-      const field = 'date'
-      if (native.orderby === field)
-        native.positive = !native.positive
-      else
-        Object.assign(native, { orderby: field, positive: true })
-      otherSorted = [3, 1, 2].sort((a, b) => a - b)
-      allDm.sort(() => 0)
-      className = `bpx-player-dm-function${native.positive ? '' : ' bpx-player-order-rotate'} bpx-player-order-${field}`
-    },
-  }
-  const row = {
-    get className() { return className },
-    set className(value: string) { className = value },
-    classList: {
-      contains: (name: string) => className.split(' ').includes(name),
-      [Symbol.iterator]: () => className.split(' ')[Symbol.iterator](),
-    },
-    querySelector: (selector: string) => selector === '[data-action="date"]' ? carrier : null,
-  } as unknown as Element
-  const senders = () => allDm.map(item => `${item.uhash}${item.stime}`).join(',')
-
-  // Most danmaku first, then by sender, each sender in playback order.
-  assert.equal(sortNativeDanmakuListBySender(row), true)
-  assert.equal(senders(), 'b1,b3,a2,c0')
-  assert.equal(className, 'bpx-player-dm-function bewly-dm-order-sender')
-  // The send-time column is left reversed: its next native click sorts ascending.
-  assert.deepEqual(native, { orderby: 'date', positive: false })
-  assert.equal(Array.prototype.sort, nativeSort)
-  assert.deepEqual(otherSorted, [1, 2, 3], 'other sorts keep their own comparator')
-  // Clicking again reverses the sender order.
-  assert.equal(sortNativeDanmakuListBySender(row), true)
-  assert.equal(senders(), 'a2,c0,b1,b3')
-  assert.equal(className, 'bpx-player-dm-function bewly-dm-order-sender bpx-player-order-rotate')
-  assert.deepEqual(native, { orderby: 'date', positive: false })
-  assert.equal(sortNativeDanmakuListBySender(row), true)
-  assert.equal(senders(), 'b1,b3,a2,c0')
-  assert.equal(sortNativeDanmakuListBySender(null), false)
-  assert.equal(Array.prototype.sort, nativeSort)
 }
 
 function verifyBilibiliApiErrorClassification() {
@@ -2400,7 +2349,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /grid-template-columns: var\(--bewly-widescreen-card-width\) minmax\(0, 1fr\)/)
   assert.match(widescreen, /grid-template-areas: "player rail"/)
   assert.match(widescreen, /\[data-sidebar-position="left"\] \.bewly-widescreen-stage \{[\s\S]{0,160}grid-template-areas: "rail player"/)
-  assert.match(widescreen, /--bewly-widescreen-card-width: min\(50vw, calc\(100vw - \$\{WIDESCREEN_SIDEBAR_MIN_WIDTH\}px\)\);/)
+  assert.match(widescreen, /--bewly-widescreen-card-width: min\(calc\(100vw \* 2 \/ 3\), calc\(100vw - \$\{WIDESCREEN_SIDEBAR_MIN_WIDTH\}px\)\);/)
   assert.match(widescreen, /#\$\{ROOT_ID\} \.bewly-widescreen-stage \{[\s\S]{0,260}height: 100dvh;\s*padding: 0;/)
   assert.match(widescreen, /\.bewly-widescreen-player-frame \{[\s\S]{0,200}flex: 1 1 auto;[\s\S]{0,120}min-height: 0;/)
   assert.doesNotMatch(widescreen.slice(widescreen.indexOf('.bewly-widescreen-player-frame {'), widescreen.indexOf('.bewly-widescreen-player-frame > ')), /border-radius|corner-shape|aspect-ratio/)
@@ -2416,7 +2365,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /> \.bewly-widescreen-backdrop\[data-display-mode="card"\] \{/)
   // The backdrop paints the pane's canvas on the pane's side, so the picture
   // zooming out of the letterboxed pane leaves no gap above or below it.
-  assert.match(widescreen, /> \.bewly-widescreen-backdrop::before \{[\s\S]{0,200}inset-block: 0;\s*left: 0;\s*width: var\(--bewly-widescreen-card-width\);\s*background-color: var\(--bew-player-canvas\);/)
+  assert.match(widescreen, /> \.bewly-widescreen-backdrop::before \{[\s\S]{0,200}inset-block: 0;\s*left: 0;\s*width: var\(--bewly-widescreen-card-width\);\s*background-color: var\(--bewly-widescreen-letterbox\);/)
   assert.match(widescreen, /> \.bewly-widescreen-backdrop\[data-sidebar-position="left"\]::before \{\s*right: 0;\s*left: auto;/)
   assert.match(widescreen, /backdrop\.dataset\.sidebarPosition = sidebarPosition/)
   assert.match(widescreen, /currentState\.backdrop\.dataset\.sidebarPosition = position/)
@@ -2431,15 +2380,17 @@ async function verifyP2WidescreenControl() {
   // padding keeps the spacing.
   assert.match(shellSurfaceStyles, /background: transparent;/)
   assert.doesNotMatch(shellSurfaceStyles, /border|corner-shape|box-shadow|backdrop-filter|--bew-elevated-alt|--bew-edge-color/)
-  assert.match(shellSurfaceStyles, /padding: var\(--bewly-widescreen-page-padding\) var\(--bewly-widescreen-page-padding\) 0;/)
+  assert.match(shellSurfaceStyles, /padding-inline: var\(--bewly-widescreen-page-padding\);\s*padding-bottom: 0;/)
   assert.match(widescreen, /--bewly-widescreen-shell-radius: var\(--bew-modal-radius, 24px\)/)
   assert.match(shellSurfaceStyles, /pointer-events: auto/)
   assert.doesNotMatch(widescreen, /\.bewly-widescreen-sidebar::before/)
   assert.match(widescreen, /--bewly-widescreen-sidebar-bg: transparent/)
   assert.doesNotMatch(widescreen, /--bewly-widescreen-surface-bg/)
   assert.match(widescreen, /\.bewly-widescreen-sidebar-top \{[\s\S]{0,640}background: transparent;/)
-  assert.match(widescreen, /\.bewly-widescreen-panels \{[\s\S]{0,200}background: transparent;/)
-  assert.doesNotMatch(widescreen.slice(widescreen.indexOf('.bewly-widescreen-sidebar-top {'), widescreen.indexOf('.bewly-widescreen-toolbar {')), /border-radius|corner-shape/)
+  assert.match(widescreen, /\.bewly-widescreen-panels \{[\s\S]{0,360}background: transparent;/)
+  assert.doesNotMatch(widescreen.slice(widescreen.indexOf('.bewly-widescreen-sidebar-top {'), widescreen.indexOf('.bewly-widescreen-info-card {')), /border-radius|corner-shape/)
+  // The info is the one card in the column (user-specified), padded by its radius.
+  assert.match(widescreen, /\.bewly-widescreen-info-card \{[\s\S]{0,200}padding: var\(--bew-space-4\);[\s\S]{0,120}border-radius: var\(--bew-surface-radius\);/)
   assert.doesNotMatch(widescreen.slice(widescreen.indexOf('.bewly-widescreen-panels {'), widescreen.indexOf('.bewly-widescreen-panel {')), /border-radius|corner-shape/)
   assert.match(widescreen, /\.bewly-widescreen-description-card \{\s*display: flex;\s*flex-direction: column;\s*gap: var\(--bew-space-3\);\s*min-width: 0;\s*\}/)
   assert.match(widescreen, /sidebar\.append\(tablist, panelWrap\)/)
@@ -2450,17 +2401,20 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /--bewly-widescreen-rail-bottom: calc\(var\(--bewly-widescreen-page-padding\) \+ var\(--bew-space-3\)\);/)
   // The tabs, the panel content and the composer share one content line; the
   // scrollers reach one space-1 past it so row fills and focus rings fit.
-  assert.match(widescreen, /\.bewly-widescreen-panels \{[\s\S]{0,160}margin-inline: calc\(var\(--bew-space-1\) \* -1\);/)
-  assert.match(widescreen, /\.bewly-widescreen-panel \{[\s\S]{0,160}padding: var\(--bew-space-3\) var\(--bew-space-1\) var\(--bewly-widescreen-rail-bottom\);/)
+  assert.match(widescreen, /\.bewly-widescreen-panels \{[\s\S]{0,260}margin-inline: calc\(var\(--bewly-widescreen-page-padding\) \* -1\);/)
+  assert.match(widescreen, /\.bewly-widescreen-panel \{[\s\S]{0,160}padding: calc\(var\(--bewly-widescreen-rail-head-height\) \+ var\(--bew-space-3\)\) var\(--bewly-widescreen-panel-inline\) var\(--bewly-widescreen-rail-bottom\);/)
   // The native danmaku list spans the panel past the content line; its
   // header, rows and views pad back in, so row hover fills fit.
-  assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \{\s*position: relative;\s*padding: 0 0 var\(--bewly-widescreen-rail-bottom\);/)
+  assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \{[^}]*position: relative;[^}]*padding: var\(--bewly-widescreen-rail-head-height\) var\(--bewly-widescreen-panel-inline\) 0;/)
+  // The danmaku panel's pinned head is glass the list scrolls under.
+  assert.match(widescreen, /\.bewly-widescreen-panel-danmaku::before \{[^}]*backdrop-filter: var\(--bew-filter-glass-1\);/)
+  assert.match(widescreen, /\.bpx-player-dm-wrap \{\s*margin-top: calc\(\(var\(--bewly-danmaku-head\) \+ var\(--bewly-danmaku-labels\)\) \* -1\) !important;/)
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.dm-info-row \{\s*box-sizing: border-box !important;\s*padding-inline: var\(--bew-space-1\) !important;/)
   // Bpx shows a list view with an inline display: block; forcing flex kept
   // the list over the block settings and advanced views.
   assert.match(widescreen, /\.bpx-player-filter-wrap\.bpx-player-dm\[style\*="display: block"\] \{\s*display: flex !important;\s*\}/)
   assert.doesNotMatch(widescreen, /\.bpx-player-filter-wrap\.bpx-player-dm \{\s*display: flex !important;/)
-  assert.match(widescreen, /\.\$\{COMMENT_COMPOSER_HOST_CLASS\} \{\s*position: absolute;\s*right: var\(--bew-space-1\);\s*bottom: var\(--bewly-widescreen-rail-bottom\);\s*left: var\(--bew-space-1\);/)
+  assert.match(widescreen, /\.\$\{COMMENT_COMPOSER_HOST_CLASS\} \{\s*position: absolute;\s*right: var\(--bewly-widescreen-page-padding\);\s*bottom: var\(--bewly-widescreen-rail-bottom\);\s*left: var\(--bewly-widescreen-page-padding\);/)
   // Narrow windows stack a 16:9 pane over the column; the backdrop pane is not needed.
   assert.match(widescreen, /@media \(max-width: \$\{MOBILE_BREAKPOINT\}px\) \{[\s\S]*\.bewly-widescreen-player-frame \{\s*flex: 0 0 auto;\s*aspect-ratio: 16 \/ 9;[\s\S]{0,200}> \.bewly-widescreen-backdrop::before \{\s*display: none;/)
   assert.match(widescreen, /\.bewly-widescreen-sidebar-top \{[^}]*padding-bottom: var\(--bew-space-6\);/)
@@ -2648,7 +2602,10 @@ async function verifyP2WidescreenControl() {
   assert.match(nativeSpinner, /stroke-dasharray='75 25'/)
   const injectEntry = await readFile(`${root}/src/inject/index.ts`, 'utf8')
   assert.match(injectEntry, /'bili-comments-spinner': \{\s*id: 'bewly-widescreen-comment-spinner-style',\s*css: COMMENT_SPINNER_RING_CSS,/)
-  assert.match(injectEntry, /name === 'bili-comments-spinner'[\s\S]{0,200}beforeUpdate: \(component\) => \{\s*if \(component\.shadowRoot\)\s*ensureCommentShadowStyle/)
+  // Every comment component's shadow styles go in before its first paint.
+  assert.match(injectEntry, /if \(options\?\.styles && this\.shadowRoot\) \{\s*for \(const style of options\.styles\)\s*ensureCommentShadowStyle\(this\.shadowRoot, style\.id, style\.css\)\s*\}\s*if \(settingsReady && options\?\.beforeUpdate\)/)
+  assert.match(injectEntry, /: \[shadowStylePatch\],\s*\}\)/)
+  assert.match(injectEntry, /\{ styles: \[\{ id: 'bewly-widescreen-comment-user-style', css: WIDESCREEN_COMMENT_USER_CSS \}\] \}/)
   assert.match(playbackPageLoadingSection, /aria-hidden', 'true'/)
   assert.match(playbackPageLoadingSection, /data-bew-skeleton/)
   assert.match(playbackPageLoadingSection, /\$\{SKELETON_CSS\}/)
@@ -2671,10 +2628,9 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /reducedMotionCss\(/)
   assert.doesNotMatch(widescreen, /\.bewly-widescreen-panel-danmaku \.bui-collapse-header[\s\S]{0,80}display: none !important/)
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bui-collapse-header \{[^}]*background: var\(--bewly-widescreen-sidebar-bg\) !important/)
-  assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bui-collapse-arrow[\s\S]{0,80}display: none !important/)
-  assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bpx-player-filter[\s\S]{0,80}pointer-events: auto/)
+  assert.doesNotMatch(widescreen, /\.bewly-widescreen-panel-danmaku \.bpx-player-filter(?!-wrap)/)
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bpx-player-wraplist[\s\S]{0,180}display: flex[\s\S]{0,180}height: 100% !important/)
-  assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bpx-player-dm-function[\s\S]{0,160}background: var\(--bewly-widescreen-sidebar-bg\) !important/)
+  assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bpx-player-dm-function,[\s\S]{0,160}background: transparent !important/)
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bpx-player-dm-wrap[\s\S]{0,260}background: var\(--bewly-widescreen-sidebar-bg\) !important/)
   const danmakuPanelStyles = widescreen.slice(
     widescreen.indexOf(`.bewly-widescreen-panel-danmaku {`),
@@ -2730,7 +2686,10 @@ async function verifyP2WidescreenControl() {
   assert.doesNotMatch(danmakuSkeletonStyles, /\.bewly-widescreen-danmaku-skeleton::after/)
   assert.match(skeletonPaint, /animation: bew-skeleton-shimmer/)
   assert.match(danmakuPanelStyles, /\.bpx-player-dm-wrap[\s\S]{0,180}position: relative !important/)
-  assert.match(danmakuPanelStyles, /\.bui-collapse-header[\s\S]{0,320}height: auto !important/)
+  assert.match(danmakuPanelStyles, /\.bui-collapse-header \{[^}]*position: absolute !important[^}]*height: var\(--bewly-danmaku-head\) !important[^}]*visibility: hidden/)
+  // The list reaches the window's bottom; the glass head's lower edge is a full-width hairline under the column labels.
+  assert.match(danmakuPanelStyles, /\.bewly-widescreen-panel-danmaku \{[^}]*padding: var\(--bewly-widescreen-rail-head-height\) var\(--bewly-widescreen-panel-inline\) 0;/)
+  assert.match(danmakuPanelStyles, /\[data-bewly-danmaku-view="LIST"\]::before \{[^}]*height: calc\(var\(--bewly-danmaku-head\) \+ var\(--bewly-danmaku-labels\)\);[^}]*border-bottom: var\(--bew-hairline\) solid var\(--bew-separator-color\)/)
   assert.match(danmakuPanelStyles, /\.bui-collapse-body \{[^}]*display: block !important[^}]*flex: 1 1 0 !important/)
   assert.match(widescreen, /return String\(i18n\.global\.t\(key\)\)/)
   assert.doesNotMatch(widescreen, /i18n\.global\.t\(key, settings\.value\.language\)/)
@@ -2738,7 +2697,9 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /initVerticalVideoZoom\(\)/)
   assert.match(widescreen, /data-sidebar-position="left"\] \.bewly-widescreen-stage/)
   assert.doesNotMatch(widescreen, /titleNotice|video-argue|argue_info/)
-  assert.match(widescreen, /currentState\.videoInfoData\?\.title\?\.trim\(\) \|\| getTitleText\(\)/)
+  // A bangumi episode keeps its episode title, not its manuscript's.
+  assert.match(widescreen, /pageKind === 'pgc' \? undefined : currentState\.videoInfoData\?\.title\?\.trim\(\)/)
+  assert.match(widescreen, /const nextTitle = manuscriptTitle \|\| getTitleText\(\)/)
   const widescreenTitleStyles = widescreen.slice(
     widescreen.indexOf('.bewly-widescreen-title {'),
     widescreen.indexOf('.bewly-widescreen-metadata-slot {'),
@@ -2752,7 +2713,21 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /\.bewly-widescreen-metadata-slot \.video-info-meta,[\s\S]{0,420}position: static !important;[\s\S]{0,220}height: auto !important/)
   // Two full-width rows: the author with charge and follow at the right edge,
   // then the actions; 16px / 12px / 16px rhythm around them.
-  assert.match(widescreen, /\.bewly-widescreen-author-actions \{\s*display: flex;\s*flex-direction: column;\s*align-items: stretch;\s*gap: var\(--bew-space-3\);\s*min-width: 0;\s*margin-block: var\(--bew-space-2\);/)
+  // The info card's rhythm is margins on its parts, so a folded part takes
+  // its space with it; folded, only the title and the uploader's row stay.
+  assert.match(widescreen, /\.bewly-widescreen-author-actions \{\s*display: flex;\s*flex-direction: column;\s*align-items: stretch;\s*min-width: 0;\s*margin-top: var\(--bew-space-4\);/)
+  assert.match(widescreen, /\.bewly-widescreen-author-actions > \.bewly-widescreen-action-slot \{\s*margin-top: var\(--bew-space-3\);/)
+  const widescreenConstants = await readFile(new URL('../src/utils/bewlyWidescreen/constants.ts', import.meta.url), 'utf8')
+  assert.match(widescreenConstants, /export const INFO_FOLDING_PARTS = \[\s*`#\$\{ROOT_ID\}:not\(\[data-page-kind="pgc"\]\) \.bewly-widescreen-metadata-slot`,\s*`#\$\{ROOT_ID\}\[data-page-kind="pgc"\] \.bewly-widescreen-metadata-slot > \* > :last-child > :not\(\[class\*="mediainfo_mediaTitle"\], \[class\*="mediainfo_bottomBar"\], \[class\*="mediainfo_mediaToolbar"\]\)`,\s*'\.bewly-widescreen-action-slot',\s*'\.bewly-widescreen-description-card',\s*'\.bewly-widescreen-up-slot \.up-description',\s*\]\.join\(', '\)/)
+  // A closing flex item must not keep its content height until the fold ends.
+  assert.match(widescreen, /\.bewly-widescreen-info-card :is\(\$\{INFO_FOLDING_PARTS\}\) \{\s*interpolate-size: allow-keywords;\s*height: auto;\s*min-height: 0;/)
+  // The fold moves the rail content below on its own layer (no per-frame
+  // repaint of the tall list), and waits only on the folding parts.
+  const widescreenShell = await readFile(new URL('../src/utils/bewlyWidescreen/shell.ts', import.meta.url), 'utf8')
+  assert.match(widescreenShell, /content\?\.style\.setProperty\('will-change', 'transform'\)/)
+  assert.match(widescreenShell, /card\.querySelectorAll\(INFO_FOLDING_PARTS\), part => part\.getAnimations\(\)/)
+  assert.doesNotMatch(widescreenShell, /getAnimations\(\{ subtree: true \}\)/)
+  assert.match(widescreen, /\.is-collapsed :is\(\$\{INFO_FOLDING_PARTS\}\) \{\s*height: 0 !important;\s*margin-block: 0 !important;\s*opacity: 0;\s*visibility: hidden;/)
   assert.match(widescreen, /\.bewly-widescreen-up-slot \.up-info__detail \{\s*flex: 1 1 calc\(var\(--bew-space-12\) \* 3\) !important;/)
   assert.match(widescreen, /\.bewly-widescreen-up-slot \.up-info__btn-panel \{\s*flex: 0 0 auto !important;\s*margin-left: auto !important;/)
   assert.doesNotMatch(widescreen, /max-width: calc\(var\(--bew-space-12\) \* 5\) !important/)
@@ -2784,7 +2759,9 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /\.video-pod ~ :is\(\.recommend-list-v1, \.recommend-list\)::before \{\s*content: var\(--bewly-widescreen-up-next-label, none\);/)
   assert.match(widescreen, /root\.style\.setProperty\('--bewly-widescreen-up-next-label', JSON\.stringify\(t\('widescreen\.up_next'\)\)\)/)
   assert.match(widescreen, /\[\$\{PLAYER_DISPLAY_MODE_ATTRIBUTE\}="card"\] \$\{DANMAKU_SURFACE_SELECTOR\} \.bpx-player-video-info\[\$\{VIEWER_COUNT_MIRRORED_ATTRIBUTE\}\] \{\s*display: none !important;/)
-  assert.match(widescreen, /:is\(\.bpx-player-filter, \.bpx-player-dm-btn-time, \.dm-info-time\) \{\s*padding-left: 0 !important;/)
+  // The danmaku labels and rows share one set of column widths, on the content line.
+  assert.match(widescreen, /:is\(\.bpx-player-dm-btn-time, \.dm-info-time\) \{[^}]*width: var\(--bewly-danmaku-time-width\) !important;\s*padding: 0 !important;/)
+  assert.match(widescreen, /:is\(\.bpx-player-dm-btn-date, \.dm-info-date\) \{[^}]*width: var\(--bewly-danmaku-date-width\) !important;/)
   assert.match(widescreen, /#\$\{ROOT_ID\} \.bewly-widescreen-panel:not\(\[hidden\]\) \{\s*transition: opacity/)
   assert.match(widescreen, /@starting-style \{\s*#\$\{ROOT_ID\} \.bewly-widescreen-panel:not\(\[hidden\]\) \{\s*opacity: 0;/)
   // The docked app controls start the bar when the viewer pill is hidden, and
@@ -2794,8 +2771,24 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /updatePlayerControlTooltip\(button, filling \? `\$\{label\} \(Esc\)` : label\)/)
   assert.match(widescreen, /button\.setAttribute\('aria-keyshortcuts', 'Escape'\)/)
 
-  assert.match(widescreen, /\.bewly-watch-later-btn \{[\s\S]{0,260}flex: 0 1 auto !important;\s*width: auto !important;/)
-  assert.match(widescreen, /-action-slot \.bewly-watch-later-btn \{\s*display: inline-flex !important;\s*width: var\(--bew-control-height, 36px\) !important;/)
+  // The five action chips fill one row in equal widths, space-1 apart; watch
+  // later shows its name; the share label eases between widths.
+  assert.match(widescreen, /\.bewly-watch-later-btn \{[\s\S]{0,260}flex: 1 1 auto !important;\s*width: auto !important;\s*min-width: min-content !important;/)
+  assert.match(widescreen, /:is\(\.video-toolbar-container, #arc_toolbar_report\) \{\s*--bewly-action-gap: var\(--bew-space-1\);/)
+  assert.match(widescreen, /\.video-toolbar-left \{\s*display: flex !important;\s*flex-wrap: wrap;\s*flex: 4 1 calc\(var\(--bewly-action-gap\) \* 3\) !important;/)
+  assert.match(widescreen, /\.toolbar-left-item-wrap \{\s*display: flex !important;\s*flex: 1 1 0 !important;/)
+  assert.match(widescreen, /\.video-toolbar-right \{\s*display: flex !important;\s*align-items: stretch !important;\s*flex: 1 1 0 !important;/)
+  assert.match(widescreen, /-action-slot \.bewly-watch-later-btn__label \{\s*display: inline !important;/)
+  const actionEffects = await readFile(new URL('../src/utils/bewlyWidescreen/actionEffects.ts', import.meta.url), 'utf8')
+  assert.match(actionEffects, /characterData: true/)
+  // Like / coin / collect / share roll between their count and their action
+  // name on hover; the row's resize watch ignores the fold's height changes.
+  const actionRolls = await readFile(new URL('../src/utils/bewlyWidescreen/actionRolls.ts', import.meta.url), 'utf8')
+  assert.match(actionRolls, /current\.animate\(\[leaveFrom, \{ translate: `0 \$\{shift\}%`, opacity: 0 \}\]/)
+  assert.match(actionRolls, /face\.animate\(\[\{ translate: `0 \$\{-shift\}%`, opacity: 0 \}, \{ translate: '0 0', opacity: 1 \}\]/)
+  assert.match(actionRolls, /nativeHoverText: '点击复制'/)
+  assert.match(actionEffects, /if \(entry\.contentRect\.width === width\)\s*return/)
+  assert.match(widescreen, /:is\(\.video-like-info, \.video-coin-info, \.video-fav-info, \.video-share-info\) \{\s*display: none !important;/)
   assert.match(widescreen, /\.upinfo-btn-panel > \.default-btn:not\(\.follow-btn\) \{\s*color: var\(--bew-text-1\) !important;\s*background: var\(--bew-fill-1\) !important;\s*border: 0 !important;/)
   assert.match(widescreen, /\.bewly-widescreen-up-slot \.up-panel-container,[\s\S]{0,360}position: relative !important;[\s\S]{0,180}inset: auto !important/)
   // The comment panel docks the dynamic-card composer; native boxes stay
@@ -2827,10 +2820,6 @@ async function verifyP2WidescreenControl() {
   assert.match(hydrationSection, /currentState\.commentListReloadRequested = false/)
   assert.match(hydrationSection, /const reload = phase !== 'hydrating' && nativeRequestPending && !currentState\.commentListReloadRequested[\s\S]{0,120}wakeNativeCommentList\(reload\)/)
   assert.ok(hydrationSection.indexOf('if (phase === \'stopped\')') < hydrationSection.indexOf('wakeNativeCommentList(reload)'))
-  // A ready danmaku list gets the sender column; MAIN sorts on its bridge message.
-  assert.match(widescreen, /if \(danmakuReady\) \{\s*clearEmptyPanel\(currentState\.panels\.danmaku\)\s*clearDanmakuSkeleton\(currentState\.panels\.danmaku\)\s*syncDanmakuSenderOrderButton\(currentState\.panels\.danmaku\)/)
-  assert.match(widescreen, /header\.insertBefore\(button, sendTime\)/)
-  assert.match(widescreen, /type: PAGE_BRIDGE_MESSAGE\.DANMAKU_SENDER_ORDER/)
   // Pinned beside the panels, outside the scroller: overscroll and late pages
   // cannot move it, and the comment panel keeps its measured height clear.
   assert.match(widescreen, /#\$\{ROOT_ID\} \.\$\{COMMENT_COMPOSER_HOST_CLASS\} \{\s*position: absolute;[\s\S]{0,120}bottom: var\(--bewly-widescreen-rail-bottom\);/)
@@ -2846,7 +2835,10 @@ async function verifyP2WidescreenControl() {
     assert.match(widescreen, /\.basic-desc-info \{\s*height: auto !important;\s*color: var\(--bewly-widescreen-text-secondary\) !important;\s*font-size: var\(--bew-font-size-body, 15px\) !important;\s*line-height: var\(--bew-line-height-body, 24px\) !important;/)
     assert.match(widescreen, /\.rec-title \.title-txt \{[\s\S]{0,80}font-size: var\(--bew-font-size-title\) !important;\s*font-weight: var\(--bew-font-weight-regular\) !important;/)
     assert.match(widescreen, /\.pic-box \.duration \{[\s\S]{0,320}background: var\(--bew-cover-scrim\) !important;\s*font-size: var\(--bew-font-size-caption\) !important;/)
-    assert.match(commentStyles, /#title h2 \{\s*font-size: var\(--bew-font-size-title\) !important;\s*font-weight: var\(--bew-font-weight-regular\) !important;/)
+    // The rail's comment tab names the panel; the header is only the sort, on the left.
+    assert.match(commentStyles, /#title \{\s*display: none !important;/)
+    assert.match(commentStyles, /#sort-actions \{[^}]*margin: 0 !important;/)
+    assert.match(commentStyles, /#sort-actions bili-text-button \{[^}]*border-radius: var\(--bew-interactive-radius\);\s*corner-shape: var\(--bew-corner-shape\);/)
     assert.doesNotMatch(commentStyles, /font-size: var\(--bew-font-size-heading\)/, 'only the video title is a heading')
     assert.match(commentStyles, /:is\(#user-name, #user-name a\) \{\s*font-size: var\(--bew-font-size-control, 13px\) !important;/)
     assert.match(commentStyles, /#location \{\s*color: var\(--bew-text-3\) !important;\s*font-size: var\(--bew-font-size-caption, 12px\) !important;/)
@@ -2868,15 +2860,20 @@ async function verifyP2WidescreenControl() {
   }
   // The follow widget over the video repeats the author row and is hidden;
   // its corner is a fixed, empty, click-through slot for future pane icons.
-  assert.match(widescreen, /:is\(\.bpx-player-top-left-follow, \.bpx-player-top-follow\),[\s\S]{0,400}display: none !important;/)
+  // Bangumi's hover title and its dark gradient repeat the info card's title.
+  assert.match(widescreen, /:is\(\.bpx-player-top-left-follow, \.bpx-player-top-follow, \.bpx-player-top-title, \.bpx-player-top-mask\),[\s\S]{0,400}display: none !important;/)
   assert.match(playbackFunctions(widescreen, 'createRoot'), /playerToolbar\.className = 'bewly-widescreen-player-toolbar'\s*playerSlot\.append\(playerFrame, danmakuDock, playerToolbar\)/)
   assert.match(widescreen, /\.bewly-widescreen-player-toolbar \{\s*position: absolute;\s*top: var\(--bewly-widescreen-card-inset\);\s*left: var\(--bewly-widescreen-card-inset\);[\s\S]{0,200}width: calc\(var\(--bew-control-height\) \* 4 \+ var\(--bew-space-2\) \* 3\);\s*height: var\(--bew-control-height\);\s*pointer-events: none;/)
   assert.match(widescreen, /:is\(\[data-display-mode="fill"\], \[data-zooming="true"\]\) \.bewly-widescreen-player-toolbar \{\s*visibility: hidden;/)
   // Every player popover shares one surface constant, the feedback panel included.
   assert.match(widescreen, /const PLAYER_POPOVER_SURFACE = `background: var\(--bew-elevated-alt-solid\) !important;\s*border: var\(--bew-hairline(?:, 1px)?\) solid var\(--bew-edge-color\) !important;\s*border-radius: var\(--bew-surface-radius\) !important;/)
-  // Six on the player, three in the column: the danmaku view menu, the
-  // history calendar and the collection description.
-  assert.equal((widescreen.match(/\$\{PLAYER_POPOVER_SURFACE\}/g) ?? []).length, 9)
+  // Six on the player, six in the column: the history calendar, the
+  // collection description, the advanced-danmaku purchase prompt, bangumi's
+  // "more" menu, its follow menu and its watch-together panel (the danmaku
+  // views are a segment row; bangumi's season menu is gone, its sections
+  // fold instead). Bangumi's dialogs are windows (PLAYER_DIALOG_SURFACE).
+  assert.equal((widescreen.match(/\$\{PLAYER_POPOVER_SURFACE\}/g) ?? []).length, 12)
+  assert.match(widescreen, /const PLAYER_DIALOG_SURFACE = `background: var\(--bew-elevated-solid\) !important;[\s\S]{0,120}border-radius: var\(--bew-modal-radius\) !important;/)
   assert.equal((widescreen.match(/border-radius: var\(--bew-surface-radius\) !important;\s*corner-shape: var\(--bew-corner-shape\);\s*box-shadow: var\(--bew-popover-surface-shadow\) !important;/g) ?? []).length, 1, 'the popover surface is declared once')
   const feedbackStyles = widescreen.slice(widescreen.indexOf('/* Player feedback, opened by the docked help button.'), widescreen.indexOf('/* 弹幕设置/弹幕样式弹窗文字颜色适配浅色模式'))
   assert.match(feedbackStyles, /\.b-back-panel \{\s*\$\{PLAYER_POPOVER_SURFACE\}/)
@@ -2926,8 +2923,11 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /'i-tabler:maximize'/)
   // Bpx zeroes the control font size and sizes its icon box from an SVG; the
   // mask glyph needs both a box height and its own size or it collapses to 0.
-  assert.match(widescreen, /\.\$\{FILL_TOGGLE_CLASS\} \.bpx-player-ctrl-btn-icon \{[\s\S]{0,160}width: 100%;\s*height: 100%;/)
-  assert.match(widescreen, /\.\$\{FILL_TOGGLE_CLASS\}__icon \{\s*flex: none;\s*width: var\(--bew-icon-size-md, 20px\);\s*height: var\(--bew-icon-size-md, 20px\);/)
+  // The fill and listen controls share one rule (videoPlayer.scss).
+  const playerControls = await readFile(`${root}/src/styles/adaptedStyles/common/videoPlayer.scss`, 'utf8')
+  assert.match(playerControls, /:is\(\.bewly-listen-control, \.bewly-widescreen-fill-toggle\) > \.bpx-player-ctrl-btn-icon \{[\s\S]{0,160}width: 100%;\s*height: 100%;/)
+  assert.match(playerControls, /\.bpx-player-ctrl-btn-icon > \.bewly-player-glyph \{\s*flex: none;\s*width: var\(--bew-icon-size-md\);\s*height: var\(--bew-icon-size-md\);/)
+  assert.match(widescreen, /\$\{FILL_ICON_CLASS\} bewly-player-glyph/)
   assert.match(widescreen, /'i-tabler:minimize'/)
   // The icon classes live only in a `.ts` file, which UnoCSS's watch pipeline
   // skips; without the include comment a running `pnpm dev` drops minimize.
@@ -3147,7 +3147,8 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuViewerInfoStyles, /border: 0 !important/)
   assert.match(danmakuViewerInfoStyles, /box-shadow: none !important/)
   assert.match(widescreen, /--bewly-widescreen-aux-controls-width/)
-  assert.match(widescreen, /var\(--bew-control-height, 36px\) \* 5 \+ var\(--bew-space-2, 8px\) \* 5/)
+  // Page mode, theme, settings and feedback: the docked bar has no home button.
+  assert.match(widescreen, /var\(--bew-control-height, 36px\) \* 4 \+ var\(--bew-space-2, 8px\) \* 4/)
   assert.match(widescreen, /body\.\$\{BODY_CLASS\} #bewly[\s\S]{0,180}z-index: calc\(var\(--bew-z-widescreen\) \+ 1\)/)
   assert.match(widescreen, /\.bpx-player-dm-root[\s\S]{0,220}margin-left: var\(--bewly-widescreen-aux-controls-width/)
   assert.match(sideBar, /useMutationObserver/)
@@ -3292,17 +3293,16 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /\.bui-progress-wrap \{\s*background: var\(--bew-fill-2\) !important/)
   assert.match(widescreen, /\.bui-progress-dot \{[\s\S]{0,180}background: var\(--bew-elevated-solid\) !important;[\s\S]{0,120}border: 1px solid var\(--bew-theme-color\) !important/)
   assert.match(widescreen, /body\.\$\{BODY_CLASS\} \.bpx-player-tooltip-item,[\s\S]{0,240}z-index: var\(--bew-z-hud\) !important/)
-  const playlistToggleStyles = widescreen.slice(
-    widescreen.indexOf('.bewly-widescreen-playlist-toggle {'),
-    widescreen.indexOf('.bewly-widescreen-playlist-toggle[hidden]'),
+  // One fold control for the info card, a collection and each bangumi section.
+  const disclosureStyles = widescreen.slice(
+    widescreen.indexOf(`.\${DISCLOSURE_TOGGLE_CLASS} {`),
+    widescreen.indexOf(`.\${DISCLOSURE_TOGGLE_CLASS}[hidden]`),
   )
-  assert.match(playlistToggleStyles, /min-height: var\(--bew-control-height-sm, 28px\)/)
-  assert.match(playlistToggleStyles, /border-radius: var\(--bew-interactive-radius\)/)
-  assert.match(playlistToggleStyles, /font-size: var\(--bew-font-size-control, 13px\)/)
-  assert.match(playlistToggleStyles, /width: auto !important/)
-  assert.match(playlistToggleStyles, /background: transparent/)
-  assert.match(playlistToggleStyles, /border: var\(--bew-hairline(?:, 1px)?\) solid var\(--bew-edge-color\)/)
-  assert.doesNotMatch(playlistToggleStyles, /position: sticky|top: 0/)
+  assert.match(disclosureStyles, /width: var\(--bew-control-item-height\);[\s\S]{0,60}height: var\(--bew-control-item-height\);/)
+  assert.match(disclosureStyles, /border-radius: var\(--bew-interactive-radius\)/)
+  assert.match(disclosureStyles, /background: transparent/)
+  assert.match(widescreen, /\.\$\{DISCLOSURE_TOGGLE_CLASS\}\[aria-expanded="false"\] > \.\$\{DISCLOSURE_TOGGLE_CLASS\}__icon \{\s*rotate: 0deg;/)
+  assert.doesNotMatch(widescreen, /bewly-widescreen-(?:playlist|info)-toggle/)
   assert.match(widescreen, /actions\.insertBefore\(toggleButton, subscribeButton\)/)
   assert.match(widescreen, /\.is-episode-section-collapsed \.\$\{EPISODE_SECTION_CLASS\}[\s\S]{0,120}max-height: 0 !important/)
   const collapsedEpisodeStyles = widescreen.slice(
@@ -3333,7 +3333,7 @@ async function verifyP2WidescreenControl() {
   // Subscribe matches the neutral collapse toggle; the collection box sits on the page.
   assert.match(widescreen, /\.subscribe-btn:hover \{\s*color: var\(--bew-text-1\) !important;\s*background: var\(--bew-fill-2\) !important;/)
   assert.match(widescreen, /\.bewly-widescreen-panel-playlist > \* \{\s*box-sizing: border-box !important;/)
-  assert.match(widescreen, /\.bewly-widescreen-panel-playlist \.video-pod \{\s*padding-inline: 0 !important;\s*background: transparent !important;/)
+  assert.match(widescreen, /\.bewly-widescreen-panel-playlist \.video-pod \{[\s\S]{0,420}border-block: var\(--bew-hairline, 1px\) solid var\(--bew-separator-color\) !important;\s*background: transparent !important;/)
   assert.match(widescreen, /\.video-pod__header \.header-bottom > \.right \{[\s\S]{0,260}min-width: max-content !important[\s\S]{0,120}flex: 0 0 auto !important/)
   const subscribeButtonStyles = widescreen.slice(
     widescreen.indexOf('.bewly-widescreen-panel-playlist .subscribe-btn {'),
@@ -3343,7 +3343,7 @@ async function verifyP2WidescreenControl() {
   assert.match(subscribeButtonStyles, /flex: 0 0 auto !important/)
   assert.match(subscribeButtonStyles, /white-space: nowrap !important/)
   assert.doesNotMatch(widescreen, /syncPlaylistToggleInsets|bewly-widescreen-playlist-toggle-inset/)
-  assert.match(widescreen, /playlistToggleButton\.setAttribute\('aria-expanded'/)
+  assert.match(widescreen, /setDisclosureToggle\(currentState\.playlistToggleButton, EPISODE_LABELS, hasEpisodeSection && !currentState\.playlistCollapsed\)/)
   assert.match(widescreen, /playlistToggleButton\.addEventListener\('click'/)
   assert.match(widescreen, /playlistToggleButton\.removeEventListener\('click'/)
   assert.match(widescreen, /syncEpisodeSectionMarker\(currentState\)/)
@@ -4179,7 +4179,7 @@ async function verifyAuditRemediationContracts() {
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bpx-docker/)
   assert.match(widescreen, /\.bpx-docker[\s\S]{0,420}height: 100% !important[\s\S]{0,180}overflow: hidden !important/)
   assert.match(widescreen, /\.bui-collapse-wrap[\s\S]{0,180}display: flex !important[\s\S]{0,120}flex-direction: column/)
-  assert.match(widescreen, /\.bui-collapse-header[\s\S]{0,120}flex: 0 0 auto/)
+  assert.match(widescreen, /\.bui-collapse-body \{[\s\S]{0,400}padding-top: var\(--bewly-danmaku-head\) !important/)
   assert.match(widescreen, /hydratedTabs: Set<BewlyWidescreenTab>/)
   assert.match(widescreen, /function scheduleInitialPanelScrollReset/)
   assert.match(widescreen, /session\.current\.hydrateSidebar\(\)/)
@@ -4375,14 +4375,19 @@ async function verifyTrackSegmentControls() {
   assert.match(segmentControl, /\.bew-segment-control--track \{\s*--bew-control-padding: var\(--bew-space-0-5\);/)
   assert.match(segmentControl, /:is\(\.bew-segment-control--track, \.bew-segment-control:has\(\.bew-liquid-indicator\)\)\s+\.bew-segment-control__item:hover:not\(\[data-active="true"\]\):not\(:disabled\) \{\s*background: transparent;/)
   assert.doesNotMatch(segmentControl, /--flush/)
-  assert.match(shell, /'bewly-widescreen-tabs bew-segment-control bew-segment-control--surface bew-segment-control--track'/)
-  assert.match(shell, /publishRailTabs\(tablist, nextTab\)/)
-  assert.match(widescreen, /clearRailTabs\(currentState\.tabButtons\.comment\.parentElement!\)\s*currentState\.root\.remove\(\)/)
-  assert.match(railTabsView, /<Teleport v-if="playbackRailTabs" :to="playbackRailTabs\.tablist">\s*<LiquidSegmentIndicator :key="playbackRailTabs\.generation" :active-key="playbackRailTabs\.activeTab" \/>/)
+  assert.match(shell, /'bewly-widescreen-tabs bew-segment-control bew-segment-control--surface bew-segment-control--track bew-segment-control--rect'/)
+  assert.match(shell, /railTabs\.publish\(tablist, nextTab\)/)
+  assert.match(widescreen, /railTabs\.clear\(currentState\.tabButtons\.comment\.parentElement!\)\s*clearDanmakuViews\(currentState\)\s*currentState\.root\.remove\(\)/)
+  assert.match(railTabsView, /v-for="\(segment, index\) in PLAYBACK_SEGMENTS"[\s\S]*<Teleport v-if="segment\.state\.value" :to="segment\.state\.value\.tablist">\s*<LiquidSegmentIndicator :key="segment\.state\.value\.generation" :active-key="segment\.state\.value\.activeKey" :motion-scope="segment\.motion" \/>/)
+  // The danmaku panel's views are the same track, driving Bpx's own menu.
+  const danmakuViewsSource = await readFile(`${root}/src/utils/bewlyWidescreen/danmakuViews.ts`, 'utf8')
+  assert.match(danmakuViewsSource, /'bewly-widescreen-danmaku-views bew-segment-control bew-segment-control--surface bew-segment-control--track'/)
+  assert.match(danmakuViewsSource, /afterMotion\(danmakuViews\.motion\)[\s\S]{0,240}item\.dataset\.value === view\)\?\.click\(\)/)
+  assert.match(danmakuViewsSource, /classList\.contains\('bui-hide'\)/)
   assert.match(app, /<PlaybackRailTabsIndicator \/>/)
   assert.match(layout, /\$\{SEGMENT_LIQUID_INDICATOR_CSS\}/)
   assert.doesNotMatch(layout, /--bew-segment-item-hover-current-bg: var\(--bew-theme-surface-hover\)/)
-  assert.match(layout, /\.bewly-widescreen-tabs:not\(:has\(> \.bew-liquid-indicator\)\) > \.bewly-widescreen-tab\[data-active="true"\] \{\s*background: var\(--bew-liquid-indicator-bg\);/)
+  assert.match(layout, /\.bewly-widescreen-tabs:not\(:has\(> \.bew-liquid-indicator\)\) > \.bewly-widescreen-tab\[data-active="true"\],\s*#\$\{ROOT_ID\} \.bewly-widescreen-danmaku-views:not\(:has\(> \.bew-liquid-indicator\)\) > \[data-active="true"\] \{\s*background: var\(--bew-liquid-indicator-bg\);/)
 
   // Repository audit: every surfaced choice row is a track with the shared
   // indicator. Pinned channels are shortcut links (no selection) and the
@@ -4410,7 +4415,8 @@ async function verifyTrackSegmentControls() {
   assert.ok(tracks.includes('src/utils/bewlyWidescreen/shell.ts'))
   assert.ok(tracks.length >= 13, `expected every known track row, found ${tracks.length}`)
 
-  const { clearRailTabs, playbackRailTabs, publishRailTabs } = await import('../src/utils/bewlyWidescreen/railTabs')
+  const { railTabs } = await import('../src/utils/bewlyWidescreen/railTabs')
+  const { clear: clearRailTabs, state: playbackRailTabs, publish: publishRailTabs } = railTabs
   const first = { id: 'first' } as unknown as HTMLElement
   const second = { id: 'second' } as unknown as HTMLElement
   publishRailTabs(first, 'comment')
@@ -4418,7 +4424,7 @@ async function verifyTrackSegmentControls() {
   publishRailTabs(first, 'comment')
   assert.equal(playbackRailTabs.value, initial, 'an unchanged tab publishes nothing')
   publishRailTabs(first, 'danmaku')
-  assert.equal(playbackRailTabs.value!.activeTab, 'danmaku')
+  assert.equal(playbackRailTabs.value!.activeKey, 'danmaku')
   assert.equal(playbackRailTabs.value!.generation, initial.generation, 'a tab change keeps the mounted indicator')
   publishRailTabs(second, 'comment')
   assert.notEqual(playbackRailTabs.value!.generation, initial.generation, 'a new tab list remounts the indicator')

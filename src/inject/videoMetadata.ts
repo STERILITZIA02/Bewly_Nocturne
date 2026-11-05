@@ -1,8 +1,9 @@
 import { createMovedPgcReactBridge, getMountedPgcEventRoot } from '~/inject/movedPgcReact'
 import { selectors } from '~/utils/bewlyWidescreen/constants'
 import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
-import type { NativePlaybackUnit } from '~/utils/videoMetadataBridge'
+import type { ListenReturnRequest, NativePlaybackUnit } from '~/utils/videoMetadataBridge'
 import {
+  getNativePlaybackUnitKey,
   isPgcPlaybackPage,
   matchesPlaybackUnit,
   parseVideoMetadataEvent,
@@ -45,6 +46,14 @@ interface NativeVideoComponent {
 }
 
 interface NativePlayer {
+  pause?: () => void
+  __core?: () => { getCorePlayer?: () => {
+    getVideoElement?: () => HTMLElement
+    getActiveStream?: () => { getProcessors?: () => Array<{
+      getScheduleController?: () => { start?: () => void, stop?: () => void }
+      getFragmentModel?: () => { abortRequests?: () => void }
+    }> }
+  } }
   mediaElement?: () => HTMLElement
   getManifest?: () => { aid?: number, bvid?: string, cid?: number, p?: number, episodeId?: number, seasonId?: number }
   getQuality?: () => { nowQ?: number, realQ?: number }
@@ -220,7 +229,7 @@ export function setupVideoMetadataBridge(channelId: string) {
       let ready: boolean | undefined
       let episodeId: number | undefined
       let qualityState
-      let unit
+      let unit: NativePlaybackUnit | undefined
       try {
         if (typeof player?.mediaElement === 'function') {
           ready = player.mediaElement() === node
@@ -240,7 +249,7 @@ export function setupVideoMetadataBridge(channelId: string) {
         }
       }
       catch { /* The native player can be disposing between navigation and this synchronous probe. */ }
-      if (request.playback === true && ready === true) {
+      if ((request.playback === true || typeof request.listen === 'string' || request.listenReturn || request.listenResume) && ready === true) {
         try {
           const manifest = player?.getManifest?.()
           const identity = parseVideoPageIdentity(location.href)
@@ -253,10 +262,113 @@ export function setupVideoMetadataBridge(channelId: string) {
             : episode ? Number(episode) === manifest?.episodeId : !!season && Number(season) === manifest?.seasonId
           if (matches && Number.isSafeInteger(manifest?.aid) && manifest!.aid! > 0
             && Number.isSafeInteger(manifest?.cid) && manifest!.cid! > 0) {
-            unit = { aid: manifest!.aid, bvid: manifest!.bvid, cid: manifest!.cid, page: manifest!.p ?? 1, episodeId: manifest!.episodeId, seasonId: manifest!.seasonId }
+            // The native manifest also has episodeId/seasonId on UGC, where
+            // they are sentinel values rather than playback identifiers.
+            unit = {
+              aid: manifest!.aid!,
+              // Episodes may report a literal null BVID; EP and CID identify them.
+              bvid: manifest!.bvid || undefined,
+              cid: manifest!.cid!,
+              page: manifest!.p ?? 1,
+              episodeId: !identity && Number(manifest!.episodeId) > 0 ? manifest!.episodeId : undefined,
+              seasonId: !identity && Number(manifest!.seasonId) > 0 ? manifest!.seasonId : undefined,
+            }
           }
         }
         catch { /* A navigation may retire the manifest before the media node. */ }
+      }
+      if (request.listenReturn) {
+        const intent = request.listenReturn as ListenReturnRequest
+        let applied = false
+        try {
+          if (unit && intent.unit === getNativePlaybackUnitKey(unit) && node instanceof HTMLMediaElement
+            && node.readyState >= HTMLMediaElement.HAVE_METADATA && Number.isFinite(intent.time) && intent.time >= 0
+            && Number.isFinite(intent.rate) && intent.rate > 0 && Number.isFinite(intent.volume) && intent.volume >= 0 && intent.volume <= 1
+            && typeof intent.playing === 'boolean' && typeof intent.muted === 'boolean') {
+            if (intent.bind) {
+              node.volume = intent.volume
+              node.muted = intent.muted
+              node.playbackRate = intent.rate
+              if (intent.playing && node.paused)
+                void node.play().catch(() => {})
+            }
+            // BTR wraps this element's play/pause and clock in MAIN. ISOLATED
+            // can otherwise pause the decoder without changing the owner's intent.
+            if (!intent.playing && (intent.bind || !node.paused))
+              node.pause()
+            if (!node.seeking && node.duration >= intent.time && Math.abs(node.currentTime - intent.time) > 1
+              && (intent.bind || !intent.playing || node.currentTime < intent.time - 1)) {
+              node.currentTime = intent.time
+            }
+            applied = true
+          }
+        }
+        catch { /* An intervening source replacement will emit new readiness events. */ }
+        node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
+          detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, applied }),
+        }))
+        return
+      }
+      // Back from listening: the suspended stream kept its source buffers, so
+      // its schedulers restart and it seeks to where the audio stopped. A
+      // stream BTR released, or one that never loaded, answers false.
+      if (request.listenResume) {
+        const intent = request.listenResume as ListenReturnRequest
+        let resumed = false
+        try {
+          const dash = player?.__core?.()?.getCorePlayer?.()
+          const processors = dash?.getActiveStream?.()?.getProcessors?.() ?? []
+          if (unit && intent.unit === getNativePlaybackUnitKey(unit) && node instanceof HTMLMediaElement
+            && dash?.getVideoElement?.() === node && processors.length && node.readyState >= HTMLMediaElement.HAVE_METADATA
+            && Number.isFinite(intent.time) && intent.time >= 0 && Number.isFinite(intent.rate) && intent.rate > 0
+            && Number.isFinite(intent.volume) && intent.volume >= 0 && intent.volume <= 1
+            && typeof intent.playing === 'boolean' && typeof intent.muted === 'boolean') {
+            node.volume = intent.volume
+            node.muted = intent.muted
+            node.playbackRate = intent.rate
+            for (const processor of processors)
+              processor.getScheduleController?.()?.start?.()
+            node.currentTime = Math.min(intent.time, node.duration || intent.time)
+            if (intent.playing)
+              void node.play().catch(() => {})
+            else
+              node.pause()
+            resumed = true
+          }
+        }
+        catch { /* A native switch can retire the media between verification and resume. */ }
+        node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
+          detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, resumed }),
+        }))
+        return
+      }
+      if (typeof request.listen === 'string') {
+        let suspended: boolean | 'interrupted' = false
+        try {
+          const dash = player?.__core?.()?.getCorePlayer?.()
+          const processors = dash?.getActiveStream?.()?.getProcessors?.() ?? []
+          const btr = (window as Window & { __biliThreadRipperDebug?: { getPlayer?: () => { video?: HTMLElement, destroy?: (options: { resumeNative: boolean }) => void } | null } }).__biliThreadRipperDebug?.getPlayer?.()
+          const ownsBtr = btr?.video === node
+          if (unit && request.listen === getNativePlaybackUnitKey(unit) && dash?.getVideoElement?.() === node && (processors.length || ownsBtr)
+            && (!node.closest('[data-btr-mse-active="true"]') || ownsBtr) && (!ownsBtr || btr?.destroy)) {
+            suspended = 'interrupted'
+            player?.pause?.()
+            // Stop scheduling before cancelling in-flight fragments. Keeping
+            // the native SourceBuffers attached lets pending append events finish.
+            for (const processor of processors) {
+              processor.getScheduleController?.()?.stop?.()
+              processor.getFragmentModel?.()?.abortRequests?.()
+            }
+            if (ownsBtr)
+              btr?.destroy?.({ resumeNative: false })
+            suspended = true
+          }
+        }
+        catch { /* A native switch can retire the media between verification and release. */ }
+        node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
+          detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, suspended }),
+        }))
+        return
       }
       const btr = request.playback === true
         ? {

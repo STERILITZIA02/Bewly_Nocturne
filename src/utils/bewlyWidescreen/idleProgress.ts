@@ -12,7 +12,7 @@ export function setupIdleProgress(currentState: BewlyWidescreenState) {
   let value: HTMLDivElement | undefined
   const events = ['timeupdate', 'durationchange', 'loadedmetadata', 'playing', 'pause', 'ended', 'emptied']
   function update(event?: Event) {
-    if (!bar || !value || session.current !== currentState)
+    if (!bar || !value || session.current !== currentState || (event && !currentState.playerEl.contains(event.target as Node)))
       return
     const video = getVideoElement()
     if (event && event.target !== video)

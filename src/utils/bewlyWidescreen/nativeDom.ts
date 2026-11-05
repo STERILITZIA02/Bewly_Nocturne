@@ -451,6 +451,9 @@ export function isReadyForLayout() {
   const player = getPlayerRoot()
   if (!player)
     return false
+  // A restored audio session deliberately has no video frame to measure.
+  if (player.hasAttribute('data-bew-listening'))
+    return true
 
   const video = player.querySelector<HTMLVideoElement>('video') ?? getVideoElement()
   if (video instanceof HTMLVideoElement) {

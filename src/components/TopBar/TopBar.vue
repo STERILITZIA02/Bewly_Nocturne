@@ -328,7 +328,12 @@ onKeyStroke('Escape', (event: KeyboardEvent) => {
         v-if="topBarStore.showTopBar"
         class="top-bar"
         w="full" transition="opacity duration-300, transform duration-300, background-color duration-300"
-        :class="{ 'hide': hideTopBar, 'force-white-icon': forceWhiteIcon, 'top-bar--over-player': playbackMode === 'card' }"
+        :class="{
+          'hide': hideTopBar,
+          'force-white-icon': forceWhiteIcon,
+          'top-bar--over-player': playbackMode === 'card',
+          'top-bar--player-start': playbackMode === 'card' && settings.bewlyWidescreenSidebarPosition === 'right',
+        }"
       >
         <TopBarHeader
           :active="hostAllowsUiReads && !hideTopBar && !usesNativeTopBar"
@@ -357,8 +362,15 @@ onKeyStroke('Escape', (event: KeyboardEvent) => {
 .top-bar--over-player {
   pointer-events: none;
 
-  :deep([data-top-bar-creation]) {
+  // Over the video only the page buttons stay: no creation group, no avatar.
+  :deep(:is([data-top-bar-creation], .avatar.right-side-item)) {
     display: none !important;
+  }
+
+  // The page buttons sit in the video pane's top-right corner, inset like the
+  // player's own corner controls. The search column shrinks to fit before them.
+  :deep(.top-bar-header) {
+    padding-inline-end: var(--bewly-widescreen-card-inset, var(--bew-space-3));
   }
 
   :deep(#search-wrap),
@@ -366,6 +378,16 @@ onKeyStroke('Escape', (event: KeyboardEvent) => {
   :deep(.top-bar-tools),
   :deep(.right-side-item) {
     pointer-events: auto;
+  }
+}
+
+// The video pane is on the left: the header ends at its right edge. Single
+// column (≤ 900px) the video spans the window, so the header does too.
+@media (min-width: 901px) {
+  .top-bar--player-start :deep(.top-bar-header) {
+    padding-inline-end: calc(
+      100% - var(--bewly-widescreen-card-width, 100vw * 2 / 3) + var(--bewly-widescreen-card-inset, var(--bew-space-3))
+    );
   }
 }
 </style>

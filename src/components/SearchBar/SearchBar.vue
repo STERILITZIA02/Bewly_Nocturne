@@ -145,9 +145,6 @@ const topBarAppearanceStyle = computed<CSSProperties | undefined>(() => {
   const foreground = props.forceLightText && !panelMerged.value ? 'white' : 'var(--bew-text-1)'
   return {
     '--b-search-bar-height': 'var(--bew-top-bar-primary-control-height, 46px)',
-    '--b-search-bar-normal-color': settings.value.disableFrostedGlass
-      ? 'var(--bew-elevated)'
-      : 'color-mix(in oklab, var(--bew-elevated-solid), transparent 60%)',
     '--b-search-bar-normal-icon-color': foreground,
     '--b-search-bar-normal-text-color': foreground,
     '--b-search-bar-hover-text-color': foreground,

@@ -3,6 +3,373 @@ import assert from 'node:assert/strict'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
+  check('listen playback: requests only separate playable audio, including CDN fallback and episode manifests', async () => {
+    const policy = await import('../src/utils/listenPlayback')
+    const a = 'https://upos-sz-mirrorcos.bilivideo.com/audio.m4s'
+    const b = 'https://upos-hz-mirrorakam.akamaized.net/audio.m4s'
+    const video = 'https://upos-sz-mirrorcos.bilivideo.com/video.m4s'
+    const dash = { video: [{ baseUrl: video }], audio: [
+      { bandwidth: 96, base_url: b },
+      { bandwidth: 128, codecs: 'mp4a', baseUrl: a, backupUrl: [b, 'https://bilivideo.com.example.org/other'] },
+      { mimeType: 'video/mp4', baseUrl: video },
+      { codecs: 'unsupported', baseUrl: video },
+    ] }
+    const canPlay = type => type.includes('unsupported') ? '' : 'probably'
+    const calls = []
+    const { readListenSources } = await loadSourceModule('../src/utils/listenStreams.ts', {
+      './api': { default: {
+        video: { async getVideoPreview(params) {
+          calls.push(params)
+          return { code: 0, data: { dash } }
+        } },
+        anime: { async getEpisodeAudio(params) {
+          calls.push(params)
+          return { code: 0, result: { dash } }
+        } },
+      } },
+      './listenPlayback': policy,
+    })
+    const unit = { aid: 170001, bvid: 'BV17x411w7KC', page: 2, cid: 279786 }
+    const signal = new AbortController().signal
+    assert.deepEqual(await readListenSources(unit, canPlay, signal), [a, b])
+    assert.equal(calls[0].fnval, 16)
+    assert.equal(calls[0].cid, unit.cid)
+    assert.deepEqual(await readListenSources({ ...unit, episodeId: 42 }, canPlay, signal), [a, b])
+    assert.equal(calls[1].ep_id, 42)
+    for (const data of [{ durl: [{ url: video }] }, { dash: { video: dash.video } }, { is_drm: true, dash }])
+      assert.deepEqual(policy.getListenSources({ code: 0, data }, canPlay), [])
+    assert.equal(policy.returnVideoUrl({ unit, time: 54.8 }), 'https://www.bilibili.com/video/BV17x411w7KC/?p=2&t=54')
+    assert.equal(policy.returnVideoUrl({ unit: { ...unit, episodeId: 42 }, time: 54 }), 'https://www.bilibili.com/bangumi/play/ep42?t=54')
+    assert.equal(policy.returnVideoUrl({ href: 'https://www.bilibili.com/zh-Hans/video/BV17x411w7KC/?p=2&t=3', unit, time: 54.8 }), 'https://www.bilibili.com/zh-Hans/video/BV17x411w7KC/?p=2&t=54')
+    assert.equal(policy.matchesListenUnit('https://www.bilibili.com/bangumi/play/ep43', { ...unit, episodeId: 42 }), false)
+    assert.deepEqual(policy.getListenSources({ code: 0, data: { dash: { audio: [{ base_url: '//upos-hz-mirrorakam.akamaized.net/audio.m4s' }] } } }, canPlay), [b])
+  })
+
+  check('listen playback: preparation, cancellation, paused seeks, a failed CDN and exhausted sources', async () => {
+    const { prepareListenAudio } = await loadSourceModule('../src/contentScripts/listenAudio.ts', {})
+    const urls = ['https://primary.bilivideo.com/audio', 'https://backup.bilivideo.com/audio']
+    const state = { time: 12, playing: false, volume: 0.5, muted: false, rate: 1.25 }
+    const controller = new AbortController()
+    let failed = 0
+    const player = prepareListenAudio(state, urls, controller.signal, () => failed++)
+    const { audio } = player
+    audio.play = () => assert.fail('a paused listener must not autoplay')
+    audio.load = () => {}
+    audio.dispatchEvent(new Event('loadedmetadata'))
+    await player.ready
+    assert.equal(audio.currentTime, 0, 'preparing an audio track does not steal playback')
+    player.commit()
+    assert.equal(audio.currentTime, 12)
+    audio.currentTime = 23
+    audio.dispatchEvent(new Event('timeupdate'))
+    audio.dispatchEvent(new Event('error'))
+    assert.equal(audio.getAttribute('src'), urls[1])
+    audio.dispatchEvent(new Event('loadedmetadata'))
+    assert.equal(audio.currentTime, 23)
+    audio.dispatchEvent(new Event('error'))
+    assert.equal(failed, 1)
+    controller.abort()
+    assert.equal(audio.getAttribute('src'), null)
+    const cancelled = new AbortController()
+    const pending = prepareListenAudio(state, urls, cancelled.signal, () => assert.fail())
+    pending.audio.load = () => {}
+    cancelled.abort()
+    await assert.rejects(pending.ready, error => error.name === 'AbortError')
+    pending.audio.dispatchEvent(new Event('error'))
+    assert.equal(pending.audio.getAttribute('src'), null)
+  })
+
+  check('listen playback: per-tab request rules allow only audio and stale releases cannot unblock a new owner', async () => {
+    const policy = await import('../src/utils/listenPlayback')
+    const messages = new Map()
+    const rules = new Map()
+    let closed
+    const { setupListenPlayback } = await loadSourceModule('../src/background/listenPlayback.ts', {
+      'webextension-polyfill': { default: {
+        declarativeNetRequest: {
+          getSessionRules: async () => [],
+          updateSessionRules: async ({ addRules = [], removeRuleIds = [] }) => {
+            removeRuleIds.forEach(id => rules.delete(id))
+            addRules.forEach(rule => rules.set(rule.id, rule))
+          },
+        },
+        tabs: { onUpdated: { addListener() {} }, onRemoved: { addListener: fn => closed = fn } },
+        storage: { session: { async set() {}, async remove() {} } },
+      } },
+      '~/constants/audioCdn': await import('../src/constants/audioCdn'),
+      '~/utils/listenPlayback': policy,
+      '~/utils/messaging': { onMessage: (type, handler) => messages.set(type, handler) },
+    }, { crypto: globalThis.crypto })
+    setupListenPlayback()
+    const source = 'https://upos-sz-mirrorcos.bilivideo.com/a.m4s?x=1'
+    const data = { unit: { aid: 1, cid: 2, page: 1 }, sources: [source] }
+    const sender = id => ({ tab: { id }, frameId: 0, url: 'https://www.bilibili.com/video/av1/' })
+    const take = messages.get(policy.LISTEN_GATE)
+    const release = messages.get(policy.LISTEN_RELEASE)
+    assert.equal(await take({ ...data, sources: ['https://invalid.example/a.m4s'] }, sender(1)), undefined)
+    const [a, b] = await Promise.all([take(data, sender(1)), take(data, sender(2))])
+    assert.notEqual(a, b)
+    assert.equal(rules.get(a).action.type, 'block')
+    assert.deepEqual([...rules.get(a).condition.tabIds], [1])
+    assert.equal(rules.get(a + 2).condition.urlFilter, `|${source}|`)
+    assert.deepEqual([...rules.get(a + 2).condition.resourceTypes], ['media'])
+    const next = await take(data, sender(1))
+    await release(a, sender(1))
+    assert.ok(rules.has(next) && rules.has(b))
+    const paused = { href: sender(1).url, unit: data.unit, gate: next, time: 65, playing: false, muted: false, volume: 0.4, rate: 1.5 }
+    await messages.get(policy.LISTEN_SAVE)(paused, sender(1))
+    await messages.get(policy.LISTEN_SAVE)({ ...paused, gate: a, time: 0 }, sender(1))
+    const restored = await messages.get(policy.LISTEN_RECOVER)(undefined, sender(1))
+    assert.equal(restored.time, 65)
+    assert.equal(restored.playing, false)
+    assert.equal(await messages.get(policy.LISTEN_RECOVER)(undefined, sender(2)), undefined)
+    closed(2)
+    await release(next, sender(1))
+    assert.equal(rules.size, 0)
+  })
+
+  check('listen playback: a second click, a late grant and a user navigation cannot steal the current player', async () => {
+    const policy = await import('../src/utils/listenPlayback')
+    const unit = { aid: 1, cid: 10, page: 1 }
+    const location = {
+      href: 'https://www.bilibili.com/video/av1/',
+      replace() { assert.fail('user navigation must win') },
+    }
+    const root = document.body.appendChild(document.createElement('div'))
+    root.innerHTML = '<video></video><div class="bpx-player-control-bottom-right"></div>'
+    const native = root.querySelector('video')
+    const rail = document.body.appendChild(document.createElement('aside'))
+    const panels = rail.appendChild(document.createElement('div'))
+    const overview = panels.appendChild(document.createElement('section'))
+    const shell = document.body.appendChild(document.createElement('div'))
+    const routes = new Set()
+    const checkpoint = new Map()
+    const released = []
+    let savedTime
+    const deferred = () => {
+      let resolve
+      const promise = new Promise(done => resolve = done)
+      return { promise, resolve }
+    }
+    let read = deferred()
+    let grant = deferred()
+    let suspensions = 0
+    let commits = 0
+    let audio, failed
+    const { listenStage } = { listenStage: Vue.shallowRef(null) }
+    let stageHost, bound
+    const { setupListenControl } = await loadSourceModule('../src/contentScripts/listenControl.ts', {
+      'vue': Vue,
+      'vue-toastification': { useToast: () => ({ info() {}, error() {} }) },
+      '~/composables/useRouteState': { onRouteChange(fn) {
+        routes.add(fn)
+        return () => routes.delete(fn)
+      } },
+      '~/logic': { settings: { value: { language: 'en' } } },
+      '~/utils/bewlyWidescreen/appHost': { createPlaybackAppHost() {
+        stageHost = document.createElement('div')
+        const mount = stageHost.appendChild(document.createElement('div'))
+        return { host: stageHost, mount, dispose: () => stageHost.remove() }
+      } },
+      '~/utils/bewlyWidescreen/displayMode': { setWidescreenDisplayMode() {} },
+      '~/utils/bewlyWidescreen/nativeControls': { syncNativePlayerControlVisibility() {} },
+      '~/utils/bewlyWidescreen/session': { session: { current: { root: shell, sidebarEl: rail, panels: { overview } } } },
+      '~/utils/i18n': { i18n: { global: { t: key => key } } },
+      '~/utils/listenPlayback': policy,
+      '~/utils/listenStage': { listenStage },
+      '~/utils/listenStreams': { readListenSources: () => read.promise },
+      '~/utils/loadingRing': { createLoadingRingElement: () => document.createElementNS('http://www.w3.org/2000/svg', 'svg') },
+      '~/utils/main': { getUserID: () => 1 },
+      '~/utils/messaging': { sendMessage: async (type, data) => {
+        if (type === policy.LISTEN_GATE)
+          return grant.promise
+        if (type === policy.LISTEN_RELEASE)
+          released.push(data)
+        if (type === policy.LISTEN_SAVE)
+          savedTime = data.time
+      } },
+      '~/utils/playerMedia': { getPlayerRoot: () => root, getVideoElement: () => native, isPlayerAdvertisement: () => false },
+      '~/utils/videoMetadataBridge': {
+        ...await import('../src/utils/videoMetadataBridge'),
+        readNativeMediaSnapshot: () => ({ unit }),
+        suspendNativePlayback: () => {
+          suspensions += 1
+          return true
+        },
+      },
+      './listenAudio': { prepareListenAudio: (_state, _sources, _signal, onFailed) => {
+        audio = document.createElement('audio')
+        failed = onFailed
+        return { audio, ready: Promise.resolve(), commit: () => commits++ }
+      } },
+      './listenNativeBar': { bindListenNativeBar: (barRoot, barAudio, signal) => bound = { root: barRoot, audio: barAudio, signal } },
+      './listenReturn': { restoreListenReturn() {}, saveListenReturn() {} },
+      './playerControlFit': { registerPlayerControlFit: () => ({ dispose() {}, refresh() {} }) },
+      './playerControlTooltip': { createPlayerControlTooltip: () => document.createElement('span'), updatePlayerControlTooltip() {} },
+      './playerDomLifecycle': { observePlayerDom(fn) {
+        fn()
+        return () => {}
+      } },
+    }, {
+      location,
+      history: { replaceState(_state, _title, href) { location.href = href } },
+      sessionStorage: { getItem: key => checkpoint.get(key), setItem: (key, value) => checkpoint.set(key, value), removeItem: key => checkpoint.delete(key) },
+    })
+    const stop = setupListenControl()
+    try {
+      const button = root.querySelector('button')
+      button.click()
+      button.click()
+      read.resolve(['audio'])
+      await flush()
+      assert.equal(suspensions, 0)
+      button.click()
+      await flush()
+      location.href = 'https://www.bilibili.com/video/av2/'
+      routes.forEach(fn => fn())
+      grant.resolve(10001)
+      await flush()
+      assert.deepEqual(released, [10001])
+      assert.equal(suspensions, 0)
+      location.href = 'https://www.bilibili.com/video/av1/'
+      grant = deferred()
+      button.click()
+      await flush()
+      native.currentTime = 18
+      grant.resolve(10002)
+      await flush()
+      assert.equal(suspensions, 1)
+      assert.equal(commits, 1)
+      // The stage lies over the picture; Bpx's own bar drives the audio.
+      assert.ok(root.hasAttribute(policy.LISTEN_ATTRIBUTE) && listenStage.value?.audio === audio && root.contains(stageHost))
+      assert.ok(bound.root === root && bound.audio === audio && !bound.signal.aborted && !native.inert)
+      assert.equal(savedTime, 18)
+      failed()
+      assert.equal(listenStage.value.failed, true)
+      read = deferred()
+      listenStage.value.retry()
+      location.href = 'https://www.bilibili.com/video/av2/'
+      routes.forEach(fn => fn())
+      read.resolve(['late'])
+      await flush()
+      assert.equal(root.hasAttribute(policy.LISTEN_ATTRIBUTE), false)
+      assert.equal(listenStage.value, null)
+      assert.ok(bound.signal.aborted && !root.contains(stageHost))
+      assert.equal(commits, 1)
+      assert.equal(location.href, 'https://www.bilibili.com/video/av2/')
+    }
+    finally {
+      stop()
+      root.remove()
+      rail.remove()
+      shell.remove()
+    }
+  })
+
+  check('listen playback: Bpx\'s bar plays the audio while its video stays suspended', async () => {
+    const root = document.body.appendChild(document.createElement('div'))
+    root.innerHTML = `<video></video>
+      <div class="bpx-player-ctrl-btn bpx-player-ctrl-play"><div class="bpx-player-ctrl-btn-icon"></div></div>
+      <span class="bpx-player-ctrl-time-current">00:00</span><span class="bpx-player-ctrl-time-duration">00:00</span>`
+    const native = root.querySelector('video')
+    const play = root.querySelector('.bpx-player-ctrl-play')
+    let paused = true
+    let nativeClicks = 0
+    play.addEventListener('click', () => nativeClicks++)
+    const audio = document.createElement('audio')
+    Object.defineProperties(audio, {
+      paused: { get: () => paused },
+      duration: { get: () => 120 },
+      play: { value: async () => { paused = false } },
+      pause: { value: () => { paused = true } },
+    })
+    audio.currentTime = 0
+    const { bindListenNativeBar } = await loadSourceModule('../src/contentScripts/listenNativeBar.ts', {
+      '~/utils/dataFormatter': { calcCurrentTime: seconds => `${seconds}` },
+      '~/utils/playerMedia': { getVideoElement: () => native },
+    }, { ResizeObserver: class { observe() {} disconnect() {} } })
+    const controller = new AbortController()
+    try {
+      audio.playbackRate = 1.5
+      bindListenNativeBar(root, audio, controller.signal)
+      // Bpx's controls start from the audio's speed, and its later changes reach the audio.
+      assert.equal(native.playbackRate, 1.5)
+      native.playbackRate = 2
+      native.dispatchEvent(new Event('ratechange'))
+      assert.equal(audio.playbackRate, 2)
+      assert.ok(play.querySelector('.bewly-player-glyph'))
+      play.click()
+      await Promise.resolve()
+      assert.deepEqual([paused, nativeClicks], [false, 0], 'the play button toggles the audio, not the suspended video')
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+      assert.equal(paused, true, 'Space acts on the audio')
+      controller.abort()
+      assert.equal(play.querySelector('.bewly-player-glyph'), null)
+      play.click()
+      assert.equal(nativeClicks, 1, 'the bar is Bpx\'s again once the session ends')
+    }
+    finally {
+      controller.abort()
+      root.remove()
+    }
+  })
+
+  check('listen playback: a paused return restores the media once, and a user gesture takes precedence', async () => {
+    const policy = await import('../src/utils/listenPlayback')
+    const bridge = await import('../src/utils/videoMetadataBridge')
+    const href = 'https://www.bilibili.com/video/av1/?t=25'
+    const unit = { aid: 1, cid: 10, page: 1 }
+    const saved = { href, gate: 10002, unit, time: 25.5, playing: false, muted: true, volume: 0.4, rate: 1.5 }
+    const cache = new Map()
+    const native = document.createElement('video')
+    document.body.append(native)
+    let loaded = false
+    let pauses = 0
+    Object.defineProperties(native, { readyState: { get: () => loaded ? 4 : 0 }, paused: { get: () => false } })
+    native.pause = () => {
+      pauses += 1
+    }
+    const { saveListenReturn, restoreListenReturn } = await loadSourceModule('../src/contentScripts/listenReturn.ts', {
+      '~/composables/useRouteState': { onRouteChange: () => () => {} },
+      '~/utils/listenPlayback': policy,
+      '~/utils/playerMedia': { getVideoElement: () => native },
+      '~/utils/videoMetadataBridge': { ...bridge, applyNativeListenReturn(video, intent) {
+        assert.equal(intent.unit, bridge.getNativePlaybackUnitKey(unit))
+        video.pause()
+        video.currentTime = intent.time
+        video.playbackRate = intent.rate
+        video.muted = intent.muted
+        return true
+      } },
+    }, {
+      location: { href },
+      sessionStorage: { getItem: k => cache.get(k), setItem: (k, v) => cache.set(k, v), removeItem: k => cache.delete(k) },
+    })
+    const scope = new AbortController()
+    try {
+      saveListenReturn(saved)
+      restoreListenReturn(scope.signal)
+      window.dispatchEvent(new Event('pointerdown'))
+      loaded = true
+      native.dispatchEvent(new Event('loadedmetadata'))
+      assert.equal(pauses, 0)
+      saveListenReturn(saved)
+      restoreListenReturn(scope.signal)
+      assert.equal(pauses, 1)
+      assert.equal(native.currentTime, 25.5)
+      assert.equal(native.playbackRate, 1.5)
+      assert.equal(native.muted, true)
+      window.dispatchEvent(new Event('keydown'))
+      native.dispatchEvent(new Event('play'))
+      assert.equal(pauses, 1)
+      assert.equal(cache.size, 0)
+    }
+    finally {
+      scope.abort()
+      native.remove()
+    }
+  })
+
   check('playback trail: skips non-video routes, restores the cursor and branches after going back', async () => {
     const base = 'https://www.bilibili.com'
     const video = id => `${base}/video/av${id}/`
@@ -195,8 +562,10 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     const video = root.appendChild(document.createElement('video'))
     const clockNode = root.appendChild(document.createElement('span'))
     const session = { current: null, entering: false }
-    const emptyImports = Object.fromEntries(['actionEffects', 'authorMessages', 'commentComposer', 'danmaku', 'description', 'displayMode', 'geometry', 'idleProgress', 'labels', 'nativeControls', 'playlist', 'shell', 'sidebar', 'styles/layout', 'videoInfo'].map(name => [`~/utils/bewlyWidescreen/${name}`, {}]))
+    const emptyImports = Object.fromEntries(['actionEffects', 'actionRolls', 'authorMessages', 'commentComposer', 'danmaku', 'danmakuViews', 'description', 'displayMode', 'geometry', 'idleProgress', 'labels', 'nativeControls', 'playlist', 'shell', 'sidebar', 'styles/layout', 'videoInfo'].map(name => [`~/utils/bewlyWidescreen/${name}`, {}]))
     emptyImports['~/utils/bewlyWidescreen/videoInfo'] = { clearViewerCount() {} }
+    emptyImports['~/utils/bewlyWidescreen/actionRolls'] = { clearActionRolls() {} }
+    emptyImports['~/utils/bewlyWidescreen/danmakuViews'] = { clearDanmakuViews() {}, refreshDanmakuViewLabels() {} }
     emptyImports['~/utils/bewlyWidescreen/railTabs'] = await import('../src/utils/bewlyWidescreen/railTabs')
     const constants = await import('../src/utils/bewlyWidescreen/constants')
     const module = await loadSourceModule('../src/utils/bewlyWidescreen.ts', {
@@ -582,10 +951,11 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     dialog.className = 'collection-m-exp'
     const favoriteOwner = { $el: dialog, _isMounted: true, aid: 1, list: [{ id: 42, favoured: true, media_count: 2500, max_count: 5000 }] }
     dialog.__vue__ = favoriteOwner
-    let manifest = { aid: 1, bvid: 'BV1NyeA6zESV', p: 1, cid: 10 }
+    let manifest = { aid: 1, bvid: 'BV1NyeA6zESV', p: 1, cid: 10, episodeId: null, seasonId: null }
     let realQuality = 80
     let fullDuration = 200
     const oldPlayer = window.player
+    const oldBtr = window.__biliThreadRipperDebug
     window.player = { mediaElement: () => video, getManifest: () => manifest, getQuality: () => ({ nowQ: 64, realQ: realQuality }), getDuration: full => full ? fullDuration : 200 }
     const bridge = await loadSourceModule('../src/utils/videoMetadataBridge.ts', { './pageBridgeChannel': { getPageBridgeChannelId: () => 'fixture-channel' } }, { CustomEvent: window.CustomEvent, location: window.location })
     const main = await loadSourceModule('../src/inject/videoMetadata.ts', {
@@ -595,6 +965,37 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     }, { CustomEvent: window.CustomEvent, location: window.location })
     const stop = main.setupVideoMetadataBridge('fixture-channel')
     try {
+      app.setAttribute('data-btr-mse-active', 'true')
+      const snapshot = bridge.readNativeMediaSnapshot(video)
+      assert.equal(snapshot.btr.ownsMedia, true)
+      assert.deepEqual({ ...snapshot.unit }, { aid: 1, bvid: 'BV1NyeA6zESV', cid: 10, page: 1 })
+      const transport = []
+      const dash = {
+        getVideoElement: () => video,
+        getActiveStream: () => ({ getProcessors: () => [{
+          getScheduleController: () => ({ stop: () => transport.push('stop') }),
+          getFragmentModel: () => ({ abortRequests: () => transport.push('abort') }),
+        }] }),
+      }
+      window.player.__core = () => ({ getCorePlayer: () => dash })
+      window.player.pause = () => transport.push('pause')
+      window.__biliThreadRipperDebug = { getPlayer: () => ({ video, destroy: options => transport.push(options.resumeNative) }) }
+      assert.equal(bridge.suspendNativePlayback(video, { ...snapshot.unit, cid: 11 }), false)
+      assert.deepEqual(transport, [])
+      assert.equal(bridge.suspendNativePlayback(video, snapshot.unit), true)
+      assert.deepEqual(transport, ['pause', 'stop', 'abort', false])
+      window.player.pause = () => {
+        throw new Error('native owner retired')
+      }
+      assert.equal(bridge.suspendNativePlayback(video, snapshot.unit), 'interrupted')
+      Object.defineProperties(video, { readyState: { value: 4 }, duration: { value: 120 } })
+      video.pause = () => transport.push('return-pause')
+      const intent = { unit: bridge.getNativePlaybackUnitKey(snapshot.unit), time: 65, rate: 1.5, volume: 0.5, muted: true, playing: false, bind: true }
+      assert.equal(bridge.applyNativeListenReturn(video, { ...intent, unit: 'other' }), false)
+      assert.equal(bridge.applyNativeListenReturn(video, intent), true)
+      assert.equal(video.currentTime, 65)
+      assert.equal(video.playbackRate, 1.5)
+      assert.equal(transport.at(-1), 'return-pause')
       const switches = []
       app.__vue__.player = window.player
       app.__vue__.switchVideo = target => switches.push(target)
@@ -621,10 +1022,17 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       assert.equal(bridge.readNativeFavoriteDialog(dialog), undefined)
       manifest = { ...manifest, p: 2 }
       assert.equal(bridge.readNativeQualityState(video).ready, false, 'a prior part cannot confirm the new selection')
+      window.history.replaceState(null, '', '/zh-Hans/bangumi/play/ep85046')
+      manifest = { aid: 2325306, cid: 3629601, bvid: null, p: 1, episodeId: 85046, seasonId: 3423 }
+      const episode = bridge.readNativeMediaSnapshot(video)?.unit
+      assert.equal(episode.episodeId, 85046)
+      assert.equal(episode.cid, 3629601)
+      assert.equal(episode.bvid, undefined)
     }
     finally {
       stop()
       window.player = oldPlayer
+      window.__biliThreadRipperDebug = oldBtr
       app.remove()
       window.history.replaceState(null, '', previousUrl)
     }
@@ -1221,7 +1629,6 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       '~/styles/sendButton.scss?inline': { default: '' },
       '~/styles/skeleton.scss?inline': { default: '' },
       '~/styles/loadingRing.scss?inline': { default: '' },
-      '~/utils/danmakuSenderOrder': await import('../src/utils/danmakuSenderOrder'),
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/styles/cardLayout': await import('../src/utils/bewlyWidescreen/styles/cardLayout'),
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
@@ -1261,13 +1668,18 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     const constants = await import('../src/utils/bewlyWidescreen/constants')
     const session = { current: null }
     const module = await loadSourceModule('../src/utils/bewlyWidescreen/videoInfo.ts', {
+      '~/components/MomentCard/utils': {},
+      '~/utils/coverField': {},
+      '~/utils/imageTone': {},
       '~/utils/playbackVideoInfo': {},
+      '~/utils/pgcEpisode': {},
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/labels': { t: key => key },
       '~/utils/bewlyWidescreen/nativeDom': {},
       '~/utils/bewlyWidescreen/session': { session },
       '~/utils/bilibiliApiError': {},
       '~/utils/bilibiliUrl': {},
+      '~/utils/dataFormatter': {},
       '~/utils/messaging': {},
       '~/utils/videoMetadataBridge': { isPgcPlaybackPage: () => false },
     }, { MutationObserver: globalThis.MutationObserver ?? window.MutationObserver })
@@ -1330,13 +1742,18 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       '</div>',
     ].join('')
     const module = await loadSourceModule('../src/utils/bewlyWidescreen/videoInfo.ts', {
+      '~/components/MomentCard/utils': {},
+      '~/utils/coverField': {},
+      '~/utils/imageTone': {},
       '~/utils/playbackVideoInfo': {},
+      '~/utils/pgcEpisode': {},
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/labels': { t: key => key },
       '~/utils/bewlyWidescreen/nativeDom': { findMovable: () => native },
       '~/utils/bewlyWidescreen/session': { session },
       '~/utils/bilibiliApiError': {},
       '~/utils/bilibiliUrl': { normalizeBilibiliImageUrl: src => src },
+      '~/utils/dataFormatter': {},
       '~/utils/messaging': {},
       '~/utils/videoMetadataBridge': { isPgcPlaybackPage: () => false },
     }, { MutationObserver: globalThis.MutationObserver ?? window.MutationObserver })

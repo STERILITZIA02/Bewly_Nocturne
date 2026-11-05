@@ -626,12 +626,12 @@ defineExpose({ refresh })
 // Vue retains the outgoing overview while it fades. Follow that actual DOM,
 // not the new selection, so its width/padding stay fixed until it is gone.
 .whisper-workspace:has(> .whisper-workspace__detail--feed),
-.whisper-workspace:has(> .whisper-workspace__detail > .conversation-insights) {
+.whisper-workspace:has(> .whisper-workspace__detail > .whisper-workspace__outlet-page > .conversation-insights) {
   column-gap: 0;
 }
 
 .whisper-workspace__detail--feed,
-.whisper-workspace__detail:has(> .conversation-insights) {
+.whisper-workspace__detail:has(> .whisper-workspace__outlet-page > .conversation-insights) {
   padding: 0;
 }
 

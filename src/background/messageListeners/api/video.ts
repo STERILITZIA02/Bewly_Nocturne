@@ -101,6 +101,7 @@ const API_VIDEO = {
       qn: 32,
       fnver: 0,
       fnval: 1,
+      avid: undefined as number | undefined,
       bvid: '',
       cid: 0,
       web_location: '1550101',

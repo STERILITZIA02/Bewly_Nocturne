@@ -15,6 +15,9 @@
   // 视频页面的侧栏
   .slide-ad-exp,
   .video-card-ad-small,
+  // 推荐列表里的运营推广卡（活动页等，从不承载普通视频）
+  .video-page-special-card-small,
+  .video-page-operator-card-small,
   // 电影/剧集频道明确的楼层广告槽；不匹配普通 promotion 或活动横幅。
   .gg-floor-module > .ad-item,
   // 动态页的广告

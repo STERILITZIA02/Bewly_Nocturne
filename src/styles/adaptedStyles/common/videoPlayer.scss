@@ -40,7 +40,8 @@
   }
 }
 
-.bpx-player-container[data-screen="mini"] :is(.bewly-video-screenshot-control, .bewly-local-loudness-control) {
+.bpx-player-container[data-screen="mini"]
+  :is(.bewly-video-screenshot-control, .bewly-listen-control, .bewly-local-loudness-control) {
   display: none !important;
 }
 
@@ -88,9 +89,15 @@
     font-size: var(--bew-icon-size-md);
     line-height: 1;
   }
+
+  // Icon only in Bilibili's toolbar; the playback page's action row shows it.
+  > .bewly-watch-later-btn__label {
+    display: none;
+  }
 }
 
 .bewly-video-screenshot-control,
+.bewly-listen-control,
 .bewly-local-loudness-control,
 .bewly-widescreen-fill-toggle {
   position: relative;
@@ -131,6 +138,34 @@
   }
 }
 
+.bpx-player-ctrl-btn.bewly-listen-control {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+// Bewly controls that draw a Tabler glyph in Bpx's icon box. Bpx sizes that
+// box from its SVG and zeroes the font size, so the mask icon's intrinsic
+// 1.2em would collapse: the box takes the button's height and the glyph the
+// icon size Bpx's own outlines are drawn at.
+// The glyph rule is scoped to the box so it outranks the icon class's own
+// 1.2em, which UnoCSS emits later in the same stylesheet.
+:is(.bewly-listen-control, .bewly-widescreen-fill-toggle) > .bpx-player-ctrl-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.bpx-player-ctrl-btn-icon > .bewly-player-glyph {
+  flex: none;
+  width: var(--bew-icon-size-md);
+  height: var(--bew-icon-size-md);
+}
+
 @keyframes bewly-player-control-feedback {
   50% {
     transform: scale(1.08);
@@ -138,12 +173,22 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  :is(.bewly-video-screenshot-control, .bewly-local-loudness-control, .bewly-widescreen-fill-toggle):focus-visible
+  :is(
+      .bewly-video-screenshot-control,
+      .bewly-listen-control,
+      .bewly-local-loudness-control,
+      .bewly-widescreen-fill-toggle
+    ):focus-visible
     > .bpx-player-ctrl-btn-icon {
     animation: bewly-player-control-feedback var(--bew-duration-moderate) var(--bew-ease-in-out);
   }
   @media (hover: hover) and (pointer: fine) {
-    :is(.bewly-video-screenshot-control, .bewly-local-loudness-control, .bewly-widescreen-fill-toggle):hover
+    :is(
+        .bewly-video-screenshot-control,
+        .bewly-listen-control,
+        .bewly-local-loudness-control,
+        .bewly-widescreen-fill-toggle
+      ):hover
       > .bpx-player-ctrl-btn-icon {
       animation: bewly-player-control-feedback var(--bew-duration-moderate) var(--bew-ease-in-out);
     }
@@ -270,4 +315,43 @@
   font-size: var(--bew-font-size-heading);
   line-height: var(--bew-line-height-heading);
   pointer-events: none;
+}
+// Listening: the stage covers the picture inside the player box
+// (listenControl.ts) and Bpx's control bar stays above it, playing the audio
+// (listenNativeBar.ts), without the controls that only act on the picture:
+// picture and sound adjustment, quality, subtitles, screenshot, picture in
+// picture, and chapters, which seek the suspended video. The play button's
+// animated icon follows that video, so a glyph that follows the audio replaces it.
+[data-bew-listening]
+  :is(
+    .bewly-local-loudness-control,
+    .bpx-player-ctrl-quality,
+    .bpx-player-ctrl-subtitle,
+    .bewly-video-screenshot-control,
+    .bpx-player-ctrl-pip,
+    .bpx-player-ctrl-viewpoint,
+    .bpx-player-ctrl-play .bpx-common-svg-icon
+  ) {
+  display: none !important;
+}
+
+// The playback page's progress line for idle controls and its empty toolbar
+// slot follow the video; the bar stays shown while listening.
+#bewly-widescreen-root[data-bew-listening] :is(.bewly-widescreen-player-toolbar, .bewly-widescreen-idle-progress) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+// Zero specificity: a player root the site positions keeps its own position.
+:where([data-bew-listening]:not(#bewly-widescreen-root)) {
+  position: relative;
+}
+
+// Above every picture layer, below the control bar and the playback page's
+// glass card behind it (9998 and 9999 in the player's stacking context).
+.bewly-listen-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 9997;
+  display: block;
 }

@@ -6,7 +6,7 @@ defineEmits<{ (event: 'toggle', trigger: MouseEvent): void }>()
 <template>
   <button type="button" class="history-day-toggle" :aria-expanded="expanded" :disabled="disabled" @click="$emit('toggle', $event)">
     <span>{{ label }}</span>
-    <svg class="history-day-toggle__chevron" :class="{ 'history-day-toggle__chevron--collapsed': !expanded }" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <svg class="history-day-toggle__chevron" :class="{ 'history-day-toggle__chevron--expanded': expanded }" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="m4 6 4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
   </button>
@@ -44,8 +44,9 @@ defineEmits<{ (event: 'toggle', trigger: MouseEvent): void }>()
   height: var(--bew-icon-size-sm);
   transition: transform var(--bew-duration-normal) var(--bew-ease-standard);
 }
-.history-day-toggle__chevron--collapsed {
-  transform: rotate(-90deg);
+/* Open, it points the way the row closes (up); closed, the way it opens. */
+.history-day-toggle__chevron--expanded {
+  transform: rotate(180deg);
 }
 @media (prefers-reduced-motion: reduce) {
   .history-day-toggle,

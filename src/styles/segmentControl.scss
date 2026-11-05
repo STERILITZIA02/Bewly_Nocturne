@@ -135,6 +135,17 @@
   box-shadow: var(--bew-segment-item-active-shadow);
 }
 
+// Standalone choices (no track around them) sit in no container to nest in,
+// so they take the control tier's rounded rectangle instead of a capsule
+// (user-specified 2026-11-03).
+.bew-segment-control--static:not(.bew-segment-control--track) {
+  --bew-control-item-radius: var(--bew-interactive-radius);
+
+  .bew-segment-control__item {
+    corner-shape: var(--bew-corner-shape);
+  }
+}
+
 .bew-segment-control__item:disabled {
   color: var(--bew-text-3);
   background: transparent;

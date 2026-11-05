@@ -582,6 +582,7 @@ const entries: SettingsSearchEntry[] = [
     'settings.visual_style.contrast',
     'settings.visual_style.interface_font_size',
   ]),
+  ...createEntries(appearanceRoute, ['settings.dock_label_size'], { keywordKeys: ['settings.dock_label_size_option.small', 'settings.dock_label_size_option.standard'] }),
   ...createEntries(appearanceRoute, ['settings.visual_style.interface_size'], { keywordKeys: ['settings.visual_style.interface_size_compact', 'settings.visual_style.interface_size_standard', 'settings.visual_style.interface_size_comfortable'] }),
   ...createEntries(appearanceRoute, ['settings.visual_style.import', 'settings.visual_style.export', 'settings.visual_style.copy'], { targetId: 'settings.visual_style.preset' }),
   ...createEntries(appearanceRoute, ['settings.visual_style.preset'], { keywordKeys: ['settings.visual_style.presets'], keywords: Object.values(CODEX_THEME_NAMES) }),

@@ -193,6 +193,14 @@ export function useTopBarInteraction() {
       clearEnterTimer()
       const browsingPopups = Object.values(topBarStore.popupVisible).some(Boolean)
       controller.instantOpen = browsingPopups
+      // Moving between buttons swaps popups in place: the one being left
+      // goes at once too, so two never overlap while it would play its exit.
+      if (browsingPopups) {
+        hoverControllers.forEach((other, otherKey) => {
+          if (otherKey !== key && topBarStore.popupVisible[otherKey])
+            other.instantOpen = true
+        })
+      }
       closeAllPopups(key)
       controller.enterTimer = setTimeout(() => {
         controller.enterTimer = undefined

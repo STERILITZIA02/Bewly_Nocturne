@@ -56,6 +56,10 @@
 - JS 里与 token 对应的长度经 `uiPx(设计 px)` 换算（与 CSS 同样取整，在 computed 里随因子更新）：视频网格列数与横向封面上限（`VideoCardGrid`、`Ranking`）、观看历史的卡片间距 / 行距 / 估高、历史行与关注侧栏的虚拟窗口间距、Dock 的适配与收起外壳、首页搜索区高度与吸顶位置、首页与独立搜索页的 Logo。列表布局键带上因子，因子变化时重新测量；`invalidateViewportGeometry` 也随之触发。
 - 设置“界面尺寸”（`interfaceSize`）在“视觉风格 → 高级”：自动 / 紧凑（比 1 小一档）/ 标准（1）/ 宽松（大一档），说明里显示当前百分比。它属于一台设备，列入 `LOCAL_ONLY_SETTINGS_FIELDS`，不云同步。
 
+## Dock 字号（同日追加）
+
+新增文字角色 caption 2 `10/13`（`--bew-font-size-caption-2` / `--bew-line-height-caption-2`），与其他角色同样乘 `--bew-effective-font-scale`，所以系统文字偏好、界面基础字号与本页的文字因子都照常生效。Dock 名称读 `--bew-dock-label-size` / `--bew-dock-label-line-height`（默认 caption），设置 `dockLabelSize = small` 时 Dock 在外层改成 caption 2。Dock 项高仍是 `ui(54px)`，网格与 Dock 几何不变。
+
 ## 验证
 
 - `pnpm verify:ui-scale`（已加入 `pnpm test`）：各类屏幕的因子、基准屏在 50%–175% 页面缩放下保持 1、所有档位落在物理像素上、JS 与 CSS 取整一致、`$lengths` 与 `ui()` token 一致、文字因子组合、发丝线与 24px 目标不缩。

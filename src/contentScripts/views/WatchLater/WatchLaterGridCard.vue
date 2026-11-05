@@ -127,6 +127,9 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
 .watch-later-grid-card {
   display: flex;
   min-width: 0;
+  // The hover fill frames the card from outside, so its cover sits on the
+  // grid's column edges like every other card.
+  margin-inline: calc(var(--bew-space-2) * -1);
   padding: var(--bew-space-2);
   flex-direction: column;
   gap: var(--bew-space-3);

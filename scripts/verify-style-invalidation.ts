@@ -111,7 +111,6 @@ async function main() {
     '~/styles/segmentLiquidIndicator.scss?inline': { default: compileFile(`${styles}segmentLiquidIndicator.scss`) },
     '~/styles/sendButton.scss?inline': { default: compileFile(`${styles}sendButton.scss`) },
     '~/styles/skeleton.scss?inline': { default: compileFile(`${styles}skeleton.scss`) },
-    '~/utils/danmakuSenderOrder': await import('../src/utils/danmakuSenderOrder'),
     '~/utils/bewlyWidescreen/constants': await import('../src/utils/bewlyWidescreen/constants'),
     '~/utils/bewlyWidescreen/styles/cardLayout': await import('../src/utils/bewlyWidescreen/styles/cardLayout'),
     '~/utils/main': { injectCSS: (text: string) => { playbackCss = text } },

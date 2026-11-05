@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useEventListener, useIntersectionObserver, useThrottleFn } from '@vueuse/core'
 import type { AsyncComponentLoader, Ref } from 'vue'
-import { provide, ref, watch } from 'vue'
+import { defineAsyncComponent, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppAuthorizationDialog from '~/components/AppAuthorizationDialog.vue'
@@ -63,6 +63,7 @@ import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { homeTabStateKey, resolveDefaultAppPage } from '~/utils/homeRoute'
 import { readIframeDrawerHistory } from '~/utils/iframeDrawerHistory'
+import { listenStage } from '~/utils/listenStage'
 import { isSentinelWithinLoadThreshold } from '~/utils/loadMoreSentinel'
 import { getUserID, isHomePage, isInIframe, isVideoOrBangumiPage, openLinkToNewTab, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
@@ -76,6 +77,10 @@ import { invalidateViewportGeometry, readViewportGeometry, subscribeViewportFram
 import { setupNecessarySettingsWatchers } from './necessarySettingsWatchers'
 import PlaybackCommentComposer from './PlaybackCommentComposer.vue'
 import PlaybackRailTabsIndicator from './PlaybackRailTabsIndicator.vue'
+import PlaybackRecommendationMenu from './PlaybackRecommendationMenu.vue'
+
+// Loaded only while a video is being listened to.
+const ListenPlayer = defineAsyncComponent(() => import('~/components/ListenPlayer/ListenPlayer.vue'))
 
 const mainStore = useMainStore()
 const settingsStore = useSettingsStore()
@@ -1004,9 +1009,8 @@ onBeforeUnmount(stopUrlCleaner)
             >
               <div
                 class="bewly-page-content"
-                :class="{ 'bewly-page-content--messages': displayedPage === AppPage.Notifications, 'bewly-page-content--library': isLibraryPage, 'bewly-page-content--home': displayedPage === AppPage.Home }"
+                :class="{ 'bewly-page-content--messages': displayedPage === AppPage.Notifications, 'bewly-page-content--library': isLibraryPage }"
                 p="t-[calc(var(--bew-top-bar-height)+var(--bew-space-3))]" m-auto
-                w="lg:[calc(100%-200px)] [calc(100%-150px)]"
                 :style="{
                   minHeight: pageContentMinHeight === undefined ? undefined : `${pageContentMinHeight}px`,
                   paddingTop: nativeHeaderPadding,
@@ -1046,6 +1050,8 @@ onBeforeUnmount(stopUrlCleaner)
     <AppAuthorizationDialog v-if="showAppAuthorizationDialog" />
     <LocalLoudnessPanel v-if="localLoudnessPanelOpen" />
     <PlaybackCommentComposer v-if="!isInIframe()" />
+    <PlaybackRecommendationMenu v-if="!isInIframe()" />
+    <ListenPlayer v-if="listenStage && !isInIframe()" />
     <PlaybackRailTabsIndicator />
 
     <!-- Keep the static overlay removal before resolving a caller's request. -->
@@ -1138,9 +1144,10 @@ onBeforeUnmount(stopUrlCleaner)
   padding-top: 0;
 }
 
-// The home feed reaches as close to the window edge as the Moments right column.
-.bewly-page-content.bewly-page-content--home {
-  width: calc(100% - var(--bew-page-inline-inset) * 2);
+// Every page's content sits between the grid's margins (Home, Anime, search
+// results); library and message pages lay out their own rail and content.
+.bewly-page-content {
+  width: calc(100% - var(--bew-grid-margin) * 2);
 }
 
 .bewly-page-container--messages,

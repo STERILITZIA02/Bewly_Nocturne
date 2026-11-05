@@ -11,6 +11,7 @@ export interface BewlyWidescreenManualToggleDetail {
   userInitiated: true
 }
 export const BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS = 'bewly-widescreen-controls-hidden'
+export const LISTEN_ATTRIBUTE = 'data-bew-listening'
 export const BEWLY_DRAWER_ESCAPE_HANDLED = 'BEWLY_DRAWER_ESCAPE_HANDLED'
 export const BEWLY_DRAWER_CLOSE_REQUEST = 'BEWLY_DRAWER_CLOSE_REQUEST'
 export const IFRAME_DARK_MODE_CHANGE = 'iframeDarkModeChange'

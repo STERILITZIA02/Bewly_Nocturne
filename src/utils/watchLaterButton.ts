@@ -109,6 +109,9 @@ function updateButtonState(button: HTMLButtonElement, isInWatchLater: boolean) {
 
   if (icon)
     icon.className = `${WATCH_LATER_ICON_CLASS} bewly-watch-later-btn__icon`
+  const label = button.querySelector<HTMLElement>('.bewly-watch-later-btn__label')
+  if (label)
+    label.textContent = translate('topbar.watch_later')
 }
 
 function isWatchLaterAccountCurrent(accountId: number, csrf: string) {
@@ -237,7 +240,7 @@ function createButton(ids: VideoIds): HTMLButtonElement {
   button.type = 'button'
   button.className = `video-toolbar-right-item ${BUTTON_CLASS}`
   button.dataset.videoKey = getVideoKey(ids)
-  button.innerHTML = `<i class="${WATCH_LATER_ICON_CLASS} bewly-watch-later-btn__icon"></i>`
+  button.innerHTML = `<i class="${WATCH_LATER_ICON_CLASS} bewly-watch-later-btn__icon"></i><span class="bewly-watch-later-btn__label"></span>`
 
   updateButtonState(button, false)
   setButtonBusy(button, true)

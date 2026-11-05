@@ -708,6 +708,7 @@ const dockTransformStyle = computed((): CSSProperties => {
   return {
     // Hidden names take no room, so the tabs and shell get shorter.
     ...(settings.value.showDockItemNames ? {} : { '--bew-dock-item-height': 'var(--bew-dock-item-height-icon-only)' }),
+    ...(settings.value.dockLabelSize === 'small' ? { '--bew-dock-label-size': 'var(--bew-font-size-caption-2)', '--bew-dock-label-line-height': 'var(--bew-line-height-caption-2)' } : {}),
     transform: `scale(${scale})`,
     transformOrigin: origin,
     ...(preservedSize

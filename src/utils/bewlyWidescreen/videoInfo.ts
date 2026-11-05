@@ -1,5 +1,6 @@
+import { getMomentThumbnailUrl } from '~/components/MomentCard/utils'
 import type { VideoInfo } from '~/models/video/videoInfo'
-import { selectors, VIEWER_COUNT_MIRRORED_ATTRIBUTE } from '~/utils/bewlyWidescreen/constants'
+import { COVER_FIELD_PROPERTY, COVER_TONE_PROPERTY, selectors, VIEWER_COUNT_MIRRORED_ATTRIBUTE } from '~/utils/bewlyWidescreen/constants'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { findFirst, findMovable, getTitleText, moveOrReplaceNode } from '~/utils/bewlyWidescreen/nativeDom'
 import { session } from '~/utils/bewlyWidescreen/session'
@@ -7,13 +8,19 @@ import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
 import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
 import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
+import { readCoverField } from '~/utils/coverField'
+import { numFormatter } from '~/utils/dataFormatter'
+import { readImageBandTone } from '~/utils/imageTone'
 import { reportRuntimeFailure } from '~/utils/messaging'
+import { resolvePgcEpisodeVideoIds } from '~/utils/pgcEpisode'
 import { getPlaybackVideoInfo } from '~/utils/playbackVideoInfo'
 import { isPgcPlaybackPage } from '~/utils/videoMetadataBridge'
 
 export function syncSidebarTitle(currentState: BewlyWidescreenState) {
   const titleElement = currentState.sidebarTop.querySelector<HTMLElement>('.bewly-widescreen-title')
-  const nextTitle = currentState.videoInfoData?.title?.trim() || getTitleText()
+  // A bangumi episode's manuscript title is not its episode title.
+  const manuscriptTitle = currentState.root.dataset.pageKind === 'pgc' ? undefined : currentState.videoInfoData?.title?.trim()
+  const nextTitle = manuscriptTitle || getTitleText()
   if (titleElement && nextTitle && titleElement.textContent !== nextTitle)
     titleElement.textContent = nextTitle
 }
@@ -103,6 +110,44 @@ export function clearVideoMetadataObserver(currentState: BewlyWidescreenState) {
   currentState.metadataObserver?.disconnect()
   currentState.metadataObserver = undefined
   currentState.metadataSource = undefined
+  currentState.followStatusObserver?.disconnect()
+  currentState.followStatusObserver = undefined
+}
+
+// The follow menu's first three items mark the series 想看 / 在看 / 已看; the
+// current one is disabled.
+const FOLLOW_STATUS_LABELS = ['widescreen.follow_status_want', 'widescreen.follow_status_watching', 'widescreen.follow_status_watched']
+
+/**
+ * Followed, bangumi's button says "已追剧" (and "取消追剧" while hovered, a
+ * wider label); it shows the series' status instead (user-specified), read
+ * from its menu. The button carries the label (data-bewly-follow-status,
+ * drawn by layout.ts) so React keeps its own text node; data-bewly-follow
+ * marks the button for its icon and menu rules.
+ */
+function syncFollowStatus(metadataSlot: HTMLElement) {
+  const button = metadataSlot.querySelector<HTMLElement>('[class*="follow_btnFollow"]')
+  if (!button)
+    return
+  if (!button.hasAttribute('data-bewly-follow'))
+    button.setAttribute('data-bewly-follow', '')
+  const items = Array.from(button.querySelectorAll('li')).slice(0, FOLLOW_STATUS_LABELS.length)
+  const current = items.findIndex(item => item.className.includes('follow_disabled'))
+  const label = button.className.includes('follow_followed') && current >= 0 ? t(FOLLOW_STATUS_LABELS[current]) : null
+  if (button.getAttribute('data-bewly-follow-status') === label)
+    return
+  if (label)
+    button.setAttribute('data-bewly-follow-status', label)
+  else
+    button.removeAttribute('data-bewly-follow-status')
+}
+
+function observeFollowStatus(currentState: BewlyWidescreenState) {
+  if (!currentState.followStatusObserver) {
+    currentState.followStatusObserver = new MutationObserver(() => syncFollowStatus(currentState.metadataSlot))
+    currentState.followStatusObserver.observe(currentState.metadataSlot, { attributeFilter: ['class'], childList: true, subtree: true })
+  }
+  syncFollowStatus(currentState.metadataSlot)
 }
 
 /**
@@ -132,8 +177,11 @@ function getMetadataSignature(source: HTMLElement) {
 }
 
 export function syncVideoMetadata(currentState: BewlyWidescreenState) {
-  if (isPgcPlaybackPage())
-    return moveOrReplaceNode(selectors.mediaInfo, currentState.metadataSlot, currentState.movedNodes).found
+  if (isPgcPlaybackPage()) {
+    const { found } = moveOrReplaceNode(selectors.mediaInfo, currentState.metadataSlot, currentState.movedNodes)
+    observeFollowStatus(currentState)
+    return found
+  }
   const source = findMovable(selectors.metadata)
   observeMetadataSource(currentState, source)
   const existing = currentState.metadataSlot.querySelector<HTMLElement>('.bewly-widescreen-metadata-clone')
@@ -175,7 +223,20 @@ function getCurrentVideoInfoRequest() {
   if (aidMatch)
     return { identity: `aid:${aidMatch[1]}`, params: { aid: aidMatch[1] } }
 
+  // A bangumi episode is a manuscript too: its season lists the episode's
+  // video, whose info gives the cover colour and the tab counts.
+  const episodeMatch = pathname.match(/^\/bangumi\/play\/ep(\d+)(?:\/|$)/)
+  if (episodeMatch)
+    return { identity: `ep:${episodeMatch[1]}`, epid: Number(episodeMatch[1]) }
+
   return null
+}
+
+async function resolveVideoInfoParams(request: NonNullable<ReturnType<typeof getCurrentVideoInfoRequest>>) {
+  if ('params' in request)
+    return request.params
+  const ids = await resolvePgcEpisodeVideoIds(request.epid)
+  return ids && (ids.bvid ? { bvid: ids.bvid } : { aid: String(ids.aid) })
 }
 
 function formatWidescreenStat(value: number) {
@@ -224,9 +285,44 @@ function createFallbackStatIcon(icon: WidescreenFallbackStatIcon) {
   return svg
 }
 
+/** The comment and danmaku tabs show the video's counts; cleared between videos. */
+export function syncTabCounts(currentState: BewlyWidescreenState) {
+  const stat = currentState.videoInfoData?.stat
+  for (const [tab, value] of [['comment', stat?.reply], ['danmaku', stat?.danmaku]] as const) {
+    const count = currentState.tabButtons[tab].querySelector('.bewly-widescreen-tab__count')
+    const text = value === undefined ? '' : numFormatter(value)
+    if (count && count.textContent !== text)
+      count.textContent = text
+  }
+}
+
+/**
+ * The light letterbox blends the cover's own colours, as the listening stage
+ * does: its blurred field (coverField.ts) under a veil of the whole cover's
+ * average colour (useImageTone's `all` band), with the same reads shared. The
+ * last cover's stay until the next one's are read.
+ */
+export function syncCoverTone(currentState: BewlyWidescreenState) {
+  const cover = currentState.videoInfoData?.pic
+  if (!cover)
+    return
+  // Only the video area and the backdrop read them (layout.ts).
+  const apply = (property: string, value: string) => {
+    if (session.current !== currentState || currentState.videoInfoData?.pic !== cover)
+      return
+    currentState.playerEl.querySelector<HTMLElement>('.bpx-player-video-area')?.style.setProperty(property, value)
+    currentState.backdrop.style.setProperty(property, value)
+  }
+  void readImageBandTone(getMomentThumbnailUrl(cover, 64), 0, 1, 'rows').then(tone => tone && apply(COVER_TONE_PROPERTY, tone.color))
+  void readCoverField(getMomentThumbnailUrl(cover, 160)).then(field => field && apply(COVER_FIELD_PROPERTY, `url("${field}")`))
+}
+
 export function renderFallbackVideoInfo(currentState: BewlyWidescreenState) {
+  syncTabCounts(currentState)
+  syncCoverTone(currentState)
   const data = currentState.videoInfoData
-  if (!data)
+  // A bangumi page shows its uploader and stats in its own media block.
+  if (!data || currentState.root.dataset.pageKind === 'pgc')
     return
 
   const nativeOwner = findFirst(selectors.upPanel, currentState.upSlot)
@@ -369,9 +465,12 @@ export async function loadFallbackVideoInfo(
 
   currentState.videoInfoIdentity = request.identity
   try {
+    const params = pendingRequest ? undefined : await resolveVideoInfoParams(request)
+    if (!pendingRequest && !params)
+      return
     const response = pendingRequest
       ? await pendingRequest
-      : await getPlaybackVideoInfo(request.params)
+      : await getPlaybackVideoInfo(params!)
     if (session.current !== currentState
       || !currentState.root.isConnected
       || currentState.videoInfoIdentity !== request.identity

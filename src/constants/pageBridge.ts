@@ -14,7 +14,6 @@ export const PAGE_BRIDGE_MESSAGE = {
   /** Isolated → MAIN: the playback page still waits for the native comment list. */
   COMMENT_LIST_WAKE: 'comment-list:wake',
   /** Isolated → MAIN: sort the playback page's danmaku list by sender. */
-  DANMAKU_SENDER_ORDER: 'danmaku:sender-order',
 } as const
 
 export type PageBridgeMessageType = typeof PAGE_BRIDGE_MESSAGE[keyof typeof PAGE_BRIDGE_MESSAGE]
@@ -91,7 +90,6 @@ function isPageBridgeMessageType(value: unknown): value is PageBridgeMessageType
     || value === PAGE_BRIDGE_MESSAGE.COMMENT_COMPOSER_TARGET
     || value === PAGE_BRIDGE_MESSAGE.COMMENT_COMPOSER_INSERT
     || value === PAGE_BRIDGE_MESSAGE.COMMENT_LIST_WAKE
-    || value === PAGE_BRIDGE_MESSAGE.DANMAKU_SENDER_ORDER
 }
 
 export function isPageBridgeMessage(value: unknown): value is PageBridgeMessage {

@@ -1088,11 +1088,12 @@ onBeforeUnmount(() => {
 .moment-comments__action--permalink {
   font-weight: var(--bew-font-weight-regular);
 }
+// On the comment text's line: past the avatar and the row's gap.
 .moment-comments__thread-more {
   display: flex;
   align-items: center;
   gap: var(--bew-space-2);
-  margin-inline-start: var(--bew-space-10);
+  margin-inline-start: calc(var(--bew-comment-avatar-size) + var(--bew-space-2));
 }
 .moment-comments__pagination-error {
   display: flex;
