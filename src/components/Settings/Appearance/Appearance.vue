@@ -178,6 +178,7 @@ function saveThemeSchedule() {
 const fontPreferenceOptions = computed(() => ['default', 'recommend', 'custom'].map(value => ({ value, label: t(`settings.customize_font_opt.${value}`) })))
 const fontSizeOptionValues: VideoCardFontSizeSetting[] = ['xs', 'sm', 'base', 'lg']
 const videoCardFontSizeOptions = computed(() => fontSizeOptionValues.map(value => ({ value, label: t(`settings.font_size_option.${value}`) })))
+const dockLabelSizeOptions = computed(() => (['small', 'standard'] as const).map(value => ({ value, label: t(`settings.dock_label_size_option.${value}`) })))
 
 async function copyTheme() {
   try {
@@ -333,6 +334,9 @@ async function importTheme(event: Event) {
         </SettingsItem>
         <SettingsItem setting-id="settings.video_card_author_font_size" :title="$t('settings.video_card_author_font_size')" right-width="auto">
           <Select v-model="settings.videoCardAuthorFontSize" commit-after-leave :options="videoCardFontSizeOptions" class="appearance-settings__select" />
+        </SettingsItem>
+        <SettingsItem v-if="settings.showDockItemNames" setting-id="settings.dock_label_size" :title="$t('settings.dock_label_size')" right-width="auto">
+          <Select v-model="settings.dockLabelSize" commit-after-leave :options="dockLabelSizeOptions" class="appearance-settings__select" />
         </SettingsItem>
         <SettingsItem setting-id="settings.customize_font" :title="$t('settings.customize_font')" right-width="auto">
           <Select v-model="settings.customizeFont" commit-after-leave :options="fontPreferenceOptions" class="appearance-settings__select" />

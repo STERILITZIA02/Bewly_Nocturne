@@ -28,7 +28,7 @@ import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { usePageSearchIntent } from '~/composables/usePageSearchIntent'
 import { usePageViewState } from '~/composables/usePageViewState'
 import { uiPx, uiScale } from '~/composables/useUiScale'
-import { VIDEO_CARD_COVER_ASPECT_RATIO, VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
+import { GRID_GUTTER, VIDEO_CARD_COVER_ASPECT_RATIO, VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
 import SelectionOverlay from '~/contentScripts/views/WatchLater/WatchLaterSelectionOverlay.vue'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
@@ -231,7 +231,7 @@ function selectInterval(value: HistoryGroupInterval) {
 }
 // Cards keep the size of the adaptive video grid's columns (user-specified):
 // a row shows as many as the grid would fit across the content.
-const cardGap = computed(() => uiPx(16))
+const cardGap = computed(() => uiPx(GRID_GUTTER))
 const containerWidth = ref(0)
 const cardColumns = computed(() => getAdaptiveGridColumnCount(containerWidth.value, cardGap.value, uiPx(VIDEO_CARD_MIN_WIDTH)))
 const cardWidth = computed(() => containerWidth.value ? (containerWidth.value - cardGap.value * (cardColumns.value - 1)) / cardColumns.value : 0)

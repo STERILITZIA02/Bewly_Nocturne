@@ -352,7 +352,7 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     assert.match(surface, /@mixin floating\(\$shape: capsule\) \{/)
     assert.match(header, /padding-inline: var\(--bew-home-logo-inline-start\) var\(--bew-page-inline-inset\);/, 'avatar inset matches the page content inset')
   })
-  check('top bar: only playback removes the creation capsule and overflow entry from layout', async () => {
+  check('top bar: only playback removes the creation capsule, overflow entry and avatar from layout', async () => {
     const directory = fileURLToPath(new URL('../src/components/TopBar/', import.meta.url))
     const filename = join(directory, 'TopBar.vue')
     const { descriptor } = parse(await readFile(filename, 'utf8'))
@@ -362,12 +362,13 @@ export function registerSidebarContinuityChecks(check, { Vue, compileComponent, 
     css.textContent = compiled.code
     const host = document.body.appendChild(document.createElement('div'))
     host.setAttribute('data-v-msg', '')
-    host.innerHTML = '<div class="right-side"><div class="top-bar-tools"></div><div class="top-bar-tools top-bar-tools--wide-only" data-top-bar-creation><a></a><a></a></div><a class="more-pop__row" data-top-bar-creation></a></div>'
+    host.innerHTML = '<div class="right-side"><div class="top-bar-tools"></div><div class="top-bar-tools top-bar-tools--wide-only" data-top-bar-creation><a></a><a></a></div><a class="more-pop__row" data-top-bar-creation></a><div class="avatar right-side-item"></div></div>'
     try {
       for (const playback of [false, true, false]) {
         host.className = playback ? 'top-bar top-bar--over-player' : 'top-bar'
         for (const entry of host.querySelectorAll('[data-top-bar-creation]'))
           assert.equal(getComputedStyle(entry).display === 'none', playback)
+        assert.equal(getComputedStyle(host.querySelector('.avatar')).display === 'none', playback)
         assert.notEqual(getComputedStyle(host.querySelector('.top-bar-tools')).display, 'none')
       }
     }

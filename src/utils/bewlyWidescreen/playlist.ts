@@ -1,6 +1,6 @@
-import { EPISODE_ITEM_SELECTOR, EPISODE_SECTION_CLASS, PLAYLIST_AUTO_EXPAND_THRESHOLD, PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR, selectors } from '~/utils/bewlyWidescreen/constants'
+import { DISCLOSURE_TOGGLE_CLASS, EPISODE_ITEM_SELECTOR, EPISODE_SECTION_CLASS, PGC_RECOMMEND_LIST_CLASS, PGC_SECTION_ATTRIBUTE, PLAYLIST_AUTO_EXPAND_THRESHOLD, PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR, SCROLL_EDGE_FADE_CLASS, SCROLL_EDGE_FADE_INLINE_CLASS, selectors } from '~/utils/bewlyWidescreen/constants'
+import { createDisclosureToggle, EPISODE_LABELS, setDisclosureToggle } from '~/utils/bewlyWidescreen/disclosureToggle'
 import { schedulePlayerResizeSync } from '~/utils/bewlyWidescreen/geometry'
-import { t } from '~/utils/bewlyWidescreen/labels'
 import type { BewlyWidescreenState, MovedNode } from '~/utils/bewlyWidescreen/types'
 
 function findManagedPanelNode(panel: HTMLElement, selectorsToMatch: string[], movedNodes: MovedNode[]) {
@@ -44,7 +44,15 @@ function findEpisodeSectionNode(panel: HTMLElement, movedNodes: MovedNode[]) {
 
 // The episode list scrolls inside the panel; it fades at an edge only while
 // more of it lies beyond (the shared scroll edge fade).
-const EPISODE_SECTION_CLASSES = [EPISODE_SECTION_CLASS, 'bew-scroll-edge-fade']
+const EPISODE_SECTION_CLASSES = [EPISODE_SECTION_CLASS, SCROLL_EDGE_FADE_CLASS]
+
+// Bangumi's directory is not one scroller but sections, each with a header,
+// a row of season / range tabs and its own virtual list: the lists fade at
+// their top and bottom, the tab rows at their ends.
+const PGC_SCROLLERS: [selector: string, fade: string][] = [
+  ['[class*="EpisodeVirtualList_scroll"]', SCROLL_EDGE_FADE_CLASS],
+  ['[class*="SectionTabs_scroller"], [class*="PageTabs_wrap"]', SCROLL_EDGE_FADE_INLINE_CLASS],
+]
 
 export function clearEpisodeSectionMarker(panel: HTMLElement, movedNodes: MovedNode[]) {
   for (const { node } of movedNodes)
@@ -52,6 +60,42 @@ export function clearEpisodeSectionMarker(panel: HTMLElement, movedNodes: MovedN
   panel.querySelectorAll<HTMLElement>(`.${EPISODE_SECTION_CLASS}`).forEach((node) => {
     node.classList.remove(...EPISODE_SECTION_CLASSES)
   })
+  for (const [selector, fade] of PGC_SCROLLERS)
+    panel.querySelectorAll(selector).forEach(node => node.classList.remove(fade))
+  panel.querySelectorAll(`[${PGC_SECTION_ATTRIBUTE}]`).forEach((section) => {
+    section.querySelector(`.${DISCLOSURE_TOGGLE_CLASS}`)?.remove()
+    section.removeAttribute(PGC_SECTION_ATTRIBUTE)
+  })
+}
+
+/**
+ * Each bangumi section folds on its own with the rail's chevron, at the end
+ * of its header; Bilibili's arrow beside the tabs (a menu listing the same
+ * tabs again) is hidden (layout.ts). The section keeps its state in
+ * PGC_SECTION_ATTRIBUTE, which the fold styles read.
+ */
+function syncPgcSections(panel: HTMLElement) {
+  for (const [selector, fade] of PGC_SCROLLERS) {
+    panel.querySelectorAll(selector).forEach((node) => {
+      if (!node.classList.contains(fade))
+        node.classList.add(fade)
+    })
+  }
+  for (const section of panel.querySelectorAll<HTMLElement>('[class*="SectionPanel_panel"]')) {
+    const actions = section.querySelector<HTMLElement>('[class*="SectionHeader_actions"]')
+    if (!actions || actions.lastElementChild?.classList.contains(DISCLOSURE_TOGGLE_CLASS))
+      continue
+    section.querySelector(`.${DISCLOSURE_TOGGLE_CLASS}`)?.remove()
+    const open = section.getAttribute(PGC_SECTION_ATTRIBUTE) !== 'folded'
+    section.setAttribute(PGC_SECTION_ATTRIBUTE, open ? 'open' : 'folded')
+    const toggle = createDisclosureToggle(EPISODE_LABELS, open)
+    toggle.addEventListener('click', () => {
+      const opening = section.getAttribute(PGC_SECTION_ATTRIBUTE) === 'folded'
+      section.setAttribute(PGC_SECTION_ATTRIBUTE, opening ? 'open' : 'folded')
+      setDisclosureToggle(toggle, EPISODE_LABELS, opening)
+    })
+    actions.append(toggle)
+  }
 }
 
 function ensurePlaylistCoverLayout(panel: HTMLElement) {
@@ -94,19 +138,11 @@ function placePlaylistToggleButton(currentState: BewlyWidescreenState) {
 export function syncPlaylistToggleButton(currentState: BewlyWidescreenState) {
   const panel = currentState.playlistSlot
   const episodeSection = panel.querySelector<HTMLElement>(`.${EPISODE_SECTION_CLASS}`)
-  const hasEpisodeSection = !!episodeSection
+  // Bangumi's sections fold on their own (syncPgcSections).
+  const hasEpisodeSection = !!episodeSection && currentState.root.dataset.pageKind !== 'pgc'
   if (currentState.playlistToggleButton.hidden !== !hasEpisodeSection)
     currentState.playlistToggleButton.hidden = !hasEpisodeSection
-  const expanded = hasEpisodeSection && !currentState.playlistCollapsed
-  if (currentState.playlistToggleButton.getAttribute('aria-expanded') !== String(expanded))
-    currentState.playlistToggleButton.setAttribute('aria-expanded', String(expanded))
-  const label = t(expanded
-    ? 'widescreen.collapse'
-    : 'widescreen.expand_more')
-  if (currentState.playlistToggleButton.textContent !== label)
-    currentState.playlistToggleButton.textContent = label
-  if (currentState.playlistToggleButton.getAttribute('aria-label') !== label)
-    currentState.playlistToggleButton.setAttribute('aria-label', label)
+  setDisclosureToggle(currentState.playlistToggleButton, EPISODE_LABELS, hasEpisodeSection && !currentState.playlistCollapsed)
   const collapsed = hasEpisodeSection && currentState.playlistCollapsed
   if (panel.classList.contains('is-episode-section-collapsed') !== collapsed)
     panel.classList.toggle('is-episode-section-collapsed', collapsed)
@@ -151,6 +187,17 @@ export function setupPlaylistToggle(currentState: BewlyWidescreenState) {
   }
 }
 
+/**
+ * Bangumi's related recommendations sit in a classless list; marking it lets
+ * the rail lay them out as the video page's two-column cards without class
+ * substrings above the subject (layout.ts).
+ */
+export function markPgcRecommendations(panel: HTMLElement) {
+  const list = panel.querySelector('[class*="RecommendItem_wrap"]')?.parentElement
+  if (list && !list.classList.contains(PGC_RECOMMEND_LIST_CLASS))
+    list.classList.add(PGC_RECOMMEND_LIST_CLASS)
+}
+
 export function syncEpisodeSectionMarker(currentState: BewlyWidescreenState) {
   const panel = currentState.playlistSlot
   const movedNodes = currentState.movedNodes
@@ -161,10 +208,12 @@ export function syncEpisodeSectionMarker(currentState: BewlyWidescreenState) {
     if (node !== episodeSection)
       node.classList.remove(...EPISODE_SECTION_CLASSES)
   })
-  if (episodeSection) {
-    if (!episodeSection.classList.contains(EPISODE_SECTION_CLASS))
-      episodeSection.classList.add(...EPISODE_SECTION_CLASSES)
-  }
+  // Bangumi's directory scrolls in its sections (syncPgcSections), not as one.
+  const isPgc = currentState.root.dataset.pageKind === 'pgc'
+  if (episodeSection && !episodeSection.classList.contains(EPISODE_SECTION_CLASS))
+    episodeSection.classList.add(...(isPgc ? [EPISODE_SECTION_CLASS] : EPISODE_SECTION_CLASSES))
+  if (isPgc)
+    syncPgcSections(panel)
   placePlaylistToggleButton(currentState)
   syncPlaylistToggleButton(currentState)
 }

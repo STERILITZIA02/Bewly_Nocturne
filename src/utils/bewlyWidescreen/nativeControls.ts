@@ -33,7 +33,9 @@ export function syncNativePlayerControlVisibility(
   const keyboardFocus = active?.matches(':focus-visible')
     && [nativeControls, currentState.danmakuSemanticsSource, currentState.auxiliaryControlsElement]
       .some(control => control?.contains(active))
-  const hidden = !ready || !(currentState.playerControlsActive || editingDanmaku || keyboardFocus)
+  // Listening keeps the bar shown: it is the audio's only transport, over a still stage.
+  const listening = currentState.root.hasAttribute('data-bew-listening')
+  const hidden = !ready || !(listening || currentState.playerControlsActive || editingDanmaku || keyboardFocus)
   if (currentState.root.dataset.playerControlsReady !== String(ready))
     currentState.root.dataset.playerControlsReady = String(ready)
   if (currentState.root.dataset.playerControlsHidden !== String(hidden))
@@ -66,7 +68,7 @@ export function setupActiveWidescreenControl(currentState: BewlyWidescreenState)
       clearActivity()
   }
   function handlePlayerActivity(event: Event) {
-    if (!event.isTrusted)
+    if (!event.isTrusted || currentState.root.hasAttribute('data-bew-listening'))
       return
     const path = event.composedPath()
     if (![currentState.playerEl, currentState.danmakuSourceHost, currentState.danmakuDock, currentState.auxiliaryControlsElement]

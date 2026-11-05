@@ -38,6 +38,7 @@ async function prepare() {
       r('src/manifest.ts'),
       r('src/constants/contentScript.ts'),
       r('src/constants/nativeSites.ts'),
+      r('src/constants/audioCdn.ts'),
       r('package.json'),
     ])
       .on('change', () => {

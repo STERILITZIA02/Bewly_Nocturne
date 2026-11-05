@@ -4,6 +4,7 @@ import { BILIBILI_DESKTOP_USER_AGENT, isPreventMobileRedirectEnabled } from '~/u
 
 import { setupAppClient } from './appClient'
 import { setupContentScriptRefreshPrompt } from './contentScriptRefreshPrompt'
+import { setupListenPlayback } from './listenPlayback'
 import { setupLoginStateWatcher } from './loginStateWatcher'
 import { setupApiMsgListeners } from './messageListeners/api'
 import { setupTabMsgListeners } from './messageListeners/tabs'
@@ -96,3 +97,4 @@ setupOpenTabsWatchLater()
 setupContentScriptRefreshPrompt()
 setupRefreshTabs()
 setupLoginStateWatcher()
+setupListenPlayback()

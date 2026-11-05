@@ -1,7 +1,7 @@
 import LOADING_RING_CSS from '~/styles/loadingRing.scss?inline'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
 import { LOADING_FADE_DURATION, LOADING_ROOT_ID, MOBILE_BREAKPOINT } from '~/utils/bewlyWidescreen/constants'
-import { CARD_LAYOUT_PROPERTIES, playbackRailTopPadding } from '~/utils/bewlyWidescreen/styles/cardLayout'
+import { CARD_LAYOUT_PROPERTIES, playbackLetterbox, playbackRailHeadGlass, playbackRailTopPadding } from '~/utils/bewlyWidescreen/styles/cardLayout'
 import { injectCSS } from '~/utils/main'
 import { reducedMotionCss } from '~/utils/reducedMotion'
 
@@ -9,7 +9,9 @@ export function injectLoadingStyle() {
   return injectCSS(`
     ${SKELETON_CSS}
     ${LOADING_RING_CSS}
-    ${playbackRailTopPadding(`#${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-sidebar`)}
+    ${playbackRailTopPadding(`#${LOADING_ROOT_ID}`, '.bewly-widescreen-loading-skeleton-sidebar')}
+    ${playbackRailHeadGlass(`#${LOADING_ROOT_ID}`, '.bewly-widescreen-loading-skeleton-sidebar')}
+    ${playbackLetterbox(`#${LOADING_ROOT_ID}`)}
     #${LOADING_ROOT_ID} {
       position: fixed;
       inset: 0;
@@ -78,7 +80,7 @@ export function injectLoadingStyle() {
       min-width: 0;
       min-height: 0;
       overflow: hidden;
-      background: var(--bew-player-canvas, #000);
+      background: var(--bewly-widescreen-letterbox);
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-block {
@@ -179,17 +181,32 @@ export function injectLoadingStyle() {
     }
 
     /* The tabs stay above the overview throughout the loading handoff. */
+    /* A hairline between the video and the column, the same edge as the
+       page rails beside the content. */
+    @media (min-width: ${MOBILE_BREAKPOINT + 1}px) {
+      #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-sidebar {
+        border-inline-start: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
+      }
+
+      #${LOADING_ROOT_ID}[data-sidebar-position="left"] .bewly-widescreen-loading-skeleton-sidebar {
+        border-inline-start: 0;
+        border-inline-end: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
+      }
+    }
+
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-sidebar {
       position: relative;
       display: flex;
       flex-direction: column;
-      gap: var(--bew-space-3, 12px);
+      gap: var(--bewly-widescreen-rail-head-inset);
       grid-area: rail;
       box-sizing: border-box;
       min-width: 0;
       min-height: 0;
-      padding: var(--bewly-widescreen-page-padding) var(--bewly-widescreen-page-padding) calc(var(--bewly-widescreen-page-padding) + var(--bew-space-3, 12px));
+      padding-inline: var(--bewly-widescreen-page-padding);
+      padding-bottom: calc(var(--bewly-widescreen-page-padding) + var(--bew-space-3, 12px));
       overflow: hidden;
+      isolation: isolate;
       background: transparent;
     }
 
@@ -202,15 +219,22 @@ export function injectLoadingStyle() {
       overflow: hidden;
     }
 
+    /* The info card (layout.ts), with the section break below it that the
+       real info's height includes. */
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-sidebar-top {
       display: grid;
       align-content: start;
       flex: 1 1 auto;
       gap: var(--bew-space-2, 8px);
       min-height: 0;
-      padding: 0 0 var(--bew-space-3, 12px);
+      margin-bottom: var(--bew-space-6, 24px);
+      padding: var(--bew-space-4, 16px);
       overflow: hidden;
-      background: transparent;
+      border: var(--bew-hairline, 1px) solid var(--bew-edge-color);
+      border-radius: var(--bew-surface-radius);
+      corner-shape: var(--bew-corner-shape);
+      background: var(--bew-elevated-over-page);
+      box-shadow: var(--bew-shadow-1);
     }
 
     #${LOADING_ROOT_ID} :is(
@@ -322,7 +346,7 @@ export function injectLoadingStyle() {
       align-items: center;
       flex: 0 0 auto;
       gap: var(--bew-space-8, 32px);
-      min-height: var(--bew-control-height, 36px);
+      min-height: var(--bewly-widescreen-rail-tabs-height);
       padding: 0 var(--bew-space-6, 24px);
     }
 

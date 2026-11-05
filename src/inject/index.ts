@@ -13,7 +13,6 @@ import { createCommentReplyPaginationController } from '~/inject/commentReplyPag
 import { createNativeCommentReplyReader } from '~/inject/commentReplyReader'
 import { createCommentReplyReadingController, getCommentReplyGuideCoordinates } from '~/inject/commentReplyReading'
 import { updateCommentSendButton } from '~/inject/commentSendButton'
-import { sortPlaybackDanmakuListBySender } from '~/inject/danmakuSenderOrder'
 import { EXTERNAL_COMPOSER_COMMENT_BOX_CSS, EXTERNAL_COMPOSER_HEADER_CSS, insertExternalComposerReply, patchExternalComposerReply } from '~/inject/externalCommentComposer'
 import { syncNativeCommentContinuation } from '~/inject/nativeCommentContinuation'
 import { wakeNativeCommentLists } from '~/inject/nativeCommentWake'
@@ -432,30 +431,20 @@ else if (shouldInitializePageScript) {
           min-height: var(--bew-control-height);
           margin-bottom: 0 !important;
         }
+        /* The rail's comment tab already names the panel and its count
+           (user-specified), so the header is only the sort, on the left. */
         :host-context(#bewly-widescreen-root) #title {
-          display: inline-flex;
-          align-items: baseline;
-          gap: var(--bew-space-2);
-        }
-        :host-context(#bewly-widescreen-root) #title h2 {
-          font-size: var(--bew-font-size-title) !important;
-          font-weight: var(--bew-font-weight-regular) !important;
-          line-height: var(--bew-line-height-title) !important;
-        }
-        :host-context(#bewly-widescreen-root) #count {
-          margin: 0;
-          font-size: var(--bew-font-size-caption) !important;
-          line-height: var(--bew-line-height-caption) !important;
-          color: var(--bew-text-3);
+          display: none !important;
         }
         /* The sort is a static segment like the dynamic cards' comment sort:
            the chosen order sits on the selected surface and the other only
-           brightens on hover. Bilibili's divider and accent hover go. */
+           brightens on hover. Standalone, its items are the control tier's
+           rounded rectangles. Bilibili's divider and accent hover go. */
         :host-context(#bewly-widescreen-root) #sort-actions {
           display: inline-flex;
           align-items: center;
           gap: var(--bew-control-gap, 4px);
-          margin-left: auto;
+          margin: 0 !important;
         }
         :host-context(#bewly-widescreen-root) #sort-actions .sort-div {
           display: none;
@@ -466,8 +455,8 @@ else if (shouldInitializePageScript) {
           --_trailing-space: var(--bew-control-item-padding-x, 12px);
           --_label-text-color: var(--bew-text-2);
           --_label-text-color-hover: var(--bew-segment-item-hover-color);
-          border-radius: var(--bew-control-item-radius);
-          corner-shape: var(--bew-corner-shape-capsule);
+          border-radius: var(--bew-interactive-radius);
+          corner-shape: var(--bew-corner-shape);
           font-size: var(--bew-font-size-control) !important;
           line-height: var(--bew-line-height-control) !important;
           transition:
@@ -714,14 +703,21 @@ else if (shouldInitializePageScript) {
     },
   }
 
-  function ensureCommentShadowStyle(root: ShadowRoot, id: string, css: string) {
-    if (root.querySelector(`#${id}`))
-      return
+  // One constructed sheet per patch, adopted by every component's shadow
+  // root. Adopted sheets add no node: a <style> child would become the
+  // root's first child and break Bilibili's own structural selectors (its
+  // footer spaces every item but the first, so the date was indented).
+  const commentShadowSheets = new Map<string, CSSStyleSheet>()
 
-    const style = document.createElement('style')
-    style.id = id
-    style.textContent = css
-    root.appendChild(style)
+  function ensureCommentShadowStyle(root: ShadowRoot, id: string, css: string) {
+    let sheet = commentShadowSheets.get(id)
+    if (!sheet) {
+      sheet = new CSSStyleSheet()
+      sheet.replaceSync(css)
+      commentShadowSheets.set(id, sheet)
+    }
+    if (!root.adoptedStyleSheets.includes(sheet))
+      root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet]
   }
 
   function isInsideBewlyWidescreen(element: Element): boolean {
@@ -790,6 +786,8 @@ else if (shouldInitializePageScript) {
       afterUpdate?: (component: any) => void
       afterNativeUpdate?: (component: any) => void
       beforeUpdate?: (component: any) => void
+      /** Static shadow styles, added before the component's first paint. */
+      styles?: Array<{ id: string, css: string }>
       silent?: boolean
     },
   ) {
@@ -859,6 +857,12 @@ else if (shouldInitializePageScript) {
 
     const boundOriginal = originalMethod
     const patched = function (this: any, ...updateArgs: any[]) {
+      // The styles take effect in the render that is about to paint, so the
+      // comment never shows Bilibili's own sizes first and then jumps.
+      if (options?.styles && this.shadowRoot) {
+        for (const style of options.styles)
+          ensureCommentShadowStyle(this.shadowRoot, style.id, style.css)
+      }
       if (settingsReady && options?.beforeUpdate) {
         try {
           options.beforeUpdate(this)
@@ -3166,9 +3170,6 @@ else if (shouldInitializePageScript) {
             if (!root)
               return
 
-            ensureCommentShadowStyle(root, shadowStylePatch.id, shadowStylePatch.css)
-            if (name === 'bili-comment-renderer')
-              ensureCommentShadowStyle(root, 'bewly-comment-text-autospace', COMMENT_TEXT_AUTOSPACE_CSS)
             if (name === 'bili-comments') {
               syncNativeCommentContinuation(component)
             }
@@ -3195,6 +3196,7 @@ else if (shouldInitializePageScript) {
             }
           }, name === 'bili-comment-replies-renderer'
             ? {
+                styles: [shadowStylePatch],
                 afterUpdate: animateCommentReplyMotion,
                 afterNativeUpdate: (component) => {
                   if (commentReplyTreeStates.get(component)?.enabled)
@@ -3211,15 +3213,11 @@ else if (shouldInitializePageScript) {
                   captureCommentReplyMotion(component)
                 },
               }
-            : name === 'bili-comments-spinner'
-              ? {
-                  // Styled before its first paint, so the native GIF never shows.
-                  beforeUpdate: (component) => {
-                    if (component.shadowRoot)
-                      ensureCommentShadowStyle(component.shadowRoot, shadowStylePatch.id, shadowStylePatch.css)
-                  },
-                }
-              : undefined)
+            : {
+                styles: name === 'bili-comment-renderer'
+                  ? [shadowStylePatch, { id: 'bewly-comment-text-autospace', css: COMMENT_TEXT_AUTOSPACE_CSS }]
+                  : [shadowStylePatch],
+              })
         }
         catch (error) {
           console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
@@ -3230,8 +3228,6 @@ else if (shouldInitializePageScript) {
       if (name === 'bili-comment-reply-renderer') {
         try {
           patchCommentComponentUpdate(name, classConstructor, (component) => {
-            if (component.shadowRoot)
-              ensureCommentShadowStyle(component.shadowRoot, 'bewly-comment-text-autospace', COMMENT_TEXT_AUTOSPACE_CSS)
             const rootNode = component.getRootNode?.()
             const repliesRenderer = rootNode instanceof ShadowRoot ? rootNode.host : null
             if (repliesRenderer?.localName === 'bili-comment-replies-renderer') {
@@ -3242,7 +3238,7 @@ else if (shouldInitializePageScript) {
               if (getCommentReplyDeepLinkId())
                 scheduleCommentReplyDeepLinkSettlement('hash')
             }
-          })
+          }, { styles: [{ id: 'bewly-comment-text-autospace', css: COMMENT_TEXT_AUTOSPACE_CSS }] })
         }
         catch (error) {
           console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
@@ -3298,8 +3294,6 @@ else if (shouldInitializePageScript) {
             if (!userNameEl)
               return
 
-            ensureCommentShadowStyle(root, 'bewly-widescreen-comment-user-style', WIDESCREEN_COMMENT_USER_CSS)
-
             cacheRootReplyAuthor(component.data)
 
             // 楼中楼 user-info 先于/并行于 replies 树更新时也写入关系缓存，避免跨页丢 parent
@@ -3325,7 +3319,7 @@ else if (shouldInitializePageScript) {
             const shouldShowLocation = Boolean(currentSettings?.showIPLocation && locationString)
             const locationAnchor = hostEl ?? sexEl ?? userNameEl
             updateInfoElement(root, 'location', shouldShowLocation, locationString, locationAnchor)
-          })
+          }, { styles: [{ id: 'bewly-widescreen-comment-user-style', css: WIDESCREEN_COMMENT_USER_CSS }] })
         }
         catch (error) {
           console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
@@ -3423,15 +3417,6 @@ else if (shouldInitializePageScript) {
       type: PAGE_BRIDGE_MESSAGE.COMMENT_LIST_WAKE,
     })) {
       wakeNativeCommentLists(event.data.data)
-      return
-    }
-    if (targetOrigin && matchesPageBridgeEvent(event, {
-      source: window,
-      origin: targetOrigin,
-      channelId: pageBridgeChannelId,
-      type: PAGE_BRIDGE_MESSAGE.DANMAKU_SENDER_ORDER,
-    })) {
-      sortPlaybackDanmakuListBySender()
       return
     }
     if (!targetOrigin || !matchesPageBridgeEvent(event, {

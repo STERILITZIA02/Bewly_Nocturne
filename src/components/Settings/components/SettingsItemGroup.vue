@@ -153,8 +153,9 @@ onScopeDispose(() => releaseMotion?.())
     color var(--bew-duration-normal) var(--bew-ease-standard),
     transform var(--bew-duration-normal) var(--bew-ease-standard);
 
-  &.collapsed {
-    transform: rotate(-90deg);
+  // Open, it points the way the group closes (up); closed, the way it opens.
+  &:not(.collapsed) {
+    transform: rotate(180deg);
   }
 }
 

@@ -745,6 +745,10 @@ settings:
   grid_columns: 显示
   video_card_title_font_size: 标题字号
   video_card_author_font_size: UP 信息字号
+  dock_label_size: Dock 字号
+  dock_label_size_option:
+    small: 较小
+    standard: 标准
   font_size_option:
     xs: 特小
     sm: 小
@@ -1892,6 +1896,16 @@ watch_later:
   play_and_remove: 播放并移除
   play_in_watch_later: 列表播放
 widescreen:
+  listen: 听视频
+  listen_play: 播放
+  listen_pause: 暂停
+  return_video: 返回视频
+  collapse_info: 收起视频信息
+  expand_info: 展开视频信息
+  collapse_episodes: 收起选集
+  expand_episodes: 展开选集
+  listen_not_ready: 播放器尚未就绪，请稍后再试。
+  listen_unavailable: 这段视频没有可单独播放的音轨。
   overview: 简介
   panel_load_incomplete: 内容未能完成加载，可刷新页面或退出 Bewly 播放页后重试
   reload_page: 刷新页面
@@ -1917,13 +1931,24 @@ widescreen:
   expand_more: 展开更多
   comments_loading: 评论区加载中
   danmaku_loading: 弹幕列表加载中
-  danmaku_sender: 用户
-  danmaku_sort_sender: 按发送用户排序
+  danmaku_list: 弹幕列表
+  danmaku_block: 屏蔽设定
+  danmaku_advanced: 高级弹幕
   list_loading: 列表加载中
   stat_likes: 点赞
   stat_coins: 投币
   stat_favorites: 收藏
   stat_shares: 分享
+  action_like: 点赞
+  action_coin: 投币
+  action_favorite: 收藏
+  action_copy_link: 复制链接
+  action_liked: 已点赞
+  action_coined: 已投币
+  action_favorited: 已收藏
+  follow_status_want: 想看
+  follow_status_watching: 观看中
+  follow_status_watched: 已观看
   video_description: 视频简介
   video_category: 视频分区
 search_bar:

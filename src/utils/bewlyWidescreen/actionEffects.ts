@@ -1,6 +1,30 @@
-import { ACTION_ANIMATION_ATTRIBUTE, ACTION_ANIMATION_SELECTOR, BILIBILI_ACTION_ANIMATION_HUE } from '~/utils/bewlyWidescreen/constants'
+import { isActionRollMutation, syncActionRolls } from '~/utils/bewlyWidescreen/actionRolls'
+import { ACTION_ANIMATION_ATTRIBUTE, ACTION_ANIMATION_SELECTOR, BILIBILI_ACTION_ANIMATION_HUE, NATIVE_DIALOG_CHECK_CLASS, NATIVE_DIALOG_FIELD_CLASS, NATIVE_DIALOG_NUMERAL_CLASS, NATIVE_DIALOG_TITLE_CLASS, RAISED_MORE_MENU_CLASS } from '~/utils/bewlyWidescreen/constants'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
+import { getViewportShiftX } from '~/utils/viewportFit'
+
+/** Waits for bangumi's "more" menu to mount (liftMoreMenu). */
+let moreMenuWatch: MutationObserver | undefined
+/** Keeps the "more" menu open while the pointer crosses into it (keepMoreMenuHover). */
+let moreMenuHover: AbortController | undefined
+
+/** Marks bangumi's dialogs as they mount (markNativeDialog). */
+let nativeDialogWatch: MutationObserver | undefined
+
+// Bangumi mounts its dialogs (coin, rating) as fixed masks in the page container.
+const NATIVE_DIALOG_HOST_SELECTOR = '#__next .main-container'
+const NATIVE_DIALOG_SELECTOR = '[class*="dialogcoin_coin_dialog_mask"], [class*="short_short_review_masker"], [class*="modalWrapper_mask"]'
+const NATIVE_DIALOG_MARKS: [selector: string, mark: string][] = [
+  ['[class*="dialogcoin_coin_title"] > span', NATIVE_DIALOG_NUMERAL_CLASS],
+  ['label > input[type="checkbox"] + i', NATIVE_DIALOG_CHECK_CLASS],
+  ['[class*="header_review_edit_media_info"] > h4', NATIVE_DIALOG_TITLE_CLASS],
+  ['[class*="short_review_body_wrap"] > textarea', NATIVE_DIALOG_FIELD_CLASS],
+]
+
+// Bangumi's watch-together panel: mounted under its chip while hovered.
+const FITTED_POPOVER_SELECTOR = '[class*="WatchInfo_watch_more"]'
+const FIT_X_PROPERTY = '--bewly-popover-fit-x'
 
 function parseRgbColor(value: string) {
   const match = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
@@ -78,6 +102,14 @@ export function syncActionAnimationTheme(currentState: BewlyWidescreenState) {
 }
 
 export function clearActionGeometry(currentState: BewlyWidescreenState) {
+  moreMenuWatch?.disconnect()
+  moreMenuWatch = undefined
+  nativeDialogWatch?.disconnect()
+  nativeDialogWatch = undefined
+  for (const [, mark] of NATIVE_DIALOG_MARKS)
+    document.querySelectorAll(`.${mark}`).forEach(node => node.classList.remove(mark))
+  moreMenuHover?.abort()
+  moreMenuHover = undefined
   if (currentState.actionGeometryFrame !== undefined)
     cancelAnimationFrame(currentState.actionGeometryFrame)
   currentState.actionGeometryFrame = undefined
@@ -110,9 +142,10 @@ function syncActionEffectGeometry(currentState: BewlyWidescreenState) {
         && centerY <= buttonRect.bottom
     }) || button
   }
-  const wraps = currentState.toolbarSlot.querySelectorAll<HTMLElement>('.toolbar-left-item-wrap')
+  // A video's chips sit in wraps; bangumi's chips are the toolbar's spans.
+  const wraps = currentState.toolbarSlot.querySelectorAll<HTMLElement>('.toolbar-left-item-wrap, .toolbar > .toolbar-left > span')
   wraps.forEach((wrap) => {
-    const button = wrap.querySelector<HTMLElement>('.video-toolbar-left-item')
+    const button = wrap.querySelector<HTMLElement>('.video-toolbar-left-item') ?? (wrap.matches('.toolbar-left-item-wrap') ? null : wrap)
     if (!button)
       return
     const anchor = findVisibleAnchor(button)
@@ -128,7 +161,7 @@ function syncActionEffectGeometry(currentState: BewlyWidescreenState) {
   })
 
   const toolbarLeft = currentState.toolbarSlot.querySelector<HTMLElement>('.video-toolbar-left')
-  const firstButton = wraps[0]?.querySelector<HTMLElement>('.video-toolbar-left-item')
+  const firstButton = wraps[0]?.querySelector<HTMLElement>('.video-toolbar-left-item') ?? null
   const firstAnchor = firstButton ? findVisibleAnchor(firstButton) : null
   if (toolbarLeft && firstAnchor) {
     const anchorRect = firstAnchor.getBoundingClientRect()
@@ -179,18 +212,133 @@ function markActionAnimations(toolbarSlot: HTMLElement) {
   })
 }
 
+/**
+ * Bangumi's "more" chip opens a menu Bilibili mounts on <body> (on first
+ * hover), under the playback shell. When the pointer reaches the chip, the
+ * menu's wrapper is raised above the shell with its right edge at the chip's
+ * (layout.ts); a body watch waits for it only until it first mounts.
+ */
+function liftMoreMenu(event: Event) {
+  const chip = (event.target as Element).closest?.('.toolbar-right > span')
+  if (!chip)
+    return
+  const right = `${document.documentElement.clientWidth - chip.getBoundingClientRect().right}px`
+  const lift = () => {
+    const wrap = document.querySelector('[class*="moreTool_popupWrap"]')?.parentElement
+    if (!wrap)
+      return false
+    wrap.classList.add(RAISED_MORE_MENU_CLASS)
+    wrap.style.setProperty('--bewly-more-menu-right', right)
+    return true
+  }
+  if (lift() || moreMenuWatch)
+    return
+  moreMenuWatch = new MutationObserver(() => {
+    if (!lift())
+      return
+    moreMenuWatch?.disconnect()
+    moreMenuWatch = undefined
+  })
+  moreMenuWatch.observe(document.body, { childList: true })
+}
+
+/**
+ * Bangumi's dialogs' count and checkbox have no class of their own; marked,
+ * they take the dialog styles (layout.ts) without class substrings above
+ * the subject.
+ */
+function markNativeDialog(dialog: Element) {
+  for (const [selector, mark] of NATIVE_DIALOG_MARKS)
+    dialog.querySelectorAll(selector).forEach(node => node.classList.add(mark))
+}
+
+function watchNativeDialogs() {
+  const host = document.querySelector(NATIVE_DIALOG_HOST_SELECTOR)
+  if (!host)
+    return
+  host.querySelectorAll(`:scope > :is(${NATIVE_DIALOG_SELECTOR})`).forEach(markNativeDialog)
+  nativeDialogWatch = new MutationObserver((records) => {
+    for (const record of records) {
+      record.addedNodes.forEach((node) => {
+        if (node instanceof Element && node.matches(NATIVE_DIALOG_SELECTOR))
+          markNativeDialog(node)
+      })
+    }
+  })
+  nativeDialogWatch.observe(host, { childList: true })
+}
+
+/**
+ * The "more" menu is a React portal of its chip, but the toolbar was moved out
+ * of Bilibili's React root, so React reads the pointer crossing from the chip
+ * into the menu (or back) as leaving the chip, and closes the menu before it
+ * can be used. Those crossings are kept from React; leaving both still
+ * closes it.
+ */
+function keepMoreMenuHover(toolbarSlot: HTMLElement, event: MouseEvent) {
+  if (!(event.target instanceof Element) || !(event.relatedTarget instanceof Element))
+    return
+  const menu = `.${RAISED_MORE_MENU_CLASS}`
+  const from = event.target
+  const to = event.relatedTarget
+  if ((toolbarSlot.contains(from) && to.closest(menu)) || (from.closest(menu) && toolbarSlot.contains(to)))
+    event.stopPropagation()
+}
+
+/**
+ * Bilibili centres a panel such as watch-together under its chip, which can
+ * reach past the window's edge; it moves sideways until it is the popover
+ * inset inside. Runs as the panel mounts, before it paints, so it never jumps.
+ */
+function fitToolbarPopovers(toolbarSlot: HTMLElement) {
+  toolbarSlot.querySelectorAll<HTMLElement>(FITTED_POPOVER_SELECTOR).forEach((popover) => {
+    const box = popover.getBoundingClientRect()
+    if (!box.width)
+      return
+    const inset = Number.parseFloat(getComputedStyle(popover).getPropertyValue('--bew-space-2'))
+    const shift = getViewportShiftX(box, document.documentElement.clientWidth, inset)
+    if (shift)
+      popover.style.setProperty(FIT_X_PROPERTY, `${(Number.parseFloat(popover.style.getPropertyValue(FIT_X_PROPERTY)) || 0) + shift}px`)
+  })
+}
+
 export function setupActionGeometryObservers(currentState: BewlyWidescreenState) {
-  currentState.toolbarMutationObserver = new MutationObserver((records) => {
+  currentState.toolbarSlot.addEventListener('pointerover', liftMoreMenu)
+  currentState.toolbarSlot.addEventListener('click', liftMoreMenu)
+  moreMenuHover?.abort()
+  moreMenuHover = new AbortController()
+  // Capturing on the document runs before React's listeners on <body>.
+  document.addEventListener('mouseout', event => keepMoreMenuHover(currentState.toolbarSlot, event), { capture: true, signal: moreMenuHover.signal })
+  nativeDialogWatch?.disconnect()
+  if (currentState.root.dataset.pageKind === 'pgc')
+    watchNativeDialogs()
+  currentState.toolbarMutationObserver = new MutationObserver((mutations) => {
+    // The rollers' own text changes are not Bilibili's.
+    const records = mutations.filter(record => !isActionRollMutation(record))
+    if (!records.length)
+      return
+    syncActionRolls(currentState)
     const inserted = records.some(record => record.addedNodes.length > 0)
+    if (inserted)
+      fitToolbarPopovers(currentState.toolbarSlot)
     if (inserted || records.some(record => record.type === 'attributes'))
       markActionAnimations(currentState.toolbarSlot)
     if (inserted || records.some(record => record.removedNodes.length > 0))
       scheduleActionGeometrySync(currentState)
   })
-  currentState.toolbarMutationObserver.observe(currentState.toolbarSlot, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] })
+  currentState.toolbarMutationObserver.observe(currentState.toolbarSlot, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'] })
   markActionAnimations(currentState.toolbarSlot)
+  syncActionRolls(currentState)
 
-  currentState.toolbarResizeObserver = new ResizeObserver(() => scheduleActionGeometrySync(currentState))
+  // The anchors follow the chips' widths. The slot's height animates when the
+  // info card folds; that must not measure the row on every frame.
+  let width = -1
+  currentState.toolbarResizeObserver = new ResizeObserver(([entry]) => {
+    if (entry.contentRect.width === width)
+      return
+    width = entry.contentRect.width
+    scheduleActionGeometrySync(currentState)
+  })
   currentState.toolbarResizeObserver.observe(currentState.toolbarSlot)
 
   currentState.themeObserver = new MutationObserver(() => syncActionAnimationTheme(currentState))

@@ -47,8 +47,15 @@ export function registerPlaybackContentChecks(check) {
       '~/utils/bewlyWidescreen/geometry': { schedulePlayerResizeSync() {} },
       '~/utils/bewlyWidescreen/labels': { t: key => key },
       '~/utils/bewlyWidescreen/nativeDom': { getTitleText: () => 'Video', restoreCommentPrewarm() {} },
-      '~/utils/bewlyWidescreen/railTabs': { publishRailTabs() {} },
+      '~/utils/bewlyWidescreen/danmakuViews': { createDanmakuViews: () => document.createElement('div') },
+      '~/utils/bewlyWidescreen/disclosureToggle': await loadSourceModule('../src/utils/bewlyWidescreen/disclosureToggle.ts', {
+        '~/utils/bewlyWidescreen/constants': await import('../src/utils/bewlyWidescreen/constants'),
+        '~/utils/bewlyWidescreen/labels': { t: key => key },
+      }),
+      '~/utils/bewlyWidescreen/railTabs': { railTabs: { publish() {}, motion: Symbol('rail-tabs') } },
       '~/utils/bewlyWidescreen/session': { session },
+      '~/utils/motionPriority': { afterMotion: () => Promise.resolve() },
+      'vue': { nextTick: () => Promise.resolve() },
     })
     const state = shell.createRoot()
     session.current = { ...state, hydratedTabs: new Set(), hydrateSidebar() {} }
@@ -60,13 +67,19 @@ export function registerPlaybackContentChecks(check) {
       const visible = () => Object.keys(state.panels).filter(tab => !state.panels[tab].hidden)
       shell.setActiveTab('overview')
       assert.deepEqual(visible(), ['overview'])
+      // A pick selects its tab at once; its panel swaps in once the plate lands.
+      const landed = () => new Promise(resolve => setTimeout(resolve))
       overview.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
-      assert.deepEqual(visible(), ['comment'])
+      assert.equal(comment.getAttribute('aria-selected'), 'true')
       assert.equal(document.activeElement, comment)
+      await landed()
+      assert.deepEqual(visible(), ['comment'])
       danmaku.click()
+      await landed()
       assert.deepEqual(visible(), ['danmaku'])
       danmaku.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
       assert.equal(document.activeElement, overview)
+      await landed()
       assert.deepEqual(visible(), ['overview'])
     }
     finally {
@@ -248,8 +261,10 @@ export function registerPlaybackContentChecks(check) {
     let nextFrame = 0
     const session = { current: state }
     const actions = await loadSourceModule('../src/utils/bewlyWidescreen/actionEffects.ts', {
+      '~/utils/bewlyWidescreen/actionRolls': { isActionRollMutation: () => false, syncActionRolls() {} },
       '~/utils/bewlyWidescreen/constants': f.constants,
       '~/utils/bewlyWidescreen/session': { session },
+      '~/utils/viewportFit': await import('../src/utils/viewportFit'),
     }, {
       requestAnimationFrame: (run) => {
         frames.set(++nextFrame, run)
@@ -458,15 +473,16 @@ export function registerPlaybackContentChecks(check) {
       '~/utils/bewlyWidescreen/commentWake': { wakeNativeCommentList: () => ++commentWakes },
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/danmaku': { activateDanmakuTab() {}, clearDanmakuActivation() {}, isDanmakuPanelReady: () => false, syncDanmakuInputSource() {} },
+      '~/utils/bewlyWidescreen/danmakuViews': { syncDanmakuViews() {} },
       '~/utils/bewlyWidescreen/description': description,
       '~/utils/bewlyWidescreen/geometry': { ensureAnchoredPlayer() {}, schedulePlayerResizeSync() {}, syncAuxiliaryControlGeometry() {}, syncControlsGlassGeometry() {} },
       '~/utils/bewlyWidescreen/labels': { t: key => key },
       '~/utils/bewlyWidescreen/nativeControls': { syncNativePlayerControlVisibility() {} },
       '~/utils/bewlyWidescreen/nativeDom': native,
-      '~/utils/bewlyWidescreen/playlist': { clearEpisodeSectionMarker() {}, placeRecommendAfterPlaylist() {}, syncEpisodeSectionMarker() {}, syncPlaylistToggleButton() {} },
+      '~/utils/bewlyWidescreen/playlist': { clearEpisodeSectionMarker() {}, markPgcRecommendations() {}, placeRecommendAfterPlaylist() {}, syncEpisodeSectionMarker() {}, syncPlaylistToggleButton() {} },
       '~/utils/bewlyWidescreen/session': { session },
       '~/utils/bewlyWidescreen/shell': { scheduleInitialPanelScrollReset() {} },
-      '~/utils/bewlyWidescreen/videoInfo': { syncVideoMetadata: () => true, syncViewerCount() {}, renderFallbackVideoInfo() {}, syncSidebarTitle() {} },
+      '~/utils/bewlyWidescreen/videoInfo': { syncVideoMetadata: () => true, syncViewerCount() {}, renderFallbackVideoInfo() {}, syncSidebarTitle() {}, syncTabCounts() {} },
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
       '~/utils/loadingRing': await import('../src/utils/loadingRing'),
       '~/utils/motionTiming': await import('../src/utils/motionTiming'),

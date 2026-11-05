@@ -50,6 +50,21 @@ function inputReserve(section: HTMLElement) {
   return Math.max(pixels(style.minWidth), section.getBoundingClientRect().width - input.getBoundingClientRect().width + minimumInput)
 }
 
+// With chapters Bpx lets the left group and its chapter title grow into every
+// free pixel. Reserve the chapter's text, as the danmaku input reserves ten
+// characters, so the title gives way before any control collapses.
+function leftReserve(section: HTMLElement) {
+  const style = getComputedStyle(section)
+  if (style.display === 'none' || !(Number.parseFloat(style.flexGrow) > 0))
+    return outerWidth(section)
+  const children = Array.from(section.children).filter((node): node is HTMLElement => node instanceof HTMLElement && getComputedStyle(node).display !== 'none')
+  return pixels(style.paddingLeft) + pixels(style.paddingRight) + Math.max(0, children.length - 1) * pixels(style.columnGap)
+    + children.reduce((sum, child) => {
+      const text = child.querySelector<HTMLElement>(':scope.bpx-player-ctrl-viewpoint .bpx-player-ctrl-viewpoint-content')
+      return sum + (text ? outerWidth(child) - child.getBoundingClientRect().width + text.getBoundingClientRect().width : outerWidth(child))
+    }, 0)
+}
+
 function syncAlternatives(collapsed: HTMLElement[]) {
   // Native context-menu rows are an alternative entry, not copies of native
   // business buttons. They call the same registered action as the toolbar.
@@ -121,7 +136,7 @@ function measure() {
     occupied += Math.max(0, visibleSections.length - 1) * gap
     for (const section of visibleSections) {
       if (section !== right)
-        occupied += section.matches('.bpx-player-control-bottom-center') ? inputReserve(section) : outerWidth(section)
+        occupied += section.matches('.bpx-player-control-bottom-center') ? inputReserve(section) : section.matches('.bpx-player-control-bottom-left') ? leftReserve(section) : outerWidth(section)
     }
     const rightStyle = getComputedStyle(right)
     const rightChildren = Array.from(right.children).filter((node): node is HTMLElement => node instanceof HTMLElement)

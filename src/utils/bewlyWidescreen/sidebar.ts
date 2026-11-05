@@ -1,17 +1,18 @@
 import { scheduleActionGeometrySync, syncActionAnimationTheme } from '~/utils/bewlyWidescreen/actionEffects'
 import { wakeNativeCommentList } from '~/utils/bewlyWidescreen/commentWake'
 import { COMMENT_TIME_SELECTOR, DANMAKU_SKELETON_CLASS, EMPTY_CLASS, selectors, SIDEBAR_HYDRATION_FAST_DURATION, SIDEBAR_HYDRATION_FAST_INTERVAL, SIDEBAR_HYDRATION_INTERVAL, SIDEBAR_HYDRATION_RECOVERY_INTERVAL } from '~/utils/bewlyWidescreen/constants'
-import { activateDanmakuTab, clearDanmakuActivation, isDanmakuPanelReady, syncDanmakuInputSource, syncDanmakuSenderOrderButton } from '~/utils/bewlyWidescreen/danmaku'
+import { activateDanmakuTab, clearDanmakuActivation, isDanmakuPanelReady, syncDanmakuInputSource } from '~/utils/bewlyWidescreen/danmaku'
+import { syncDanmakuViews } from '~/utils/bewlyWidescreen/danmakuViews'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
 import { ensureAnchoredPlayer, schedulePlayerResizeSync, syncAuxiliaryControlGeometry, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
 import { findCommentRoot, findMovable, findRetainedNode, isCommentRootUsable, isNativeCommentRequestPending, moveCommentRoot, moveMatchingNodes, moveNativeMusicPanel, moveNode, moveOrReplaceNode, movePlaylistControls, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
-import { clearEpisodeSectionMarker, placeRecommendAfterPlaylist, syncEpisodeSectionMarker, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
+import { clearEpisodeSectionMarker, markPgcRecommendations, placeRecommendAfterPlaylist, syncEpisodeSectionMarker, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
 import { session } from '~/utils/bewlyWidescreen/session'
 import { scheduleInitialPanelScrollReset } from '~/utils/bewlyWidescreen/shell'
 import type { BewlyWidescreenState, WidescreenSidebarReadiness } from '~/utils/bewlyWidescreen/types'
-import { clearVideoMetadataObserver, renderFallbackVideoInfo, syncSidebarTitle, syncVideoMetadata, syncViewerCount } from '~/utils/bewlyWidescreen/videoInfo'
+import { clearVideoMetadataObserver, renderFallbackVideoInfo, syncSidebarTitle, syncTabCounts, syncVideoMetadata, syncViewerCount } from '~/utils/bewlyWidescreen/videoInfo'
 import { resolveWidescreenSidebarHydrationPhase, shortenCommentDateText } from '~/utils/bewlyWidescreenPolicy'
 import { createLoadingRingElement, getLoadingRingCloseDuration } from '~/utils/loadingRing'
 import { getMotionDuration } from '~/utils/motionTiming'
@@ -134,13 +135,13 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
       }
     }
     else {
+      syncDanmakuViews(currentState)
       if (!currentState.sidebarHydrationTimedOut)
         activateDanmakuTab(currentState)
       danmakuReady = isDanmakuPanelReady(currentState.panels.danmaku)
       if (danmakuReady) {
         clearEmptyPanel(currentState.panels.danmaku)
         clearDanmakuSkeleton(currentState.panels.danmaku)
-        syncDanmakuSenderOrderButton(currentState.panels.danmaku)
       }
       else if (currentState.sidebarHydrationTimedOut) {
         ensureSidebarHydrationFailure(currentState)
@@ -162,6 +163,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
         moveNode(findMovable(list), currentState.playlistSlot, currentState.movedNodes)
     }
     placeRecommendAfterPlaylist(currentState.playlistSlot, currentState.movedNodes)
+    markPgcRecommendations(currentState.playlistSlot)
     syncEpisodeSectionMarker(currentState)
   }
   const hasVideoList = !!currentState.playlistSlot.querySelector([...selectors.playlist, ...selectors.recommend].join(','))
@@ -486,6 +488,7 @@ export function suspendSidebarForVideoNavigation(currentState: BewlyWidescreenSt
   currentState.initialScrollResetTabs.clear()
   currentState.videoInfoData = undefined
   currentState.videoInfoIdentity = undefined
+  syncTabCounts(currentState)
   currentState.descriptionExpanded = false
   currentState.sidebarHydrationWarningShown = false
 

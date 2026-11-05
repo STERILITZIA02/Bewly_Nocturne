@@ -65,6 +65,10 @@ const registered = partial.match(/\$lengths: \(([^)]*)\)/)![1].split(',').map(na
 assert.deepEqual([...registered].sort(), [...scaled].sort(), 'register every scaled token as a length')
 assert.match(variables, /--bew-effective-font-scale: calc\(var\(--bew-font-scale\) \* var\(--bew-interface-scale\) \* var\(--bew-ui-text-scale\)\)/, 'text keeps the OS and interface font scales and takes the half factor')
 assert.match(variables, /--bew-ui-text-scale: calc\(\(1 \+ var\(--bew-ui-scale\)\) \/ 2\)/)
+// Caption 2 (the Dock's smaller names) is a text role like the rest: every text scale applies.
+assert.match(variables, /--bew-font-size-caption-2: calc\(10px \* var\(--bew-effective-font-scale\)\);/)
+assert.match(variables, /--bew-line-height-caption-2: calc\(13px \* var\(--bew-effective-font-scale\)\);/)
+assert.match(readFileSync(new URL('../src/styles/dockTab.scss', import.meta.url), 'utf8'), /font-size: var\(--bew-dock-label-size\);[\s\S]{0,80}line-height: var\(--bew-dock-label-line-height\);/)
 assert.match(variables, /--bew-hairline: 1px;/, 'the hairline stays one device pixel')
 assert.match(variables, /--bew-icon-button-size-sm: 24px;/, 'the smallest target stays 24px')
 assert.match(readFileSync(new URL('../src/styles/main.scss', import.meta.url), 'utf8'), /@include uiScale\.global;/)

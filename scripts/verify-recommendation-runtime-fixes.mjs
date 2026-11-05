@@ -258,7 +258,7 @@ export function registerRecommendationRuntimeChecks(check, { Vue, flush, compile
       const initial = deferred()
       const writes = []
       let changed
-      const setups = { appClient: 'setupAppClient', contentScriptRefreshPrompt: 'setupContentScriptRefreshPrompt', loginStateWatcher: 'setupLoginStateWatcher', 'messageListeners/api': 'setupApiMsgListeners', 'messageListeners/tabs': 'setupTabMsgListeners', openTabsWatchLater: 'setupOpenTabsWatchLater', refreshTabs: 'setupRefreshTabs', settingsCloudSync: 'setupSettingsCloudSync', settingsStorageCoordinator: 'setupSettingsStorageCoordinator', stateConsumers: 'setupStateConsumers', topBarStateBroker: 'setupTopBarStateBroker', videoVisitHistoryCoordinator: 'setupVideoVisitHistoryCoordinator' }
+      const setups = { appClient: 'setupAppClient', contentScriptRefreshPrompt: 'setupContentScriptRefreshPrompt', listenPlayback: 'setupListenPlayback', loginStateWatcher: 'setupLoginStateWatcher', 'messageListeners/api': 'setupApiMsgListeners', 'messageListeners/tabs': 'setupTabMsgListeners', openTabsWatchLater: 'setupOpenTabsWatchLater', refreshTabs: 'setupRefreshTabs', settingsCloudSync: 'setupSettingsCloudSync', settingsStorageCoordinator: 'setupSettingsStorageCoordinator', stateConsumers: 'setupStateConsumers', topBarStateBroker: 'setupTopBarStateBroker', videoVisitHistoryCoordinator: 'setupVideoVisitHistoryCoordinator' }
       await loadSourceModule('../src/background/index.ts', {
         ...Object.fromEntries(Object.entries(setups).map(([file, fn]) => [`./${file}`, { [fn]() {} }])),
         '~/utils/bilibiliDesktopNavigation': await import('../src/utils/bilibiliDesktopNavigation'),
@@ -304,6 +304,7 @@ export function registerRecommendationRuntimeChecks(check, { Vue, flush, compile
     const manifestModule = await loadSourceModule('../src/manifest.ts', {
       'fs-extra': { default: { readJSON: async () => ({ name: 'fixture', version: '1.0.0' }) } },
       '../scripts/utils': { isDev: false, isSafari: false, r: path => path },
+      './constants/audioCdn': await import('../src/constants/audioCdn'),
       './constants/contentScript': scope,
       './constants/nativeSites': nativeSites,
     })

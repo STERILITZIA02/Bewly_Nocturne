@@ -1772,7 +1772,7 @@ function appendMoments(items: DisplayMoment[]) {
 .moments-grid {
   display: grid;
   grid-template-columns: repeat(var(--moments-columns), minmax(0, 1fr));
-  gap: var(--bew-space-4);
+  gap: var(--bew-grid-gutter);
   width: 100%;
   justify-items: stretch;
   /* 虚拟 spacer 会持续变化，禁用浏览器自动锚定以免与滚动输入互相拉扯 */

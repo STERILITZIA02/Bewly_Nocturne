@@ -71,7 +71,6 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
       '~/styles/sendButton.scss?inline': { default: compile(fileURLToPath(new URL('../src/styles/sendButton.scss', import.meta.url))).css },
       '~/styles/skeleton.scss?inline': { default: '' },
       '~/styles/loadingRing.scss?inline': { default: '' },
-      '~/utils/danmakuSenderOrder': await import('../src/utils/danmakuSenderOrder'),
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/styles/cardLayout': await import('../src/utils/bewlyWidescreen/styles/cardLayout'),
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),

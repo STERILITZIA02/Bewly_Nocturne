@@ -208,4 +208,9 @@ $line-ramp: var(--bew-space-6);
   .bew-scroll-edge-fade--no-bottom {
     --bew-scroll-edge-bottom-off: 1;
   }
+
+  // For a scroller the markup cannot include the mixin in (a native tab row).
+  .bew-scroll-edge-fade-inline {
+    @include horizontal;
+  }
 }

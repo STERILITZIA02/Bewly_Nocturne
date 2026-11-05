@@ -206,6 +206,9 @@ const privateShare = computed(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--bew-space-3);
+  // Room for the cards' focus rings, taken outside so the cards stay on the
+  // page grid's margin.
+  margin-inline: calc(var(--bew-space-1) * -1);
   padding: var(--bew-space-1);
   align-items: stretch;
 }

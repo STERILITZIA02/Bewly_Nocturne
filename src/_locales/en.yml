@@ -680,6 +680,10 @@ settings:
   grid_columns: Show
   video_card_title_font_size: Title Font Size
   video_card_author_font_size: UP info font size
+  dock_label_size: Dock text size
+  dock_label_size_option:
+    small: Small
+    standard: Standard
   font_size_option:
     xs: Extra small
     sm: Small
@@ -1925,6 +1929,16 @@ watch_later:
   play_and_remove: Play & remove
   play_in_watch_later: Playlist
 widescreen:
+  listen: Listen to video
+  listen_play: Play
+  listen_pause: Pause
+  return_video: Return to video
+  collapse_info: Collapse video info
+  expand_info: Expand video info
+  collapse_episodes: Collapse episodes
+  expand_episodes: Expand episodes
+  listen_not_ready: The player is not ready yet. Try again shortly.
+  listen_unavailable: This video has no separately playable audio track.
   overview: Overview
   panel_load_incomplete: Content could not finish loading. Reload the page or exit Bewly Playback Page to try again.
   reload_page: Reload page
@@ -1950,13 +1964,24 @@ widescreen:
   expand_more: Expand more
   comments_loading: Loading comments
   danmaku_loading: Loading danmaku
-  danmaku_sender: User
-  danmaku_sort_sender: Sort by sender
+  danmaku_list: List
+  danmaku_block: Blocking
+  danmaku_advanced: Advanced
   list_loading: Loading list
   stat_likes: Likes
   stat_coins: Coins
   stat_favorites: Favorites
   stat_shares: Shares
+  action_like: Like
+  action_coin: Coin
+  action_favorite: Favorite
+  action_copy_link: Copy link
+  action_liked: Liked
+  action_coined: Coined
+  action_favorited: Favorited
+  follow_status_want: Want to watch
+  follow_status_watching: Watching
+  follow_status_watched: Watched
   video_description: Video description
   video_category: Video category
 search_bar:

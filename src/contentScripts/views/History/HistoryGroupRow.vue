@@ -6,7 +6,7 @@ import type { CardWindowSnapshot } from '~/composables/useCardWindow'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useMeasuredDisclosure } from '~/composables/useMeasuredDisclosure'
 import { uiPx } from '~/composables/useUiScale'
-import { VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
+import { GRID_GUTTER, VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
 import type { List as HistoryItem } from '~/models/history/history'
 
 import HistoryDayToggle from './HistoryDayToggle.vue'
@@ -34,7 +34,7 @@ const windowed = useCardWindow({
   container,
   keys: computed(() => props.items.map(historyItemKey)),
   columns: ref(1),
-  gap: computed(() => uiPx(16)),
+  gap: computed(() => uiPx(GRID_GUTTER)),
   axis: 'horizontal',
   estimatedHeight: cardExtent,
   enabled: computed(() => props.items.length > CARD_WINDOW_THRESHOLD),
@@ -93,7 +93,7 @@ function toggle(event: MouseEvent) {
 }
 .history-group__cards {
   display: flex;
-  gap: var(--bew-space-4);
+  gap: var(--bew-grid-gutter);
 }
 .history-group__disclosure {
   display: block;

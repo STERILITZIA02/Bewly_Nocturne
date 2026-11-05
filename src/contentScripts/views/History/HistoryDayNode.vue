@@ -135,8 +135,9 @@ const { height, onTransitionEnd } = useMeasuredDisclosure(fold, periodList, comp
     height: var(--bew-icon-size-xs);
     transition: transform var(--bew-duration-normal) var(--bew-ease-standard);
   }
-  &.is-collapsed svg {
-    transform: rotate(-90deg);
+  // Open, it points the way the periods close (up); closed, the way they open.
+  &:not(.is-collapsed) svg {
+    transform: rotate(180deg);
   }
 }
 .history-day-node__fold {

@@ -59,9 +59,11 @@ const useLightText = computed(() => forceWhiteIcon.value && !settings.value.disa
     z-index: 1;
   }
 
+  // A control of its own after the collapsed search, the header's section gap
+  // away, as the search is from the logo.
   .playback-history-controls {
     position: absolute;
-    inset-inline-start: calc(var(--bew-top-bar-primary-control-height) + var(--bew-space-2));
+    inset-inline-start: calc(var(--bew-top-bar-primary-control-height) + var(--bew-top-bar-section-gap));
     transition:
       opacity var(--bew-duration-fast) var(--bew-ease-out) var(--bew-duration-moderate),
       visibility 0s var(--bew-duration-moderate);

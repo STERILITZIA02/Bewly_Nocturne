@@ -422,6 +422,7 @@ async function verifyPlayerAndTiming() {
   let appliedAt = -1
   let drawer = false
   let nativeError = false
+  let listening = false
   let mediaReady = true
   let readinessChecks = 0
   const errorCleanup: string[] = []
@@ -449,6 +450,8 @@ async function verifyPlayerAndTiming() {
     failedPlayerModeState: undefined,
     getPlayerModeReadiness: () => [],
     getPlayerModeControl: () => null,
+    getVideoElement: () => ({ closest: () => listening ? {} : null }),
+    LISTEN_ATTRIBUTE: 'data-bew-listening',
     getPlayerModeContainer: () => null,
     userExitedWidescreenNavigationKey: undefined,
     lastAppliedPlayerModeNavigationKey: undefined,
@@ -529,6 +532,11 @@ async function verifyPlayerAndTiming() {
   assert.equal(timers.size, 0, 'a native failure stops readiness polling')
   assert.deepEqual(errorCleanup, ['cancel', 'exit', 'reveal'])
   assert.equal(appliedAt, -1, 'a native error never masquerades as applied playback mode')
+  listening = true
+  errorCleanup.length = 0
+  timing.applyDefaultPlayerMode()
+  assert.ok(!errorCleanup.includes('exit'), 'the intentionally suspended native player must not tear down the listening layout')
+  listening = false
   nativeError = false
   now = 1800
   timing.playerModeApplicationStarted = false

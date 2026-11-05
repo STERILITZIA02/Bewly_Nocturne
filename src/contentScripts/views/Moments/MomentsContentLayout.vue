@@ -36,19 +36,36 @@ defineProps<{ sidebarLabel: string }>()
     align-self: start;
   }
 }
+// The content beside the rail is the page's 12 columns: the feed takes nine
+// and hot search three, then 8 + 4 and 7 + 5 as the content narrows, so the
+// card stays about 250px wide before it moves above the feed.
 .moments-content-layout__grid {
+  --moments-feed-columns: 9;
+  --moments-aside-columns: 3;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--bew-moments-hot-search-width);
+  grid-template-columns: repeat(var(--bew-grid-columns), minmax(0, 1fr));
   align-items: start;
-  gap: var(--bew-space-6);
+  gap: var(--bew-grid-gutter);
+}
+@container (max-width: 1100px) {
+  .moments-content-layout__grid {
+    --moments-feed-columns: 8;
+    --moments-aside-columns: 4;
+  }
+}
+@container (max-width: 800px) {
+  .moments-content-layout__grid {
+    --moments-feed-columns: 7;
+    --moments-aside-columns: 5;
+  }
 }
 .moments-content-layout__feed {
-  grid-column: 1;
+  grid-column: 1 / span var(--moments-feed-columns);
   grid-row: 1;
   min-width: 0;
 }
 .moments-content-layout__aside {
-  grid-column: 2;
+  grid-column: span var(--moments-aside-columns) / -1;
   grid-row: 1;
   position: sticky;
   top: calc(var(--bew-top-bar-height) + var(--bew-space-4));

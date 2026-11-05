@@ -10,7 +10,7 @@ import { onRouteChange, stopRouteObserver } from '~/composables/useRouteState'
 import { applyUiScale, setupUiScale } from '~/composables/useUiScale'
 import { CONTENT_SCRIPT_COMMIT, CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG, isContentScriptTargetUrl } from '~/constants/contentScript'
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
-import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_MOUNTED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_MOUNTED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_TOP_BAR_CHANGE, LISTEN_ATTRIBUTE } from '~/constants/globalEvents'
 import { getPageBridgeTargetOrigin, isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { setupCommentReplyApiBridge } from '~/contentScripts/features/commentReplyApiBridge'
 import { setupOriginalMomentsFilter } from '~/contentScripts/features/originalMomentsFilter'
@@ -57,7 +57,7 @@ import { SVG_ICONS } from '~/utils/svgIcons'
 import { openLinkInBackground } from '~/utils/tabs'
 import { initVerticalVideoZoom, resetVerticalVideoZoom } from '~/utils/verticalVideoZoom'
 import { createVideoCommentNavigation } from '~/utils/videoCommentNavigation'
-import { isNativeVideoComponentReady, isPgcPlaybackPage, parseVideoMetadataEvent, readNativeMediaSnapshot, readVideoPageMetadata, validateVideoPageMetadata, VIDEO_COMPONENT_CHANGED, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
+import { isNativeVideoComponentReady, isPgcPlaybackPage, parseVideoMetadataEvent, parseVideoPageIdentity, readNativeMediaSnapshot, readVideoPageMetadata, validateVideoPageMetadata, VIDEO_COMPONENT_CHANGED, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
 import { recordVideoVisitFromUrl } from '~/utils/videoVisitHistory'
 import { ensureResponsiveViewport } from '~/utils/viewportMeta'
 import { mountWatchLaterButtonWhenToolbarReady, removeWatchLaterButton } from '~/utils/watchLaterButton'
@@ -425,7 +425,31 @@ else if (shouldInitializeContentScript) {
   let homePageHiddenStyleEl: HTMLStyleElement | undefined
   let releaseHiddenHomepageImages: (() => void) | undefined
   let settingsBootLoaded = false
+  let playerModeSettingsReady = false
   let lastUrl = location.href
+  let listenScope: AbortController | undefined
+  function syncListenControl() {
+    const active = playerModeSettingsReady && window === window.top && !isIframeDrawerHost()
+      && (parseVideoPageIdentity(location.href) || isPgcPlaybackPage())
+    if (!active) {
+      listenScope?.abort()
+      listenScope = undefined
+      return
+    }
+    if (listenScope)
+      return
+    const scope = listenScope = new AbortController()
+    void import('./listenControl').then(({ setupListenControl }) => {
+      if (!scope.signal.aborted)
+        scope.signal.addEventListener('abort', setupListenControl(applyDefaultPlayerMode), { once: true })
+    }).catch((error: unknown) => {
+      if (!scope.signal.aborted) {
+        listenScope = undefined
+        console.warn('[Bewly Nocturne] Failed to load listen control:', error)
+      }
+    })
+  }
+  contentScriptDisposers.push(() => listenScope?.abort())
   let lastVideoNavigationKey = getVideoNavigationKey(location.href)
   let lastAppliedPlayerModeNavigationKey: string | undefined
   let playerModeGeneration = 0
@@ -442,7 +466,6 @@ else if (shouldInitializeContentScript) {
     : Number.POSITIVE_INFINITY
   let playerModeRetryTimer: ReturnType<typeof setTimeout> | undefined
   let playerModeRetryDeadline = Date.now() + playerModeReadinessRetryWindow
-  let playerModeSettingsReady = false
   let videoOwnerAvatarReadyDeadline = document.readyState === 'complete'
     ? Date.now() + videoOwnerAvatarReadyTimeout
     : Number.POSITIVE_INFINITY
@@ -478,6 +501,7 @@ else if (shouldInitializeContentScript) {
     playerModeSettingsReady = true
     if (window === window.top)
       contentScriptDisposers.push(setupPlaybackTrail())
+    syncListenControl()
     contentScriptDisposers.push(setupVideoWatchProgress())
     contentScriptDisposers.push(setupVideoQualityMemory())
     contentScriptDisposers.push(setupLocalLoudnessControl())
@@ -748,16 +772,19 @@ else if (shouldInitializeContentScript) {
     const video = getVideoElement()
     if (!video)
       return undefined
+    // A restored listen session cannot (and should not) load a video frame
+    // just to mount the sidebar. Its verified audio session owns the layout.
+    const listening = mode === 'bewlyWidescreen' && !!video.closest(`[${LISTEN_ATTRIBUTE}]`)
     const source = video.currentSrc || video.getAttribute('src') || ''
     // MSE can keep both the element and blob URL across a native video switch.
     // MAIN only returns a manifest unit when video, manuscript and part match.
-    if (awaitingNavigationMedia && video === navigationVideo && source === navigationMediaSource && !readNativeMediaSnapshot(video)?.unit)
+    if (!listening && awaitingNavigationMedia && video === navigationVideo && source === navigationMediaSource && !readNativeMediaSnapshot(video)?.unit)
       return undefined
-    if (video.readyState < HTMLMediaElement.HAVE_METADATA)
+    if (!listening && video.readyState < HTMLMediaElement.HAVE_METADATA)
       return undefined
-    if (awaitingNavigationMedia && isVideoPage() && !readVideoPageMetadata())
+    if (!listening && awaitingNavigationMedia && isVideoPage() && !readVideoPageMetadata())
       return undefined
-    if (isPgcPlaybackPage() && isNativeVideoComponentReady(video) !== true)
+    if (!listening && isPgcPlaybackPage() && isNativeVideoComponentReady(video) !== true)
       return undefined
     awaitingNavigationMedia = false
     navigationVideo = video
@@ -767,12 +794,13 @@ else if (shouldInitializeContentScript) {
     const application = createPlayerModeApplication(
       () => !contentScriptSignal.aborted && generation === playerModeGeneration
         && getVideoNavigationKey(location.href) === currentNavigationKey
-        && getVideoElement() === video && (video.currentSrc || video.getAttribute('src') || '') === source
-        && video.readyState >= HTMLMediaElement.HAVE_METADATA
-        && resolveDefaultVideoPlayerMode() === preference
-        && document.visibilityState === 'visible' && !isIframeDrawerHost()
-        && !shouldSuppressWidescreenAutoEntry(currentNavigationKey, userExitedWidescreenNavigationKey)
-        && !isPlayerShowingEndingRecommendation(),
+        && getVideoElement() === video && (listening
+        ? !!video.closest(`[${LISTEN_ATTRIBUTE}]`)
+        : (video.currentSrc || video.getAttribute('src') || '') === source && video.readyState >= HTMLMediaElement.HAVE_METADATA)
+      && resolveDefaultVideoPlayerMode() === preference
+      && document.visibilityState === 'visible' && !isIframeDrawerHost()
+      && !shouldSuppressWidescreenAutoEntry(currentNavigationKey, userExitedWidescreenNavigationKey)
+      && !isPlayerShowingEndingRecommendation(),
       () => {
         clearPlayerModeRetry()
         lastAppliedPlayerModeNavigationKey = currentNavigationKey
@@ -780,6 +808,10 @@ else if (shouldInitializeContentScript) {
         pageLoading.dispose()
         autoContinuationNavigationKey = undefined
         lastVideoEndedAt = 0
+        if (listening) {
+          scheduleAddWatchLaterButton()
+          return
+        }
         applyDefaultDanmakuState(application.shouldApply)
         applyDefaultCaptionState(application.shouldApply)
         if (settings.value.showVerticalVideoZoomButton)
@@ -861,7 +893,7 @@ else if (shouldInitializeContentScript) {
     }
     if (lastAppliedPlayerModeNavigationKey === currentNavigationKey)
       return
-    if (hasNativePlayerError()) {
+    if (hasNativePlayerError() && !getVideoElement()?.closest(`[${LISTEN_ATTRIBUTE}]`)) {
       clearPlayerModeRetry()
       invalidatePlayerModeApplication()
       exitBewlyWidescreen()
@@ -1166,6 +1198,7 @@ else if (shouldInitializeContentScript) {
 
       lastUrl = location.href
       lastVideoNavigationKey = currentVideoNavigationKey
+      syncListenControl()
       if (isIframeDrawerHost()) {
         pageLoading.dispose()
         clearPendingWidescreenReloadNavigation()

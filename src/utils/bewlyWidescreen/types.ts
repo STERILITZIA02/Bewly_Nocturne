@@ -1,4 +1,5 @@
 import type { Data as VideoInfoData } from '~/models/video/videoInfo'
+import type { ActionRoll } from '~/utils/bewlyWidescreen/actionRolls'
 import type { WidescreenDisplayMode, WidescreenRect, WidescreenZoomFrame } from '~/utils/bewlyWidescreenPolicy'
 
 export type BewlyWidescreenTab = 'overview' | 'comment' | 'danmaku'
@@ -61,6 +62,10 @@ export interface BewlyWidescreenState {
   tagsSlot: HTMLElement
   panels: Record<BewlyWidescreenTab, HTMLElement>
   tabButtons: Record<BewlyWidescreenTab, HTMLButtonElement>
+  /** The danmaku panel's view row (danmakuViews.ts) and the Bpx menu items it drives. */
+  danmakuViews: HTMLElement
+  danmakuViewItems?: HTMLElement[]
+  danmakuViewsObserver?: MutationObserver
   playlistToggleButton: HTMLButtonElement
   movedNodes: MovedNode[]
   styleEl: HTMLStyleElement
@@ -81,6 +86,9 @@ export interface BewlyWidescreenState {
   lastPlayerResizeSignature?: string
   actionGeometryFrame?: number
   actionGeometryElements?: Set<HTMLElement>
+  /** The like / coin / collect / share chips' rolling labels, by chip (actionRolls.ts). */
+  actionRolls?: Map<HTMLElement, ActionRoll>
+  actionRollEvents?: AbortController
   layoutEventCleanup?: () => void
   settingsWatchCleanup?: Array<() => void>
   sidebarHydrationTimer?: ReturnType<typeof setTimeout>
@@ -130,6 +138,8 @@ export interface BewlyWidescreenState {
   /** The native meta line being cloned, watched for late updates (icons fill in after first paint). */
   metadataSource?: HTMLElement
   metadataObserver?: MutationObserver
+  /** Bangumi's moved media block, watched for its follow button's state (videoInfo.ts). */
+  followStatusObserver?: MutationObserver
   escapeKeyCleanup?: () => void
   colorProbe?: HTMLSpanElement
   descriptionExpanded: boolean

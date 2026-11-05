@@ -16,3 +16,13 @@ export function av2bv(aid: number | string | bigint): string {
   ;[bytes[4], bytes[7]] = [bytes[7], bytes[4]]
   return bytes.join('')
 }
+
+export function bv2av(bvid: string): number {
+  const bytes = bvid.split('')
+  ;[bytes[3], bytes[9]] = [bytes[9], bytes[3]]
+  ;[bytes[4], bytes[7]] = [bytes[7], bytes[4]]
+  let value = BigInt(0)
+  for (const char of bytes.slice(3))
+    value = value * BASE + BigInt(ALPHABET.indexOf(char))
+  return Number((value & (MAX_AID - BigInt(1))) ^ XOR_CODE)
+}
