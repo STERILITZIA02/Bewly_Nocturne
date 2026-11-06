@@ -1,5 +1,6 @@
 import { settings } from '~/logic'
 import { getVideoElement } from '~/utils/player'
+import { isPgcPlaybackPage } from '~/utils/videoMetadataBridge'
 
 import { LOADING_EXIT_DELAY, LOADING_FADE_DURATION, LOADING_ROOT_ID, PREPARED_LOADING_TIMEOUT } from './constants'
 import { t } from './labels'
@@ -53,7 +54,7 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
     label.className = 'bewly-widescreen-loading-label'
     label.textContent = t('widescreen.loading')
     status.appendChild(label)
-    content.append(status, createWidescreenLoadingSkeleton())
+    content.append(status, createWidescreenLoadingSkeleton(isPgcPlaybackPage() ? 'pgc' : 'video'))
 
     overlay.appendChild(content)
     const mountTarget = document.body ?? document.documentElement

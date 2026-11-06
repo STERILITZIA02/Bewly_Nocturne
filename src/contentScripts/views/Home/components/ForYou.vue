@@ -12,7 +12,7 @@ const emit = defineEmits<{
   (e: 'beforeLoading'): void
   (e: 'afterLoading'): void
 }>()
-const { currentVideoList, isLoading, noMoreContent, needToLoginFirst, appAuthorizationRequired, requestFailed, recommendationEmptyDescription, isWebRecommendationMode, requiresManualFilteredPaging, retryRecommendation, jumpToLoginPage, handleLoadMore, handleManualLoadMore, handleAppAuthorization, initData, undoRefresh, goForward, canGoBack, canGoForward } = useForYouRecommendations(emit)
+const { currentVideoList, hasAcceptedItemKey, isLoading, noMoreContent, needToLoginFirst, appAuthorizationRequired, requestFailed, recommendationEmptyDescription, isWebRecommendationMode, requiresManualFilteredPaging, retryRecommendation, jumpToLoginPage, handleLoadMore, handleManualLoadMore, handleAppAuthorization, initData, undoRefresh, goForward, canGoBack, canGoForward } = useForYouRecommendations(emit)
 defineExpose({ initData, undoRefresh, goForward, canGoBack, canGoForward })
 </script>
 
@@ -29,6 +29,7 @@ defineExpose({ initData, undoRefresh, goForward, canGoBack, canGoForward })
       :empty-description="recommendationEmptyDescription"
       :transform-item="(item: VideoElement | AppVideoElement) => item.displayData"
       :get-item-key="(item: VideoElement | AppVideoElement) => item.uniqueId"
+      :has-item-key="hasAcceptedItemKey"
       :video-type="isWebRecommendationMode ? 'rcmd' : 'appRcmd'"
       show-preview
       @refresh="retryRecommendation"

@@ -1,11 +1,5 @@
-import { LOADING_RING_ARC } from '~/utils/loadingRing'
+import { LOADING_RING_MASK } from '~/utils/loadingRing'
 import { reducedMotionCss } from '~/utils/reducedMotion'
-
-// The shared ring (styles/loadingRing.scss) drawn as a mask: the same 3/4 arc
-// with round caps, so the native spinner needs no DOM of ours.
-const RING_MASK = `url("data:image/svg+xml,${encodeURIComponent(
-  `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='${LOADING_RING_ARC.cx}' cy='${LOADING_RING_ARC.cy}' r='${LOADING_RING_ARC.r}' pathLength='${LOADING_RING_ARC.pathLength}' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-dasharray='75 25'/></svg>`,
-)}")`
 
 /**
  * `bili-comments-spinner` is every native comment loader (first page, more
@@ -40,8 +34,8 @@ export const COMMENT_SPINNER_RING_CSS = `
     width: var(--bew-icon-size-lg, 24px);
     height: var(--bew-icon-size-lg, 24px);
     background: currentColor;
-    mask: ${RING_MASK} center / contain no-repeat;
-    -webkit-mask: ${RING_MASK} center / contain no-repeat;
+    mask: ${LOADING_RING_MASK} center / contain no-repeat;
+    -webkit-mask: ${LOADING_RING_MASK} center / contain no-repeat;
     animation: bewly-comment-loading-ring-spin var(--bew-loading-ring-spin-duration, 900ms) linear infinite;
   }
 

@@ -10,13 +10,14 @@ const BILIBILI_LOCALE_PREFIXES: ReadonlySet<string> = new Set([
   'th',
   'tr',
   'vi',
-  'zh-Hans',
-  'zh-Hant',
+  'zh-hans',
+  'zh-hant',
 ])
 
 const BILIBILI_MAIN_HOSTS: ReadonlySet<string> = new Set(['www.bilibili.com', 'bilibili.com'])
+const BILIBILI_LOCALIZED_HOSTS = new Set([...BILIBILI_MAIN_HOSTS, 't.bilibili.com', 'space.bilibili.com'])
 
-const LOCALIZED_ROUTE_PATTERN = /^\/(?:$|video\/|list\/|watchlater(?:\/|$)|bangumi\/play\/|history(?:\/|$))/
+const LOCALIZED_ROUTE_PATTERN = /^\/(?:$|video\/|opus\/|list\/|watchlater(?:\/|$)|bangumi\/play\/|history(?:\/|$))/
 const LOCALE_SEGMENT_PATTERN = /^\/([^/]+)(\/.*)?$/
 
 export interface BilibiliLocalePath {
@@ -29,13 +30,13 @@ export function isBilibiliMainHost(hostname: string): boolean {
 }
 
 export function splitBilibiliLocalePath(hostname: string, pathname: string): BilibiliLocalePath {
-  if (!isBilibiliMainHost(hostname))
+  if (!BILIBILI_LOCALIZED_HOSTS.has(hostname))
     return { locale: null, pathname }
   const match = LOCALE_SEGMENT_PATTERN.exec(pathname)
-  if (!match || !BILIBILI_LOCALE_PREFIXES.has(match[1]))
+  if (!match || !BILIBILI_LOCALE_PREFIXES.has(match[1].toLowerCase()))
     return { locale: null, pathname }
   const logicalPathname = match[2] || '/'
-  if (!LOCALIZED_ROUTE_PATTERN.test(logicalPathname))
+  if (isBilibiliMainHost(hostname) && !LOCALIZED_ROUTE_PATTERN.test(logicalPathname))
     return { locale: null, pathname }
   return { locale: match[1], pathname: logicalPathname }
 }
@@ -56,6 +57,11 @@ export function getBilibiliLogicalPathname(value: string | URL = location.href, 
   if (!url)
     return ''
   return splitBilibiliLocalePath(url.hostname, url.pathname).pathname
+}
+
+export function isBilibiliMomentsFeed(value: string | URL = location.href): boolean {
+  const url = parseUrl(value)
+  return url?.hostname === 't.bilibili.com' && /^\/?$/.test(splitBilibiliLocalePath(url.hostname, url.pathname).pathname)
 }
 
 export function toBilibiliLogicalUrl(value: string): string {

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import ContentFilterEntry from '~/components/ContentFilterEntry.vue'
 import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
 import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
@@ -80,6 +81,7 @@ function selectFilter(key: string, value: string) {
         <LibraryFilterMenu :label="t('moments.search_filter')" :groups="filterGroups" @select="selectFilter" />
       </template>
     </LibrarySearchField>
+    <ContentFilterEntry kind="moments" />
     <div
       v-if="settings.momentsSidebarShowUserCard || settings.momentsSidebarShowPublish || settings.momentsSidebarShowLive"
       class="moments-sidebar__modules"

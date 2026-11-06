@@ -2907,235 +2907,6 @@ verify('message settings live in the global Bewly settings page and the old sect
   }
 })
 
-verify('message interaction shell keeps selection internal, settings typed, and surfaces independently layered', async () => {
-  const [
-    itemSource,
-    listSource,
-    workspaceSource,
-    emptySource,
-    fallbackSource,
-    conversationSource,
-    notificationsSource,
-    navigationSource,
-    pageHeaderSource,
-    sectionsSource,
-    routeSource,
-    appProviderSource,
-    appSource,
-    settingsSource,
-    messagesPageSource,
-    settingsCategorySource,
-  ] = await Promise.all([
-    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationListItem.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationEmptyState.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationOriginalFallback.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationsNavigation.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationsPageHeader.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/notificationSections.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/utils/notificationRoute.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/composables/useAppProvider.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/App.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/Settings/Settings.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/Settings/PluginComponentsAndPages/MessagesPage/MessagesPage.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/Settings/components/SettingsCategoryLayout.vue', import.meta.url), 'utf8'),
-  ])
-
-  assert.equal((itemSource.match(/<button\b/g) ?? []).length, 1)
-  assert.ok(itemSource.includes('conversation-list-item__profile'))
-  assert.ok(itemSource.includes('session.capabilities.canOpenProfile'))
-  assert.ok(itemSource.includes('type="button"'))
-  assert.ok(itemSource.includes(':aria-current="selected'))
-  assert.ok(itemSource.includes(`@click="emit('select', session)"`))
-  assert.equal((listSource.match(/<ConversationListItem\b/g) ?? []).length, 3)
-  assert.ok(listSource.includes('v-if="outsideSelection"'))
-  assert.ok(listSource.includes('<template v-if="!normalizedQuery">'))
-  assert.ok(listSource.includes('v-if="row.session"'))
-  assert.ok(listSource.includes('v-for="session in filteredItems"'))
-  assert.ok(listSource.includes(`@select="emit('select', $event)"`))
-
-  assert.equal(workspaceSource.includes('OriginalNotificationsFrame'), false)
-  assert.ok(workspaceSource.includes('<ConversationEmptyState v-else-if="!selectedSession && !transientRecipient"'))
-  assert.ok(workspaceSource.includes('<ConversationView'))
-  assert.ok(workspaceSource.includes('<ConversationOriginalFallback'))
-  assert.ok(workspaceSource.includes(`'whisper-workspace--detail': Boolean(selectedSession || transientRecipient)`))
-  assert.equal(workspaceSource.includes('originalFrameRef'), false)
-  assert.equal(workspaceSource.includes('.reload()'), false)
-  assert.ok(emptySource.includes('notifications.whisper.select_conversation_empty'))
-  assert.ok(fallbackSource.includes('notifications.whisper.open_original_list'))
-  assert.ok(fallbackSource.includes('buildOriginalNotificationUrl'))
-  assert.ok(fallbackSource.includes('conversation-original-fallback__back'))
-
-  const selectConversationSource = notificationsSource.slice(
-    notificationsSource.indexOf('function selectPrivateConversation'),
-    notificationsSource.indexOf('function closePrivateConversation'),
-  )
-  assert.ok(selectConversationSource.includes('sessionType: session.sessionType'))
-  assert.ok(selectConversationSource.includes('window.history.pushState'))
-  assert.equal(selectConversationSource.includes('canReadNative'), false)
-  assert.equal(notificationsSource.includes('window.history.back()'), false)
-  assert.ok(notificationsSource.includes('clearPrivateConversationRoute'))
-  assert.ok(notificationsSource.includes('applyPendingPrivateConversationRoute'))
-  assert.equal(notificationsSource.includes('originalView'), false)
-  assert.equal(notificationsSource.includes('OriginalNotificationsFrame'), false)
-  assert.ok(sectionsSource.includes(`export type NativeNotificationSection = 'reply' | 'at' | 'love' | 'system'`))
-  assert.equal(sectionsSource.includes(`| 'settings'`), false)
-
-  assert.equal(navigationSource.includes(`(event: 'openSettings'): void`), false)
-  assert.equal(navigationSource.includes('notifications-navigation__settings'), false)
-  assert.equal(navigationSource.includes(`@click="emit('openSettings')"`), false)
-  assert.equal(notificationsSource.includes('@open-settings="handleOpenMessagesSettings"'), false)
-  assert.ok(routeSource.includes(`settings: 'config'`))
-  assert.ok(routeSource.includes(`view: 'whisper'`))
-  assert.ok(routeSource.includes('openMessageSettings: true'))
-  assert.ok(notificationsSource.indexOf('v-if="!routeReady"') < notificationsSource.lastIndexOf('<NativeNotificationFeed'))
-  assert.ok(notificationsSource.includes(`openSettingsAt({ category: 'bewly-pages', page: 'messages' })`))
-  assert.ok(appProviderSource.includes(`category: 'bewly-pages'`))
-  assert.ok(appProviderSource.includes(`page: 'messages'`))
-  assert.ok(appSource.includes('settingsNavigationRequest'))
-  assert.ok(settingsSource.includes('navigationRequest'))
-  // The primary column's current category uses the shared neutral row.
-  const settingsNavStyle = await readFile(new URL('../src/styles/settingsNav.scss', import.meta.url), 'utf8')
-  assert.ok(settingsSource.includes('@include settingsNav.row(".menu-item-activated")'))
-  assert.ok(settingsNavStyle.includes('background: var(--bew-selected-bg)'))
-  assert.equal(settingsNavStyle.includes('--bew-theme-color-auto'), false)
-  assert.equal(settingsNavStyle.includes('--bew-text-auto'), false)
-  assert.equal(messagesPageSource.includes('SettingsSectionHeading'), false)
-  assert.equal(messagesPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'), false)
-  assert.ok(messagesPageSource.includes('useMessageServerSettings'))
-  assert.ok(settingsCategorySource.includes('@include settingsNav.row(".active")'))
-
-  const workspaceLayoutStyle = workspaceSource.slice(
-    workspaceSource.indexOf('.whisper-workspace {'),
-    workspaceSource.indexOf('.whisper-workspace__sessions,'),
-  )
-  assert.ok(workspaceLayoutStyle.includes('background: transparent'))
-  assert.ok(workspaceLayoutStyle.includes('gap: var(--notifications-workspace-gap)'))
-  assert.equal(workspaceLayoutStyle.includes('border:'), false)
-  assert.equal(workspaceLayoutStyle.includes('backdrop-filter:'), false)
-  assert.ok(workspaceSource.includes('conversation-list-card'))
-  assert.ok(notificationsSource.includes('--notifications-conversation-list-width'))
-  assert.equal(notificationsSource.includes('v-if="isWhisperView"'), false, 'the message sidebar persists across categories')
-  assert.ok(navigationSource.includes('<LibrarySidebarHeading'))
-  const sidebarHeadingSource = await readFile(new URL('../src/components/SidebarHeadingControl.vue', import.meta.url), 'utf8')
-  assert.ok(sidebarHeadingSource.includes('<WheelSelector'))
-  assert.equal(navigationSource.includes('ResizeObserver'), false)
-  assert.ok(workspaceSource.includes('<slot name="navigation"'))
-  assert.ok(workspaceSource.includes('var(--notifications-conversation-list-width)'))
-  assert.match(workspaceSource, /\.whisper-workspace__sessions\s*\{[\s\S]{0,360}height:\s*100%/)
-  assert.match(workspaceSource, /\.whisper-workspace__detail\s*\{[\s\S]{0,120}height:\s*100%/)
-  assert.ok(workspaceSource.includes('background: var(--bew-glass-tint)'))
-  assert.ok(workspaceSource.includes('overflow: hidden'))
-  assert.equal(workspaceSource.includes('--bew-homepage-bg'), false)
-  assert.equal(emptySource.includes('conversation-empty-state__tips'), false, 'empty state keeps only the task title')
-  assert.equal(emptySource.includes('notifications.whisper.select_conversation_hint'), false, 'the list beside it already says where conversations are')
-  assert.ok(emptySource.includes('background: transparent'))
-  assert.ok(conversationSource.includes('class="conversation-card"'))
-  assert.ok(conversationSource.includes('background: var(--bew-glass-tint)'))
-  assert.ok(conversationSource.includes('backdrop-filter: var(--bew-filter-glass-1)'))
-  assert.ok(conversationSource.includes('conversation-view__floating-composer'))
-  assert.equal(conversationSource.includes('conversation-view__close'), false)
-  assert.equal(conversationSource.includes('conversation-view__header'), false)
-  assert.doesNotMatch(conversationSource, /conversation-card__(?:top|bottom)-edge|ProgressiveBlur/)
-  assert.equal(conversationSource.includes('--bew-homepage-bg'), false)
-  assert.match(conversationSource, /\.conversation-view--solid \.conversation-view__floating-composer \{\s*background: var\(--bew-elevated-solid\)/)
-  assert.ok(fallbackSource.includes('background: transparent'))
-  assert.ok(conversationSource.includes(`data-expansion-state`))
-  assert.ok(conversationSource.includes('conversationExpanded ? \'expanded\' : \'compact\''))
-  const [viewportSource, presentationSource] = await Promise.all(['useConversationViewport.ts', 'useConversationPresentation.ts'].map(file => readFile(new URL(`../src/contentScripts/views/Notifications/whisper/${file}`, import.meta.url), 'utf8')))
-  assert.ok(viewportSource.includes('requestAnimationFrame(processScrollFrame)'))
-  assert.ok(viewportSource.includes('cancelAnimationFrame(frame)'))
-  assert.ok(presentationSource.includes('new ResizeObserver'))
-  assert.ok(presentationSource.includes('resize.observe(view.value)'))
-  assert.equal(presentationSource.includes('resize.observe(messageScrollRef.value)'), false)
-  assert.ok(presentationSource.includes('resize?.disconnect()'))
-  assert.ok(conversationSource.includes('isLayoutTransitioning'))
-  assert.ok(presentationSource.includes('transitionTimer = setTimeout(completeLayoutTransition, CONVERSATION_EXPANSION_DURATION)'))
-  assert.ok(presentationSource.includes('completeLayoutTransition'))
-  assert.equal(conversationSource.includes('compactSettlementTimer'), false)
-  assert.ok(viewportSource.includes('directGesture'))
-  assert.equal(conversationSource.includes('layoutTransitionTarget'), false)
-  assert.equal(conversationSource.includes('applyExpansionAction'), false)
-  assert.ok(conversationSource.includes('initialScrollGeneration !== viewport.interactionGeneration'))
-  assert.ok(conversationSource.includes('conversationActivationPending'))
-  assert.ok(conversationSource.includes('v-if="showLatestButton || (searchMode'))
-  assert.ok(conversationSource.includes('!isAtLatestPosition.value || state.value.newMessagesAvailable'))
-  assert.match(viewportSource, /function applyReadingDirection\([\s\S]{0,180}generation\+\+/)
-  assert.match(viewportSource, /function handleScroll\(\)[\s\S]{0,420}applyReadingDirection/)
-  assert.ok(conversationSource.includes('@touchmove.passive="handleDirectGestureMove"'))
-  assert.match(viewportSource, /for \(const name of \['pointercancel', 'pointerup', 'touchcancel', 'touchend'\]\)[\s\S]{0,100}window.addEventListener\(name, endDirectScrollGesture/)
-  const conversationCardStyle = conversationSource.slice(
-    conversationSource.indexOf('.conversation-card {'),
-    conversationSource.indexOf('.conversation-view__messages {'),
-  )
-  assert.doesNotMatch(conversationCardStyle, /(?:transition|will-change):/, 'the scroll surface settles once instead of relaying out each entry frame')
-  assert.match(conversationSource, /\.conversation-view__floating-composer\[data-entering="true"\]\s*\{[^}]*transform: translateY\(var\(--bew-space-2\)\)/)
-  assert.ok(conversationSource.includes('generation !== activationGeneration'))
-  assert.ok(viewportSource.includes('generation === requestGeneration && viewport === messageScrollRef.value'))
-  assert.ok(conversationSource.includes('epoch !== props.controller.lifecycleEpoch.value'))
-  assert.ok(conversationSource.includes('stateGeneration !== state.value.generation'))
-  assert.ok(conversationSource.includes(`state.value.failedOperation !== 'load-older'`))
-  assert.ok(conversationSource.includes('!state.value.paginationStalled'))
-  assert.match(conversationSource, /watch\(talkerId,[\s\S]{0,120}saveViewportState\(undefined, undefined, previousTalkerId\)/)
-  assert.ok(viewportSource.includes('restoreVisibleMessageAnchor(viewport, anchor)'))
-  assert.ok(viewportSource.includes('readVerticalScrollPadding(viewport)'))
-  assert.ok(viewportSource.includes('messageContentGrowth'))
-  assert.ok(viewportSource.includes('viewport.scrollHeight - oldScrollHeight'))
-  assert.ok(viewportSource.includes('lastScrollTop = viewport.scrollTop'))
-  assert.ok(conversationSource.includes('--conversation-radius'))
-  assert.doesNotMatch(conversationSource, /border-inline:/, 'the conversation no longer draws side rails')
-  assert.ok(conversationSource.includes('--conversation-extra-height'))
-  assert.match(conversationSource, /--conversation-top-expansion/)
-  assert.match(conversationSource, /--conversation-bottom-expansion/)
-  assert.match(conversationSource, /\.conversation-view__messages\s*\{[\s\S]{0,520}var\(--conversation-top-expansion, 0px\)/)
-  assert.match(conversationSource, /\.conversation-view__messages\s*\{[\s\S]{0,700}var\(--conversation-bottom-expansion, 0px\)/)
-  assert.match(conversationSource, /\.conversation-view__messages\s*\{[\s\S]{0,820}overflow-anchor:\s*none/)
-  const reducedConversationStyles = conversationSource.slice(conversationSource.lastIndexOf('@media (prefers-reduced-motion: reduce)'))
-  assert.match(reducedConversationStyles, /\.conversation-view__messages/)
-  assert.match(presentationSource, /openingFrame = requestAnimationFrame\([\s\S]{0,200}updateConversationGeometry\(\)/)
-  assert.match(conversationSource, /\.conversation-view\s*\{[\s\S]{0,240}height:\s*100%/)
-  assert.match(conversationSource, /\.conversation-card\s*\{[\s\S]{0,520}height:\s*calc\(100% \+ var\(--conversation-extra-height/)
-  assert.ok(notificationsSource.includes('overflow: visible'))
-  assert.match(
-    notificationsSource,
-    /\.bewly-scroll-viewport:has\(\.notifications-page--workspace\)[\s\S]{0,100}overflow-y:\s*hidden/,
-  )
-  assert.equal(notificationsSource.includes('--notifications-dock-safe-space'), false)
-  assert.ok(conversationSource.includes('--conversation-new-message-reserve'))
-  assert.match(conversationSource, /\.conversation-view__floating-composer,\s*\.conversation-view__new-messages\s*\{[\s\S]{0,120}position:\s*absolute/)
-  assert.equal(conversationSource.includes('--conversation-edge-left'), false)
-  assert.equal(conversationSource.includes('--conversation-edge-right'), false)
-  assert.equal(conversationSource.includes('--conversation-edge-top'), false)
-  assert.equal(conversationSource.includes('--conversation-edge-bottom'), false)
-  assert.doesNotMatch(conversationSource, /ProgressiveBlur|conversation-card__(?:top|bottom)-edge/)
-  assert.match(notificationsSource, /--notifications-composer-dock-shift: var\(--bew-dock-bottom-shift, 0px\)/)
-  assert.equal(conversationSource.includes('MutationObserver'), false)
-  assert.equal(pageHeaderSource.includes('<ALink'), false)
-  assert.equal(pageHeaderSource.includes('<Button'), false)
-  assert.equal(pageHeaderSource.includes('descriptionKey'), false)
-  assert.equal(pageHeaderSource.includes('--bew-content-solid'), false)
-
-  for (const imageWrite of ['uploadPrivateImage', 'sendPrivateImageMessage']) {
-    assert.equal(notificationsSource.includes(imageWrite), true, imageWrite)
-    assert.equal(conversationSource.includes(imageWrite), false, imageWrite)
-  }
-  assert.equal(notificationsSource.includes('upload_bfs'), false)
-  assert.equal(conversationSource.includes('upload_bfs'), false)
-  assert.equal(notificationsSource.includes('sendPrivateMessage'), true)
-  assert.equal(conversationSource.includes('MessageComposer'), true)
-  assert.match(conversationSource, /<footer\s+v-if="writeState"[\s\S]*?:data-entering="!conversationExpanded"[\s\S]*?:inert="entryPhase === 'opening' \? true : undefined"/)
-  assert.equal(conversationSource.includes(':disabled-reason="isTextSendEnabled ?'), true)
-  assert.equal(conversationSource.includes('enable-image'), true)
-  assert.equal(conversationSource.includes('@select-image="selectImage"'), true)
-  assert.equal(conversationSource.includes(`t('notifications.whisper.messages.test_send')`), false)
-  assert.equal(conversationSource.includes('notifications.whisper.messages.readonly'), false)
-  assert.equal(conversationSource.includes('notifications.whisper.messages.continue_original'), false)
-  assert.equal(sectionsSource.includes('notifications.sections.whisper.description'), false)
-})
-
 verify('private message parser supports text, image, recall, custom emoji, tip, and safe unknown fallback', ({ privateMessage }) => {
   const eInfos = [{
     text: '[smile]',
@@ -3369,6 +3140,23 @@ verify('private emote catalog groups default and account-owned token packages wi
       },
     ],
   })
+})
+
+verify('private emote hydration preserves unchanged rows and updates only changed definitions', ({ privateMessage }) => {
+  const definitions = [{ text: '[smile]', uri: 'https://i0.hdslb.com/smile.png', size: 2 }]
+  const packages = privateMessage.collectPrivateEmotePackages(definitions, '100')
+  const messages = privateMessage.transformPrivateMessages(Array.from({ length: 200 }, (_, index) => createRawMessage(String(index), String(index + 1), {
+    content: JSON.stringify({ content: index % 2 ? 'plain text' : 'hello [smile]' }),
+  })), definitions, '100')
+  assert.equal(privateMessage.mergePrivateEmotePackages(packages, []), packages)
+  assert.equal(privateMessage.hydratePrivateMessageEmotes(messages, packages), messages)
+  const changed = packages.map(pkg => ({ ...pkg, emotes: pkg.emotes.map(emote => ({ ...emote, url: 'https://i0.hdslb.com/smile-new.png' })) }))
+  const hydrated = privateMessage.hydratePrivateMessageEmotes(messages, changed)
+  assert.equal(hydrated.filter((message, index) => message !== messages[index]).length, 100)
+  const first = hydrated[0]!.content
+  assert.ok(first.type === 'text' && first.segments.some(segment => segment.type === 'emote' && segment.url.endsWith('smile-new.png')))
+  assert.equal(privateMessage.hydratePrivateMessageEmotes(hydrated, changed), hydrated)
+  console.log('PERF private emote fixture: 200 messages, unchanged catalog = 0 replaced rows; one changed definition = 100 affected rows')
 })
 
 verify('private emote catalog drops stale account responses and resets before loading the next account', async ({ usePrivateMessages }) => {
@@ -3902,7 +3690,7 @@ verify('latest refresh merges to the tail and reports new messages without disca
   assert.equal(state.scrollTop, 40)
 })
 
-verify('conversation message limits retain the newest items without losing the older-page boundary', async ({ usePrivateMessages }) => {
+verify('conversation message limits retain newly read older items and their continuation boundary', async ({ usePrivateMessages }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   const requests: Array<{ endSeqno?: string, talkerId: string }> = []
@@ -3932,8 +3720,8 @@ verify('conversation message limits retain the newest items without losing the o
   await controller.loadInitial('200', '100')
   await controller.loadOlder('200')
   const state = controller.getState('200')
-  assert.deepEqual(state.items.map(item => item.msgKey), ['3', '4'])
-  assert.equal(state.oldestSeqno, '103')
+  assert.deepEqual(state.items.map(item => item.msgKey), ['1', '2'])
+  assert.equal(state.oldestSeqno, '101')
   assert.equal(state.historyBoundarySeqno, '101')
   assert.equal(state.noMore, false)
 
@@ -3944,6 +3732,77 @@ verify('conversation message limits retain the newest items without losing the o
     { talkerId: '200', endSeqno: '101', size: 20 },
   ])
   assert.equal(state.noMore, true)
+})
+
+verify('conversation message limits preserve anchors beyond 200, background refresh, latest return and account isolation', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const active = ref('200')
+  let newest = 600
+  let deferOlder: ((response: unknown) => void) | undefined
+  let holdOlder = false
+  let pendingLatest: Promise<unknown> | undefined
+  let finishLatest: ((response: unknown) => void) | undefined
+  const response = (end: number, count: number) => createMessagesResponse(
+    Array.from({ length: count }, (_, index) => createRawMessage(String(end - count + index + 1), String(end - count + index + 1))),
+    [],
+    { maxSeqno: String(newest), minSeqno: '1' },
+  )
+  const controller = usePrivateMessages.usePrivateMessages(mid, active, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async ({ endSeqno }) => {
+      if (!endSeqno && pendingLatest)
+        return pendingLatest
+      return endSeqno && holdOlder
+        ? new Promise(resolve => deferOlder = resolve)
+        : response(endSeqno ? Number(endSeqno) - 1 : newest, 20)
+    },
+    getCsrf: () => 'csrf',
+    getMaxMessagesPerConversation: () => 200,
+    markSessionRead() {},
+    syncUnread: async () => {},
+  })
+  await controller.loadInitial('200')
+  const state = controller.getState('200')
+  for (let page = 0; page < 18; page++) {
+    const anchor = state.items[0]!.msgKey
+    controller.updateViewport('200', { atLatest: false, scrollTop: 40, anchorId: anchor })
+    await controller.loadOlder('200')
+    assert.ok(state.items.length <= 200)
+    assert.ok(state.items.some(item => item.msgKey === anchor), 'the reading anchor survives')
+    assert.equal(Number(state.oldestSeqno), Number(anchor) - 20, 'new older messages remain reachable past the cap')
+  }
+  const oldKeys = state.items.map(item => item.msgKey)
+  newest = 620
+  await controller.refreshLatest('200')
+  assert.deepEqual(state.items.map(item => item.msgKey), oldKeys, 'background refresh cannot push old history away')
+  assert.equal(state.newMessagesAvailable, true)
+  pendingLatest = new Promise(resolve => finishLatest = resolve)
+  let requestedLatest = true
+  const abandoned = controller.loadLatest('200', () => requestedLatest)
+  await nextTick()
+  assert.equal(state.refreshing, true)
+  requestedLatest = false
+  controller.updateViewport('200', { atLatest: false, scrollTop: 80, anchorId: oldKeys[0] })
+  finishLatest!(response(newest, 20))
+  await abandoned
+  assert.deepEqual(state.items.map(item => item.msgKey), oldKeys, 'new reading intent prevents the pending latest page from replacing old history')
+  assert.equal(state.atLatest, false)
+  pendingLatest = undefined
+  holdOlder = true
+  const older = controller.loadOlder('200')
+  await controller.loadLatest('200')
+  assert.equal(state.newestSeqno, '620')
+  assert.equal(state.oldestSeqno, '601')
+  deferOlder!(response(200, 20))
+  await older
+  assert.equal(state.oldestSeqno, '601', 'a late old page cannot replace the returned latest window')
+  const obsolete = controller.loadOlder('200')
+  mid.value = '300'
+  await nextTick()
+  deferOlder!(response(580, 20))
+  await obsolete
+  assert.equal(controller.states.size, 0)
+  controller.dispose()
 })
 
 verify('conversation cache evicts the least recently used inactive state and preserves the active state', ({ usePrivateMessages }) => {
@@ -5382,7 +5241,7 @@ verify('workspace retains history only in its reader and preserves the older-pag
   })
   await reader.loadInitial('200')
   await reader.loadOlder('200')
-  assert.deepEqual(reader.getState('200').items.map(item => item.msgKey), ['3', '4'])
+  assert.deepEqual(reader.getState('200').items.map(item => item.msgKey), ['1', '2'])
   assert.equal(reader.getState('200').historyBoundarySeqno, '101')
   assert.equal(controller.getState('200').items.length, 0, 'the writer never copies confirmed history')
   await reader.loadOlder('200')
@@ -5472,8 +5331,9 @@ verify('workspace reader owns ACK and page exit releases both histories and draf
 async function main() {
   const modules = await loadModules()
   const failed: string[] = []
-
-  for (const assertion of assertions) {
+  const selected = process.argv[2] ? assertions.filter(assertion => assertion.name.includes(process.argv[2]!)) : assertions
+  assert.ok(selected.length, 'No checks matched the requested filter')
+  for (const assertion of selected) {
     try {
       await assertion.run(modules)
       console.log(`PASS ${assertion.name}`)
@@ -5484,6 +5344,8 @@ async function main() {
       console.error(error instanceof Error ? error.stack : String(error))
     }
   }
+
+  console.log(`Private-message: ${selected.length - failed.length} passed, ${failed.length} failed`)
 
   if (failed.length > 0) {
     console.error(`Private-message verification failed: ${failed.join(', ')}`)

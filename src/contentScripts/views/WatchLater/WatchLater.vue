@@ -48,7 +48,7 @@ import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { retiringTransition } from '~/utils/motionPresence'
 import { dissolveElements } from '~/utils/particleDissolve'
 import { openLinkInBackground } from '~/utils/tabs'
-import { getVideoPlaybackProgress, getVideoProgressPercentage, getVideoWatchState } from '~/utils/videoVisitHistory'
+import { acquireVideoVisitHistory, getVideoPlaybackProgress, getVideoProgressPercentage, getVideoWatchState } from '~/utils/videoVisitHistory'
 import { updateOwnedWatchLater } from '~/utils/watchLater'
 import { getWatchLaterAuthor, getWatchLaterPlaybackUrl, mergeWatchLaterItemsByAid, normalizeWatchLaterItem } from '~/utils/watchLaterList'
 
@@ -60,6 +60,7 @@ import WatchLaterPlayAllCard from './WatchLaterPlayAllCard.vue'
 import WatchLaterSelectionOverlay from './WatchLaterSelectionOverlay.vue'
 
 const { t } = useI18n()
+onScopeDispose(acquireVideoVisitHistory())
 const toast = useToast()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 const { openIframeDrawer } = useBewlyApp()
@@ -194,7 +195,12 @@ const batch = useLibraryBatchSelection({
   keys: () => filteredItems.value.map(item => item.aid),
   captureOwner: () => actionLifetime.capture(),
   remove: deleteWatchLaterItem,
-  commit: ids => void dissolveElements(watchLaterCards(ids)).released.then(() => commitRemovedItems(ids)),
+  async commit(ids) {
+    const owner = actionLifetime.capture()
+    await dissolveElements(watchLaterCards(ids)).released
+    if (owner.isCurrent())
+      commitRemovedItems(ids)
+  },
 })
 const bulkAction = useWatchLaterBulkAction({
   capture: () => actionLifetime.capture(),
@@ -720,7 +726,7 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
       readController = undefined
   }
 
-  return true
+  return isCurrentRequest(generation, accountId) && !requestFailed.value
 }
 
 async function deleteWatchLaterItem(aid: number): Promise<boolean> {

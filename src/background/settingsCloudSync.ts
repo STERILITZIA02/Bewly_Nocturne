@@ -54,7 +54,7 @@ let initializationPromise: Promise<SettingsCloudSyncStartResult> | undefined
 let initializationToken: symbol | undefined
 let messageEnableInProgressCount = 0
 let enableIntentGeneration = 0
-let enableRequestGeneration = -1
+let enableRequestIntent: { generation: number, mode: SettingsCloudSyncMode, expectedState: SettingsCloudSyncEnableRequest['expectedState'] | undefined } | undefined
 let enableRequestPromise: Promise<SettingsCloudSyncEnableResponse> | undefined
 let preferenceReadRetryTimer: ReturnType<typeof setTimeout> | undefined
 let preferenceReadRetryAttempt = 0
@@ -741,7 +741,7 @@ async function performEnableSettingsCloudSync(
 
   const isStale = () => requestGeneration !== enableIntentGeneration
   const rollBackCurrentRequest = async () => {
-    if (enableRequestGeneration !== requestGeneration)
+    if (enableRequestIntent?.generation !== requestGeneration)
       return
     stopCloudSync()
     await browser.storage.local.set({ [SETTINGS_CLOUD_SYNC_ENABLED_KEY]: false }).catch(rollbackError => (
@@ -797,14 +797,20 @@ async function performEnableSettingsCloudSync(
 
 function handleEnableSettingsCloudSync(value: unknown): Promise<SettingsCloudSyncEnableResponse> {
   const requestGeneration = enableIntentGeneration
-  if (enableRequestPromise && enableRequestGeneration === requestGeneration)
-    return enableRequestPromise
+  const request = value as Partial<SettingsCloudSyncEnableRequest> | undefined
+  const mode = normalizeSettingsCloudSyncMode(request?.mode)
+  const expectedState = request?.expectedState
+  if (enableRequestPromise && enableRequestIntent?.generation === requestGeneration) {
+    return enableRequestIntent.mode === mode && enableRequestIntent.expectedState === expectedState
+      ? enableRequestPromise
+      : Promise.resolve({ ok: false, reason: 'conflict' })
+  }
 
-  enableRequestGeneration = requestGeneration
+  enableRequestIntent = { generation: requestGeneration, mode, expectedState }
   const run = performEnableSettingsCloudSync(value, requestGeneration).finally(() => {
     if (enableRequestPromise === run) {
       enableRequestPromise = undefined
-      enableRequestGeneration = -1
+      enableRequestIntent = undefined
     }
   })
   enableRequestPromise = run

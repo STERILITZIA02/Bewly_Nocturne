@@ -4,6 +4,7 @@ import { createVNode, render } from 'vue'
 import { openImageViewer } from '~/composables/useImageViewer'
 import { IFRAME_IMAGE_VIEWER_ACK, IFRAME_IMAGE_VIEWER_CLOSE, IFRAME_IMAGE_VIEWER_OPEN } from '~/constants/globalEvents'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
+import { toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { getBilibiliImageResourceKey } from '~/utils/bilibiliUrl'
 import { i18n } from '~/utils/i18n'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
@@ -682,6 +683,7 @@ ${reducedMotionCss(`html.momentsPage.drawer.bewly-opus-layout .bewly-opus-iframe
 `
 
 function isOpusDetailPage(url: string = location.href): boolean {
+  url = toBilibiliLogicalUrl(url)
   return /https?:\/\/(?:www\.)?bilibili\.com\/opus\/\d+/.test(url)
     || /https?:\/\/t\.bilibili\.com\/\d+/.test(url)
 }

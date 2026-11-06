@@ -12,6 +12,7 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     const layout = await import('../src/constants/layout')
     const activeItem = await import('../src/utils/dockActiveItem')
     const undoState = Vue.ref(0)
+    const reachTop = Vue.ref(true)
     const item = { page: AppPage.Home, visible: true, icon: '', dockIcon: '', i18nKey: 'Home' }
     const items = [item, ...[AppPage.Notifications, AppPage.Moments, AppPage.WatchLater].map(page => ({ ...item, page, i18nKey: page }))]
     const topBarStore = Vue.reactive({ isLogin: true, unReadMessageCount: 120, newMomentsCount: 3, watchLaterCount: 12 })
@@ -24,7 +25,7 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       '@iconify/vue': { Icon: { render: () => Vue.h('svg') } },
       // 62px = the Dock tab (54px) plus its 4px rim on each side.
       '@vueuse/core': { useElementSize: () => ({ width: Vue.ref(600), height: Vue.ref(62) }), useWindowSize: () => ({ width: Vue.ref(1280), height: Vue.ref(900) }), usePreferredReducedMotion: () => Vue.ref('reduce') },
-      '~/composables/useAppProvider': { UndoForwardState: { ShowUndo: 1, ShowForward: 2 }, useBewlyApp: () => ({ reachTop: Vue.ref(true), homeActivatedPage: Vue.ref(HomeSubPage.ForYou), undoForwardState: undoState, canRefreshHomeSubPage: Vue.ref(true), getDockPageHref: () => '/' }) },
+      '~/composables/useAppProvider': { UndoForwardState: { ShowUndo: 1, ShowForward: 2 }, useBewlyApp: () => ({ reachTop, homeActivatedPage: Vue.ref(HomeSubPage.ForYou), undoForwardState: undoState, canRefreshHomeSubPage: Vue.ref(true), getDockPageHref: () => '/' }) },
       '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), toggleDark: () => {} }) },
       '~/composables/useReducedMotion': { useReducedMotion: () => Vue.ref(true) },
       '~/composables/useDelayedHover': { useDelayedHover: () => Vue.ref(null) },
@@ -55,7 +56,9 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     style.textContent = compiled.code
     const host = document.body.appendChild(document.createElement('div'))
     const bottomShifts = []
-    const app = Vue.createApp(Dock, { activatedPage: AppPage.Home, settingsOpen: false, onBottomShiftChange: value => bottomShifts.push(value) })
+    let refreshes = 0
+    let backToTop = 0
+    const app = Vue.createApp(Dock, { activatedPage: AppPage.Home, settingsOpen: false, onBottomShiftChange: value => bottomShifts.push(value), onRefresh: () => refreshes++, onBackToTop: () => backToTop++ })
     app.config.globalProperties.$t = key => key
     app.mount(host)
     await flush()
@@ -125,6 +128,31 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     settings.value.disableFrostedGlass = false
     undoState.value = 0
     await flush()
+    settings.value.backToTopAndRefreshButtonsAreSeparated = true
+    settings.value.showDockBackToTop = true
+    reachTop.value = false
+    await flush()
+    assert.ok(host.querySelector('[data-dock-refresh]'))
+    assert.ok(host.querySelector('[data-dock-back-to-top]'))
+    settings.value.hideDockRefreshButton = true
+    await flush()
+    await new Promise(resolve => setTimeout(resolve, 40))
+    await flush()
+    assert.equal(host.querySelector('[data-dock-refresh]'), null)
+    host.querySelector('[data-dock-back-to-top]').click()
+    assert.equal(backToTop, 1)
+    assert.equal(refreshes, 0)
+    settings.value.backToTopAndRefreshButtonsAreSeparated = false
+    await flush()
+    host.querySelector('[data-dock-combined-action]').click()
+    assert.equal(backToTop, 2, 'hiding refresh keeps the combined action as back-to-top')
+    reachTop.value = true
+    await flush()
+    assert.equal(host.querySelector('[data-dock-combined-action]'), null, 'the hidden refresh reserves no combined action at the top')
+    settings.value.hideDockRefreshButton = false
+    await flush()
+    host.querySelector('[data-dock-combined-action]').click()
+    assert.equal(refreshes, 1)
     const collapsedTrigger = host.querySelector('.dock-collapsed-trigger')
     // Dock tabs name themselves under the glyph (no hover tooltips).
     const collapseButton = () => [...host.querySelectorAll('button')].find(button => button.textContent.trim() === 'dock.collapse_dock')

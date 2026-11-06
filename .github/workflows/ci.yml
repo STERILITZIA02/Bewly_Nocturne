@@ -1,5 +1,9 @@
 name: CI
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
@@ -43,13 +47,13 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node .github/scripts/pr-policy-check.mjs
 
-  test:
-    name: Test
+  checks:
+    name: ${{ matrix.check }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        check: [lint, typecheck, test, knip, build]
       fail-fast: false
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
@@ -65,34 +69,33 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v6.1.0
         with:
+          cache: true
           run_install: |
             - args: [--frozen-lockfile]
 
-      - name: Lint
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: pnpm run lint
-
-      - name: Dependency security audit
-        run: pnpm audit --audit-level low
-
-      - name: Type check
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: pnpm run typecheck
-
-      - name: Test
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: pnpm test
-
-      - name: Knip
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: pnpm run knip
-
-      - name: Build Extension
-        run: pnpm build
+      - run: pnpm run ${{ matrix.check }}
 
       - name: Upload Chrome extension
-        if: ${{ matrix.os == 'ubuntu-latest' && github.ref_name == 'main' }}
+        if: ${{ matrix.check == 'build' && github.ref_name == 'main' }}
         uses: actions/upload-artifact@v7.0.2
         with:
           name: Bewly-Nocturne-chrome-extension
           path: extension
+
+  audit:
+    name: Dependency security audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v6.1.0
+        with:
+          cache: true
+          run_install: |
+            - args: [--frozen-lockfile]
+      - run: pnpm verify:dependency-security

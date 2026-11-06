@@ -22,6 +22,11 @@ interface MenuGroup {
 
 const groups = computed<MenuGroup[]>(() => [
   {
+    id: 'menu',
+    label: t('settings.group_video_card_context_menu'),
+    elements: [{ key: 'customizeMenu', label: t('video_card.customize_menu'), icon: 'i-tabler:adjustments-horizontal' }],
+  },
+  {
     id: 'recommendation',
     label: t('settings.video_card_context_menu_region_recommendation'),
     elements: [

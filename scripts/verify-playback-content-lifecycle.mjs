@@ -279,12 +279,10 @@ export function registerPlaybackContentChecks(check) {
     }
     const observer = new MutationObserver(() => {})
     try {
-      actions.syncActionAnimationTheme(state)
       actions.scheduleActionGeometrySync(state)
       flushFrame()
       assert.equal(button.style.getPropertyValue('--bewly-action-anchor-x'), '20px')
       observer.observe(state.root, { attributes: true, subtree: true, attributeFilter: ['style'] })
-      actions.syncActionAnimationTheme(state)
       actions.scheduleActionGeometrySync(state)
       actions.scheduleActionGeometrySync(state)
       assert.equal(frames.size, 1)
@@ -477,6 +475,7 @@ export function registerPlaybackContentChecks(check) {
       '~/utils/bewlyWidescreen/description': description,
       '~/utils/bewlyWidescreen/geometry': { ensureAnchoredPlayer() {}, schedulePlayerResizeSync() {}, syncAuxiliaryControlGeometry() {}, syncControlsGlassGeometry() {} },
       '~/utils/bewlyWidescreen/labels': { t: key => key },
+      '~/utils/bewlyWidescreen/loadingView': await import('../src/utils/bewlyWidescreen/loadingView'),
       '~/utils/bewlyWidescreen/nativeControls': { syncNativePlayerControlVisibility() {} },
       '~/utils/bewlyWidescreen/nativeDom': native,
       '~/utils/bewlyWidescreen/playlist': { clearEpisodeSectionMarker() {}, markPgcRecommendations() {}, placeRecommendAfterPlaylist() {}, syncEpisodeSectionMarker() {}, syncPlaylistToggleButton() {} },

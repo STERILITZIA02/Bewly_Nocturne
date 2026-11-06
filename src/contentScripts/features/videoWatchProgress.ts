@@ -1,7 +1,6 @@
 import { watch } from 'vue'
 
 import { onRouteChange } from '~/composables/useRouteState'
-import { settings } from '~/logic'
 import { waitWithSignal } from '~/utils/abort'
 import { resolvePgcEpisodeVideoIds } from '~/utils/pgcEpisode'
 import { getPlaybackNavigationKey, parsePlaybackTabUrl } from '~/utils/playbackTab'
@@ -10,7 +9,7 @@ import { getVideoElement, isPlayerAdvertisement } from '~/utils/playerMedia'
 import { isNativeVideoComponentReady, readNativePlaybackEpisodeId } from '~/utils/videoMetadataBridge'
 import type { PlaybackHistoryIdentity } from '~/utils/videoPlaybackHistory'
 import { createVideoPlaybackHistory } from '~/utils/videoPlaybackHistory'
-import { flushVideoVisitHistory, recordVideoVisitFromUrl, recordVideoWatchProgress, videoVisitHistoryEpoch } from '~/utils/videoVisitHistory'
+import { acquireVideoVisitHistory, flushVideoVisitHistory, recordVideoVisitFromUrl, recordVideoWatchProgress, videoVisitHistoryEpoch } from '~/utils/videoVisitHistory'
 
 import { hasPlayerMediaMutation, observePlayerDom } from '../playerDomLifecycle'
 
@@ -18,12 +17,13 @@ export function setupVideoWatchProgress() {
   let media: HTMLVideoElement | null = null
   let navigation = ''
   let detach: (() => void) | undefined
+  let releaseHistory: (() => void) | undefined
   let identity: PlaybackHistoryIdentity | undefined
   const tracker = createVideoPlaybackHistory({
     media: () => media,
     navigation: () => navigation,
     epoch: () => videoVisitHistoryEpoch.value,
-    eligible: () => settings.value.showVideoWatchedBadge && Boolean(navigation),
+    eligible: () => Boolean(navigation && videoVisitHistoryEpoch.value),
     advertisement: () => isPlayerAdvertisement(media),
     async identity(video, signal) {
       if (isNativeVideoComponentReady(video) === false)
@@ -80,8 +80,12 @@ export function setupVideoWatchProgress() {
     }
     detach?.()
     detach = undefined
-    if (!navigation || !settings.value.showVideoWatchedBadge)
+    if (!navigation) {
+      releaseHistory?.()
+      releaseHistory = undefined
       return
+    }
+    releaseHistory ??= acquireVideoVisitHistory()
     const stopObserver = observePlayerDom((records) => {
       if (hasPlayerMediaMutation(records))
         syncMedia()
@@ -94,7 +98,7 @@ export function setupVideoWatchProgress() {
     }
   }
   const stopRoute = onRouteChange(syncRoute, true)
-  const stopSettings = watch([() => settings.value.showVideoWatchedBadge, videoVisitHistoryEpoch], () => {
+  const stopSettings = watch(videoVisitHistoryEpoch, () => {
     tracker.invalidate(false)
     identity = undefined
     if (videoVisitHistoryEpoch.value)
@@ -109,6 +113,7 @@ export function setupVideoWatchProgress() {
     stopSettings()
     detach?.()
     tracker.dispose()
+    releaseHistory?.()
     document.removeEventListener('visibilitychange', flush)
     window.removeEventListener('pagehide', flush)
     media = null

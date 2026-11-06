@@ -30,7 +30,7 @@ let lastDrawerEntryId: string | undefined
 function scheduleFallback() {
   if (fallbackTimer !== undefined)
     clearTimeout(fallbackTimer)
-  if (document.hidden)
+  if (!routeObserverStarted || window.navigation || document.hidden)
     return
   fallbackTimer = setTimeout(() => {
     fallbackTimer = undefined
@@ -41,7 +41,8 @@ function scheduleFallback() {
 
 // Extension-owned history writes run in ISOLATED world and do not pass through
 // the site's MAIN-world history wrapper. Their callers commit this same route
-// source immediately instead of waiting for the 4-second external fallback.
+// source immediately. Older browsers without Navigation retain the existing
+// fallback for third-party code that holds an unwrapped History method.
 export function syncRouteState() {
   if (typeof window === 'undefined')
     return
@@ -88,6 +89,7 @@ function startRouteObserver() {
   window.addEventListener('replacestate', scheduleRouteSync)
   window.addEventListener('popstate', scheduleRouteSync)
   window.addEventListener('hashchange', scheduleRouteSync)
+  window.navigation?.addEventListener('currententrychange', scheduleRouteSync)
 
   document.addEventListener('visibilitychange', handleRouteVisibilityChange)
   syncRouteState()
@@ -102,6 +104,7 @@ export function stopRouteObserver() {
   window.removeEventListener('replacestate', scheduleRouteSync)
   window.removeEventListener('popstate', scheduleRouteSync)
   window.removeEventListener('hashchange', scheduleRouteSync)
+  window.navigation?.removeEventListener('currententrychange', scheduleRouteSync)
   document.removeEventListener('visibilitychange', handleRouteVisibilityChange)
   if (fallbackTimer !== undefined) {
     clearTimeout(fallbackTimer)

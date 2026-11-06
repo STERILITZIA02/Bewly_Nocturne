@@ -113,6 +113,7 @@ async function main() {
     '~/styles/skeleton.scss?inline': { default: compileFile(`${styles}skeleton.scss`) },
     '~/utils/bewlyWidescreen/constants': await import('../src/utils/bewlyWidescreen/constants'),
     '~/utils/bewlyWidescreen/styles/cardLayout': await import('../src/utils/bewlyWidescreen/styles/cardLayout'),
+    '~/utils/loadingRing': await import('../src/utils/loadingRing'),
     '~/utils/main': { injectCSS: (text: string) => { playbackCss = text } },
     '~/utils/photoViewer': await import('../src/utils/photoViewer'),
   })

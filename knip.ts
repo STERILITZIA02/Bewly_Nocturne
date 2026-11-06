@@ -16,6 +16,7 @@ export default {
     'scripts/fixtures/visual-editor.browser.ts',
     'scripts/verify-color-policy.ts',
     'scripts/verify-style-invalidation.ts',
+    'scripts/verify-ui-scale.ts',
     'scripts/verify-bundle-licenses.ts',
     'scripts/serve-card-window-benchmark.mjs',
   ],

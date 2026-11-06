@@ -62,6 +62,7 @@ export function clearEpisodeSectionMarker(panel: HTMLElement, movedNodes: MovedN
   })
   for (const [selector, fade] of PGC_SCROLLERS)
     panel.querySelectorAll(selector).forEach(node => node.classList.remove(fade))
+  panel.querySelector('#playlist-video-action-list')?.classList.remove(SCROLL_EDGE_FADE_CLASS)
   panel.querySelectorAll(`[${PGC_SECTION_ATTRIBUTE}]`).forEach((section) => {
     section.querySelector(`.${DISCLOSURE_TOGGLE_CLASS}`)?.remove()
     section.removeAttribute(PGC_SECTION_ATTRIBUTE)
@@ -212,6 +213,11 @@ export function syncEpisodeSectionMarker(currentState: BewlyWidescreenState) {
   const isPgc = currentState.root.dataset.pageKind === 'pgc'
   if (episodeSection && !episodeSection.classList.contains(EPISODE_SECTION_CLASS))
     episodeSection.classList.add(...(isPgc ? [EPISODE_SECTION_CLASS] : EPISODE_SECTION_CLASSES))
+  const actionList = episodeSection?.querySelector('#playlist-video-action-list')
+  if (actionList) {
+    episodeSection?.classList.remove(SCROLL_EDGE_FADE_CLASS)
+    actionList.classList.add(SCROLL_EDGE_FADE_CLASS)
+  }
   if (isPgc)
     syncPgcSections(panel)
   placePlaylistToggleButton(currentState)

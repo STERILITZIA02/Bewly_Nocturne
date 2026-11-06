@@ -293,6 +293,23 @@ export function normalizeSurfaceColor(value: unknown, dark: boolean): string | n
   return oklchToHex(dark ? Math.min(l, 0.4) : Math.max(l, 0.88), c, h)
 }
 
+/** SVGA's blue is baked into its pixels; keep default-blue artwork untouched. */
+export function getActionAnimationFilter(theme: string) {
+  const rgb = parseHexColor(theme)
+  if (!rgb || toHex(rgb) === DEFAULT_THEME_COLOR)
+    return 'none'
+  const [r, g, b] = [rgb.r, rgb.g, rgb.b].map(value => value / 255)
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const delta = max - min
+  const lightness = (max + min) / 2
+  if (!delta)
+    return `grayscale(1) brightness(${lightness === 0 ? 0 : lightness === 1 ? 10 : (lightness / 0.46).toFixed(2)})`
+  const saturation = delta / (1 - Math.abs(2 * lightness - 1))
+  const hue = 60 * (max === r ? (g - b) / delta + (g < b ? 6 : 0) : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4)
+  return `hue-rotate(${Math.round(hue - 196)}deg) saturate(${saturation.toFixed(2)}) brightness(${Math.max(0.6, Math.min(1.35, lightness / 0.46)).toFixed(2)})`
+}
+
 export function getThemeColorTokens(themeColor: string, isDark: boolean, surfaces: readonly string[] = []) {
   const backgrounds = surfaces.filter(surface => parseHexColor(surface))
   if (!backgrounds.length)
@@ -306,6 +323,7 @@ export function getThemeColorTokens(themeColor: string, isDark: boolean, surface
     // changes. Contrast correction below is exclusively for text and markers.
     theme,
     onTheme,
+    actionAnimationFilter: getActionAnimationFilter(theme),
     // Brand marks keep a chromatic hover even without an accent.
     brandAccent: neutral ? 'var(--bew-bili-pink)' : theme,
     // Keep native checkbox artwork, with the same contrast decision as text.
@@ -319,6 +337,7 @@ export function getThemeColorTokens(themeColor: string, isDark: boolean, surface
 const THEME_TOKEN_PROPERTIES = {
   theme: '--bew-theme-color',
   onTheme: '--bew-on-theme-color',
+  actionAnimationFilter: '--bew-action-animation-filter',
   brandAccent: '--bew-brand-accent',
   checkmarkImage: '--bew-theme-checkmark-image',
   switchThumb: '--bew-switch-thumb-active',

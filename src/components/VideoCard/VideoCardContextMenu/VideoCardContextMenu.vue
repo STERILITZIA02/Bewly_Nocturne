@@ -143,7 +143,13 @@ const showUnfollowUserDialog = ref<boolean>(false)
 const showFavoriteDialog = ref(false)
 const showPipWindow = ref<boolean>(false)
 const loadingWebDislike = ref<boolean>(false)
-const { openLayoutEditorSetting } = useBewlyApp()
+const { openLayoutEditorSetting, openSettingsAt } = useBewlyApp()
+
+function customizeMenu() {
+  handleClose()
+  // Let the menu owner return focus to the card before Settings captures it.
+  void nextTick(() => openSettingsAt({ category: 'bewly-components', page: 'video-card', settingId: 'settings.group_video_card_context_menu' }))
+}
 
 interface MenuItem { key: string, name: string, icon: string, color?: string, run: () => void }
 type ConfigurableItem = Omit<MenuItem, 'key'> & { key: VideoCardContextMenuKey }
@@ -240,13 +246,14 @@ const layoutGroup = computed((): MenuItem[] => {
   ]
 })
 
+const menuEditorGroup = computed<ConfigurableItem[]>(() => [{ key: 'customizeMenu', name: t('video_card.customize_menu'), icon: 'i-tabler:adjustments-horizontal', run: customizeMenu }])
 const advancedKeys = computed(() => new Set<string>(settings.value.videoCardContextMenuAdvanced))
 const menuGroups = computed(() => {
   const extra = props.extraGroups.map(group => group.map(option => ({ ...option, run: closeThen(option.run) })))
   const main = configurableGroups.value.map(group => group.filter(item => !advancedKeys.value.has(item.key)))
-  return [...main, ...extra, layoutGroup.value].filter(group => group.length > 0)
+  return [...main, ...extra, layoutGroup.value, menuEditorGroup.value.filter(item => !advancedKeys.value.has(item.key))].filter(group => group.length > 0)
 })
-const advancedGroups = computed(() => configurableGroups.value
+const advancedGroups = computed(() => [...configurableGroups.value, menuEditorGroup.value]
   .map(group => group.filter(item => advancedKeys.value.has(item.key)))
   .filter(group => group.length > 0))
 

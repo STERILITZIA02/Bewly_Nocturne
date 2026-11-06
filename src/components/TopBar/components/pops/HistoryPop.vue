@@ -17,24 +17,27 @@ import { Business } from '~/models/history/history'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isAccountRequestCurrent, resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
+import type { HistoryCursor } from '~/utils/historyCursor'
+import { historyReadKey, readHistoryCursor } from '~/utils/historyCursor'
 import { getHistoryUrl, getHistoryVideoIdentity } from '~/utils/historyTarget'
 import { captureListRemovalFocus } from '~/utils/listRemovalFocus'
 import { getCSRF, removeHttpFromUrl, scrollToTop } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { retiringListTransition } from '~/utils/motionPresence'
 import { dissolveElements } from '~/utils/particleDissolve'
-import { getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
+import { acquireVideoVisitHistory, getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
 
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
 
 const { t } = useI18n()
+onScopeDispose(acquireVideoVisitHistory())
 const toast = useToast()
 const topBarStore = useTopBarStore()
 const currentAccountId = computed(() => resolveAuthenticatedAccountId(
   topBarStore.isLogin,
   topBarStore.userInfo.mid,
 ))
-const historys = reactive<Array<HistoryItem>>([])
+const historys = shallowReactive<Array<HistoryItem>>([])
 const pendingRemovals = reactive(new Set<string>())
 const historyTabs = computed(() => [
   {
@@ -58,19 +61,26 @@ const isLoading = ref<boolean>(false)
 // when noMoreContent is true, the user can't scroll down to load more content
 const noMoreContent = ref<boolean>(false)
 const loadError = ref(false)
-const failedRequest = ref<{ type: Business, viewAt: number } | null>(null)
-const livePage = ref<number>(1)
+const failedRequest = ref<{ type: Business, cursor: HistoryCursor } | null>(null)
+let cursor: HistoryCursor = { max: 0, view_at: 0, business: '' }
+const seenCursors = new Set<string>()
+const seenItems = new Set<string>()
+let readController: AbortController | undefined
 const historysWrap = ref<HTMLElement>() as Ref<HTMLElement>
 let requestGeneration = 0
 
 function resetHistoryState() {
   requestGeneration++
+  readController?.abort()
+  readController = undefined
   historys.length = 0
   isLoading.value = false
   noMoreContent.value = false
   loadError.value = false
   failedRequest.value = null
-  livePage.value = 1
+  cursor = { max: 0, view_at: 0, business: '' }
+  seenCursors.clear()
+  seenItems.clear()
   if (historysWrap.value)
     scrollToTop(historysWrap.value)
 }
@@ -105,18 +115,14 @@ function handleReachBottom() {
   if (isLoading.value || loadError.value || noMoreContent.value || historys.length === 0)
     return
 
-  const lastViewAt = historys[historys.length - 1]?.view_at
-  if (!lastViewAt)
-    return
-
   if (activatedTab.value === 0) {
-    void getHistoryList(Business.ARCHIVE, lastViewAt)
+    void getHistoryList(Business.ARCHIVE)
   }
   else if (activatedTab.value === 1) {
-    void getHistoryList(Business.LIVE, lastViewAt)
+    void getHistoryList(Business.LIVE)
   }
   else if (activatedTab.value === 2) {
-    void getHistoryList(Business.ARTICLE, lastViewAt)
+    void getHistoryList(Business.ARTICLE)
   }
 }
 
@@ -128,6 +134,7 @@ useOptimizedScroll(
 
 onBeforeUnmount(() => {
   requestGeneration++
+  readController?.abort()
 })
 
 function onClickTab(tabId: number) {
@@ -143,9 +150,9 @@ function onClickTab(tabId: number) {
 /**
  * Get history list
  * @param type
- * @param view_at Last viewed timestamp
+ * @param requestCursor Complete cursor returned by the previous page
  */
-async function getHistoryList(type: Business, view_at = 0 as number) {
+async function getHistoryList(type: Business, requestCursor = cursor) {
   if (isLoading.value)
     return
   if (noMoreContent.value)
@@ -156,6 +163,8 @@ async function getHistoryList(type: Business, view_at = 0 as number) {
     return
 
   const generation = requestGeneration
+  const controller = new AbortController()
+  readController = controller
   isLoading.value = true
   loadError.value = false
   failedRequest.value = null
@@ -163,21 +172,28 @@ async function getHistoryList(type: Business, view_at = 0 as number) {
   try {
     const res: HistoryResult = await api.history.getHistoryList({
       type,
-      view_at,
-    })
+      ...requestCursor,
+    }, { signal: controller.signal })
 
     if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
       return
     if (res.code !== 0 || !Array.isArray(res.data?.list))
       throw res
 
-    // API success with an empty list is a normal empty/end state.
-    if (res.data.list.length === 0) {
-      noMoreContent.value = true
-      return
+    const next = readHistoryCursor(res.data.cursor, requestCursor, seenCursors, !res.data.list.length)
+    const added = res.data.list.filter(item => !seenItems.has(historyReadKey(item)))
+    if (next.stalled || (res.data.list.length > 0 && added.length === 0))
+      throw new Error('History pagination stalled')
+    for (const item of added) {
+      const key = historyReadKey(item)
+      if (!seenItems.has(key)) {
+        seenItems.add(key)
+        historys.push(item)
+      }
     }
-
-    historys.push(...res.data.list)
+    cursor = next.cursor
+    seenCursors.add(next.key)
+    noMoreContent.value = next.ended
     loadError.value = false
     failedRequest.value = null
   }
@@ -185,12 +201,14 @@ async function getHistoryList(type: Business, view_at = 0 as number) {
     if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
       return
     loadError.value = true
-    failedRequest.value = { type, viewAt: view_at }
+    failedRequest.value = { type, cursor: requestCursor }
     noMoreContent.value = false
     if (!isExtensionContextInvalidatedError(error))
       console.error('Failed to load history list:', error)
   }
   finally {
+    if (readController === controller)
+      readController = undefined
     if (isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
       isLoading.value = false
   }
@@ -203,7 +221,7 @@ function retryFailedLoad() {
 
   loadError.value = false
   noMoreContent.value = false
-  void getHistoryList(request.type, request.viewAt)
+  void getHistoryList(request.type, request.cursor)
 }
 
 function getHistoryItemKey(historyItem: HistoryItem): string {

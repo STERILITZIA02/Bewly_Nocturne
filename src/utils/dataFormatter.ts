@@ -5,6 +5,13 @@ import { LanguageType } from './../enums/appEnums'
 
 export const { t } = i18n.global
 
+const COUNT_MULTIPLIERS: Record<string, number> = { k: 1e3, m: 1e6, b: 1e9, 万: 1e4, 萬: 1e4, 千万: 1e7, 千萬: 1e7, 亿: 1e8, 億: 1e8 }
+const COUNT_UNITS = {
+  simplified: [[1e8, ' 亿'], [1e7, ' 千万'], [1e4, ' 万'], [1, ' ']],
+  traditional: [[1e8, ' 億'], [1e7, ' 千萬'], [1e4, ' 萬'], [1, ' ']],
+  latin: [[1e9, 'B'], [1e6, 'M'], [1e3, 'K'], [1, '']],
+} as const
+
 export function parseStatNumber(value?: number | string | null): number | undefined {
   if (typeof value === 'number')
     return Number.isFinite(value) ? value : undefined
@@ -12,32 +19,13 @@ export function parseStatNumber(value?: number | string | null): number | undefi
   if (typeof value !== 'string')
     return undefined
 
-  const trimmed = value.trim()
-  if (!trimmed || trimmed === '-' || trimmed === '--')
+  // A count may contain grouped digits and one display unit; arbitrary text
+  // containing digits is not numeric evidence (nor is a missing-stat marker).
+  const match = /^([+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+-]?\.\d+)\s*([kmb亿億]|千?[万萬])?$/i.exec(value.trim())
+  if (!match)
     return undefined
-
-  let normalized = trimmed.replace(/,/g, '').toLowerCase()
-  let multiplier = 1
-
-  if (/[亿億]/.test(normalized)) {
-    multiplier *= 1e8
-    normalized = normalized.replace(/[亿億]/g, '')
-  }
-
-  if (/[万萬]/.test(normalized)) {
-    multiplier *= 1e4
-    normalized = normalized.replace(/[万萬]/g, '')
-  }
-
-  normalized = normalized.replace(/[^0-9.]/g, '')
-  if (!normalized)
-    return undefined
-
-  const numeric = Number(normalized)
-  if (Number.isNaN(numeric))
-    return undefined
-
-  return numeric * multiplier
+  const numeric = Number(match[1].replace(/,/g, '')) * (COUNT_MULTIPLIERS[match[2]?.toLowerCase()] ?? 1)
+  return Number.isFinite(numeric) ? numeric : undefined
 }
 
 /** A compact count in the interface language (1.2 万, 1.2K); input that is not a count is shown as given. */
@@ -45,38 +33,15 @@ export function numFormatter(num: number | string | null | undefined): string {
   const value = parseStatNumber(num)
   if (value === undefined)
     return typeof num === 'string' && num.trim() ? num.trim() : '0'
-  const digits = 1 // specify number of digits after decimal
-  let lookup
-
-  if (settings.value.language === LanguageType.Mandarin_CN) {
-    lookup = [
-      { value: 1, symbol: ' ' },
-      { value: 1e4, symbol: ' 万' },
-      { value: 1e7, symbol: ' 千万' },
-      { value: 1e8, symbol: ' 亿' },
-    ]
+  const language = settings.value.language
+  const units = language === LanguageType.Mandarin_CN
+    ? COUNT_UNITS.simplified
+    : language === LanguageType.Cantonese || language === LanguageType.Mandarin_TW ? COUNT_UNITS.traditional : COUNT_UNITS.latin
+  for (const [threshold, symbol] of units) {
+    if (Math.abs(value) >= threshold)
+      return (value / threshold).toFixed(1).replace(/\.0+$|(\.\d*[1-9])0+$/, '$1') + symbol
   }
-  else if (settings.value.language === LanguageType.Cantonese || settings.value.language === LanguageType.Mandarin_TW) {
-    lookup = [
-      { value: 1, symbol: ' ' },
-      { value: 1e4, symbol: ' 萬' },
-      { value: 1e7, symbol: ' 千萬' },
-      { value: 1e8, symbol: ' 億' },
-    ]
-  }
-  else {
-    lookup = [
-      { value: 1, symbol: '' },
-      { value: 1e3, symbol: 'K' },
-      { value: 1e6, symbol: 'M' },
-      { value: 1e9, symbol: 'B' },
-    ]
-  }
-  const rx = /\.0+$|(\.\d*[1-9])0+$/
-  const item = lookup.slice().reverse().find((item) => {
-    return value >= item.value
-  })
-  return item ? (value / item.value).toFixed(digits).replace(rx, '$1') + item.symbol : '0'
+  return String(value)
 }
 
 export function calcTimeSince(date: number | string | Date) {
@@ -85,10 +50,10 @@ export function calcTimeSince(date: number | string | Date) {
   const diffMs = now.getTime() - targetDate.getTime()
   const diffSeconds = Math.floor(diffMs / 1000)
 
-  // 获取今天和目标日期的日期部分（忽略时间）
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const target = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
-  const daysDiff = Math.floor((today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24))
+  // Compare calendar dates: a local day can be 23 or 25 hours across DST.
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  const target = Date.UTC(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
+  const daysDiff = (today - target) / (1000 * 60 * 60 * 24)
 
   if (daysDiff === 0) {
     // 当天

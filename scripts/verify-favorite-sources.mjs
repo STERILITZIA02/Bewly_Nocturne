@@ -176,16 +176,19 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
     try {
       data.selectedCategory.value = { id: 1 }
       const initial = data.loadSelectedContent()
+      await flush()
       reads[0].resolve(page([video(1)]))
       await initial
       const pending = data.refreshSelectedContent()
       assert.equal(data.favoriteResources[0].id, 1)
       assert.equal(data.isFullPageLoading.value, false)
+      await flush()
       reads[1].resolve({ code: -503 })
       await pending
       assert.equal(data.favoriteResources[0].id, 1)
       const retry = data.retryFavoriteContent()
       assert.equal(data.isFullPageLoading.value, false)
+      await flush()
       reads[2].resolve(page([video(2)]))
       await retry
       assert.deepEqual(data.favoriteResources.map(item => item.id), [2])
@@ -361,20 +364,23 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
     } }, user: {}, getAccountId: () => 1, haveScrollbar: async () => true, t: key => key })
     data.selectedCategory.value = { id: 1 }
     const first = data.loadSelectedContent()
+    await flush()
     data.selectedCategory.value = { id: 2 }
     const second = data.loadSelectedContent()
+    await flush()
     assert.equal(calls[0].signal.aborted, true)
     calls[1].resolve(page([video(2)]))
     await second
     calls[0].resolve(page([video(1)]))
     await first
     assert.deepEqual(data.favoriteResources.map(item => item.id), [2])
-    const third = data.loadSelectedContent()
+    const third = data.refreshSelectedContent()
+    await flush()
     data.dispose()
     assert.equal(calls[2].signal.aborted, true)
     calls[2].resolve(page([video(3)]))
     await third
-    assert.equal(data.favoriteResources.length, 0)
+    assert.deepEqual(data.favoriteResources.map(item => item.id), [2], 'disposal rejects late refresh results without mutating the retained snapshot')
   })
 
   check('favorite pagination: the video grid owns viewport filling instead of racing a second recursive loader', async () => {
@@ -404,10 +410,13 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
     data.selectedCategory.value = folder
     await data.loadSelectedContent()
     await data.loadNextPage()
+    const loadedCount = data.favoriteResources.length
     items = items.slice(25)
     data.applyResourceWrite({ kind: 'delete', sourceId: 1, resourceKeys: Array.from({ length: 25 }, (_, i) => `${i + 1}:2`) }, data.contentVersion.value)
     await data.loadNextPage()
-    assert.deepEqual(data.favoriteResources.map(item => item.id), items.slice(0, 20).map(item => item.id))
+    assert.deepEqual(data.favoriteResources.map(item => item.id), items.slice(0, loadedCount).map(item => item.id))
+    await data.loadNextPage()
+    assert.deepEqual(data.favoriteResources.map(item => item.id), items.map(item => item.id), 'repair preserves the loaded window and pagination reaches every remaining item')
     data.dispose()
   })
 
@@ -541,8 +550,10 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
     try {
       data.selectedCategory.value = { id: 1 }
       const first = data.loadSelectedContent()
+      await flush()
       data.videoOrder.value = 'view'
       const second = data.loadSelectedContent()
+      await flush()
       assert.deepEqual(calls.map(call => call.params.order), ['mtime', 'view'])
       calls[1].resolve(page([video(2)], 2, true))
       await second
@@ -550,12 +561,14 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
       await first
       assert.deepEqual(data.favoriteResources.map(item => item.id), [2])
       const next = data.loadNextPage()
+      await flush()
       assert.equal(calls[2].params.order, 'view')
       assert.equal(calls[2].params.pn, 2)
       calls[2].resolve(page([video(3)], 2, false))
       await next
       data.videoOrder.value = 'pubtime'
       const published = data.loadSelectedContent()
+      await flush()
       assert.equal(calls[3].params.order, 'pubtime')
       assert.equal(calls[3].params.pn, 1)
       calls[3].resolve(page([], 0, false))

@@ -176,6 +176,8 @@ const showBackToTopOrRefreshButton = computed((): boolean => {
 })
 
 const canRefreshCurrentPage = computed((): boolean => {
+  if (settings.value.hideDockRefreshButton)
+    return false
   if (props.activatedPage === AppPage.Search || props.activatedPage === AppPage.SearchResults)
     return false
 
@@ -186,9 +188,14 @@ const showBackToTopOrRefreshActions = computed((): boolean => {
   return showBackToTopOrRefreshButton.value && (canRefreshCurrentPage.value || (settings.value.showDockBackToTop && !reachTop.value))
 })
 const combinedActionIsRefresh = computed(() => canRefreshCurrentPage.value && (reachTop.value || !settings.value.showDockBackToTop))
-watch(() => settings.value.showDockBackToTop, async (visible) => {
+watch([() => settings.value.showDockBackToTop, () => settings.value.hideDockRefreshButton], async ([visible, hideRefresh]) => {
   const root = document.getElementById('bewly')?.shadowRoot
-  if (!visible && root?.activeElement?.hasAttribute('data-dock-back-to-top')) {
+  const active = root?.activeElement
+  const separated = settings.value.backToTopAndRefreshButtonsAreSeparated
+  const removed = separated
+    ? (!visible && active?.hasAttribute('data-dock-back-to-top')) || (hideRefresh && active?.hasAttribute('data-dock-refresh'))
+    : !showBackToTopOrRefreshActions.value && active?.hasAttribute('data-dock-combined-action')
+  if (removed) {
     await nextTick()
     dockContentRef.value?.querySelector<HTMLElement>('button:not(:disabled), a[href]')?.focus({ preventScroll: true })
   }
@@ -951,6 +958,7 @@ onUnmounted(() => {
                 v-if="(key === 1 && canRefreshCurrentPage) || (key === 2 && settings.showDockBackToTop && !reachTop)"
                 v-layout-editable="key === 1 ? 'dock-refresh-action' : 'dock-back-to-top-action'"
                 :data-dock-back-to-top="key === 2 ? '' : undefined"
+                :data-dock-refresh="key === 1 ? '' : undefined"
                 class="back-to-top-or-refresh-btn"
                 :label="key === 1 ? $t('common.operation.refresh') : $t('common.operation.back_to_top')"
                 :class="{
@@ -978,6 +986,7 @@ onUnmounted(() => {
           <IconButton
             v-if="showBackToTopOrRefreshActions"
             v-layout-editable="'dock-refresh-back-to-top-action'"
+            data-dock-combined-action
             class="back-to-top-or-refresh-btn"
             :label="combinedActionIsRefresh ? $t('common.operation.refresh') : $t('common.operation.back_to_top')"
             :class="{

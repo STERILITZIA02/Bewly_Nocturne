@@ -1,5 +1,5 @@
 import type { ShallowRef } from 'vue'
-import { computed, onScopeDispose, ref, shallowRef } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { SearchRequest } from '~/constants/searchApi'
@@ -46,9 +46,10 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
     const account = accountId === null
       ? (topBarStore.isLogin ? 'profile-unavailable' : 'logged-out')
       : `account:${accountId}`
-    return `${settings.value.depersonalizeSearchResults ? 'anonymous' : 'personalized'}:${account}:cookie:${getUserID() ?? 'guest'}`
+    return `${settings.value.depersonalizeSearchResults ? 'anonymous' : 'personalized'}:${account}:cookie:${getUserID() ?? 'guest'}:pagination:${settings.value.searchResultsPaginationMode}`
   }
   const requestScope = computed(getRequestScope)
+  watch(requestScope, cancelActiveRequest, { flush: 'sync' })
 
   /**
    * 执行搜索请求

@@ -474,7 +474,18 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     let failHistory = false
     let nextHistoryRead
     const errors = []
+    const geometryListeners = new Set()
     const source = await compileComponent('../src/components/SearchBar/SearchBar.vue', {
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ scrollViewportRef: Vue.ref(document.documentElement) }) },
+      '~/utils/viewportGeometry': {
+        subscribeViewportFrame(_root, listener) {
+          geometryListeners.add(listener)
+          return () => geometryListeners.delete(listener)
+        },
+        invalidateViewportGeometry() {
+          geometryListeners.forEach(listener => listener({}, 'layout'))
+        },
+      },
       '@vueuse/core': {
         onClickOutside() {},
         useDebounceFn: callback => (...args) => delayInput ? debounce.push(() => callback(...args)) : callback(...args),
@@ -521,7 +532,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
           return history = []
         },
       },
-    }, { globals: { CSS: window.CSS } })
+    }, { globals: { CSS: window.CSS, ResizeObserver: class { observe() {} disconnect() {} } } })
     const host = document.body.appendChild(document.createElement('div'))
     const props = Vue.reactive({ modelValue: '' })
     const header = playbackHeader && await compileComponent('../src/components/TopBar/components/TopBarSearch.vue', {
@@ -549,6 +560,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       settings,
       pending,
       errors,
+      geometryListeners,
       debounce,
       visibility,
       iframeActive,
@@ -599,6 +611,41 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       assert.equal(fixture.errors.length, 0)
     }
     finally { fixture.close() }
+  })
+
+  check('approved upstream: closed search stops geometry work; fixed and sticky searches own different scroll measurements', async () => {
+    const fixture = await searchFixture()
+    const wrap = fixture.host.querySelector('#search-wrap')
+    let measurements = 0
+    wrap.getBoundingClientRect = () => {
+      measurements++
+      return { left: 30, top: 40, width: 500, height: 40, right: 530, bottom: 80 }
+    }
+    try {
+      assert.equal(fixture.geometryListeners.size, 0)
+      fixture.props.topBarMode = true
+      fixture.host.querySelector('input').dispatchEvent(new FocusEvent('focus'))
+      await flush()
+      assert.equal(fixture.geometryListeners.size, 1)
+      measurements = 0
+      fixture.geometryListeners.forEach(listener => listener({}, 'scroll'))
+      assert.equal(measurements, 0, 'a fixed top bar does not measure while the feed scrolls')
+      fixture.geometryListeners.forEach(listener => listener({}, 'layout'))
+      assert.equal(measurements, 1)
+      fixture.props.topBarMode = false
+      await flush()
+      measurements = 0
+      fixture.geometryListeners.forEach(listener => listener({}, 'scroll'))
+      assert.equal(measurements, 1, 'the sticky home search follows the shared viewport frame')
+      fixture.host.querySelector('input').dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+      await flush()
+      assert.equal(fixture.geometryListeners.size, 0)
+      assert.equal(fixture.errors.length, 0)
+    }
+    finally {
+      fixture.close()
+      assert.equal(fixture.geometryListeners.size, 0)
+    }
   })
 
   check('playback search: hover covers the same navigation capsule and collapse restores it', async () => {

@@ -630,7 +630,7 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
   })
 
   check('forward adapter: re-poster, quoted author and actual video uploader stay separate across nested forwards', async () => {
-    const { createMomentAdapter } = await import('../src/contentScripts/views/Moments/momentAdapter')
+    const { createMomentAdapter } = await loadSourceModule('../src/contentScripts/views/Moments/momentAdapter.ts', {})
     const adapter = createMomentAdapter(key => key, (_id, count) => Number(count) || 0)
     const author = mid => ({ mid, name: `author-${mid}`, face: `https://example.com/${mid}.png` })
     const video = { id_str: '30', type: 'DYNAMIC_TYPE_AV', modules: { module_author: author(3), module_dynamic: { major: { archive: { aid: '40', bvid: 'BVfixture', cid: 50, title: 'video', desc: 'description', duration_text: '01:00', stat: { play: '100', danmaku: '5' } } } } } }

@@ -49,6 +49,7 @@ library_tools:
   next_match: 下一個符合項目
   load_more_videos: 繼續載入影片
 common:
+  volume: 音量 {volume}%
   pagination_stalled: 清單未能繼續載入，請重試。
   advertisement: 廣告
   clear_selection: 清空已選
@@ -197,6 +198,14 @@ player_adjustment:
   delay: 聲音延後
   delay_note: 僅修正聲音領先的固定偏移，不會自動同步影音或修復動態緩衝。音源無法處理時保留原聲。
 settings:
+  original_moments_click_blank_to_fold_comments: 點擊原生動態兩側空白收起評論
+  custom_fullscreen_wheel_volume: 全螢幕滾輪調整音量
+  fullscreen_wheel_volume_step: 每步音量
+  hide_dock_refresh_button: 隱藏 Dock 重新整理按鈕
+  moments_filter_entry: 動態過濾
+  recommendation_filter_entry: 推薦過濾
+  filter_settings: 過濾設定
+  moments_shown_types: 顯示的動態類型
   moments_start_from_last_seen: 進入動態時自動續讀
   moments_start_from_last_seen_desc: 用於全部動態、影片投稿與頂欄影片動態。優先恢復本視窗的閱讀書籤，否則定位至伺服器影片未讀分界；分界不代表所有類型的閱讀位置。
   parameters: 參數
@@ -1305,6 +1314,8 @@ dock:
   collapse_dock: 收合 Dock
   expand_dock: 展開 Dock
 moments:
+  vote_expand_options: 展開全部 {count} 個選項
+  vote_collapse_options: 收起選項
   jump_to_last_seen: 回到上次正在看的動態
   jump_to_latest: 回到最新
   refresh_moments: 重新整理動態
@@ -1547,6 +1558,7 @@ moment_card:
   reservation_failed: 預約操作失敗
   reservation_login_required: 登入後才能預約
 video_card:
+  customize_menu: 自訂選單
   favorite_dialog:
     read: 收藏夾載入失敗，請重試
     save: 收藏操作失敗，請重試
@@ -1906,6 +1918,7 @@ widescreen:
   expand_episodes: 展開選集
   listen_not_ready: 播放器尚未就緒，請稍後再試。
   listen_unavailable: 這段影片沒有可單獨播放的音軌。
+  listen_btr_companion_required: 目前的 BTR 需要安裝支援聽影片交接 v1 的配套修補程式。
   overview: 簡介
   panel_load_incomplete: 內容未能完成載入，可重新整理頁面或退出 Bewly 播放頁後重試
   reload_page: 重新整理頁面

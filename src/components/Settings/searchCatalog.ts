@@ -287,6 +287,7 @@ const entries: SettingsSearchEntry[] = [
     'settings.group_original_moments_page',
     'settings.original_moments_show_user_card',
     'settings.original_moments_use_bewly_filters',
+    'settings.original_moments_click_blank_to_fold_comments',
     'settings.original_moments_show_live_list',
     'settings.original_moments_show_community_center',
     'settings.original_moments_show_hot_search',
@@ -371,6 +372,7 @@ const entries: SettingsSearchEntry[] = [
   ], { keywordKeys: ['settings.font_size_option'] }),
   ...createEntries(videoCardRoute, ['video_card.operation.open_in_new_window'], { keywordKeys: ['video_card.operation.open_in_pip_window'] }),
   ...createEntries(videoCardRoute, ['video_card.operation.more_options'], { targetKey: 'settings.group_video_card_context_menu', keywordKeys: ['settings.group_video_card_context_menu_desc'] }),
+  ...createEntries(videoCardRoute, ['video_card.customize_menu'], { targetKey: 'settings.group_video_card_context_menu' }),
 
   ...createEntries(videoCardRoute, [
     'settings.group_link_opening_behavior',
@@ -422,6 +424,7 @@ const entries: SettingsSearchEntry[] = [
     'settings.dock_collapse_mode',
     'settings.always_use_dock',
     'settings.show_dock_back_to_top',
+    'settings.hide_dock_refresh_button',
     'settings.show_dock_item_names',
     'settings.show_dock_badges',
     'settings.dock_content_adjustment',
@@ -503,6 +506,8 @@ const entries: SettingsSearchEntry[] = [
   ], { keywordKeys: [...playerModeOptionKeys, 'settings.video_player_mode.inherit'] }),
   ...createEntries(playerRoute, [
     'settings.video_danmaku_default_state',
+    'settings.custom_fullscreen_wheel_volume',
+    'settings.fullscreen_wheel_volume_step',
     'settings.video_caption_default_state',
   ], { keywordKeys: ['settings.video_default_state_opt'] }),
 
@@ -667,6 +672,7 @@ const targetAliases: Record<string, string> = {
   'settings.remember_video_quality': 'settings.group_playback_memory',
 }
 const conditionalParents: Record<string, string[]> = {
+  'settings.fullscreen_wheel_volume_step': ['settings.custom_fullscreen_wheel_volume'],
   'settings.override_danmaku_font': ['settings.customize_font'],
   'settings.back_to_top_and_refresh_buttons_are_separated': ['settings.show_dock_back_to_top'],
   'local_loudness.target': ['local_loudness.enable'],

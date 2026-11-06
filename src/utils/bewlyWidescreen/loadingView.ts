@@ -1,97 +1,189 @@
 import { createLoadingRingElement } from '~/utils/loadingRing'
 
-function createLoadingSkeletonElement(className: string) {
+const PREFIX = 'bewly-widescreen-loading-skeleton'
+
+function createElement(className: string, ...children: Element[]) {
   const element = document.createElement('div')
   element.className = className
+  element.append(...children)
   return element
 }
 
-function createLoadingSkeletonBlock(modifier: string) {
+function createBlock(className: string) {
   const block = document.createElement('span')
-  block.className = `bewly-widescreen-loading-skeleton-block ${modifier}`
+  block.className = className
   block.setAttribute('data-bew-skeleton', '')
   return block
 }
 
-export function createWidescreenLoadingSkeleton() {
-  const stage = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-stage')
-  stage.setAttribute('aria-hidden', 'true')
+function createLoadingSkeletonBlock(modifier: string) {
+  return createBlock(`${PREFIX}-block ${modifier}`)
+}
 
-  const player = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-player')
-  const playerMark = createLoadingRingElement()
-  playerMark.classList.add('bewly-widescreen-loading-skeleton-player-mark')
-  player.appendChild(playerMark)
+function repeat(count: number, create: () => Element) {
+  return Array.from({ length: count }, create)
+}
 
-  const controls = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-controls')
-  controls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-progress'))
-
-  const playerControls = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-player-controls')
-  for (let index = 0; index < 3; index += 1)
-    playerControls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-circle'))
-  playerControls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-time'))
-  const playerControlsSpacer = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-spacer')
-  playerControls.appendChild(playerControlsSpacer)
-  for (let index = 0; index < 5; index += 1)
-    playerControls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-control-label'))
-  controls.appendChild(playerControls)
-
-  // The viewer count sits in the info's meta line while the card shows.
-  const danmakuControls = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-danmaku-controls')
-  // Home, page mode, theme, settings and feedback, then the two danmaku toggles.
-  for (let index = 0; index < 7; index += 1)
-    danmakuControls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-circle'))
-  danmakuControls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-input'))
-  danmakuControls.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-send'))
-  controls.appendChild(danmakuControls)
-  player.appendChild(controls)
-
-  // Title, author, actions and description open the overview panel.
-  const info = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-info')
-  const sidebarTop = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-sidebar-top')
-  const title = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-title')
-  title.append(
-    createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line bewly-widescreen-loading-skeleton-line--title'),
-    createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line bewly-widescreen-loading-skeleton-line--title-short'),
-  )
-  sidebarTop.appendChild(title)
-  sidebarTop.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line bewly-widescreen-loading-skeleton-line--meta'))
-
-  const owner = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-owner')
-  owner.append(
-    createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-avatar'),
-    createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line bewly-widescreen-loading-skeleton-line--owner'),
-    createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line bewly-widescreen-loading-skeleton-line--owner-sign'),
-    createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-owner-action'),
-    createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-owner-action bewly-widescreen-loading-skeleton-owner-action--wide'),
-  )
-  const authorActions = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-author-actions')
-  authorActions.appendChild(owner)
-
-  const stats = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-stats')
-  for (let index = 0; index < 5; index += 1)
-    stats.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-stat'))
-  authorActions.appendChild(stats)
-  sidebarTop.appendChild(authorActions)
-  const description = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-description')
-  description.append(
-    createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line'),
-    createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line bewly-widescreen-loading-skeleton-line--description-short'),
-  )
-  sidebarTop.appendChild(description)
-  info.appendChild(sidebarTop)
-
-  const sidebar = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-sidebar')
-
-  const tabs = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-tabs')
-  for (let index = 0; index < 3; index += 1)
-    tabs.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-tab'))
-  sidebar.append(tabs, info)
-  for (let index = 0; index < 3; index++) {
-    const row = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-video-row')
-    row.append(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-cover'), createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line'))
-    sidebar.appendChild(row)
+/**
+ * The recommendations' two-column video cards (styles: cardLayout.ts,
+ * playbackRecommendationSkeleton), shared by the loading overlay and the
+ * overview panel while its list loads.
+ */
+export function createRecommendationSkeleton(count = 6) {
+  const block = 'bewly-widescreen-skeleton-recommendations'
+  const grid = createElement(block, createBlock(`${block}__heading`))
+  grid.setAttribute('aria-hidden', 'true')
+  for (let index = 0; index < count; index++) {
+    grid.append(createElement(
+      `${block}__card`,
+      createBlock(`${block}__cover`),
+      createBlock(`${block}__line`),
+      createBlock(`${block}__line ${block}__line--short`),
+      createBlock(`${block}__caption`),
+    ))
   }
+  return grid
+}
 
-  stage.append(player, sidebar)
+/** A floating glass control of the Bewly header: a circle or a capsule of icon slots. */
+function createTopBarControl(slots: number, modifier = '') {
+  return createElement(
+    `${PREFIX}-top-bar-control ${modifier}`.trim(),
+    ...repeat(slots, () => createElement(`${PREFIX}-top-bar-slot`, createLoadingSkeletonBlock(`${PREFIX}-icon`))),
+  )
+}
+
+/** Logo, search and history navigation on the left; the page group over the video's top-right corner. */
+function createTopBarSkeleton() {
+  return createElement(
+    `${PREFIX}-top-bar`,
+    createElement(
+      `${PREFIX}-top-bar-start`,
+      createTopBarControl(1, `${PREFIX}-top-bar-control--logo`),
+      createTopBarControl(1),
+      createTopBarControl(2),
+    ),
+    createTopBarControl(4, `${PREFIX}-top-bar-tools`),
+  )
+}
+
+/** The floating control card: progress, the player's controls, then the app and danmaku controls. */
+function createControlsSkeleton() {
+  const circle = () => createLoadingSkeletonBlock(`${PREFIX}-circle`)
+  const label = () => createLoadingSkeletonBlock(`${PREFIX}-control-label`)
+  const qualityLabel = createLoadingSkeletonBlock(`${PREFIX}-control-label ${PREFIX}-control-label--wide`)
+  const playerControls = createElement(
+    `${PREFIX}-player-controls`,
+    ...repeat(3, circle),
+    createLoadingSkeletonBlock(`${PREFIX}-time`),
+    createElement(`${PREFIX}-spacer`),
+    // Listen, audio, then quality, speed and subtitles, then the icon buttons.
+    ...repeat(2, circle),
+    qualityLabel,
+    ...repeat(2, label),
+    ...repeat(5, circle),
+  )
+  const danmakuControls = createElement(
+    `${PREFIX}-danmaku-controls`,
+    // The app's controls, a divider, the two danmaku toggles.
+    ...repeat(4, circle),
+    createElement(`${PREFIX}-divider`),
+    ...repeat(2, circle),
+    createElement(`${PREFIX}-input`, createLoadingSkeletonBlock(`${PREFIX}-input-field`), createLoadingSkeletonBlock(`${PREFIX}-send`)),
+  )
+  return createElement(
+    `${PREFIX}-controls`,
+    createLoadingSkeletonBlock(`${PREFIX}-progress`),
+    playerControls,
+    danmakuControls,
+  )
+}
+
+function createTabsSkeleton() {
+  return createElement(
+    `${PREFIX}-tabs`,
+    ...repeat(3, () => createElement(
+      `${PREFIX}-tab`,
+      createLoadingSkeletonBlock(`${PREFIX}-tab-icon`),
+      createLoadingSkeletonBlock(`${PREFIX}-tab-label`),
+    )),
+  )
+}
+
+function line(modifier = '') {
+  return createLoadingSkeletonBlock(`${PREFIX}-line ${modifier}`.trim())
+}
+
+/** The title and the card's fold chevron at its top-right corner. */
+function createInfoHead(lines: number) {
+  return createElement(
+    `${PREFIX}-info-head`,
+    createElement(`${PREFIX}-title`, ...repeat(lines, () => line(`${PREFIX}-line--title`))),
+    createLoadingSkeletonBlock(`${PREFIX}-toggle`),
+  )
+}
+
+/** Five equal action pills (and bangumi's square "more"). */
+function createActionsSkeleton(more: boolean) {
+  const actions = createElement(`${PREFIX}-actions`, ...repeat(more ? 6 : 5, () => createLoadingSkeletonBlock(`${PREFIX}-action`)))
+  actions.toggleAttribute('data-more', more)
+  return actions
+}
+
+/** A video: title, meta line, uploader with charge and follow, actions, description and tags. */
+function createVideoInfoCard() {
+  const owner = createElement(
+    `${PREFIX}-owner`,
+    createLoadingSkeletonBlock(`${PREFIX}-avatar`),
+    line(`${PREFIX}-line--owner`),
+    line(`${PREFIX}-line--owner-sign`),
+    createLoadingSkeletonBlock(`${PREFIX}-owner-action`),
+    createLoadingSkeletonBlock(`${PREFIX}-owner-action ${PREFIX}-owner-action--wide`),
+  )
+  return createElement(
+    `${PREFIX}-sidebar-top`,
+    createInfoHead(2),
+    line(`${PREFIX}-line--meta`),
+    owner,
+    createActionsSkeleton(false),
+    createElement(`${PREFIX}-description`, line(), line(`${PREFIX}-line--description-short`)),
+    createElement(`${PREFIX}-tags`, ...repeat(4, () => createLoadingSkeletonBlock(`${PREFIX}-tag`))),
+  )
+}
+
+/** A bangumi episode: its title, the poster beside the series, rating and buttons, then the actions. */
+function createPgcInfoCard() {
+  const media = createElement(
+    `${PREFIX}-media`,
+    createLoadingSkeletonBlock(`${PREFIX}-poster`),
+    createElement(
+      `${PREFIX}-media-info`,
+      line(`${PREFIX}-line--series`),
+      line(`${PREFIX}-line--meta`),
+      line(),
+      line(`${PREFIX}-line--description-short`),
+      createElement(
+        `${PREFIX}-media-buttons`,
+        createLoadingSkeletonBlock(`${PREFIX}-owner-action`),
+        createLoadingSkeletonBlock(`${PREFIX}-owner-action ${PREFIX}-owner-action--wide`),
+      ),
+    ),
+  )
+  return createElement(`${PREFIX}-sidebar-top`, createInfoHead(1), media, createActionsSkeleton(true))
+}
+
+export function createWidescreenLoadingSkeleton(pageKind: 'video' | 'pgc') {
+  const ring = createLoadingRingElement()
+  ring.classList.add(`${PREFIX}-player-mark`)
+  const player = createElement(`${PREFIX}-player`, ring, createControlsSkeleton())
+
+  // The column: its tabs, the info card, then the recommendations.
+  const info = createElement(`${PREFIX}-info`, pageKind === 'pgc' ? createPgcInfoCard() : createVideoInfoCard())
+  const sidebar = createElement(`${PREFIX}-sidebar`)
+  sidebar.append(createTabsSkeleton(), info, createRecommendationSkeleton())
+
+  const stage = createElement(`${PREFIX}-stage`)
+  stage.setAttribute('aria-hidden', 'true')
+  stage.append(player, sidebar, createTopBarSkeleton())
   return stage
 }

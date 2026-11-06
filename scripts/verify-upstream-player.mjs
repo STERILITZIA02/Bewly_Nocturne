@@ -150,6 +150,7 @@ export function registerUpstreamPlayerChecks(check) {
       isFestivalPage: () => false,
       isVideoPage: () => true,
       readVideoPageMetadata: () => ({ bvid: key }),
+      readNativeMediaSnapshot: () => undefined,
       resolveDefaultVideoPlayerMode: () => 'widescreen',
       isPlayerShowingEndingRecommendation: () => ended,
       shouldSuppressWidescreenAutoEntry: (key, exited) => key === exited,

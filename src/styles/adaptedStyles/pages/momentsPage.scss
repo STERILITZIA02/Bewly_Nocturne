@@ -491,3 +491,30 @@
 
   // #endregion
 }
+.bewly-original-moments-fold-comment {
+  display: block;
+  width: 100%;
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-2);
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+  color: var(--bew-text-2);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    color var(--bew-duration-fast),
+    background-color var(--bew-duration-fast);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--bew-text-1);
+    background: var(--bew-hover-bg);
+  }
+  &:active {
+    background: var(--bew-pressed-bg);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}

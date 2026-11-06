@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import { createAccountLifetime } from '../src/utils/accountLifetime'
+import { historyResponse } from './fixtures/historyResponses'
 import { loadSourceModule } from './sourceModuleHarness'
 
 function deferred() {
@@ -71,9 +72,9 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
     account.userInfo.mid = 2
     confirmation.resolve(true)
     await paused
-    reads[0].resolve({ code: 0, data: { list: [{ title: 'old', view_at: 1, history: { oid: 1, business: 'archive' } }] } })
+    reads[0].resolve(historyResponse([{ title: 'old', view_at: 1, history: { oid: 1, business: 'archive' } }]))
     statuses[0].resolve({ code: 0, data: true })
-    reads[1].resolve({ code: 0, data: { list: [{ title: 'new', view_at: 2, history: { oid: 2, business: 'archive' } }] } })
+    reads[1].resolve(historyResponse([{ title: 'new', view_at: 2, history: { oid: 2, business: 'archive' } }]))
     statuses[1].resolve({ code: 0, data: false })
     await flush()
     assert.equal(state.historyList[0].title, 'new')
@@ -375,9 +376,9 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
     account = 2
     timeline.activate()
     const newItem = { ...item, title: 'new account' }
-    reads[1].resolve({ code: 0, data: { list: [newItem] } })
+    reads[1].resolve(historyResponse([newItem]))
     status[1].resolve({ code: 0, data: false })
-    reads[0].resolve({ code: 0, data: { list: [item] } })
+    reads[0].resolve(historyResponse([item]))
     status[0].resolve({ code: 0, data: true })
     writes[0].resolve({ code: 0 })
     await deleting

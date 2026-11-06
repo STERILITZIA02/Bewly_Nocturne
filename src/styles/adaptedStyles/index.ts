@@ -6,7 +6,7 @@ import { watch } from 'vue'
 
 import { onRouteChange } from '~/composables/useRouteState'
 import { settings, settingsInitializationState, settingsReady } from '~/logic/storage'
-import { toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
+import { isBilibiliMomentsFeed, toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { isHomePage, isInIframe, isTopicPage, isWatchLaterListPage } from '~/utils/main'
 
 const PAGE_STYLE_CLASSES = [
@@ -157,7 +157,7 @@ async function setupStyles(currentUrl: string) {
     if (!activatePage(css, 'momentsPage'))
       return
 
-    const isOriginalMomentsFeed = /^https?:\/\/t\.bilibili\.com\/?(?:[?#].*)?$/.test(routeUrl)
+    const isOriginalMomentsFeed = isBilibiliMomentsFeed(routeUrl)
     root.classList.toggle('moments-native-feed', isOriginalMomentsFeed)
     let initialVisibilityGuard: HTMLStyleElement | undefined
     if (isOriginalMomentsFeed) {

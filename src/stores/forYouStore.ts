@@ -15,6 +15,7 @@ export interface VideoElement {
   item?: VideoItem
   displayData?: VideoCardDisplayData
   isAdvertisement: boolean
+  filtered?: boolean
 }
 
 export interface AppVideoElement {
@@ -22,6 +23,7 @@ export interface AppVideoElement {
   item?: AppVideoItem
   displayData?: VideoCardDisplayData
   isAdvertisement: boolean
+  filtered?: boolean
 }
 
 export interface ForYouState {

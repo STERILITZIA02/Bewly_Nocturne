@@ -655,7 +655,7 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
     assert.equal(module.findCommentRoot(document.createElement('div')), null)
   })
 
-  async function cloudFixture({ local = {}, remote = {}, entries = {}, time = 0, rejectWrite } = {}) {
+  async function cloudFixture({ local = {}, remote = {}, entries = {}, time = 0, rejectWrite, enabled = true, readSync } = {}) {
     const protocol = await import('../src/utils/settingsCloudSyncProtocol')
     const storageProtocol = await import('../src/utils/settingsStorageProtocol')
     const listeners = new Set()
@@ -666,7 +666,8 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
     const activities = []
     let alarmListener
     let now = time
-    local[protocol.SETTINGS_CLOUD_SYNC_ENABLED_KEY] = true
+    local[protocol.SETTINGS_CLOUD_SYNC_ENABLED_KEY] = enabled
+    const messages = new Map()
     const emit = (changes, area) => listeners.forEach(listener => listener(changes, area))
     const browser = {
       extension: { inIncognitoContext: false },
@@ -680,7 +681,7 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
           },
         },
         sync: {
-          get: async () => structuredClone(remote),
+          get: async () => readSync ? readSync() : structuredClone(remote),
           set: async (data) => {
             writes.push({ at: now, data: structuredClone(data) })
             if (rejectWrite)
@@ -715,7 +716,7 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
       'webextension-polyfill': { default: browser },
       '~/utils/settingsCloudSyncProtocol': protocol,
       '~/utils/settingsStorageProtocol': storageProtocol,
-      './settingsContextRelay': { onSettingsMessage() {} },
+      './settingsContextRelay': { onSettingsMessage: (name, handler) => messages.set(name, handler) },
       './settingsCloudSyncWrites': writePolicy,
       './settingsStorageCoordinator': {
         reconcileSettingsCloudSyncSnapshot: async () => ({ uploads: { ...entries } }),
@@ -734,6 +735,8 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
       alarms,
       timers,
       entries,
+      enable: value => messages.get(protocol.SETTINGS_CLOUD_SYNC_ENABLE_MESSAGE)(value),
+      preference: value => browser.storage.local.set({ [protocol.SETTINGS_CLOUD_SYNC_ENABLED_KEY]: value }),
       status: () => local[protocol.SETTINGS_CLOUD_SYNC_STATUS_KEY],
       activity: () => activities.forEach(callback => callback()),
       async edit(field, value, counter) {
@@ -764,6 +767,33 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
   }
 
   const entry = value => ({ schemaVersion: 1, deleted: false, value, version: { counter: 1, deviceId: 'fixture' } })
+  check('reliability cloud: concurrent enable compares direction, normalized mode, state and disable generation', async () => {
+    const protocol = await import('../src/utils/settingsCloudSyncProtocol')
+    let resolveRead
+    const delayed = new Promise(resolve => resolveRead = resolve)
+    let reads = 0
+    const fixture = await cloudFixture({ enabled: false, readSync: () => ++reads === 1 ? delayed : {} })
+    const first = fixture.enable({ mode: 'auto', expectedState: 'empty' })
+    const same = fixture.enable({ expectedState: 'empty' })
+    assert.equal(first, same, 'normalized equivalent requests share the actual Promise')
+    assert.equal((await fixture.enable({ mode: 'push', expectedState: 'compatible' })).reason, 'conflict')
+    assert.equal((await fixture.enable({ mode: 'auto', expectedState: 'compatible' })).reason, 'conflict')
+    await fixture.preference(false)
+    await flush()
+    resolveRead({})
+    assert.equal((await first).reason, 'conflict')
+    assert.equal(fixture.local[protocol.SETTINGS_CLOUD_SYNC_ENABLED_KEY], false)
+    assert.equal((await fixture.enable({ mode: 'auto', expectedState: 'empty' })).ok, true)
+    const remote = { [protocol.createSettingsCloudSyncKey('theme')]: entry('dark') }
+    let resolvePull
+    const pullWait = new Promise(resolve => resolvePull = resolve)
+    let pullReads = 0
+    const pullFixture = await cloudFixture({ enabled: false, readSync: () => ++pullReads === 1 ? pullWait : remote })
+    const pull = pullFixture.enable({ mode: 'pull', expectedState: 'compatible' })
+    assert.equal((await pullFixture.enable({ mode: 'push', expectedState: 'compatible' })).reason, 'conflict')
+    resolvePull(remote)
+    assert.equal((await pull).ok, true)
+  })
   check('cloud sync: hourly quota persists, edits coalesce and alarm recovery writes only the latest value', async () => {
     const failure = 'This request exceeds the MAX_WRITE_OPERATIONS_PER_HOUR quota.'
     const fixture = await cloudFixture({ entries: { theme: entry('light') }, rejectWrite: failure })

@@ -1,5 +1,7 @@
+import { GRID_GUTTER } from '~/constants/layout'
+
 export const MOMENTS_SCROLL_BOUNDARY_TOLERANCE_PX = 2
-export const MOMENT_GRID_DIMENSIONS = { minCardWidth: 360, gap: 16 } as const
+export const MOMENT_GRID_DIMENSIONS = { minCardWidth: 360, gap: GRID_GUTTER } as const
 
 interface HorizontalScrollStateInput {
   scrollLeft: number

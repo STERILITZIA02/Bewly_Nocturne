@@ -355,3 +355,23 @@
   z-index: 9997;
   display: block;
 }
+// SVGA blue layers only; the pink heart and native animation timing stay intact.
+:is(.bewly-design:not(.bewly-video-dark-only), .bewly-widescreen-active) {
+  canvas.ring-progress,
+  .svga-container.svga-fireworks,
+  .svga-container.svga-center,
+  .bili-danmaku-x-guide-cyc > span,
+  .bili-danmaku-x-guide-animate > span {
+    filter: var(--bew-action-animation-filter, none) !important;
+  }
+
+  .bili-danmaku-x-guide:not(.bili-danmaku-x-guide-followed) .bili-danmaku-x-guide-follow,
+  .bili-danmaku-x-guide-electric {
+    background: var(--bew-accent-solid) !important;
+    color: var(--bew-on-accent-solid) !important;
+  }
+
+  .bili-danmaku-x-guide-three > .bili-danmaku-x-active svg {
+    fill: var(--bew-theme-foreground) !important;
+  }
+}

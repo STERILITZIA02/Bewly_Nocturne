@@ -14,7 +14,7 @@ import { hasLoadedPicture, rememberLoadedPicture } from '~/utils/pictureRevealMe
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { springTiming } from '~/utils/spring'
 import type { NativePlaybackUnit } from '~/utils/videoMetadataBridge'
-import { getNativePlaybackUnitKey } from '~/utils/videoMetadataBridge'
+import { claimNativeMediaSession, getNativePlaybackUnitKey } from '~/utils/videoMetadataBridge'
 
 /**
  * Listening to a video: the cover takes the picture's place on a field of its
@@ -167,15 +167,11 @@ watch(() => meta.value?.cover, async (source, _previous, onCleanup) => {
 
 // ---- System media controls --------------------------------------------------------
 
-watch([meta, () => stage.value?.audio], ([info, audio], _previous, onCleanup) => {
+watch(() => stage.value?.audio, (audio, _previous, onCleanup) => {
   if (!audio || !('mediaSession' in navigator))
     return
   const session = navigator.mediaSession
-  session.metadata = new MediaMetadata({
-    title: info?.title ?? '',
-    artist: info?.author ?? info?.detail ?? '',
-    artwork: info?.cover ? [{ src: getMomentThumbnailUrl(info.cover, 512) }] : [],
-  })
+  const restore = claimNativeMediaSession()
   const actions: [MediaSessionAction, MediaSessionActionHandler][] = [
     ['play', () => void audio.play().catch(() => {})],
     ['pause', () => audio.pause()],
@@ -196,8 +192,17 @@ watch([meta, () => stage.value?.audio], ([info, audio], _previous, onCleanup) =>
   actions.forEach(([action, handler]) => set(action, handler))
   onCleanup(() => {
     actions.forEach(([action]) => set(action, null))
-    session.metadata = null
+    restore()
   })
+}, { immediate: true })
+watch([meta, () => stage.value?.audio], ([info, audio]) => {
+  if (audio && 'mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: info?.title ?? '',
+      artist: info?.author ?? info?.detail ?? '',
+      artwork: info?.cover ? [{ src: getMomentThumbnailUrl(info.cover, 512) }] : [],
+    })
+  }
 }, { immediate: true })
 </script>
 

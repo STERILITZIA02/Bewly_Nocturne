@@ -6,7 +6,7 @@ import { waitWithSignal, withRequestDeadline } from '~/utils/abort'
 import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure, sendMessage } from '~/utils/messaging'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { parsePlaybackTabUrl } from '~/utils/playbackTab'
-import { followStateTopic } from '~/utils/stateConsumer'
+import { followStateTopic, unfollowStateTopic } from '~/utils/stateConsumer'
 import type { VideoHistoryCommand, VideoHistoryEdit, VideoHistorySnapshot, VideoHistoryUpdate, VideoIdentity, VideoVisitHistory } from '~/utils/videoVisitRecord'
 import { applyVideoHistoryEdits, createVideoHistoryIndex, mergeVideoVisitRecord, pruneVideoVisitHistory, VIDEO_VISIT_HISTORY_MESSAGE, VIDEO_VISIT_HISTORY_UPDATED, videoHistoryBaseKeys, videoHistoryPartKey } from '~/utils/videoVisitRecord'
 
@@ -30,11 +30,13 @@ function parseVideoVisitHistory(rawValue: unknown): VideoVisitHistory {
 }
 
 const videoVisitHistory = shallowRef<VideoVisitHistory>({})
+let indexedRecords: VideoVisitHistory | undefined
+let queryHistory = createVideoHistoryIndex({})
 const epoch = shallowRef('')
 let canonical: VideoHistorySnapshot | undefined
 let pendingRead: Promise<void> | undefined
 let pending = new Map<string, VideoHistoryEdit>()
-let inFlight: { epoch: string, edits: VideoHistoryEdit[], promise: Promise<void> } | undefined
+let inFlight: { epoch: string, operationId: string, acknowledgedRevision?: number, edits: VideoHistoryEdit[], promise: Promise<void> } | undefined
 let writeTimer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
 let invalidated = false
@@ -42,16 +44,66 @@ let operationId = 0
 let historyGeneration = 0
 const clientId = crypto.randomUUID()
 let settingsLoaded = false
-
-function render() {
-  const edits = [...(inFlight?.edits ?? []), ...pending.values()].filter(edit => videoHistoryBaseKeys(edit.identity)
-    .every(key => (canonical?.deleted[key] ?? 0) <= (edit.baseRevision ?? 0)))
-  videoVisitHistory.value = applyVideoHistoryEdits(canonical?.records ?? {}, edits)
+const readers = new Set<symbol>()
+const hasConsumers = () => settings.value.showVideoWatchedBadge || readers.size > 0
+function releaseUnusedSubscription() {
+  if (!hasConsumers() && !pendingRead && !inFlight && !pending.size)
+    unfollowStateTopic('videoHistory')
 }
 
-function acceptSnapshot(next: VideoHistorySnapshot) {
-  if (disposed || invalidated || (canonical?.epoch === next.epoch && next.revision < canonical.revision))
+/** A history/progress surface or native playback owner holds only this topic. */
+export function acquireVideoVisitHistory() {
+  const interested = hasConsumers()
+  const reader = Symbol('video-history-reader')
+  readers.add(reader)
+  if (settingsLoaded && (!interested || !canonical))
+    void initialize()
+  return () => {
+    readers.delete(reader)
+    releaseUnusedSubscription()
+  }
+}
+
+function editKeys(edits: readonly VideoHistoryEdit[]) {
+  return edits.flatMap((edit) => {
+    const bases = videoHistoryBaseKeys(edit.identity)
+    const part = videoHistoryPartKey(edit.identity)
+    return part ? bases.flatMap(base => [base, `${base}|${part}`]) : bases
+  })
+}
+
+function render(changedKeys: Iterable<string> = [], reset = false) {
+  const acknowledged = inFlight?.acknowledgedRevision !== undefined && canonical?.epoch === inFlight.epoch && canonical.revision >= inFlight.acknowledgedRevision
+  const edits = [...(!acknowledged ? inFlight?.edits ?? [] : []), ...pending.values()].filter(edit => videoHistoryBaseKeys(edit.identity)
+    .every(key => (canonical?.deleted[key] ?? 0) <= (edit.baseRevision ?? 0)))
+  const records = applyVideoHistoryEdits(canonical?.records ?? {}, edits)
+  if (records === videoVisitHistory.value)
     return
+  if (indexedRecords === videoVisitHistory.value) {
+    if (reset) {
+      queryHistory = createVideoHistoryIndex(records)
+    }
+    else {
+      const affected = new Set([...changedKeys, ...editKeys(edits)])
+      queryHistory.update(Object.fromEntries([...affected].flatMap(key => records[key] ? [[key, records[key]]] : [])), [...affected].filter(key => !records[key]))
+    }
+    indexedRecords = records
+  }
+  videoVisitHistory.value = records
+}
+
+function settleAcknowledgedWrite() {
+  const owner = inFlight
+  if (!owner || owner.acknowledgedRevision === undefined || canonical?.epoch !== owner.epoch || canonical.revision < owner.acknowledgedRevision)
+    return
+  inFlight = undefined
+  return owner.edits
+}
+
+function acceptSnapshot(next: VideoHistorySnapshot, changedKeys?: Iterable<string>) {
+  if (disposed || invalidated || (canonical?.epoch === next.epoch && next.revision <= canonical.revision))
+    return
+  const affected = changedKeys && new Set([...changedKeys, ...editKeys([...(inFlight?.edits ?? []), ...pending.values()])])
   if (next.epoch !== canonical?.epoch) {
     historyGeneration++
     pending.clear()
@@ -60,12 +112,17 @@ function acceptSnapshot(next: VideoHistorySnapshot) {
     writeTimer = undefined
   }
   canonical = next
+  if (inFlight && next.recentOperations.includes(inFlight.operationId))
+    inFlight.acknowledgedRevision = next.revision
   for (const [key, edit] of pending) {
     if (videoHistoryBaseKeys(edit.identity).some(base => (next.deleted[base] ?? 0) > (edit.baseRevision ?? 0)))
       pending.delete(key)
   }
   epoch.value = next.epoch
-  render()
+  const settled = settleAcknowledgedWrite()
+  render(affected, !changedKeys)
+  if (settled)
+    void flushVideoVisitHistory()
 }
 
 function handleFailure(error: unknown) {
@@ -89,12 +146,12 @@ function writeSiteMarker(value: string) {
 }
 
 function initialize(): Promise<void> {
+  if (disposed || invalidated)
+    return Promise.resolve()
   // Watched badges are shown here; while hidden this document is only marked stale.
   followStateTopic('videoHistory', () => void initialize())
   if (pendingRead)
     return pendingRead
-  if (disposed || invalidated)
-    return Promise.resolve()
   let readAgain = false
   const task = withRequestDeadline(async (signal) => {
     const generation = historyGeneration
@@ -165,6 +222,7 @@ function initialize(): Promise<void> {
       pendingRead = undefined
     if (readAgain && !disposed && !invalidated)
       void initialize()
+    releaseUnusedSubscription()
   })
   pendingRead = task
   return task
@@ -173,38 +231,41 @@ function initialize(): Promise<void> {
 export function flushVideoVisitHistory(): Promise<void> {
   clearTimeout(writeTimer)
   writeTimer = undefined
-  if (inFlight)
-    return inFlight.promise
+  if (inFlight) {
+    return inFlight.acknowledgedRevision !== undefined && canonical?.epoch === inFlight.epoch && canonical.revision < inFlight.acknowledgedRevision
+      ? initialize()
+      : inFlight.promise
+  }
   if (disposed || invalidated || !canonical || !pending.size)
     return Promise.resolve()
   const edits = [...pending.values()]
   pending = new Map()
-  const owner = { epoch: canonical.epoch, edits, promise: Promise.resolve() }
+  const owner = { epoch: canonical.epoch, operationId: `${clientId}:${++operationId}`, edits, promise: Promise.resolve() }
   inFlight = owner
-  const command: VideoHistoryCommand = { type: 'record', epoch: owner.epoch, baseRevision: canonical.revision, operationId: `${clientId}:${++operationId}`, edits }
-  owner.promise = sendMessage<VideoHistoryCommand, VideoHistorySnapshot>(VIDEO_VISIT_HISTORY_MESSAGE, command)
-    .then((next) => {
+  const command: VideoHistoryCommand = { type: 'record', epoch: owner.epoch, baseRevision: canonical.revision, operationId: owner.operationId, edits }
+  owner.promise = sendMessage<VideoHistoryCommand, VideoHistoryUpdate>(VIDEO_VISIT_HISTORY_MESSAGE, command)
+    .then(async (next) => {
       if (inFlight !== owner)
         return
-      inFlight = undefined
-      acceptSnapshot(next)
-      void flushVideoVisitHistory()
+      await receiveUpdate(next)
     })
     .catch((error) => {
       if (inFlight !== owner)
         return
       inFlight = undefined
+      render(editKeys(owner.edits))
       handleFailure(error)
       // Unknown writes are never blindly resent. The next actual session sample
       // carries newer evidence; an authoritative read reconciles this outcome.
       if (!invalidated)
         void initialize()
     })
+    .finally(releaseUnusedSubscription)
   return owner.promise
 }
 
 function record(edit: VideoHistoryEdit, expectedEpoch = epoch.value): boolean {
-  if (!settingsLoaded || !settings.value.showVideoWatchedBadge || !canonical || disposed || invalidated || expectedEpoch !== canonical.epoch)
+  if (!settingsLoaded || !canonical || disposed || invalidated || expectedEpoch !== canonical.epoch)
     return false
   const base = videoHistoryBaseKeys(edit.identity)[0]
   if (!base)
@@ -214,7 +275,7 @@ function record(edit: VideoHistoryEdit, expectedEpoch = epoch.value): boolean {
   // turn a delayed visit to A into a visit to B before the batch is submitted.
   const { aid, bvid, cid, page, epid, pageCount } = edit.identity
   pending.set(key, { identity: { aid, bvid, cid, page, epid, pageCount }, record: mergeVideoVisitRecord(pending.get(key)?.record, edit.record), baseRevision: canonical.revision })
-  render()
+  render(editKeys([edit]))
   if (writeTimer === undefined)
     writeTimer = setTimeout(() => void flushVideoVisitHistory(), 500)
   return true
@@ -222,7 +283,7 @@ function record(edit: VideoHistoryEdit, expectedEpoch = epoch.value): boolean {
 
 export const videoVisitHistoryEpoch = computed(() => epoch.value)
 
-onMessage<VideoHistoryUpdate>(VIDEO_VISIT_HISTORY_UPDATED, (update) => {
+async function receiveUpdate(update: VideoHistoryUpdate) {
   if (disposed || invalidated)
     return
   if (update.type === 'snapshot') {
@@ -232,26 +293,41 @@ onMessage<VideoHistoryUpdate>(VIDEO_VISIT_HISTORY_UPDATED, (update) => {
       void initialize()
     return
   }
+  const owner = inFlight
+  if (owner && update.epoch === owner.epoch && update.operationId === owner.operationId)
+    owner.acknowledgedRevision = update.revision
   if (!canonical || update.epoch !== canonical.epoch || update.baseRevision > canonical.revision) {
-    void initialize()
+    await initialize()
     return
   }
-  if (update.revision <= canonical.revision)
+  if (update.revision <= canonical.revision) {
+    const settled = settleAcknowledgedWrite()
+    if (settled) {
+      render(editKeys(settled))
+      void flushVideoVisitHistory()
+    }
     return
-  const records = { ...canonical.records, ...update.records }
+  }
+  const changed = Object.keys(update.records)
+  const records = changed.length || update.removed.length ? { ...canonical.records, ...update.records } : canonical.records
   for (const key of update.removed)
     delete records[key]
-  acceptSnapshot({ ...canonical, revision: update.revision, records, deleted: { ...canonical.deleted, ...update.deleted } })
+  acceptSnapshot({ ...canonical, revision: update.revision, records, deleted: { ...canonical.deleted, ...update.deleted } }, [...changed, ...update.removed])
+}
+onMessage<VideoHistoryUpdate>(VIDEO_VISIT_HISTORY_UPDATED, (update) => {
+  void receiveUpdate(update)
 })
 
 void settingsReady.then(() => {
   settingsLoaded = true
-  if (settings.value.showVideoWatchedBadge)
+  if (hasConsumers())
     void initialize()
 })
 const stopSettings = watch(() => settings.value.showVideoWatchedBadge, (enabled) => {
   if (enabled && settingsLoaded)
     void initialize()
+  else
+    releaseUnusedSubscription()
 })
 
 if (typeof window !== 'undefined') {
@@ -274,7 +350,7 @@ if (typeof window !== 'undefined') {
 }
 
 export function recordVideoVisit(video: VideoIdentity, visitedAt = Date.now()): boolean {
-  return record({ identity: video, record: { visitedAt } })
+  return settings.value.showVideoWatchedBadge && record({ identity: video, record: { visitedAt } })
 }
 
 export function recordVideoWatchProgress(video: VideoIdentity, progress: number, duration: number | undefined, completed: boolean, expectedEpoch: string): boolean {
@@ -283,29 +359,41 @@ export function recordVideoWatchProgress(video: VideoIdentity, progress: number,
 }
 
 export async function clearVideoVisitHistory() {
-  if (!canonical)
-    await initialize()
-  if (!canonical || invalidated || disposed)
-    return
-  pending.clear()
-  const next = await sendMessage<VideoHistoryCommand, VideoHistorySnapshot>(VIDEO_VISIT_HISTORY_MESSAGE, { type: 'clear', epoch: canonical.epoch }).catch(handleFailure)
-  if (next) {
-    acceptSnapshot(next)
-    writeSiteMarker('v2')
+  const release = acquireVideoVisitHistory()
+  try {
+    if (pendingRead)
+      await pendingRead
+    else if (!canonical)
+      await initialize()
+    if (!canonical || invalidated || disposed)
+      return
+    pending.clear()
+    const next = await sendMessage<VideoHistoryCommand, VideoHistorySnapshot>(VIDEO_VISIT_HISTORY_MESSAGE, { type: 'clear', epoch: canonical.epoch }).catch(handleFailure)
+    if (next) {
+      acceptSnapshot(next)
+      writeSiteMarker('v2')
+    }
   }
+  finally { release() }
 }
 
 export async function removeVideoVisitHistory(identity: VideoIdentity | readonly VideoIdentity[]) {
-  if (!canonical)
-    await initialize()
-  if (!canonical || invalidated || disposed)
-    return
-  const identities = Array.isArray(identity) ? identity : [identity as VideoIdentity]
-  if (!identities.length)
-    return
-  const next = await sendMessage<VideoHistoryCommand, VideoHistorySnapshot>(VIDEO_VISIT_HISTORY_MESSAGE, { type: 'remove', epoch: canonical.epoch, identities }).catch(handleFailure)
-  if (next)
-    acceptSnapshot(next)
+  const release = acquireVideoVisitHistory()
+  try {
+    if (pendingRead)
+      await pendingRead
+    else if (!canonical)
+      await initialize()
+    if (!canonical || invalidated || disposed)
+      return
+    const identities = Array.isArray(identity) ? identity : [identity as VideoIdentity]
+    if (!identities.length)
+      return
+    const next = await sendMessage<VideoHistoryCommand, VideoHistoryUpdate>(VIDEO_VISIT_HISTORY_MESSAGE, { type: 'remove', epoch: canonical.epoch, identities }).catch(handleFailure)
+    if (next)
+      await receiveUpdate(next)
+  }
+  finally { release() }
 }
 
 export function getVideoIdentityFromUrl(url: string): VideoIdentity | undefined {
@@ -328,8 +416,6 @@ export function recordVideoVisitFromUrl(url: string, visitedAt = Date.now()): bo
   return identity ? recordVideoVisit(identity, visitedAt) : false
 }
 
-let indexedRecords: VideoVisitHistory | undefined
-let queryHistory = createVideoHistoryIndex({})
 export function getVideoWatchState(video: VideoIdentity) {
   if (indexedRecords !== videoVisitHistory.value) {
     indexedRecords = videoVisitHistory.value

@@ -16,6 +16,7 @@ interface Dependencies {
 /** All documents patch this writer; read/merge/write never runs in two tabs. */
 export function createVideoVisitHistoryCoordinator(dependencies: Dependencies) {
   let snapshot: VideoHistorySnapshot | undefined
+  let recordCount = 0
   let queue = Promise.resolve()
   let resetGeneration = 0
   const empty = (): VideoHistorySnapshot => ({ epoch: crypto.randomUUID(), revision: 0, records: {}, deleted: {}, migratedSources: [], migrationClosed: false, recentOperations: [] })
@@ -35,12 +36,13 @@ export function createVideoVisitHistoryCoordinator(dependencies: Dependencies) {
       snapshot = empty()
       await dependencies.set(snapshot)
     }
+    recordCount = Object.keys(snapshot.records).length
     return snapshot
   }
-  async function commit(previous: VideoHistorySnapshot, next: VideoHistorySnapshot, full = false) {
+  async function commit(previous: VideoHistorySnapshot, next: VideoHistorySnapshot, full = false, delta?: VideoHistoryWriteDelta, operationId?: string): Promise<VideoHistoryUpdate> {
     const generation = resetGeneration
-    const records = Object.fromEntries(Object.entries(next.records).filter(([key, value]) => value !== previous.records[key]))
-    const removed = Object.keys(previous.records).filter(key => !Object.hasOwn(next.records, key))
+    const records = delta?.records ?? Object.fromEntries(Object.entries(next.records).filter(([key, value]) => value !== previous.records[key]))
+    const removed = delta?.removed ?? Object.keys(previous.records).filter(key => !Object.hasOwn(next.records, key))
     try {
       await dependencies.set(next, { records, removed, reset: full })
     }
@@ -48,17 +50,17 @@ export function createVideoVisitHistoryCoordinator(dependencies: Dependencies) {
       snapshot = undefined
       throw error
     }
-    if (generation !== resetGeneration)
-      return next
-    snapshot = next
-    if (full) {
-      await dependencies.broadcast({ type: 'snapshot', snapshot: next, previousEpoch: previous.epoch })
+    const update: VideoHistoryUpdate = full
+      ? { type: 'snapshot', snapshot: next, previousEpoch: previous.epoch }
+      : { type: 'patch', epoch: next.epoch, baseRevision: previous.revision, revision: next.revision, records, removed, deleted: Object.fromEntries(Object.entries(next.deleted).filter(([key, version]) => version !== previous.deleted[key])), operationId }
+    if (generation === resetGeneration) {
+      recordCount = full
+        ? Object.keys(next.records).length
+        : recordCount + Object.keys(records).filter(key => !Object.hasOwn(previous.records, key)).length - removed.filter(key => Object.hasOwn(previous.records, key)).length
+      snapshot = next
+      await dependencies.broadcast(update)
     }
-    else {
-      const deleted = Object.fromEntries(Object.entries(next.deleted).filter(([key, version]) => version !== previous.deleted[key]))
-      await dependencies.broadcast({ type: 'patch', epoch: next.epoch, baseRevision: previous.revision, revision: next.revision, records, removed, deleted })
-    }
-    return next
+    return update
   }
   function handle(command: VideoHistoryCommand) {
     return serialized(async () => {
@@ -66,18 +68,24 @@ export function createVideoVisitHistoryCoordinator(dependencies: Dependencies) {
       if (command.type === 'read')
         return current
       if (command.epoch !== current.epoch)
-        return current
-      if (command.type === 'clear')
-        return commit(current, { ...empty(), migratedSources: current.migratedSources, migrationClosed: true }, true)
-      let records = { ...current.records }
+        return command.type === 'record' || command.type === 'remove' ? { type: 'snapshot' as const, snapshot: current } : current
+      if (command.type === 'clear') {
+        const next = { ...empty(), migratedSources: current.migratedSources, migrationClosed: true }
+        await commit(current, next, true)
+        return next
+      }
+      const noChange = (): VideoHistoryUpdate => ({ type: 'patch', epoch: current.epoch, baseRevision: current.revision, revision: current.revision, records: {}, removed: [], deleted: {}, operationId: command.type === 'record' ? command.operationId : undefined })
+      let records = current.records
+      let delta: VideoHistoryWriteDelta | undefined
       const next = { ...current, revision: current.revision + 1, records }
       if (command.type === 'remove') {
+        records = { ...records }
         if (!Array.isArray(command.identities))
           throw new TypeError('Invalid history removal')
         const keys = new Set(command.identities.flatMap(videoHistoryBaseKeys))
         const legacyKeys = new Set([...keys].map(key => key.toLowerCase()))
         if (!keys.size)
-          return current
+          return noChange()
         next.deleted = { ...current.deleted }
         for (const [key, record] of Object.entries(records)) {
           const base = key.split('|')[0]
@@ -97,6 +105,7 @@ export function createVideoVisitHistoryCoordinator(dependencies: Dependencies) {
       else if (command.type === 'migrate') {
         if (current.migratedSources.includes(command.source))
           return current
+        records = { ...records }
         // No playback information is imported from pre-model storage.
         const legacy = current.migrationClosed ? {} : pruneVideoVisitHistory(command.records)
         for (const [key, value] of Object.entries(legacy)) {
@@ -107,13 +116,21 @@ export function createVideoVisitHistoryCoordinator(dependencies: Dependencies) {
       }
       else {
         if (!command.operationId || current.recentOperations.includes(command.operationId))
-          return current
+          return noChange()
         const edits = command.edits.filter(edit => videoHistoryBaseKeys(edit.identity).every(key => (current.deleted[key] ?? 0) <= (edit.baseRevision ?? command.baseRevision)))
-        records = applyVideoHistoryEdits(records, edits)
+        delta = { records: {}, removed: [], reset: false }
+        records = applyVideoHistoryEdits(records, edits, delta.records)
         next.recentOperations = [...current.recentOperations, command.operationId].slice(-256)
       }
-      next.records = limitVideoVisitHistory(records)
-      return commit(current, next, next.epoch !== current.epoch)
+      const size = delta ? recordCount + Object.keys(delta.records).filter(key => !Object.hasOwn(current.records, key)).length : Object.keys(records).length
+      next.records = size > VIDEO_VISIT_HISTORY_MAX_ENTRIES ? limitVideoVisitHistory(records) : records
+      if (delta && next.records !== records) {
+        delta.removed = Object.keys(records).filter(key => !Object.hasOwn(next.records, key))
+        for (const key of delta.removed)
+          delete delta.records[key]
+      }
+      const update = await commit(current, next, next.epoch !== current.epoch || command.type === 'migrate', delta, command.type === 'record' ? command.operationId : undefined)
+      return command.type === 'migrate' ? next : update
     })
   }
   return {

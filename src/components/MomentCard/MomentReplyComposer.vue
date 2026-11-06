@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import IconButton from '~/components/IconButton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useComposerPicker } from '~/composables/useComposerPicker'
+import { useImageViewer } from '~/composables/useImageViewer'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { getCSRF, getUserID } from '~/utils/main'
@@ -34,6 +35,8 @@ const textarea = ref<HTMLTextAreaElement | null>(null)
 const imageInput = ref<HTMLInputElement | null>(null)
 const pickerPanel = ref<HTMLElement | null>(null)
 const focused = ref(false)
+const imageViewer = useImageViewer()
+const draggingImages = ref(false)
 
 const text = ref('')
 const mentions = new Map<string, string>()
@@ -53,7 +56,7 @@ const accountCurrent = () => topBar.isLogin && String(topBar.userInfo.mid) === p
 const canSubmit = computed(() => Boolean(text.value.trim()) && !pending.value && !addingImages.value && !uncertain.value)
 let alive = true
 const editLocked = computed(() => pending.value || addingImages.value || uncertain.value)
-watch(() => Boolean(text.value || pictures.value.length || props.reply || picker.value || focused.value || editLocked.value), value => emit('interaction', value), { flush: 'sync' })
+watch(() => Boolean(text.value || pictures.value.length || props.reply || picker.value || focused.value || editLocked.value || imageViewer.isOpen.value || draggingImages.value), value => emit('interaction', value), { flush: 'sync' })
 
 // Only the auxiliary picker escapes the card. The editor stays in its layout.
 useComposerPicker(panel, pickerPanel, computed(() => Boolean(picker.value)), () => {
@@ -126,6 +129,7 @@ function closePicker() {
 function removePicture(index: number) {
   if (pending.value)
     return
+  imageViewer.close()
   const removed = pictures.value.splice(index, 1)[0]
   if (removed)
     URL.revokeObjectURL(removed.url)
@@ -135,8 +139,47 @@ async function addImages(event: Event) {
   const input = event.target as HTMLInputElement
   const files = Array.from(input.files ?? [])
   input.value = ''
-  if (pending.value || addingImages.value || !richComment.value)
+  await acceptImages(files)
+}
+
+function dragOver(event: DragEvent) {
+  if (!event.dataTransfer?.types.includes('Files'))
     return
+  event.preventDefault()
+  event.stopPropagation()
+  const allowed = richComment.value && !editLocked.value
+  event.dataTransfer.dropEffect = allowed ? 'copy' : 'none'
+  draggingImages.value = allowed
+}
+
+function dragLeave(event: DragEvent) {
+  if (!(event.relatedTarget instanceof Node) || !panel.value?.contains(event.relatedTarget))
+    draggingImages.value = false
+}
+
+function dropImages(event: DragEvent) {
+  if (!event.dataTransfer?.types.includes('Files'))
+    return
+  event.preventDefault()
+  event.stopPropagation()
+  draggingImages.value = false
+  void acceptImages(Array.from(event.dataTransfer.files))
+}
+
+function previewPicture(index: number, event: MouseEvent) {
+  imageViewer.open({
+    urls: pictures.value.map(picture => picture.url),
+    index,
+    trigger: event.currentTarget as HTMLElement,
+    getOrigin: at => panel.value?.querySelectorAll<HTMLElement>('.moment-reply__preview')[at]?.getBoundingClientRect(),
+  })
+}
+
+async function acceptImages(files: File[]) {
+  if (editLocked.value || !richComment.value)
+    return
+  const accountId = props.accountId
+  const oid = props.oid
   error.value = ''
   if (files.length + pictures.value.length > MOMENT_REPLY_IMAGE_LIMIT) {
     error.value = t('moment_card.reply_image_limit')
@@ -152,7 +195,7 @@ async function addImages(event: Event) {
       bitmap.close()
       if (!valid)
         throw new Error(t('moment_card.reply_image_invalid'))
-      if (!alive || !accountCurrent())
+      if (!alive || !accountCurrent() || accountId !== props.accountId || oid !== props.oid || !richComment.value)
         return
       pictures.value.push({ file, url: URL.createObjectURL(file) })
     }
@@ -184,7 +227,12 @@ async function submit() {
   pending.value = true
   picker.value = null
   emit('pending', true)
-  const current = () => alive && accountCurrent()
+  const accountId = props.accountId
+  const oid = props.oid
+  const type = props.type
+  const target = relation.value
+  const current = () => alive && accountCurrent() && props.accountId === accountId && props.oid === oid && props.type === type
+    && relation.value.root === target.root && relation.value.parent === target.parent
   try {
     const identity = { accountId: props.accountId, csrf: getCSRF()! }
     for (const picture of richComment.value ? pictures.value : []) {
@@ -230,8 +278,7 @@ async function submit() {
     else {
       text.value = ''
       mentions.clear()
-      pictures.value.forEach(picture => URL.revokeObjectURL(picture.url))
-      pictures.value = []
+      clearPictures()
       sync.value = false
       selection.value = { start: 0, end: 0 }
       emit('posted', response.data.reply)
@@ -269,9 +316,16 @@ function keydown(event: KeyboardEvent) {
     void submit()
   }
 }
+function clearPictures() {
+  imageViewer.close()
+  pictures.value.forEach(picture => URL.revokeObjectURL(picture.url))
+  pictures.value = []
+  draggingImages.value = false
+}
+watch(() => [props.accountId, props.oid, props.type], clearPictures)
 onBeforeUnmount(() => {
   alive = false
-  pictures.value.forEach(picture => URL.revokeObjectURL(picture.url))
+  clearPictures()
   emit('pending', false)
   emit('interaction', false)
 })
@@ -279,9 +333,11 @@ onBeforeUnmount(() => {
 
 <template>
   <section
-    ref="panel" class="moment-reply" :aria-label="title" @keydown="keydown"
-    @focusin="focused = true" @focusout="focused = false"
-    @click.stop @pointerdown.stop
+    ref="panel" class="moment-reply" :aria-label="title" :class="{ 'moment-reply--drop': draggingImages }"
+    @keydown="keydown" @focusin="focused = true"
+    @focusout="focused = false" @click.stop
+    @pointerdown.stop
+    @dragover="dragOver" @dragleave="dragLeave" @drop="dropImages"
   >
     <header v-if="reply" class="moment-reply__header">
       <span>
@@ -300,7 +356,9 @@ onBeforeUnmount(() => {
       />
       <div v-if="richComment && pictures.length" class="moment-reply__pictures">
         <div v-for="(picture, index) in pictures" :key="picture.url">
-          <img :src="picture.url" :alt="picture.file.name">
+          <button type="button" class="moment-reply__preview" :aria-label="t('moment_card.reply_image')" @click="previewPicture(index, $event)">
+            <img :src="picture.url" :alt="picture.file.name">
+          </button>
           <IconButton class="moment-reply__remove" shape="smooth-rect" :disabled="pending" :label="t('moment_card.reply_remove_image')" @click="removePicture(index)">
             <i i-tabler-x aria-hidden="true" />
           </IconButton>
@@ -366,6 +424,16 @@ onBeforeUnmount(() => {
 }
 .moment-reply__picker {
   @include composer.picker;
+}
+.moment-reply--drop {
+  background: var(--bew-selected-bg);
+}
+.moment-reply__preview {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border-radius: var(--bew-thumb-radius);
+  cursor: zoom-in;
 }
 .moment-reply__header,
 .moment-reply__tools {

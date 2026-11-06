@@ -1,7 +1,8 @@
+import { createListenMediaSession } from '~/inject/listenMediaSession'
 import { createMovedPgcReactBridge, getMountedPgcEventRoot } from '~/inject/movedPgcReact'
 import { selectors } from '~/utils/bewlyWidescreen/constants'
 import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
-import type { ListenReturnRequest, NativePlaybackUnit } from '~/utils/videoMetadataBridge'
+import type { ListenReturnRequest, ListenSuspendRequest, NativePlaybackUnit } from '~/utils/videoMetadataBridge'
 import {
   getNativePlaybackUnitKey,
   isPgcPlaybackPage,
@@ -64,6 +65,22 @@ export function getNativePlayer() {
   return (window as Window & { player?: NativePlayer }).player
 }
 
+interface BtrListenHandoff {
+  version: number
+  getOwner: () => number | null
+  suspend: (video: HTMLElement, gate: number, previousGate?: number) => boolean
+  resume: (video: HTMLElement, gate: number, intent: ListenReturnRequest) => boolean
+  release: (gate: number) => boolean
+}
+function btrListenHandoff() {
+  const api = (window as Window & { __biliThreadRipperDebug?: { listenHandoff?: BtrListenHandoff } }).__biliThreadRipperDebug?.listenHandoff
+  return api?.version === 1 ? api : undefined
+}
+function btrInstalled() {
+  return document.documentElement.hasAttribute('data-btr-userscript')
+    || (window as Window & { __biliThreadRipper0901Installed?: boolean }).__biliThreadRipper0901Installed === true
+}
+
 export function setupVideoMetadataBridge(channelId: string) {
   const controller = new AbortController()
   const { signal } = controller
@@ -73,6 +90,8 @@ export function setupVideoMetadataBridge(channelId: string) {
   let refreshQueued = false
   const nativeComponents = new Map<NativeVideoComponent, { node: HTMLElement, destroyed: () => void }>()
   const movedPgcBridge = createMovedPgcReactBridge()
+  const mediaSession = createListenMediaSession()
+  let listenOwner: { gate: number, unit: string } | undefined
 
   function getApp() {
     return (document.getElementById('app') as (HTMLElement & { __vue__?: NativeVideoApp }) | null)?.__vue__
@@ -150,10 +169,35 @@ export function setupVideoMetadataBridge(channelId: string) {
   document.addEventListener(VIDEO_COMPONENT_REQUEST, (event) => {
     const request = parseVideoMetadataEvent(event)
     const node = event.target
+    if (request?.channelId === channelId && Number.isSafeInteger(request.requestId) && request.href === location.href
+      && node === document.documentElement && (request.listenMediaSession !== undefined || request.listenRelease !== undefined)) {
+      if (request.listenRelease !== undefined) {
+        const gate = request.listenRelease
+        const handoff = btrListenHandoff()
+        const released = Number.isSafeInteger(gate) && (!listenOwner || listenOwner.gate === gate)
+          && (!handoff || handoff.getOwner() === null || handoff.release(gate as number))
+        if (released)
+          listenOwner = undefined
+        node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
+          detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, released }),
+        }))
+        return
+      }
+      let token
+      if (request.listenMediaSession === true && (parseVideoPageIdentity(location.href) || isPgcPlaybackPage())) {
+        token = request.requestId as number
+        mediaSession?.claim(token)
+      }
+      else if (Number.isSafeInteger(request.listenMediaSession)) {
+        mediaSession?.release(request.listenMediaSession as number)
+      }
+      node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, { detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, token }) }))
+      return
+    }
     const nativeMedia = node instanceof HTMLElement && node.matches('video, bwp-video')
     const favoriteDialog = node instanceof HTMLElement && node.matches('.collection-m-exp') && request?.favorite === true
     if (request?.channelId !== channelId || !Number.isSafeInteger(request.requestId)
-      || request.href !== location.href || (!parseVideoPageIdentity(location.href) && !isPgcPlaybackPage())
+      || request.href !== location.href || (!parseVideoPageIdentity(location.href) && !isPgcPlaybackPage() && !(nativeMedia && (request.adjustVolume !== undefined || request.playback === true)))
       || !(node instanceof HTMLElement) || !node.isConnected || (!node.matches(nativeComponentSelector) && !nativeMedia && !favoriteDialog)) {
       return
     }
@@ -249,7 +293,23 @@ export function setupVideoMetadataBridge(channelId: string) {
         }
       }
       catch { /* The native player can be disposing between navigation and this synchronous probe. */ }
-      if ((request.playback === true || typeof request.listen === 'string' || request.listenReturn || request.listenResume) && ready === true) {
+      if (request.adjustVolume !== undefined) {
+        let volume: number | undefined
+        const delta = request.adjustVolume
+        if (ready === true && node instanceof HTMLMediaElement && typeof delta === 'number' && Number.isFinite(delta) && Math.abs(delta) <= 1) {
+          volume = Math.max(0, Math.min(1, (node.muted ? 0 : node.volume) + delta))
+          if (delta !== 0) {
+            node.volume = volume
+            if (volume > 0)
+              node.muted = false
+          }
+        }
+        node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
+          detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, volume }),
+        }))
+        return
+      }
+      if ((request.playback === true || request.listen || request.listenReturn || request.listenResume) && ready === true) {
         try {
           const manifest = player?.getManifest?.()
           const identity = parseVideoPageIdentity(location.href)
@@ -288,6 +348,7 @@ export function setupVideoMetadataBridge(channelId: string) {
             if (intent.bind) {
               node.volume = intent.volume
               node.muted = intent.muted
+              node.defaultPlaybackRate = intent.rate
               node.playbackRate = intent.rate
               if (intent.playing && node.paused)
                 void node.play().catch(() => {})
@@ -319,21 +380,27 @@ export function setupVideoMetadataBridge(channelId: string) {
           const dash = player?.__core?.()?.getCorePlayer?.()
           const processors = dash?.getActiveStream?.()?.getProcessors?.() ?? []
           if (unit && intent.unit === getNativePlaybackUnitKey(unit) && node instanceof HTMLMediaElement
-            && dash?.getVideoElement?.() === node && processors.length && node.readyState >= HTMLMediaElement.HAVE_METADATA
+            && (!listenOwner || (intent.gate === listenOwner.gate && intent.unit === listenOwner.unit))
             && Number.isFinite(intent.time) && intent.time >= 0 && Number.isFinite(intent.rate) && intent.rate > 0
             && Number.isFinite(intent.volume) && intent.volume >= 0 && intent.volume <= 1
             && typeof intent.playing === 'boolean' && typeof intent.muted === 'boolean') {
-            node.volume = intent.volume
-            node.muted = intent.muted
-            node.playbackRate = intent.rate
-            for (const processor of processors)
-              processor.getScheduleController?.()?.start?.()
-            node.currentTime = Math.min(intent.time, node.duration || intent.time)
-            if (intent.playing)
-              void node.play().catch(() => {})
-            else
-              node.pause()
-            resumed = true
+            resumed = intent.gate !== undefined && btrListenHandoff()?.resume(node, intent.gate, intent) === true
+            if (dash?.getVideoElement?.() === node && processors.length && node.readyState >= HTMLMediaElement.HAVE_METADATA) {
+              node.volume = intent.volume
+              node.muted = intent.muted
+              node.defaultPlaybackRate = intent.rate
+              node.playbackRate = intent.rate
+              for (const processor of processors)
+                processor.getScheduleController?.()?.start?.()
+              node.currentTime = Math.min(intent.time, node.duration || intent.time)
+              if (intent.playing)
+                void node.play().catch(() => {})
+              else
+                node.pause()
+              resumed = true
+            }
+            if (resumed)
+              listenOwner = undefined
           }
         }
         catch { /* A native switch can retire the media between verification and resume. */ }
@@ -342,16 +409,23 @@ export function setupVideoMetadataBridge(channelId: string) {
         }))
         return
       }
-      if (typeof request.listen === 'string') {
-        let suspended: boolean | 'interrupted' = false
+      if (request.listen) {
+        const intent = request.listen as ListenSuspendRequest
+        let suspended: boolean | 'interrupted' | 'btr-companion-required' = false
         try {
           const dash = player?.__core?.()?.getCorePlayer?.()
           const processors = dash?.getActiveStream?.()?.getProcessors?.() ?? []
-          const btr = (window as Window & { __biliThreadRipperDebug?: { getPlayer?: () => { video?: HTMLElement, destroy?: (options: { resumeNative: boolean }) => void } | null } }).__biliThreadRipperDebug?.getPlayer?.()
-          const ownsBtr = btr?.video === node
-          if (unit && request.listen === getNativePlaybackUnitKey(unit) && dash?.getVideoElement?.() === node && (processors.length || ownsBtr)
-            && (!node.closest('[data-btr-mse-active="true"]') || ownsBtr) && (!ownsBtr || btr?.destroy)) {
+          const handoff = btrListenHandoff()
+          if (btrInstalled() && !handoff) {
+            suspended = 'btr-companion-required'
+          }
+          else if (unit && intent.unit === getNativePlaybackUnitKey(unit) && Number.isSafeInteger(intent.gate) && intent.gate > 0
+            && (!listenOwner || listenOwner.unit !== intent.unit || listenOwner.gate === intent.gate || listenOwner.gate === intent.previousGate)
+            && dash?.getVideoElement?.() === node && (processors.length || handoff)) {
             suspended = 'interrupted'
+            if (handoff && !handoff.suspend(node, intent.gate, intent.previousGate))
+              throw new Error('BTR handoff owner changed')
+            listenOwner = { unit: intent.unit, gate: intent.gate }
             player?.pause?.()
             // Stop scheduling before cancelling in-flight fragments. Keeping
             // the native SourceBuffers attached lets pending append events finish.
@@ -359,8 +433,6 @@ export function setupVideoMetadataBridge(channelId: string) {
               processor.getScheduleController?.()?.stop?.()
               processor.getFragmentModel?.()?.abortRequests?.()
             }
-            if (ownsBtr)
-              btr?.destroy?.({ resumeNative: false })
             suspended = true
           }
         }
@@ -372,9 +444,9 @@ export function setupVideoMetadataBridge(channelId: string) {
       }
       const btr = request.playback === true
         ? {
-            installed: document.documentElement.hasAttribute('data-btr-userscript')
-              || (window as Window & { __biliThreadRipper0901Installed?: boolean }).__biliThreadRipper0901Installed === true,
+            installed: btrInstalled(),
             ownsMedia: !!node.closest('[data-btr-mse-active="true"]'),
+            listenHandoffVersion: btrListenHandoff()?.version ?? 0,
           }
         : undefined
       if (request.quality === true) {
@@ -400,7 +472,7 @@ export function setupVideoMetadataBridge(channelId: string) {
         catch { /* Optional native APIs cannot change the component-ready contract. */ }
       }
       node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
-        detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, ready, episodeId, qualityState, unit, btr }),
+        detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, ready, episodeId, qualityState, unit, btr, listenOwner: request.playback === true ? listenOwner?.gate ?? btrListenHandoff()?.getOwner() ?? undefined : undefined }),
       }))
       return
     }
@@ -439,6 +511,7 @@ export function setupVideoMetadataBridge(channelId: string) {
     window.addEventListener(name, scheduleRefresh, { signal })
   document.addEventListener('loadedmetadata', scheduleRefresh, { capture: true, signal })
   signal.addEventListener('abort', () => {
+    mediaSession?.dispose()
     stopWatch?.()
     nativeComponents.forEach((binding, owner) => owner.$off?.('hook:destroyed', binding.destroyed))
     nativeComponents.clear()

@@ -5,7 +5,8 @@ import SEGMENT_LIQUID_INDICATOR_CSS from '~/styles/segmentLiquidIndicator.scss?i
 import SEND_BUTTON_CSS from '~/styles/sendButton.scss?inline'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
 import { ACTION_ANIMATION_ATTRIBUTE, ACTION_ROLL_CLASS, BODY_CLASS, COMMENT_COMPOSER_HEIGHT_PROPERTY, COMMENT_COMPOSER_HOST_CLASS, COVER_FIELD_PROPERTY, COVER_TONE_PROPERTY, DANMAKU_GLASS_CLASS, DANMAKU_SOURCE_HOST_CLASS, DANMAKU_SURFACE_SELECTOR, DISCLOSURE_TOGGLE_CLASS, EPISODE_SECTION_CLASS, FILL_TOGGLE_CLASS, HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS, HIGH_ENERGY_PROGRESS_PIN_SELECTOR, HOST_ZOOMING_ATTRIBUTE, INFO_FOLDING_PARTS, MOBILE_BREAKPOINT, NATIVE_DIALOG_CHECK_CLASS, NATIVE_DIALOG_FIELD_CLASS, NATIVE_DIALOG_NUMERAL_CLASS, NATIVE_DIALOG_TITLE_CLASS, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, NATIVE_PLAYER_ANCESTOR_CLASS, NATIVE_PLAYER_CLASS, PGC_RECOMMEND_LIST_CLASS, PGC_SECTION_ATTRIBUTE, PLAYER_DISPLAY_MODE_ATTRIBUTE, PLAYER_ZOOMING_ATTRIBUTE, PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR, RAISED_MORE_MENU_CLASS, ROOT_ID, VIEWER_COUNT_MIRRORED_ATTRIBUTE } from '~/utils/bewlyWidescreen/constants'
-import { CARD_LAYOUT_PROPERTIES, playbackLetterbox, playbackRailHeadGlass, playbackRailTopPadding, playbackTopBarRule } from '~/utils/bewlyWidescreen/styles/cardLayout'
+import { CARD_LAYOUT_PROPERTIES, playbackLetterbox, playbackRailHeadGlass, playbackRailTopPadding, playbackRecommendationSkeleton, playbackTopBarRule } from '~/utils/bewlyWidescreen/styles/cardLayout'
+import { LOADING_RING_MASK } from '~/utils/loadingRing'
 import { injectCSS } from '~/utils/main'
 import { PHOTO_VIEWER_SELECTOR } from '~/utils/photoViewer'
 import { reducedMotionCss } from '~/utils/reducedMotion'
@@ -191,6 +192,7 @@ export function injectLayoutStyle() {
     /* The pane's letterbox (playbackLetterbox). Filled and native fullscreen
        video keep the black player canvas. */
     ${playbackLetterbox(`body.${BODY_CLASS}`)}
+    ${playbackRecommendationSkeleton(`#${ROOT_ID}`)}
 
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS}[${PLAYER_DISPLAY_MODE_ATTRIBUTE}="card"]:not([${PLAYER_ZOOMING_ATTRIBUTE}="true"]),
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS}[${PLAYER_DISPLAY_MODE_ATTRIBUTE}="card"]:not([${PLAYER_ZOOMING_ATTRIBUTE}="true"]) .bpx-player-container:not([data-screen="full"]) .bpx-player-video-area {
@@ -578,6 +580,20 @@ export function injectLayoutStyle() {
       translate: -50% -50%;
     }
 
+    /* The player's own loading (first frame, switching, buffering) is the
+       shared ring instead of Bpx's TV-and-dots sprite: the same arc as a
+       mask, in the skeleton's ring's place and size over the video, so the
+       loading overlay hands over to it without a change. */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-loading-panel-blur-detail {
+      width: var(--bewly-widescreen-player-ring-size);
+      height: var(--bewly-widescreen-player-ring-size);
+      transform: none;
+      background: var(--bewly-widescreen-player-ring-color);
+      -webkit-mask: ${LOADING_RING_MASK} center / contain no-repeat;
+      mask: ${LOADING_RING_MASK} center / contain no-repeat;
+      animation: bew-loading-ring-spin var(--bew-loading-ring-spin-duration, 900ms) linear infinite;
+    }
+
     #${ROOT_ID} {
       position: fixed;
       inset: 0;
@@ -594,12 +610,8 @@ export function injectLayoutStyle() {
       --bewly-widescreen-divider: var(--bew-separator-color);
       --bewly-widescreen-control-bg: var(--bew-fill-1);
       --bewly-widescreen-control-hover-bg: var(--bew-fill-2);
-      /* Selected buttons, plates and segments in the column are translucent
-         like its other fills, with no ring (user-specified 2026-11-05), not
-         the solid shared selected surface: content scrolls under the head's
-         blur. The indicator's tokens are resolved on :root, so they are set
-         here too. */
-      --bewly-widescreen-control-selected-bg: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+      /* The column's translucent selected fill (CARD_LAYOUT_PROPERTIES). The
+         indicator's tokens are resolved on :root, so they are set here too. */
       --bew-selected-bg: var(--bewly-widescreen-control-selected-bg);
       --bew-segment-item-active-bg: var(--bewly-widescreen-control-selected-bg);
       --bew-segment-item-active-shadow: none;
@@ -2198,26 +2210,6 @@ export function injectLayoutStyle() {
       border: 0 !important;
     }
 
-    #${ROOT_ID} .bili-danmaku-x-guide:not(.bili-danmaku-x-guide-followed) .bili-danmaku-x-guide-follow,
-    #${ROOT_ID} .bili-danmaku-x-guide-electric {
-      background: var(--bew-theme-color, #00aeec) !important;
-      color: var(--bew-on-theme-color) !important;
-    }
-
-    #${ROOT_ID} .bili-danmaku-x-guide:not(.bili-danmaku-x-guide-followed) .bili-danmaku-x-guide-follow:hover,
-    #${ROOT_ID} .bili-danmaku-x-guide-electric:hover {
-      background: var(--bew-theme-color, #00aeec) !important;
-      color: var(--bew-on-theme-color) !important;
-    }
-
-    #${ROOT_ID} .bili-danmaku-x-guide-three > span.bili-danmaku-x-active svg {
-      fill: var(--bew-text-1) !important;
-    }
-
-    #${ROOT_ID} .bili-danmaku-x-guide-cyc > span {
-      filter: var(--bewly-widescreen-action-canvas-filter, none) !important;
-    }
-
     #${ROOT_ID} .player-wrap > .bpx-player-container,
     #${ROOT_ID} .bpx-player-container > .bpx-player-primary-area {
       border-radius: 0 !important;
@@ -3653,24 +3645,11 @@ export function injectLayoutStyle() {
       pointer-events: none !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item > canvas {
-      filter: var(--bewly-widescreen-action-canvas-filter, none) !important;
-      opacity: 0.96 !important;
-    }
-
     /* Animation containers are tagged by actionEffects (ACTION_ANIMATION_ATTRIBUTE). */
     #${ROOT_ID} .bewly-widescreen-action-slot [${ACTION_ANIMATION_ATTRIBUTE}] svg {
       width: 100% !important;
       height: 100% !important;
-      color: var(--bew-text-1) !important;
-    }
-
-    #${ROOT_ID} .bewly-widescreen-action-slot [${ACTION_ANIMATION_ATTRIBUTE}] [stroke] {
-      stroke: var(--bew-text-1) !important;
-    }
-
-    #${ROOT_ID} .bewly-widescreen-action-slot [${ACTION_ANIMATION_ATTRIBUTE}] [fill]:not([fill="none"]) {
-      fill: var(--bew-text-1) !important;
+      filter: var(--bew-action-animation-filter, none) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-share,
@@ -4141,8 +4120,13 @@ export function injectLayoutStyle() {
        (left) and Bpx's history button (right); the column labels and rows
        below share one set of column widths. */
     #${ROOT_ID} .bewly-widescreen-panel-danmaku {
-      --bewly-danmaku-head: calc(var(--bew-control-height) + var(--bew-space-3) * 2);
+      /* The view row, as far under the tabs as they are under the window's
+         top (the column head's inset), and space-3 before the labels. */
+      --bewly-danmaku-head: calc(var(--bew-control-height) + var(--bew-space-3));
       --bewly-danmaku-labels: var(--bew-space-8);
+      /* Where the list's first row sits: below the column's head, the panel's
+         head row and the labels, all of which its scroller reaches behind. */
+      --bewly-danmaku-list-top: calc(var(--bewly-widescreen-rail-head-height) + var(--bewly-danmaku-head) + var(--bewly-danmaku-labels));
       --bewly-danmaku-time-width: calc(var(--bew-space-12) + var(--bew-space-3));
       --bewly-danmaku-date-width: calc(var(--bew-space-12) + var(--bew-space-10));
       position: relative;
@@ -4153,33 +4137,39 @@ export function injectLayoutStyle() {
       container-type: size;
     }
 
-    /* The panel's own pinned head (the view segment and the history button,
-       and in the list view the column labels) is glass like the column's
-       head (playbackRailHeadGlass), as it stays at the top too: the list
-       reaches up behind it and scrolls under its blur, and in the list view
-       its lower edge is a hairline across the whole column. The panel draws
-       it: the native ancestors clip anything wider than the list. */
+    /* The panel's pinned head (the view segment and the history button, and
+       in the list view the column labels) continues the column's head: one
+       glass band (the shared glass filter, no tint) from the column's top
+       through the head, with no hairline or second layer between the tabs
+       and the view row (user-specified 2026-11-05), and one hairline across
+       the whole column at its lower edge. While the panel shows, it draws
+       the band in place of the column's (playbackRailHeadGlass); the list
+       reaches up behind it and scrolls under its blur. The panel draws it:
+       the native ancestors clip anything wider than the list. */
+    #${ROOT_ID} .bewly-widescreen-sidebar:has(> .bewly-widescreen-panels > .bewly-widescreen-panel-danmaku:not([hidden]))::before {
+      display: none;
+    }
+
     #${ROOT_ID} .bewly-widescreen-panel-danmaku::before {
       content: "";
       position: absolute;
-      inset-inline: 0;
-      top: var(--bewly-widescreen-rail-head-height);
+      inset: 0 0 auto;
       z-index: 1;
-      height: var(--bewly-danmaku-head);
+      box-sizing: content-box;
+      height: calc(var(--bewly-widescreen-rail-head-height) + var(--bewly-danmaku-head));
+      border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
       backdrop-filter: var(--bew-filter-glass-1);
       pointer-events: none;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku[data-bewly-danmaku-view="LIST"]::before {
-      box-sizing: content-box;
-      height: calc(var(--bewly-danmaku-head) + var(--bewly-danmaku-labels));
-      border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
+      height: calc(var(--bewly-widescreen-rail-head-height) + var(--bewly-danmaku-head) + var(--bewly-danmaku-labels));
     }
 
     /* Bpx's view menu as a track segment (danmakuViews.ts) on the head row. */
     #${ROOT_ID} .bewly-widescreen-panel > .bewly-widescreen-danmaku-views {
       position: absolute;
-      top: calc(var(--bewly-widescreen-rail-head-height) + var(--bew-space-3));
+      top: var(--bewly-widescreen-rail-head-height);
       inset-inline-start: calc(var(--bewly-widescreen-panel-inline) + var(--bew-space-1));
       z-index: 2;
       width: auto !important;
@@ -4202,12 +4192,15 @@ export function injectLayoutStyle() {
       background: var(--bewly-widescreen-sidebar-bg) !important;
     }
 
+    /* Bpx's docker, collapse body and view list clip only sideways: clipped
+       vertically they cut the list off below the head row, which then stayed
+       an opaque band the rows never passed under. The panel clips the rest. */
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-docker {
       display: flex !important;
       flex-direction: column !important;
       height: 100% !important;
       min-height: 0 !important;
-      overflow: hidden !important;
+      overflow: clip visible !important;
       background: var(--bewly-widescreen-sidebar-bg) !important;
     }
 
@@ -4247,7 +4240,7 @@ export function injectLayoutStyle() {
       min-height: 0 !important;
       flex: 1 1 0 !important;
       padding-top: var(--bewly-danmaku-head) !important;
-      overflow: hidden;
+      overflow: clip visible;
       background: var(--bewly-widescreen-sidebar-bg) !important;
       transform: none !important;
     }
@@ -4258,6 +4251,7 @@ export function injectLayoutStyle() {
       height: 100% !important;
       min-height: 0 !important;
       flex-direction: column;
+      overflow: clip visible;
       background: var(--bewly-widescreen-sidebar-bg) !important;
     }
 
@@ -4292,14 +4286,15 @@ export function injectLayoutStyle() {
       padding-inline: var(--bew-space-1) !important;
     }
 
-    /* The list's scroller reaches up behind the head row and the labels;
-       its list starts below them. */
+    /* The list's scroller reaches up to the panel's top, behind the
+       column's head, the head row and the labels (rows scroll under their
+       glass, as in the other panels); its list starts below them. */
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-wrap {
-      margin-top: calc((var(--bewly-danmaku-head) + var(--bewly-danmaku-labels)) * -1) !important;
+      margin-top: calc(var(--bewly-danmaku-list-top) * -1) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-wrap .bui-long-list-list {
-      padding-top: calc(var(--bewly-danmaku-head) + var(--bewly-danmaku-labels)) !important;
+      padding-top: var(--bewly-danmaku-list-top) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-function > :is(.bpx-player-dm-btn-time, .bpx-player-dm-btn-dm, .bpx-player-dm-btn-date) {
@@ -4418,7 +4413,7 @@ export function injectLayoutStyle() {
       display: flex;
       align-items: center;
       width: auto !important;
-      height: var(--bewly-danmaku-head) !important;
+      height: var(--bew-control-height) !important;
       margin: 0 !important;
       padding: 0 !important;
       border: 0 !important;
@@ -5294,6 +5289,10 @@ export function injectLayoutStyle() {
       background: var(--bewly-widescreen-sidebar-bg) !important;
     }
 
+    /* Rows where the list's rows will be: below the column's head, the
+       panel's head row and the labels (Bpx's scroller reaches up to the
+       panel's top behind them), on the rows' content line. Before Bpx's box
+       mounts it hangs in the panel itself, which starts at the same top. */
     #${ROOT_ID} .bewly-widescreen-danmaku-skeleton {
       position: absolute;
       inset: 0;
@@ -5301,9 +5300,13 @@ export function injectLayoutStyle() {
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      padding: var(--bew-space-3, 12px) var(--bew-space-1, 4px) var(--bew-space-4, 16px);
+      padding: var(--bewly-danmaku-list-top) var(--bew-space-1) var(--bew-space-4);
       background: transparent;
       pointer-events: none;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku > .bewly-widescreen-danmaku-skeleton {
+      padding-inline: calc(var(--bewly-widescreen-panel-inline) + var(--bew-space-1));
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku:has(.bewly-widescreen-danmaku-skeleton)
@@ -5314,15 +5317,14 @@ export function injectLayoutStyle() {
 
     #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__rows {
       display: grid;
-      gap: var(--bew-space-3, 12px);
     }
 
+    /* Bpx's 24px rows, in the list's three columns. */
     #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__row {
       display: grid;
       grid-template-columns: var(--bewly-danmaku-time-width) minmax(0, 1fr) var(--bewly-danmaku-date-width);
       align-items: center;
-      gap: var(--bew-space-3, 12px) 0;
-      min-height: var(--bew-line-height-caption, 16px);
+      height: var(--bew-space-6);
     }
 
     #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__block {
@@ -5533,6 +5535,36 @@ export function injectLayoutStyle() {
       overflow: hidden !important;
       pointer-events: none;
       scrollbar-gutter: auto;
+    }
+
+    /* Native lazy loading listens on the inner list, not action-list-container. */
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .action-list-container.${EPISODE_SECTION_CLASS} {
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+      scrollbar-gutter: auto;
+    }
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .action-list-header,
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .action-list-body-top,
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .action-list-body > .split-line {
+      flex: none !important;
+    }
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .action-list-body,
+    #${ROOT_ID} .bewly-widescreen-panel-playlist .action-list-body-bottom {
+      display: flex !important;
+      flex: 1 1 auto !important;
+      flex-direction: column !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      overflow: hidden !important;
+    }
+    #${ROOT_ID} .bewly-widescreen-panel-playlist #playlist-video-action-list {
+      flex: 1 1 auto !important;
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      overflow-y: auto !important;
+      overscroll-behavior: auto !important;
     }
 
     /* The modern PGC directory owns its virtual scrollports and item metrics.
@@ -6398,32 +6430,12 @@ export function injectLayoutStyle() {
       font-size: var(--bew-font-size-caption) !important;
     }
 
+    /* The list's placeholder is the recommendations' (cardLayout.ts) on the
+       column's content line, one space-1 inside the panel's box. */
     #${ROOT_ID} .bewly-widescreen-empty.bewly-widescreen-panel-skeleton {
-      display: grid;
-      align-content: start;
-      gap: var(--bew-space-4);
-      padding: var(--bew-space-4);
-    }
-    #${ROOT_ID} .bewly-widescreen-panel-skeleton__row {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--bew-space-3);
-      width: 100%;
-    }
-    #${ROOT_ID} .bewly-widescreen-panel-skeleton__leading {
-      width: var(--bew-space-8);
-      height: var(--bew-space-8);
-      flex: none;
-      border-radius: var(--bew-pill-radius);
-    }
-    #${ROOT_ID} .bewly-widescreen-panel-skeleton__content {
-      flex: 1;
-      min-width: 0;
-      height: var(--bew-space-12);
-      border-radius: var(--bew-radius-tiny);
-    }
-    #${ROOT_ID} [data-kind="playlist"] .bewly-widescreen-panel-skeleton__leading {
-      border-radius: var(--bew-radius-tiny);
+      display: block;
+      min-height: 0;
+      padding: 0 var(--bew-space-1);
     }
 
     #${ROOT_ID} .bewly-widescreen-empty {
@@ -6471,7 +6483,8 @@ export function injectLayoutStyle() {
       #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag, .bgm-tag) > .tag-link,
       ${DANMAKU_SURFACE_SELECTOR},
       #${ROOT_ID} .bewly-widescreen-panel-playlist .${EPISODE_SECTION_CLASS},
-      #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__block`, 'transition:none;animation:none;')}
+      #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__block,
+      body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-loading-panel-blur-detail`, 'transition:none;animation:none;')}
 
     ${reducedMotionCss(`#${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-function > :is(.bpx-player-dm-btn-time, .bpx-player-dm-btn-dm, .bpx-player-dm-btn-date),
       #${ROOT_ID} .bewly-widescreen-panel-danmaku .dm-info-row,

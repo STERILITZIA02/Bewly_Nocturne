@@ -61,6 +61,7 @@ import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
 import { setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
+import { supportsHighlightInheritance } from '~/utils/highlightInheritance'
 import { homeTabStateKey, resolveDefaultAppPage } from '~/utils/homeRoute'
 import { readIframeDrawerHistory } from '~/utils/iframeDrawerHistory'
 import { listenStage } from '~/utils/listenStage'
@@ -903,6 +904,7 @@ onBeforeUnmount(stopUrlCleaner)
     :style="{ '--bew-dock-bottom-shift': `${dockBottomShift}px` }"
     :class="{
       'dark': isDark,
+      'bewly-selection-fallback': !supportsHighlightInheritance(),
       'bewly-wrapper--wide-sidebar': displayedPage === AppPage.Notifications,
       'bewly-wrapper--viewport': isHomePage(currentLocationHref),
     }"

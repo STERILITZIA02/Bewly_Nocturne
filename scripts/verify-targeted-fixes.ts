@@ -2011,7 +2011,7 @@ async function verifyP1Contracts() {
   assert.match(widescreen, /new MutationObserver\(\(records\)/)
   assert.match(widescreen, /shouldScheduleWidescreenRefresh\(origins\)/)
   assert.match(widescreen, /querySelectorAll<HTMLElement>\(COMMENT_TIME_SELECTOR\)/)
-  assert.match(widescreen, /currentState\.colorProbe\?\.remove\(\)/)
+  assert.doesNotMatch(widescreen, /currentState\.(?:colorProbe|themeObserver)/, 'action colours derive from shared theme tokens without a second probe or observer')
 
   assert.match(randomPlay, /videoListenerRetryCount\+\+/)
   assert.match(randomPlay, /generation !== videoListenerGeneration/)
@@ -2330,7 +2330,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /window\.innerHeight - stableDockBottom \+ blockPadding/)
   assert.match(sideBar, /var\(--bewly-widescreen-controls-glass-bottom, var\(--bew-space-8\)\)/)
   assert.match(widescreen, /danmakuSourceHost\?\.isConnected && currentState\.playerEl\.isConnected/)
-  assert.match(widescreen, /getBoundingClientRect\(\)\.bottom \+ dockRect\.height/)
+  assert.match(widescreen, /rect\(currentState\.playerFrame\)\.bottom \+ dockRect\.height/)
   assert.doesNotMatch(widescreen, /window\.innerHeight - rootRect\.bottom \+ \(dockRect\.height - controlHeight\)/)
   const hiddenNativeControlStyles = widescreen.slice(
     widescreen.indexOf('${HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS'),
@@ -2408,7 +2408,14 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \{[^}]*position: relative;[^}]*padding: var\(--bewly-widescreen-rail-head-height\) var\(--bewly-widescreen-panel-inline\) 0;/)
   // The danmaku panel's pinned head is glass the list scrolls under.
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku::before \{[^}]*backdrop-filter: var\(--bew-filter-glass-1\);/)
-  assert.match(widescreen, /\.bpx-player-dm-wrap \{\s*margin-top: calc\(\(var\(--bewly-danmaku-head\) \+ var\(--bewly-danmaku-labels\)\) \* -1\) !important;/)
+  // The list reaches up to the panel's top, under the column's head, the head
+  // row and the labels; Bpx's wrappers clip only sideways, or the head row
+  // stays an opaque band the rows never pass under.
+  assert.match(widescreen, /--bewly-danmaku-list-top: calc\(var\(--bewly-widescreen-rail-head-height\) \+ var\(--bewly-danmaku-head\) \+ var\(--bewly-danmaku-labels\)\);/)
+  assert.match(widescreen, /\.bpx-player-dm-wrap \{\s*margin-top: calc\(var\(--bewly-danmaku-list-top\) \* -1\) !important;/)
+  assert.match(widescreen, /\.bpx-player-dm-wrap \.bui-long-list-list \{\s*padding-top: var\(--bewly-danmaku-list-top\) !important;/)
+  for (const wrapper of ['bpx-docker', 'bui-collapse-body', 'bpx-player-wraplist'])
+    assert.match(widescreen, new RegExp(`\\.bewly-widescreen-panel-danmaku \\.${wrapper} \\{[^}]*overflow: clip visible`))
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.dm-info-row \{\s*box-sizing: border-box !important;\s*padding-inline: var\(--bew-space-1\) !important;/)
   // Bpx shows a list view with an inline display: block; forcing flex kept
   // the list over the block settings and advanced views.
@@ -2582,12 +2589,14 @@ async function verifyP2WidescreenControl() {
   assert.match(anchoredPlayerReplacementSection, /setupAspectObservers\(currentState\)/)
   // The card anchors to the shell frame; filling the window anchors to the overlay.
   assert.match(anchoredPlayerReplacementSection, /\(currentState\.displayMode === 'fill' \? root : playerFrame\)\.getBoundingClientRect\(\)/)
-  const playbackPageLoadingSection = playbackFunctions(widescreen, 'createWidescreenLoadingSkeleton', 'createLoadingSkeletonBlock', 'showWidescreenLoading', 'injectLoadingStyle')
+  const playbackPageLoadingSection = playbackFunctions(widescreen, 'createWidescreenLoadingSkeleton', 'createBlock', 'createRecommendationSkeleton', 'showWidescreenLoading', 'injectLoadingStyle')
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-stage/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-player/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-controls/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-sidebar/)
-  assert.match(playbackPageLoadingSection, /sidebar\.append\(tabs, info\)/)
+  // The column: tabs, the info card (a bangumi variant), the shared recommendations.
+  assert.match(playbackPageLoadingSection, /sidebar\.append\(createTabsSkeleton\(\), info, createRecommendationSkeleton\(\)\)/)
+  assert.match(playbackPageLoadingSection, /createWidescreenLoadingSkeleton\(isPgcPlaybackPage\(\) \? 'pgc' : 'video'\)/)
   assert.doesNotMatch(widescreen, /skeleton-list-row|skeleton-list-avatar|panel-skeleton__row'[\s\S]{0,20}'comment'/)
   const panelLoadingSection = playbackFunctions(widescreen, 'ensureLoadingRingPanel', 'finishPanelLoading', 'ensureLoadingPanel')
   assert.match(panelLoadingSection, /if \(kind === 'comment'\) \{\s*ensureLoadingRingPanel\(panel, label\)/)
@@ -2599,7 +2608,16 @@ async function verifyP2WidescreenControl() {
   // Native loaders inside the shell become the same ring (MAIN).
   const nativeSpinner = await readFile(`${root}/src/inject/commentLoadingRing.ts`, 'utf8')
   assert.match(nativeSpinner, /:host-context\(#bewly-widescreen-root\) #spinner img \{\s*display: none !important;/)
-  assert.match(nativeSpinner, /stroke-dasharray='75 25'/)
+  assert.match(nativeSpinner, /mask: \$\{LOADING_RING_MASK\}/)
+  assert.match(await readFile(`${root}/src/utils/loadingRing.ts`, 'utf8'), /stroke-dasharray='75 25'/)
+  // The player's own loading panel shows the same ring, in the skeleton's ring's place.
+  assert.match(widescreen, /\.bpx-player-loading-panel-blur-detail \{[^}]*width: var\(--bewly-widescreen-player-ring-size\);[\s\S]{0,300}mask: \$\{LOADING_RING_MASK\}[\s\S]{0,200}animation: bew-loading-ring-spin/)
+  // The overview's list placeholder is the loading overlay's recommendation cards.
+  assert.match(panelLoadingSection, /skeleton\.append\(createRecommendationSkeleton\(\)\)/)
+  assert.match(widescreen, /\$\{playbackRecommendationSkeleton\(`#\$\{ROOT_ID\}`\)\}/)
+  assert.match(widescreen, /\$\{playbackRecommendationSkeleton\(`#\$\{LOADING_ROOT_ID\}`\)\}/)
+  // Danmaku rows start under the panel's glass head and column labels.
+  assert.match(widescreen, /\.bewly-widescreen-danmaku-skeleton \{[^}]*padding: var\(--bewly-danmaku-list-top\)/)
   const injectEntry = await readFile(`${root}/src/inject/index.ts`, 'utf8')
   assert.match(injectEntry, /'bili-comments-spinner': \{\s*id: 'bewly-widescreen-comment-spinner-style',\s*css: COMMENT_SPINNER_RING_CSS,/)
   // Every comment component's shadow styles go in before its first paint.
@@ -2618,7 +2636,7 @@ async function verifyP2WidescreenControl() {
   // The skeleton mirrors the split layout: the square pane with controls,
   // then the column with the overview below the tabs.
   assert.doesNotMatch(playbackPageLoadingSection, /data-sidebar-layout|sidebar-user-width|skeleton-column|card-radius/)
-  assert.match(playbackPageLoadingSection, /stage\.append\(player, sidebar\)/)
+  assert.match(playbackPageLoadingSection, /stage\.append\(player, sidebar, createTopBarSkeleton\(\)\)/)
   assert.match(playbackPageLoadingSection, /\$\{CARD_LAYOUT_PROPERTIES\}/)
   assert.match(playbackPageLoadingSection, /\.bewly-widescreen-loading-skeleton-player \{\s*position: relative;\s*grid-area: player;/)
   // Match the real info height so the video rows begin at its lower edge.
@@ -2689,7 +2707,12 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuPanelStyles, /\.bui-collapse-header \{[^}]*position: absolute !important[^}]*height: var\(--bewly-danmaku-head\) !important[^}]*visibility: hidden/)
   // The list reaches the window's bottom; the glass head's lower edge is a full-width hairline under the column labels.
   assert.match(danmakuPanelStyles, /\.bewly-widescreen-panel-danmaku \{[^}]*padding: var\(--bewly-widescreen-rail-head-height\) var\(--bewly-widescreen-panel-inline\) 0;/)
-  assert.match(danmakuPanelStyles, /\[data-bewly-danmaku-view="LIST"\]::before \{[^}]*height: calc\(var\(--bewly-danmaku-head\) \+ var\(--bewly-danmaku-labels\)\);[^}]*border-bottom: var\(--bew-hairline\) solid var\(--bew-separator-color\)/)
+  // The tabs and the view row share one glass band (no hairline or second
+  // layer between them); its one hairline is under the head, or the labels.
+  assert.match(danmakuPanelStyles, /\.bewly-widescreen-sidebar:has\(> \.bewly-widescreen-panels > \.bewly-widescreen-panel-danmaku:not\(\[hidden\]\)\)::before \{\s*display: none;/)
+  assert.match(danmakuPanelStyles, /\.bewly-widescreen-panel-danmaku::before \{[^}]*inset: 0 0 auto;[^}]*height: calc\(var\(--bewly-widescreen-rail-head-height\) \+ var\(--bewly-danmaku-head\)\);[^}]*border-bottom: var\(--bew-hairline\) solid var\(--bew-separator-color\);[^}]*backdrop-filter: var\(--bew-filter-glass-1\);/)
+  assert.match(danmakuPanelStyles, /\[data-bewly-danmaku-view="LIST"\]::before \{\s*height: calc\(var\(--bewly-widescreen-rail-head-height\) \+ var\(--bewly-danmaku-head\) \+ var\(--bewly-danmaku-labels\)\);/)
+  assert.match(danmakuPanelStyles, /--bewly-danmaku-head: calc\(var\(--bew-control-height\) \+ var\(--bew-space-3\)\);/)
   assert.match(danmakuPanelStyles, /\.bui-collapse-body \{[^}]*display: block !important[^}]*flex: 1 1 0 !important/)
   assert.match(widescreen, /return String\(i18n\.global\.t\(key\)\)/)
   assert.doesNotMatch(widescreen, /i18n\.global\.t\(key, settings\.value\.language\)/)
@@ -3043,7 +3066,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /currentState\.highEnergyProgressObserver\?\.disconnect\(\)/)
   assert.match(widescreen, /const controlsHeight = wrapHeight \+ highEnergyProgressHeight/)
   assert.match(widescreen, /\$\{controlsHeight\}px/)
-  assert.match(widescreen, /syncDanmakuInputSource\(currentState\)\s*syncViewerCount\(currentState\)\s*syncControlsGlassGeometry\(currentState\)/)
+  assert.match(widescreen, /syncDanmakuInputSource\(currentState\)\s*syncViewerCount\(currentState\)\s*syncNativePlayerControlVisibility\(currentState\)\s*schedulePlayerResizeSync\(currentState\)/)
   assert.match(widescreen, /right: var\(--bewly-widescreen-controls-glass-inset\) !important[\s\S]{0,240}left: var\(--bewly-widescreen-controls-glass-inset\) !important/)
   assert.match(widescreen, /--bewly-widescreen-bottom-controls-height\) \+ var\(--bewly-widescreen-controls-block-padding, 12px\) \+ \$\{controlsHeight\}px/)
   assert.match(widescreen, /--bewly-widescreen-controls-glass-inset: 10%/)
@@ -4177,7 +4200,7 @@ async function verifyAuditRemediationContracts() {
   ])
 
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bpx-docker/)
-  assert.match(widescreen, /\.bpx-docker[\s\S]{0,420}height: 100% !important[\s\S]{0,180}overflow: hidden !important/)
+  assert.match(widescreen, /\.bpx-docker[\s\S]{0,420}height: 100% !important[\s\S]{0,180}overflow: clip visible !important/)
   assert.match(widescreen, /\.bui-collapse-wrap[\s\S]{0,180}display: flex !important[\s\S]{0,120}flex-direction: column/)
   assert.match(widescreen, /\.bui-collapse-body \{[\s\S]{0,400}padding-top: var\(--bewly-danmaku-head\) !important/)
   assert.match(widescreen, /hydratedTabs: Set<BewlyWidescreenTab>/)
@@ -4346,7 +4369,7 @@ async function verifySemanticPortContracts() {
   // Layout math uses the grid's measured column gap; the token is only the start value.
   assert.match(moments, /getComputedStyle\(grid\)\.columnGap/)
   assert.match(moments, /gap: gridGap/)
-  assert.equal((await import('../src/utils/momentsLayout')).MOMENT_GRID_DIMENSIONS.gap, 16)
+  assert.equal((await import('../src/utils/momentsLayout')).MOMENT_GRID_DIMENSIONS.gap, (await import('../src/constants/layout')).GRID_GUTTER)
   assert.match(momentCard, /@container \(min-width: #\{breakpoints\.\$moment-card-wide\}\)/)
   assert.match(momentCard, /grid-template-columns: minmax\(0, 3fr\) minmax\(320px, 2fr\)/)
 }

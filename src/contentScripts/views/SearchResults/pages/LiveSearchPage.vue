@@ -29,6 +29,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   updatePage: [page: number]
+  selectLiveUsers: []
 }>()
 
 const { t } = useI18n()
@@ -336,7 +337,7 @@ function resetAll() {
 }
 
 function handleSwitchToLiveUser() {
-  // 切换到主播模式需要由父级筛选器统一实现。
+  emit('selectLiveUsers')
 }
 
 // 预加载更多直播间
@@ -384,7 +385,7 @@ defineExpose({
       <template v-else>
         <!-- 主播 (上面) -->
         <div
-          v-if="!isInPaginationNonFirstPage
+          v-if="(filters.subCategory === 'live_user' || !isInPaginationNonFirstPage)
             && (liveUserList.length > 0 || isLoading)
             && (filters.subCategory === 'all' || filters.subCategory === 'live_user')"
         >

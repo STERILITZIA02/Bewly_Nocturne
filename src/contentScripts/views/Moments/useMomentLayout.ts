@@ -4,7 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import type { DisplayMoment } from '~/components/MomentCard/types'
 import { getCardPreviewText, isCompactPlainTextMoment } from '~/components/MomentCard/utils'
 import { useBewlyApp } from '~/composables/useAppProvider'
-import { uiScale } from '~/composables/useUiScale'
+import { uiPx, uiScale } from '~/composables/useUiScale'
 import { settings } from '~/logic'
 import { useLayoutEditSettingValue } from '~/logic/layoutEdit'
 import { shouldUseWideMomentCardLayout, supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
@@ -50,9 +50,9 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   const gridRef = ref<HTMLElement | null>(null)
   const { minCardWidth: CARD_MIN_WIDTH } = MOMENT_GRID_DIMENSIONS
   /** Measured from the rendered grid (or its skeleton) on layout changes, never in render paths. */
-  let gridGap: number = MOMENT_GRID_DIMENSIONS.gap
+  let gridGap: number = uiPx(MOMENT_GRID_DIMENSIONS.gap)
   const gridColumnCount = ref(1)
-  const gridCardWidth = ref(520)
+  const gridCardWidth = ref(uiPx(520))
   let rebalanceTimer: ReturnType<typeof setTimeout> | null = null
   // Read only by imperative layout passes, never by render or computed state.
   const cardHeights: Record<string, number> = {}
@@ -102,8 +102,8 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   }
 
   function estimateCardHeight(moment: DisplayMoment) {
-    const columnWidth = Math.max(1, gridCardWidth.value || 520)
-    const contentScale = Math.max(1, Math.min(1.6, columnWidth / 520))
+    const columnWidth = Math.max(1, gridCardWidth.value || uiPx(520))
+    const contentScale = Math.max(1, Math.min(1.6, columnWidth / uiPx(520)))
     const scaledTextBodyExtra = Math.round(230 * (contentScale - 1))
     const interactionHeight = moment.hotComment ? 52 : 0
     const additionalHeight = moment.additional ? 68 : 0
@@ -145,7 +145,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     }
     if (moment.isChargeExclusive && !moment.isVideo)
       return 230 + scaledTextBodyExtra + additionalHeight + interactionHeight
-    if (columnWidth < CARD_MIN_WIDTH) {
+    if (columnWidth < uiPx(CARD_MIN_WIDTH)) {
       if (moment.isLive)
         return Math.round(columnWidth * 9 / 16) + 210 + additionalHeight + interactionHeight
     }
@@ -319,6 +319,9 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     settledHeights.clear()
     if (cardGeometryFrame)
       cancelAnimationFrame(cardGeometryFrame)
+    cardGeometryFrame = 0
+    if (!active)
+      return
     // Wait for the new width to reach the DOM, then fit and measure every
     // mounted card in one batch instead of alternating writes and reads per card.
     cardGeometryFrame = requestAnimationFrame(() => {
@@ -342,7 +345,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     return false
   }
 
-  function updateGridColumnCount() {
+  function updateGridColumnCount(remeasure = false) {
     const gapChanged = measureGridGap()
     const layoutWidth = layoutRef.value?.clientWidth || window.innerWidth
     const mainRailWidth = momentsContentRef.value?.clientWidth || layoutWidth
@@ -350,7 +353,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     const desiredCols = resolveMomentGridColumnCount({
       containerWidth: mainRailWidth,
       preferredColumns,
-      minCardWidth: CARD_MIN_WIDTH,
+      minCardWidth: uiPx(CARD_MIN_WIDTH),
       gap: gridGap,
     })
     // Keep an active editor/focus/fullscreen in its Vue column. Apply the new
@@ -369,13 +372,14 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
 
     gridColumnCount.value = nextCols
     gridCardWidth.value = nextCardWidth
-    if (widthChanged)
+    if (widthChanged || remeasure)
       invalidateCardMeasurementsForWidthChange()
 
     if (colsChanged || needInitColumns)
       redistributeColumns()
-    else if (widthChanged)
+    else if (widthChanged || remeasure)
       updateVirtualColumns()
+    return colsChanged || needInitColumns || widthChanged || remeasure
   }
 
   function append(items: DisplayMoment[], wasEmpty: boolean) {
@@ -912,31 +916,28 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
       gridObserver.unobserve(prev)
     if (el && gridObserver) {
       gridObserver.observe(el)
-      updateGridColumnCount()
-      updateVirtualColumns()
+      if (!updateGridColumnCount())
+        updateVirtualColumns()
     }
   })
   watch(
     [() => settings.value.fontFamily, textAutospaceMode, () => settings.value.interfaceFontSize, () => uiScale.value.scale],
     async () => {
       await nextTick()
-      if (!active)
+      if (!active) {
+        invalidateCardMeasurementsForWidthChange()
         return
-      invalidateCardMeasurementsForWidthChange()
-      updateVirtualColumns()
+      }
+      updateGridColumnCount(true)
     },
   )
   watch(
     momentsGridColumns,
     async () => {
-      measurementRevision++
-      Object.keys(cardHeights).forEach(key => delete cardHeights[key])
-      settledHeights.clear()
       await nextTick()
       if (!active)
         return
       updateGridColumnCount()
-      updateVirtualColumns()
     },
   )
   function clearColumns() {
@@ -976,8 +977,8 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
       })
       if (!changed)
         return
-      updateGridColumnCount()
-      updateVirtualColumns()
+      if (!updateGridColumnCount())
+        updateVirtualColumns()
     })
     void nextTick(() => {
       if (!active)

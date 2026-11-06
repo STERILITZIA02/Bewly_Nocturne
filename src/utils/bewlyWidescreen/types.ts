@@ -80,7 +80,6 @@ export interface BewlyWidescreenState {
   playerAncestryObserver?: MutationObserver
   toolbarMutationObserver?: MutationObserver
   toolbarResizeObserver?: ResizeObserver
-  themeObserver?: MutationObserver
   metadataListener?: () => void
   resizeSyncFrame?: number
   lastPlayerResizeSignature?: string
@@ -141,7 +140,6 @@ export interface BewlyWidescreenState {
   /** Bangumi's moved media block, watched for its follow button's state (videoInfo.ts). */
   followStatusObserver?: MutationObserver
   escapeKeyCleanup?: () => void
-  colorProbe?: HTMLSpanElement
   descriptionExpanded: boolean
   playlistCollapsed: boolean
   hydratedTabs: Set<BewlyWidescreenTab>

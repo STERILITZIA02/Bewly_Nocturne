@@ -90,4 +90,73 @@ export const CARD_LAYOUT_PROPERTIES = `
          the window's top. */
       --bewly-widescreen-rail-head-inset: calc((var(--bew-top-bar-height, 64px) - var(--bew-top-bar-primary-control-height, 46px)) / 2);
       --bewly-widescreen-rail-tabs-height: var(--bew-control-height-sm, 28px);
-      --bewly-widescreen-card-width: min(calc(100vw * 2 / 3), calc(100vw - ${WIDESCREEN_SIDEBAR_MIN_WIDTH}px));`
+      --bewly-widescreen-card-width: min(calc(100vw * 2 / 3), calc(100vw - ${WIDESCREEN_SIDEBAR_MIN_WIDTH}px));
+      /* Selected buttons, plates and segments in the column are translucent
+         like its other fills, with no ring (user-specified 2026-11-05), not
+         the solid shared selected surface: content scrolls under the head's
+         blur. The skeleton's selected tab uses it too. */
+      --bewly-widescreen-control-selected-bg: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+      /* The loading ring over the video: the skeleton's, then the native
+         player's own loading panel (layout.ts) in the same place and size. */
+      --bewly-widescreen-player-ring-size: var(--bew-space-12, 48px);
+      --bewly-widescreen-player-ring-color: rgb(255 255 255 / 72%);`
+
+/**
+ * The recommendations' placeholder (loadingView.ts), shared by the loading
+ * overlay and the overview panel while its list loads: the two-column video
+ * cards of layout.ts (cover in the video card ratio and radius, two title
+ * lines and the caption line, 16px rows and 12px columns) under the title.
+ * The host places it on the column's content line.
+ */
+export function playbackRecommendationSkeleton(root: string) {
+  const block = `${root} .bewly-widescreen-skeleton-recommendations`
+  return `${block} {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--bew-space-4) var(--bew-space-3);
+    min-width: 0;
+  }
+
+  ${block}__heading {
+    grid-column: 1 / -1;
+    width: calc(var(--bew-space-10) * 2);
+    height: var(--bew-space-3);
+    margin-bottom: calc(var(--bew-space-3) - var(--bew-space-4));
+    border-radius: var(--bew-radius-tiny);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  ${block}__card {
+    display: grid;
+    align-content: start;
+    min-width: 0;
+  }
+
+  /* Each bar sits in the line box of the text it stands for: two title
+     lines (13/16) 12 below the cover, then 4 down the caption line (11/14). */
+  ${block}__cover {
+    aspect-ratio: var(--bew-video-cover-aspect-ratio);
+    margin-bottom: var(--bew-space-3);
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  ${block}__line {
+    height: var(--bew-space-3);
+    margin-block: calc((var(--bew-line-height-title) - var(--bew-space-3)) / 2);
+    border-radius: var(--bew-radius-tiny);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  ${block}__line--short {
+    width: 64%;
+  }
+
+  ${block}__caption {
+    width: 48%;
+    height: var(--bew-space-2);
+    margin-block: calc(var(--bew-space-1) + (var(--bew-line-height-caption) - var(--bew-space-2)) / 2) calc((var(--bew-line-height-caption) - var(--bew-space-2)) / 2);
+    border-radius: var(--bew-radius-tiny);
+    corner-shape: var(--bew-corner-shape);
+  }`
+}

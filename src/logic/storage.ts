@@ -112,6 +112,7 @@ export interface LocalSettings {
 export const videoCardContextMenuKeys = [
   'watchLater',
   'favorite',
+  'customizeMenu',
   'notInterested',
   'notInterestedUploader',
   'openInNewTab',
@@ -216,6 +217,8 @@ export interface Settings {
   filterArticlesInMoments: boolean
   originalMomentsShowUserCard: boolean
   originalMomentsUseBewlyFilters: boolean
+  originalMomentsClickBlankToFoldComments: boolean
+  momentCommentSort: 0 | 1
   historyGroupInterval: HistoryGroupInterval
   originalMomentsShowLiveList: boolean
   originalMomentsShowCommunityCenter: boolean
@@ -263,6 +266,7 @@ export interface Settings {
   disableLightDarkModeSwitcherOnDock: boolean
   backToTopAndRefreshButtonsAreSeparated: boolean
   showDockBackToTop: boolean
+  hideDockRefreshButton: boolean
   // Names under the Dock glyphs; off gives a shorter Dock.
   showDockItemNames: boolean
   // Unread counts on the Dock glyphs (display only, never read state).
@@ -370,6 +374,8 @@ export interface Settings {
   showVerticalVideoZoomButton: boolean // 显示竖屏视频放大按钮
   showVideoScreenshotButton: boolean // 显示播放器截图按钮
   videoScreenshotShortcut: string
+  customFullscreenWheelVolume: boolean
+  fullscreenWheelVolumeStep: number
   localLoudnessEnabled: boolean
   localLoudnessTarget: number
   localLoudnessStrength: number
@@ -504,6 +510,8 @@ export const originalSettings: Settings = {
   filterArticlesInMoments: true,
   originalMomentsShowUserCard: true,
   originalMomentsUseBewlyFilters: false,
+  originalMomentsClickBlankToFoldComments: false,
+  momentCommentSort: 1,
   historyGroupInterval: 'day',
   originalMomentsShowLiveList: true,
   originalMomentsShowCommunityCenter: true,
@@ -544,6 +552,7 @@ export const originalSettings: Settings = {
   disableLightDarkModeSwitcherOnDock: false,
   backToTopAndRefreshButtonsAreSeparated: true,
   showDockBackToTop: true,
+  hideDockRefreshButton: false,
   showDockItemNames: true,
   showDockBadges: true,
   dockLabelSize: 'standard',
@@ -651,6 +660,8 @@ export const originalSettings: Settings = {
   showVerticalVideoZoomButton: true, // 默认显示竖屏视频放大按钮
   showVideoScreenshotButton: true, // 默认显示播放器截图按钮
   videoScreenshotShortcut: DEFAULT_SCREENSHOT_SHORTCUT,
+  customFullscreenWheelVolume: false,
+  fullscreenWheelVolumeStep: 5,
   localLoudnessEnabled: LOCAL_LOUDNESS_DEFAULTS.enabled,
   localLoudnessTarget: LOCAL_LOUDNESS_DEFAULTS.target,
   localLoudnessStrength: LOCAL_LOUDNESS_DEFAULTS.strength,
@@ -741,6 +752,15 @@ function normalizeSettings(value: Settings) {
   if (!isValidScreenshotShortcut(value.videoScreenshotShortcut))
     value.videoScreenshotShortcut = ''
   const record = value as Settings & Record<string, unknown>
+  if (value.momentCommentSort !== 0 && value.momentCommentSort !== 1)
+    value.momentCommentSort = originalSettings.momentCommentSort
+  value.fullscreenWheelVolumeStep = Number.isFinite(value.fullscreenWheelVolumeStep)
+    ? Math.max(1, Math.min(100, Math.round(value.fullscreenWheelVolumeStep)))
+    : originalSettings.fullscreenWheelVolumeStep
+  for (const field of ['originalMomentsClickBlankToFoldComments', 'customFullscreenWheelVolume', 'hideDockRefreshButton'] as const) {
+    if (typeof value[field] !== 'boolean')
+      value[field] = originalSettings[field]
+  }
   if (!['web', 'webNoCookie', 'app'].includes(value.recommendationMode))
     value.recommendationMode = originalSettings.recommendationMode
   if (value.appRecommendationColumn !== 1 && value.appRecommendationColumn !== 2)

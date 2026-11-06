@@ -147,6 +147,7 @@ export function useForYouRecommendations(emit: {
   })
   // 当前使用的视频列表（根据推荐模式），由各自的增量投影维护
   const currentVideoList = computed(() => isWebRecommendationMode.value ? webFeed.visible.value : appFeed.visible.value)
+  const hasAcceptedItemKey = (key: string | number) => (isWebRecommendationMode.value ? webFeed : appFeed).has(String(key))
 
   const isLoading = ref<boolean>(true)
   const recommendationDataState = tabState.ref<RecommendationDataState>('recommendationDataState', 'idle')
@@ -233,14 +234,96 @@ export function useForYouRecommendations(emit: {
       // A threshold or keyword edit must not request a feed for every keystroke.
       filterRefreshTimer = setTimeout(() => {
         filterRefreshTimer = undefined
-        void initData()
+        void reapplyFilters()
       }, 300)
     }
-  })
+  }, { flush: 'sync' })
+
+  async function reapplyFilters() {
+    if (!isComponentActive || !isPageVisible.value)
+      return
+    const version = requestVersion
+    const mode = settings.value.recommendationMode
+    const accountId = loadedAccountId
+    const signature = recommendationFilterSettingsSignature.value
+    const current = () => isCurrentWebRequest(version, mode, accountId)
+    isLoading.value = true
+    emit('beforeLoading')
+    try {
+      if (isWebRecommendationMode.value) {
+        const entries = videoList.value
+        const filter = filterFunc.value
+        const matches = filter ? await filter(entries.map(entry => entry.isAdvertisement ? null : entry.item ?? null)) : entries.map(() => true)
+        if (!current())
+          return
+        videoList.value = entries.map((entry, index) => ({ ...entry, filtered: !entry.isAdvertisement && !matches[index] }))
+      }
+      else {
+        const entries = appVideoList.value
+        // Like enrichment writes only to this unpublished batch, never parked snapshots.
+        const items = entries.map(entry => entry.isAdvertisement || !entry.item
+          ? null
+          : {
+              ...entry.item,
+              normalized: { ...(entry.item as NormalizedAppVideoItem).normalized },
+            })
+        const filter = appFilterFunc.value
+        const matches = filter ? await filter(items) : items.map(() => true)
+        if (!current())
+          return
+        if (settings.value.enableFilterByLikeCount) {
+          const candidates = items.filter((item, index): item is NormalizedAppVideoItem => !!item && matches[index]
+            && !(settings.value.disableFilterForFollowedUser && item.normalized.followed))
+          const controller = new AbortController()
+          appLikesController = controller
+          try {
+            await completeAppLikeCounts(candidates, controller.signal)
+          }
+          finally {
+            controller.abort()
+            if (appLikesController === controller)
+              appLikesController = undefined
+          }
+          if (!current())
+            return
+          items.forEach((item, index) => {
+            if (item && matches[index] && !(settings.value.disableFilterForFollowedUser && item.normalized.followed))
+              matches[index] = isAboveKnownCount(item.normalized.likeCount, settings.value.filterByLikeCount)
+          })
+        }
+        appVideoList.value = entries.map((entry, index) => ({ ...entry, item: items[index] ?? entry.item, filtered: !entry.isAdvertisement && !matches[index] }))
+      }
+      if (!current())
+        return
+      acceptedFilterSignature.value = signature
+      const entries = isWebRecommendationMode.value ? videoList.value : appVideoList.value
+      recordFilteredFeedBatch(entries.filter(entry => !entry.isAdvertisement).length, entries.filter(entry => !entry.isAdvertisement && !entry.filtered).length)
+      hasInitializedData.value = true
+      recommendationDataState.value = currentVideoList.value.length ? 'success' : entries.length ? 'filtered-empty' : 'idle'
+      // A cancelled first page has no accepted batch; resume its existing cursor.
+      if (!entries.length && !noMoreContent.value)
+        await getData('loadMore')
+    }
+    catch (error) {
+      if (current())
+        setRecommendationFailure(error)
+    }
+    finally {
+      if (current()) {
+        isLoading.value = false
+        emit('afterLoading')
+      }
+    }
+  }
 
   // 监听页面可见性变化
   async function handleVisibilityChange() {
     isPageVisible.value = !document.hidden
+    if (isPageVisible.value && acceptedFilterSignature.value !== recommendationFilterSettingsSignature.value) {
+      suspendedAppLikes = false
+      await reapplyFilters()
+      return
+    }
     if (!isPageVisible.value && appLikesController) {
       suspendAppLikeReads()
     }
@@ -290,8 +373,10 @@ export function useForYouRecommendations(emit: {
         recommendationDataState.value = currentVideoList.value.length ? 'success' : 'idle'
     }
     if (acceptedFilterSignature.value !== recommendationFilterSettingsSignature.value) {
-      hasInitializedData.value = false
       recommendationHistory.reset()
+      initPageAction()
+      void reapplyFilters()
+      return
     }
     initPageAction()
     void initialDataCoordinator.ensure()
@@ -322,7 +407,7 @@ export function useForYouRecommendations(emit: {
   }
 
   function rememberAppRecentShown(list: AppVideoElement[]) {
-    const keys = new Set(list.flatMap(video => video.item && !video.isAdvertisement ? getAppVideoKeys(video.item) : []))
+    const keys = new Set(list.flatMap(video => video.item && !video.isAdvertisement && !video.filtered ? getAppVideoKeys(video.item) : []))
     if (!keys.size)
       return
     appRecentShownKeys.value = [
@@ -758,23 +843,22 @@ export function useForYouRecommendations(emit: {
           if (activeWebFilter && !advertisement)
             filteredCandidateCount++
 
-          if (filterMatches && !advertisement && !filterMatches[index])
-            return
-
-          if (activeWebFilter && !advertisement)
+          const filtered = Boolean(filterMatches && !advertisement && !filterMatches[index])
+          if (activeWebFilter && !advertisement && !filtered)
             filteredKeptCount++
           accepted.push({
             uniqueId: itemKey,
             item,
             displayData: transformWebVideo(item),
             isAdvertisement: advertisement,
+            filtered,
           })
         })
 
         recordFilteredFeedBatch(filteredCandidateCount, filteredKeptCount)
 
         const showlistGroup = buildLastShowlistGroup(accepted.flatMap(entry =>
-          entry.item && !(settings.value.blockAds && entry.isAdvertisement) ? [entry.item] : []))
+          entry.item && !entry.filtered && !(settings.value.blockAds && entry.isAdvertisement) ? [entry.item] : []))
         if (showlistGroup)
           webShowlistGroups.value = [...webShowlistGroups.value, showlistGroup]
 
@@ -1009,9 +1093,8 @@ export function useForYouRecommendations(emit: {
 
             if (activeAppFilter) {
               filteredCandidateCount++
-              if (!filterMatches![index])
-                return
-              filteredKeptCount++
+              if (filterMatches![index])
+                filteredKeptCount++
             }
 
             accepted.push({
@@ -1019,6 +1102,7 @@ export function useForYouRecommendations(emit: {
               item,
               displayData: { ...transformAppVideo(item), recommendationRequestIdentity: requestIdentity },
               isAdvertisement: false,
+              filtered: Boolean(filterMatches && !filterMatches[index]),
             })
           })
           appFeed.append(accepted)
@@ -1121,5 +1205,5 @@ export function useForYouRecommendations(emit: {
 
   // 修改 defineExpose，暴露重置方法和撤销方法
 
-  return { currentVideoList, isLoading, noMoreContent, needToLoginFirst, appAuthorizationRequired, requestFailed, recommendationEmptyDescription, isWebRecommendationMode, requiresManualFilteredPaging, retryRecommendation, jumpToLoginPage, handleLoadMore, handleManualLoadMore, handleAppAuthorization, initData, undoRefresh: () => tabState.isCurrent() && restoreRecommendationSnapshot(recommendationHistory.undo(captureRecommendationSnapshot())), goForward: () => tabState.isCurrent() && restoreRecommendationSnapshot(recommendationHistory.redo(captureRecommendationSnapshot())), canGoBack: () => recommendationHistory.canUndo.value, canGoForward: () => recommendationHistory.canRedo.value }
+  return { currentVideoList, hasAcceptedItemKey, isLoading, noMoreContent, needToLoginFirst, appAuthorizationRequired, requestFailed, recommendationEmptyDescription, isWebRecommendationMode, requiresManualFilteredPaging, retryRecommendation, jumpToLoginPage, handleLoadMore, handleManualLoadMore, handleAppAuthorization, initData, undoRefresh: () => tabState.isCurrent() && restoreRecommendationSnapshot(recommendationHistory.undo(captureRecommendationSnapshot())), goForward: () => tabState.isCurrent() && restoreRecommendationSnapshot(recommendationHistory.redo(captureRecommendationSnapshot())), canGoBack: () => recommendationHistory.canUndo.value, canGoForward: () => recommendationHistory.canRedo.value }
 }

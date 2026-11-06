@@ -58,7 +58,6 @@ export function useCardWindow(options: {
     else root.scrollTop = value
   }
   const startOf = (rect: DOMRect) => horizontal ? rect.left : rect.top
-  const endOf = (rect: DOMRect) => horizontal ? rect.right : rect.bottom
   const ranges = shallowRef<CardRange[]>([])
   const loadingRange = shallowRef({ start: 0, end: 0 })
   const measurements = new Map<CardKey, CardMeasurement>(options.snapshot?.measurements)
@@ -95,7 +94,6 @@ export function useCardWindow(options: {
   let pendingAnchor: CardWindowSnapshot['anchor']
   let pendingScrollTop = 0
   let bookmark: { root: HTMLElement, scrollTop: number, anchor: CardWindowSnapshot['anchor'] } | undefined
-  let bookmarkScheduled = false
 
   function viewport() {
     const root = options.root.value
@@ -106,20 +104,22 @@ export function useCardWindow(options: {
     return { top: horizontal ? geometry.left : geometry.top, height: horizontal ? geometry.clientWidth : geometry.clientHeight }
   }
 
+  function anchorAt(offset: number, height: number) {
+    if (!rowCount || offset >= metrics.total - options.gap.value || offset + height <= 0)
+      return
+    let row = metrics.rowAt(Math.max(0, offset))
+    if (row + 1 < rowCount && offset >= metrics.offset(row + 1) - options.gap.value)
+      row++
+    const key = options.keys.value[row * measuredColumns]
+    return key === undefined ? undefined : { key, offset: metrics.offset(row) - offset }
+  }
+
   function visibleAnchor() {
+    const container = options.container.value
+    if (!container?.isConnected)
+      return
     const { top, height } = viewport()
-    let anchor: CardWindowSnapshot['anchor']
-    for (const [key, element] of slots) {
-      if (!element.isConnected)
-        continue
-      const rect = element.getBoundingClientRect()
-      const offset = startOf(rect) - top
-      const precedesAnchor = !anchor || offset < anchor.offset
-        || (Math.abs(offset - anchor.offset) < 0.5 && (indices.get(key) ?? Infinity) < (indices.get(anchor.key) ?? Infinity))
-      if (endOf(rect) > top && startOf(rect) < top + height && precedesAnchor)
-        anchor = { key, offset }
-    }
-    return anchor
+    return anchorAt(top - startOf(container.getBoundingClientRect()), height)
   }
 
   function restoreAnchor(anchor: CardWindowSnapshot['anchor']) {
@@ -132,7 +132,7 @@ export function useCardWindow(options: {
     }
   }
 
-  function keepScrollAnchor() {
+  function keepScrollAnchor(firstChangedRow = -1) {
     if (!active || restoring || anchorPending)
       return
     const root = options.root.value
@@ -145,6 +145,9 @@ export function useCardWindow(options: {
     let anchor = root === bookmark?.root && scrollPosition(root) === bookmark?.scrollTop
       ? bookmark?.anchor
       : visibleAnchor()
+    const anchorIndex = anchor && indices.get(anchor.key)
+    if (anchorIndex !== undefined && firstChangedRow >= Math.floor(anchorIndex / measuredColumns))
+      return
     const container = options.container.value
     // A scrollbar jump can put every old slot outside the viewport. Preserve
     // the destination row while its estimated predecessors are measured.
@@ -259,20 +262,13 @@ export function useCardWindow(options: {
       const previous = ranges.value[index]
       return range.start !== previous.start || range.end !== previous.end || range.height !== previous.height
     })) {
-      keepScrollAnchor()
       ranges.value = next
       if (active && !resizeObserver)
         void nextTick(measureMounted)
     }
-    if (bookmarkScheduled)
-      return
-    bookmarkScheduled = true
-    void nextTick(() => {
-      bookmarkScheduled = false
-      const root = options.root.value
-      if (active && !anchorPending && root)
-        bookmark = { root, scrollTop: scrollPosition(root), anchor: visibleAnchor() }
-    })
+    const root = options.root.value
+    if (active && !anchorPending && root)
+      bookmark = { root, scrollTop: scrollPosition(root), anchor: anchorAt(offset, height) }
   }
 
   /** Joins the viewport's next shared frame instead of scheduling a private one. */
@@ -314,7 +310,7 @@ export function useCardWindow(options: {
     // A change near the top is a replacement, not an extension.
     if (firstRow === 0 && prefix < keys.length && previousKeys.length > columns)
       return false
-    keepScrollAnchor()
+    keepScrollAnchor(firstRow)
     for (let index = prefix; index < previousKeys.length; index++) {
       if (indices.get(previousKeys[index]) === index)
         indices.delete(previousKeys[index])
@@ -379,18 +375,19 @@ export function useCardWindow(options: {
       const row = Math.floor(index / options.columns.value)
       if (dirtyRows && !dirtyRows.has(row))
         continue
-      const height = horizontal ? element.offsetWidth : element.getBoundingClientRect().height
+      const height = horizontal ? element.offsetWidth : element.offsetHeight
       if (height <= 0)
         continue
       pending.push([key, height])
       heights.set(row, Math.max(heights.get(row) ?? 0, height))
     }
-    // Capture the visible position before changing spacer heights above it.
-    keepScrollAnchor()
+    const changedRows = [...heights].filter(([row, height]) => Math.abs(metrics.offset(row + 1) - metrics.offset(row) - height - options.gap.value) >= 0.5)
+    if (changedRows.length)
+      keepScrollAnchor(Math.min(...changedRows.map(([row]) => row)))
     for (const [key, height] of pending)
       measurements.set(key, { height, layout: options.layout.value, estimatedHeight: options.estimateHeight?.(key) ?? options.estimatedHeight.value })
     let changed = false
-    for (const [row, height] of heights)
+    for (const [row, height] of changedRows)
       changed = metrics.set(row, height + options.gap.value) || changed
     if (changed)
       updateRanges()
@@ -506,5 +503,21 @@ export function useCardWindow(options: {
     slots.clear()
     measurements.clear()
   })
-  return { ranges, loadingRange, setElement, captureSnapshot }
+  function ensureVisible(key: CardKey) {
+    const index = indices.get(key)
+    const root = options.root.value
+    const container = options.container.value
+    if (index === undefined || !root || !container)
+      return
+    const { top, height } = viewport()
+    const offset = startOf(container.getBoundingClientRect()) - top
+    const row = Math.floor(index / measuredColumns)
+    const start = offset + metrics.offset(row)
+    const end = offset + metrics.offset(row + 1) - options.gap.value
+    const delta = start < 0 ? start : end > height ? Math.min(start, end - height) : 0
+    if (delta)
+      setScrollPosition(root, scrollPosition(root) + delta)
+    updateRanges()
+  }
+  return { ranges, loadingRange, setElement, captureSnapshot, ensureVisible }
 }

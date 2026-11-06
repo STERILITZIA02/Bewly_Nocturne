@@ -1,11 +1,12 @@
-import { scheduleActionGeometrySync, syncActionAnimationTheme } from '~/utils/bewlyWidescreen/actionEffects'
+import { scheduleActionGeometrySync } from '~/utils/bewlyWidescreen/actionEffects'
 import { wakeNativeCommentList } from '~/utils/bewlyWidescreen/commentWake'
 import { COMMENT_TIME_SELECTOR, DANMAKU_SKELETON_CLASS, EMPTY_CLASS, selectors, SIDEBAR_HYDRATION_FAST_DURATION, SIDEBAR_HYDRATION_FAST_INTERVAL, SIDEBAR_HYDRATION_INTERVAL, SIDEBAR_HYDRATION_RECOVERY_INTERVAL } from '~/utils/bewlyWidescreen/constants'
 import { activateDanmakuTab, clearDanmakuActivation, isDanmakuPanelReady, syncDanmakuInputSource } from '~/utils/bewlyWidescreen/danmaku'
 import { syncDanmakuViews } from '~/utils/bewlyWidescreen/danmakuViews'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
-import { ensureAnchoredPlayer, schedulePlayerResizeSync, syncAuxiliaryControlGeometry, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
+import { ensureAnchoredPlayer, schedulePlayerResizeSync } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
+import { createRecommendationSkeleton } from '~/utils/bewlyWidescreen/loadingView'
 import { syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
 import { findCommentRoot, findMovable, findRetainedNode, isCommentRootUsable, isNativeCommentRequestPending, moveCommentRoot, moveMatchingNodes, moveNativeMusicPanel, moveNode, moveOrReplaceNode, movePlaylistControls, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
 import { clearEpisodeSectionMarker, markPgcRecommendations, placeRecommendAfterPlaylist, syncEpisodeSectionMarker, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
@@ -88,18 +89,14 @@ function fillOverviewInfo(currentState: BewlyWidescreenState) {
 
 function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadiness {
   ensureAnchoredPlayer(currentState)
-  syncActionAnimationTheme(currentState)
   const activeTab = currentState.activeTab
   const overviewReady = activeTab === 'overview'
     ? fillOverviewInfo(currentState)
     : currentState.hydratedTabs.has('overview')
   syncDanmakuInputSource(currentState)
   syncViewerCount(currentState)
-  syncControlsGlassGeometry(currentState)
   syncNativePlayerControlVisibility(currentState)
-  syncAuxiliaryControlGeometry(currentState)
-  if (!currentState.controlsLayoutReady)
-    schedulePlayerResizeSync(currentState)
+  schedulePlayerResizeSync(currentState)
 
   const existingComment = findCommentRoot(currentState.panels.comment)
   let commentFound = !!existingComment && isCommentRootUsable(existingComment)
@@ -295,21 +292,9 @@ function ensureLoadingPanel(panel: HTMLElement, label: string, kind: 'comment' |
   clearEmptyPanel(panel)
   const skeleton = createPanelEmpty('')
   skeleton.classList.add('bewly-widescreen-panel-skeleton')
-  skeleton.dataset.kind = kind
   skeleton.setAttribute('role', 'status')
   skeleton.setAttribute('aria-label', label)
-  for (let index = 0; index < 5; index++) {
-    const row = document.createElement('div')
-    row.className = 'bewly-widescreen-panel-skeleton__row'
-    row.setAttribute('aria-hidden', 'true')
-    for (const part of ['leading', 'content']) {
-      const block = document.createElement('span')
-      block.className = `bewly-widescreen-panel-skeleton__${part}`
-      block.setAttribute('data-bew-skeleton', '')
-      row.appendChild(block)
-    }
-    skeleton.appendChild(row)
-  }
+  skeleton.append(createRecommendationSkeleton())
   panel.appendChild(skeleton)
 }
 

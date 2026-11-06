@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 
 import { compileString } from 'sass'
 
+import { applyMotionPreference } from '../src/utils/reducedMotion'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
@@ -382,6 +383,8 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
   check('Motion: glass panel entry keeps material opaque and reverses from the painted frame', async () => {
     const { useGlassPanelMotion } = await import('../src/composables/useGlassPanelMotion')
     const previousMatchMedia = window.matchMedia
+    const preference = document.documentElement.dataset.bewMotion
+    applyMotionPreference(document.documentElement, 'full')
     window.matchMedia = () => ({ matches: false })
     const root = document.createElement('div')
     const panel = root.appendChild(document.createElement('section'))
@@ -449,6 +452,7 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
       records[3].finish()
       await flush()
       window.matchMedia = () => ({ matches: true })
+      applyMotionPreference(document.documentElement, 'reduce')
       hooks.onEnter(root, () => completed++)
       assert.equal(root.inert, false)
       assert.equal(records.length, 4, 'reduced motion resolves immediately')
@@ -459,6 +463,7 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
       scope.stop()
       root.remove()
       window.matchMedia = previousMatchMedia
+      applyMotionPreference(document.documentElement, preference)
     }
   })
 
