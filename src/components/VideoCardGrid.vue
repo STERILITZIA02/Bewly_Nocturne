@@ -17,14 +17,12 @@ import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { useLoadingRingPhase } from '~/composables/useLoadingRingPhase'
 import { uiPx, uiScale } from '~/composables/useUiScale'
 import { useUserRelations } from '~/composables/useUserRelations'
-import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
 import { VIDEO_CARD_COVER_ASPECT_RATIO, VIDEO_CARD_HORIZONTAL_COVER_MAX_WIDTH, VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 import { isLayoutEditing, vLayoutEditable } from '~/logic/layoutEdit'
 import { getAdaptiveGridColumnCount, getListGridColumnCount } from '~/utils/gridLayout'
-import emitter from '~/utils/mitt'
-import { getRemainingScroll, readViewportGeometry } from '~/utils/viewportGeometry'
+import { getRemainingScroll, invalidateViewportGeometry, readViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
 
 import SmoothLoading from './SmoothLoading.vue'
 
@@ -122,6 +120,8 @@ interface VideoCardGridProps<T = any> {
    * 生成唯一ID的函数（可选接收 index 参数以确保唯一性）
    */
   getItemKey: (item: T, index?: number) => string | number
+  /** A filtered projection can retain interaction state while its source still owns the item. */
+  hasItemKey?: (key: string | number) => boolean
 
   /**
    * 是否为骨架屏项（判断函数）
@@ -251,6 +251,9 @@ let detachGridSnapshot: (() => void) | undefined
 onBeforeUnmount(() => detachGridSnapshot?.())
 const mountedCards = new Map<string | number, { canRecycle?: boolean }>()
 const cardStates = new Map<string | number, VideoCardState>(restoredGrid?.cardStates.map(([key, state]) => [key, reactive(state)]))
+const videoTransformCache = new Map<string | number, VideoTransformCacheEntry>()
+const slots = useSlots()
+const forwardedSlotNames = () => Object.keys(slots).filter(name => name !== 'empty' && name !== 'afterCard')
 let layoutPinnedKeys = new Set<string | number>()
 watch(isLayoutEditing, (editing) => {
   layoutPinnedKeys = editing ? new Set(mountedCards.keys()) : new Set()
@@ -294,7 +297,7 @@ const initialSkeletonItems = computed(() => {
 
   return Array.from({ length: dynamicSkeletonCount.value }, (_, i) => ({
     _isSkeleton: true,
-    _skeletonId: `skeleton-initial-${i}`,
+    _skeletonId: `skeleton-${i}`,
   })) as T[]
 })
 
@@ -317,7 +320,7 @@ const loadingMoreSkeletonItems = computed(() => {
   const skeletonCount = minimumSkeletonCount + (remainder === 0 ? 0 : columns - remainder)
   return Array.from({ length: skeletonCount }, (_, i) => ({
     _isSkeleton: true,
-    _skeletonId: `skeleton-more-${i}`,
+    _skeletonId: `skeleton-${props.items.length + i}`,
   })) as T[]
 })
 
@@ -377,6 +380,9 @@ const supportsIntersectionObserver = typeof window !== 'undefined' && 'Intersect
 let intersectionObserver: IntersectionObserver | null = null
 let isGridActive = false
 let scrollListenersActive = false
+let releaseViewport: (() => void) | undefined
+let pendingGridWidth: number | undefined
+let completedLoad: { stayedInPreloadArea: boolean } | undefined
 
 function cleanupIntersectionObserver() {
   if (intersectionObserver) {
@@ -458,26 +464,42 @@ function checkShouldPreload(fromScroll = false) {
     triggerLoadMore()
 }
 
-// emitter 路径已在 App.vue 共享的视口帧内，直接复用该帧的快照
-function handleScroll() {
-  checkShouldPreload(true)
-}
-
-function handleResize() {
-  measureGridGeometry()
-  checkShouldPreload()
-}
-
 function setupScrollListeners() {
   if (scrollListenersActive)
     return
 
   scrollListenersActive = true
 
-  // Bewly 自己的页面都在内部滚动容器中，通过全局事件同步 scrollTop
-  emitter.on(OVERLAY_SCROLL_BAR_SCROLL, handleScroll)
+  const root = findScrollElement() ?? bewlyApp?.scrollViewportRef.value ?? document.scrollingElement as HTMLElement
+  releaseViewport = subscribeViewportFrame(root, (_geometry, reason) => {
+    if (reason === 'scroll') {
+      checkShouldPreload(true)
+      return
+    }
+    measureGridGeometry(pendingGridWidth)
+    pendingGridWidth = undefined
+    const completion = completedLoad
+    completedLoad = undefined
+    if (completion) {
+      if (isScrollAtBottom() || (completion.stayedInPreloadArea && props.showLoadingMoreSkeleton && isWithinPreloadDistance())) {
+        checkShouldPreload()
+        return
+      }
+      if (completion.stayedInPreloadArea) {
+        const missingItems = getMissingItemsInLastRow()
+        if (missingItems === 0 || missingItems > 2)
+          return
+      }
+    }
+    checkShouldPreload()
+  })
+}
 
-  window.addEventListener('resize', handleResize, { passive: true })
+function scheduleLayoutCheck() {
+  void nextTick(() => {
+    if (isGridActive)
+      invalidateViewportGeometry(findScrollElement() ?? bewlyApp?.scrollViewportRef.value ?? document.scrollingElement as HTMLElement)
+  })
 }
 
 function cleanupScrollListeners() {
@@ -485,12 +507,13 @@ function cleanupScrollListeners() {
     return
 
   scrollListenersActive = false
-  emitter.off(OVERLAY_SCROLL_BAR_SCROLL, handleScroll)
-  window.removeEventListener('resize', handleResize)
+  releaseViewport?.()
+  releaseViewport = undefined
+  completedLoad = undefined
 }
 
 function getRenderedColumnCount(): number {
-  const containerWidth = gridContainerRef.value?.clientWidth
+  const containerWidth = gridContainerWidth.value
     || (typeof window !== 'undefined' ? window.innerWidth : 0)
   return getCurrentColumnCount(props.gridLayout, containerWidth)
 }
@@ -531,32 +554,8 @@ watch(() => props.loading, (newLoading, oldLoading) => {
     const stayedInPreloadArea = reachedLoadMoreDuringLoading.value
     reachedLoadMoreDuringLoading.value = false
 
-    // 加载完成后，延迟检查是否需要继续加载
-    nextTick(() => {
-      // 用户可能在请求结束前刚好滚到底部。此时 sentinel 没有新的相交变化，
-      // 直接按滚动容器几何位置补触发，避免丢掉这次 loadMore。
-      if (isScrollAtBottom()) {
-        triggerLoadMore()
-        return
-      }
-
-      // 首页保留一页预加载缓冲。上一批结束后仍处于缓冲区时继续预取，
-      // 直到新内容把列表底部推出这一页范围。
-      if (stayedInPreloadArea && props.showLoadingMoreSkeleton && isWithinPreloadDistance()) {
-        checkShouldPreload()
-        return
-      }
-
-      // sentinel 在整个请求期间都处于相交状态时，IntersectionObserver 不会再次回调。
-      // 只在末行差 1-2 张卡片时主动补查，避免恢复无条件递归加载。
-      if (stayedInPreloadArea) {
-        const missingItems = getMissingItemsInLastRow()
-        if (missingItems === 0 || missingItems > 2)
-          return
-      }
-
-      checkShouldPreload()
-    })
+    completedLoad = { stayedInPreloadArea }
+    scheduleLayoutCheck()
   }
 })
 
@@ -584,9 +583,7 @@ watch(() => props.items.length, (newCount, oldCount) => {
   if (props.loading || reachedLoadMoreDuringLoading.value)
     return
 
-  nextTick(() => {
-    checkShouldPreload()
-  })
+  scheduleLayoutCheck()
 })
 
 // 监听 noMoreContent 重置（用户切换模式或刷新时）
@@ -603,9 +600,7 @@ watch(loadMoreSentinelRef, () => {
 
 watch(() => bewlyApp?.isHomeTabSwitching.value, (switching) => {
   if (!switching && isGridActive) {
-    nextTick(() => {
-      checkShouldPreload()
-    })
+    scheduleLayoutCheck()
   }
 })
 
@@ -622,7 +617,7 @@ function activateGrid() {
       return
 
     setupIntersectionObserver()
-    checkShouldPreload()
+    scheduleLayoutCheck()
   })
 }
 
@@ -652,7 +647,7 @@ onUnmounted(() => {
   cleanupGridResizeObserver()
   mountedCards.clear()
   cardStates.clear()
-  resetTransformCaches()
+  videoTransformCache.clear()
 })
 
 // 计算是否横向布局（根据 gridLayout 自动决定）
@@ -760,6 +755,7 @@ let gridResizeObserver: ResizeObserver | null = null
 function cleanupGridResizeObserver() {
   gridResizeObserver?.disconnect()
   gridResizeObserver = null
+  pendingGridWidth = undefined
 }
 
 function setupGridResizeObserver() {
@@ -777,9 +773,10 @@ function setupGridResizeObserver() {
 
   gridResizeObserver = new ResizeObserver((entries) => {
     const width = entries[0]?.contentRect.width
-    if (!width || Math.abs(width - gridContainerWidth.value) <= 0.5)
+    if (!width || (pendingGridWidth === undefined && Math.abs(width - gridContainerWidth.value) <= 0.5))
       return
-    measureGridGeometry(width)
+    pendingGridWidth = width
+    scheduleLayoutCheck()
   })
   gridResizeObserver.observe(container)
 }
@@ -806,6 +803,10 @@ function measureGridGeometry(width?: number) {
 
 watch(gridContainerRef, () => {
   cachedScrollElement = undefined
+  if (isGridActive) {
+    cleanupScrollListeners()
+    setupScrollListeners()
+  }
   setupGridResizeObserver()
 })
 
@@ -817,6 +818,7 @@ interface VideoCardRenderItem {
   skeleton: boolean
   type: 'rcmd' | 'appRcmd' | 'bangumi' | 'common'
   video: Video | undefined
+  record: VideoTransformCacheEntry
 }
 
 // 辅助函数：从 video 对象推断类型
@@ -844,42 +846,12 @@ function getGeneratedSkeletonId(item: unknown): string | number | undefined {
 function createRenderItem(item: T, index: number): VideoCardRenderItem {
   const key = getUniqueKey(item, index)
   const fallbackType = props.videoType || 'common'
-
-  // 自动生成骨架屏
-  if (isGeneratedSkeleton(item)) {
-    return {
-      key,
-      index,
-      item,
-      skeleton: true,
-      type: fallbackType,
-      video: undefined,
-    }
-  }
-
-  // 外部骨架判断（命中时不做 transform）
-  if (props.isSkeletonItem) {
-    try {
-      if (props.isSkeletonItem(item)) {
-        return {
-          key,
-          index,
-          item,
-          skeleton: true,
-          type: fallbackType,
-          video: undefined,
-        }
-      }
-    }
-    catch {
-      // ignore
-    }
-  }
-
-  const video = getTransformedVideo(item, key)
-  const skeleton = !video || (video.id == null && !video.bvid)
+  const placeholder = isGeneratedSkeleton(item) || props.isSkeletonItem?.(item) === true
+  const record = getCardRecord(item, key, placeholder)
+  const video = record.video
+  const skeleton = placeholder || !video || (video.id == null && !video.bvid)
   const type = skeleton ? fallbackType : inferVideoTypeFromVideo(video)
-  return { key, index, item, skeleton, type, video }
+  return { key, index, item, skeleton, type, video, record }
 }
 
 const cardWindowRoot = computed(() => {
@@ -888,8 +860,19 @@ const cardWindowRoot = computed(() => {
   return findScrollElement() ?? document.scrollingElement as HTMLElement | null
 })
 const recycleCards = computed(() => Boolean(tabState?.enabled) || props.items.length > CARD_WINDOW_THRESHOLD)
+const sharedCardProps = computed(() => ({
+  showPreview: props.showPreview,
+  showWatchLater: props.showWatchLater,
+  horizontal: isHorizontal.value,
+  contextMenu: props.contextMenu,
+  getMenuExtraGroups: getCardMenuExtraGroups,
+  hideAuthor: props.hideAuthor,
+  disableContentVisibility: props.disableContentVisibility || recycleCards.value,
+  isFollowingPage: props.isFollowingPage,
+  coverTopLeftAlwaysVisible: props.coverTopLeftAlwaysVisible,
+}))
 const cardColumns = computed(() => getCurrentColumnCount(props.gridLayout, gridContainerWidth.value || window.innerWidth))
-watch([isHorizontal, () => props.gridLayout], () => nextTick(() => measureGridGeometry()), { flush: 'post' })
+watch([isHorizontal, () => props.gridLayout], scheduleLayoutCheck, { flush: 'post' })
 const cardKeys = computed(() => displayItems.value.map(getUniqueKey))
 const estimatedCardHeight = computed(() => {
   const columns = cardColumns.value
@@ -1013,25 +996,19 @@ function setMountedCard(key: string | number, component: unknown) {
 watch(cardKeys, (keys) => {
   const validKeys = new Set(keys)
   for (const key of cardStates.keys()) {
-    if (!validKeys.has(key))
+    if (!(props.hasItemKey?.(key) ?? validKeys.has(key)))
       cardStates.delete(key)
   }
 })
 
-interface VideoTransformCacheEntry<T = unknown> {
+interface VideoTransformCacheEntry {
   item: T
   video: Video | undefined
+  transform: typeof props.transformItem | undefined
+  setElement: (element: unknown) => void
+  setMounted: (component: unknown) => void
+  click: (event: MouseEvent) => void
 }
-
-let videoTransformCache = new Map<string | number, VideoTransformCacheEntry<T>>()
-
-function resetTransformCaches() {
-  videoTransformCache = new Map()
-}
-
-watch(() => props.transformItem, () => {
-  resetTransformCaches()
-})
 
 watch(
   () => renderItems.value.flatMap(item => item.card ? [item.card.key] : []),
@@ -1046,26 +1023,26 @@ watch(
   { flush: 'post' },
 )
 
-function getTransformedVideo(item: T, key: string | number): Video | undefined {
-  if (!item)
-    return undefined
-
-  // 检查是否为骨架屏占位，骨架屏不需要转换
-  if (isGeneratedSkeleton(item))
-    return undefined
-
-  try {
-    const cached = videoTransformCache.get(key)
-    if (cached && cached.item === item)
-      return cached.video
-
-    const video = props.transformItem(item)
-    videoTransformCache.set(key, { item, video })
-    return video
+function getCardRecord(item: T, key: string | number, placeholder: boolean): VideoTransformCacheEntry {
+  let record = videoTransformCache.get(key)
+  const unchanged = !placeholder && record?.item === item && record?.transform === props.transformItem
+  if (!record) {
+    const created: VideoTransformCacheEntry = {
+      item,
+      video: undefined,
+      transform: props.transformItem,
+      setElement: element => cardWindow.setElement(key, element),
+      setMounted: component => setMountedCard(key, component),
+      click: event => props.cardClickHandler?.(created.item, event),
+    }
+    videoTransformCache.set(key, record = created)
   }
-  catch {
-    return undefined
+  if (!unchanged) {
+    record.item = item
+    record.transform = placeholder ? undefined : props.transformItem
+    record.video = item && !placeholder ? props.transformItem(item) : undefined
   }
+  return record
 }
 
 // 处理登录
@@ -1149,7 +1126,7 @@ function getUniqueKey(item: T, index: number): string | number {
       <div
         v-for="renderItem in renderItems"
         :key="renderItem.key"
-        :ref="(element) => renderItem.card && cardWindow.setElement(renderItem.card.key, element)"
+        :ref="renderItem.card?.record.setElement"
         :class="renderItem.card ? 'video-card-slot' : 'video-card-spacer'"
         :data-motion-key="renderItem.card && layoutMotion ? renderItem.card.key : undefined"
         :style="renderItem.card ? undefined : { height: `${String(renderItem.height)}px` }"
@@ -1161,26 +1138,30 @@ function getUniqueKey(item: T, index: number): string | number {
           :horizontal="isHorizontal"
         />
         <VideoCard
-          v-else-if="renderItem.card"
-          :ref="(component: unknown) => setMountedCard(renderItem.card!.key, component)"
+          v-else-if="renderItem.card && !forwardedSlotNames().length"
+          :ref="renderItem.card.record.setMounted"
+          v-bind="sharedCardProps"
           :persistent-state="getCardState(renderItem.card.key)"
           :data-index="renderItem.card.index"
           :skeleton="renderItem.card.skeleton"
           :type="renderItem.card.type"
           :video="renderItem.card.video"
-          :show-preview="showPreview"
-          :show-watch-later="showWatchLater"
-          :horizontal="isHorizontal"
-          :context-menu="contextMenu"
           :menu-item="renderItem.card.item"
-          :get-menu-extra-groups="getCardMenuExtraGroups"
-          :hide-author="hideAuthor"
-          :disable-content-visibility="props.disableContentVisibility || recycleCards"
-          :is-following-page="props.isFollowingPage"
-          :custom-click-handler="props.cardClickHandler ? (event: MouseEvent) => props.cardClickHandler?.(renderItem.card!.item, event) : undefined"
-          :cover-top-left-always-visible="props.coverTopLeftAlwaysVisible"
+          :custom-click-handler="props.cardClickHandler ? renderItem.card.record.click : undefined"
+        />
+        <VideoCard
+          v-else-if="renderItem.card"
+          :ref="renderItem.card.record.setMounted"
+          v-bind="sharedCardProps"
+          :persistent-state="getCardState(renderItem.card.key)"
+          :data-index="renderItem.card.index"
+          :skeleton="renderItem.card.skeleton"
+          :type="renderItem.card.type"
+          :video="renderItem.card.video"
+          :menu-item="renderItem.card.item"
+          :custom-click-handler="props.cardClickHandler ? renderItem.card.record.click : undefined"
         >
-          <template v-for="(_, name) in $slots" #[name]>
+          <template v-for="name in forwardedSlotNames()" #[name]>
             <slot :name="name" :item="renderItem.card.item" />
           </template>
         </VideoCard>

@@ -270,7 +270,7 @@ defineExpose({
         </button>
       </div>
 
-      <TransitionGroup name="list" v-bind="retiringListTransition">
+      <TransitionGroup name="list" move-class="moments-pop-no-move" v-bind="retiringListTransition">
         <article
           v-for="(moment, index) in topBarStore.moments"
           :key="moment.id_str"
@@ -360,6 +360,10 @@ defineExpose({
 <style lang="scss" scoped>
 @use "../../../../styles/truncateFade";
 @use "../../styles/popoverCards";
+
+.moments-pop-no-move {
+  transition: none;
+}
 
 .moments-pop {
   --bew-popover-media-width: 96px;

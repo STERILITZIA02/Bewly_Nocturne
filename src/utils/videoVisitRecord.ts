@@ -39,7 +39,7 @@ export type VideoHistoryCommand
     | { type: 'record', epoch: string, baseRevision: number, operationId: string, edits: VideoHistoryEdit[] }
 export type VideoHistoryUpdate
   = | { type: 'snapshot', snapshot: VideoHistorySnapshot, previousEpoch?: string }
-    | { type: 'patch', epoch: string, baseRevision: number, revision: number, records: VideoVisitHistory, removed: string[], deleted: Record<string, number> }
+    | { type: 'patch', epoch: string, baseRevision: number, revision: number, records: VideoVisitHistory, removed: string[], deleted: Record<string, number>, operationId?: string }
 
 function positiveInteger(value: unknown): number | undefined {
   const number = Number(value)
@@ -108,7 +108,10 @@ export function pruneVideoVisitHistory(value: Record<string, unknown>): VideoVis
 }
 
 export function limitVideoVisitHistory(records: VideoVisitHistory): VideoVisitHistory {
-  return Object.fromEntries(Object.entries(records).sort(([, left], [, right]) => right.visitedAt - left.visitedAt)
+  const entries = Object.entries(records)
+  if (entries.length <= VIDEO_VISIT_HISTORY_MAX_ENTRIES)
+    return records
+  return Object.fromEntries(entries.sort(([, left], [, right]) => right.visitedAt - left.visitedAt)
     .slice(0, VIDEO_VISIT_HISTORY_MAX_ENTRIES))
 }
 
@@ -119,7 +122,9 @@ export function mergeVideoVisitRecord(previous: VideoVisitRecord | undefined, in
   return { ...previous, ...incoming, visitedAt: Math.max(previous.visitedAt, incoming.visitedAt), playedAt: latestPlayback.playedAt, progress: latestPlayback.progress, duration: latestPlayback.duration, completed: latestPlayback.completed }
 }
 
-export function applyVideoHistoryEdits(records: VideoVisitHistory, edits: readonly VideoHistoryEdit[]): VideoVisitHistory {
+export function applyVideoHistoryEdits(records: VideoVisitHistory, edits: readonly VideoHistoryEdit[], changed?: VideoVisitHistory): VideoVisitHistory {
+  if (!edits.length)
+    return records
   const next = { ...records }
   for (const edit of edits) {
     const normalized = normalizeVideoVisitRecord({ ...edit.record, ...edit.identity })
@@ -128,8 +133,12 @@ export function applyVideoHistoryEdits(records: VideoVisitHistory, edits: readon
     const part = videoHistoryPartKey(edit.identity)
     for (const key of videoHistoryBaseKeys(edit.identity)) {
       next[key] = mergeVideoVisitRecord(next[key], { visitedAt: normalized.visitedAt, aid: normalized.aid, bvid: normalized.bvid, epid: normalized.epid })
+      if (changed)
+        changed[key] = next[key]
       if (part)
         next[`${key}|${part}`] = mergeVideoVisitRecord(next[`${key}|${part}`], normalized)
+      if (changed && part)
+        changed[`${key}|${part}`] = next[`${key}|${part}`]
     }
   }
   return next
@@ -139,30 +148,58 @@ export type VideoWatchState
   = | { status: 'browsed' }
     | { status: 'played', progress?: number, duration?: number, completed: boolean }
 
-/** Build once per delivered batch; card queries never scan the whole history. */
+/** Only bases touched by a patch rebuild their part aliases and latest-played index. */
 export function createVideoHistoryIndex(records: VideoVisitHistory) {
   const byPart = new Map<string, VideoVisitRecord>()
   const latest = new Map<string, VideoVisitRecord>()
-  for (const [key, record] of Object.entries(records)) {
-    const base = key.split('|')[0]
-    byPart.set(key, record)
-    if (record.page)
-      byPart.set(`${base}|p:${record.page}`, record)
-    if (record.playedAt && (record.playedAt > (latest.get(base)?.playedAt ?? 0)))
-      latest.set(base, record)
+  const groups = new Map<string, Map<string, VideoVisitRecord>>()
+  function update(changed: VideoVisitHistory, removed: readonly string[] = []) {
+    const bases = new Set([...Object.keys(changed), ...removed].map(key => key.split('|')[0]))
+    for (const base of bases) {
+      for (const [key, record] of groups.get(base) ?? []) {
+        byPart.delete(key)
+        if (record.page)
+          byPart.delete(`${base}|p:${record.page}`)
+      }
+      latest.delete(base)
+    }
+    for (const key of removed)
+      groups.get(key.split('|')[0])?.delete(key)
+    for (const [key, record] of Object.entries(changed)) {
+      const base = key.split('|')[0]
+      let group = groups.get(base)
+      if (!group)
+        groups.set(base, group = new Map())
+      group.set(key, record)
+    }
+    for (const base of bases) {
+      const group = groups.get(base)
+      if (!group?.size) {
+        groups.delete(base)
+        continue
+      }
+      for (const [key, record] of group) {
+        byPart.set(key, record)
+        if (record.page)
+          byPart.set(`${base}|p:${record.page}`, record)
+        if (record.playedAt && record.playedAt > (latest.get(base)?.playedAt ?? 0))
+          latest.set(base, record)
+      }
+    }
   }
-  return (identity: VideoIdentity): VideoWatchState | undefined => {
+  update(records)
+  const query = (identity: VideoIdentity): VideoWatchState | undefined => {
     const keys = videoHistoryBaseKeys(identity)
     const part = videoHistoryPartKey(identity)
     const candidates = keys.map((key) => {
       if (part)
         return byPart.get(`${key}|${part}`)
-      const exact = latest.get(key) ?? records[key]
+      const exact = latest.get(key) ?? byPart.get(key)
       if (exact)
         return exact
       // The old timestamp-only format lowercased BV payloads. Preserve only its
       // browsing hint; new playback identities retain case-sensitive BV data.
-      const legacy = key.startsWith('bv:') ? records[key.toLowerCase()] : undefined
+      const legacy = key.startsWith('bv:') ? byPart.get(key.toLowerCase()) : undefined
       return legacy && !legacy.playedAt ? legacy : undefined
     }).filter((record): record is VideoVisitRecord => !!record)
     const record = candidates.sort((a, b) => (b.playedAt ?? b.visitedAt) - (a.playedAt ?? a.visitedAt))[0]
@@ -173,4 +210,5 @@ export function createVideoHistoryIndex(records: VideoVisitHistory) {
     const precise = Boolean(part || record.pageCount === 1 || identity.epid)
     return { status: 'played', completed: precise && record.completed === true, ...(precise && record.progress !== undefined ? { progress: record.progress, duration: record.duration } : {}) }
   }
+  return Object.assign(query, { update })
 }

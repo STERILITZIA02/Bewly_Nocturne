@@ -88,10 +88,11 @@ export interface NativePlaybackUnit {
 
 export interface NativeMediaSnapshot {
   unit?: NativePlaybackUnit
-  btr: { installed: boolean, ownsMedia: boolean }
+  listenOwner?: number
+  btr: { installed: boolean, ownsMedia: boolean, listenHandoffVersion: number }
 }
 
-function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quality' | 'playback' | 'switchPlayback' | 'listen' | 'listenReturn' | 'listenResume', value: unknown = true) {
+function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quality' | 'playback' | 'switchPlayback' | 'listen' | 'listenReturn' | 'listenResume' | 'listenRelease' | 'listenMediaSession' | 'adjustVolume', value: unknown = true) {
   const channelId = getPageBridgeChannelId()
   const href = location.href
   if (!channelId || !node.isConnected)
@@ -134,7 +135,7 @@ export function switchNativePlaybackVisit(video: HTMLElement, href: string, unit
 }
 
 /** Source URLs are intentionally absent: MSE replacement does not change a unit. */
-export function readNativeMediaSnapshot(video: HTMLVideoElement): NativeMediaSnapshot | undefined {
+export function readNativeMediaSnapshot(video: HTMLElement): NativeMediaSnapshot | undefined {
   const data = readComponentSnapshot(video, 'playback')
   const btr = data?.btr as NativeMediaSnapshot['btr'] | undefined
   const unit = data?.unit as NativePlaybackUnit | undefined
@@ -146,20 +147,35 @@ export function readNativeMediaSnapshot(video: HTMLVideoElement): NativeMediaSna
     || [unit.episodeId, unit.seasonId].some(id => id !== undefined && (!Number.isSafeInteger(id) || id <= 0)))) {
     return
   }
-  return { unit, btr }
+  return { unit, btr, listenOwner: typeof data?.listenOwner === 'number' && Number.isSafeInteger(data.listenOwner) && data.listenOwner > 0 ? data.listenOwner : undefined }
 }
 
 export function getNativePlaybackUnitKey(unit: NativePlaybackUnit) {
   return `${unit.aid}:${unit.cid}:${unit.episodeId ?? ''}`
 }
 
-export function suspendNativePlayback(video: HTMLElement, unit: NativePlaybackUnit) {
-  const value = readComponentSnapshot(video, 'listen', getNativePlaybackUnitKey(unit))?.suspended
-  return value === 'interrupted' ? value : value === true
+export interface ListenSuspendRequest { unit: string, gate: number, previousGate?: number }
+
+export function suspendNativePlayback(video: HTMLElement, unit: NativePlaybackUnit, gate: number, previousGate?: number) {
+  const value = readComponentSnapshot(video, 'listen', { unit: getNativePlaybackUnitKey(unit), gate, previousGate })?.suspended
+  return value === 'interrupted' || value === 'btr-companion-required' ? value : value === true
+}
+
+export function releaseNativeListen(gate: number) {
+  return readComponentSnapshot(document.documentElement, 'listenRelease', gate)?.released === true
+}
+
+export function claimNativeMediaSession() {
+  const token = readComponentSnapshot(document.documentElement, 'listenMediaSession')?.token
+  return () => {
+    if (typeof token === 'number')
+      readComponentSnapshot(document.documentElement, 'listenMediaSession', token)
+  }
 }
 
 export interface ListenReturnRequest {
   unit: string
+  gate?: number
   time: number
   rate: number
   playing: boolean
@@ -170,6 +186,12 @@ export interface ListenReturnRequest {
 
 export function applyNativeListenReturn(video: HTMLElement, request: ListenReturnRequest) {
   return readComponentSnapshot(video, 'listenReturn', request)?.applied === true
+}
+
+/** MAIN confirms the native media owner; BTR uses that same element's volume. */
+export function adjustNativeVolume(video: HTMLElement, delta: number): number | undefined {
+  const volume = readComponentSnapshot(video, 'adjustVolume', delta)?.volume
+  return typeof volume === 'number' && Number.isFinite(volume) && volume >= 0 && volume <= 1 ? volume : undefined
 }
 
 /** Reconnects the suspended native stream in place; false when only a reload can. */

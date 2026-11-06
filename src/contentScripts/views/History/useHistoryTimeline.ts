@@ -7,6 +7,7 @@ import type { HistorySearchResult } from '~/models/video/historySearch'
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import type { AccountId } from '~/utils/accountScope'
 import type api from '~/utils/api'
+import { historyReadKey, readHistoryCursor } from '~/utils/historyCursor'
 
 import type { HistoryContentFilter, HistorySortOrder } from './historyFilters'
 import { createHistoryFilters, hasHistoryFilters, historyRangeBounds, matchesHistoryFilters } from './historyFilters'
@@ -125,7 +126,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
         if (response.code !== 0 || !Array.isArray(response.data?.list))
           throw response
         const items = response.data.list
-        const keys = items.map(item => `${item.history.business}:${item.history.oid}:${item.view_at}`)
+        const keys = items.map(historyReadKey)
         const newSourceRecords = keys.filter(key => !sourceKeys.has(key)).length
         let followingCursor = nextCursor
         let stalled = items.length > 0 && newSourceRecords === 0
@@ -137,20 +138,17 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
           stalled ||= !items.length && !ended
         }
         else {
-          const value = (response as HistoryResult).data.cursor
-          if (!value || !Number.isSafeInteger(value.max) || !Number.isFinite(value.view_at) || typeof value.business !== 'string')
-            throw new Error('History cursor unavailable')
-          followingCursor = { max: value.max, view_at: value.view_at, business: value.business }
-          ended = (!items.length && value.max === 0 && value.view_at === 0) || Boolean(bounds && value.view_at < bounds.start)
-          const key = JSON.stringify(followingCursor)
-          stalled ||= !ended && (key === JSON.stringify(nextCursor) || cursors.has(key) || value.view_at <= 0)
+          const next = readHistoryCursor((response as HistoryResult).data.cursor, nextCursor, cursors, !items.length, bounds?.start)
+          followingCursor = next.cursor
+          ended = next.ended
+          stalled ||= next.stalled
         }
         if (stalled) {
           requestStalled.value = true
           throw new Error('History pagination stalled')
         }
         const added = items.filter((item) => {
-          const key = `${item.history.business}:${item.history.oid}:${item.view_at}`
+          const key = historyReadKey(item)
           if (sourceKeys.has(key))
             return false
           sourceKeys.add(key)

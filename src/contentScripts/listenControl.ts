@@ -16,7 +16,7 @@ import { createLoadingRingElement } from '~/utils/loadingRing'
 import { getUserID } from '~/utils/main'
 import { sendMessage } from '~/utils/messaging'
 import { getPlayerRoot, getVideoElement, isPlayerAdvertisement } from '~/utils/playerMedia'
-import { getNativePlaybackUnitKey, readNativeMediaSnapshot, resumeNativeListen, suspendNativePlayback, switchNativePlaybackVisit, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
+import { getNativePlaybackUnitKey, readNativeMediaSnapshot, releaseNativeListen, resumeNativeListen, suspendNativePlayback, switchNativePlaybackVisit, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
 
 import { prepareListenAudio } from './listenAudio'
 import { bindListenNativeBar } from './listenNativeBar'
@@ -41,7 +41,7 @@ export function setupListenControl(onLayoutReady?: () => void) {
   button.append(iconBox, createPlayerControlTooltip(''))
 
   let state: ListenSession | undefined
-  let pending: AbortController | undefined
+  let pending: (AbortController & { finished: Promise<void> }) | undefined
   let media: AbortController | undefined
   let playingAudio: HTMLAudioElement | undefined
   let masked: HTMLElement | null = null
@@ -103,6 +103,7 @@ export function setupListenControl(onLayoutReady?: () => void) {
         })
         ownerChanges.observe(root, { attributes: true, subtree: true, attributeFilter: ['src', 'data-btr-mse-active'] })
         onLayoutReady?.()
+        checkNativeUnit()
       }
     }
     const wide = state ? session.current : null
@@ -145,36 +146,48 @@ export function setupListenControl(onLayoutReady?: () => void) {
     publish()
   }
   function stop(keepCheckpoint = false, releasedGate?: number) {
+    const previous = state
+    const native = suspendedNative ?? getVideoElement()
+    const nativeGate = (native && readNativeMediaSnapshot(native)?.listenOwner) ?? previous?.gate
     pending?.abort()
     pending = undefined
     media?.abort()
     media = undefined
     playingAudio = undefined
-    const previous = state
     state = undefined
     suspendedNative = undefined
     failed = false
     place()
     if (!keepCheckpoint) {
-      if (previous?.gate && previous.gate !== releasedGate)
-        void sendMessage(LISTEN_RELEASE, previous.gate).catch(() => {})
+      if (previous?.gate && previous.gate !== releasedGate) {
+        void sendMessage(LISTEN_RELEASE, previous.gate).then(() => {
+          if (nativeGate)
+            releaseNativeListen(nativeGate)
+        }).catch(() => {})
+      }
     }
   }
   async function returnVideo() {
     if (!state || leaving)
       return
     leaving = true
-    pending?.abort()
-    save()
     const previous = state
-    const gate = previous.gate
     try {
+      const preparing = pending
+      preparing?.abort()
+      await preparing?.finished
+      if (state !== previous || !matchesListenUnit(location.href, previous.unit))
+        return
+      save()
+      const gate = previous.gate
       await sendMessage(LISTEN_RELEASE, gate)
       if (state !== previous || !matchesListenUnit(location.href, previous.unit))
         return
       // Read before stopping: ending the audio pauses it.
+      const video = getVideoElement()
       const intent = {
         unit: getNativePlaybackUnitKey(previous.unit),
+        gate: (video && readNativeMediaSnapshot(video)?.listenOwner) ?? gate,
         time: previous.time,
         playing: previous.playing,
         muted: previous.muted,
@@ -183,23 +196,21 @@ export function setupListenControl(onLayoutReady?: () => void) {
         bind: true,
       }
       const snapshot = { ...previous }
-      stop(false, gate)
       // The page stays as it is. A suspended native stream reconnects in place;
       // one with no source left (BTR released it, or the page was reloaded
       // mid-listen) is reloaded by the player's own in-page switch, and the
-      // saved return restores time, speed, volume and playing on it. Only a
-      // player that cannot switch reloads the page at the listened position.
-      const video = getVideoElement()
-      if (video && resumeNativeListen(video, intent))
-        return
-      const url = returnVideoUrl(snapshot)
-      saveListenReturn(snapshot)
-      const switched = video && switchNativePlaybackVisit(video, url, snapshot.unit)
-      if (switched && switched !== 'needs-unit') {
-        restoreListenReturn(lifecycle.signal)
-        return
+      // saved return restores time, speed, volume and playing on it.
+      if (!video)
+        throw new Error('Native playback unavailable')
+      if (!resumeNativeListen(video, intent)) {
+        const switched = switchNativePlaybackVisit(video, returnVideoUrl(snapshot), snapshot.unit)
+        if (!switched || switched === 'needs-unit')
+          throw new Error('Native playback could not resume')
+        releaseNativeListen(intent.gate)
       }
-      location.replace(url)
+      stop(false, gate)
+      saveListenReturn(snapshot)
+      restoreListenReturn(lifecycle.signal)
     }
     catch { fail() }
     finally { leaving = false }
@@ -212,7 +223,14 @@ export function setupListenControl(onLayoutReady?: () => void) {
       return
     }
     const original = getVideoElement()
-    const unit = saved?.unit ?? (original && readNativeMediaSnapshot(original)?.unit)
+    const originalSnapshot = original && readNativeMediaSnapshot(original)
+    const unit = saved?.unit ?? originalSnapshot?.unit
+    if (originalSnapshot?.btr.installed && originalSnapshot.btr.listenHandoffVersion !== 1) {
+      useToast().info(t('widescreen.listen_btr_companion_required'))
+      if (saved)
+        fail()
+      return
+    }
     if (!unit || !matchesListenUnit(location.href, unit) || (!saved && (!original || isPlayerAdvertisement(original)))) {
       useToast().info(t('widescreen.listen_not_ready'))
       return
@@ -228,7 +246,9 @@ export function setupListenControl(onLayoutReady?: () => void) {
       muted: false,
     }
     const account = getUserID()
-    const attempt = new AbortController()
+    let finish!: () => void
+    const finished = new Promise<void>(resolve => finish = resolve)
+    const attempt = Object.assign(new AbortController(), { finished })
     const stopNavigation = onRouteChange(() => {
       if (!matchesListenUnit(location.href, unit))
         attempt.abort()
@@ -237,6 +257,7 @@ export function setupListenControl(onLayoutReady?: () => void) {
     setBusy(true)
     let gate: number | undefined
     let prepared: ReturnType<typeof prepareListenAudio> | undefined
+    let handoffMedia: HTMLElement | undefined
     const isCurrent = () => !attempt.signal.aborted && !unloading && account === getUserID() && matchesListenUnit(location.href, unit)
     try {
       const probe = document.createElement('audio')
@@ -252,7 +273,7 @@ export function setupListenControl(onLayoutReady?: () => void) {
       // A fresh grant comes before preloading: a restored session can have
       // expired CDN signatures still pinned in its previous network rules.
       if (saved) {
-        gate = await sendMessage(LISTEN_GATE, { unit, sources })
+        gate = await sendMessage(LISTEN_GATE, { unit, sources, state: saved })
         if (!gate || !isCurrent())
           throw new Error('Listening grant unavailable')
         candidate.gate = gate
@@ -271,8 +292,8 @@ export function setupListenControl(onLayoutReady?: () => void) {
         if (!gate || !isCurrent() || prepared.exhausted)
           throw new Error('Listening grant unavailable')
         const video = getVideoElement()
-        const current = video && readNativeMediaSnapshot(video)?.unit
-        if (!video || !current || getNativePlaybackUnitKey(current) !== getNativePlaybackUnitKey(unit) || isPlayerAdvertisement(video)) {
+        const current = video && readNativeMediaSnapshot(video)
+        if (!video || !current?.unit || getNativePlaybackUnitKey(current.unit) !== getNativePlaybackUnitKey(unit) || isPlayerAdvertisement(video)) {
           useToast().info(t('widescreen.listen_not_ready'))
           return
         }
@@ -282,30 +303,31 @@ export function setupListenControl(onLayoutReady?: () => void) {
         candidate.volume = video.volume
         candidate.muted = video.muted
         candidate.gate = gate
-        const suspended = suspendNativePlayback(video, unit)
-        if (suspended === 'interrupted') {
-          await sendMessage(LISTEN_RELEASE, gate)
-          if (isCurrent()) {
-            saveListenReturn(candidate)
-            location.replace(returnVideoUrl(candidate))
-          }
-          return
-        }
-        if (!suspended)
+        const suspended = suspendNativePlayback(video, unit, gate, current.listenOwner)
+        if (suspended === true || suspended === 'interrupted')
+          handoffMedia = video
+        if (suspended !== true)
           throw new Error('Native player could not release its source')
         suspendedNative = video
       }
-      else if (original && readNativeMediaSnapshot(original)?.unit && suspendNativePlayback(original, unit) === true) {
-        suspendedNative = original
+      else {
+        const suspended = original && suspendNativePlayback(original, unit, gate!, originalSnapshot?.listenOwner)
+        if (original && (suspended === true || suspended === 'interrupted'))
+          handoffMedia = original
+        if (suspended !== true)
+          throw new Error('Native player could not renew its listening owner')
+        suspendedNative = original!
       }
+      if (!isCurrent())
+        return
       candidate.gate = gate!
       state = candidate
       media?.abort()
       media = attempt
       playingAudio = prepared.audio
       failed = false
-      place()
       prepared.commit()
+      place()
       save()
       for (const event of ['pause', 'seeked', 'ended'])
         playingAudio.addEventListener(event, save, { signal: attempt.signal })
@@ -326,12 +348,22 @@ export function setupListenControl(onLayoutReady?: () => void) {
       stopNavigation()
       if (media !== attempt)
         attempt.abort()
-      if (gate && state?.gate !== gate)
-        void sendMessage(LISTEN_RELEASE, gate).catch(() => {})
+      if (gate && state?.gate !== gate) {
+        if (unloading && saved) {
+          await sendMessage(LISTEN_SAVE, { ...saved, gate }).catch(() => {})
+        }
+        else {
+          await sendMessage(LISTEN_RELEASE, gate).catch(() => {})
+          if (handoffMedia && matchesListenUnit(location.href, unit)) {
+            resumeNativeListen(handoffMedia, { unit: getNativePlaybackUnitKey(unit), gate, time: candidate.time, playing: candidate.playing, rate: candidate.rate, volume: candidate.volume, muted: candidate.muted, bind: true })
+          }
+        }
+      }
       if (pending === attempt) {
         pending = undefined
         setBusy(false)
       }
+      finish()
     }
   }
   function activate() {
@@ -396,7 +428,7 @@ export function setupListenControl(onLayoutReady?: () => void) {
     if (getNativePlaybackUnitKey(snapshot.unit) !== getNativePlaybackUnitKey(state.unit)) {
       stop()
     }
-    else if ((video !== suspendedNative || snapshot.btr.ownsMedia) && suspendNativePlayback(video, state.unit) === true) {
+    else if ((video !== suspendedNative || snapshot.btr.ownsMedia) && suspendNativePlayback(video, state.unit, state.gate, snapshot.listenOwner) === true) {
       suspendedNative = video
     }
   }

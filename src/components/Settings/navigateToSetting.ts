@@ -51,6 +51,7 @@ export async function navigateToSetting(options: {
     return await withRequestDeadline(async (signal) => {
       while (!signal.aborted && root.isConnected) {
         const target = await new Promise<HTMLElement>((resolve, reject) => {
+          let expanded: HTMLElement | undefined
           const observer = new MutationObserver(check)
           function cleanup() {
             observer.disconnect()
@@ -63,16 +64,23 @@ export async function navigateToSetting(options: {
           function check() {
             const element = options.find()
             if (element && root.contains(element) && !element.closest('.page-fade-leave-active')) {
-              cleanup()
-              resolve(element)
+              if (expanded !== element) {
+                expanded = element
+                expand(element, root)
+              }
+              // A group commits its content after its own control motion. The
+              // target can exist inside v-show long before it has a layout box.
+              if (element.getClientRects().length) {
+                cleanup()
+                resolve(element)
+              }
             }
           }
-          observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'data-settings-title', 'data-setting-id'] })
+          observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'aria-expanded', 'data-settings-title', 'data-setting-id'] })
           signal.addEventListener('abort', abort, { once: true })
           check()
         })
         signal.throwIfAborted()
-        expand(target, root)
         await nextTick()
         // The expansion's own transitions are sampled below with the rest.
         await nextFrame(signal)

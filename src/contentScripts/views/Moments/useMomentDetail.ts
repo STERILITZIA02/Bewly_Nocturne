@@ -359,20 +359,15 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
     syncDetailFrameViewport()
     void focusDetailIframe(iframe)
 
-    // 与抽屉一致：同域时去掉顶栏占位，并保证视频/直播页可滚动
+    // The document or opus split panes own scrolling; do not create a second body scroller.
     const win = iframe?.contentWindow
     if (win) {
       try {
         const doc = win.document
         if (doc) {
           doc.documentElement.classList.add('remove-top-bar-without-placeholder')
-          doc.documentElement.style.setProperty('overflow-x', 'hidden', 'important')
-          doc.documentElement.style.setProperty('overflow-y', 'auto', 'important')
-          if (doc.body) {
-            doc.body.style.setProperty('overflow-x', 'hidden', 'important')
-            doc.body.style.setProperty('overflow-y', 'auto', 'important')
-            doc.body.style.setProperty('height', 'auto', 'important')
-          }
+          doc.documentElement.style.setProperty('overscroll-behavior', 'contain', 'important')
+          doc.body?.style.setProperty('overscroll-behavior', 'contain', 'important')
         }
       }
       catch {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 
 import { JSDOM } from 'jsdom'
 
+import { historyResponse, historySearchResponse } from './fixtures/historyResponses'
 import { loadSourceModule } from './sourceModuleHarness'
 
 function deferred() {
@@ -277,11 +278,11 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
         reads.push(['history', view_at])
         if (reads.length === 1)
           await initialRead.promise
-        return { code: 0, data: { list: records.filter(item => !view_at || item.view_at < view_at).slice(0, 20) } }
+        return historyResponse(records.filter(item => !view_at || item.view_at < view_at).slice(0, 20))
       },
       searchHistoryList: async (options) => {
         reads.push(['search', options.keyword, options.pn])
-        return { code: 0, data: { list: [records[999]] } }
+        return historySearchResponse([records[999]], options.pn, false)
       },
       getHistoryPauseStatus: async () => ({ code: 0, data: false }),
       deleteHistoryItem: async (options) => {
@@ -404,14 +405,14 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       assert.ok(root.querySelector('.history-day-toggle'))
       assert.match(root.querySelector('.video-card-stub').dataset.href, /p=2/)
       assert.ok(root.querySelector('.video-card-stub [data-progress]'), 'the watched line sits on the cover')
-      // Choosing a period in the hero starts the list below at it, from loaded pages.
+      // The day tree changes the starting group without another read.
       const firstHeading = root.querySelector('.history-day-toggle').textContent
       const readsBeforeStart = reads.length
-      root.querySelector('.library-hero-carousel__peek').click()
+      root.querySelectorAll('.history-day-node__row')[1].click()
       await settle()
       assert.notEqual(root.querySelector('.history-day-toggle').textContent, firstHeading, 'the list starts at the chosen period')
       assert.equal(reads.length, readsBeforeStart, 'starting at a loaded period reads nothing')
-      root.querySelectorAll('.library-hero-carousel__peek')[0].click()
+      root.querySelector('.history-day-node__row').click()
       await settle()
       assert.equal(root.querySelector('.history-day-toggle').textContent, firstHeading, 'the previous card brings the earlier periods back')
       const before = reads.length
@@ -516,7 +517,14 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     const clock = frameClock()
     const abort = await loadSourceModule('../src/utils/abort.ts', {}, { ...clock, DOMException })
     const navigation = await loadSourceModule('../src/components/Settings/navigateToSetting.ts', { 'vue': Vue, '~/utils/abort': abort }, { ...clock, MutationObserver: window.MutationObserver })
-    const Group = await compileComponent('../src/components/Settings/components/SettingsItemGroup.vue')
+    const groupMotion = deferred()
+    const Group = await compileComponent('../src/components/Settings/components/SettingsItemGroup.vue', {
+      '~/utils/motionPriority': { createMotionScope: () => Symbol('group'), holdMotion: () => () => {} },
+      '~/composables/useMotionValue': await loadSourceModule('../src/composables/useMotionValue.ts', {
+        vue: Vue,
+        '~/utils/motionPriority': { afterMotion: () => groupMotion.promise },
+      }),
+    })
     const ready = Vue.ref(false)
     const targetTitle = Vue.ref('Target')
     const leaf = { setup: () => {
@@ -577,6 +585,9 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       await step()
       assert.equal(scrolls.length, 0)
       ready.value = true
+      await step()
+      assert.equal(scrolls.length, 0, 'a mounted target still waits for its collapsed group to commit')
+      groupMotion.resolve()
       await step()
       await step()
       assert.equal(scrolls.length, 1)
@@ -801,6 +812,18 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     let hidden = false
     Object.defineProperty(page, 'hidden', { get: () => hidden })
     const settings = Vue.ref({ originalMomentsUseBewlyFilters: false, momentsHideVideoDynamics: true, momentsHideLiveDynamics: true, momentsHideVideoReservation: true, momentsHideChargeExclusive: true, momentsEnableKeywordFilter: true, momentsBlockedKeywords: 'blocked' })
+    const listeners = new Map()
+    const add = page.addEventListener.bind(page)
+    const remove = page.removeEventListener.bind(page)
+    page.addEventListener = (name, listener, options) => {
+      listeners.set(name, listener)
+      add(name, listener, options)
+    }
+    page.removeEventListener = (name, listener, options) => {
+      if (listeners.get(name) === listener)
+        listeners.delete(name)
+      remove(name, listener, options)
+    }
     const route = Vue.reactive({ href: 'https://t.bilibili.com/', navigationId: 0 })
     const rules = await loadSourceModule('../src/logic/momentFilters.ts', {
       'vue': Vue,
@@ -823,12 +846,14 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
         observerTargets.delete(this)
       }
     }
-    const module = await loadSourceModule('../src/contentScripts/features/originalMomentsFilter.ts', {
+    const module = await loadSourceModule('../src/contentScripts/features/originalMomentsFeed.ts', {
       'vue': Vue,
       '~/composables/useRouteState': { useRouteState: () => route },
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/logic': { settings },
       '~/logic/momentFilters': rules,
+      '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
+      '~/utils/i18n': { i18n: { global: { t: key => key, locale: Vue.ref('en') } } },
       '~/utils/iframeDrawerHost': { isIframeDrawerHost: () => false },
     }, { window: dom.window, document: page, location: dom.window.location, Element: dom.window.Element, HTMLElement: dom.window.HTMLElement, MutationObserver: Observer, ...clock })
     let feed = page.querySelector('.bili-dyn-list__items')
@@ -845,9 +870,9 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       await flush()
       clock.step()
     }
-    const stop = module.setupOriginalMomentsFilter()
+    const stop = module.setupOriginalMomentsFeed()
     try {
-      assert.equal(observerTargets.size, 0)
+      assert.ok(observerTargets.size > 0, 'fold buttons share the feed owner even when filtering is disabled')
       settings.value.originalMomentsUseBewlyFilters = true
       await settle()
       assert.deepEqual(Array.from(feed.children, node => node.classList.contains('bewly-filtered-original-moment')), [true, false, true, true, false, true])
@@ -859,7 +884,59 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       assert.equal(page.querySelectorAll('.bewly-filtered-original-moment').length, 0)
       hidden = false
       page.dispatchEvent(new dom.window.Event('visibilitychange'))
+      feed.innerHTML = card('<div>text</div>')
+      const nativeCard = feed.querySelector('.bili-dyn-item')
+      nativeCard.insertAdjacentHTML('beforeend', '<button class="bili-dyn-action comment active">comments</button><div class="bili-comment-container">comments body</div>')
+      const comments = nativeCard.querySelector('.bili-comment-container')
+      comments.checkVisibility = () => true
+      comments.getBoundingClientRect = () => ({ top: 100, bottom: 400, height: 300 })
+      const action = nativeCard.querySelector('.bili-dyn-action')
+      let collapsed = 0
+      action.onclick = () => {
+        collapsed++
+        action.classList.toggle('active')
+      }
       await settle()
+      assert.ok(comments.querySelector('.bewly-original-moments-fold-comment'))
+      assert.equal(listeners.has('pointerdown'), false, 'blank collapsing is off by default')
+      settings.value.originalMomentsClickBlankToFoldComments = true
+      await settle()
+      const press = () => listeners.get('pointerdown')({ button: 0, clientX: 10, clientY: 100 })
+      const click = (target = feed) => listeners.get('click')({ isTrusted: true, button: 0, detail: 1, clientX: 10, clientY: 100, composedPath: () => [target, page.body, page.documentElement] })
+      press()
+      click()
+      await settle()
+      assert.equal(collapsed, 1)
+      assert.equal(comments.querySelector('.bewly-original-moments-fold-comment'), null)
+      action.classList.add('active')
+      await settle()
+      const input = page.body.appendChild(page.createElement('input'))
+      input.focus()
+      press()
+      input.blur()
+      click()
+      assert.equal(collapsed, 1, 'the click that exits an editor cannot also collapse comments')
+      const selection = dom.window.getSelection()
+      const range = page.createRange()
+      range.selectNodeContents(comments)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      press()
+      selection.removeAllRanges()
+      click()
+      assert.equal(collapsed, 1, 'clearing a selection preserves comments')
+      press()
+      listeners.get('pointermove')({ clientX: 20, clientY: 100 })
+      click()
+      assert.equal(collapsed, 1, 'a drag returning to its origin is still a drag')
+      press()
+      click(action)
+      assert.equal(collapsed, 1, 'buttons and card contents keep their native interaction')
+      input.remove()
+      route.href = 'https://t.bilibili.com/zh-Hans/'
+      route.navigationId++
+      await settle()
+      assert.ok(comments.querySelector('.bewly-original-moments-fold-comment'), 'localized native feeds share the same controller')
       const removed = feed.firstElementChild
       removed.remove()
       await settle()
@@ -883,12 +960,14 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       await settle()
       settings.value.originalMomentsUseBewlyFilters = false
       await settle()
-      assert.equal(observerTargets.size, 0)
+      assert.ok(observerTargets.size > 0, 'disabling filtering keeps the shared fold-button lifecycle')
       assert.equal(clock.frames.size, 0)
       assert.equal(page.querySelectorAll('.bewly-filtered-original-moment').length, 0)
     }
     finally {
       stop()
+      assert.equal(listeners.has('pointerdown'), false)
+      assert.equal(listeners.has('click'), false)
       dom.window.close()
     }
   })

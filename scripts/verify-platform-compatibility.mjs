@@ -4,14 +4,24 @@ import { createRequire } from 'node:module'
 
 import { compileString } from 'sass'
 
+import { applyMotionPreference } from '../src/utils/reducedMotion'
+import { loadSourceModule } from './sourceModuleHarness'
+
 export function registerPlatformCompatibilityChecks(check, { Vue, flush, compileComponent }) {
   check('Platform: PiP carries its Shadow styles and theme, closes on unmount, and retires late or rejected windows', async () => {
     const previous = Object.getOwnPropertyDescriptor(window, 'documentPictureInPicture')
     const previousWarn = console.warn
     const warnings = []
-    console.warn = (...args) => warnings.push(args)
     const dark = Vue.ref(true)
+    const settings = Vue.ref({ disableFrostedGlass: true })
+    const scale = await loadSourceModule('../src/composables/useUiScale.ts', { vue: Vue, '~/logic': { settings }, '~/utils/uiScale': await import('../src/utils/uiScale') })
+    const Actions = await compileComponent('../src/components/FrameActions.vue', {
+      '~/components/Button.vue': { default: { render: () => Vue.h('button') } },
+    })
     const Pip = await compileComponent('../src/components/PipWindow.vue', {
+      '~/logic': { settings },
+      '~/composables/useUiScale': scale,
+      '~/components/FrameActions.vue': { default: Actions },
       '~/composables/useDark': { useDark: () => ({ isDark: dark, appearanceStyle: Vue.ref({}), accentColor: Vue.ref('#00a1d6'), motionPreference: Vue.ref('system') }) },
       '~/components/Button.vue': { default: { render: () => Vue.h('button') } },
       '~/utils/appearance': await import('../src/utils/appearance'),
@@ -19,6 +29,7 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
       '~/utils/themeColor': await import('../src/utils/themeColor'),
     }, { globals: { console } })
     try {
+      console.warn = (...args) => warnings.push(args)
       for (const mode of ['opened', 'unmounted', 'rejected']) {
         const sourceHost = document.body.appendChild(document.createElement('div'))
         sourceHost.className = 'dark disable-frosted-glass'
@@ -46,7 +57,8 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
           reject = fail
         }) }
         let emitted = 0
-        const app = Vue.createApp(Pip, { url: 'https://www.bilibili.com/video/BVfixture', onClose: () => emitted++ })
+        const url = Vue.ref('https://www.bilibili.com/video/BVfixture')
+        const app = Vue.createApp({ render: () => Vue.h(Pip, { url: url.value, onClose: () => emitted++ }) })
         app.config.globalProperties.$t = key => key
         let unmounted = false
         try {
@@ -70,6 +82,19 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
             dark.value = false
             await flush()
             assert.equal(host.classList.contains('dark'), false, 'theme changes reach the PiP shadow host')
+            settings.value.disableFrostedGlass = false
+            scale.uiScale.value = { scale: 0.75, pixel: 0.5 }
+            url.value = 'https://www.bilibili.com/video/BV17x411w7KC/'
+            await flush()
+            assert.equal(host.classList.contains('disable-frosted-glass'), false)
+            assert.equal(host.style.getPropertyValue('--bew-ui-scale'), '0.75')
+            assert.equal(host.shadowRoot.querySelector('iframe').getAttribute('src'), url.value)
+            const link = host.shadowRoot.querySelector('.frame-actions__link')
+            assert.equal(link.href, url.value)
+            const modified = new MouseEvent('click', { button: 0, metaKey: true, bubbles: true, cancelable: true })
+            link.dispatchEvent(modified)
+            assert.equal(modified.defaultPrevented, false, 'modifier-click remains a native anchor action')
+            assert.equal(closes, 0)
             dark.value = true
             app.unmount()
             unmounted = true
@@ -84,7 +109,7 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
           }
           else {
             assert.equal(emitted, 1, 'request rejection releases the open-menu state')
-            assert.equal(warnings.length, 1)
+            assert.equal(warnings.filter(([message]) => message === '[Bewly] Unable to open picture-in-picture window:').length, 1)
           }
         }
         finally {
@@ -121,6 +146,8 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
   check('Platform: elastic rows preserve browser zoom and schedule rebound work only beyond an edge', async () => {
     const { createElasticWheelScroll } = await import('../src/utils/elasticScroll')
     const previousMedia = window.matchMedia
+    const preference = document.documentElement.dataset.bewMotion
+    applyMotionPreference(document.documentElement, 'full')
     const previousSetTimeout = globalThis.setTimeout
     const previousClearTimeout = globalThis.clearTimeout
     const timers = new Map()
@@ -160,6 +187,7 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
       assert.equal(timers.size, 0)
       assert.equal(track.style.translate, '')
       media.matches = true
+      applyMotionPreference(document.documentElement, 'reduce')
       scroller.scrollLeft = 0
       wheel({ deltaY: 900 })
       assert.equal(scroller.scrollLeft, 600)
@@ -169,6 +197,7 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
     finally {
       elastic.dispose()
       window.matchMedia = previousMedia
+      applyMotionPreference(document.documentElement, preference)
       globalThis.setTimeout = previousSetTimeout
       globalThis.clearTimeout = previousClearTimeout
     }
@@ -215,6 +244,8 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
   check('Platform: smooth scroll no-ops settle immediately at clamped and fractional Windows coordinates', async () => {
     const { scrollToPosition, getScrollIntent, cancelScrollIntent } = await import('../src/utils/scrollIntent')
     const previousMedia = window.matchMedia
+    const preference = document.documentElement.dataset.bewMotion
+    applyMotionPreference(document.documentElement, 'full')
     window.matchMedia = () => ({ matches: false })
     const viewport = document.body.appendChild(document.createElement('div'))
     Object.defineProperties(viewport, { clientHeight: { value: 400 }, scrollHeight: { value: 1000 } })
@@ -229,6 +260,7 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
       }
       assert.equal(calls.length, 0)
       window.matchMedia = () => ({ matches: true })
+      applyMotionPreference(document.documentElement, 'reduce')
       viewport.scrollTop = 0
       await scrollToPosition(viewport, 300, 'smooth')
       assert.deepEqual(calls, [{ top: 300, behavior: 'instant' }])
@@ -238,6 +270,7 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
       cancelScrollIntent(viewport)
       viewport.remove()
       window.matchMedia = previousMedia
+      applyMotionPreference(document.documentElement, preference)
     }
   })
 

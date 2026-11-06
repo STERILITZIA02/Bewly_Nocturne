@@ -4,6 +4,7 @@ import { countOpenTabsTask, selectOpenTabsTaskItems } from '../src/constants/ope
 import { createHistoryFilters, historyDateBounds, historyRangeBounds, matchesHistoryFilters } from '../src/contentScripts/views/History/historyFilters'
 import { createHistoryGroupIndex } from '../src/contentScripts/views/History/historyGroups'
 import { createWatchLaterFilters, filterWatchLaterItems, sortWatchLaterItems, watchLaterAddedBounds, watchLaterPlaybackState } from '../src/contentScripts/views/WatchLater/watchLaterFilters'
+import { historyResponse, historySearchResponse } from './fixtures/historyResponses'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
@@ -696,15 +697,15 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
       timeline.keyword.value = 'music'
       timeline.handleSearch()
       assert.equal(reads[0].options.signal.aborted, true)
-      reads[1].resolve({ code: 0, data: { list: [historyItem(1)] } })
+      reads[1].resolve(historySearchResponse([historyItem(1)], 1, false))
       await flush()
       assert.equal(timeline.submittedKeyword.value, 'music')
       timeline.clearSearch()
       assert.equal(timeline.keyword.value, '')
       assert.equal(timeline.submittedKeyword.value, '')
       assert.equal(reads[2].kind, 'list')
-      reads[0].resolve({ code: 0, data: { list: [historyItem(999)] } })
-      reads[2].resolve({ code: 0, data: { list: [historyItem(2)] } })
+      reads[0].resolve(historyResponse([historyItem(999)]))
+      reads[2].resolve(historyResponse([historyItem(2)]))
       await flush()
       assert.deepEqual(timeline.historyList.map(item => item.history.oid), [2])
       timeline.filters.value = { ...timeline.filters.value, period: 'custom', startDate: '2026-09-29', endDate: '2026-09-29' }
@@ -712,7 +713,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
       timeline.handleSearch()
       const bounds = historyDateBounds(timeline.filters.value.startDate)
       assert.equal(reads[3].params.view_at, bounds.end)
-      reads[3].resolve({ code: 0, data: { list: [historyItem(3, 'archive', bounds.start + 1), historyItem(4, 'pgc', bounds.end), historyItem(5, 'pgc', bounds.start - 1)] } })
+      reads[3].resolve(historyResponse([historyItem(3, 'archive', bounds.start + 1), historyItem(4, 'pgc', bounds.end), historyItem(5, 'pgc', bounds.start - 1)]))
       await flush()
       assert.deepEqual(timeline.historyList.map(item => item.history.oid), [4])
       assert.equal(matchesHistoryFilters(historyItem(6, 'article-list', bounds.start), 'article', bounds), true)
@@ -730,7 +731,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
         requests++
         if (requests === 4)
           return new Promise((resolve) => { pending = { resolve, signal: options.signal } })
-        return { code: 0, data: { list: Array.from({ length: 20 }, (_, index) => historyItem(requests * 20 + index, 'archive', 10_000 - requests * 20 - index)) } }
+        return historyResponse(Array.from({ length: 20 }, (_, index) => historyItem(requests * 20 + index, 'archive', 10_000 - requests * 20 - index)))
       },
     }, getAccountId: () => 1, getCSRF: () => '', haveScrollbar: async () => false, onWriteError: assert.fail })
     timeline.contentType.value = 'live'
@@ -750,11 +751,11 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
     const timeline = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api: {
       getHistoryList: async () => {
         calls++
-        return { code: 0, data: { list: calls === 4 ? [historyItem(100, 'live', 900)] : Array.from({ length: 20 }, (_, i) => historyItem(calls * 20 + i, 'archive', 1000 - calls * 20 - i)) } }
+        return historyResponse(calls === 5 ? [] : calls === 4 ? [historyItem(100, 'live', 900)] : Array.from({ length: 20 }, (_, i) => historyItem(calls * 20 + i, 'archive', 1000 - calls * 20 - i)))
       },
-      searchHistoryList: async () => {
+      searchHistoryList: async ({ pn }) => {
         calls++
-        return { code: 0, data: { list: Array.from({ length: 20 }, (_, i) => historyItem(i, 'archive', 1000 - i)) } }
+        return historySearchResponse(Array.from({ length: 20 }, (_, i) => historyItem(i, 'archive', 1000 - i)), pn, true)
       },
     }, getAccountId: () => 1, getCSRF: () => '', haveScrollbar: async () => false, onWriteError: assert.fail })
     try {
@@ -766,14 +767,14 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
       assert.deepEqual(timeline.historyList.map(item => item.history.oid), [100])
       assert.equal(timeline.noMoreContent.value, true)
       assert.equal(await timeline.load(), false)
-      assert.equal(calls, 4)
+      assert.equal(calls, 5)
       timeline.keyword.value = 'filtered search'
       timeline.handleSearch()
       await flush()
-      assert.equal(calls, 6, 'a repeated full page stops even when every source row is filtered out')
-      assert.equal(timeline.noMoreContent.value, true)
-      assert.equal(await timeline.load(), false)
-      assert.equal(calls, 6)
+      assert.equal(calls, 7, 'a repeated full page stops even when every source row is filtered out')
+      assert.equal(timeline.requestStalled.value, true)
+      assert.equal(timeline.noMoreContent.value, false, 'a stalled cursor is retryable, not server exhaustion')
+      assert.equal(timeline.requestFailed.value, true)
     }
     finally { timeline.dispose() }
   })

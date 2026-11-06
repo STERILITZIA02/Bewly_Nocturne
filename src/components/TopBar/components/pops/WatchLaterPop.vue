@@ -25,7 +25,7 @@ import { getUserID, removeHttpFromUrl } from '~/utils/main'
 import { retiringListTransition } from '~/utils/motionPresence'
 import { dissolveElements } from '~/utils/particleDissolve'
 import { openLinkInBackground } from '~/utils/tabs'
-import { getVideoProgressPercentage } from '~/utils/videoVisitHistory'
+import { acquireVideoVisitHistory, getVideoProgressPercentage } from '~/utils/videoVisitHistory'
 import { getWatchLaterAuthor, getWatchLaterPlaybackUrl } from '~/utils/watchLaterList'
 
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
@@ -34,6 +34,7 @@ const emit = defineEmits<{ addOpenTabs: [] }>()
 const topBarStore = useTopBarStore()
 const { openIframeDrawer } = useBewlyApp()
 const { t } = useI18n()
+onScopeDispose(acquireVideoVisitHistory())
 const toast = useToast()
 const { watchLaterList, isLoadingWatchLater, watchLaterCount, watchLaterPageState } = storeToRefs(topBarStore)
 const viewAllUrl = computed((): string => {

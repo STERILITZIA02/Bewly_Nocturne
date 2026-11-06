@@ -1104,6 +1104,11 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       root.scrollTop = 19000
       root.dispatchEvent(new Event('scroll'))
       await settle()
+      assert.equal(first.isConnected, true, 'the focused card remains pinned outside the window')
+      root.tabIndex = -1
+      root.focus()
+      root.dispatchEvent(new Event('scroll'))
+      await settle()
       assert.equal(first.isConnected, false)
       root.querySelector('[data-filter="layout:grid"]').click()
       root.scrollTop = 0

@@ -163,8 +163,8 @@ watch(
     requestedNavigation.value = props.navigationRequest ?? null
     const target = props.navigationRequest?.target
     if (target)
-      activatedMenuItem.value = target.category === 'playback' ? MenuType.Playback : MenuType.BewlyPages
-    if (target?.category === 'playback' && target.settingId) {
+      activatedMenuItem.value = target.category === 'playback' ? MenuType.Playback : target.category === 'bewly-components' ? MenuType.BewlyComponents : MenuType.BewlyPages
+    if (target?.settingId) {
       const requestId = props.navigationRequest!.id
       nextTick(() => {
         if (requestedNavigation.value?.id === requestId)
@@ -303,7 +303,7 @@ const settingsMenuItems: MenuItem[] = [
   },
 ]
 const activeSettingsComponentProps = computed(() => (
-  (activatedMenuItem.value === MenuType.BewlyPages || activatedMenuItem.value === MenuType.Playback)
+  (activatedMenuItem.value === MenuType.BewlyPages || activatedMenuItem.value === MenuType.BewlyComponents || activatedMenuItem.value === MenuType.Playback)
     ? { navigationTarget: requestedNavigation.value }
     : {}
 ))

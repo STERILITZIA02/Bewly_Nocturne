@@ -11,6 +11,7 @@ import { usePanelTrigger } from '~/composables/usePanelOrigin'
 import { useSourcePanelMotion } from '~/composables/useSourcePanelMotion'
 import { DIALOG_FOCUS_OWNER, DIALOG_TELEPORT_TARGET, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard, restoreOverlayFocus } from '~/utils/dialogFocus'
 import { resolveDialogKeyboardAction } from '~/utils/dialogKeyboard'
+import { lockDialogScroll } from '~/utils/dialogScroll'
 
 const props = withDefaults(defineProps<{
   title?: string
@@ -52,10 +53,14 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits(['beforeClose', 'close', 'confirm'])
 
 const showShortcut = ref<boolean>(false)
-const { mainAppRef } = useBewlyApp()
+const { mainAppRef, scrollViewportRef } = useBewlyApp()
 const showDialog = ref<boolean>(false)
 const dialogRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
+// The close protocol releases this after leave; template refs clear before leave starts.
+const stopScrollLock = watch(scrollViewportRef, (viewport, _previous, onCleanup) => {
+  onCleanup(lockDialogScroll(viewport ?? document.scrollingElement as HTMLElement))
+}, { immediate: true, flush: 'post' })
 const dialogId = useId()
 const titleId = `${dialogId}-title`
 // The mask outlives `loading` until its ring has closed.
@@ -220,6 +225,7 @@ function emitCloseOnce() {
     return
   closeEmitted = true
   isClosing = true
+  stopScrollLock()
   restoreDialogFocus()
   emit('close')
 }

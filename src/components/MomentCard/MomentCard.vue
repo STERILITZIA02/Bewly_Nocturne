@@ -241,6 +241,7 @@ const forwardExpanded = computed(() => disclosure.value === 'forward')
 const cardFocused = ref(false)
 const previewInteracting = ref(false)
 const descriptionMoving = ref(false)
+const voteMoving = ref(false)
 watch(() => {
   const media = moment.forward?.video ?? moment
   return `${media.bvid}:${media.cid}:${moment.forward?.video?.url ?? moment.videoUrl}`
@@ -250,7 +251,7 @@ watch(() => {
 })
 const commentWriting = ref(false)
 const interactionHeld = computed(() => cardFocused.value || showVideoOptions.value || forwardInteracting.value
-  || disclosureMoving.value || descriptionMoving.value || previewInteracting.value || commentWriting.value || isForwardLoading || isLikeLoading || isReservationLoading
+  || disclosureMoving.value || descriptionMoving.value || voteMoving.value || previewInteracting.value || commentWriting.value || isForwardLoading || isLikeLoading || isReservationLoading
   || isWatchLaterLoading(moment) || (!!moment.forward?.video && isWatchLaterLoading(moment.forward.video)))
 watch(interactionHeld, held => emit('interactionChange', held), { immediate: true, flush: 'sync' })
 const canExpandComments = computed(() => Boolean(moment.id && !moment.isLive))
@@ -264,7 +265,7 @@ const descriptionExpanded = ref(false)
 const descriptionCanToggle = ref(false)
 let descriptionAnimation: Animation | undefined
 // The masonry holds its geometry while the comment area or the text animates.
-watch(() => disclosureMoving.value || descriptionMoving.value, moving => emit('disclosureMotion', moving), { flush: 'sync' })
+watch(() => disclosureMoving.value || descriptionMoving.value || voteMoving.value, moving => emit('disclosureMotion', moving), { flush: 'sync' })
 const descriptionId = computed(() => `moment-description-${moment.id}`)
 const descriptionPreviewText = computed(() => getCardPreviewText(moment))
 const hasUserDescription = computed(() => Boolean(
@@ -1083,6 +1084,7 @@ onBeforeUnmount(() => {
         :moment-id="moment.id"
         :fallback-title="moment.additional.title"
         :fallback-end-time="moment.additional.voteEndTime"
+        @disclosure-motion="voteMoving = $event"
         @interactive-resize="emit('interactiveResize')"
       />
       <div

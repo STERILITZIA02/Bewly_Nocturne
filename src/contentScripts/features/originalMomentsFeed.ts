@@ -4,13 +4,52 @@ import { useRouteState } from '~/composables/useRouteState'
 import { BEWLY_IFRAME_DRAWER_HOST_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { momentFilterPolicy } from '~/logic/momentFilters'
+import { isBilibiliMomentsFeed } from '~/utils/bilibiliLocale'
+import { getDeepActiveElement } from '~/utils/dialogFocus'
+import { i18n } from '~/utils/i18n'
 import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
 import type { MomentFilterCandidate } from '~/utils/momentFilter'
+import { scrollToPosition } from '~/utils/scrollIntent'
 
 const FEED = '.bili-dyn-list__items'
 const CARD = '.bili-dyn-item'
 const ROW = '.bili-dyn-list__item'
 const HIDDEN = 'bewly-filtered-original-moment'
+const COMMENTS = '.bili-comment-container, .bb-comment'
+const FOLD = 'bewly-original-moments-fold-comment'
+const BLANK = 'html, body, #app, #app > .bg, #app > .bgc, .bili-dyn-home--member, .bili-dyn-home--visitor, .bili-dyn-home--member > main, .bili-dyn-home--member > aside, .bili-dyn-list, .bili-dyn-list__items'
+const INTERACTIVE = 'a, button, input, textarea, select, label, summary, video, audio, [contenteditable], [role], [popover], #bewly, .bili-dialog-bomb, .modal-wrapper, .bili-album__watch'
+
+function syncFoldButton(card: HTMLElement) {
+  const action = card.querySelector<HTMLElement>('.bili-dyn-action.comment.active')
+  const container = card.querySelector<HTMLElement>(COMMENTS)
+  const existing = card.querySelector<HTMLButtonElement>(`.${FOLD}`)
+  if (!action || !container || card.querySelector('.fold-comment')) {
+    existing?.remove()
+    return
+  }
+  const button = existing ?? document.createElement('button')
+  const label = String(i18n.global.t('moment_card.collapse_comments'))
+  if (button.textContent !== label)
+    button.textContent = label
+  if (existing?.parentElement === container)
+    return
+  button.type = 'button'
+  button.className = FOLD
+  button.onclick = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const currentAction = card.querySelector<HTMLElement>('.bili-dyn-action.comment.active')
+    if (!currentAction)
+      return
+    const scroller = document.scrollingElement as HTMLElement
+    const top = card.getBoundingClientRect().top + scroller.scrollTop
+    currentAction.click()
+    currentAction.focus({ preventScroll: true })
+    void scrollToPosition(scroller, Math.max(0, top - (Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bew-top-bar-height')) || 0)), 'smooth')
+  }
+  container.append(button)
+}
 
 function readOriginalMoment(card: HTMLElement, includeText = true): MomentFilterCandidate & { text: string } {
   const content = card.querySelector('.bili-dyn-content')
@@ -42,7 +81,7 @@ function readOriginalMoment(card: HTMLElement, includeText = true): MomentFilter
   }
 }
 
-export function setupOriginalMomentsFilter() {
+export function setupOriginalMomentsFeed() {
   if (location.hostname !== 't.bilibili.com')
     return () => {}
   const route = useRouteState()
@@ -53,9 +92,53 @@ export function setupOriginalMomentsFilter() {
   let frame: number | undefined
   let style: HTMLStyleElement | undefined
   let listening = false
+  let blankListening = false
+  let pointerStart: { x: number, y: number, suppressed: boolean } | undefined
   let disposed = false
-  const allowed = () => !disposed && settings.value.originalMomentsUseBewlyFilters && !document.hidden && !isIframeDrawerHost()
-    && new URL(route.href).hostname === 't.bilibili.com' && /^\/?$/.test(new URL(route.href).pathname)
+  const onFeed = () => isBilibiliMomentsFeed(route.href)
+  const allowed = () => !disposed && !document.hidden && !isIframeDrawerHost()
+    && onFeed()
+
+  function pointerDown(event: PointerEvent) {
+    const active = getDeepActiveElement(document)
+    pointerStart = {
+      x: event.clientX,
+      y: event.clientY,
+      suppressed: event.button !== 0 || window.getSelection()?.isCollapsed === false
+        || !!active?.matches('input, textarea, select, [contenteditable], [role="textbox"]'),
+    }
+  }
+  function cancelPointer() {
+    pointerStart = undefined
+  }
+  function pointerMove(event: PointerEvent) {
+    if (pointerStart && Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 4)
+      pointerStart.suppressed = true
+  }
+  function blankClick(event: MouseEvent) {
+    const start = pointerStart
+    pointerStart = undefined
+    if (!start || start.suppressed || !event.isTrusted || event.defaultPrevented || event.button !== 0 || !event.detail
+      || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey
+      || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4 || window.getSelection()?.isCollapsed === false) {
+      return
+    }
+    const path = event.composedPath().filter((node): node is Element => node instanceof Element)
+    if (!path[0]?.matches(BLANK) || path.some(node => node.matches(INTERACTIVE)))
+      return
+    const actions: HTMLElement[] = []
+    for (const root of feeds.keys()) {
+      root.querySelectorAll<HTMLElement>('.bili-dyn-action.comment.active').forEach((action) => {
+        const comments = action.closest(CARD)?.querySelector<HTMLElement>(COMMENTS)
+        if (!comments?.checkVisibility())
+          return
+        const rect = comments.getBoundingClientRect()
+        if (rect.bottom > 0 && rect.top < window.innerHeight)
+          actions.push(action)
+      })
+    }
+    actions.forEach(action => action.click())
+  }
 
   function containerOf(element: Element) {
     let card = element.closest<HTMLElement>(CARD)
@@ -67,6 +150,7 @@ export function setupOriginalMomentsFilter() {
   function restore(element: Element) {
     element.classList.remove(HIDDEN)
     element.querySelectorAll(`.${HIDDEN}`).forEach(node => node.classList.remove(HIDDEN))
+    element.querySelectorAll(`.${FOLD}`).forEach(node => node.remove())
   }
   function flush() {
     frame = undefined
@@ -80,10 +164,12 @@ export function setupOriginalMomentsFilter() {
       if (!container.isConnected || !feed || !feeds.has(feed))
         continue
       const card = container.matches(CARD) ? container : container.querySelector<HTMLElement>(CARD)
-      const candidate = card ? readOriginalMoment(card, policy.keywords.length > 0) : undefined
+      const candidate = card && settings.value.originalMomentsUseBewlyFilters ? readOriginalMoment(card, policy.keywords.length > 0) : undefined
       const hidden = !!candidate && !policy.passes(candidate, candidate.text)
       if (container.classList.contains(HIDDEN) !== hidden)
         container.classList.toggle(HIDDEN, hidden)
+      if (card)
+        syncFoldButton(card)
     }
     pending.clear()
   }
@@ -172,7 +258,7 @@ export function setupOriginalMomentsFilter() {
     document.querySelectorAll(`.${HIDDEN}`).forEach(element => element.classList.remove(HIDDEN))
   }
   function refresh() {
-    const enabled = !disposed && settings.value.originalMomentsUseBewlyFilters
+    const enabled = !disposed && onFeed()
     if (enabled !== listening) {
       listening = enabled
       if (enabled) {
@@ -182,6 +268,25 @@ export function setupOriginalMomentsFilter() {
       else {
         document.removeEventListener('visibilitychange', refresh)
         window.removeEventListener(BEWLY_IFRAME_DRAWER_HOST_CHANGE, refresh)
+      }
+    }
+    const blankEnabled = allowed() && settings.value.originalMomentsClickBlankToFoldComments
+    if (blankListening !== blankEnabled) {
+      blankListening = blankEnabled
+      if (blankEnabled) {
+        document.addEventListener('pointerdown', pointerDown, true)
+        document.addEventListener('pointermove', pointerMove, { capture: true, passive: true })
+        document.addEventListener('pointercancel', cancelPointer, true)
+        document.addEventListener('dragstart', cancelPointer, true)
+        document.addEventListener('click', blankClick)
+      }
+      else {
+        document.removeEventListener('pointerdown', pointerDown, true)
+        document.removeEventListener('pointermove', pointerMove, true)
+        document.removeEventListener('pointercancel', cancelPointer, true)
+        document.removeEventListener('dragstart', cancelPointer, true)
+        document.removeEventListener('click', blankClick)
+        pointerStart = undefined
       }
     }
     if (!allowed()) {
@@ -195,7 +300,7 @@ export function setupOriginalMomentsFilter() {
     }
     bind()
   }
-  const stop = watch([() => settings.value.originalMomentsUseBewlyFilters, () => route.navigationId, momentFilterPolicy], refresh, { immediate: true })
+  const stop = watch([() => settings.value.originalMomentsUseBewlyFilters, () => settings.value.originalMomentsClickBlankToFoldComments, i18n.global.locale, () => route.navigationId, momentFilterPolicy], refresh, { immediate: true })
   return () => {
     disposed = true
     stop()

@@ -21,6 +21,12 @@ const AUXILIARY_CONTROL_GEOMETRY_PROPERTIES = [
   '--bewly-widescreen-aux-controls-left',
 ] as const
 
+// One controls-layout pass: readiness shares the same reads, then styles commit.
+interface ControlsGeometryPass {
+  rect: (element: HTMLElement) => DOMRect
+  write: (apply: () => void) => void
+}
+
 function setGeometryProperty(element: HTMLElement, name: string, value: string) {
   if (element.style.getPropertyValue(name) !== value)
     element.style.setProperty(name, value)
@@ -67,39 +73,44 @@ function syncHighEnergyProgressState(
 
 /* 悬浮玻璃卡高度 = 弹幕区高度 + 原生控制栏实际高度 + 高能进度图高度。
    原生收起态由 CSS 属性选择器塌缩，无需在此处处理。 */
-export function syncControlsGlassGeometry(currentState: BewlyWidescreenState) {
+function syncControlsGlassGeometry(currentState: BewlyWidescreenState, pass: ControlsGeometryPass) {
   // A zoom scales the whole player; its end re-measures the settled layout.
   if (currentState.zoom)
     return
-  currentState.danmakuPopoverPositionSync?.()
   const glass = currentState.danmakuGlass
   if (!glass?.isConnected)
     return
   const container = getNativePlayerContainer(currentState) ?? currentState.playerEl
   const wrap = container?.querySelector<HTMLElement>(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR)
-  const wrapHeight = wrap?.isConnected ? Math.round(wrap.getBoundingClientRect().height) : 0
   const highEnergyProgress = container?.querySelector<HTMLElement>(HIGH_ENERGY_PROGRESS_SELECTOR)
   syncHighEnergyProgressState(currentState, highEnergyProgress ?? null)
+  const wrapHeight = wrap?.isConnected ? Math.round(pass.rect(wrap).height) : 0
   const highEnergyProgressHeight = highEnergyProgress?.isConnected
-    ? Math.ceil(highEnergyProgress.getBoundingClientRect().height)
+    ? Math.ceil(pass.rect(highEnergyProgress).height)
     : 0
   const controlsHeight = wrapHeight + highEnergyProgressHeight
   const height = controlsHeight > 0
     ? `calc(var(--bewly-widescreen-bottom-controls-height) + var(--bewly-widescreen-controls-block-padding, 12px) + ${controlsHeight}px)`
     : ''
   // CC and the glass share this measurement, even when the sending bar is outside the native player.
-  setGeometryProperty(currentState.playerEl, '--bewly-widescreen-controls-glass-height', height)
-  if (!currentState.playerEl.contains(glass))
-    setGeometryProperty(glass, '--bewly-widescreen-controls-glass-height', height)
+  pass.write(() => {
+    setGeometryProperty(currentState.playerEl, '--bewly-widescreen-controls-glass-height', height)
+    if (!currentState.playerEl.contains(glass))
+      setGeometryProperty(glass, '--bewly-widescreen-controls-glass-height', height)
+  })
 }
 
-export function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState) {
+function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState, pass?: ControlsGeometryPass) {
   if (currentState.zoom)
     return
   const host = document.querySelector<HTMLElement>('#bewly')
+  const write = pass?.write ?? ((apply: () => void) => apply())
+  const rect = pass?.rect ?? ((element: HTMLElement) => element.getBoundingClientRect())
   if (settings.value.alwaysUseDock) {
-    AUXILIARY_CONTROL_GEOMETRY_PROPERTIES.forEach(property => host?.style.removeProperty(property))
-    setGeometryProperty(document.body, '--bewly-widescreen-aux-controls-width', '0px')
+    write(() => {
+      AUXILIARY_CONTROL_GEOMETRY_PROPERTIES.forEach(property => host?.style.removeProperty(property))
+      setGeometryProperty(document.body, '--bewly-widescreen-aux-controls-width', '0px')
+    })
     return
   }
   const auxiliary = host?.shadowRoot?.querySelector<HTMLElement>('.widescreen-docked .sidebar-content')
@@ -111,19 +122,18 @@ export function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState)
       currentState.resizeObserver?.observe(auxiliary)
   }
   const viewerInfo = currentState.danmakuSemanticsSource?.querySelector<HTMLElement>('.bpx-player-video-info')
-  const dockRect = (currentState.danmakuSourceHost ?? currentState.danmakuDock).getBoundingClientRect()
-  const viewerRect = viewerInfo?.getBoundingClientRect()
-  const auxiliaryRect = auxiliary?.getBoundingClientRect()
+  const dockRect = rect(currentState.danmakuSourceHost ?? currentState.danmakuDock)
+  const viewerRect = viewerInfo && rect(viewerInfo)
+  const auxiliaryRect = auxiliary && rect(auxiliary)
   if (!host || dockRect.width <= 0 || dockRect.height <= 0
     || !auxiliaryRect || auxiliaryRect.width <= 0 || auxiliaryRect.height <= 0) {
-    clearAuxiliaryControlGeometry()
+    write(clearAuxiliaryControlGeometry)
     return
   }
 
   const rootStyle = getComputedStyle(currentState.root)
   const gap = Number.parseFloat(rootStyle.getPropertyValue('--bew-space-2')) || 8
   const controlHeight = Number.parseFloat(rootStyle.getPropertyValue('--bew-control-height')) || 36
-  setGeometryProperty(document.body, '--bewly-widescreen-aux-controls-width', `${auxiliaryRect.width + gap}px`)
   // After the viewer count while the bar shows it; with the card it reads in
   // the info's meta line instead (syncViewerCount), and the controls open the row.
   const left = viewerRect && viewerRect.width > 0 && viewerRect.height > 0
@@ -132,15 +142,18 @@ export function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState)
   // 圆键贴底锚定稳定布局几何，避免显隐过程中的绘制状态影响按钮位置。
   const glassBottom = Number.parseFloat(getComputedStyle(currentState.playerEl).getPropertyValue('--bewly-widescreen-controls-glass-bottom')) || 32
   const stableDockBottom = currentState.danmakuSourceHost?.isConnected && currentState.playerEl.isConnected
-    ? currentState.playerEl.getBoundingClientRect().bottom - glassBottom
+    ? rect(currentState.playerEl).bottom - glassBottom
     : currentState.playerFrame.isConnected
-      ? currentState.playerFrame.getBoundingClientRect().bottom + dockRect.height
+      ? rect(currentState.playerFrame).bottom + dockRect.height
       : dockRect.bottom
   // 按卡片内容块间距贴底，与原生 36px 控制按钮同水平线
   const blockPadding = Math.max((dockRect.height - controlHeight) / 2, 0)
   const bottom = Math.max(window.innerHeight - stableDockBottom + blockPadding, 0)
-  setGeometryProperty(host, '--bewly-widescreen-aux-controls-left', `${left}px`)
-  setGeometryProperty(host, '--bewly-widescreen-aux-controls-bottom', `${bottom}px`)
+  write(() => {
+    setGeometryProperty(document.body, '--bewly-widescreen-aux-controls-width', `${auxiliaryRect.width + gap}px`)
+    setGeometryProperty(host, '--bewly-widescreen-aux-controls-left', `${left}px`)
+    setGeometryProperty(host, '--bewly-widescreen-aux-controls-bottom', `${bottom}px`)
+  })
 }
 
 export function clearAnchoredPlayerElement(playerEl: HTMLElement) {
@@ -193,7 +206,7 @@ export function syncDisplayModeAttributes(currentState: BewlyWidescreenState) {
  * The pane mirrors the shell's player frame; filling the window anchors the
  * player to the whole overlay. Only the native player moves, never its tree.
  */
-export function syncAnchoredPlayerGeometry(currentState: BewlyWidescreenState) {
+export function syncAnchoredPlayerGeometry(currentState: BewlyWidescreenState, auxiliary = true) {
   const { playerEl, playerFrame, root } = currentState
   if (!playerEl.isConnected || !playerFrame.isConnected)
     return
@@ -212,11 +225,14 @@ export function syncAnchoredPlayerGeometry(currentState: BewlyWidescreenState) {
   setGeometryProperty(playerEl, '--bewly-widescreen-player-left', `${finite(rect.left)}px`)
   setGeometryProperty(playerEl, '--bewly-widescreen-player-top', `${finite(rect.top)}px`)
   setGeometryProperty(playerEl, '--bewly-widescreen-player-width', `${Math.max(0, finite(rect.width))}px`)
-  syncAuxiliaryControlGeometry(currentState)
+  if (auxiliary)
+    syncAuxiliaryControlGeometry(currentState)
+  return currentState.displayMode === 'fill' ? undefined : rect
 }
 
 export function ensureAnchoredPlayer(currentState: BewlyWidescreenState) {
   const replacement = getPlayerRoot()
+  let changed = false
   if (!currentState.playerEl.isConnected || (replacement && replacement !== currentState.playerEl)) {
     if (!replacement)
       return false
@@ -226,26 +242,31 @@ export function ensureAnchoredPlayer(currentState: BewlyWidescreenState) {
     clearAspectObservers(currentState)
     clearAnchoredPlayerElement(currentState.playerEl)
     currentState.playerEl = replacement
+    changed = true
     resetControlsLayout(currentState)
     if (shouldRestoreAspectObservers)
       setupAspectObservers(currentState)
   }
 
-  if (!isPlayerShowingEndingRecommendation())
-    exitNativeMiniPlayer(currentState.playerEl)
-  if (!currentState.playerEl.classList.contains(NATIVE_PLAYER_CLASS))
+  if (!currentState.playerEl.classList.contains(NATIVE_PLAYER_CLASS)) {
     currentState.playerEl.classList.add(NATIVE_PLAYER_CLASS)
-  syncAnchoredPlayerGeometry(currentState)
+    changed = true
+  }
+  // Replacements must move back before paint; ordinary refreshes join the frame.
+  if (changed)
+    syncAnchoredPlayerGeometry(currentState, false)
+  schedulePlayerResizeSync(currentState)
   return true
 }
 
-export function updatePlayerLayoutState(currentState: BewlyWidescreenState | null = session.current) {
+export function updatePlayerLayoutState(currentState: BewlyWidescreenState | null = session.current, auxiliary = true) {
   if (!currentState || session.current !== currentState)
     return
 
-  syncAnchoredPlayerGeometry(currentState)
+  const frameRect = syncAnchoredPlayerGeometry(currentState, auxiliary)
   syncNativePlayerControlVisibility(currentState)
   scheduleActionGeometrySync(currentState)
+  return frameRect
 }
 
 /** Media changes (new source, metadata) re-anchor the player and let the native layout re-measure. */
@@ -253,7 +274,6 @@ export function refreshPlayerLayout(currentState: BewlyWidescreenState | null = 
   if (!currentState || session.current !== currentState)
     return
 
-  updatePlayerLayoutState(currentState)
   schedulePlayerResizeSync(currentState)
 }
 
@@ -272,68 +292,91 @@ export function resetControlsLayout(currentState: BewlyWidescreenState) {
   syncNativePlayerControlVisibility(currentState)
 }
 
-function settleControlsLayout(currentState: BewlyWidescreenState) {
+function settleControlsLayout(currentState: BewlyWidescreenState, anchored = false, frameRect?: DOMRect) {
   currentState.resizeSyncFrame = undefined
   if (session.current !== currentState || !currentState.root.isConnected)
     return
 
-  syncAnchoredPlayerGeometry(currentState)
-  syncControlsGlassGeometry(currentState)
+  if (!anchored)
+    frameRect = syncAnchoredPlayerGeometry(currentState, false)
   const controls = currentState.playerEl.querySelector<HTMLElement>(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR)
-  if (currentState.controlsLayoutReady) {
-    if (controls === currentState.measuredControls)
-      return
+  if (currentState.controlsLayoutReady && controls !== currentState.measuredControls)
     resetControlsLayout(currentState)
+  const measured = new Map<HTMLElement, DOMRect>()
+  if (frameRect)
+    measured.set(currentState.playerFrame, frameRect)
+  const writes: Array<() => void> = []
+  const pass: ControlsGeometryPass = {
+    rect(element) {
+      let rect = measured.get(element)
+      if (!rect) {
+        rect = element.getBoundingClientRect()
+        measured.set(element, rect)
+      }
+      return rect
+    },
+    write: apply => writes.push(apply),
   }
-  const source = currentState.danmakuSemanticsSource
-  const viewers = source?.querySelector<HTMLElement>('.bpx-player-video-info')
-  const nativeButtons = controls?.matches('.bpx-player-control-wrap')
-    ? controls.querySelector<HTMLElement>('.bpx-player-control-bottom')
-    : controls
-  const nativeLayoutReady = !controls?.matches('.bpx-player-control-wrap')
-    || (nativeButtons && getComputedStyle(nativeButtons).display === 'flex')
-  const elements = [currentState.playerFrame, controls, nativeButtons, currentState.danmakuSourceHost]
-  // BV bars open with the online count, unless the card shows it in the info's
-  // meta line instead (syncViewerCount) and its pill has no box.
-  if (currentState.root.dataset.pageKind !== 'pgc' && !viewers?.hasAttribute(VIEWER_COUNT_MIRRORED_ATTRIBUTE))
-    elements.push(viewers)
-  if (!settings.value.alwaysUseDock) {
-    const auxiliary = currentState.auxiliaryControlsElement
-    elements.push(auxiliary)
-    if (!auxiliary || getComputedStyle(auxiliary).flexDirection !== 'row') {
+  syncControlsGlassGeometry(currentState, pass)
+  syncAuxiliaryControlGeometry(currentState, pass)
+  pass.write(() => currentState.danmakuPopoverPositionSync?.())
+  try {
+    if (currentState.controlsLayoutReady)
+      return
+    const source = currentState.danmakuSemanticsSource
+    const viewers = source?.querySelector<HTMLElement>('.bpx-player-video-info')
+    const nativeButtons = controls?.matches('.bpx-player-control-wrap')
+      ? controls.querySelector<HTMLElement>('.bpx-player-control-bottom')
+      : controls
+    const nativeLayoutReady = !controls?.matches('.bpx-player-control-wrap')
+      || (nativeButtons && getComputedStyle(nativeButtons).display === 'flex')
+    const elements = [currentState.playerFrame, controls, nativeButtons, currentState.danmakuSourceHost]
+    // BV bars open with the online count, unless the card shows it in the info's
+    // meta line instead (syncViewerCount) and its pill has no box.
+    if (currentState.root.dataset.pageKind !== 'pgc' && !viewers?.hasAttribute(VIEWER_COUNT_MIRRORED_ATTRIBUTE))
+      elements.push(viewers)
+    if (!settings.value.alwaysUseDock) {
+      const auxiliary = currentState.auxiliaryControlsElement
+      elements.push(auxiliary)
+      if (!auxiliary || getComputedStyle(auxiliary).flexDirection !== 'row') {
+        currentState.controlsLayoutSignature = undefined
+        currentState.controlsLayoutStableSince = undefined
+        return
+      }
+    }
+    const rects = elements.map(element => element?.isConnected ? pass.rect(element) : undefined)
+    if (!nativeLayoutReady || !source?.isConnected || !currentState.danmakuGlass?.isConnected
+      || !nativeButtons?.childElementCount
+      || rects.some(rect => !rect || rect.width <= 0 || rect.height <= 0)) {
       currentState.controlsLayoutSignature = undefined
       currentState.controlsLayoutStableSince = undefined
+      return // Existing DOM/Resize observers resume this when native controls arrive.
+    }
+
+    const signature = `${rects.flatMap(rect => [rect!.left, rect!.top, rect!.width, rect!.height])
+      .map(value => value.toFixed(1))
+      .join(':')}:${nativeButtons.childElementCount}`
+    const now = Date.now()
+    if (signature !== currentState.controlsLayoutSignature) {
+      currentState.controlsLayoutSignature = signature
+      currentState.controlsLayoutStableSince = now
+    }
+    if (now - currentState.controlsLayoutStableSince! < READY_STABILITY_DELAY) {
+      currentState.resizeSyncFrame = requestAnimationFrame(() => settleControlsLayout(currentState))
       return
     }
-  }
-  const rects = elements.map(element => element?.isConnected ? element.getBoundingClientRect() : undefined)
-  if (!nativeLayoutReady || !source?.isConnected || !currentState.danmakuGlass?.isConnected
-    || !nativeButtons?.childElementCount
-    || rects.some(rect => !rect || rect.width <= 0 || rect.height <= 0)) {
-    currentState.controlsLayoutSignature = undefined
-    currentState.controlsLayoutStableSince = undefined
-    return // Existing DOM/Resize observers resume this when native controls arrive.
-  }
 
-  const signature = `${rects.flatMap(rect => [rect!.left, rect!.top, rect!.width, rect!.height])
-    .map(value => value.toFixed(1))
-    .join(':')}:${nativeButtons.childElementCount}`
-  const now = Date.now()
-  if (signature !== currentState.controlsLayoutSignature) {
-    currentState.controlsLayoutSignature = signature
-    currentState.controlsLayoutStableSince = now
+    currentState.controlsLayoutReady = true
+    currentState.measuredControls = controls!
+    pass.write(() => syncNativePlayerControlVisibility(currentState))
+    const reveal = currentState.onInitialLayoutReady
+    currentState.onInitialLayoutReady = undefined
+    if (reveal)
+      pass.write(reveal)
   }
-  if (now - currentState.controlsLayoutStableSince! < READY_STABILITY_DELAY) {
-    currentState.resizeSyncFrame = requestAnimationFrame(() => settleControlsLayout(currentState))
-    return
+  finally {
+    writes.forEach(apply => apply())
   }
-
-  currentState.controlsLayoutReady = true
-  currentState.measuredControls = controls!
-  syncNativePlayerControlVisibility(currentState)
-  const reveal = currentState.onInitialLayoutReady
-  currentState.onInitialLayoutReady = undefined
-  reveal?.()
 }
 
 export function schedulePlayerResizeSync(currentState: BewlyWidescreenState) {
@@ -346,14 +389,14 @@ export function schedulePlayerResizeSync(currentState: BewlyWidescreenState) {
       return
 
     syncDescription(currentState)
-    updatePlayerLayoutState(currentState)
+    const frameRect = updatePlayerLayoutState(currentState, false)
     // Layout size, not the painted box: a running zoom transform is not a resize.
     const signature = `${currentState.playerEl.offsetWidth}:${currentState.playerEl.offsetHeight}`
     if (!isPlayerShowingEndingRecommendation() && signature !== currentState.lastPlayerResizeSignature) {
       currentState.lastPlayerResizeSignature = signature
       window.dispatchEvent(new Event('resize'))
     }
-    settleControlsLayout(currentState)
+    settleControlsLayout(currentState, true, frameRect)
   })
 }
 

@@ -8,7 +8,7 @@ import { AppPage } from '~/enums/appEnums'
 import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, originalSettings, settings } from '~/logic'
 import { useIframePageActive } from '~/logic/iframePageState'
 import { useSettingsStore } from '~/stores/settingsStore'
-import { getBilibiliLogicalPathname } from '~/utils/bilibiliLocale'
+import { getBilibiliLogicalPathname, isBilibiliMomentsFeed } from '~/utils/bilibiliLocale'
 import { detachOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanClipboardSelectionHtml, getClipboardSelection } from '~/utils/clipboardSelection'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
@@ -306,7 +306,7 @@ export function setupNecessarySettingsWatchers(scrollViewportRef: Ref<HTMLElemen
       currentLocationHref,
     ],
     ([showUserCard, showLiveList, showCommunityCenter, showHotSearch, showUpList, href]) => {
-      const isOriginalMomentsFeed = /https?:\/\/t\.bilibili\.com\/?(?:[?#].*)?$/.test(href)
+      const isOriginalMomentsFeed = isBilibiliMomentsFeed(href)
       document.documentElement.classList.toggle('moments-hide-original-user-card', isOriginalMomentsFeed && !showUserCard)
       document.documentElement.classList.toggle('moments-hide-original-live-list', isOriginalMomentsFeed && !showLiveList)
       document.documentElement.classList.toggle('moments-hide-original-community-center', isOriginalMomentsFeed && !showCommunityCenter)

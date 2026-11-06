@@ -8,7 +8,6 @@ import {
   FAVORITES_URL,
   HEADER_ARTWORK_PAGE_URL,
   HISTORY_URL,
-  MOMENTS_FEED_URL,
   SEARCH_PAGE_URL,
   SPACE_URL,
 } from '~/components/TopBar/constants/urls'
@@ -19,6 +18,7 @@ import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { isBilibiliMomentsFeed, toBilibiliLogicalUrl } from '~/utils/bilibiliLocale'
 import { resolveConfiguredLinkAction } from '~/utils/configuredLinkNavigation'
 import { isHomePage, isInIframe, isWatchLaterListPage } from '~/utils/main'
 import { shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
@@ -41,7 +41,7 @@ const BEWLY_PAGE_BY_TOP_BAR_ITEM: Partial<Record<TopBarPopupKey, AppPage>> = {
 }
 
 const NATIVE_PAGE_BY_TOP_BAR_ITEM: Partial<Record<TopBarPopupKey, (url: string) => boolean>> = {
-  moments: url => MOMENTS_FEED_URL.test(url),
+  moments: isBilibiliMomentsFeed,
   favorites: url => FAVORITES_URL.test(url),
   history: url => HISTORY_URL.test(url),
   watchLater: isWatchLaterListPage,
@@ -112,7 +112,7 @@ export function useTopBarInteraction() {
 
   // TopBar 相关计算属性
   const forceWhiteIcon = computed((): boolean => {
-    const currentUrl = currentLocationHref.value
+    const currentUrl = toBilibiliLogicalUrl(currentLocationHref.value)
     if (!settings.value)
       return false
 
@@ -129,7 +129,7 @@ export function useTopBarInteraction() {
   })
 
   const showSearchBar = computed((): boolean => {
-    const currentUrl = currentLocationHref.value
+    const currentUrl = toBilibiliLogicalUrl(currentLocationHref.value)
     const isSearchPage = SEARCH_PAGE_URL.test(currentUrl)
 
     if (isHomePage(currentUrl)) {
@@ -420,7 +420,7 @@ export function useTopBarInteraction() {
 
   /** True while the page this action leads to is already shown (Bewly or native). */
   function isCurrentTopBarItemPage(key: TopBarPopupKey): boolean {
-    const url = currentLocationHref.value
+    const url = toBilibiliLogicalUrl(currentLocationHref.value)
     const page = BEWLY_PAGE_BY_TOP_BAR_ITEM[key]
     if (page && isHomePage(url) && activatedPage?.value === page)
       return true

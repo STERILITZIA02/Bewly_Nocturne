@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Input from '~/components/Input.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
+import { MOMENT_TYPE_FILTER_OPTIONS } from '~/constants/momentFilters'
 import { settings } from '~/logic'
 
 import SettingsItem from '../../components/SettingsItem.vue'
@@ -56,20 +57,6 @@ const pluginComponentOptions = computed<MomentTagOption[]>(() => [
   { setting: 'momentsShowUpList', labelKey: 'settings.moments_show_up_list', icon: 'i-tabler-users' },
 ])
 
-const pluginFilterOptions = computed<MomentTagOption[]>(() => [
-  { setting: 'momentsHideVideoDynamics', labelKey: 'settings.moments_filter_video_dynamic', icon: 'i-tabler-player-play' },
-  { setting: 'momentsHideDrawDynamics', labelKey: 'settings.moments_filter_draw_dynamic', icon: 'i-tabler-photo' },
-  { setting: 'momentsHideUgcSeasonDynamics', labelKey: 'settings.moments_filter_ugc_season_dynamic', icon: 'i-tabler-stack' },
-  { setting: 'momentsHideForwardDynamics', labelKey: 'settings.moments_filter_forward_dynamic', icon: 'i-tabler-repeat' },
-  { setting: 'momentsHidePgcDynamics', labelKey: 'settings.moments_filter_pgc_dynamic', icon: 'i-tabler-device-tv' },
-  { setting: 'momentsHideArticleDynamics', labelKey: 'settings.moments_filter_article_dynamic', icon: 'i-tabler-news' },
-  { setting: 'momentsFilterUpRecommendation', labelKey: 'settings.moments_filter_up_recommendation_short', icon: 'i-tabler-sparkles' },
-  { setting: 'momentsHideChargeExclusive', labelKey: 'settings.moments_filter_charge_dynamic', icon: 'i-tabler-battery-charging' },
-  { setting: 'momentsHideVideoReservation', labelKey: 'settings.moments_filter_video_reservation', icon: 'i-tabler-calendar-time' },
-  { setting: 'momentsHideLiveReservation', labelKey: 'settings.moments_filter_live_reservation', icon: 'i-tabler-calendar-event' },
-  { setting: 'momentsHideLiveDynamics', labelKey: 'settings.moments_filter_live_dynamic', icon: 'i-tabler-broadcast' },
-])
-
 const openModeOptions = computed(() => [
   {
     label: t('settings.moments_card_open_mode_opt.dialog'),
@@ -97,6 +84,9 @@ const gridColumnOptions = computed(() => [
     <SettingsItemGroup data-setting-id="settings.group_original_moments_page" :title="$t('settings.group_original_moments_page')">
       <SettingsItem setting-id="settings.original_moments_use_bewly_filters" :title="$t('settings.original_moments_use_bewly_filters')" :desc="$t('settings.original_moments_use_bewly_filters_desc')" right-width="auto">
         <Radio v-model="settings.originalMomentsUseBewlyFilters" />
+      </SettingsItem>
+      <SettingsItem setting-id="settings.original_moments_click_blank_to_fold_comments" :title="$t('settings.original_moments_click_blank_to_fold_comments')" right-width="auto">
+        <Radio v-model="settings.originalMomentsClickBlankToFoldComments" />
       </SettingsItem>
       <SettingsItem
         setting-id="settings.original_moments_visible_components"
@@ -186,7 +176,7 @@ const gridColumnOptions = computed(() => [
         <template #bottom>
           <div class="moment-setting-tags moment-setting-tags--filters" role="group" :aria-label="$t('settings.moments_filtered_types')">
             <SettingsToggleTag
-              v-for="option in pluginFilterOptions"
+              v-for="option in MOMENT_TYPE_FILTER_OPTIONS"
               :key="option.setting"
               v-model="settings[option.setting]"
               :label="$t(option.labelKey)"

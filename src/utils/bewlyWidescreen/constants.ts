@@ -135,8 +135,6 @@ export const SIDEBAR_HYDRATION_RECOVERY_INTERVAL = 1000
 
 export const DANMAKU_RESIZE_DELAYS = [0, 80, 180, 360, 720] as const
 
-export const BILIBILI_ACTION_ANIMATION_HUE = 196
-
 export const COMMENT_ROOT_ID_SELECTOR = '#comment-module, #comment-body, #commentapp'
 
 export const COMMENT_NESTED_UI_SELECTOR = '.reply-item, .sub-reply-item, bili-comment-renderer'

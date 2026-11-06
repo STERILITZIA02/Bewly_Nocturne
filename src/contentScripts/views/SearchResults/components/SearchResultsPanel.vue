@@ -42,6 +42,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   updatePage: [page: number]
+  selectLiveUsers: []
 }>()
 
 interface SearchPageHandle {
@@ -171,7 +172,10 @@ defineExpose({
 <template>
   <div ref="panelRef" class="search-results-panel" :style="{ minHeight: minHeight === undefined ? undefined : `${minHeight}px` }">
     <Transition mode="out-in" v-bind="transition">
-      <Component :is="pages[currentCategory]" :key="currentCategory" ref="currentPageRef" v-bind="pageProps" @update-page="handleUpdatePage" />
+      <Component
+        :is="pages[currentCategory]" :key="currentCategory" ref="currentPageRef" v-bind="pageProps" @update-page="handleUpdatePage"
+        @select-live-users="emit('selectLiveUsers')"
+      />
     </Transition>
     <div v-if="canManuallyLoadMore" class="search-results-panel__more">
       <Button type="secondary" @click="currentPageRef?.resumeLoadMore?.()">

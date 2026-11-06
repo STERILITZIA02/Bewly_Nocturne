@@ -23,7 +23,7 @@ function attachPageListeners() {
   const syncActivity = () => {
     for (const [topic, onStale] of followed) {
       void report(topic, !document.hidden).then((stale) => {
-        if (stale && !document.hidden)
+        if (stale && !document.hidden && followed.get(topic) === onStale)
           onStale()
       })
     }
@@ -51,6 +51,11 @@ export function followStateTopic(topic: StateTopic, onStale: () => void) {
     return
   followed.set(topic, onStale)
   attachPageListeners()
+}
+
+export function unfollowStateTopic(topic: StateTopic) {
+  if (followed.delete(topic))
+    void sendMessage(STATE_CONSUMER_MESSAGE.RELEASE, { topic }).catch(() => {})
 }
 
 /** For a topic whose display need is owned by a component (e.g. TopBar). */

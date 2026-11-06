@@ -2,6 +2,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import { settings } from '~/logic'
+import { parseStatNumber } from '~/utils/dataFormatter'
 import { compileFilterRules, isAboveKnownCount } from '~/utils/filterRules'
 import { createRegexBatchRunner } from '~/utils/regexBatchRunner'
 import { isVerticalVideo } from '~/utils/uriParse'
@@ -61,16 +62,8 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
    * @returns `true` if the value is greater than the filter value, `false` otherwise.
    */
   function compareNumberString(item: any, keyPath: string[], filterValue: number) {
-    const value = get(item, keyPath)
-
-    // for example: `1.2万`, `1.2萬`, `-` (indicates no data)
-    if (typeof value === 'string' && (value.includes('万') || value.includes('萬'))) {
-      const processedValue = value.replace(/万|萬/g, '')
-      return Number(processedValue) * 10000 > filterValue
-    }
-
-    const numericValue = Number(value)
-    return !Number.isNaN(numericValue) && numericValue > filterValue
+    const value = parseStatNumber(get(item, keyPath))
+    return value !== undefined && value > filterValue
   }
 
   // #region filter by title

@@ -5,7 +5,8 @@ import ChevronIcon from '~/components/ChevronIcon.vue'
 import Empty from '~/components/Empty.vue'
 import { useImageViewer } from '~/composables/useImageViewer'
 import { useSurfaceMorph } from '~/composables/useSurfaceMorph'
-import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
+import { uiPx } from '~/composables/useUiScale'
+import { LAYOUT_BREAKPOINTS, TOP_BAR_HEIGHT } from '~/constants/layout'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { normalizeImageViewerUrl } from '~/utils/imageViewer'
@@ -24,6 +25,7 @@ import type { PrivateEmotePanelController } from './usePrivateEmotePanel'
 import type { PrivateHistorySearchController } from './usePrivateHistorySearch'
 import { usePrivateMessagePreviews } from './usePrivateMessagePreviews'
 import type { PrivateMessagesController } from './usePrivateMessages'
+import { hasPrivateMessageLatestWindow } from './usePrivateMessages'
 
 const props = defineProps<{
   active: boolean
@@ -83,6 +85,8 @@ const state = computed(() => {
     atLatest: false,
     scrollTop: 0,
     newMessagesAvailable: false,
+    newestSeqno: '',
+    serverMaxSeqno: '',
   }
 })
 const isTextSendEnabled = computed(() => Boolean(props.writeController) && Boolean(
@@ -152,6 +156,7 @@ const viewport = useConversationViewport({
   ready: isHistoryReady,
   canProcess: () => !conversationActivationPending,
   followContentGrowth: () => state.value.atLatest,
+  latestWindow: () => props.searchMode || hasPrivateMessageLatestWindow(state.value),
   talkerId: () => talkerId.value,
   save: (id, position) => {
     if (props.searchMode || searchViewportOwned)
@@ -172,8 +177,10 @@ const { messageScrollRef, messageContentRef, isAtLatestPosition, isAtLatest, sav
 function locateMessage(key: string) {
   highlightedMessage.value = key
   const rootTop = messageScrollRef.value?.getBoundingClientRect().top ?? 0
-  const topBarHeight = conversationViewRef.value ? Number.parseFloat(getComputedStyle(conversationViewRef.value).getPropertyValue('--bew-top-bar-height')) || 64 : 64
-  viewport.scrollToMessage(key, Math.max(16, topBarHeight - rootTop + 16))
+  const style = conversationViewRef.value && getComputedStyle(conversationViewRef.value)
+  const topBarHeight = Number.parseFloat(style?.getPropertyValue('--bew-top-bar-height') ?? '') || uiPx(TOP_BAR_HEIGHT)
+  const inset = Number.parseFloat(style?.getPropertyValue('--bew-space-4') ?? '') || uiPx(16)
+  viewport.scrollToMessage(key, Math.max(inset, topBarHeight - rootTop + inset))
 }
 const presentation = useConversationPresentation(conversationViewRef, () => props.active, {
   activate: () => void activateConversation(),
@@ -183,7 +190,20 @@ const presentation = useConversationPresentation(conversationViewRef, () => prop
 }, messageContentRef, composerRef)
 const { conversationExpanded, reducedMotion, isLayoutTransitioning, entryPhase, historyVisible, isRevealingHistory, historyRevealDelays, conversationLayoutStyle, updateConversationGeometry, finishConversationSwitch, revealVisibleHistory, finishHistoryReveal, beginHistoryLeave } = presentation
 const showLatestButton = computed(() => !props.searchMode && entryPhase.value === 'ready' && timelineItems.value.length > 0
-  && (!isAtLatestPosition.value || state.value.newMessagesAvailable))
+  && (!isAtLatestPosition.value || !hasPrivateMessageLatestWindow(state.value) || state.value.newMessagesAvailable))
+
+async function jumpToLatest() {
+  const generation = activationGeneration
+  const id = talkerId.value
+  const anchor = viewport.captureReadingAnchor()
+  const isCurrent = () => generation === activationGeneration && props.active && componentMounted && anchor?.isCurrent() === true
+  await props.controller.loadLatest(id, isCurrent)
+  await nextTick()
+  if (!isCurrent() || state.value.errorKind)
+    return
+  scrollToLatest('smooth')
+  await acknowledgeIfEligible()
+}
 
 function isHistoryReady() {
   return entryPhase.value === 'ready'
@@ -248,7 +268,7 @@ async function refreshLatest(options: { forceBottom?: boolean } = {}) {
   if (!componentMounted || !props.active || generation !== activationGeneration)
     return
   if (shouldFollow && anchor?.isCurrent())
-    scrollToLatest()
+    await jumpToLatest()
   else
     saveViewportState()
   await acknowledgeIfEligible()
@@ -287,7 +307,7 @@ async function finishConfirmedWrite(submittedTalkerId: string, generation: numbe
   if (!componentMounted || !props.active || generation !== activationGeneration || submittedTalkerId !== talkerId.value)
     return
   if (!props.searchMode)
-    scrollToLatest()
+    await jumpToLatest()
   emit('sendConfirmed', submittedTalkerId)
 }
 
@@ -601,7 +621,7 @@ defineExpose({
           v-else type="button" class="conversation-view__latest-action"
           :aria-label="t(state.newMessagesAvailable ? 'notifications.whisper.messages.new_messages' : 'notifications.whisper.messages.return_latest')"
           :title="t(state.newMessagesAvailable ? 'notifications.whisper.messages.new_messages' : 'notifications.whisper.messages.return_latest')"
-          @click="scrollToLatest('smooth'); acknowledgeIfEligible()"
+          @click="jumpToLatest"
         >
           <ChevronIcon />
         </button>

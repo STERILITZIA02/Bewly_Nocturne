@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
 
+import { applyMotionPreference } from '../src/utils/reducedMotion'
 import { loadSourceModule } from './sourceModuleHarness'
 
 function animationFixture() {
   const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate')
   const matchMedia = window.matchMedia
+  const preference = document.documentElement.dataset.bewMotion
+  applyMotionPreference(document.documentElement, 'full')
   const records = []
   let reduced = false
   window.matchMedia = () => ({ get matches() {
@@ -27,9 +30,13 @@ function animationFixture() {
   } })
   return {
     records,
-    reduced(value) { reduced = value },
+    reduced(value) {
+      reduced = value
+      applyMotionPreference(document.documentElement, value ? 'reduce' : 'full')
+    },
     close() {
       window.matchMedia = matchMedia
+      applyMotionPreference(document.documentElement, preference)
       if (original)
         Object.defineProperty(HTMLElement.prototype, 'animate', original)
       else delete HTMLElement.prototype.animate

@@ -22,6 +22,10 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
     try {
       await flush()
       const trigger = host.querySelector('button')
+      const pointerClick = () => {
+        trigger.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }))
+        trigger.dispatchEvent(new MouseEvent('click', { detail: 1, bubbles: true, composed: true }))
+      }
       trigger.focus()
       trigger.click()
       await flush()
@@ -33,10 +37,10 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       assert.equal(trigger.getAttribute('aria-expanded'), 'false')
       assert.equal(document.activeElement, trigger)
       settings.value.touchScreenOptimization = true
-      trigger.dispatchEvent(new MouseEvent('click', { detail: 1, bubbles: true }))
+      pointerClick()
       await flush()
       assert.equal(trigger.getAttribute('aria-expanded'), 'true')
-      trigger.dispatchEvent(new MouseEvent('click', { detail: 1, bubbles: true }))
+      pointerClick()
       await flush()
       assert.equal(trigger.getAttribute('aria-expanded'), 'false')
       settings.value.touchScreenOptimization = false
@@ -45,7 +49,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       trigger.dispatchEvent(hover)
       await flush()
       assert.equal(trigger.getAttribute('aria-expanded'), 'true')
-      trigger.dispatchEvent(new MouseEvent('click', { detail: 1, bubbles: true }))
+      pointerClick()
       await flush()
       assert.equal(trigger.getAttribute('aria-expanded'), 'true', 'clicking a hovered trigger must not immediately close its panel')
       window.dispatchEvent(new Event('blur'))

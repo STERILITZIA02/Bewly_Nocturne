@@ -19,7 +19,8 @@ export enum DrawerType {
 }
 
 export type SettingsNavigationTarget
-  = | { category: 'bewly-pages', page: 'messages' | 'page-modes' | 'search' }
+  = | { category: 'bewly-pages', page: 'messages' | 'page-modes' | 'search' | 'home' | 'moments', settingId?: string }
+    | { category: 'bewly-components', page: 'video-card', settingId?: string }
     | { category: 'playback', page: 'layout' | 'controls' | 'behavior', settingId?: string }
 
 export interface SettingsNavigationRequest {

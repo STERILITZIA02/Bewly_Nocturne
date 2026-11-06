@@ -45,7 +45,7 @@ import { normalizeIntlLocale } from '~/utils/locale'
 import { getCSRF, getUserID, removeHttpFromUrl } from '~/utils/main'
 import { retiringTransition } from '~/utils/motionPresence'
 import { dissolveElements } from '~/utils/particleDissolve'
-import { clearVideoVisitHistory, getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
+import { acquireVideoVisitHistory, clearVideoVisitHistory, getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
 
 import HistoryDayNode from './HistoryDayNode.vue'
 import type { HistoryFilters, HistorySortOrder } from './historyFilters'
@@ -57,6 +57,7 @@ import HistoryGroupSkeleton from './HistoryGroupSkeleton.vue'
 import { useHistoryTimeline } from './useHistoryTimeline'
 
 const { t, locale } = useI18n()
+onScopeDispose(acquireVideoVisitHistory())
 const toast = useToast()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 

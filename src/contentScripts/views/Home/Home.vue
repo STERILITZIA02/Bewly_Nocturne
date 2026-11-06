@@ -2,6 +2,7 @@
 import { useMediaQuery } from '@vueuse/core'
 import type { AsyncComponentLoader } from 'vue'
 
+import ContentFilterEntry from '~/components/ContentFilterEntry.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import Logo from '~/components/Logo.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
@@ -517,6 +518,7 @@ watch(tabContentLoading, (loading) => {
         </div>
 
         <div class="home-header-actions">
+          <ContentFilterEntry v-if="activatedPage === HomeSubPage.ForYou" kind="recommendation" />
           <RecommendationModeSwitcher
             v-if="reserveRecommendationModeSwitcher"
             class="home-control-surface"

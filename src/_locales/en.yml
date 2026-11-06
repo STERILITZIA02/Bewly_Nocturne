@@ -49,6 +49,7 @@ library_tools:
   next_match: Next match
   load_more_videos: Load more videos
 common:
+  volume: Volume {volume}%
   pagination_stalled: The list did not advance. Retry to continue.
   advertisement: Advertisement
   clear_selection: Clear selection
@@ -197,6 +198,14 @@ player_adjustment:
   delay: Audio delay
   delay_note: Corrects a fixed offset when sound leads the picture. It does not automatically synchronize playback or fix buffering. Unsupported audio stays unchanged.
 settings:
+  original_moments_click_blank_to_fold_comments: Collapse native feed comments by clicking the side margins
+  custom_fullscreen_wheel_volume: Adjust volume with the wheel in fullscreen
+  fullscreen_wheel_volume_step: Volume per step
+  hide_dock_refresh_button: Hide Dock refresh button
+  moments_filter_entry: Moment filters
+  recommendation_filter_entry: Recommendation filters
+  filter_settings: Filter settings
+  moments_shown_types: Visible moment types
   moments_start_from_last_seen: Resume when opening dynamics
   moments_start_from_last_seen_desc: For All, Videos and the top bar video feed. Restores this window’s reading bookmark, or uses the server’s unread-video boundary. That boundary does not track reading across all post types.
   parameters: Parameters
@@ -1331,6 +1340,8 @@ dock:
   collapse_dock: Collapse Dock
   expand_dock: Expand Dock
 moments:
+  vote_expand_options: Show all {count} options
+  vote_collapse_options: Collapse options
   jump_to_last_seen: Back to what you were reading
   jump_to_latest: Back to latest
   refresh_moments: Refresh posts
@@ -1573,6 +1584,7 @@ moment_card:
   reservation_failed: Reservation failed
   reservation_login_required: Sign in to reserve
 video_card:
+  customize_menu: Customize menu
   favorite_dialog:
     read: Could not load folders. Try again.
     save: Could not update favorites. Try again.
@@ -1939,6 +1951,7 @@ widescreen:
   expand_episodes: Expand episodes
   listen_not_ready: The player is not ready yet. Try again shortly.
   listen_unavailable: This video has no separately playable audio track.
+  listen_btr_companion_required: This BTR version needs the companion patch for listen handoff v1.
   overview: Overview
   panel_load_incomplete: Content could not finish loading. Reload the page or exit Bewly Playback Page to try again.
   reload_page: Reload page

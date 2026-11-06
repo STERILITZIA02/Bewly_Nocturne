@@ -5,6 +5,7 @@ import type { ListenSession } from '~/utils/listenPlayback'
 import { isListenSession, LISTEN_GATE, LISTEN_RECOVER, LISTEN_RELEASE, LISTEN_SAVE, matchesListenUnit } from '~/utils/listenPlayback'
 import { onMessage } from '~/utils/messaging'
 import type { NativePlaybackUnit } from '~/utils/videoMetadataBridge'
+import { getNativePlaybackUnitKey } from '~/utils/videoMetadataBridge'
 
 const FIRST_GATE = 10_000
 const ownerKey = (tabId: number) => `listenGate:${tabId}`
@@ -34,9 +35,10 @@ export function setupListenPlayback() {
       const tab = await browser.tabs.get(tabId).catch(() => undefined)
       const saved = owners[ownerKey(tabId)] as { unit?: NativePlaybackUnit, state?: ListenSession } | undefined
       const unit = saved?.unit
-      if (tab?.url && unit && matchesListenUnit(tab.url, unit)) {
+      const href = tab?.pendingUrl || tab?.url
+      if (href && unit && matchesListenUnit(href, unit)) {
         units.set(tabId, unit)
-        if (isListenSession(saved?.state, tab.url) && saved.state.gate === ids[0])
+        if (isListenSession(saved?.state, href) && saved.state.gate === ids[0])
           checkpoints.set(tabId, saved.state)
       }
       else {
@@ -51,19 +53,25 @@ export function setupListenPlayback() {
     writes = result.then(() => {}, () => {})
     return result
   }
-  function release(tabId: number, gate: number) {
-    return enqueue(async () => {
-      const ids = gates.get(tabId)
-      if (ids?.[0] !== gate)
-        return
-      await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: ids })
-      gates.delete(tabId)
-      units.delete(tabId)
-      checkpoints.delete(tabId)
-      await browser.storage.session.remove(ownerKey(tabId))
-    })
+  async function releaseOwned(tabId: number, gate: number) {
+    const ids = gates.get(tabId)
+    if (ids?.[0] !== gate)
+      return
+    await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: ids })
+    gates.delete(tabId)
+    units.delete(tabId)
+    checkpoints.delete(tabId)
+    await browser.storage.session.remove(ownerKey(tabId))
   }
-  onMessage<{ unit: NativePlaybackUnit, sources: string[] }, number | undefined>(LISTEN_GATE, async (data, sender) => {
+  async function ownsRoute(tabId: number, unit: NativePlaybackUnit) {
+    const tab = await browser.tabs.get(tabId).catch(() => undefined)
+    const href = tab?.pendingUrl || tab?.url
+    return !!href && matchesListenUnit(href, unit)
+  }
+  function release(tabId: number, gate: number) {
+    return enqueue(() => releaseOwned(tabId, gate))
+  }
+  onMessage<{ unit: NativePlaybackUnit, sources: string[], state?: ListenSession }, number | undefined>(LISTEN_GATE, async (data, sender) => {
     const tabId = sender?.tab?.id
     if (tabId === undefined || sender?.frameId !== 0 || !sender.url || !matchesListenUnit(sender.url, data?.unit) || !Array.isArray(data.sources))
       return
@@ -71,6 +79,8 @@ export function setupListenPlayback() {
     if (!sources.length || !sources.every(value => URL.canParse(value) && new URL(value).protocol === 'https:' && isAudioCdnHost(new URL(value).hostname)))
       return
     return enqueue(async () => {
+      if (!await ownsRoute(tabId, data.unit))
+        return
       const occupied = new Set(Array.from(gates.values()).flat())
       let id: number
       do {
@@ -88,25 +98,33 @@ export function setupListenPlayback() {
           condition: { tabIds: [tabId], initiatorDomains: ['www.bilibili.com'], resourceTypes: ['media'], urlFilter: `|${url}|`, isUrlFilterCaseSensitive: true },
         })),
       ]
+      const previousGate = gates.get(tabId)?.[0]
       await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: gates.get(tabId) ?? [], addRules })
       const ids = addRules.map(rule => rule.id)
-      const previous = checkpoints.get(tabId)
-      const state = previous && matchesListenUnit(sender.url!, previous.unit) ? { ...previous, gate: id } : undefined
-      try {
-        await browser.storage.session.set({ [ownerKey(tabId)]: { unit: data.unit, state } })
-      }
-      catch (error) {
-        await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: ids })
-        gates.delete(tabId)
-        units.delete(tabId)
-        checkpoints.delete(tabId)
-        throw error
-      }
+      const previous = isListenSession(data.state, sender.url!) && (previousGate === undefined || data.state.gate === previousGate)
+        ? data.state
+        : checkpoints.get(tabId)
+      const state = previous && getNativePlaybackUnitKey(previous.unit) === getNativePlaybackUnitKey(data.unit) ? { ...previous, gate: id } : undefined
       gates.set(tabId, ids)
       units.set(tabId, data.unit)
       if (state)
         checkpoints.set(tabId, state)
       else checkpoints.delete(tabId)
+      try {
+        if (!await ownsRoute(tabId, data.unit)) {
+          await releaseOwned(tabId, id)
+          return
+        }
+        await browser.storage.session.set({ [ownerKey(tabId)]: { unit: data.unit, state } })
+        if (!await ownsRoute(tabId, data.unit)) {
+          await releaseOwned(tabId, id)
+          return
+        }
+      }
+      catch (error) {
+        await releaseOwned(tabId, id)
+        throw error
+      }
       return id
     })
   })
@@ -115,39 +133,50 @@ export function setupListenPlayback() {
     if (tabId === undefined || sender?.frameId !== 0 || !sender.url || !isListenSession(state, sender.url))
       return
     await enqueue(async () => {
-      if (gates.get(tabId)?.[0] !== state.gate)
+      const unit = units.get(tabId)
+      if (gates.get(tabId)?.[0] !== state.gate || !unit || getNativePlaybackUnitKey(unit) !== getNativePlaybackUnitKey(state.unit))
         return
+      if (!await ownsRoute(tabId, unit)) {
+        await releaseOwned(tabId, state.gate)
+        return
+      }
       await browser.storage.session.set({ [ownerKey(tabId)]: { unit: state.unit, state } })
+      if (!await ownsRoute(tabId, unit)) {
+        await releaseOwned(tabId, state.gate)
+        return
+      }
       checkpoints.set(tabId, state)
     })
   })
   onMessage<undefined, ListenSession | undefined>(LISTEN_RECOVER, async (_, sender) => {
-    await writes
     const tabId = sender?.tab?.id
     if (tabId === undefined || sender?.frameId !== 0 || !sender.url)
       return
-    const state = checkpoints.get(tabId)
-    if (state && matchesListenUnit(sender.url, state.unit))
-      return state
-    // The previous document may have disappeared between reserving the tab
-    // and committing its first playable checkpoint.
-    const gate = gates.get(tabId)?.[0]
-    if (gate !== undefined)
-      await release(tabId, gate)
+    return enqueue(async () => {
+      const state = checkpoints.get(tabId)
+      const gate = gates.get(tabId)?.[0]
+      if (state && state.gate === gate && matchesListenUnit(sender.url!, state.unit) && await ownsRoute(tabId, state.unit))
+        return state
+      // An uncommitted or departed document cannot keep network restrictions.
+      if (gate !== undefined)
+        await releaseOwned(tabId, gate)
+    })
   })
   onMessage<number, void>(LISTEN_RELEASE, async (gate, sender) => {
     if (sender?.tab?.id !== undefined && sender.frameId === 0)
       await release(sender.tab.id, gate)
   })
-  function changed(tabId: number, href?: string) {
-    const gate = gates.get(tabId)?.[0]
-    const unit = units.get(tabId)
-    if (gate !== undefined && (!unit || !href || !matchesListenUnit(href, unit)))
-      void release(tabId, gate).catch(error => console.warn('[Bewly Nocturne] Failed to release listening rules:', error))
+  function changed(tabId: number, closed = false) {
+    void enqueue(async () => {
+      const gate = gates.get(tabId)?.[0]
+      const unit = units.get(tabId)
+      if (gate !== undefined && (closed || !unit || !await ownsRoute(tabId, unit)))
+        await releaseOwned(tabId, gate)
+    }).catch(error => console.warn('[Bewly Nocturne] Failed to release listening rules:', error))
   }
-  browser.tabs.onUpdated.addListener((tabId, change, tab) => {
-    if (change.url || (change.status === 'complete' && !tab.url))
-      changed(tabId, change.url ?? tab.url)
+  browser.tabs.onUpdated.addListener((tabId, change) => {
+    if (change.url || change.status)
+      changed(tabId)
   })
-  browser.tabs.onRemoved.addListener(tabId => changed(tabId))
+  browser.tabs.onRemoved.addListener(tabId => changed(tabId, true))
 }

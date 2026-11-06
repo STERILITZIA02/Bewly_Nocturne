@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 import { compileStyleAsync } from 'vue/compiler-sfc'
 
+import { loadSourceModule } from './sourceModuleHarness'
+
 export function registerSurfaceMaterialChecks(check, { Vue, compileComponent, flush }) {
   check('surface materials: the settings window is one solid surface ruled into columns by hairlines', async () => {
     const read = file => readFile(new URL(`../src/${file}`, import.meta.url), 'utf8')
@@ -49,7 +51,14 @@ export function registerSurfaceMaterialChecks(check, { Vue, compileComponent, fl
 
   check('surface materials: actual segmented controls stay solid and retain selection', async () => {
     const indicator = await compileComponent('../src/components/LiquidSegmentIndicator.vue', {
-      '~/composables/useLiquidSegmentIndicator': await import('../src/composables/useLiquidSegmentIndicator'),
+      '~/composables/useLiquidSegmentIndicator': await loadSourceModule('../src/composables/useLiquidSegmentIndicator.ts', {
+        'vue': Vue,
+        '@vueuse/core': await import('@vueuse/core'),
+        '~/utils/motionPriority': await import('../src/utils/motionPriority'),
+        '~/utils/motionTiming': await import('../src/utils/motionTiming'),
+        '~/utils/spring': await import('../src/utils/spring'),
+        './useReducedMotion': { useReducedMotion: () => Vue.ref(true) },
+      }),
     })
     const segmented = await compileComponent('../src/components/Settings/components/SettingsSegmentedControl.vue', {
       '~/components/LiquidSegmentIndicator.vue': { default: indicator },

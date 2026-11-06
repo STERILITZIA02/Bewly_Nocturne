@@ -54,6 +54,7 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     const player = prepareListenAudio(state, urls, controller.signal, () => failed++)
     const { audio } = player
     audio.play = () => assert.fail('a paused listener must not autoplay')
+    audio.pause = () => {}
     audio.load = () => {}
     audio.dispatchEvent(new Event('loadedmetadata'))
     await player.ready
@@ -93,7 +94,7 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
             addRules.forEach(rule => rules.set(rule.id, rule))
           },
         },
-        tabs: { onUpdated: { addListener() {} }, onRemoved: { addListener: fn => closed = fn } },
+        tabs: { get: async id => ({ id, url: 'https://www.bilibili.com/video/av1/' }), onUpdated: { addListener() {} }, onRemoved: { addListener: fn => closed = fn } },
         storage: { session: { async set() {}, async remove() {} } },
       } },
       '~/constants/audioCdn': await import('../src/constants/audioCdn'),
@@ -145,6 +146,7 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     const routes = new Set()
     const checkpoint = new Map()
     const released = []
+    const nativeReleased = []
     let savedTime
     const deferred = () => {
       let resolve
@@ -191,11 +193,14 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       '~/utils/playerMedia': { getPlayerRoot: () => root, getVideoElement: () => native, isPlayerAdvertisement: () => false },
       '~/utils/videoMetadataBridge': {
         ...await import('../src/utils/videoMetadataBridge'),
-        readNativeMediaSnapshot: () => ({ unit }),
+        readNativeMediaSnapshot: () => ({ unit, btr: { installed: false, ownsMedia: false, listenHandoffVersion: 0 } }),
         suspendNativePlayback: () => {
           suspensions += 1
           return true
         },
+        resumeNativeListen: () => false,
+        switchNativePlaybackVisit: () => unit,
+        releaseNativeListen: gate => nativeReleased.push(gate),
       },
       './listenAudio': { prepareListenAudio: (_state, _sources, _signal, onFailed) => {
         audio = document.createElement('audio')
@@ -257,6 +262,17 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       assert.ok(bound.signal.aborted && !root.contains(stageHost))
       assert.equal(commits, 1)
       assert.equal(location.href, 'https://www.bilibili.com/video/av2/')
+      nativeReleased.length = 0
+      location.href = 'https://www.bilibili.com/video/av1/'
+      grant = deferred()
+      button.click()
+      await flush()
+      grant.resolve(10003)
+      await flush()
+      button.click()
+      await flush()
+      assert.equal(listenStage.value, null)
+      assert.deepEqual(nativeReleased, [10003], 'native source switch return releases the controller')
     }
     finally {
       stop()
@@ -287,6 +303,10 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     const { bindListenNativeBar } = await loadSourceModule('../src/contentScripts/listenNativeBar.ts', {
       '~/utils/dataFormatter': { calcCurrentTime: seconds => `${seconds}` },
       '~/utils/playerMedia': { getVideoElement: () => native },
+      './playerDomLifecycle': { observePlayerDom(fn) {
+        fn()
+        return () => {}
+      } },
     }, { ResizeObserver: class { observe() {} disconnect() {} } })
     const controller = new AbortController()
     try {
@@ -297,6 +317,7 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       native.playbackRate = 2
       native.dispatchEvent(new Event('ratechange'))
       assert.equal(audio.playbackRate, 2)
+      await new Promise(resolve => requestAnimationFrame(resolve))
       assert.ok(play.querySelector('.bewly-player-glyph'))
       play.click()
       await Promise.resolve()
@@ -956,6 +977,7 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
     let fullDuration = 200
     const oldPlayer = window.player
     const oldBtr = window.__biliThreadRipperDebug
+    const hadBtrMark = document.documentElement.hasAttribute('data-btr-userscript')
     window.player = { mediaElement: () => video, getManifest: () => manifest, getQuality: () => ({ nowQ: 64, realQ: realQuality }), getDuration: full => full ? fullDuration : 200 }
     const bridge = await loadSourceModule('../src/utils/videoMetadataBridge.ts', { './pageBridgeChannel': { getPageBridgeChannelId: () => 'fixture-channel' } }, { CustomEvent: window.CustomEvent, location: window.location })
     const main = await loadSourceModule('../src/inject/videoMetadata.ts', {
@@ -979,15 +1001,38 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       }
       window.player.__core = () => ({ getCorePlayer: () => dash })
       window.player.pause = () => transport.push('pause')
-      window.__biliThreadRipperDebug = { getPlayer: () => ({ video, destroy: options => transport.push(options.resumeNative) }) }
-      assert.equal(bridge.suspendNativePlayback(video, { ...snapshot.unit, cid: 11 }), false)
+      document.documentElement.setAttribute('data-btr-userscript', '')
+      window.__biliThreadRipperDebug = { getPlayer: () => ({ video, destroy: () => assert.fail('destroy alone cannot release the BTR controller') }) }
+      assert.equal(bridge.suspendNativePlayback(video, snapshot.unit, 10101), 'btr-companion-required')
       assert.deepEqual(transport, [])
-      assert.equal(bridge.suspendNativePlayback(video, snapshot.unit), true)
-      assert.deepEqual(transport, ['pause', 'stop', 'abort', false])
+      let heldOwner = null
+      window.__biliThreadRipperDebug.listenHandoff = {
+        version: 1,
+        getOwner: () => heldOwner,
+        suspend: (_video, gate) => {
+          heldOwner = gate
+          transport.push('controller-suspend')
+          return true
+        },
+        resume: () => true,
+        release: (gate) => {
+          if (gate !== heldOwner)
+            return false
+          heldOwner = null
+          return true
+        },
+      }
+      assert.equal(bridge.suspendNativePlayback(video, { ...snapshot.unit, cid: 11 }, 10101), false)
+      assert.deepEqual(transport, [])
+      assert.equal(bridge.suspendNativePlayback(video, snapshot.unit, 10101), true)
+      assert.deepEqual(transport, ['controller-suspend', 'pause', 'stop', 'abort'])
+      assert.equal(bridge.readNativeMediaSnapshot(video).listenOwner, 10101)
       window.player.pause = () => {
         throw new Error('native owner retired')
       }
-      assert.equal(bridge.suspendNativePlayback(video, snapshot.unit), 'interrupted')
+      assert.equal(bridge.suspendNativePlayback(video, snapshot.unit, 10102, 10101), 'interrupted')
+      assert.equal(bridge.readNativeMediaSnapshot(video).listenOwner, 10102, 'partial suspension retains an owner for rollback')
+      assert.equal(bridge.releaseNativeListen(10101), false)
       Object.defineProperties(video, { readyState: { value: 4 }, duration: { value: 120 } })
       video.pause = () => transport.push('return-pause')
       const intent = { unit: bridge.getNativePlaybackUnitKey(snapshot.unit), time: 65, rate: 1.5, volume: 0.5, muted: true, playing: false, bind: true }
@@ -1028,11 +1073,16 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       assert.equal(episode.episodeId, 85046)
       assert.equal(episode.cid, 3629601)
       assert.equal(episode.bvid, undefined)
+      video.remove()
+      assert.equal(bridge.releaseNativeListen(10102), true)
+      assert.equal(heldOwner, null, 'release survives removal of the native media node')
     }
     finally {
       stop()
       window.player = oldPlayer
       window.__biliThreadRipperDebug = oldBtr
+      if (!hadBtrMark)
+        document.documentElement.removeAttribute('data-btr-userscript')
       app.remove()
       window.history.replaceState(null, '', previousUrl)
     }
@@ -1632,6 +1682,7 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/styles/cardLayout': await import('../src/utils/bewlyWidescreen/styles/cardLayout'),
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
+      '~/utils/loadingRing': await import('../src/utils/loadingRing'),
       '~/utils/main': { injectCSS: (css) => {
         style.textContent = css
         return style

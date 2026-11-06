@@ -1,5 +1,5 @@
 import { isActionRollMutation, syncActionRolls } from '~/utils/bewlyWidescreen/actionRolls'
-import { ACTION_ANIMATION_ATTRIBUTE, ACTION_ANIMATION_SELECTOR, BILIBILI_ACTION_ANIMATION_HUE, NATIVE_DIALOG_CHECK_CLASS, NATIVE_DIALOG_FIELD_CLASS, NATIVE_DIALOG_NUMERAL_CLASS, NATIVE_DIALOG_TITLE_CLASS, RAISED_MORE_MENU_CLASS } from '~/utils/bewlyWidescreen/constants'
+import { ACTION_ANIMATION_ATTRIBUTE, ACTION_ANIMATION_SELECTOR, NATIVE_DIALOG_CHECK_CLASS, NATIVE_DIALOG_FIELD_CLASS, NATIVE_DIALOG_NUMERAL_CLASS, NATIVE_DIALOG_TITLE_CLASS, RAISED_MORE_MENU_CLASS } from '~/utils/bewlyWidescreen/constants'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 import { getViewportShiftX } from '~/utils/viewportFit'
@@ -25,81 +25,6 @@ const NATIVE_DIALOG_MARKS: [selector: string, mark: string][] = [
 // Bangumi's watch-together panel: mounted under its chip while hovered.
 const FITTED_POPOVER_SELECTOR = '[class*="WatchInfo_watch_more"]'
 const FIT_X_PROPERTY = '--bewly-popover-fit-x'
-
-function parseRgbColor(value: string) {
-  const match = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
-  if (!match)
-    return null
-
-  return {
-    r: Number(match[1]) / 255,
-    g: Number(match[2]) / 255,
-    b: Number(match[3]) / 255,
-  }
-}
-
-function rgbToHsl({ r, g, b }: { r: number, g: number, b: number }) {
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  const lightness = (max + min) / 2
-
-  if (max === min)
-    return { hue: 0, saturation: 0, lightness }
-
-  const delta = max - min
-  const saturation = lightness > 0.5
-    ? delta / (2 - max - min)
-    : delta / (max + min)
-
-  let hue = 0
-  switch (max) {
-    case r:
-      hue = (g - b) / delta + (g < b ? 6 : 0)
-      break
-    case g:
-      hue = (b - r) / delta + 2
-      break
-    default:
-      hue = (r - g) / delta + 4
-      break
-  }
-
-  return { hue: hue * 60, saturation, lightness }
-}
-
-function resolveCssColor(currentState: BewlyWidescreenState, value: string) {
-  if (!value)
-    return null
-
-  let probe = currentState.colorProbe
-  if (!probe) {
-    probe = document.createElement('span')
-    probe.style.position = 'fixed'
-    probe.style.pointerEvents = 'none'
-    probe.style.opacity = '0'
-    probe.setAttribute('aria-hidden', 'true')
-    currentState.root.appendChild(probe)
-    currentState.colorProbe = probe
-  }
-  if (probe.style.color !== value)
-    probe.style.color = value
-  return parseRgbColor(getComputedStyle(probe).color)
-}
-
-export function syncActionAnimationTheme(currentState: BewlyWidescreenState) {
-  const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--bew-text-1').trim()
-  const rgb = resolveCssColor(currentState, themeColor || '#888888')
-  if (!rgb)
-    return
-
-  const { hue, saturation, lightness } = rgbToHsl(rgb)
-  const hueRotate = Math.round(hue - BILIBILI_ACTION_ANIMATION_HUE)
-  const saturationRatio = Math.max(0.8, Math.min(2.4, saturation / 0.85))
-  const brightnessRatio = Math.max(0.75, Math.min(1.35, lightness / 0.46))
-  const filter = `hue-rotate(${hueRotate}deg) saturate(${saturationRatio.toFixed(2)}) brightness(${brightnessRatio.toFixed(2)})`
-  if (currentState.root.style.getPropertyValue('--bewly-widescreen-action-canvas-filter') !== filter)
-    currentState.root.style.setProperty('--bewly-widescreen-action-canvas-filter', filter)
-}
 
 export function clearActionGeometry(currentState: BewlyWidescreenState) {
   moreMenuWatch?.disconnect()
@@ -341,10 +266,5 @@ export function setupActionGeometryObservers(currentState: BewlyWidescreenState)
   })
   currentState.toolbarResizeObserver.observe(currentState.toolbarSlot)
 
-  currentState.themeObserver = new MutationObserver(() => syncActionAnimationTheme(currentState))
-  currentState.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] })
-  const bewlyHost = document.querySelector('#bewly')
-  if (bewlyHost)
-    currentState.themeObserver.observe(bewlyHost, { attributes: true, attributeFilter: ['class', 'style'] })
   scheduleActionGeometrySync(currentState)
 }

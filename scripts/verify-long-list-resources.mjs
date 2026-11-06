@@ -532,18 +532,29 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     }
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 1200 })
     let mounted = 0
+    let updates = 0
+    const clickCallbacks = new Map()
+    const clicks = []
+    const skeletons = Vue.reactive(new Set())
+    const filtered = Vue.reactive(new Set())
     const card = {
-      props: ['video', 'persistentState'],
+      props: ['video', 'persistentState', 'customClickHandler'],
       setup(props, { expose }) {
         Vue.onMounted(() => mounted++)
+        Vue.onUpdated(() => updates++)
         Vue.onBeforeUnmount(() => mounted--)
-        expose({ canRecycle: Vue.computed(() => !pins.has(props.video.id)) })
-        return () => Vue.h('div', { 'data-video-id': props.video.id }, [Vue.h('button', { onClick: () => props.persistentState.videoCurrentTime = 17 }, String(props.persistentState.videoCurrentTime))])
+        clickCallbacks.set(props.video.id, props.customClickHandler)
+        expose({ canRecycle: Vue.computed(() => !pins.has(props.video?.id)) })
+        return () => Vue.h('div', { 'data-video-id': props.video?.id ?? 'skeleton' }, [Vue.h('button', { onClick: (event) => {
+          props.persistentState.videoCurrentTime = 17
+          props.customClickHandler(event)
+        } }, String(props.persistentState.videoCurrentTime))])
       },
     }
-    const items = Array.from({ length: 5000 }, (_, id) => ({ id: id + 1, author: { mid: id + 10001 } }))
+    const items = Vue.shallowRef(Array.from({ length: 5000 }, (_, id) => ({ id: id + 1, author: { mid: id + 10001 } })))
     const textOnlyStates = Vue.ref(false)
-    const app = Vue.createApp({ setup: () => () => Vue.h(grid, { items, gridLayout: mode.value, noMoreContent: true, textOnlyStates: textOnlyStates.value, transformItem: item => item, getItemKey: item => item.id }) })
+    const transformItem = item => item
+    const app = Vue.createApp({ setup: () => () => Vue.h(grid, { items: items.value.filter(item => !filtered.has(item.id)), hasItemKey: key => items.value.some(item => item.id === key), gridLayout: mode.value, noMoreContent: true, textOnlyStates: textOnlyStates.value, transformItem, isSkeletonItem: item => skeletons.has(item.id), getItemKey: item => item.id, cardClickHandler: item => clicks.push(item) }) })
     app.component('VideoCard', card).component('Empty', {
       props: ['description'],
       setup: props => () => Vue.h('p', { 'data-grid-state': '' }, props.description),
@@ -564,8 +575,31 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       assert.equal(root.querySelector('[data-grid-state]'), null, 'completed sidebar lists have no empty/end footer')
       assert.ok(relationWindows.some(mids => mids.includes(10001)), 'visible unknown relationships are read')
       assert.ok(relationWindows.every(mids => mids.length < 400), 'relation requests cover the loading window, not the entire list')
-      const first = root.querySelector('[data-video-id="1"] button')
+      let first = root.querySelector('[data-video-id="1"] button')
+      updates = 0
+      const callback = clickCallbacks.get(1)
+      items.value = [...items.value, { id: 5001, author: { mid: 15001 } }]
+      await settle()
+      assert.equal(updates, 0, 'appending a page does not update the retained slot-free cards')
+      const replacement = { ...items.value[0], title: 'current item' }
+      items.value = [replacement, ...items.value.slice(1)]
+      await settle()
+      assert.equal(clickCallbacks.get(1), callback, 'a record keeps its click identity across item replacement')
+      skeletons.add(1)
+      await settle()
+      assert.equal(root.querySelector('[data-video-id="1"]'), null)
+      skeletons.delete(1)
+      await settle()
+      assert.ok(root.querySelector('[data-video-id="1"]'), 'a same-key placeholder can become a real card without replacing its item')
       first.click()
+      assert.equal(clicks.at(-1), replacement, 'the stable click callback reads the current item')
+      filtered.add(1)
+      await settle()
+      assert.equal(root.querySelector('[data-video-id="1"]'), null)
+      filtered.delete(1)
+      await settle()
+      first = root.querySelector('[data-video-id="1"] button')
+      assert.equal(first.textContent, '17', 'filtering retains interaction state while the canonical feed still owns the key')
       first.focus()
       pins.add(2)
       root.scrollTop = 18000
@@ -691,7 +725,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
   })
 
   check('A09 regular feed retains all in-memory pages without retired persistent group caches', async () => {
-    const { createMomentAdapter } = await import('../src/contentScripts/views/Moments/momentAdapter')
+    const { createMomentAdapter } = await loadSourceModule('../src/contentScripts/views/Moments/momentAdapter.ts', {})
     const requests = []
     const raw = id => ({ id_str: String(id), type: 'DYNAMIC_TYPE_WORD', modules: { module_author: { mid: '1', pub_ts: 20000 - id }, module_dynamic: { desc: { text: `post ${id}` } } } })
     const api = { moment: { getMoments: async (request) => {

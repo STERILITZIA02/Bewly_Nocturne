@@ -1,7 +1,7 @@
 // @unocss-include
 import { nextTick } from 'vue'
 
-import { INFO_FOLDING_PARTS, ROOT_ID } from '~/utils/bewlyWidescreen/constants'
+import { DISCLOSURE_TOGGLE_CLASS, INFO_FOLDING_PARTS, ROOT_ID } from '~/utils/bewlyWidescreen/constants'
 import { createDanmakuViews } from '~/utils/bewlyWidescreen/danmakuViews'
 import type { DisclosureLabels } from '~/utils/bewlyWidescreen/disclosureToggle'
 import { createDisclosureToggle, EPISODE_LABELS, setDisclosureToggle } from '~/utils/bewlyWidescreen/disclosureToggle'
@@ -165,8 +165,13 @@ const TAB_ICONS: Record<BewlyWidescreenTab, string> = {
   comment: 'i-tabler:message-circle',
   danmaku: 'i-tabler:messages',
 }
+const TAB_LABELS: Record<BewlyWidescreenTab, string> = {
+  overview: 'widescreen.overview',
+  comment: 'widescreen.comments',
+  danmaku: 'widescreen.danmaku',
+}
 
-function createTabButton(tab: BewlyWidescreenTab, label: string) {
+function createTabButton(tab: BewlyWidescreenTab) {
   const button = document.createElement('button')
   button.type = 'button'
   button.className = 'bewly-widescreen-tab bew-segment-control__item bew-segment-control__item--wide'
@@ -174,6 +179,9 @@ function createTabButton(tab: BewlyWidescreenTab, label: string) {
   const icon = document.createElement('span')
   icon.className = `${TAB_ICONS[tab]} bewly-widescreen-tab__icon`
   icon.setAttribute('aria-hidden', 'true')
+  const label = document.createElement('span')
+  label.className = 'bewly-widescreen-tab__label'
+  label.textContent = t(TAB_LABELS[tab])
   button.append(icon, label)
   // Filled from the video's stats (syncTabCounts); empty until they load.
   if (tab !== 'overview') {
@@ -192,13 +200,23 @@ function createPlaylistToggleButton() {
   return button
 }
 
+export function syncShellLabels({ root, tabButtons }: Pick<BewlyWidescreenState, 'root' | 'tabButtons'>) {
+  for (const [tab, button] of Object.entries(tabButtons) as Array<[BewlyWidescreenTab, HTMLButtonElement]>) {
+    const label = button.querySelector('.bewly-widescreen-tab__label')!
+    const text = t(TAB_LABELS[tab])
+    if (label.textContent !== text)
+      label.textContent = text
+  }
+  root.style.setProperty('--bewly-widescreen-up-next-label', JSON.stringify(t('widescreen.up_next')))
+  const infoToggle = root.querySelector<HTMLButtonElement>(`.bewly-widescreen-toolbar .${DISCLOSURE_TOGGLE_CLASS}`)!
+  setDisclosureToggle(infoToggle, INFO_LABELS, infoToggle.getAttribute('aria-expanded') === 'true')
+}
+
 export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   const root = document.createElement('div')
   root.id = ROOT_ID
   root.dataset.sidebarPosition = sidebarPosition
   root.dataset.displayMode = 'card'
-  // The label of the recommendations that follow a collection (a CSS string).
-  root.style.setProperty('--bewly-widescreen-up-next-label', JSON.stringify(t('widescreen.up_next')))
 
   // Covers the native page below the native player: the page background beside
   // the video pane, the player canvas behind the pane and the filled video. The
@@ -262,9 +280,9 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   tablist.setAttribute('role', 'tablist')
 
   const tabButtons = {
-    overview: createTabButton('overview', t('widescreen.overview')),
-    comment: createTabButton('comment', t('widescreen.comments')),
-    danmaku: createTabButton('danmaku', t('widescreen.danmaku')),
+    overview: createTabButton('overview'),
+    comment: createTabButton('comment'),
+    danmaku: createTabButton('danmaku'),
   }
   tablist.append(...Object.values(tabButtons))
 
@@ -334,6 +352,7 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   // Grid areas place both columns; DOM order keeps the video first for focus.
   stage.append(playerSlot, sidebar)
   root.append(stage)
+  syncShellLabels({ root, tabButtons })
   document.body.append(backdrop, root)
 
   return { root, backdrop, stage, playerSlot, playerFrame, danmakuDock, sidebarEl: sidebar, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, danmakuViews, playlistSlot, playlistToggleButton }

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onClickOutside, useDebounceFn, useDocumentVisibility, useElementBounding, useMediaQuery } from '@vueuse/core'
+import { onClickOutside, useDebounceFn, useDocumentVisibility, useMediaQuery } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 import { computed, getCurrentInstance, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 
 import ALink from '~/components/ALink.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import Tooltip from '~/components/Tooltip.vue'
+import { useBewlyApp } from '~/composables/useAppProvider'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { usePageDim } from '~/composables/usePageDim'
 import type { SearchCommand } from '~/composables/useSearchCommands'
@@ -27,6 +28,7 @@ import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
 import { openSearchResults, resolveSearchNavigationTarget, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import type { SearchScope, SearchVideoFilters } from '~/utils/searchUrl'
 import { EMPTY_SEARCH_VIDEO_FILTERS, readSearchVideoFilters, SEARCH_SCOPES } from '~/utils/searchUrl'
+import { invalidateViewportGeometry, subscribeViewportFrame } from '~/utils/viewportGeometry'
 
 import TagRemoveButton from '../TagRemoveButton.vue'
 import SearchBarFilters from './SearchBarFilters.vue'
@@ -70,7 +72,9 @@ const searchWrapRef = ref<HTMLElement>()
 // Removed history rows break apart; the rows below then close the gap.
 const historyRemovals = ref(0)
 useLayoutMotion(searchWrapRef, historyRemovals, { selector: '.search-panel__row[id]', key: 'id' })
-const { left: searchWrapLeft, top: searchWrapTop } = useElementBounding(searchWrapRef)
+const searchWrapLeft = ref(0)
+const searchWrapTop = ref(0)
+const { scrollViewportRef } = useBewlyApp()
 const keywordRef = ref<HTMLInputElement>()
 const searchButton = ref<HTMLButtonElement>()
 const searchBarInstanceId = getCurrentInstance()?.uid ?? 0
@@ -102,6 +106,29 @@ const isNarrowLayout = useMediaQuery(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax
 const documentVisibility = useDocumentVisibility()
 const iframePageActive = useIframePageActive()
 const uiActive = computed(() => props.active !== false && documentVisibility.value === 'visible' && (isInIframe() || !iframePageActive.value))
+
+watch([() => uiActive.value && (isFocus.value || panelShown.value), searchWrapRef, scrollViewportRef, () => props.topBarMode], ([enabled, element], _previous, onCleanup) => {
+  if (!enabled || !element)
+    return
+  const root = scrollViewportRef.value ?? document.scrollingElement as HTMLElement
+  function measure() {
+    const rect = element!.getBoundingClientRect()
+    searchWrapLeft.value = rect.left
+    searchWrapTop.value = rect.top
+  }
+  measure()
+  const release = subscribeViewportFrame(root, (_geometry, reason) => {
+    // The fixed top bar does not move with the feed; the home search sticks and translates.
+    if (reason === 'layout' || !props.topBarMode)
+      measure()
+  })
+  const observer = new ResizeObserver(() => invalidateViewportGeometry(root))
+  observer.observe(element)
+  onCleanup(() => {
+    release()
+    observer.disconnect()
+  })
+}, { flush: 'post' })
 
 function reportSearchBarFailure(endpointName: string, error: unknown) {
   if (isExtensionContextInvalidatedError(error))

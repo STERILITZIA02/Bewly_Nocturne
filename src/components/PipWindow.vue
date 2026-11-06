@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import FrameActions from '~/components/FrameActions.vue'
 import { useDark } from '~/composables/useDark'
+import { applyUiScale, uiScale } from '~/composables/useUiScale'
+import { settings } from '~/logic'
 import { applyAppearanceStyle } from '~/utils/appearance'
+import { resolveIframeExternalUrl } from '~/utils/iframeExternalUrl'
+import { hasNavigationModifier } from '~/utils/linkNavigation'
 import { applyMotionPreference } from '~/utils/reducedMotion'
 import { applyThemeColorTokens, getThemeColorTokens, readThemeContrastSurfaces } from '~/utils/themeColor'
 
@@ -22,6 +26,11 @@ let pipHost: HTMLElement | null = null
 let disposed = false
 let closing = false
 let closed = false
+const externalHref = computed(() => resolveIframeExternalUrl(iframeRef.value, '', currentUrl.value))
+watch(() => props.url, (url) => {
+  if (!disposed && !closing && !closed)
+    currentUrl.value = url
+})
 
 function applyPipTheme() {
   const documentElement = pipWindowEl.value?.document?.documentElement
@@ -32,8 +41,10 @@ function applyPipTheme() {
     if (!element)
       continue
     element.classList.toggle('dark', isDark.value)
+    element.classList.toggle('disable-frosted-glass', settings.value.disableFrostedGlass)
     applyAppearanceStyle(element, appearanceStyle.value)
     applyMotionPreference(element, motionPreference.value)
+    applyUiScale(element)
   }
 }
 
@@ -48,8 +59,8 @@ function applyPipColors() {
   applyThemeColorTokens(pipHost, tokens)
   documentElement.style.background = background
 }
-watch([isDark, appearanceStyle, motionPreference], applyPipTheme)
-watch([isDark, accentColor, () => appearanceStyle.value['--bew-custom-background'], () => appearanceStyle.value['--bew-custom-foreground']], applyPipColors, { flush: 'post' })
+watch([isDark, appearanceStyle, motionPreference, uiScale, () => settings.value.disableFrostedGlass], applyPipTheme)
+watch([isDark, accentColor, () => settings.value.disableFrostedGlass, () => appearanceStyle.value['--bew-custom-background'], () => appearanceStyle.value['--bew-custom-foreground']], applyPipColors, { flush: 'post' })
 
 onMounted(() => {
   void openPipWindow()
@@ -111,10 +122,21 @@ async function openPipWindow() {
   }
 }
 
+function syncExternalHref(event: Event) {
+  (event.currentTarget as HTMLAnchorElement).href = resolveIframeExternalUrl(iframeRef.value, '', currentUrl.value)
+}
+
 function openInNewTab(event: MouseEvent) {
-  event.preventDefault()
-  window.open(currentUrl.value, '_blank', 'noopener,noreferrer')
-  void handleClose()
+  if (closing || disposed || closed) {
+    event.preventDefault()
+    return
+  }
+  syncExternalHref(event)
+  if (event.button === 0 && !hasNavigationModifier(event)) {
+    event.preventDefault()
+    window.open((event.currentTarget as HTMLAnchorElement).href, '_blank', 'noopener,noreferrer')
+    void handleClose()
+  }
 }
 
 async function handleClose() {
@@ -162,11 +184,12 @@ async function releaseIframeResources() {
         w-full h="$bew-top-bar-height"
         pointer-events-none
       >
-        <FrameActions :href="currentUrl" mr-8 @open="openInNewTab" @close="handleClose" />
+        <FrameActions :href="externalHref" mr-8 @sync="syncExternalHref" @open="openInNewTab" @close="handleClose" />
       </div>
       <iframe
+        :key="url"
         ref="iframeRef"
-        :src="url" frameborder="0"
+        :src="currentUrl" frameborder="0"
         w-full h-full p-0
         pos="absolute top-0 left-0"
         bg="$bew-bg"

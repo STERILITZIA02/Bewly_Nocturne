@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 
+import { historyResponse } from './fixtures/historyResponses'
+
 export function registerLibraryMemoryChecks(check, { Vue, compileComponent, flush }) {
   check('memory: virtual rows keep their metrics when enrichment replaces equal keys and still rebuild for sorting or layout changes', async () => {
     const { useCardWindow } = await import('../src/composables/useCardWindow')
@@ -166,7 +168,7 @@ export function registerLibraryMemoryChecks(check, { Vue, compileComponent, flus
     let articleReads = 0
     const history = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api: { getHistoryList: async () => {
       historyReads++
-      return { code: 0, data: { list: Array.from({ length: 20 }, (_, i) => ({ title: String(i), view_at: 10_000 - historyReads * 20 - i, history: { oid: historyReads * 20 + i, business: 'archive' } })) } }
+      return historyResponse(Array.from({ length: 20 }, (_, i) => ({ title: String(i), view_at: 10_000 - historyReads * 20 - i, history: { oid: historyReads * 20 + i, business: 'archive' } })))
     } }, getAccountId: () => 1, getCSRF: () => '', haveScrollbar: async () => false, onWriteError: assert.fail })
     const favorites = useFavoritesData({ api: { getFavoriteArticles: async () => {
       articleReads++

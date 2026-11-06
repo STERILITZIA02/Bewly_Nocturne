@@ -1,12 +1,11 @@
 import { shallowRef, watch } from 'vue'
 
-import { useDark } from '~/composables/useDark'
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
 import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS, BEWLY_WIDESCREEN_MANUAL_TOGGLE } from '~/constants/globalEvents'
 import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { VideoInfo } from '~/models/video/videoInfo'
-import { clearActionGeometry, setupActionGeometryObservers, syncActionAnimationTheme } from '~/utils/bewlyWidescreen/actionEffects'
+import { clearActionGeometry, setupActionGeometryObservers } from '~/utils/bewlyWidescreen/actionEffects'
 import { clearActionRolls } from '~/utils/bewlyWidescreen/actionRolls'
 import { bindAuthorMessageLinks } from '~/utils/bewlyWidescreen/authorMessages'
 import { setupPlaybackCommentComposer } from '~/utils/bewlyWidescreen/commentComposer'
@@ -24,7 +23,7 @@ import { classifyWidescreenMutation, disableNativeLightOffMode, findCommentRoot,
 import { clearEpisodeSectionMarker, setupPlaylistToggle, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
 import { railTabs } from '~/utils/bewlyWidescreen/railTabs'
 import { session } from '~/utils/bewlyWidescreen/session'
-import { createRoot, setActiveTab } from '~/utils/bewlyWidescreen/shell'
+import { createRoot, setActiveTab, syncShellLabels } from '~/utils/bewlyWidescreen/shell'
 import { clearSidebarHydration, clearSidebarRefreshTimer, scheduleSidebarRefresh, startSidebarHydration, suspendSidebarForVideoNavigation, syncSidebarReadiness } from '~/utils/bewlyWidescreen/sidebar'
 import { injectLayoutStyle } from '~/utils/bewlyWidescreen/styles/layout'
 import type { BewlyWidescreenState, ExitBewlyWidescreenOptions, MovedNode } from '~/utils/bewlyWidescreen/types'
@@ -82,9 +81,7 @@ function syncLocalizedWidescreenText(currentState = session.current) {
   if (!currentState || session.current !== currentState)
     return
 
-  currentState.tabButtons.comment.textContent = t('widescreen.comments')
-  currentState.tabButtons.danmaku.textContent = t('widescreen.danmaku')
-  currentState.tabButtons.overview.textContent = t('widescreen.overview')
+  syncShellLabels(currentState)
   refreshDanmakuViewLabels(currentState.danmakuViews)
   syncFillToggleButton(currentState)
   syncDescription(currentState)
@@ -138,12 +135,6 @@ function stopWidescreenLanguageWatch() {
 }
 
 function setupWidescreenSettingsWatchers(currentState: BewlyWidescreenState) {
-  const { isDark, appearanceStyle } = useDark()
-  const stopThemeWatch = watch(
-    [isDark, appearanceStyle],
-    () => syncActionAnimationTheme(currentState),
-    { flush: 'post' },
-  )
   const stopPositionWatch = watch(
     () => settings.value.bewlyWidescreenSidebarPosition,
     (position) => {
@@ -159,7 +150,6 @@ function setupWidescreenSettingsWatchers(currentState: BewlyWidescreenState) {
     { flush: 'sync' },
   )
   currentState.settingsWatchCleanup = [
-    stopThemeWatch,
     stopPositionWatch,
     bindAuthorMessageLinks(currentState.upSlot),
   ]
@@ -346,8 +336,6 @@ function cleanupState(currentState: BewlyWidescreenState) {
   currentState.toolbarMutationObserver = undefined
   currentState.toolbarResizeObserver?.disconnect()
   currentState.toolbarResizeObserver = undefined
-  currentState.themeObserver?.disconnect()
-  currentState.themeObserver = undefined
   currentState.highEnergyProgressObserver?.disconnect()
   currentState.highEnergyProgressObserver = undefined
   currentState.highEnergyProgressElement = undefined
@@ -381,8 +369,6 @@ function cleanupState(currentState: BewlyWidescreenState) {
   clearSidebarRefreshTimer()
   clearAnchoredPlayerElement(currentState.playerEl)
   clearAuxiliaryControlGeometry()
-  currentState.colorProbe?.remove()
-  currentState.colorProbe = undefined
 
   // If Bilibili created a replacement while its original comment root was in
   // the sidebar, keep the replacement instead of restoring a duplicate editor.

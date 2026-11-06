@@ -145,6 +145,7 @@ export async function verifyMomentCommentLifecycle() {
     '~/utils/commentTree': commentTree,
     '~/utils/locale': { normalizeIntlLocale: (locale: string) => locale },
     '~/utils/momentCommentSession': sessions,
+    '~/logic': { settings: vue.ref({ momentCommentSort: 1 }) },
     '~/utils/momentCommentTarget': targets,
     '~/utils/momentCommentThread': threads,
     './commentUtils': commentUtils,
@@ -304,7 +305,7 @@ export async function verifyMomentCommentLifecycle() {
   moment.value = { ...moment.value, id: '456', commentId: undefined, commentType: undefined }
   await flush()
   assert.equal(detailRequests, 1, 'missing target resolves through detail before loading comments')
-  assert.equal(requestedSorts.at(-1), 1, 'a different dynamic starts with hottest comments independently of the previous choice')
+  assert.equal(requestedSorts.at(-1), 0, 'a new dynamic uses the last selected sort; existing sessions keep their own sort')
   measureCommentList = true
   emptyTail = true
   const beforeFill = rootRequests

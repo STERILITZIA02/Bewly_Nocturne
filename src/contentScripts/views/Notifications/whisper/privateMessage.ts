@@ -2,6 +2,7 @@ import type { PrivateMessage } from '~/background/privateMessage/types'
 
 import type {
   ParsedPrivateMessageContent,
+  PrivateEmote,
   PrivateEmotePackage,
 } from './privateMessageRenderers'
 import {
@@ -94,21 +95,42 @@ export function hydratePrivateMessageEmotes(
   items: DisplayPrivateMessage[],
   packages: PrivateEmotePackage[],
 ): DisplayPrivateMessage[] {
-  const emotes = packages.flatMap(pkg => pkg.emotes)
-  if (emotes.length === 0)
+  const emotes = new Map<string, PrivateEmote>()
+  for (const pkg of packages) {
+    for (const emote of pkg.emotes)
+      emotes.set(emote.text, emote)
+  }
+  if (!emotes.size)
     return items
-  return items.map((item) => {
+  let changed = false
+  const hydrated = items.map<DisplayPrivateMessage>((item) => {
     if (item.content.type !== 'text')
       return item
     const text = item.content.segments.map(segment => segment.text).join('')
+    const segments = parsePrivateMessageTextSegments(text, emotes)
+    const previous = item.content.segments
+    if (segments.length === previous.length && segments.every((segment, index) => {
+      const old = previous[index]
+      if (segment.type !== old.type || segment.text !== old.text)
+        return false
+      if (segment.type === 'link')
+        return old.type === 'link' && segment.href === old.href
+      if (segment.type === 'emote')
+        return old.type === 'emote' && segment.url === old.url && segment.size === old.size
+      return true
+    })) {
+      return item
+    }
+    changed = true
     return {
       ...item,
       content: {
         type: 'text',
-        segments: parsePrivateMessageTextSegments(text, emotes),
+        segments,
       },
     }
   })
+  return changed ? hydrated : items
 }
 
 export function mergePrivateMessages(

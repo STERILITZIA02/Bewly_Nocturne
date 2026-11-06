@@ -1,11 +1,12 @@
 /** Cancel this consumer's wait without aborting a task owned by another reader. */
-export function waitWithSignal<T>(task: Promise<T>, signal?: AbortSignal): Promise<T> {
+export function waitWithSignal<T>(task: Promise<T>, signal?: AbortSignal, onAbort?: () => void): Promise<T> {
   if (!signal)
     return task
   return new Promise<T>((resolve, reject) => {
     const cleanup = () => signal.removeEventListener('abort', abort)
     function abort() {
       cleanup()
+      onAbort?.()
       reject(signal!.reason ?? new DOMException('Request aborted', 'AbortError'))
     }
     task.then((value) => {

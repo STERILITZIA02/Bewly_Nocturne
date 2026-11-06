@@ -122,13 +122,15 @@ const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const { searchKeyword: topBarSearchKeyword } = storeToRefs(topBarStore)
 const searchTransportScope = computed(() => {
+  const mode = settings.value.searchResultsPaginationMode
   if (settings.value.depersonalizeSearchResults)
-    return 'anonymous'
+    return `anonymous:${mode}`
 
   const accountId = resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid)
-  return accountId === null
+  const account = accountId === null
     ? (topBarStore.isLogin ? 'profile-unavailable' : 'logged-out')
     : `account:${accountId}`
+  return `${account}:${mode}`
 })
 function resetSearchIdentityPage() {
   urlRestoreGeneration++
@@ -137,6 +139,7 @@ function resetSearchIdentityPage() {
   updateUrlParams({ pn: 1 })
 }
 watch(() => settings.value.depersonalizeSearchResults, resetSearchIdentityPage, { flush: 'sync' })
+watch(() => settings.value.searchResultsPaginationMode, resetSearchIdentityPage, { flush: 'sync' })
 
 const videoOrderOptions = computed(() => [
   { value: '', label: t('search.filters.order_relevance') },
@@ -434,6 +437,7 @@ onBeforeUnmount(() => {
       :live-filters="liveFilters"
       :initial-page="currentPage"
       @update-page="handlePageUpdate"
+      @select-live-users="currentLiveSubCategory = 'live_user'"
     />
   </div>
 </template>

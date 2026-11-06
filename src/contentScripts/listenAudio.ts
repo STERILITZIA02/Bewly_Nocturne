@@ -13,6 +13,7 @@ export function prepareListenAudio(state: ListenSession, urls: string[], signal:
   let exhausted = false
   function apply() {
     audio.currentTime = audio.duration > 0 ? Math.min(state.time, audio.duration) : state.time
+    audio.defaultPlaybackRate = state.rate
     audio.playbackRate = state.rate
     audio.volume = state.volume
     audio.muted = state.muted
@@ -22,9 +23,14 @@ export function prepareListenAudio(state: ListenSession, urls: string[], signal:
           state.playing = false
       })
     }
+    else {
+      audio.pause()
+    }
   }
   const ready = new Promise<void>((resolve, reject) => {
     function next() {
+      if (committed && loaded && audio.readyState >= HTMLMediaElement.HAVE_METADATA)
+        state.time = audio.currentTime
       loaded = false
       const url = urls[index++]
       if (!url) {
@@ -52,21 +58,24 @@ export function prepareListenAudio(state: ListenSession, urls: string[], signal:
     next()
   })
   audio.addEventListener('timeupdate', () => {
-    if (committed && loaded && !audio.error)
+    if (committed && loaded && !signal.aborted && !audio.error)
       state.time = audio.currentTime
   }, { signal })
   for (const event of ['play', 'pause']) {
     audio.addEventListener(event, () => {
-      if (committed && loaded && !audio.error)
+      if (committed && loaded && !signal.aborted && !audio.error)
         state.playing = !audio.paused && !audio.ended
     }, { signal })
   }
   audio.addEventListener('ratechange', () => {
-    if (committed && loaded && !audio.error)
+    if (committed && !signal.aborted) {
       state.rate = audio.playbackRate
+      if (audio.defaultPlaybackRate !== state.rate)
+        audio.defaultPlaybackRate = state.rate
+    }
   }, { signal })
   audio.addEventListener('volumechange', () => {
-    if (committed && loaded) {
+    if (committed && !signal.aborted) {
       state.volume = audio.volume
       state.muted = audio.muted
     }

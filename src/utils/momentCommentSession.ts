@@ -93,12 +93,26 @@ export const DEFAULT_MOMENT_COMMENT_SORT = 1
 
 export function createMomentCommentSessionCache(initialAccountId: string, limit = 16) {
   const entries = new Map<string, SessionEntry>()
-  const cachedBytes = () => [...entries.values()].reduce((total, entry) => total + (entry.snapshot?.length ?? 0) * 2, 0)
+  let cachedBytes = 0
+  function replaceSnapshot(entry: SessionEntry, snapshot: string | undefined) {
+    if (entry.snapshot === snapshot)
+      return false
+    cachedBytes += ((snapshot?.length ?? 0) - (entry.snapshot?.length ?? 0)) * 2
+    entry.snapshot = snapshot
+    return true
+  }
+  function dropEntry(key: string) {
+    const entry = entries.get(key)
+    if (entry)
+      cachedBytes -= (entry.snapshot?.length ?? 0) * 2
+    entries.delete(key)
+  }
   let accountId = initialAccountId
   let generation = 0
   const clear = () => {
     generation += 1
     entries.clear()
+    cachedBytes = 0
   }
   const pruneEntries = () => {
     while (entries.size > limit) {
@@ -106,7 +120,7 @@ export function createMomentCommentSessionCache(initialAccountId: string, limit 
         && ![...entry.deletions.values()].some(deletion => deletion.pending))
       if (!evict)
         break
-      entries.delete(evict[0])
+      dropEntry(evict[0])
     }
   }
   const touch = (key: string, entry: SessionEntry) => {
@@ -129,17 +143,19 @@ export function createMomentCommentSessionCache(initialAccountId: string, limit 
     // JSON is immutable and detached from Vue. Serialize once on save, parse
     // once on restore; no mutable comment array is shared with the cache.
     const serialized = JSON.stringify({ ...pruneSnapshot(entry, snapshot), likedIds: [...likedIds], likeCounts })
-    entry.snapshot = serialized.length * 2 <= MAX_SNAPSHOT_BYTES ? serialized : undefined
+    if (!replaceSnapshot(entry, serialized.length * 2 <= MAX_SNAPSHOT_BYTES ? serialized : undefined))
+      return false
     for (const candidate of entries.values()) {
-      if (cachedBytes() <= CACHE_BYTE_BUDGET)
+      if (cachedBytes <= CACHE_BYTE_BUDGET)
         break
-      candidate.snapshot = undefined
+      replaceSnapshot(candidate, undefined)
     }
+    return true
   }
   const entryOf = (lease: SessionLease | null) => lease && current(lease) ? entries.get(lease.key) : undefined
   return {
     clear,
-    get cachedBytes() { return cachedBytes() },
+    get cachedBytes() { return cachedBytes },
     setAccount(nextAccountId: string) {
       if (accountId === nextAccountId)
         return
@@ -157,19 +173,19 @@ export function createMomentCommentSessionCache(initialAccountId: string, limit 
       }
       return null
     },
-    open(requestAccountId: string, momentId: string, target: MomentCommentTarget, sort?: 0 | 1): SessionLease | null {
+    open(requestAccountId: string, momentId: string, target: MomentCommentTarget, sort?: 0 | 1, initialSort: 0 | 1 = DEFAULT_MOMENT_COMMENT_SORT): SessionLease | null {
       if (requestAccountId !== accountId)
         return null
       const key = JSON.stringify([accountId, momentId, target.type, target.oid])
       for (const [oldKey, entry] of entries) {
         if (entry.momentId === momentId && oldKey !== key)
-          entries.delete(oldKey)
+          dropEntry(oldKey)
       }
-      const entry = entries.get(key) ?? { momentId, target: { ...target }, sort: sort ?? DEFAULT_MOMENT_COMMENT_SORT, revision: 0, likeVersion: 0, likes: shallowReactive(new Map<string, CommentLikeState>()), deletions: shallowReactive(new Map<string, CommentDeletionState>()), deletedRpids: shallowReactive(new Set<string>()), deletedRoots: shallowReactive(new Set<string>()), removedCount: 0, readers: new Set<SessionLease>() }
+      const entry = entries.get(key) ?? { momentId, target: { ...target }, sort: sort ?? initialSort, revision: 0, likeVersion: 0, likes: shallowReactive(new Map<string, CommentLikeState>()), deletions: shallowReactive(new Map<string, CommentDeletionState>()), deletedRpids: shallowReactive(new Set<string>()), deletedRoots: shallowReactive(new Set<string>()), removedCount: 0, readers: new Set<SessionLease>() }
       if (sort !== undefined && sort !== entry.sort) {
         entry.sort = sort
         entry.revision += 1
-        entry.snapshot = undefined
+        replaceSnapshot(entry, undefined)
       }
       const lease = { key, generation, accountId, revision: entry.revision, sort: entry.sort }
       entry.readers.add(lease)
@@ -195,7 +211,7 @@ export function createMomentCommentSessionCache(initialAccountId: string, limit 
       if (!entry || entry.revision !== lease.revision)
         return
       touch(lease.key, entry)
-      storeSnapshot(entry, snapshot)
+      return storeSnapshot(entry, snapshot)
     },
     getLike(lease: SessionLease | null, id: string) {
       const like = lease && current(lease) ? entries.get(lease.key)?.likes.get(id) : undefined

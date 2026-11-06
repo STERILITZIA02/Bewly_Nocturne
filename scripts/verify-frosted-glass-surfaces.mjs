@@ -74,6 +74,7 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/styles/cardLayout': await import('../src/utils/bewlyWidescreen/styles/cardLayout'),
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
+      '~/utils/loadingRing': await import('../src/utils/loadingRing'),
       '~/utils/main': { injectCSS: (css) => {
         style.textContent = css
         return style

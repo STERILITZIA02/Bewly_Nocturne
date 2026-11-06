@@ -277,9 +277,9 @@ function splitTextUrls(text: string): PrivateMessageTextSegment[] {
   return segments
 }
 
-function splitTextWithEmotions(
+export function parsePrivateMessageTextSegments(
   text: string,
-  emotions: Map<string, PrivateEmote>,
+  emotions: ReadonlyMap<string, PrivateEmote>,
 ): PrivateMessageTextSegment[] {
   if (!text)
     return []
@@ -391,6 +391,8 @@ export function mergePrivateEmotePackages(
   current: PrivateEmotePackage[],
   incoming: PrivateEmotePackage[],
 ): PrivateEmotePackage[] {
+  if (!incoming.length)
+    return current
   const packages = new Map<string, PrivateEmotePackage>()
   for (const source of [...current, ...incoming]) {
     const key = `${source.type}:${source.id}`
@@ -410,16 +412,6 @@ export function mergePrivateEmotePackages(
 
 export function collectPrivateMessageEmotions(eInfos: unknown[]): Map<string, PrivateEmote> {
   return new Map(collectPrivateEmotes(eInfos).map(emote => [emote.text, emote]))
-}
-
-export function parsePrivateMessageTextSegments(
-  text: string,
-  emotes: Iterable<PrivateEmote>,
-): PrivateMessageTextSegment[] {
-  return splitTextWithEmotions(
-    text,
-    new Map([...emotes].map(emote => [emote.text, emote])),
-  )
 }
 
 export function insertPrivateEmoteToken(
@@ -445,7 +437,7 @@ function parseTextContent(
     return null
   return {
     type: 'text',
-    segments: splitTextWithEmotions(record.content, context.emotions),
+    segments: parsePrivateMessageTextSegments(record.content, context.emotions),
   }
 }
 

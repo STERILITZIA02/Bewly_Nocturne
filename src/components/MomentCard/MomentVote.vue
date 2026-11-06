@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { useIntervalFn, useNow } from '@vueuse/core'
-import { computed, onBeforeUnmount, reactive, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartRungs from '~/components/ChartRungs.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import { useMeasuredDisclosure } from '~/composables/useMeasuredDisclosure'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { normalizeIntlLocale } from '~/utils/locale'
@@ -19,12 +19,41 @@ const props = defineProps<{
   fallbackTitle: string
   fallbackEndTime: number
 }>()
-const emit = defineEmits<{ interactiveResize: [] }>()
+const emit = defineEmits<{ interactiveResize: [], disclosureMotion: [moving: boolean] }>()
 const { t, locale } = useI18n()
 const topBarStore = useTopBarStore()
 const state = reactive(createMomentVoteState())
 const groupId = useId()
-const now = useNow({ scheduler: callback => useIntervalFn(callback, 30_000) })
+const expanded = ref(false)
+const extra = ref<HTMLElement | null>(null)
+const extraContent = ref<HTMLElement | null>(null)
+const { height, onTransitionEnd } = useMeasuredDisclosure(extra, extraContent, expanded, () => {}, (moving) => {
+  emit('disclosureMotion', moving)
+  emit('interactiveResize')
+})
+const optionGroups = computed(() => [state.info?.options.slice(0, 6) ?? [], state.info?.options.slice(6) ?? []])
+function setExtra(element: unknown) {
+  extra.value = element as HTMLElement | null
+}
+function setExtraContent(element: unknown) {
+  extraContent.value = element as HTMLElement | null
+}
+const now = ref(Date.now())
+let expiryTimer: ReturnType<typeof setTimeout> | undefined
+function scheduleExpiry() {
+  clearTimeout(expiryTimer)
+  expiryTimer = undefined
+  now.value = Date.now()
+  const deadline = (state.info?.endTime || props.fallbackEndTime) * 1000
+  if (!document.hidden && state.info?.status !== 4 && deadline > now.value)
+    expiryTimer = setTimeout(scheduleExpiry, Math.min(deadline - now.value + 1, 2_147_483_647))
+}
+watch(() => [state.info?.endTime, state.info?.status, props.fallbackEndTime], scheduleExpiry, { immediate: true })
+document.addEventListener('visibilitychange', scheduleExpiry)
+onBeforeUnmount(() => {
+  clearTimeout(expiryTimer)
+  document.removeEventListener('visibilitychange', scheduleExpiry)
+})
 const identity = () => `${topBarStore.userInfo.mid || 'guest'}:${getUserID() ?? 'guest'}:${props.momentId}:${props.voteId}`
 const voterId = () => Number(getUserID())
 const controller = createMomentVoteController({
@@ -50,7 +79,7 @@ const controller = createMomentVoteController({
     })
   },
 })
-const ended = computed(() => isMomentVoteEnded(state.info, props.fallbackEndTime, now.value.getTime() / 1000))
+const ended = computed(() => isMomentVoteEnded(state.info, props.fallbackEndTime, now.value / 1000))
 const showResults = computed(() => ended.value || controller.hasVoted())
 const locked = computed(() => showResults.value || state.submitting || state.loading)
 const deadline = computed(() => {
@@ -73,6 +102,7 @@ function select(event: Event, index: number) {
   ;(event.target as HTMLInputElement).checked = state.selected.includes(index)
 }
 watch(identity, () => {
+  expanded.value = false
   controller.invalidate()
   void controller.load()
 }, { immediate: true, flush: 'sync' })
@@ -98,29 +128,46 @@ onBeforeUnmount(controller.invalidate)
       <p v-if="!showResults" class="moment-vote__meta">
         {{ t('moments.vote_select_up_to', { count: state.info.choiceCount }) }}
       </p>
-      <div class="moment-vote__options" :role="state.info.choiceCount === 1 ? 'radiogroup' : 'group'" :aria-labelledby="groupId">
-        <label v-for="option in state.info.options" :key="option.index" class="moment-vote__option" :class="{ 'is-selected': state.selected.includes(option.index), 'is-locked': locked }">
-          <img
-            v-if="option.imageUrl" class="moment-vote__image" :src="getMomentThumbnailUrl(option.imageUrl, 320)" alt="" loading="lazy"
-            decoding="async"
-          >
-          <span class="moment-vote__option-body">
-            <input
-              :type="state.info.choiceCount === 1 ? 'radio' : 'checkbox'"
-              :name="groupId"
-              :value="option.index"
-              :checked="state.selected.includes(option.index)"
-              :disabled="locked"
-              @change="select($event, option.index)"
-            >
-            <span>{{ option.text || t('moments.vote_image_option', { index: option.index }) }}</span>
-            <span v-if="showResults" class="moment-vote__percentage">{{ percentage(option.count).toFixed(1) }}%</span>
-          </span>
-          <div v-if="showResults" class="moment-vote__result" aria-hidden="true">
-            <ChartRungs :value="percentage(option.count)" :unit="1" :steps="100" horizontal />
+      <div class="moment-vote__groups" :role="state.info.choiceCount === 1 ? 'radiogroup' : 'group'" :aria-labelledby="groupId">
+        <div
+          v-for="(options, part) in optionGroups" :id="part ? `${groupId}-extra` : undefined" :key="part"
+          :ref="part ? setExtra : undefined"
+          :class="part ? ['moment-card__disclosure', { 'is-open': expanded }] : undefined"
+          :style="part && height !== undefined ? { height: `${height}px` } : undefined"
+          :inert="part === 1 && !expanded || undefined"
+          @transitionend="part && onTransitionEnd($event)"
+        >
+          <div :ref="part ? setExtraContent : undefined" class="moment-vote__options" :class="{ 'moment-vote__extra-options': part && options.length }">
+            <label v-for="option in options" :key="option.index" class="moment-vote__option" :class="{ 'is-selected': state.selected.includes(option.index), 'is-locked': locked }">
+              <img
+                v-if="option.imageUrl" class="moment-vote__image" :src="getMomentThumbnailUrl(option.imageUrl, 320)" alt="" loading="lazy"
+                decoding="async"
+              >
+              <span class="moment-vote__option-body">
+                <input
+                  :type="state.info.choiceCount === 1 ? 'radio' : 'checkbox'"
+                  :name="groupId"
+                  :value="option.index"
+                  :checked="state.selected.includes(option.index)"
+                  :disabled="locked"
+                  @change="select($event, option.index)"
+                >
+                <span>{{ option.text || t('moments.vote_image_option', { index: option.index }) }}</span>
+                <span v-if="showResults" class="moment-vote__percentage">{{ percentage(option.count).toFixed(1) }}%</span>
+              </span>
+              <div v-if="showResults" class="moment-vote__result" aria-hidden="true">
+                <ChartRungs :value="percentage(option.count)" :unit="1" :steps="100" horizontal />
+              </div>
+            </label>
           </div>
-        </label>
+        </div>
       </div>
+      <button
+        v-if="state.info.options.length > 6" type="button" class="moment-vote__toggle" :aria-expanded="expanded" :aria-controls="`${groupId}-extra`"
+        @click="expanded = !expanded; emit('interactiveResize')"
+      >
+        {{ expanded ? t('moments.vote_collapse_options') : t('moments.vote_expand_options', { count: state.info.options.length }) }}
+      </button>
       <p v-if="showResults" class="moment-vote__meta">
         {{ t('moments.vote_chart_unit') }}
       </p>
@@ -142,6 +189,7 @@ onBeforeUnmount(controller.invalidate)
 </template>
 
 <style scoped lang="scss">
+@use "../../styles/momentDisclosure";
 .moment-vote {
   // MomentCard's surface passes clicks through to its primary action by default.
   pointer-events: auto;
@@ -171,6 +219,14 @@ onBeforeUnmount(controller.invalidate)
 .moment-vote__options {
   display: grid;
   gap: var(--bew-space-2);
+}
+.moment-vote__extra-options {
+  padding-top: var(--bew-space-2);
+}
+.moment-vote__toggle {
+  align-self: flex-start;
+  color: var(--bew-text-2);
+  background: transparent;
 }
 .moment-vote__option {
   position: relative;

@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import Button from '~/components/Button.vue'
+import Input from '~/components/Input.vue'
 import LocalLoudnessPreferences from '~/components/LocalLoudnessPreferences.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
@@ -67,6 +68,19 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
       <LocalLoudnessPreferences />
     </SettingsItemGroup>
     <SettingsItemGroup data-setting-id="settings.group_player_components" :title="t('settings.group_player_components')">
+      <SettingsItem setting-id="settings.custom_fullscreen_wheel_volume" :title="t('settings.custom_fullscreen_wheel_volume')" right-width="auto">
+        <Radio v-model="settings.customFullscreenWheelVolume" />
+      </SettingsItem>
+      <SettingsItem v-if="settings.customFullscreenWheelVolume" setting-id="settings.fullscreen_wheel_volume_step" :title="t('settings.fullscreen_wheel_volume_step')" right-width="auto">
+        <Input
+          v-model="settings.fullscreenWheelVolumeStep" type="number" :min="1" :max="100" :step="1"
+          size="small"
+        >
+          <template #suffix>
+            %
+          </template>
+        </Input>
+      </SettingsItem>
       <SettingsItem
         setting-id="settings.video_danmaku_default_state" :title="t('settings.video_danmaku_default_state')"
         right-width="auto"

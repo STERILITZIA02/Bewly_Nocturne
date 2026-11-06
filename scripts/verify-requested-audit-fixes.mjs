@@ -219,43 +219,48 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
 
   check('audit 12: image errors settle, try the original URL once, and reject stale image events', async () => {
     const LazyPicture = await compileComponent('../src/components/LazyPicture.vue')
-    const Picture = await compileComponent('../src/components/Picture.vue', { './LazyPicture.vue': { default: LazyPicture } })
     const src = Vue.ref('https://i0.hdslb.com/bfs/archive/fixture-a.jpg')
     const host = document.body.appendChild(document.createElement('div'))
     let loads = 0
-    const app = Vue.createApp({ setup: () => () => Vue.h(Picture, { src: src.value, aspectRatio: '1 / 1', loading: 'eager', onLoaded: () => loads++ }) })
+    const app = Vue.createApp({ setup: () => () => Vue.h(LazyPicture, { src: src.value, aspectRatio: '1 / 1', loading: 'eager', onLoaded: () => loads++ }) })
     app.config.globalProperties.$t = key => key
     app.mount(host)
-    const preferred = host.querySelector('img')
-    assert.equal(preferred.style.aspectRatio, '1 / 1')
-    assert.ok(host.querySelector('[data-bew-skeleton]'))
-    preferred.dispatchEvent(new Event('error'))
-    await flush()
-    assert.equal(host.querySelectorAll('source').length, 0)
-    const original = host.querySelector('img')
-    assert.notEqual(original, preferred)
-    assert.equal(original.getAttribute('src'), src.value)
-    original.dispatchEvent(new Event('error'))
-    await flush()
-    assert.ok(host.querySelector('.lazy-picture-error'))
-    assert.equal(host.querySelector('.lazy-picture-skeleton'), null)
-    assert.equal(host.querySelector('img'), null)
-    assert.equal(host.querySelector('[data-bew-skeleton]'), null, 'failed images stop animating')
-    src.value = 'https://i0.hdslb.com/bfs/archive/fixture-b.jpg'
-    await flush()
-    original.dispatchEvent(new Event('load'))
-    assert.equal(loads, 0)
-    assert.equal(host.querySelector('.lazy-picture-error'), null)
-    const retargetedLoad = new Event('load')
-    Object.defineProperty(retargetedLoad, 'target', { value: host })
-    host.querySelector('img').dispatchEvent(retargetedLoad)
-    await flush()
-    assert.equal(loads, 1)
-    assert.equal(host.querySelector('img').style.opacity, '1', 'the bound image settles even when the event target is retargeted')
-    assert.equal(host.querySelector('.lazy-picture-skeleton'), null)
-    assert.equal(host.querySelector('[data-bew-skeleton]'), null, 'completed images stop animating')
-    app.unmount()
-    host.remove()
+    try {
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      await flush()
+      const preferred = host.querySelector('img')
+      assert.equal(preferred.style.aspectRatio, '1 / 1')
+      assert.ok(host.querySelector('[data-bew-skeleton]'))
+      preferred.dispatchEvent(new Event('error'))
+      await flush()
+      assert.equal(host.querySelectorAll('source').length, 0)
+      const original = host.querySelector('img')
+      assert.notEqual(original, preferred)
+      assert.equal(original.getAttribute('src'), src.value)
+      original.dispatchEvent(new Event('error'))
+      await flush()
+      assert.ok(host.querySelector('.lazy-picture-error'))
+      assert.equal(host.querySelector('.lazy-picture-skeleton'), null)
+      assert.equal(host.querySelector('img'), null)
+      assert.equal(host.querySelector('[data-bew-skeleton]'), null, 'failed images stop animating')
+      src.value = 'https://i0.hdslb.com/bfs/archive/fixture-b.jpg'
+      await flush()
+      original.dispatchEvent(new Event('load'))
+      assert.equal(loads, 0)
+      assert.equal(host.querySelector('.lazy-picture-error'), null)
+      const retargetedLoad = new Event('load')
+      Object.defineProperty(retargetedLoad, 'target', { value: host })
+      host.querySelector('img').dispatchEvent(retargetedLoad)
+      await flush()
+      assert.equal(loads, 1)
+      assert.equal(host.querySelector('img').style.opacity, '1', 'the bound image settles even when the event target is retargeted')
+      assert.equal(host.querySelector('.lazy-picture-skeleton'), null)
+      assert.equal(host.querySelector('[data-bew-skeleton]'), null, 'completed images stop animating')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
   })
 
   check('audit 13: anime watchlist failure and retry are separate from a valid empty response', async () => {
@@ -269,6 +274,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
       getUserID: () => '1',
       ...await import('../src/utils/accountScope'),
       animeMounted: true,
+      animeController: new AbortController(),
       requestGeneration: 1,
       isLoadingAnimeWatchList: Vue.ref(false),
       watchListRequestFailed: Vue.ref(false),
@@ -514,37 +520,41 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     assert.equal(list.totalResults.value, 1)
     assert.deepEqual(list.results.value.map(item => item.id), [1])
     fixture.settings.value.searchResultsPaginationMode = 'scroll'
+    await flush()
+    assert.equal(fixture.requests[1].request.page, 1, 'a new pagination mode starts a new result window')
+    fixture.requests[1].resolve({ code: 0, data: { result: [{ id: 1 }], numResults: 120, pagesize: 30 } })
+    await flush()
     const next = list.performSearch(true)
-    fixture.requests[1].resolve({ code: 0, data: { result: [{ id: 1 }, { id: 3 }], numResults: 120, pagesize: 30 } })
+    fixture.requests[2].resolve({ code: 0, data: { result: [{ id: 1 }, { id: 3 }], numResults: 120, pagesize: 30 } })
     assert.equal(await next, true)
     assert.deepEqual(list.results.value.map(item => item.id), [1, 3])
     assert.equal(list.currentPage.value, 2)
     const old = list.performSearch(false)
     query.value = 'current'
     await flush()
-    fixture.requests[3].resolve({ code: 0, data: { result: [{ id: 4 }] } })
+    fixture.requests[4].resolve({ code: 0, data: { result: [{ id: 4 }] } })
     await flush()
-    fixture.requests[2].resolve({ code: 0, data: { result: [{ id: 99 }] } })
+    fixture.requests[3].resolve({ code: 0, data: { result: [{ id: 99 }] } })
     assert.equal(await old, false)
     assert.deepEqual(list.results.value.map(item => item.id), [4])
     fixture.account.userInfo.mid = 2
     await flush()
     assert.equal(list.results.value.length, 0)
     assert.equal(list.isLoading.value, true)
-    fixture.requests[4].resolve({ code: 0, data: { result: [{ id: 5 }] } })
+    fixture.requests[5].resolve({ code: 0, data: { result: [{ id: 5 }] } })
     await flush()
     assert.deepEqual(list.results.value.map(item => item.id), [5])
     list.currentPage.value = 2
     const refreshing = list.refreshCurrentPage()
-    assert.equal(fixture.requests[5].request.page, 1)
+    assert.equal(fixture.requests[6].request.page, 1)
     assert.deepEqual(list.results.value.map(item => item.id), [5], 'known content remains until refresh succeeds')
-    fixture.requests[5].resolve({ code: 0, data: { result: [{ id: 6 }], numResults: 120, pagesize: 30 } })
+    fixture.requests[6].resolve({ code: 0, data: { result: [{ id: 6 }], numResults: 120, pagesize: 30 } })
     assert.equal(await refreshing, true)
     assert.deepEqual(list.results.value.map(item => item.id), [6])
     assert.equal(list.currentPage.value, 1)
     const appended = list.performSearch(true)
-    assert.equal(fixture.requests[6].request.page, 2)
-    fixture.requests[6].resolve({ code: 0, data: { result: [{ id: 7 }], numResults: 120, pagesize: 30 } })
+    assert.equal(fixture.requests[7].request.page, 2)
+    fixture.requests[7].resolve({ code: 0, data: { result: [{ id: 7 }], numResults: 120, pagesize: 30 } })
     assert.equal(await appended, true)
     assert.deepEqual(list.results.value.map(item => item.id), [6, 7])
     fixture.scope.stop()
@@ -633,9 +643,9 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
   })
 
   check('audit 11: MAIN metadata bridge transfers strings, validates the current manuscript and cleans up', async () => {
-    const bridge = await import('../src/utils/videoMetadataBridge')
-    const { setPageBridgeChannelId } = await import('../src/utils/pageBridgeChannel')
-    setPageBridgeChannelId('audit-fixture')
+    const bridge = await loadSourceModule('../src/utils/videoMetadataBridge.ts', {
+      './pageBridgeChannel': { getPageBridgeChannelId: () => 'audit-fixture' },
+    }, { location: window.location })
     const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
     Object.defineProperty(globalThis, 'location', { configurable: true, value: window.location })
     const oldUrl = window.location.href
@@ -651,10 +661,11 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
         return () => watchers.delete(callback)
       },
     }
-    const main = await loadSourceFunctions('../src/inject/videoMetadata.ts', ['setupVideoMetadataBridge'], {
-      ...bridge,
-      ...await import('../src/inject/movedPgcReact'),
-      selectors: (await import('../src/utils/bewlyWidescreen/constants')).selectors,
+    const main = await loadSourceModule('../src/inject/videoMetadata.ts', {
+      '~/utils/videoMetadataBridge': bridge,
+      '~/inject/movedPgcReact': await import('../src/inject/movedPgcReact'),
+      '~/utils/bewlyWidescreen/constants': await import('../src/utils/bewlyWidescreen/constants'),
+    }, {
       window,
       document,
       HTMLElement,
@@ -668,7 +679,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     const recordChange = event => changes.push(bridge.parseVideoMetadataEvent(event))
     window.addEventListener(bridge.VIDEO_METADATA_CHANGED, recordChange)
     try {
-      assert.deepEqual(bridge.readVideoPageMetadata(), { aid: 123, bvid: 'BV1ab411c7mD', pageCount: 2, isCollection: true })
+      assert.deepEqual({ ...bridge.readVideoPageMetadata() }, { aid: 123, bvid: 'BV1ab411c7mD', pageCount: 2, isCollection: true })
       assert.equal(watchers.size, 1)
       assert.equal(changes.length, 1)
       const toolbar = element.appendChild(document.createElement('div'))

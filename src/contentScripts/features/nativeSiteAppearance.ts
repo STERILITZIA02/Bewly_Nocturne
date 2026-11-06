@@ -4,6 +4,7 @@ import { stopDarkState, useDark } from '~/composables/useDark'
 import { getNativeSite } from '~/constants/nativeSites'
 import { settings, settingsInitializationState } from '~/logic/storage'
 import { APPEARANCE_STYLE_KEYS } from '~/utils/appearance'
+import { supportsHighlightInheritance } from '~/utils/highlightInheritance'
 import { NATIVE_NEUTRAL_RGB_PROPERTIES, syncThemeColors, THEME_COLOR_PROPERTIES } from '~/utils/themeColor'
 
 import { setupNativePageKeyboard } from './nativePageKeyboard'
@@ -34,7 +35,7 @@ export function setupNativeSiteAppearance() {
     appearanceScope.stop()
     appearanceScope = undefined
     stopDarkState()
-    root.classList.remove('bewly-design', 'bewly-native-fonts')
+    root.classList.remove('bewly-design', 'bewly-native-fonts', 'bewly-selection-fallback')
     for (const [element, classes] of originalClasses) {
       for (const [name, enabled] of classes)
         element.classList.toggle(name, enabled)
@@ -61,6 +62,7 @@ export function setupNativeSiteAppearance() {
       for (const element of [root, document.body].filter((element): element is HTMLElement => Boolean(element)))
         originalClasses.set(element, new Map(['dark', 'bili_dark'].map(name => [name, element.classList.contains(name)])))
       root.classList.add('bewly-design')
+      root.classList.toggle('bewly-selection-fallback', !supportsHighlightInheritance())
       appearanceScope = effectScope(true)
       appearanceScope.run(() => {
         const mangaClassify = site === 'manga' && /^\/classify\/?$/.test(location.pathname)

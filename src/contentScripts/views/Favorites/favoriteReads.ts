@@ -42,14 +42,22 @@ export function createFavoriteReads(client: ReadApi, getAccount: () => AccountId
   async function consume(entry: Entry, signal?: AbortSignal) {
     signal?.throwIfAborted()
     entry.consumers++
+    let released = false
+    const release = () => {
+      if (released)
+        return
+      released = true
+      if (--entry.consumers === 0 && !entry.settled)
+        entry.controller.abort()
+    }
     try {
-      const result = await waitWithSignal(entry.promise, signal)
+      // Release synchronously on cancellation, before a queued API call starts.
+      const result = await waitWithSignal(entry.promise, signal, release)
       entry.controller.signal.throwIfAborted()
       return result
     }
     finally {
-      if (--entry.consumers === 0 && !entry.settled)
-        entry.controller.abort()
+      release()
     }
   }
   function read(method: keyof ReadApi, source: number, params: object, signal?: AbortSignal) {
@@ -65,7 +73,10 @@ export function createFavoriteReads(client: ReadApi, getAccount: () => AccountId
       const controller = new AbortController()
       const owner = account
       const created: Entry = { source, controller, consumers: 0, settled: false, resources: method === 'getFavoriteResources' && 'type' in params && params.type === 0, promise: Promise.resolve() }
-      created.promise = Promise.resolve().then(() => client[method](params, { signal: controller.signal })).then((result) => {
+      created.promise = Promise.resolve().then(() => {
+        controller.signal.throwIfAborted()
+        return client[method](params, { signal: controller.signal })
+      }).then((result) => {
         controller.signal.throwIfAborted()
         if (owner !== getAccount())
           throw new DOMException('Favorites account changed', 'AbortError')

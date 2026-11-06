@@ -5,8 +5,10 @@ import Button from '~/components/Button.vue'
 import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
 import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
+import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { usePageViewState } from '~/composables/usePageViewState'
+import { uiPx, uiScale } from '~/composables/useUiScale'
 import { isDissolving } from '~/utils/particleDissolve'
 
 import ConversationListItem from './ConversationListItem.vue'
@@ -22,6 +24,7 @@ import type {
 } from './privateSession'
 import { filterPrivateSessions, matchesPrivateSessionType } from './privateSession'
 import type { PrivateRecipientSearchController } from './usePrivateRecipientSearch'
+import { privateSessionActionsKey } from './usePrivateSessionActions'
 
 const props = defineProps<{
   active: boolean
@@ -79,6 +82,8 @@ const filteredItems = computed(() => filterPrivateSessions(visibleItems.value, {
   query: query.value,
 }))
 const normalizedQuery = computed(() => normalizePrivateRecipientQuery(query.value))
+const rowsRef = ref<HTMLElement | null>(null)
+const actions = inject(privateSessionActionsKey, undefined)
 const messageSearch = computed(() => props.searchMode === 'messages' && Boolean(normalizedQuery.value))
 const recipientGroups = computed(() => {
   const groups = props.recipientSearch.state.groups
@@ -103,6 +108,25 @@ const recipientGroups = computed(() => {
   const rows = [...results.values()].map(row => ({ ...row, recipient: { ...row.recipient, source: followed.has(row.recipient.mid) ? 'following' as const : 'global' as const } }))
   return (['following', 'global'] as const).map(source => ({ source, items: rows.filter(row => row.recipient.source === source) }))
 })
+interface DirectoryRow { key: string, heading?: 'following' | 'global', session?: DisplayPrivateSession, recipient?: TransientPrivateRecipient }
+const directoryRows = computed<DirectoryRow[]>(() => normalizedQuery.value
+  ? recipientGroups.value.flatMap(group => group.items.length ? [{ key: `heading:${group.source}`, heading: group.source }, ...group.items] : [])
+  : filteredItems.value.map(session => ({ key: session.key, session })))
+const rowHeight = computed(() => uiPx(props.compact ? 60 : 72))
+const sessionWindow = useCardWindow({
+  root: itemsRef,
+  container: rowsRef,
+  keys: computed(() => directoryRows.value.map(item => item.key)),
+  columns: computed(() => 1),
+  gap: computed(() => 0),
+  enabled: computed(() => directoryRows.value.length > CARD_WINDOW_THRESHOLD),
+  suspended: computed(() => !props.active || messageSearch.value),
+  estimatedHeight: rowHeight,
+  estimateHeight: key => String(key).startsWith('heading:') ? uiPx(40) : rowHeight.value,
+  layout: computed(() => `${props.compact}:${uiScale.value.scale}`),
+  canRelease: key => key !== props.selectedSessionKey && key !== actions?.state.target?.key && key !== `recipient:${props.selectedRecipient?.mid}`,
+})
+const sessionRanges = sessionWindow.ranges
 const hasPeopleResults = computed(() => recipientGroups.value.some(group => group.items.length))
 const recipientErrors = computed(() => (['following', 'global'] as const).filter(source => props.recipientSearch.state.groups[source].errorKind))
 const noPeopleResults = computed(() => Boolean(normalizedQuery.value) && props.recipientSearch.state.complete
@@ -117,6 +141,8 @@ const outsideSelection = computed(() => {
 watch(() => [props.active, props.selectedSessionKey, props.selectedRecipient?.mid], async () => {
   if (!props.active)
     return
+  await nextTick()
+  sessionWindow.ensureVisible(props.selectedSessionKey || `recipient:${props.selectedRecipient?.mid}`)
   await nextTick()
   const selected = Array.from(itemsRef.value?.querySelectorAll<HTMLElement>('[data-session-key], [data-recipient-mid]') ?? [])
     .find(element => element.dataset.sessionKey === props.selectedSessionKey || (props.selectedRecipient && element.dataset.recipientMid === props.selectedRecipient.mid))
@@ -164,35 +190,40 @@ function restoreScrollTop(scrollTop: number) {
     itemsRef.value.scrollTop = Math.max(0, scrollTop)
 }
 
-function focusSession(sessionKey: string) {
-  const sessionItems = itemsRef.value?.querySelectorAll<HTMLElement>('[data-session-key]')
+async function focusSession(sessionKey: string) {
+  sessionWindow.ensureVisible(sessionKey)
+  await nextTick()
+  const sessionItems = itemsRef.value?.querySelectorAll<HTMLElement>('[data-session-key], [data-recipient-mid]')
   const sessionItem = sessionItems
-    ? Array.from(sessionItems).find(element => element.dataset.sessionKey === sessionKey)
+    ? Array.from(sessionItems).find(element => rowKey(element) === sessionKey)
     : undefined
   sessionItem?.focus({ preventScroll: true })
+}
+
+function rowKey(element: HTMLElement) {
+  return element.dataset.sessionKey ?? `recipient:${element.dataset.recipientMid}`
 }
 
 function handleListKeydown(event: KeyboardEvent) {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')
     return
   const target = event.target instanceof HTMLElement
-    ? event.target.closest<HTMLElement>('[data-session-key]')
+    ? event.target.closest<HTMLElement>('[data-session-key], [data-recipient-mid]')
     : null
   if (!target || !itemsRef.value?.contains(target))
     return
 
-  const sessionItems = Array.from(
-    itemsRef.value.querySelectorAll<HTMLElement>('[data-session-key]'),
-  )
-  const currentIndex = sessionItems.indexOf(target)
-  if (currentIndex < 0)
-    return
-  const direction = event.key === 'ArrowDown' ? 1 : -1
-  const nextIndex = Math.min(sessionItems.length - 1, Math.max(0, currentIndex + direction))
-  if (nextIndex === currentIndex)
-    return
-  event.preventDefault()
-  sessionItems[nextIndex]?.focus()
+  const keys = [...new Set([
+    ...(props.selectedRecipient ? [`recipient:${props.selectedRecipient.mid}`] : []),
+    ...(outsideSelection.value ? [outsideSelection.value.key] : []),
+    ...directoryRows.value.filter(row => !row.heading).map(row => row.key),
+  ])]
+  const index = keys.indexOf(rowKey(target))
+  const next = keys[index + (event.key === 'ArrowDown' ? 1 : -1)]
+  if (index >= 0 && next) {
+    event.preventDefault()
+    void focusSession(next)
+  }
 }
 
 async function observeSentinel() {
@@ -321,32 +352,31 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
         v-if="outsideSelection" :session="outsideSelection" :compact="compact" selected @select="emit('select', $event)"
         @menu="(session, trigger) => emit('menu', session, trigger)"
       />
-      <template v-if="!normalizedQuery">
-        <ConversationListItem
-          v-for="session in filteredItems"
-          :key="session.key"
-          :compact="compact"
-          :session="session"
-          :selected="selectedSessionKey === session.key"
-          @select="emit('select', $event)"
-          @menu="(session, trigger) => emit('menu', session, trigger)"
-        />
-      </template>
-      <template v-if="normalizedQuery">
-        <template v-for="group in recipientGroups" :key="group.source">
-          <section v-if="group.items.length" :aria-label="t(`notifications.whisper.search.${group.source}`)">
-            <p class="conversation-list__search-heading">
-              {{ t(`notifications.whisper.search.${group.source}`) }}
+      <div ref="rowsRef">
+        <template v-for="range in sessionRanges" :key="range.start">
+          <div v-if="range.height !== undefined" :style="{ height: `${range.height}px` }" aria-hidden="true" />
+          <template v-for="row in range.height === undefined ? directoryRows.slice(range.start, range.end) : []" :key="row.key">
+            <p v-if="row.heading" :ref="element => sessionWindow.setElement(row.key, element)" class="conversation-list__search-heading" role="heading" aria-level="3">
+              {{ t(`notifications.whisper.search.${row.heading}`) }}
             </p>
-            <template v-for="row in group.items" :key="row.key">
-              <ConversationListItem
-                v-if="row.session" :session="row.session" :compact="compact" :selected="selectedSessionKey === row.session.key" @select="emit('select', $event)"
-                @menu="(session, trigger) => emit('menu', session, trigger)"
-              />
-              <PrivateRecipientSearchResultItem v-else :recipient="row.recipient" @select="selectSearchResult" />
-            </template>
-          </section>
+            <ConversationListItem
+              v-else-if="row.session"
+              :ref="element => sessionWindow.setElement(row.key, (element as InstanceType<typeof ConversationListItem> | null)?.$el)"
+              :compact="compact"
+              :session="row.session"
+              :selected="selectedSessionKey === row.key"
+              @select="emit('select', $event)"
+              @menu="(session, trigger) => emit('menu', session, trigger)"
+            />
+            <PrivateRecipientSearchResultItem
+              v-else-if="row.recipient"
+              :ref="element => sessionWindow.setElement(row.key, (element as InstanceType<typeof PrivateRecipientSearchResultItem> | null)?.$el)"
+              :recipient="row.recipient" @select="selectSearchResult"
+            />
+          </template>
         </template>
+      </div>
+      <template v-if="normalizedQuery">
         <ConversationListSkeleton v-if="recipientSearch.state.loading || recipientSearch.state.searching" :compact="compact" :count="2" :label="t('notifications.whisper.recipient_search.loading')" :show-tools="false" />
         <div v-else-if="recipientSearch.state.groups.global.hasMore && hasPeopleResults" class="conversation-list__more">
           <button type="button" class="bew-message-search-pill" @click="recipientSearch.loadMore('global')">

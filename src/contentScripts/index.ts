@@ -13,8 +13,9 @@ import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents
 import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_MOUNTED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_TOP_BAR_CHANGE, LISTEN_ATTRIBUTE } from '~/constants/globalEvents'
 import { getPageBridgeTargetOrigin, isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { setupCommentReplyApiBridge } from '~/contentScripts/features/commentReplyApiBridge'
-import { setupOriginalMomentsFilter } from '~/contentScripts/features/originalMomentsFilter'
+import { setupOriginalMomentsFeed } from '~/contentScripts/features/originalMomentsFeed'
 import { setupVideoWatchProgress } from '~/contentScripts/features/videoWatchProgress'
+import { setupFullscreenWheelVolume } from '~/contentScripts/fullscreenWheelVolume'
 import { settings, settingsDisplayReady, settingsInitializationState, settingsReady } from '~/logic'
 import { setupApp } from '~/logic/common-setup'
 import { reportIframePlayerMode, setupIframePlaybackContext } from '~/logic/iframePageState'
@@ -34,6 +35,7 @@ import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
+import { supportsHighlightInheritance } from '~/utils/highlightInheritance'
 import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { handleIframeNavigationRequest } from '~/utils/iframeNavigation'
@@ -505,7 +507,8 @@ else if (shouldInitializeContentScript) {
     contentScriptDisposers.push(setupVideoWatchProgress())
     contentScriptDisposers.push(setupVideoQualityMemory())
     contentScriptDisposers.push(setupLocalLoudnessControl())
-    contentScriptDisposers.push(setupOriginalMomentsFilter())
+    contentScriptDisposers.push(setupOriginalMomentsFeed())
+    contentScriptDisposers.push(setupFullscreenWheelVolume())
     recordVideoVisitFromUrl(lastUrl)
     if (document.readyState === 'complete')
       waitForPlayerModePageSettle(false)
@@ -571,6 +574,7 @@ else if (shouldInitializeContentScript) {
   }
 
   function applyBewlyDesignClasses() {
+    document.documentElement.classList.toggle('bewly-selection-fallback', !supportsHighlightInheritance())
     const shouldApply = shouldApplyBewlyDesign()
     document.documentElement.classList.toggle('bewly-design', shouldApply)
     document.documentElement.classList.toggle('bewly-video-dark-only', shouldApplyVideoPageDarkOnly())
@@ -700,6 +704,7 @@ else if (shouldInitializeContentScript) {
     removeHomePageHiddenStyle()
     document.documentElement.classList.remove(
       'bewly-design',
+      'bewly-selection-fallback',
       'bewly-video-dark-only',
       'remove-top-bar',
       'bewly-outer-top-bars-suppressed',

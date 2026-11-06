@@ -30,6 +30,5 @@ export const CREATOR_PLATFORM_URL = /^https?:\/\/member\.bilibili\.com\/platform
 export const MESSAGE_URL = /^https?:\/\/message\.bilibili\.com(?:\/|$).*$/
 
 // Native pages that a top bar action leads to (the action is hidden while on them).
-export const MOMENTS_FEED_URL = /^https?:\/\/t\.bilibili\.com\/?(?:[?#]|$)/
 export const FAVORITES_URL = /^https?:\/\/space\.bilibili\.com\/\d+\/favlist(?:[/?#]|$)/
 export const HISTORY_URL = /^https?:\/\/(?:www\.)?bilibili\.com\/(?:account\/)?history(?:[/?#]|$)/

@@ -116,7 +116,7 @@ export function createStateConsumerRegistry(extensionApi: StateConsumerBrowser =
       return { stale: false }
     let consumer = consumers.get(key)
     const documentId = (sender as { documentId?: string }).documentId
-    if (!consumer || (documentId && consumer.documentId && consumer.documentId !== documentId)) {
+    if (!consumer || consumer.documentId !== documentId) {
       consumer = { tabId: sender.tab.id, frameId: sender.frameId ?? 0, documentId, privacy: privacyOf(sender.tab), topics: {} }
       consumers.set(key, consumer)
     }
@@ -132,10 +132,11 @@ export function createStateConsumerRegistry(extensionApi: StateConsumerBrowser =
     return { stale }
   }
 
-  function release({ topic }: { topic?: StateTopic }, sender?: Browser.Runtime.MessageSender) {
+  async function release({ topic }: { topic?: StateTopic }, sender?: Browser.Runtime.MessageSender) {
+    await load()
     const key = keyOf(sender)
     const consumer = key ? consumers.get(key) : undefined
-    if (!consumer)
+    if (!consumer || consumer.documentId !== (sender as { documentId?: string } | undefined)?.documentId)
       return
     if (topic)
       delete consumer.topics[topic]
@@ -165,7 +166,7 @@ export function createStateConsumerRegistry(extensionApi: StateConsumerBrowser =
       if (active)
         targets.push({ key, consumer })
     }
-    await Promise.all(targets.map(({ key, consumer }) => extensionApi.tabs.sendMessage(consumer.tabId, message, { frameId: consumer.frameId })
+    await Promise.all(targets.map(({ key, consumer }) => extensionApi.tabs.sendMessage(consumer.tabId, message, { frameId: consumer.frameId, ...(consumer.documentId ? { documentId: consumer.documentId } : {}) })
       .catch(() => {
         if (consumers.get(key) === consumer)
           consumers.delete(key)
@@ -197,7 +198,7 @@ export function createStateConsumerRegistry(extensionApi: StateConsumerBrowser =
     }
     await Promise.all(targets.map(async ({ key, consumer }) => {
       try {
-        await extensionApi.tabs.sendMessage(consumer.tabId, message, { frameId: consumer.frameId })
+        await extensionApi.tabs.sendMessage(consumer.tabId, message, { frameId: consumer.frameId, ...(consumer.documentId ? { documentId: consumer.documentId } : {}) })
       }
       catch {
         // The document is gone (or never had a receiver); it registers again on load.

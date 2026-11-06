@@ -5,6 +5,7 @@ export interface RecommendationFeedEntry {
   uniqueId: string
   /** Classified once from the immutable raw item when the entry is accepted. */
   isAdvertisement: boolean
+  filtered?: boolean
 }
 
 /**
@@ -26,7 +27,7 @@ export function createRecommendationFeed<E extends RecommendationFeedEntry>(
   let projectedBlockAds: boolean | undefined
 
   function project(entries: readonly E[]) {
-    return projectedBlockAds ? entries.filter(entry => !entry.isAdvertisement) : entries.slice()
+    return entries.filter(entry => !entry.filtered && !(projectedBlockAds && entry.isAdvertisement))
   }
 
   function rebuild() {

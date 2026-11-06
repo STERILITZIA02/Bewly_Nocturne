@@ -1,16 +1,20 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import process from 'node:process'
+import { setImmediate as nextTask } from 'node:timers'
 import vm from 'node:vm'
 
 import { JSDOM } from 'jsdom'
 import ts from 'typescript'
 import { compileScript, parse } from 'vue/compiler-sfc'
 
+import { installMediaQueryFixture } from './browserMediaFixture.mjs'
+import { historySearchResponse } from './fixtures/historyResponses'
 import { loadSourceFunctions } from './sourceFunctionHarness'
-import { globalComponentFixture, loadSourceModule } from './sourceModuleHarness'
+import { dataFormatterFixture, globalComponentFixture, loadSourceModule } from './sourceModuleHarness'
 import { registerAccountTransactionChecks } from './verify-account-transactions.mjs'
 import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
+import { registerApprovedUpstreamChecks } from './verify-approved-upstream.mjs'
 import { registerCommentReadingChecks } from './verify-comment-reading.mjs'
 import { registerCompatibleAChecks } from './verify-compatible-a.mjs'
 import { registerControlChecks } from './verify-controls.mjs'
@@ -18,6 +22,7 @@ import { registerDataConsistencyChecks } from './verify-data-consistency.mjs'
 import { registerDesignImplementationChecks } from './verify-design-implementation.mjs'
 import { registerDockGlassChecks } from './verify-dock-glass.mjs'
 import { registerFavoriteSourceChecks } from './verify-favorite-sources.mjs'
+import { registerFinalAuditChecks } from './verify-final-audit.mjs'
 import { registerFourFeatureChecks } from './verify-four-features.mjs'
 import { registerFrostedGlassSurfaceChecks } from './verify-frosted-glass-surfaces.mjs'
 import { registerGlobalResourceChecks } from './verify-global-resources.mjs'
@@ -45,6 +50,7 @@ import { registerPrivateHistorySearchChecks } from './verify-private-history-sea
 import { registerPrivateSessionActionChecks } from './verify-private-session-actions.mjs'
 import { registerRecommendationConfigChecks } from './verify-recommendation-config.mjs'
 import { registerRecommendationRuntimeChecks } from './verify-recommendation-runtime-fixes.mjs'
+import { registerReliabilityChecks } from './verify-reliability.mjs'
 import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
 import { registerRuntimeErrorChecks } from './verify-runtime-errors.mjs'
 import { registerSeptemberAdaptationChecks } from './verify-september-adaptation.mjs'
@@ -95,6 +101,8 @@ dom.window.HTMLElement.prototype.getClientRects = function () {
   return [{ x: 0, y: 0, left: 0, top: 0, right: 100, bottom: 30, width: 100, height: 30 }]
 }
 dom.window.HTMLElement.prototype.scrollIntoView = function () {}
+Object.defineProperty(document, 'scrollingElement', { configurable: true, get: () => document.documentElement })
+const restoreMediaQueries = installMediaQueryFixture(window)
 
 const Vue = await import('vue')
 const VueUse = await import('@vueuse/core')
@@ -110,6 +118,9 @@ const { useLoadMore } = await import('../src/contentScripts/views/SearchResults/
 const r = value => ({ value })
 const checks = []
 const check = (name, run) => checks.push({ name, run })
+registerApprovedUpstreamChecks(check, { Vue, compileComponent, flush })
+registerReliabilityChecks(check, { Vue, compileComponent, flush })
+registerFinalAuditChecks(check, { Vue, compileComponent, flush })
 registerCompatibleAChecks(check, { Vue, flush, compileComponent })
 registerDataConsistencyChecks(check, { Vue, flush })
 registerCommentReadingChecks(check, { Vue, compileComponent, flush })
@@ -171,8 +182,9 @@ registerControlChecks(check, { Vue, flush, compileComponent })
 registerVisualEditorChecks(check, { Vue, flush, compileComponent })
 function noop() {}
 async function flush() {
-  for (let turn = 0; turn < 8; turn++)
-    await Vue.nextTick()
+  await Vue.nextTick()
+  await new Promise(resolve => nextTask(resolve))
+  await Vue.nextTick()
 }
 
 check('i18n: actual settings interpolation templates use global messages without parent-scope warnings', async () => {
@@ -240,7 +252,7 @@ check('P2-01/02 history clear invalidates old reads; submitted query owns pagina
     clearAllHistory: () => cleared.promise,
     searchHistoryList: async (options) => {
       searches.push(options)
-      return { code: 0, data: { list: Array.from({ length: 20 }, (_, i) => ({ view_at: i, history: { business: 'archive', oid: options.pn * 20 + i } })) } }
+      return historySearchResponse(Array.from({ length: 20 }, (_, i) => ({ view_at: 1000 - options.pn * 20 - i, history: { business: 'archive', oid: options.pn * 20 + i } })), options.pn, true)
     },
   }
   const timeline = useHistoryTimeline({ getGroupInterval: () => 'day', getSortOrder: () => 'newest', api, getAccountId: () => 1, getCSRF: () => 'fixture', haveScrollbar: async () => true, onWriteError: error => errors.push(error) })
@@ -289,6 +301,8 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
     LIBRARY_AUTOFILL_PAGE_LIMIT: (await import('../src/constants/library')).LIBRARY_AUTOFILL_PAGE_LIMIT,
     topBarStore: { isLogin: true, userInfo: { mid: 1 }, commitWatchLaterMutation: async () => {} },
     watchLaterExtensionContextInvalidated: false,
+    captureWatchLaterReadGeneration: () => 0,
+    isWatchLaterReadCurrent: () => true,
     AbortController,
     readController: undefined,
     loadingLibrary: false,
@@ -298,11 +312,16 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
     isRefreshing: r(false),
     refreshFailed: r(false),
     requestFailed: r(false),
+    requestStalled: r(false),
     noMoreContent: r(false),
     pageNum: r(1),
     pageSize: r(20),
     watchLaterCount: { get value() { return server.length } },
     currentWatchLaterList: r([]),
+    sourcePages: r({}),
+    batch: { busy: r(false) },
+    watchLaterCards: () => [],
+    dissolveElements: () => ({ released: Promise.resolve(), restore() {} }),
     pendingAction: r(null),
     bulkAction: { pending: r(false) },
     haveScrollbar: async () => true,
@@ -343,6 +362,11 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
   await context.getWatchLaterListByPage(context.requestGeneration, 1)
   assert.deepEqual(context.currentWatchLaterList.value.map(item => item.aid), server.slice(0, 40).map(item => item.aid))
   assert.equal(new Set(context.currentWatchLaterList.value.map(item => item.aid)).size, 40)
+  const retained = context.currentWatchLaterList.value
+  context.api.watchlater.getWatchLaterListByPage = async () => ({ code: -503 })
+  assert.equal(await context.getWatchLaterListByPage(context.requestGeneration, 1), false)
+  assert.equal(context.requestFailed.value, true)
+  assert.equal(context.currentWatchLaterList.value, retained)
 })
 
 async function favoriteContext() {
@@ -510,6 +534,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/utils/iframeDrawerHistory': await import('../src/utils/iframeDrawerHistory'),
     '~/composables/useRouteState': await import('../src/composables/useRouteState'),
     '~/utils/videoPreviewProgress': await import('../src/utils/videoPreviewProgress'),
+    '~/utils/historyCursor': await import('../src/utils/historyCursor'),
     '~/utils/iframeExternalUrl': await import('../src/utils/iframeExternalUrl'),
     '~/utils/linkNavigation': await import('../src/utils/linkNavigation'),
     '~/utils/listRemovalFocus': await import('../src/utils/listRemovalFocus'),
@@ -542,6 +567,9 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/composables/useReadyPageTransition': await import('../src/composables/useReadyPageTransition'),
     '~/composables/useAnchoredPopoverPosition': await import('../src/composables/useAnchoredPopoverPosition'),
     '~/composables/useComposerPicker': await import('../src/composables/useComposerPicker'),
+    '~/composables/useImageViewer': await import('../src/composables/useImageViewer'),
+    '~/utils/dialogScroll': await import('../src/utils/dialogScroll'),
+    '~/utils/highlightInheritance': { supportsHighlightInheritance: () => false },
     '~/utils/floatingMenu': await import('../src/utils/floatingMenu'),
     '~/utils/chartScale': await import('../src/utils/chartScale'),
     '~/utils/selectionScrollAnchor': await import('../src/utils/selectionScrollAnchor'),
@@ -607,8 +635,10 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
       '~/logic': modules['~/logic'] ?? { settings: Vue.ref({ videoCardTitleFontSize: 'base', videoCardAuthorFontSize: 'sm' }) },
     })
   }
-  if (modules['~/composables/useAppProvider'])
-    modules['~/composables/useAppProvider'] = { ...(await import('../src/composables/useAppProvider')), ...modules['~/composables/useAppProvider'] }
+  if (modules['~/composables/useAppProvider']) {
+    const provider = modules['~/composables/useAppProvider']
+    modules['~/composables/useAppProvider'] = { ...(await import('../src/composables/useAppProvider')), ...provider, useBewlyApp: () => ({ scrollViewportRef: Vue.ref(document.documentElement), ...provider.useBewlyApp() }) }
+  }
   if (text.includes('\'./watchLaterFilters\'') && !modules['./watchLaterFilters'])
     modules['./watchLaterFilters'] = await import('../src/contentScripts/views/WatchLater/watchLaterFilters')
   for (const path of ['./historyFilters', '~/contentScripts/views/History/historyFilters']) {
@@ -622,7 +652,9 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     if (text.includes(`'${path}'`) && !modules[path])
       modules[path] = { default: await compileComponent(`../src/contentScripts/views/WatchLater/${name}.vue`) }
   }
-  if (text.includes('\'./HistoryDayToggle.vue\''))
+  if (text.includes('\'./HistoryDayNode.vue\'') && !modules['./HistoryDayNode.vue'])
+    modules['./HistoryDayNode.vue'] = { default: await compileComponent('../src/contentScripts/views/History/HistoryDayNode.vue') }
+  if (text.includes('\'./HistoryDayToggle.vue\'') && !modules['./HistoryDayToggle.vue'])
     modules['./HistoryDayToggle.vue'] = { default: await compileComponent('../src/contentScripts/views/History/HistoryDayToggle.vue') }
   if (text.includes('\'./historyGroups\''))
     modules['./historyGroups'] = await import('../src/contentScripts/views/History/historyGroups')
@@ -804,6 +836,29 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     modules['~/utils/momentsReadPosition'] = await import('../src/utils/momentsReadPosition')
   if (text.includes('\'~/components/MomentReadMarker.vue\'') && !modules['~/components/MomentReadMarker.vue'])
     modules['~/components/MomentReadMarker.vue'] = { default: await compileComponent('../src/components/MomentReadMarker.vue') }
+  for (const [name, path] of [
+    ['~/composables/usePageSearchIntent', '../src/composables/usePageSearchIntent'],
+    ['~/utils/appearance', '../src/utils/appearance'],
+    ['~/composables/useIframeImageViewerBridge', '../src/composables/useIframeImageViewerBridge'],
+    ['./usePrivateMessages', '../src/contentScripts/views/Notifications/whisper/usePrivateMessages'],
+    ['./usePrivateSessionActions', '../src/contentScripts/views/Notifications/whisper/usePrivateSessionActions'],
+  ]) {
+    if (text.includes(`'${name}'`) && !(name in modules))
+      modules[name] = await import(path)
+  }
+  if (text.includes('\'~/utils/dataFormatter\'') && !modules['~/utils/dataFormatter'])
+    modules['~/utils/dataFormatter'] = await dataFormatterFixture(modules['~/logic'], modules['~/utils/i18n'])
+  if (text.includes('\'~/composables/useReducedMotion\'') && !modules['~/composables/useReducedMotion']) {
+    modules['~/composables/useReducedMotion'] = await loadSourceModule('../src/composables/useReducedMotion.ts', {
+      'vue': Vue,
+      '@vueuse/core': VueUse,
+      '~/logic': modules['~/logic'] ?? { settings: Vue.ref({ motionPreference: 'system' }) },
+    })
+  }
+  // Component fixtures substitute the history service; its real subscription
+  // ownership is exercised in the multi-client reliability checks.
+  if (modules['~/utils/videoVisitHistory'])
+    modules['~/utils/videoVisitHistory'] = { acquireVideoVisitHistory: () => () => {}, ...modules['~/utils/videoVisitHistory'] }
   vm.runInNewContext(code, {
     ...Vue,
     exports,
@@ -1136,6 +1191,7 @@ check('P2-13 weekly retries the failed edition; ranking and anime settle network
   assert.equal(ranking.isLoading.value, false)
   const anime = await loadSourceFunctions('../src/contentScripts/views/Anime/Anime.vue', ['getPopularAnimeList'], {
     animeMounted: true,
+    animeController: new AbortController(),
     requestGeneration: 1,
     isLoadingPopularAnime: r(false),
     popularRequestFailed: r(false),
@@ -1201,6 +1257,9 @@ try {
     process.exitCode = 1
 }
 finally {
+  const { stopRouteObserver } = await import('../src/composables/useRouteState')
+  stopRouteObserver()
+  restoreMediaQueries()
   dom.window.close()
   for (const [name, descriptor] of savedGlobals) {
     if (descriptor)

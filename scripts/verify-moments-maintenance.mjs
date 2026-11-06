@@ -145,7 +145,7 @@ export function registerMomentsMaintenanceChecks(check, { Vue, compileComponent,
 
   const article = (text, fields = {}) => ({ type: 'DYNAMIC_TYPE_ARTICLE', modules: { module_dynamic: { major: { article: { title: '文章', desc: text } }, ...fields } } })
   check('moment promotion: text, image and opus posts share filtering; nested forwards inspect each caption without merging unrelated evidence', async () => {
-    const { createMomentAdapter } = await import('../src/contentScripts/views/Moments/momentAdapter')
+    const { createMomentAdapter } = await loadSourceModule('../src/contentScripts/views/Moments/momentAdapter.ts', {})
     const mapper = createMomentAdapter(key => key, (_id, count) => Number(count) || 0)
     const filter = createMomentFilter({ blockAds: true })
     const text = '美团搜【668899】，领取外卖优惠券'
@@ -178,7 +178,7 @@ export function registerMomentsMaintenanceChecks(check, { Vue, compileComponent,
     assert.equal(detectMomentPromotion(deep), undefined)
   })
   check('article promotion: screenshot coupon and checkout messages are filtered without goods nodes or author blacklists', async () => {
-    const { createMomentAdapter } = await import('../src/contentScripts/views/Moments/momentAdapter')
+    const { createMomentAdapter } = await loadSourceModule('../src/contentScripts/views/Moments/momentAdapter.ts', {})
     const mapper = createMomentAdapter(key => key, (_id, count) => Number(count) || 0)
     const samples = [
       '大漏！大牌Jeep 冲锋衣！专柜一件一千多！今天71到手马上断码！\n大牌吉普冲锋衣！专柜一件一千多！ 评论区随机抽一位粉丝补贴50买零食 今天带你们零头价撸！！ Jeep吉普.户外冲锋衣💰71 马上断码！马上断码！马上断码！ 1Copy这条信息打开|🍑宝( CZ005 ZyhoTqUOYxS)/ 1Copy这条信息打开|🍑宝( CZ005 ZyhoTqUOYxS)/ [图片]',
@@ -283,7 +283,7 @@ export function registerMomentsMaintenanceChecks(check, { Vue, compileComponent,
   })
 
   check('article promotion: forwarded article evidence survives mapping without classifying ordinary video posts', async () => {
-    const { createMomentAdapter } = await import('../src/contentScripts/views/Moments/momentAdapter')
+    const { createMomentAdapter } = await loadSourceModule('../src/contentScripts/views/Moments/momentAdapter.ts', {})
     const mapper = createMomentAdapter(key => key, (_id, count) => Number(count) || 0)
     const source = { ...article('点击链接购买，使用优惠码'), id_str: 'original' }
     const result = mapper.mapMoment({ id_str: 'forward', type: 'DYNAMIC_TYPE_FORWARD', orig: source, modules: { module_author: { mid: 1 } } })

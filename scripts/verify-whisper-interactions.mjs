@@ -288,7 +288,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     const saved = []
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ setup() {
-      reading = module.useConversationViewport({ active: () => true, ready: () => true, canProcess: () => true, followContentGrowth: () => true, talkerId: () => 'A', save: (...args) => saved.push(args), onFrame() {} })
+      reading = module.useConversationViewport({ active: () => true, ready: () => true, canProcess: () => true, latestWindow: () => true, followContentGrowth: () => true, talkerId: () => 'A', save: (...args) => saved.push(args), onFrame() {} })
       return () => Vue.h('div', { ref: reading.messageScrollRef }, [Vue.h('div', { 'data-message-id': 'first' }), Vue.h('div', { 'data-message-id': 'anchor' })])
     } })
     app.mount(host)
@@ -356,7 +356,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     let reading
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ setup() {
-      reading = module.useConversationViewport({ active: () => true, ready: () => true, canProcess: () => true, followContentGrowth: () => follow, talkerId: () => 'A', save: (_id, value) => saved.push(value), onFrame: (_atLatest, loadOlder) => automaticHistory.push(loadOlder) })
+      reading = module.useConversationViewport({ active: () => true, ready: () => true, canProcess: () => true, latestWindow: () => true, followContentGrowth: () => follow, talkerId: () => 'A', save: (_id, value) => saved.push(value), onFrame: (_atLatest, loadOlder) => automaticHistory.push(loadOlder) })
       return () => Vue.h('div', { ref: reading.messageScrollRef }, Array.from({ length: 1000 }, (_, i) => Vue.h('div', { 'data-message-id': `message-${i}` })))
     } })
     app.mount(host)
@@ -413,13 +413,13 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       reading.markReadingIntent(new window.WheelEvent('wheel', { deltaY: -1 }))
       const pendingAnchor = reading.captureReadingAnchor()
       growthAbove = 0
-      reading.scrollToMessage('message-0')
+      reading.scrollToMessage('message-0', 16)
       step()
       assert.equal(scrollTop, 0)
       assert.equal(automaticHistory.at(-1), false, 'finding an already-loaded message does not request more history')
       pendingAnchor.restore()
       assert.equal(scrollTop, 0, 'an earlier read cannot undo message navigation')
-      reading.scrollToMessage('message-100')
+      reading.scrollToMessage('message-100', 16)
       step()
       assert.equal(scrollTop, 2984)
       assert.equal(reading.isAtLatestPosition.value, false)
@@ -483,103 +483,106 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     const oldMatchMedia = window.matchMedia
     const oldRequestFrame = globalThis.requestAnimationFrame
     const oldCancelFrame = globalThis.cancelAnimationFrame
-    globalThis.requestAnimationFrame = clock.requestAnimationFrame
-    globalThis.cancelAnimationFrame = clock.cancelAnimationFrame
     const oldScrollTo = window.HTMLElement.prototype.scrollTo
     const oldRect = window.HTMLElement.prototype.getBoundingClientRect
-    window.HTMLElement.prototype.getBoundingClientRect = function () {
-      return { x: 0, y: 0, top: 0, bottom: 600, left: 0, right: 900, width: 900, height: 600 }
-    }
-    window.matchMedia = () => ({ matches: false, addEventListener() {} })
-    window.HTMLElement.prototype.scrollTo = function ({ top }) {
-      this.scrollTop = top
-    }
-    const { usePrivateMessages } = await import(`${path}usePrivateMessages`)
     const scope = Vue.effectScope()
-    const account = Vue.ref('1')
-    const topBar = Vue.reactive({ userInfo: { mid: 1 } })
-    const selected = Vue.ref('2')
-    const active = Vue.ref(true)
-    const requests = []
-    let ackCount = 0
-    const reader = scope.run(() => usePrivateMessages(account, selected, {
-      fetchMessages: (options) => {
-        const task = deferred()
-        requests.push({ ...options, ...task })
-        return task.promise
-      },
-      ackSession: async () => {
-        ackCount++
-        return { code: 0, data: null }
-      },
-      getCsrf: () => 'fixture',
-      markSessionRead() {},
-      syncUnread: async () => {},
-    }))
-    const Content = await compileComponent(`${path}PrivateMessageContent.vue`, {
-      './PrivateMessageMediaCover.vue': { default: blank },
-      'vue-i18n': i18n,
-      '~/utils/notificationRoute': await import('../src/utils/notificationRoute'),
-    })
-    const Item = await compileComponent(`${path}PrivateMessageItem.vue`, {
-      'vue-i18n': i18n,
-      './PrivateMessageContent.vue': { default: Content },
-      './privateSession': await import(`${path}privateSession`),
-    })
-    const Composer = await compileComponent(`${path}experimental/MessageComposer.vue`, {
-      '@vueuse/core': await import('@vueuse/core'),
-      'vue-i18n': i18n,
-      '../PrivateEmotePicker.vue': { default: blank },
-      '../privateMessageRenderers': await import(`${path}privateMessageRenderers`),
-      '~/utils/privateMessageImage': await import('../src/utils/privateMessageImage'),
-    })
-    const writeStates = new Map()
-    const writer = {
-      getState(talkerId) {
-        if (!writeStates.has(talkerId))
-          writeStates.set(talkerId, Vue.reactive({ draft: `draft-${talkerId}`, items: [], sending: false, imageDraft: null }))
-        return writeStates.get(talkerId)
-      },
-      setDraft(talkerId, value) { this.getState(talkerId).draft = value },
-    }
-    const View = await compileComponent(`${path}ConversationView.vue`, {
-      './usePrivateMessagePreviews': { usePrivateMessagePreviews() {} },
-      'vue-i18n': i18n,
-      '~/constants/layout': await import('../src/constants/layout'),
-      '~/logic': { settings: Vue.ref({ autoMarkPrivateMessagesRead: true, followNewPrivateMessages: true, autoLoadPrivateMessageImages: true }) },
-      '~/stores/topBarStore': { useTopBarStore: () => topBar },
-      './conversationExpansion': await import(`${path}conversationExpansion`),
-      './useConversationViewport': await loadSourceModule(`${path}useConversationViewport.ts`, { vue: Vue, './conversationExpansion': await import(`${path}conversationExpansion`) }, clock),
-      './useConversationPresentation': await loadSourceModule(`${path}useConversationPresentation.ts`, { vue: Vue, '~/constants/layout': await import('../src/constants/layout'), './conversationExpansion': await import(`${path}conversationExpansion`) }, clock),
-      './experimental/MessageComposer.vue': { default: Composer },
-      '~/composables/useImageViewer': { useImageViewer: () => ({ isOpen: Vue.ref(false), open: () => true, close() {} }) },
-      '~/utils/imageViewer': await import('../src/utils/imageViewer'),
-      './PrivateMessageItem.vue': { default: Item },
-    }, { globals: clock })
-    const host = document.body.appendChild(document.createElement('div'))
-    let exposed
-    const app = Vue.createApp({ render: () => Vue.h(View, {
-      key: account.value,
-      ref: value => exposed = value,
-      active: active.value,
-      controller: reader,
-      writeController: writer,
-      emoteController: { packages: Vue.ref([]), loading: Vue.ref(false), failed: Vue.ref(false), load() {} },
-      session: { talkerId: selected.value, name: 'Fixture', ackSeqno: '0', maxSeqno: '1', unreadCount: 1, capabilities: { canAck: true, canSend: true } },
-    }) })
-    installLeaves(app)
-    const response = (text, count = 1, firstSeqno = 1, hasMore = 0) => ({ code: 0, data: { has_more: hasMore, min_seqno: '1', max_seqno: String(firstSeqno + count - 1), e_infos: [], messages: Array.from({ length: count }, (_, index) => ({
-      sender_uid: '2',
-      receiver_id: '1',
-      receiver_type: 1,
-      msg_type: 1,
-      msg_key: `${text}-${index}`,
-      msg_seqno: String(index + firstSeqno),
-      timestamp: 1700000000,
-      msg_status: 0,
-      content: JSON.stringify({ content: text }),
-    })) } })
+    let reader
+    let app
+    let host
     try {
+      globalThis.requestAnimationFrame = clock.requestAnimationFrame
+      globalThis.cancelAnimationFrame = clock.cancelAnimationFrame
+      window.HTMLElement.prototype.getBoundingClientRect = function () {
+        return { x: 0, y: 0, top: 0, bottom: 600, left: 0, right: 900, width: 900, height: 600 }
+      }
+      window.matchMedia = () => ({ matches: false, addEventListener() {} })
+      window.HTMLElement.prototype.scrollTo = function ({ top }) {
+        this.scrollTop = top
+      }
+      const { usePrivateMessages } = await import(`${path}usePrivateMessages`)
+      const account = Vue.ref('1')
+      const topBar = Vue.reactive({ userInfo: { mid: 1 } })
+      const selected = Vue.ref('2')
+      const active = Vue.ref(true)
+      const requests = []
+      let ackCount = 0
+      reader = scope.run(() => usePrivateMessages(account, selected, {
+        fetchMessages: (options) => {
+          const task = deferred()
+          requests.push({ ...options, ...task })
+          return task.promise
+        },
+        ackSession: async () => {
+          ackCount++
+          return { code: 0, data: null }
+        },
+        getCsrf: () => 'fixture',
+        markSessionRead() {},
+        syncUnread: async () => {},
+      }))
+      const Content = await compileComponent(`${path}PrivateMessageContent.vue`, {
+        './PrivateMessageMediaCover.vue': { default: blank },
+        'vue-i18n': i18n,
+        '~/utils/notificationRoute': await import('../src/utils/notificationRoute'),
+      })
+      const Item = await compileComponent(`${path}PrivateMessageItem.vue`, {
+        'vue-i18n': i18n,
+        './PrivateMessageContent.vue': { default: Content },
+        './privateSession': await import(`${path}privateSession`),
+      })
+      const Composer = await compileComponent(`${path}experimental/MessageComposer.vue`, {
+        '@vueuse/core': await import('@vueuse/core'),
+        'vue-i18n': i18n,
+        '../PrivateEmotePicker.vue': { default: blank },
+        '../privateMessageRenderers': await import(`${path}privateMessageRenderers`),
+        '~/utils/privateMessageImage': await import('../src/utils/privateMessageImage'),
+      })
+      const writeStates = new Map()
+      const writer = {
+        getState(talkerId) {
+          if (!writeStates.has(talkerId))
+            writeStates.set(talkerId, Vue.reactive({ draft: `draft-${talkerId}`, items: [], sending: false, imageDraft: null }))
+          return writeStates.get(talkerId)
+        },
+        setDraft(talkerId, value) { this.getState(talkerId).draft = value },
+      }
+      const View = await compileComponent(`${path}ConversationView.vue`, {
+        './usePrivateMessagePreviews': { usePrivateMessagePreviews() {} },
+        'vue-i18n': i18n,
+        '~/constants/layout': await import('../src/constants/layout'),
+        '~/logic': { settings: Vue.ref({ autoMarkPrivateMessagesRead: true, followNewPrivateMessages: true, autoLoadPrivateMessageImages: true }) },
+        '~/stores/topBarStore': { useTopBarStore: () => topBar },
+        './conversationExpansion': await import(`${path}conversationExpansion`),
+        './useConversationViewport': await loadSourceModule(`${path}useConversationViewport.ts`, { vue: Vue, './conversationExpansion': await import(`${path}conversationExpansion`) }, clock),
+        './useConversationPresentation': await loadSourceModule(`${path}useConversationPresentation.ts`, { vue: Vue, '~/constants/layout': await import('../src/constants/layout'), './conversationExpansion': await import(`${path}conversationExpansion`) }, clock),
+        './experimental/MessageComposer.vue': { default: Composer },
+        '~/composables/useImageViewer': { useImageViewer: () => ({ isOpen: Vue.ref(false), open: () => true, close() {} }) },
+        '~/utils/imageViewer': await import('../src/utils/imageViewer'),
+        './PrivateMessageItem.vue': { default: Item },
+      }, { globals: clock })
+      host = document.body.appendChild(document.createElement('div'))
+      let exposed
+      app = Vue.createApp({ render: () => Vue.h(View, {
+        key: account.value,
+        ref: value => exposed = value,
+        active: active.value,
+        controller: reader,
+        writeController: writer,
+        emoteController: { packages: Vue.ref([]), loading: Vue.ref(false), failed: Vue.ref(false), load() {} },
+        session: { talkerId: selected.value, name: 'Fixture', ackSeqno: '0', maxSeqno: '1', unreadCount: 1, capabilities: { canAck: true, canSend: true } },
+      }) })
+      installLeaves(app)
+      const response = (text, count = 1, firstSeqno = 1, hasMore = 0) => ({ code: 0, data: { has_more: hasMore, min_seqno: '1', max_seqno: String(firstSeqno + count - 1), e_infos: [], messages: Array.from({ length: count }, (_, index) => ({
+        sender_uid: '2',
+        receiver_id: '1',
+        receiver_type: 1,
+        msg_type: 1,
+        msg_key: `${text}-${index}`,
+        msg_seqno: String(index + firstSeqno),
+        timestamp: 1700000000,
+        msg_status: 0,
+        content: JSON.stringify({ content: text }),
+      })) } })
       app.mount(host)
       await flush()
       assert.equal(requests.length, 0)
@@ -655,8 +658,8 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       await flush()
       stepFrame()
       await flush()
-      assert.ok(host.textContent.includes('older-history'))
-      assert.equal(host.querySelectorAll('[data-message-id]').length, 5)
+      assert.equal(host.textContent.includes('older-history'), false, 'returning to latest retires the pending old-history window')
+      assert.equal(host.querySelectorAll('[data-message-id]').length, 3)
       assert.equal(host.querySelector('.conversation-view').getAttribute('style'), expandedStyle, 'a late history page and its no-more flag never collapse the container')
       const shell = host.querySelector('.conversation-card')
       const composer = host.querySelector('.conversation-view__floating-composer')
@@ -738,11 +741,11 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       assert.deepEqual(requests.map(request => request.talkerId), ['3', '3', '5', '6', '6'])
     }
     finally {
-      if (host.firstChild)
-        app.unmount()
-      reader.dispose()
+      if (host?.firstChild)
+        app?.unmount()
+      reader?.dispose()
       scope.stop()
-      host.remove()
+      host?.remove()
       window.matchMedia = oldMatchMedia
       globalThis.requestAnimationFrame = oldRequestFrame
       globalThis.cancelAnimationFrame = oldCancelFrame

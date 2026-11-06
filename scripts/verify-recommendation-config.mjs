@@ -352,6 +352,19 @@ export function registerRecommendationConfigChecks(check, { Vue, flush, compileC
       assert.deepEqual(Array.from(fifth.state.currentVideoList.value, row => row.item.param), ['7', '999', '10'])
       await flush()
       assert.equal(fifth.state.isLoading.value, false)
+      const cachedRequestCount = requests.length
+      const cachedStatsCount = statRequests.length
+      settings.value.filterByLikeCount = 102
+      await new Promise(resolve => setTimeout(resolve, 320))
+      await flush()
+      assert.deepEqual(Array.from(fifth.state.currentVideoList.value, row => row.item.param), ['999'])
+      assert.equal(requests.length, cachedRequestCount, 'changing a filter reprojects accepted rows without restarting the feed')
+      settings.value.filterByLikeCount = 99
+      await new Promise(resolve => setTimeout(resolve, 320))
+      await flush()
+      assert.deepEqual(Array.from(fifth.state.currentVideoList.value, row => row.item.param), ['7', '8', '999', '10'], 'relaxing a filter restores the original rows in order')
+      assert.equal(requests.length, cachedRequestCount)
+      assert.equal(statRequests.length, cachedStatsCount, 'known likes are reused by their accepted rows')
       provider.handlePageRefresh.value()
       await flush()
       const obsolete = requests.at(-1)

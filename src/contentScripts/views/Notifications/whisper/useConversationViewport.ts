@@ -52,8 +52,9 @@ export function useConversationViewport(options: {
   ready: () => boolean
   canProcess: () => boolean
   followContentGrowth: () => boolean
+  latestWindow: () => boolean
   talkerId: () => string
-  save: (talkerId: string, position: { atLatest: boolean, scrollTop: number }) => void
+  save: (talkerId: string, position: { atLatest: boolean, scrollTop: number, anchorId?: string }) => void
   onFrame: (atLatest: boolean, shouldLoadOlder: boolean) => void
 }) {
   const messageScrollRef = ref<HTMLElement | null>(null)
@@ -74,7 +75,7 @@ export function useConversationViewport(options: {
 
   function isAtLatest() {
     const viewport = messageScrollRef.value
-    return !!viewport && isConversationAtLatest({
+    return !!viewport && options.latestWindow() && isConversationAtLatest({
       physicalAtLatest: isMetricsAtLatest(readScrollMetrics(viewport)),
       requestedLatest: userRequestedLatest,
       userHasReadUpward,
@@ -85,7 +86,7 @@ export function useConversationViewport(options: {
     if (!viewport || !options.ready())
       return
     const current = metrics ?? readScrollMetrics(viewport)
-    options.save(savedTalkerId, { atLatest: atLatestOverride ?? (isAtLatestPosition.value && isMetricsAtLatest(current)), scrollTop: current.scrollTop })
+    options.save(savedTalkerId, { atLatest: atLatestOverride ?? (isAtLatestPosition.value && isMetricsAtLatest(current)), scrollTop: current.scrollTop, anchorId: readingAnchor?.id })
   }
   function processScrollFrame() {
     frame = null
@@ -217,7 +218,7 @@ export function useConversationViewport(options: {
     }
     userRequestedLatest = false
   }
-  function scrollToMessage(id: string, topInset = 16) {
+  function scrollToMessage(id: string, topInset: number) {
     const viewport = messageScrollRef.value
     const target = Array.from(viewport?.querySelectorAll<HTMLElement>('[data-message-id]') ?? []).find(element => element.dataset.messageId === id)
     if (!viewport || !target || !options.active() || !options.ready())
@@ -241,6 +242,8 @@ export function useConversationViewport(options: {
     const oldScrollHeight = viewport.scrollHeight
     const oldScrollTop = viewport.scrollTop
     const oldPadding = readVerticalScrollPadding(viewport)
+    readingAnchor = anchor
+    saveViewportState({ clientHeight: viewport.clientHeight, scrollHeight: oldScrollHeight, scrollTop: oldScrollTop })
     const isCurrent = () => generation === requestGeneration && viewport === messageScrollRef.value
     return { isCurrent, restore() {
       if (viewport !== messageScrollRef.value)

@@ -114,6 +114,7 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       '~/logic': { settings: { value: { bewlyWidescreenSidebarPosition: 'left' } } },
       '~/utils/bewlyWidescreenPolicy': policy,
       '~/utils/player': { getVideoElement: () => video },
+      '~/utils/videoMetadataBridge': { isPgcPlaybackPage: () => false },
       './constants': constants,
       './labels': { t: key => key },
       './loadingView': await import('../src/utils/bewlyWidescreen/loadingView'),
@@ -136,7 +137,13 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       const overlay = document.getElementById(constants.LOADING_ROOT_ID)
       assert.ok(overlay.querySelector('[data-bew-skeleton]'))
       assert.equal(overlay.dataset.sidebarPosition, 'left')
-      assert.ok(overlay.querySelector('.bewly-widescreen-loading-skeleton-stage > .bewly-widescreen-loading-skeleton-player + .bewly-widescreen-loading-skeleton-sidebar > .bewly-widescreen-loading-skeleton-tabs:first-child + .bewly-widescreen-loading-skeleton-info + .bewly-widescreen-loading-skeleton-video-row'))
+      assert.ok(overlay.querySelector('.bewly-widescreen-loading-skeleton-stage > .bewly-widescreen-loading-skeleton-player + .bewly-widescreen-loading-skeleton-sidebar > .bewly-widescreen-loading-skeleton-tabs:first-child + .bewly-widescreen-loading-skeleton-info + .bewly-widescreen-skeleton-recommendations'))
+      assert.ok(overlay.querySelector('.bewly-widescreen-loading-skeleton-sidebar + .bewly-widescreen-loading-skeleton-top-bar > .bewly-widescreen-loading-skeleton-top-bar-start + .bewly-widescreen-loading-skeleton-top-bar-tools'))
+      // A video's card: five equal actions, no bangumi poster or "more".
+      assert.equal(overlay.querySelectorAll('.bewly-widescreen-loading-skeleton-actions > .bewly-widescreen-loading-skeleton-action').length, 5)
+      assert.equal(overlay.querySelector('.bewly-widescreen-loading-skeleton-poster'), null)
+      assert.ok(overlay.querySelector('.bewly-widescreen-loading-skeleton-info-head > .bewly-widescreen-loading-skeleton-title + .bewly-widescreen-loading-skeleton-toggle'))
+      assert.ok(overlay.querySelector('.bewly-widescreen-loading-skeleton-input > .bewly-widescreen-loading-skeleton-input-field + .bewly-widescreen-loading-skeleton-send'))
       assert.equal(overlay.querySelector('.bewly-widescreen-loading-skeleton-column'), null)
       assert.ok(overlay.querySelector('.bewly-widescreen-loading-skeleton-player > .bewly-widescreen-loading-skeleton-controls'))
       session.entering = false
@@ -185,6 +192,7 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       '~/logic': { settings: { value: { bewlyWidescreenSidebarPosition: 'right' } } },
       '~/utils/bewlyWidescreenPolicy': policy,
       '~/utils/player': { getVideoElement: () => video },
+      '~/utils/videoMetadataBridge': { isPgcPlaybackPage: () => false },
       './constants': constants,
       './labels': { t: key => key },
       './loadingView': await import('../src/utils/bewlyWidescreen/loadingView'),
@@ -305,6 +313,14 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       const auxiliary = host.shadowRoot.querySelector('.sidebar-content')
       let auxiliaryWidth = 168
       auxiliary.getBoundingClientRect = () => rect(96, 780, auxiliaryWidth, 36)
+      const layoutReads = new Map()
+      for (const element of [state.playerFrame, controls, source, viewers, auxiliary]) {
+        const read = element.getBoundingClientRect.bind(element)
+        element.getBoundingClientRect = () => {
+          layoutReads.set(element, (layoutReads.get(element) ?? 0) + 1)
+          return read()
+        }
+      }
       geometry.schedulePlayerResizeSync(state)
       time.step(500)
       assert.equal(reveals, 0, 'unstyled/vertical controls cannot dismiss initialization')
@@ -315,8 +331,10 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       assert.equal(time.frames.size, 0, 'positive native boxes without their flex CSS are still unready')
       assert.equal(state.controlsLayoutReady, false)
       buttons.style.display = 'flex'
+      layoutReads.clear()
       geometry.schedulePlayerResizeSync(state)
       time.step()
+      assert.ok([...layoutReads.values()].every(count => count === 1), 'initial readiness shares the anchor and control measurements')
       assert.equal(document.body.style.getPropertyValue('--bewly-widescreen-aux-controls-width'), '176px')
       time.step(100)
       auxiliaryWidth = 124
@@ -327,10 +345,13 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       time.step(1)
       assert.equal(reveals, 1)
       const beforeBurstMeasurements = descriptionMeasurements
+      layoutReads.clear()
       for (let i = 0; i < 100; i++)
         geometry.schedulePlayerResizeSync(state)
       time.step()
       assert.equal(descriptionMeasurements, beforeBurstMeasurements + 1, 'a burst of observers settles the description once through the existing frame owner')
+      assert.ok([...layoutReads.values()].every(count => count === 1), 'one frame reads each tracked control once')
+      console.log(`PERF playback geometry fixture: 100 queued requests => 1 pass, ${layoutReads.size} distinct tracked boxes read once each`)
 
       const beforeRepeatedLayout = resizeCount
       for (let count = 0; count < 100; count++) {
@@ -509,6 +530,7 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
     let releases = 0
     let hotLoads = 0
     const Search = await compileComponent('../src/components/SearchBar/SearchBar.vue', {
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ scrollViewportRef: Vue.ref(document.documentElement) }) },
       '@vueuse/core': {
         onClickOutside() {},
         useDebounceFn: run => run,

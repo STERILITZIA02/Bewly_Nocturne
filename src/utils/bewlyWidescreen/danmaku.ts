@@ -1,5 +1,5 @@
 import { DANMAKU_EMPTY_STATE_SELECTOR, DANMAKU_GLASS_CLASS, DANMAKU_LIST_ITEM_SELECTOR, DANMAKU_LIST_VIEWPORT_SELECTOR, DANMAKU_RESIZE_DELAYS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, NANO_DANMAKU_INPUT_SELECTOR, selectors } from '~/utils/bewlyWidescreen/constants'
-import { resetControlsLayout, schedulePlayerResizeSync, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
+import { resetControlsLayout, schedulePlayerResizeSync } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { findFirst, findMovable } from '~/utils/bewlyWidescreen/nativeDom'
 import { session } from '~/utils/bewlyWidescreen/session'
@@ -285,7 +285,6 @@ export function syncDanmakuInputSource(currentState: BewlyWidescreenState, force
       positionDanmakuSettingsPanel(setting, panel)
   }
   currentState.resizeObserver?.observe(host)
-  syncControlsGlassGeometry(currentState)
   schedulePlayerResizeSync(currentState)
   return true
 }
