@@ -1,6 +1,10 @@
 // @unocss-include
+import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
+import { getClipboardSelection } from '~/utils/clipboardSelection'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getVideoElement } from '~/utils/playerMedia'
+import type { NativePlaybackUnit } from '~/utils/videoMetadataBridge'
+import { matchesPlaybackUnit } from '~/utils/videoMetadataBridge'
 
 import { observePlayerDom } from './playerDomLifecycle'
 
@@ -17,7 +21,7 @@ const EDITABLE = 'input, textarea, select, button, [contenteditable]:not([conten
  * follows. Listeners are delegated to the player root, so a re-rendered bar
  * keeps working; all of it ends with `signal`.
  */
-export function bindListenNativeBar(root: HTMLElement, audio: HTMLAudioElement, signal: AbortSignal) {
+export function bindListenNativeBar(root: HTMLElement, audio: HTMLAudioElement, signal: AbortSignal, unit: NativePlaybackUnit) {
   // Bpx's animated play icon follows the suspended video; a glyph that follows
   // the audio takes its place (videoPlayer.scss hides the native one).
   const glyph = document.createElement('i')
@@ -136,6 +140,31 @@ export function bindListenNativeBar(root: HTMLElement, audio: HTMLAudioElement, 
   }
 
   const options = { capture: true, signal }
+  root.addEventListener('contextmenu', (event) => {
+    if (!(event.target instanceof Element) || !event.target.closest('.bewly-listen-stage'))
+      return
+    const trigger = root.querySelector<HTMLElement>('.bpx-player-video-perch')
+    if (!trigger)
+      return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    // Bpx owns the entries, their actions and edge positioning. Its context
+    // listener sits on the video perch, below this sibling Shadow DOM stage.
+    trigger.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      button: event.button,
+      buttons: event.buttons,
+      ctrlKey: event.ctrlKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+      metaKey: event.metaKey,
+      view: window,
+    }))
+  }, options)
   for (const name of ['play', 'pause', 'ended', 'timeupdate', 'durationchange', 'progress', 'seeked', 'emptied'])
     audio.addEventListener(name, schedulePaint, { signal })
   // Bpx redraws the line from its own clock when the bar resizes.
@@ -167,6 +196,25 @@ export function bindListenNativeBar(root: HTMLElement, audio: HTMLAudioElement, 
   root.addEventListener('mousedown', (event) => {
     if ((event.target as Element).closest('.bpx-player-progress-wrap'))
       event.stopImmediatePropagation()
+    if (!(event.target instanceof Element) || !event.target.closest('.bpx-player-contextmenu [data-action="copyLink"]'))
+      return
+    // Keep Bpx's copy action and success feedback, replacing only its suspended
+    // video clock. Run after the existing share-link cleaner, retaining titles.
+    const copyTime = (copy: ClipboardEvent) => {
+      const selected = getClipboardSelection(copy)?.text
+      if (!copy.clipboardData || !selected || !URL.canParse(selected) || !matchesPlaybackUnit(selected, unit))
+        return
+      const text = copy.clipboardData.getData('text/plain') || selected
+      const original = text.includes(selected) ? selected : cleanBilibiliUrl(selected)
+      if (!text.includes(original))
+        return
+      const url = new URL(original)
+      url.searchParams.set('t', audio.currentTime.toFixed(1))
+      copy.clipboardData.setData('text/plain', text.replace(original, url.href))
+      copy.preventDefault()
+    }
+    window.addEventListener('copy', copyTime, { once: true, signal })
+    queueMicrotask(() => window.removeEventListener('copy', copyTime))
   }, options)
   root.addEventListener('pointerdown', (event) => {
     const area = (event.target as Element).closest<HTMLElement>('.bpx-player-progress-wrap')

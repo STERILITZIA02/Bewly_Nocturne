@@ -193,14 +193,14 @@
     }
 
     .banner-entry .enter-btn {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
       border-color: var(--bew-separator-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
 
       &:hover {
-        background: var(--bew-theme-surface-hover);
+        background: var(--bew-pressed-bg);
       }
     }
 
@@ -289,8 +289,8 @@
     color: var(--bew-text-1);
 
     &:is(:hover, .selected) {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
   }
 
@@ -542,8 +542,8 @@
         }
 
         &.active {
-          background: var(--bew-theme-surface);
-          color: var(--bew-on-theme-surface);
+          background: var(--bew-selected-bg);
+          color: var(--bew-text-1);
         }
       }
     }
@@ -737,9 +737,9 @@
         corner-shape: var(--bew-corner-shape-round);
 
         &:is(:hover, .inRange) {
-          color: var(--bew-on-theme-surface);
-          background: var(--bew-theme-surface);
-          border-color: var(--bew-theme-surface);
+          color: var(--bew-text-1);
+          background: var(--bew-selected-bg);
+          border-color: var(--bew-selected-bg);
           box-shadow: none;
         }
 
@@ -833,8 +833,8 @@
       corner-shape: var(--bew-corner-shape-capsule);
 
       &.income-tab-color-highlight {
-        background: var(--bew-theme-surface);
-        color: var(--bew-on-theme-surface);
+        background: var(--bew-selected-bg);
+        color: var(--bew-text-1);
       }
     }
 
@@ -1132,8 +1132,8 @@
       max-width: 100%;
       margin: var(--bew-space-1) 0 0;
       padding: var(--bew-space-1) var(--bew-space-2);
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
       border-radius: var(--bew-pill-radius);
       corner-shape: var(--bew-corner-shape-capsule);
 
@@ -1154,8 +1154,8 @@
 
     .unlock-action {
       flex-shrink: 0;
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
       border-color: var(--bew-separator-color);
       border-radius: var(--bew-pill-radius);
       corner-shape: var(--bew-corner-shape-capsule);
@@ -1322,8 +1322,8 @@
     }
 
     .reward-tag.integration {
-      color: var(--bew-on-theme-surface);
-      background: var(--bew-theme-surface);
+      color: var(--bew-text-1);
+      background: var(--bew-selected-bg);
       border-radius: var(--bew-pill-radius);
       corner-shape: var(--bew-corner-shape-capsule);
     }
@@ -1826,8 +1826,8 @@
       }
 
       &.anchor {
-        background: var(--bew-theme-surface);
-        color: var(--bew-on-theme-surface);
+        background: var(--bew-selected-bg);
+        color: var(--bew-text-1);
 
         &::before {
           background: var(--bew-theme-foreground);
@@ -2042,12 +2042,6 @@
       }
     }
   }
-
-  // #region theme color adaption part
-  // Increase the priority of the style inside by writing a non-existent selector in `:not()`
-  // :not(foobar) {
-  // }
-  // #endregion
 
   // #region dark mode adaption part
   &.dark {

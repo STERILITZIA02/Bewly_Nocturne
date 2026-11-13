@@ -310,7 +310,7 @@
       width: var(--bew-control-height);
       height: var(--bew-control-height);
       border-radius: var(--bew-control-radius);
-      // Nested in the tools capsule's ends: the capsule's shape keeps them concentric.
+      // Nested in the tools capsule's ends, keeping the same smooth shape.
       corner-shape: var(--bew-corner-shape-capsule);
       font-size: var(--bew-control-icon-size);
     }

@@ -14,16 +14,16 @@ defineProps<{
 
 <style scoped lang="scss">
 .bew-tag-remove-button {
-  width: 24px;
-  height: 24px;
+  width: var(--bew-icon-button-size-sm);
+  height: var(--bew-icon-button-size-sm);
   margin-left: var(--bew-space-1);
   color: var(--bew-text-2);
   background: transparent;
   opacity: 0.6;
 
   &:hover {
-    color: var(--bew-on-theme-surface);
-    background: var(--bew-theme-surface-hover);
+    color: var(--bew-text-1);
+    background: var(--bew-pressed-bg);
     opacity: 1;
   }
 

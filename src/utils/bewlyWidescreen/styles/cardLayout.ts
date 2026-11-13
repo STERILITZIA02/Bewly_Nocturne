@@ -115,6 +115,8 @@ export function playbackRecommendationSkeleton(root: string) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--bew-space-4) var(--bew-space-3);
     min-width: 0;
+    /* Under the hairline that closes the info, as the real list. */
+    padding-top: var(--bew-space-4);
   }
 
   ${block}__heading {

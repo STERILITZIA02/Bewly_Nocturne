@@ -135,9 +135,7 @@
   box-shadow: var(--bew-segment-item-active-shadow);
 }
 
-// Standalone choices (no track around them) sit in no container to nest in,
-// so they take the control tier's rounded rectangle instead of a capsule
-// (user-specified 2026-11-03).
+// Standalone choices have no surrounding track and keep the control radius.
 .bew-segment-control--static:not(.bew-segment-control--track) {
   --bew-control-item-radius: var(--bew-interactive-radius);
 
@@ -150,7 +148,7 @@
   color: var(--bew-text-3);
   background: transparent;
   box-shadow: none;
-  opacity: 0.45;
+  opacity: var(--bew-disabled-opacity);
   cursor: not-allowed;
 }
 

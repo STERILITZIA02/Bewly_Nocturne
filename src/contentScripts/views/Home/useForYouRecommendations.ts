@@ -25,6 +25,7 @@ import api from '~/utils/api'
 import type { AppAuthSnapshot } from '~/utils/authProvider'
 import { captureAppAuth, ensureFreshAppAccessToken, isAppAccessTokenInvalidResponse, isAppAuthCurrent, refreshInvalidAppAccessToken, requestAppClient } from '~/utils/authProvider'
 import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
+import { jumpToLoginPage } from '~/utils/bilibiliLogin'
 import { debugLog } from '~/utils/debug'
 import { isAboveKnownCount } from '~/utils/filterRules'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
@@ -68,11 +69,12 @@ export function useForYouRecommendations(emit: {
   const acceptedFilterSignature = tabState.ref('recommendationFilterSignature', recommendationFilterSettingsSignature.value)
   let requestVersion = 0
   let appLikesController: AbortController | undefined
-  let suspendedAppLikes = false
+  const requestPhase = ref<'initializing' | 'idle' | 'loading' | 'filtering' | 'filling' | 'suspended'>('initializing')
   let filterRefreshTimer: ReturnType<typeof setTimeout> | undefined
   function invalidateRequests() {
     requestVersion++
-    suspendedAppLikes = false
+    if (requestPhase.value === 'suspended')
+      requestPhase.value = 'idle'
     clearTimeout(filterRefreshTimer)
     filterRefreshTimer = undefined
     appLikesController?.abort()
@@ -149,7 +151,7 @@ export function useForYouRecommendations(emit: {
   const currentVideoList = computed(() => isWebRecommendationMode.value ? webFeed.visible.value : appFeed.visible.value)
   const hasAcceptedItemKey = (key: string | number) => (isWebRecommendationMode.value ? webFeed : appFeed).has(String(key))
 
-  const isLoading = ref<boolean>(true)
+  const isLoading = computed(() => requestPhase.value !== 'idle' && requestPhase.value !== 'suspended')
   const recommendationDataState = tabState.ref<RecommendationDataState>('recommendationDataState', 'idle')
   const requestFailed = computed(() => (
     recommendationDataState.value === 'risk-control'
@@ -196,8 +198,6 @@ export function useForYouRecommendations(emit: {
   const scrollLoadStartLength = tabState.ref<number>('scrollLoadStartLength', 0) // 滚动加载开始时的列表长度
   const consecutiveEmptyLoads = tabState.ref<number>('consecutiveEmptyLoads', 0) // 连续空加载次数，用于防止无限递归（Web模式）
   const appConsecutiveEmptyLoads = tabState.ref<number>('appConsecutiveEmptyLoads', 0) // APP模式连续空加载次数
-  // 递归加载锁，防止双重触发
-  const isRecursiveLoading = ref<boolean>(false)
   const webRiskCooldownUntil = tabState.ref('webRiskCooldownUntil', 0)
   let notifiedWebRiskCooldownUntil = 0
 
@@ -247,7 +247,7 @@ export function useForYouRecommendations(emit: {
     const accountId = loadedAccountId
     const signature = recommendationFilterSettingsSignature.value
     const current = () => isCurrentWebRequest(version, mode, accountId)
-    isLoading.value = true
+    requestPhase.value = 'filtering'
     emit('beforeLoading')
     try {
       if (isWebRecommendationMode.value) {
@@ -310,7 +310,7 @@ export function useForYouRecommendations(emit: {
     }
     finally {
       if (current()) {
-        isLoading.value = false
+        requestPhase.value = 'idle'
         emit('afterLoading')
       }
     }
@@ -320,15 +320,13 @@ export function useForYouRecommendations(emit: {
   async function handleVisibilityChange() {
     isPageVisible.value = !document.hidden
     if (isPageVisible.value && acceptedFilterSignature.value !== recommendationFilterSettingsSignature.value) {
-      suspendedAppLikes = false
       await reapplyFilters()
       return
     }
     if (!isPageVisible.value && appLikesController) {
       suspendAppLikeReads()
     }
-    else if (isPageVisible.value && suspendedAppLikes) {
-      suspendedAppLikes = false
+    else if (isPageVisible.value && requestPhase.value === 'suspended') {
       const version = requestVersion
       await getData('loadMore')
       if (version === requestVersion && isComponentActive)
@@ -338,8 +336,7 @@ export function useForYouRecommendations(emit: {
 
   function suspendAppLikeReads() {
     invalidateRequests()
-    suspendedAppLikes = true
-    isLoading.value = false
+    requestPhase.value = 'suspended'
     recommendationDataState.value = currentVideoList.value.length ? 'success' : 'idle'
   }
 
@@ -366,7 +363,7 @@ export function useForYouRecommendations(emit: {
     attachVisibilityListener()
     loadedAccountId = getCurrentAccountId()
     if (tabState.restored) {
-      isLoading.value = false
+      requestPhase.value = 'idle'
       if (currentVideoList.value.length > 0)
         hasInitializedData.value = true
       if (recommendationDataState.value === 'loading')
@@ -469,6 +466,7 @@ export function useForYouRecommendations(emit: {
     invalidateRequests()
     if (isWebRecommendationMode.value && isWebRiskCooldownActive()) {
       recommendationDataState.value = 'risk-control'
+      requestPhase.value = 'idle'
       notifyWebRiskCooldown()
       return
     }
@@ -517,7 +515,7 @@ export function useForYouRecommendations(emit: {
       return
     }
     emit('beforeLoading')
-    isLoading.value = true
+    requestPhase.value = 'loading'
     recommendationDataState.value = 'loading'
 
     try {
@@ -558,7 +556,7 @@ export function useForYouRecommendations(emit: {
     }
     finally {
       if (isCurrentWebRequest(version, recommendationMode, accountId)) {
-        isLoading.value = false
+        requestPhase.value = 'idle'
         emit('afterLoading')
       }
     }
@@ -577,13 +575,12 @@ export function useForYouRecommendations(emit: {
       return
     }
 
-    // 如果正在递归加载中，跳过外部触发的加载请求
+    // One loading phase owns the entire request and its viewport-fill chain.
     if (
       !hasInitializedData.value
       || filterRefreshTimer !== undefined
       || isLoading.value
       || noMoreContent.value
-      || isRecursiveLoading.value
       || (!manual && requiresManualFilteredPaging.value)
     ) {
       return
@@ -630,8 +627,7 @@ export function useForYouRecommendations(emit: {
     if (!snapshot || !tabState.isCurrent() || snapshot.requestIdentity !== getRecommendationRequestIdentity())
       return false
     invalidateRequests()
-    isLoading.value = false
-    isRecursiveLoading.value = false
+    requestPhase.value = 'idle'
     videoList.value = snapshot.videoList
     appVideoList.value = snapshot.appVideoList
     appFeedIdx.value = snapshot.appFeedIdx
@@ -914,20 +910,15 @@ export function useForYouRecommendations(emit: {
           await nextTick()
 
           const hasScrollbar = await haveScrollbar()
-          if (!hasScrollbar || filledItems.length < PAGE_SIZE || filledItems.length < 1) {
+          if (isCurrentWebRequest(version, recommendationMode, accountId)
+            && (!hasScrollbar || filledItems.length < PAGE_SIZE || filledItems.length < 1)) {
             if (
               !hasActiveRecommendationFilter.value
               && isPageVisible.value
               && consecutiveEmptyLoads.value < MAX_EMPTY_LOADS
             ) {
-            // 设置递归加载锁，防止 VideoCardGrid 触发额外的 loadMore
-              isRecursiveLoading.value = true
-              try {
-                await getRecommendVideos(version, 'loadMore')
-              }
-              finally {
-                isRecursiveLoading.value = false
-              }
+              requestPhase.value = 'filling'
+              await getRecommendVideos(version, 'loadMore')
             }
             else if (!hasActiveRecommendationFilter.value && consecutiveEmptyLoads.value >= MAX_EMPTY_LOADS) {
               noMoreContent.value = true
@@ -1160,6 +1151,8 @@ export function useForYouRecommendations(emit: {
 
       let shouldContinue = false
       const hasScrollbar = await haveScrollbar()
+      if (!isCurrentAppRequest())
+        return
 
       if (!hasScrollbar || currentVideoList.value.length < PAGE_SIZE) {
         shouldContinue = true
@@ -1180,14 +1173,8 @@ export function useForYouRecommendations(emit: {
         && isPageVisible.value
         && appConsecutiveEmptyLoads.value < MAX_EMPTY_LOADS
       ) {
-      // 设置递归加载锁，防止 VideoCardGrid 触发额外的 loadMore
-        isRecursiveLoading.value = true
-        try {
-          await getAppRecommendVideos(version, requestType)
-        }
-        finally {
-          isRecursiveLoading.value = false
-        }
+        requestPhase.value = 'filling'
+        await getAppRecommendVideos(version, requestType)
       }
       else if (!hasActiveRecommendationFilter.value && appConsecutiveEmptyLoads.value >= MAX_EMPTY_LOADS) {
         noMoreContent.value = true
@@ -1197,10 +1184,6 @@ export function useForYouRecommendations(emit: {
 
   function handleAppAuthorization() {
     requestAppAuthorization(appAuthTokens.value.accessToken)
-  }
-
-  function jumpToLoginPage() {
-    location.href = 'https://passport.bilibili.com/login'
   }
 
   // 修改 defineExpose，暴露重置方法和撤销方法

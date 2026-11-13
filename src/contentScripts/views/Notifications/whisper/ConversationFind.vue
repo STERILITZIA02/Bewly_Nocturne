@@ -63,7 +63,7 @@ async function close() {
 
 <template>
   <div ref="root" class="conversation-find" :class="{ 'conversation-find--expanded': expanded && !external, 'conversation-find--external': external }" @keydown.esc.stop.prevent="close">
-    <IconButton v-if="!expanded && !external" class="bew-icon-button--control" :label="t('library_tools.find_messages')" @click="open">
+    <IconButton v-if="!expanded && !external" variant="filled" size="control" :label="t('library_tools.find_messages')" @click="open">
       <i i-tabler:search />
     </IconButton>
     <template v-else>
@@ -79,7 +79,7 @@ async function close() {
       <IconButton class="conversation-find__move" :label="t('library_tools.next_match')" :disabled="!matchCount" @click="move(1)">
         <ChevronIcon />
       </IconButton>
-      <IconButton v-if="!external" class="bew-icon-button--control" :label="t('common.close')" @click="close">
+      <IconButton v-if="!external" variant="filled" size="control" :label="t('common.close')" @click="close">
         <i i-tabler:x />
       </IconButton>
     </template>

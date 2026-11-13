@@ -3,6 +3,7 @@ import { BEWLY_IFRAME_DRAWER_HOST_CHANGE } from '~/constants/globalEvents'
 import { captureCommentReadingAnchor } from '~/utils/commentReadingAnchor'
 import type { CommentReplyPage, CommentReplyPageIdentity } from '~/utils/commentReplyPageCache'
 import { COMMENT_REPLY_CACHE_LIMITS, commentReplyPageKey, commentReplyWriteKey, createCommentReplyPageCache } from '~/utils/commentReplyPageCache'
+import type { NativeCommentReply } from '~/utils/commentReplyRequest'
 import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
 
 import { COMMENT_REPLY_PAGE_CONTROL_CLASS as PAGE_CONTROL_CLASS, removeCommentReplyPageControl, updateCommentReplyPageControl } from './commentReplyControls'
@@ -48,12 +49,12 @@ export interface CommentReplyPaginationAdapter {
   getAccountId: () => string
   getContextId?: () => string
   getBatchPages?: () => number
-  readPage?: (identity: CommentReplyPageIdentity, page: number, signal: AbortSignal) => Promise<CommentReplyPage<any>>
+  readPage?: (identity: CommentReplyPageIdentity, page: number, signal: AbortSignal) => Promise<CommentReplyPage<NativeCommentReply>>
   getData: (renderer: any) => any | null
   getMode: () => CommentReplyPaginationMode
-  getOid: (reply: any) => string | null
-  getRpid: (reply: any) => string | null
-  getRootRpid: (reply: any) => string | null
+  getOid: (reply: unknown) => string | null
+  getRpid: (reply: unknown) => string | null
+  getRootRpid: (reply: unknown) => string | null
   getLabels: () => PaginationLabels
   isTreeEnabled: () => boolean
   shouldShowExpandAll?: (renderer: any) => boolean
@@ -83,15 +84,15 @@ interface PaginationState {
   failedPage?: number
   failedReplace?: boolean
   anchor?: ReturnType<typeof captureCommentReadingAnchor>
-  initialList: any[]
+  initialList: NativeCommentReply[]
   interactionByRpid: Map<string, CommentReplyInteractionState>
   loading?: Promise<unknown>
-  mergedList?: any[]
-  collapsedList?: any[]
+  mergedList?: NativeCommentReply[]
+  collapsedList?: NativeCommentReply[]
   suppressInvalidatedResultRestore?: boolean
-  pages: Map<number, any[]>
+  pages: Map<number, NativeCommentReply[]>
   pending?: {
-    beforeList: any[]
+    beforeList: NativeCommentReply[]
     layoutReservation?: LayoutReservation
     page: number
     controller: AbortController
@@ -193,7 +194,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
   const enabledStates = new WeakMap<object, boolean>()
   const expandAllTasks = new WeakMap<object, Promise<void>>()
   const activeLayoutReservations = new WeakMap<HTMLElement, LayoutReservation>()
-  const pageCache = createCommentReplyPageCache<any>()
+  const pageCache = createCommentReplyPageCache<NativeCommentReply>()
   const activeRenderers = new Set<any>()
   let scopeGeneration = 0
   const readingRenderers = new Set<any>()
@@ -374,7 +375,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     renderer.requestUpdate?.()
   }
 
-  function mergeLists(...lists: any[][]): any[] {
+  function mergeLists(...lists: NativeCommentReply[][]): NativeCommentReply[] {
     return mergeCommentReplyLists(lists, adapter.getRpid)
   }
 
@@ -648,14 +649,14 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     return request
   }
 
-  function mergePages(state: PaginationState): any[] {
+  function mergePages(state: PaginationState): NativeCommentReply[] {
     const merged = mergeLists(...[...state.pages.entries()]
       .sort(([left], [right]) => left - right)
       .map(([, replies]) => replies))
     return applyCommentReplyInteractionOverrides(merged, state.interactionByRpid, adapter.getRpid)
   }
 
-  function applyInteractionOverrides(state: PaginationState, list: any[] | undefined) {
+  function applyInteractionOverrides(state: PaginationState, list: NativeCommentReply[] | undefined) {
     if (list)
       applyCommentReplyInteractionOverrides(list, state.interactionByRpid, adapter.getRpid)
   }
@@ -682,7 +683,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     state.interactionByRpid.set(rpid, nextInteraction)
     if (state.readIdentity)
       pageCache.update(state.readIdentity, rpid, reply => adapter.getRpid(reply) === rpid ? { ...reply, ...nextInteraction } : reply)
-    const updateList = (list: any[] | undefined) => list?.map((reply) => {
+    const updateList = (list: NativeCommentReply[] | undefined) => list?.map((reply) => {
       if (adapter.getRpid(reply) !== rpid || Object.entries(nextInteraction).every(([key, value]) => reply[key] === value))
         return reply
       return { ...reply, ...nextInteraction }

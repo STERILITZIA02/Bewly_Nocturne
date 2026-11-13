@@ -87,10 +87,8 @@ function ensureState(element: HTMLElement): ViewportState {
   }
   target.addEventListener('scroll', handleScroll, { passive: true })
   window.addEventListener('resize', handleResize, { passive: true })
-  if (typeof ResizeObserver !== 'undefined') {
-    state.resizeObserver = new ResizeObserver(handleResize)
-    state.resizeObserver.observe(element)
-  }
+  state.resizeObserver = new ResizeObserver(handleResize)
+  state.resizeObserver.observe(element)
   states.set(element, state)
   return state
 }

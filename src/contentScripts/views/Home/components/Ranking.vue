@@ -3,14 +3,13 @@ import { useI18n } from 'vue-i18n'
 
 import BangumiCard from '~/components/BangumiCard/BangumiCard.vue'
 import BangumiCardSkeleton from '~/components/BangumiCard/BangumiCardSkeleton.vue'
-import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
 import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useHomeTabState } from '~/composables/useHomeTabState'
 import { uiPx } from '~/composables/useUiScale'
-import { VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
+import { GRID_GUTTER, VIDEO_CARD_MIN_WIDTH } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import type { List as RankingVideoItem, RankingResult } from '~/models/video/ranking'
 import type { List as RankingPgcItem, RankingPgcResult } from '~/models/video/rankingPgc'
@@ -82,11 +81,9 @@ const PgcList = tabState.shallowRef<RankingPgcItem[]>('pgcList', [])
 const noMoreContent = tabState.ref<boolean>('noMoreContent', true) // 排行榜没有分页
 const rankingGridRef = ref<HTMLElement | null>(null)
 const rankingGridWidth = ref(0)
-const rankingGridGap = ref(0)
 let rankingGridResizeObserver: ResizeObserver | null = null
 let requestGeneration = 0
 let isComponentActive = false
-let resizeListenerAttached = false
 
 const isRankingAutoSwitchSingleColumn = computed(() => {
   if (props.gridLayout !== 'twoColumns' || !rankingGridWidth.value)
@@ -95,14 +92,13 @@ const isRankingAutoSwitchSingleColumn = computed(() => {
   return getListGridColumnCount(
     props.gridLayout,
     rankingGridWidth.value,
-    rankingGridGap.value,
+    uiPx(GRID_GUTTER),
     uiPx(VIDEO_CARD_MIN_WIDTH),
   ) === 1
 })
 
 function updateRankingGridWidth() {
   rankingGridWidth.value = rankingGridRef.value?.clientWidth || 0
-  rankingGridGap.value = rankingGridRef.value ? Number.parseFloat(getComputedStyle(rankingGridRef.value).columnGap) || 0 : 0
 }
 
 function cleanupRankingGridResizeObserver() {
@@ -117,7 +113,7 @@ function setupRankingGridResizeObserver() {
   updateRankingGridWidth()
 
   const element = rankingGridRef.value
-  if (!element || typeof ResizeObserver === 'undefined')
+  if (!element)
     return
 
   rankingGridResizeObserver = new ResizeObserver((entries) => {
@@ -126,20 +122,6 @@ function setupRankingGridResizeObserver() {
       rankingGridWidth.value = width
   })
   rankingGridResizeObserver.observe(element)
-}
-
-function attachRankingResizeListener() {
-  if (resizeListenerAttached)
-    return
-  resizeListenerAttached = true
-  window.addEventListener('resize', updateRankingGridWidth, { passive: true })
-}
-
-function detachRankingResizeListener() {
-  if (!resizeListenerAttached)
-    return
-  resizeListenerAttached = false
-  window.removeEventListener('resize', updateRankingGridWidth)
 }
 
 // 数据转换函数：将原始数据转换为 VideoCard 所需的显示格式
@@ -180,7 +162,6 @@ onMounted(() => {
   if (!tabState.restored || !hasSettled.value)
     void initData()
   initPageAction()
-  attachRankingResizeListener()
   nextTick(setupRankingGridResizeObserver)
 })
 
@@ -190,7 +171,6 @@ onBeforeUnmount(() => {
   isComponentActive = false
   requestGeneration++
   cleanupRankingGridResizeObserver()
-  detachRankingResizeListener()
 })
 
 function initPageAction() {
@@ -300,7 +280,7 @@ defineExpose({ initData })
               type="button"
               :aria-pressed="activatedRankingType.id === rankingType.id"
               :class="{ active: activatedRankingType.id === rankingType.id }"
-              px-4 lh-36px h-36px hover:bg="$bew-fill-2" w-full
+              px-4 lh-36px h-36px hover:bg="$bew-hover-bg" w-full
               text-left
               block rounded="$bew-interactive-radius" cursor-pointer transition="background-color duration-200, color duration-200, box-shadow duration-200, transform duration-200"
               un-text="$bew-text-1"
@@ -329,16 +309,12 @@ defineExpose({ initData })
         />
       </template>
       <template v-else>
-        <Empty v-if="requestFailed && !isLoading" :description="t('common.load_failed')" role="alert">
-          <Button type="primary" @click="initData">
-            {{ t('common.operation.refresh') }}
-          </Button>
-        </Empty>
+        <Empty v-if="requestFailed && !isLoading" :description="t('common.load_failed')" :action-label="t('common.operation.refresh')" role="alert" @action="initData" />
         <div
           v-else
           ref="rankingGridRef"
           :class="{
-            'grid-adaptive-bangumi': gridLayout === 'adaptive',
+            'bew-grid-adaptive-poster': gridLayout === 'adaptive',
             'grid-two-columns': gridLayout === 'twoColumns',
             'grid-one-column': gridLayout === 'oneColumn',
             'grid-list-auto-switch-single': isRankingAutoSwitchSingleColumn,
@@ -381,14 +357,8 @@ defineExpose({ initData })
 
 <style lang="scss" scoped>
 .active {
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
-}
-
-/* Bangumi Grid 布局 */
-.grid-adaptive-bangumi {
-  --uno: "grid gap-5";
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 
 .grid-two-columns {

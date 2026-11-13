@@ -1,3 +1,5 @@
+@use "../../imageTone";
+
 .bpx-player-control-bottom-right > .bewly-player-control-collapsed {
   position: absolute !important;
   visibility: hidden !important;
@@ -26,7 +28,7 @@
 
   &:hover,
   &:active {
-    background: var(--bew-fill-2);
+    background: var(--bew-hover-bg);
   }
 
   &:focus-visible {
@@ -75,7 +77,7 @@
 
   &.is-active {
     color: var(--bew-theme-color, var(--brand_blue, #00aeec));
-    background: var(--bew-theme-surface);
+    background: var(--bew-selected-bg);
   }
 
   &.is-pending {
@@ -152,7 +154,13 @@
 // icon size Bpx's own outlines are drawn at.
 // The glyph rule is scoped to the box so it outranks the icon class's own
 // 1.2em, which UnoCSS emits later in the same stylesheet.
-:is(.bewly-listen-control, .bewly-widescreen-fill-toggle) > .bpx-player-ctrl-btn-icon {
+:is(
+    .bewly-listen-control,
+    .bewly-widescreen-fill-toggle,
+    .bewly-video-screenshot-control,
+    .bewly-local-loudness-control
+  )
+  > .bpx-player-ctrl-btn-icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -233,15 +241,12 @@
       }
 
       .BgmInfo .right .bottom .btn:hover {
-        color: var(--bew-on-theme-color);
-      }
-
-      .BgmInfo .right .bottom .btn:hover {
-        background-color: var(--bew-theme-color);
+        background-color: var(--bew-hover-bg);
+        color: var(--bew-text-1);
       }
 
       .BgmInfo .right .bottom .btn {
-        background-color: var(--bew-theme-surface);
+        background-color: var(--bew-selected-bg);
       }
     }
   }
@@ -342,8 +347,44 @@
   pointer-events: none !important;
 }
 
+// The playback page's control card under the stage takes the stage's colours
+// (user-approved 2026-11-12): the stage writes its tone on the player root
+// (ListenPlayer.vue) and every colour the card, its controls and their menus
+// read is derived from it here, text included, so black or white follows the
+// cover as it does on the stage. Tokens the card reads that `:root` resolved
+// against the page's colours are set again. With frosted glass off the glass
+// tint is the solid one, as everywhere.
+.bewly-widescreen-native-player[data-bew-listen-toned] {
+  @include imageTone.toned-surface;
+  // Raise menus away from their chosen ink, so middle-tone covers retain
+  // contrast even under the shared hover/selected fills.
+  --bew-elevated-solid: color-mix(
+    in srgb,
+    var(--moment-tone) 75%,
+    light-dark(var(--bew-static-white), var(--bew-player-canvas))
+  );
+  --bew-elevated-alt-solid: var(--bew-elevated-solid);
+  --bew-switch-bg: var(--bew-fill-3);
+  --bew-input-bg: var(--bew-fill-1);
+  --bew-field-edge-color: var(--bew-edge-color);
+  --bew-field-edge-color-hover: color-mix(in srgb, var(--moment-tone-fg) 24%, transparent);
+  --bew-glass-edge-color: color-mix(in srgb, var(--moment-tone-fg) 24%, transparent);
+  --bew-segment-item-hover-bg: var(--bew-hover-bg);
+  --bew-segment-item-hover-color: var(--bew-text-1);
+  --bew-segment-item-active-bg: var(--bew-selected-bg);
+  --bew-segment-item-active-color: var(--bew-text-1);
+  --bewly-widescreen-danmaku-bar-bg: var(--bew-glass-tint);
+  // The progress bar's colours are declared on the page (layout.ts) from the
+  // page's text colour; here the played part is the tone's foreground, as the
+  // dark theme's is white.
+  --bewly-widescreen-progress-track: color-mix(in srgb, var(--moment-tone-fg) 32%, transparent);
+  --bewly-widescreen-progress-buffer: color-mix(in srgb, var(--moment-tone-fg) 44%, transparent);
+  --bewly-widescreen-progress-played: var(--moment-tone-fg);
+}
+
 // Zero specificity: a player root the site positions keeps its own position.
-:where([data-bew-listening]:not(#bewly-widescreen-root)) {
+// A finished session's stage still lies in the box while it dissolves.
+:where(:is([data-bew-listening], [data-bew-listen-leaving]):not(#bewly-widescreen-root)) {
   position: relative;
 }
 
@@ -354,6 +395,12 @@
   inset: 0;
   z-index: 9997;
   display: block;
+}
+
+// The native menu belongs to the player's context layer, above the listening
+// stage even when the page uses Bilibili's original layout.
+[data-bew-listening] .bpx-player-context-area {
+  z-index: var(--bew-z-hud) !important;
 }
 // SVGA blue layers only; the pink heart and native animation timing stay intact.
 :is(.bewly-design:not(.bewly-video-dark-only), .bewly-widescreen-active) {

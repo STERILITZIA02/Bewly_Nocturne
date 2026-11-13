@@ -83,20 +83,25 @@ export function createPrivateMessagePollingCoordinator(
   context: PrivateMessagePollingContext,
   runtime: PrivateMessagePollingRuntime = DEFAULT_POLLING_RUNTIME,
 ): PrivateMessagePollingCoordinator {
-  let disposed = false
-  let eligible = false
+  let lifecycle: 'inactive' | 'active' | 'disposed' = 'inactive'
   let generation = 0
   let activeMid = ''
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let inFlight: Promise<void> | null = null
-  let pendingLifecyclePoll = false
+  let activity:
+    | { phase: 'idle' }
+    | { phase: 'waiting', timer: ReturnType<typeof setTimeout> }
+    | { phase: 'polling', promise: Promise<void>, resume: boolean }
+      = { phase: 'idle' }
   let transientFailureCount = 0
 
+  function isCurrentPoll(expectedGeneration: number) {
+    return lifecycle !== 'disposed' && generation === expectedGeneration && context.isEligible()
+  }
+
   function clearTimer() {
-    if (timer === null)
+    if (activity.phase !== 'waiting')
       return
-    runtime.clearTimeout(timer)
-    timer = null
+    runtime.clearTimeout(activity.timer)
+    activity = { phase: 'idle' }
   }
 
   function getRetryDelay(kind: PrivateMessageTransportErrorKind | null): number | null {
@@ -122,26 +127,23 @@ export function createPrivateMessagePollingCoordinator(
     clearTimer()
     if (
       delay === null
-      || disposed
-      || requestGeneration !== generation
-      || !context.isEligible()
+      || !isCurrentPoll(requestGeneration)
     ) {
       return
     }
-    timer = runtime.setTimeout(() => {
-      timer = null
-      void triggerNow()
-    }, delay)
+    activity = {
+      phase: 'waiting',
+      timer: runtime.setTimeout(() => {
+        activity = { phase: 'idle' }
+        void triggerNow()
+      }, delay),
+    }
   }
 
   async function poll(requestGeneration: number): Promise<number | null> {
     const activeBefore = context.getActiveConversation()
     await context.refreshSessions()
-    if (
-      disposed
-      || requestGeneration !== generation
-      || !context.isEligible()
-    ) {
+    if (!isCurrentPoll(requestGeneration)) {
       return null
     }
 
@@ -166,11 +168,7 @@ export function createPrivateMessagePollingCoordinator(
 
       if (shouldRefreshDetail) {
         await context.refreshConversation(activeAfter.talkerId)
-        if (
-          disposed
-          || requestGeneration !== generation
-          || !context.isEligible()
-        ) {
+        if (!isCurrentPoll(requestGeneration)) {
           return null
         }
         const refreshedStatus = context.getConversationStatus(activeAfter.talkerId)
@@ -187,44 +185,46 @@ export function createPrivateMessagePollingCoordinator(
   }
 
   function triggerNow(): Promise<void> {
-    if (disposed || !context.isEligible())
+    if (lifecycle === 'disposed' || !context.isEligible())
       return Promise.resolve()
     clearTimer()
-    if (inFlight)
-      return inFlight
+    if (activity.phase === 'polling')
+      return activity.promise
 
     const requestGeneration = generation
+    let nextDelay: number | null = null
     const request = (async () => {
-      const delay = await poll(requestGeneration)
-      scheduleNext(delay, requestGeneration)
+      nextDelay = await poll(requestGeneration)
     })().finally(() => {
-      if (inFlight === request) {
-        inFlight = null
-        if (pendingLifecyclePoll && !disposed && context.isEligible()) {
-          pendingLifecyclePoll = false
+      if (activity.phase === 'polling' && activity.promise === request) {
+        const resume = activity.resume
+        activity = { phase: 'idle' }
+        if (resume && lifecycle !== 'disposed' && context.isEligible())
           void triggerNow()
-        }
+        else
+          scheduleNext(nextDelay, requestGeneration)
       }
     })
-    inFlight = request
+    activity = { phase: 'polling', promise: request, resume: false }
     return request
   }
 
   function sync() {
-    if (disposed)
+    if (lifecycle === 'disposed')
       return
     const nextEligible = context.isEligible()
     const nextMid = context.getCurrentMid()
     const midChanged = nextMid !== activeMid
 
     if (!nextEligible) {
-      if (eligible || timer !== null || inFlight) {
+      if (lifecycle === 'active' || activity.phase !== 'idle') {
         generation++
         clearTimer()
         context.invalidatePendingRequests()
       }
-      eligible = false
-      pendingLifecyclePoll = false
+      lifecycle = 'inactive'
+      if (activity.phase === 'polling')
+        activity.resume = false
       activeMid = nextMid
       return
     }
@@ -235,21 +235,21 @@ export function createPrivateMessagePollingCoordinator(
       context.invalidatePendingRequests()
       activeMid = nextMid
     }
-    if (!eligible || midChanged) {
-      eligible = true
-      if (inFlight)
-        pendingLifecyclePoll = true
+    if (lifecycle !== 'active' || midChanged) {
+      lifecycle = 'active'
+      if (activity.phase === 'polling')
+        activity.resume = true
       else
         void triggerNow()
     }
   }
 
   function dispose() {
-    if (disposed)
+    if (lifecycle === 'disposed')
       return
-    disposed = true
-    eligible = false
-    pendingLifecyclePoll = false
+    lifecycle = 'disposed'
+    if (activity.phase === 'polling')
+      activity.resume = false
     generation++
     clearTimer()
     context.invalidatePendingRequests()

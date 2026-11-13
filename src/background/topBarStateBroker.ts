@@ -16,6 +16,7 @@ import {
   TOP_BAR_STATE_MESSAGE,
 } from '~/constants/topBarState'
 import { onMessage } from '~/utils/messaging'
+import { isRecord } from '~/utils/plainObject'
 
 import type { StateConsumerBrowser } from './stateConsumers'
 import { createStateConsumerRegistry, getStateConsumerRegistry } from './stateConsumers'
@@ -63,10 +64,6 @@ export interface TopBarStateBroker {
 const REFRESH_LEASE_TIMEOUT = 30_000
 /** One session-storage record per context/account/resource: no write rewrites unrelated resources. */
 const TOP_BAR_STATE_STORAGE_KEY = 'topBarStateBroker:v4'
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
 
 function isOptionalTimestamp(value: unknown): value is number | null | undefined {
   return value === undefined || value === null || (typeof value === 'number' && Number.isFinite(value))

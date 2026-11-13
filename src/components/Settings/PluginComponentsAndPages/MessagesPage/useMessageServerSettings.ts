@@ -14,9 +14,12 @@ import type {
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import type { AccountId } from '~/utils/accountScope'
 
+type SettingMutation = { phase: 'idle' } | { phase: 'sending' | 'verifying' | 'unconfirmed', value: number }
+
 export interface MessageServerSettingState {
   serverValue: number | null
-  pending: boolean
+  mutation: SettingMutation
+  readonly pending: boolean
   errorKind: MessageServerSettingsErrorKind | null
 }
 
@@ -59,7 +62,8 @@ export interface MessageServerSettingsController {
 function createSettingStates(): Record<MessageServerSettingField, MessageServerSettingState> {
   return Object.fromEntries(MESSAGE_SERVER_SETTING_FIELDS.map(field => [field, {
     serverValue: null,
-    pending: false,
+    mutation: { phase: 'idle' } as SettingMutation,
+    get pending() { return this.mutation.phase === 'sending' || this.mutation.phase === 'verifying' },
     errorKind: null,
   }])) as Record<MessageServerSettingField, MessageServerSettingState>
 }
@@ -128,8 +132,15 @@ export function useMessageServerSettings(
         throw response
       for (const field of MESSAGE_SERVER_SETTING_FIELDS) {
         if (values[field] !== undefined && readRevisions[field] === revisions[field] && !state.settings[field].pending) {
-          state.settings[field].serverValue = values[field]
-          state.settings[field].errorKind = null
+          const fieldState = state.settings[field]
+          fieldState.serverValue = values[field]
+          if (fieldState.mutation.phase === 'unconfirmed' && values[field] !== fieldState.mutation.value) {
+            fieldState.errorKind = 'invalid-response'
+          }
+          else {
+            fieldState.mutation = { phase: 'idle' }
+            fieldState.errorKind = null
+          }
         }
       }
       return true
@@ -217,9 +228,16 @@ export function useMessageServerSettings(
     if (!owner.isCurrent())
       return false
     const fieldState = state.settings[field]
-    if (fieldState.pending || fieldState.serverValue === value)
+    if (fieldState.pending)
+      return false
+    if (fieldState.mutation.phase === 'unconfirmed') {
+      const expected = fieldState.mutation.value
+      await load()
+      return owner.isCurrent() && state.settings[field].mutation.phase === 'idle' && expected === value
+    }
+    if (fieldState.serverValue === value)
       return fieldState.serverValue === value
-    fieldState.pending = true
+    fieldState.mutation = { phase: 'sending', value }
     revisions[field]++
     fieldState.errorKind = null
     try {
@@ -228,6 +246,7 @@ export function useMessageServerSettings(
         return false
       if (asResponse(response)?.code !== 0)
         throw response
+      fieldState.mutation = { phase: 'verifying', value }
       const authoritativeResponse = await dependencies.fetchSettings()
       if (!owner.isCurrent())
         return false
@@ -235,17 +254,21 @@ export function useMessageServerSettings(
       if (authoritative?.[field] === undefined)
         throw authoritativeResponse
       fieldState.serverValue = authoritative[field]
+      if (authoritative[field] !== value)
+        throw new Error('Message setting change has not been reconciled')
+      fieldState.mutation = { phase: 'idle' }
       return true
     }
     catch (error) {
-      if (owner.isCurrent())
+      if (owner.isCurrent()) {
         fieldState.errorKind = resolveErrorKind(error)
+        fieldState.mutation = fieldState.mutation.phase === 'verifying' ? { phase: 'unconfirmed', value } : { phase: 'idle' }
+      }
       return false
     }
     finally {
       if (owner.isCurrent()) {
         revisions[field]++
-        fieldState.pending = false
       }
     }
   }

@@ -13,16 +13,13 @@ import { detachOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, res
 import { cleanClipboardSelectionHtml, getClipboardSelection } from '~/utils/clipboardSelection'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
+import { isFestivalPage } from '~/utils/festivalPage'
 import { postMessageToIframe } from '~/utils/iframeMessage'
 import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { cleanBilibiliShareText, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
 import { getTextAutospaceCss, SUPPORTS_TEXT_AUTOSPACE } from '~/utils/textAutospace'
 import { syncThemeColors } from '~/utils/themeColor'
 import { invalidateViewportGeometry } from '~/utils/viewportGeometry'
-
-function isFestivalPage(): boolean {
-  return /https?:\/\/(?:www\.)?bilibili\.com\/festival\/.*/.test(location.href)
-}
 
 export function setupNecessarySettingsWatchers(scrollViewportRef: Ref<HTMLElement | null>) {
   const settingsStore = useSettingsStore()

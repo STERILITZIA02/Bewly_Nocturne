@@ -6,6 +6,7 @@ import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
 import HorizontalScrollView from '~/components/HorizontalScrollView.vue'
 import IconButton from '~/components/IconButton.vue'
+import { usePageViewState } from '~/composables/usePageViewState'
 import type { Result as TimetableItem, TimetableResult } from '~/models/anime/timeTable'
 import api from '~/utils/api'
 import { removeHttpFromUrl } from '~/utils/main'
@@ -15,8 +16,12 @@ import { prefersReducedMotion } from '~/utils/reducedMotion'
 import AnimeTimeTableSkeleton from './AnimeTimeTableSkeleton.vue'
 
 const { t } = useI18n()
-const animeTimeTable = reactive<TimetableItem[]>([])
-const isLoading = ref(true)
+const viewState = usePageViewState('anime:timetable')
+const today = new Date().toDateString()
+let loadedDate = viewState.read('date', '')
+const restored = loadedDate === today
+const animeTimeTable = shallowReactive<TimetableItem[]>(restored ? viewState.read('items', []) : [])
+const isLoading = ref(!restored)
 const requestFailed = ref(false)
 const animeTimeTableWrap = ref<HTMLElement | null>(null)
 const scrollViewRef = ref<InstanceType<typeof HorizontalScrollView> | null>(null)
@@ -26,6 +31,10 @@ const atEnd = ref(true)
 const hasToday = computed(() => animeTimeTable.some(day => day.is_today))
 let mounted = false
 let requestGeneration = 0
+let requestController: AbortController | undefined
+viewState.capture('items', () => animeTimeTable)
+viewState.capture('date', () => loadedDate)
+viewState.capture('scroll', () => scrollViewport.value?.scrollLeft ?? 0)
 
 function updateScrollBounds() {
   const viewport = scrollViewport.value
@@ -69,11 +78,20 @@ const daysOfTheWeekList = computed(() => {
 
 onMounted(() => {
   mounted = true
-  void getAnimeTimeTable()
+  if (restored) {
+    void nextTick(() => {
+      scrollHorizontally(viewState.read('scroll', 0), 'auto')
+      updateScrollBounds()
+    })
+  }
+  else {
+    void getAnimeTimeTable()
+  }
 })
 onScopeDispose(() => {
   mounted = false
   requestGeneration++
+  requestController?.abort()
 })
 
 function refreshAnimeTimeTable() {
@@ -82,17 +100,20 @@ function refreshAnimeTimeTable() {
 
 async function getAnimeTimeTable() {
   const generation = ++requestGeneration
+  requestController?.abort()
+  const controller = requestController = new AbortController()
   const isCurrent = () => mounted && generation === requestGeneration
   const revealToday = animeTimeTable.length === 0
   isLoading.value = true
   requestFailed.value = false
   try {
-    const res: TimetableResult = await api.anime.getAnimeTimeTable()
+    const res: TimetableResult = await api.anime.getAnimeTimeTable({}, { signal: controller.signal })
     if (!isCurrent())
       return
     const { code, result } = res
     if (code === 0 && Array.isArray(result)) {
       animeTimeTable.splice(0, animeTimeTable.length, ...result)
+      loadedDate = new Date().toDateString()
       await nextTick()
       if (isCurrent()) {
         if (revealToday)
@@ -121,11 +142,7 @@ defineExpose({ refreshAnimeTimeTable })
 <template>
   <div>
     <AnimeTimeTableSkeleton v-if="isLoading && !animeTimeTable.length" :today-index="animeTimeTable.findIndex(day => day.is_today)" />
-    <Empty v-else-if="requestFailed && !animeTimeTable.length" :description="t('common.load_failed')">
-      <Button type="tertiary" @click="refreshAnimeTimeTable">
-        {{ t('common.operation.refresh') }}
-      </Button>
-    </Empty>
+    <Empty v-else-if="requestFailed && !animeTimeTable.length" :description="t('common.load_failed')" :action-label="t('common.operation.refresh')" @action="refreshAnimeTimeTable" />
     <template v-else>
       <div class="anime-timetable__navigation">
         <span v-if="requestFailed" role="status">{{ t('common.load_failed') }}</span>
@@ -152,8 +169,8 @@ defineExpose({ refreshAnimeTimeTable })
             w="1/1 sm:1/2 md:1/4 lg:1/5 xl:1/6 2xl:1/7"
             p="x-2 b-8"
             shrink-0
-            :bg="item.is_today ? '!$bew-theme-surface' : ''"
-            hover:bg="$bew-fill-1"
+            :bg="item.is_today ? '!$bew-selected-bg' : ''"
+            hover:bg="$bew-hover-bg"
           >
             <header class="anime-timetable__heading">
               <h4 class="anime-timetable__day">
@@ -172,7 +189,7 @@ defineExpose({ refreshAnimeTimeTable })
               grid
               gap-4
               :border-l="`~ 2px dashed ${
-                item.is_today ? '$bew-theme-surface' : '$bew-fill-2'
+                item.is_today ? '$bew-selected-bg' : '$bew-fill-2'
               }`"
               p="t-3 l-3"
             >
@@ -182,8 +199,8 @@ defineExpose({ refreshAnimeTimeTable })
                   w="[fit-content]"
                   mb-2
                   rounded="$bew-interactive-radius"
-                  :color="item.is_today ? '$bew-on-theme-surface' : '$bew-text-3'"
-                  :bg="item.is_today ? '$bew-theme-surface' : '$bew-fill-1'"
+                  :color="item.is_today ? '$bew-text-1' : '$bew-text-3'"
+                  :bg="item.is_today ? '$bew-selected-bg' : '$bew-fill-1'"
                   relative
                   grid
                   place-items-center
@@ -195,7 +212,7 @@ defineExpose({ refreshAnimeTimeTable })
                     h-2
                     rounded="$bew-pill-radius"
                     :bg="item.is_today ? '$bew-accent-marker' : '$bew-fill-3'"
-                    transform="~ translate-x-[calc(-0.25rem-1px)]"
+                    transform="~ translate-x-[calc(-1*var(--bew-space-1)-var(--bew-hairline))]"
                   />
                   {{ episode.pub_time }}
                 </div>
@@ -270,7 +287,7 @@ defineExpose({ refreshAnimeTimeTable })
   height: var(--bew-control-height);
   font-size: var(--bew-control-icon-size);
   &:hover:not(:disabled) {
-    background: var(--bew-fill-1);
+    background: var(--bew-hover-bg);
   }
 }
 @media (prefers-reduced-motion: reduce) {

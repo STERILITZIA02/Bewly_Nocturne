@@ -1,6 +1,7 @@
 import type { PrivateSession } from '~/background/privateMessage/types'
 import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 import { normalizeIntlLocale } from '~/utils/locale'
+import { asRecord } from '~/utils/plainObject'
 
 export type RawSessionReference = Readonly<PrivateSession>
 
@@ -62,12 +63,6 @@ export interface PrivateUserCard {
   avatar: string
   mid: string
   name: string
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
 }
 
 function asString(value: unknown): string {

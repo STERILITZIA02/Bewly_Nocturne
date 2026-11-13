@@ -38,6 +38,7 @@ export function registerAdvertisingRuleChecks(check, { Vue, compileComponent, fl
     const stubs = Object.fromEntries([
       '~/components/ArticleCard/ArticleCard.vue',
       '~/components/BangumiEpisodeList/BangumiEpisodeList.vue',
+      '~/components/Button.vue',
       '~/components/MediaEpisodeSelect/MediaEpisodeSelect.vue',
       '~/components/UserCard/UserAvatarLink.vue',
       '~/components/VideoCard/VideoCard.vue',
@@ -46,6 +47,7 @@ export function registerAdvertisingRuleChecks(check, { Vue, compileComponent, fl
       '../components/Pagination.vue',
       '../components/renderers/EsportsMatchCard.vue',
       '../components/SearchEmptyState.vue',
+      '../components/SearchMediaCard.vue',
     ].map(path => [path, { default: empty }]))
     const Component = await compileComponent('../src/contentScripts/views/SearchResults/pages/AllSearchPage.vue', {
       ...stubs,
@@ -61,7 +63,7 @@ export function registerAdvertisingRuleChecks(check, { Vue, compileComponent, fl
       '~/stores/topBarStore': { useTopBarStore: () => ({ isLogin: true, userInfo: { mid: 42 } }) },
       '~/utils/accountScope': { resolveAuthenticatedAccountId: () => 42 },
       '~/utils/advertising': advertising,
-      '~/utils/lvIcons': Object.fromEntries(Array.from({ length: 7 }, (_, index) => [`LV${index}_ICON`, ''])),
+      '~/utils/lvIcons': { getLvIcon: () => '' },
       '~/utils/main': { getUserID: () => 42 },
       '~/utils/searchHighlight': { sanitizeSearchHighlight: value => value },
       '~/utils/userRelation': { changeUserRelation: () => { throw new Error('unexpected write') } },
@@ -71,7 +73,7 @@ export function registerAdvertisingRuleChecks(check, { Vue, compileComponent, fl
         '~/utils/dataFormatter': { numFormatter: String, parseStatNumber: Number },
         '~/utils/htmlDecode': { decodeHtmlEntities: value => value },
       }),
-      '../composables/useSearchRequest': { useSearchRequest: () => ({ results, requestScope: Vue.ref(0), isLoading: Vue.ref(false), error: Vue.ref(null), reset: noop, search: async (_options, accept) => {
+      '../composables/useSearchRequest': { useSearchRequest: () => ({ results, view: { restored: false, retain: noop }, requestScope: Vue.ref(0), isLoading: Vue.ref(false), error: Vue.ref(null), reset: noop, search: async (_options, accept) => {
         reads++
         return accept({ data: response }, () => true)
       } }) },

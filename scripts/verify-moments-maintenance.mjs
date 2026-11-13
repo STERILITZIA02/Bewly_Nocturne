@@ -3,9 +3,44 @@ import { readFile } from 'node:fs/promises'
 
 import { createMomentFilter } from '../src/utils/momentFilter'
 import { detectMomentPromotion } from '../src/utils/momentPromotion'
+import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerMomentsMaintenanceChecks(check, { Vue, compileComponent, flush }) {
+  check('moment navigation: a retiring scroll cannot refresh another filter or an unmounted feed', async () => {
+    const scrolls = []
+    let refreshes = 0
+    const context = await loadSourceFunctions('../src/contentScripts/views/Moments/Moments.vue', ['latestNavigation', 'returnToLatest', 'isFeedRequestCurrent'], {
+      momentsMounted: true,
+      feedRequestToken: 0,
+      activeMomentFilter: Vue.ref('all'),
+      selectedHostMid: Vue.ref(''),
+      loadedAccountId: 1,
+      getCurrentAccountId: () => 1,
+      isSameAccount: (await import('../src/utils/accountScope')).isSameAccount,
+      scrollViewportRef: Vue.ref({}),
+      previews: { clear() {} },
+      scrollToPosition: () => new Promise(resolve => scrolls.push(resolve)),
+      refresh: () => refreshes++,
+    })
+    const previous = context.returnToLatest()
+    context.feedRequestToken++
+    const current = context.returnToLatest()
+    scrolls[0]()
+    await previous
+    assert.equal(refreshes, 0)
+    await context.returnToLatest()
+    assert.equal(scrolls.length, 2, 'the old completion cannot unlock a newer navigation')
+    scrolls[1]()
+    await current
+    assert.equal(refreshes, 1)
+    const retiring = context.returnToLatest()
+    context.momentsMounted = false
+    scrolls[2]()
+    await retiring
+    assert.equal(refreshes, 1)
+  })
+
   check('comment tails: root, nested and native replies end successfully without reintroducing load-more', async () => {
     const { normalizeMomentCommentPage, normalizeMomentCommentRepliesPage } = await import('../src/components/MomentCard/commentUtils')
     const { normalizeNativeCommentReplyPage } = await import('../src/utils/commentReplyRequest')
@@ -25,6 +60,7 @@ export function registerMomentsMaintenanceChecks(check, { Vue, compileComponent,
     const identity = { context: 'fixture', account: 'guest', oid: '1', type: 17, root: '10', sort: 1, pageSize: 20 }
     const nativeTail = normalizeNativeCommentReplyPage({ code: 0, data: { replies: null, page: { num: 2, size: 20, count: 100 } } }, { requestId: '1', identity, page: 2 })
     assert.equal(nativeTail.totalPages, 2)
+    assert.throws(() => normalizeNativeCommentReplyPage({ code: 0, data: { replies: [[]], page: { num: 2, size: 20, count: 100 } } }, { requestId: '1', identity, page: 2 }), 'an array row is not a native comment record')
     let calls = 0
     const threads = createMomentCommentThreadController({ getIdentity: () => 'fixture', fetchPage: async () => {
       calls++

@@ -1,21 +1,15 @@
 <script setup lang="ts">
-import { getExtensionAssetUrl } from '~/utils/messaging'
-
 const props = defineProps<{
   description?: string
-  textOnly?: boolean
   fill?: boolean
   actionLabel?: string
 }>()
 const emit = defineEmits<{ action: [] }>()
-
-const emptyImg = getExtensionAssetUrl('/assets/empty.png')
 </script>
 
 <template>
-  <div class="bew-empty" :class="{ 'bew-empty--text': textOnly, 'bew-empty--fill': fill }" flex="~ col gap-4" justify="center" items="center">
-    <img v-if="!textOnly && emptyImg" :src="emptyImg" alt="" w="200px" h="auto">
-    <span v-if="props.description" text="$bew-text-3">{{ props.description }}</span>
+  <div class="bew-empty" :class="{ 'bew-empty--fill': fill }" flex="~ col gap-4" justify="center" items="center">
+    <span v-if="props.description">{{ props.description }}</span>
     <button v-if="actionLabel" type="button" class="bew-empty__action" @click="emit('action')">
       {{ actionLabel }}
     </button>
@@ -24,7 +18,7 @@ const emptyImg = getExtensionAssetUrl('/assets/empty.png')
 </template>
 
 <style scoped lang="scss">
-.bew-empty--text {
+.bew-empty {
   text-align: center;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-body);

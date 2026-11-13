@@ -187,8 +187,8 @@
   }
 
   .home-user-spec {
-    background: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
     border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-capsule);
   }
@@ -598,8 +598,8 @@
     corner-shape: var(--bew-corner-shape);
 
     &:hover {
-      color: var(--bew-on-theme-surface);
-      background: var(--bew-theme-surface-hover);
+      color: var(--bew-text-1);
+      background: var(--bew-pressed-bg);
     }
   }
 
@@ -891,8 +891,8 @@
     corner-shape: var(--bew-corner-shape);
 
     &:hover {
-      background: var(--bew-theme-surface-hover);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-pressed-bg);
+      color: var(--bew-text-1);
     }
   }
 

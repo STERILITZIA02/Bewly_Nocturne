@@ -236,6 +236,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
+@use "../styles/hoverState";
+
 .context-menu-container {
   z-index: var(--bew-z-popover);
   width: max-content;
@@ -249,10 +251,10 @@ onBeforeUnmount(() => {
 }
 
 .context-menu-item {
-  --uno: "hover:bg-$bew-fill-2 rounded-$bew-interactive-radius cursor-pointer";
+  --uno: "hover:bg-$bew-hover-bg rounded-$bew-interactive-radius cursor-pointer";
   --uno: "flex items-center";
 
-  min-height: var(--bew-space-8);
+  min-height: var(--bew-row-height);
   border: 0;
   background: transparent;
   color: inherit;
@@ -262,13 +264,14 @@ onBeforeUnmount(() => {
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
+  @include hoverState.transition;
 
   &:active:not(:disabled) {
-    background: var(--bew-fill-3);
+    background: var(--bew-pressed-bg);
   }
 
   &:disabled {
-    opacity: 0.5;
+    opacity: var(--bew-disabled-opacity);
     cursor: default;
   }
 

@@ -5,7 +5,7 @@ const API_ANIME = {
   getEpisodeAudio: {
     url: 'https://api.bilibili.com/pgc/player/web/playurl',
     _fetch: { method: 'get' },
-    params: { ep_id: 0, cid: 0, fnval: 16, fnver: 0 },
+    params: { ep_id: 0, cid: 0, fnval: 16, fnver: 0, voice_balance: 1 },
     afterHandle: AHS.J_D,
   },
   // https://github.com/SocialSisterYi/bilibili-API-collect/blob/36e250090800793b41b223b55eefdcbb9391b53e/user/space.md#%E6%9F%A5%E8%AF%A2%E7%94%A8%E6%88%B7%E8%BF%BD%E7%95%AA%E8%BF%BD%E5%89%A7%E6%98%8E%E7%BB%86

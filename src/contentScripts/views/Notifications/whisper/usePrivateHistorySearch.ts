@@ -19,6 +19,12 @@ export interface PrivateHistoryMatch {
 }
 
 interface HistoryCursor { session: DisplayPrivateSession, endSeqno?: string, done: boolean }
+type HistoryScan
+  = | { phase: 'idle' | 'debouncing' | 'scanning' | 'waiting' | 'paused' | 'complete' | 'limited' }
+    | { phase: 'failed', cursor: HistoryCursor | null }
+type HistoryContext
+  = | { phase: 'idle' | 'loading' | 'error' }
+    | { phase: 'ready', value: { key: string, talkerId: string, items: DisplayPrivateMessage[] } }
 interface SearchDependencies {
   active?: () => boolean
   sessions: PrivateSessionsController
@@ -53,19 +59,21 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
     results: [] as PrivateHistoryMatch[],
     selectedKey: '',
     selectionVersion: 0,
-    loading: false,
-    running: false,
-    complete: false,
-    error: false,
-    canSkip: false,
-    limited: false,
+    scan: { phase: 'idle' } as HistoryScan,
+    get loading() { return this.scan.phase === 'scanning' },
+    get running() { return ['debouncing', 'scanning', 'waiting'].includes(this.scan.phase) },
+    get complete() { return this.scan.phase === 'complete' },
+    get error() { return this.scan.phase === 'failed' },
+    get canSkip() { return this.scan.phase === 'failed' && this.scan.cursor !== null },
+    get limited() { return this.scan.phase === 'limited' },
     scannedMessages: 0,
     skippedSessions: 0,
     batch: 1,
     visibleResultCount: PRIVATE_HISTORY_VISIBLE_BATCH_SIZE,
-    loadingContext: false,
-    contextError: false,
-    context: null as { key: string, talkerId: string, items: DisplayPrivateMessage[] } | null,
+    contextState: { phase: 'idle' } as HistoryContext,
+    get loadingContext() { return this.contextState.phase === 'loading' },
+    get contextError() { return this.contextState.phase === 'error' },
+    get context() { return this.contextState.phase === 'ready' ? this.contextState.value : null },
   })
   const selected = computed(() => state.results.find(result => result.key === state.selectedKey) ?? null)
   const filteredResults = computed(() => state.results.filter(result => matchesPrivateSessionType(result.session.kind, state.typeFilter)))
@@ -77,7 +85,6 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
   let contextGeneration = 0
   let pending: Promise<void> | null = null
   let contextPending: Promise<void> | null = null
-  let failedCursor: HistoryCursor | null = null
   let continuationTimer: ReturnType<typeof setTimeout> | undefined
   let pacingTimer: ReturnType<typeof setTimeout> | undefined
   let finishPacing: (() => void) | undefined
@@ -89,8 +96,8 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
     clearTimeout(pacingTimer)
     finishPacing?.()
     finishPacing = undefined
-    state.running = false
-    state.loading = false
+    if (state.running)
+      state.scan = { phase: state.query ? 'paused' : 'idle' }
   }
   function pace() {
     return new Promise<void>((resolve) => {
@@ -104,12 +111,10 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
   function reset() {
     stop()
     contextGeneration++
-    failedCursor = null
-    state.canSkip = false
     state.batch = 1
     state.visibleResultCount = PRIVATE_HISTORY_VISIBLE_BATCH_SIZE
     state.selectionVersion = 0
-    Object.assign(state, { query: '', results: [], selectedKey: '', complete: false, error: false, limited: false, scannedMessages: 0, skippedSessions: 0, context: null, loadingContext: false, contextError: false })
+    Object.assign(state, { query: '', results: [], selectedKey: '', scan: { phase: 'idle' }, scannedMessages: 0, skippedSessions: 0, contextState: { phase: 'idle' } })
     cursors.clear()
     seen.clear()
     position = 0
@@ -130,18 +135,16 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
     document.addEventListener('visibilitychange', onVisibility)
     const epoch = generation
     const account = mid.value
-    const current = () => !disposed && generation === epoch && mid.value === account && !document.hidden
-    state.loading = true
-    state.running = true
+    const current = () => !disposed && generation === epoch && mid.value === account && !document.hidden && dependencies.active?.() !== false
+    state.scan = { phase: 'scanning' }
     clearTimeout(continuationTimer)
-    state.error = false
-    state.canSkip = false
     if (pending)
       await pending
     if (!current())
       return
     const task = (async () => {
       const query = state.query.normalize('NFKC').toLocaleLowerCase()
+      let failedCursor: HistoryCursor | null = null
       try {
         if (!dependencies.sessions.state.loaded)
           await dependencies.sessions.loadInitial()
@@ -177,7 +180,7 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
           }
           if (!cursor) {
             if (dependencies.sessions.state.noMore) {
-              state.complete = true
+              state.scan = { phase: 'complete' }
               break
             }
             position = entries.length
@@ -212,27 +215,25 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
           failedCursor = null
           position++
           if (state.results.length >= RESULT_LIMIT) {
-            state.limited = true
+            state.scan = { phase: 'limited' }
             break
           }
           if (reads + 1 < BATCH_REQUESTS)
             await pace()
         }
         if (current() && dependencies.sessions.state.noMore && [...cursors.values()].every(cursor => cursor.done)) {
-          state.complete = true
-          state.limited = false
+          state.scan = { phase: 'complete' }
         }
       }
       catch {
         if (current()) {
-          state.error = true
-          state.canSkip = Boolean(failedCursor)
+          state.scan = { phase: 'failed', cursor: failedCursor }
         }
       }
       finally {
         if (generation === epoch && mid.value === account) {
-          state.loading = false
-          state.running = !state.complete && !state.error && !state.limited && current()
+          if (state.scan.phase === 'scanning')
+            state.scan = { phase: current() ? 'waiting' : 'paused' }
           if (state.running)
             continuationTimer = setTimeout(() => void run(), PRIVATE_HISTORY_BATCH_PAUSE_MS)
         }
@@ -247,7 +248,7 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
     reset()
     state.query = query.normalize('NFKC').trim()
     if (delay > 0 && state.query) {
-      state.running = true
+      state.scan = { phase: 'debouncing' }
       continuationTimer = setTimeout(() => void run(), delay)
       return Promise.resolve()
     }
@@ -256,14 +257,14 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
   function suspend() {
     stop()
     contextGeneration++
-    state.loadingContext = false
+    if (state.loadingContext)
+      state.contextState = { phase: 'idle' }
     document.removeEventListener('visibilitychange', onVisibility)
   }
   function skipFailed() {
-    if (!state.error || !failedCursor)
+    if (state.scan.phase !== 'failed' || !state.scan.cursor)
       return Promise.resolve()
-    failedCursor.done = true
-    failedCursor = null
+    state.scan.cursor.done = true
     state.skippedSessions++
     position++
     return run()
@@ -274,23 +275,19 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
     contextGeneration++
     state.results = []
     state.selectedKey = ''
-    state.context = null
-    state.contextError = false
-    state.loadingContext = false
-    state.limited = false
+    state.contextState = { phase: 'idle' }
+    state.scan = { phase: 'paused' }
     state.batch++
     state.visibleResultCount = PRIVATE_HISTORY_VISIBLE_BATCH_SIZE
     return run()
   }
   async function select(key: string) {
     const result = filteredResults.value.find(item => item.key === key)
-    if (!result)
+    if (!result || disposed || document.hidden || dependencies.active?.() === false)
       return
     document.addEventListener('visibilitychange', onVisibility)
     state.selectedKey = key
-    state.context = null
-    state.contextError = false
-    state.loadingContext = true
+    state.contextState = { phase: 'loading' }
     const epoch = ++contextGeneration
     const account = mid.value
     if (contextPending)
@@ -312,15 +309,11 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
         const items = transformPrivateMessages(data.messages, data.e_infos, account)
         if (!items.some(item => item.msgKey === result.message.msgKey))
           throw new Error('message-no-longer-available')
-        state.context = { key, talkerId: result.session.talkerId, items }
+        state.contextState = { phase: 'ready', value: { key, talkerId: result.session.talkerId, items } }
       }
       catch {
         if (epoch === contextGeneration && account === mid.value)
-          state.contextError = true
-      }
-      finally {
-        if (epoch === contextGeneration && account === mid.value)
-          state.loadingContext = false
+          state.contextState = { phase: 'error' }
       }
     })()
     contextPending = task
@@ -336,9 +329,7 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
       return
     contextGeneration++
     state.selectedKey = key
-    state.context = null
-    state.contextError = false
-    state.loadingContext = false
+    state.contextState = { phase: 'idle' }
   }
   function nextKey(direction: number) {
     const length = filteredResults.value.length
@@ -354,9 +345,7 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
     if (state.selectedKey && !filteredResults.value.some(result => result.key === state.selectedKey)) {
       contextGeneration++
       state.selectedKey = ''
-      state.context = null
-      state.loadingContext = false
-      state.contextError = false
+      state.contextState = { phase: 'idle' }
     }
   }
   function onVisibility() {
@@ -364,8 +353,7 @@ export function usePrivateHistorySearch(mid: Ref<string>, dependencies: SearchDe
       stop()
       contextGeneration++
       if (state.loadingContext)
-        state.contextError = true
-      state.loadingContext = false
+        state.contextState = { phase: 'error' }
     }
   }
   watch(() => [dependencies.active?.() ?? true, state.query] as const, ([active, query]) => {

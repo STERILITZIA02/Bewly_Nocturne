@@ -358,15 +358,15 @@ function showRefreshPrompt(...args: unknown[]): void {
     }
     .title {
       margin: 0;
-      font-size: var(--bew-font-size-body, 14px);
+      font-size: var(--bew-font-size-body, 13px);
       font-weight: var(--bew-font-weight-regular, 400);
-      line-height: var(--bew-line-height-body, 20px);
+      line-height: var(--bew-line-height-body, 16px);
       overflow-wrap: anywhere;
     }
     .description {
       margin: 2px 0 0;
       color: var(--bew-text-2, #61666d);
-      font-size: var(--bew-font-size-control, 12px);
+      font-size: var(--bew-font-size-control, 13px);
       font-weight: var(--bew-font-weight-regular, 400);
       line-height: var(--bew-line-height-control, 16px);
       overflow-wrap: anywhere;
@@ -388,7 +388,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       padding: 0 var(--bew-control-item-padding-x, 12px);
       color: var(--bew-text-1, #18191c);
       font: inherit;
-      font-size: var(--bew-font-size-control, 12px);
+      font-size: var(--bew-font-size-control, 13px);
       font-weight: var(--bew-font-weight-regular, 400);
       line-height: var(--bew-line-height-control, 16px);
       background: transparent;

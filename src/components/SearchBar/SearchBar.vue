@@ -1005,16 +1005,16 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
     cursor: pointer;
 
     &:hover:not(:disabled) {
-      color: var(--bew-on-theme-surface);
-      background: var(--bew-theme-surface);
+      color: var(--bew-text-1);
+      background: var(--bew-selected-bg);
     }
 
     &:active:not(:disabled) {
-      background: var(--bew-theme-surface-hover);
+      background: var(--bew-pressed-bg);
     }
 
     &:disabled {
-      opacity: 0.5;
+      opacity: var(--bew-disabled-opacity);
       cursor: default;
     }
   }
@@ -1120,7 +1120,7 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
       color: var(--b-search-bar-normal-icon-color);
       background: transparent;
       isolation: isolate;
-      transition: color 280ms ease;
+      transition: color var(--bew-duration-moderate) var(--bew-ease-standard);
 
       > * {
         position: relative;
@@ -1138,7 +1138,7 @@ function animatePanel(element: Element, done: () => void, entering: boolean) {
 
   &.search-wrap--collapsible {
     width: 100%;
-    transition: width var(--bew-duration-moderate) cubic-bezier(0.16, 1, 0.3, 1);
+    transition: width var(--bew-duration-moderate) var(--bew-ease-decelerate);
 
     .search-submit-btn {
       inset-inline: 0 auto;

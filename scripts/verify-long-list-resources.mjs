@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 
 import { MOMENTS_SOURCE_FILES } from './refactoredSources'
 import { loadSourceFunctions } from './sourceFunctionHarness'
@@ -269,16 +268,6 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     const seriesNext = await reader.read({ ...seriesRequest, reset: false }, () => true)
     assert.deepEqual([seriesFirst.stalled, seriesNext.stalled], [false, false], 'series keep auto-loading')
     assert.deepEqual(seriesTypes, ['pgc', 'pgc'])
-
-    const moments = await readFile(new URL('../src/contentScripts/views/Moments/Moments.vue', import.meta.url), 'utf8')
-    assert.match(moments, /const ended = !hasMore \|\| \(cutoff > 0 && \(normalizedItems\.at\(-1\)\?\.publishedAt \?\? cutoff\) < cutoff\)\n[\s\S]{0,1800}noMoreContent\.value = ended/, 'only a server end, or a page past the search time range, closes pagination')
-    assert.match(moments, /feedRequestFailed\.value = response\.stalled/, 'a stalled page remains retryable')
-    assert.match(moments, /function requiresManualMomentPaging\(\) \{\s*return feedRequestFailed\.value\s*\}/, 'only failures need a button')
-    assert.match(moments, /<template v-else-if="noMoreContent && !feedRequestFailed">\s*\{\{ t\('moments\.no_more'\) \}\}/, 'the end is a centred hint')
-    assert.match(moments, /<button\s+v-if="feedRequestFailed"\s+:disabled="isLoading"\s+@click="loadMoments\(true, 0, true, atLatest \? 'latest' : 'resume'\)"/, 'retry reads content without marking the head as read')
-    assert.match(moments, /visibilitychange', \(\) => \{[\s\S]{0,450}maybeLoadMoreNearBottom\(\)/, 'returning to the tab resumes a short list')
-    assert.match(moments, /updateVirtualColumns\(\)\s*\/\/ A restored list may not fill the viewport\.\s*maybeLoadMoreNearBottom\(\)/)
-    assert.match(moments, /momentLayout\.remove\(id\)[\s\S]{0,120}void nextTick\(maybeLoadMoreNearBottom\)/)
   })
 
   check('moments text-and-image category: reads the full feed, scans like a filter and keeps only WORD and DRAW posts', async () => {
@@ -307,8 +296,6 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     assert.equal(result.rawItems.length, 6, 'raw pages still feed uploader video times')
     assert.equal(result.nextOffset, 'p3')
     assert.equal(reader.getLoaded('draw', '').map(item => item.id).join(), 'w,d', 'its cache holds only kept posts')
-    const sidebar = await readFile(new URL('../src/contentScripts/views/Moments/MomentsSidebar.vue', import.meta.url), 'utf8')
-    assert.match(sidebar, /\['all', 'video', 'draw', 'pgc', 'article'\]/)
   })
 
   check('viewport geometry: one read per owner and round is shared by every subscriber; hidden pages defer and release stops work', async () => {
@@ -552,9 +539,9 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       },
     }
     const items = Vue.shallowRef(Array.from({ length: 5000 }, (_, id) => ({ id: id + 1, author: { mid: id + 10001 } })))
-    const textOnlyStates = Vue.ref(false)
+    const inlineStates = Vue.ref(false)
     const transformItem = item => item
-    const app = Vue.createApp({ setup: () => () => Vue.h(grid, { items: items.value.filter(item => !filtered.has(item.id)), hasItemKey: key => items.value.some(item => item.id === key), gridLayout: mode.value, noMoreContent: true, textOnlyStates: textOnlyStates.value, transformItem, isSkeletonItem: item => skeletons.has(item.id), getItemKey: item => item.id, cardClickHandler: item => clicks.push(item) }) })
+    const app = Vue.createApp({ setup: () => () => Vue.h(grid, { items: items.value.filter(item => !filtered.has(item.id)), hasItemKey: key => items.value.some(item => item.id === key), gridLayout: mode.value, noMoreContent: true, inlineStates: inlineStates.value, transformItem, isSkeletonItem: item => skeletons.has(item.id), getItemKey: item => item.id, cardClickHandler: item => clicks.push(item) }) })
     app.component('VideoCard', card).component('Empty', {
       props: ['description'],
       setup: props => () => Vue.h('p', { 'data-grid-state': '' }, props.description),
@@ -570,7 +557,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       await settle()
       assert.ok(mounted > 0 && mounted < 250)
       assert.equal(root.querySelector('[data-grid-state]').textContent, 'common.no_more_content')
-      textOnlyStates.value = true
+      inlineStates.value = true
       await Vue.nextTick()
       assert.equal(root.querySelector('[data-grid-state]'), null, 'completed sidebar lists have no empty/end footer')
       assert.ok(relationWindows.some(mids => mids.includes(10001)), 'visible unknown relationships are read')

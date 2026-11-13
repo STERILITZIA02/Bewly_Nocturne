@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEventListener } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
@@ -8,7 +9,7 @@ import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import MomentReadMarker from '~/components/MomentReadMarker.vue'
 import Tooltip from '~/components/Tooltip.vue'
-import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
+import { useLoadMoreSentinel } from '~/composables/useLoadMoreSentinel'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { createAccountLifetime } from '~/utils/accountLifetime'
@@ -130,7 +131,6 @@ watch(() => settings.value.filterArticlesInMoments, () => {
     void initData()
 }, { flush: 'sync' })
 
-// 使用 useOptimizedScroll 处理滚动加载
 function handleReachBottom() {
   if (topBarStore.isLoadingMoments || topBarStore.moments.length === 0)
     return
@@ -138,11 +138,9 @@ function handleReachBottom() {
   getData()
 }
 
-useOptimizedScroll(
-  momentsWrap,
-  { onReachBottom: handleReachBottom, onScroll: rememberReading },
-  { bottomThreshold: 400, throttleDelay: 100 },
-)
+const loadMoreSentinel = ref<HTMLElement>()
+useLoadMoreSentinel(momentsWrap, loadMoreSentinel, handleReachBottom, () => topBarStore.moments.length)
+useEventListener(momentsWrap, 'scroll', rememberReading, { passive: true })
 
 function onClickTab(tab: MomentTab) {
   // Prevent changing tab when loading, cuz it will cause a bug
@@ -261,7 +259,7 @@ defineExpose({
 
       <Empty
         v-if="!topBarStore.isLoadingMoments && topBarStore.moments.length === 0"
-        :description="topBarStore.momentsPageFailed ? t('common.load_failed') : undefined"
+        :description="t(topBarStore.momentsPageFailed ? 'common.load_failed' : 'common.no_data')"
         class="bew-popover__state"
       />
       <div v-if="topBarStore.momentsPageFailed" class="moments-reading-actions">
@@ -353,6 +351,7 @@ defineExpose({
       <Transition name="fade">
         <PopoverListSkeleton v-if="topBarStore.isLoadingMoments && topBarStore.moments.length !== 0" variant="moments" :count="2" />
       </Transition>
+      <div ref="loadMoreSentinel" aria-hidden="true" />
     </main>
   </div>
 </template>

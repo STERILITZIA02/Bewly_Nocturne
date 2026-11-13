@@ -3,10 +3,9 @@ import { useIntersectionObserver } from '@vueuse/core'
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 
 import { useImageTone } from '~/composables/useImageTone'
+import { useMeasuredDisclosure } from '~/composables/useMeasuredDisclosure'
 import { removeHttpFromUrl } from '~/utils/main'
-import { getMotionDuration } from '~/utils/motionTiming'
 import { hasLoadedPicture, rememberLoadedPicture } from '~/utils/pictureRevealMemory'
-import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { keepSelectionScrollAnchor } from '~/utils/selectionScrollAnchor'
 
 const props = defineProps<{
@@ -24,32 +23,24 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [], visible: [] }>()
 const root = ref<HTMLElement>()
 const trigger = ref<HTMLButtonElement>()
-const panel = ref<HTMLElement>()
+const panel = ref<HTMLElement | null>(null)
+const actions = ref<HTMLElement | null>(null)
+const band = ref<HTMLElement | null>(null)
+const bandClip = ref<HTMLElement | null>(null)
 const failedImage = ref(false)
 const panelId = `favorite-folder-${useId()}`
+// The actions (and the cover band's picture) mount only while the folder is
+// open or closing, so collapsed rows keep no content and no size observer.
 const renderActions = ref(props.expanded)
-let closeActionsTimer: ReturnType<typeof setTimeout> | undefined
 let releaseAnchor: (() => void) | undefined
 watch(() => props.expanded, (expanded) => {
-  clearTimeout(closeActionsTimer)
-  if (expanded) {
+  if (expanded)
     renderActions.value = true
-  }
-  else if (prefersReducedMotion()) {
-    renderActions.value = false
-  }
-  else {
-    const duration = root.value ? getMotionDuration(getComputedStyle(root.value), '--bew-duration-normal') : 200
-    closeActionsTimer = setTimeout(() => renderActions.value = false, duration + 50)
-  }
   releaseAnchor?.()
   if (expanded && root.value?.parentElement)
     releaseAnchor = keepSelectionScrollAnchor(root.value, root.value.parentElement)
 }, { flush: 'pre' })
-onBeforeUnmount(() => {
-  clearTimeout(closeActionsTimer)
-  releaseAnchor?.()
-})
+onBeforeUnmount(() => releaseAnchor?.())
 watch(() => props.cover, () => failedImage.value = false)
 // The open folder is a card after the portrait moment cards (user-specified):
 // its cover unfolds across the top and fades into the colour the cover has
@@ -57,6 +48,14 @@ watch(() => props.cover, () => failedImage.value = false)
 const bandCover = computed(() => props.cover && !failedImage.value ? removeHttpFromUrl(`${props.cover}@480w_252h_1c.webp`) : '')
 const toned = computed(() => props.expanded && Boolean(bandCover.value))
 const tone = useImageTone(() => ({ portrait: toned.value, image: props.cover }))
+// The cover band and the actions open and close as measured disclosures.
+const panelDisclosure = useMeasuredDisclosure(panel, actions, computed(() => props.expanded), () => renderActions.value = false, () => {})
+const bandDisclosure = useMeasuredDisclosure(band, computed(() => renderActions.value ? bandClip.value : null), toned, () => {}, () => {})
+const panelHeight = panelDisclosure.height
+const bandHeight = bandDisclosure.height
+function heightStyle(height: number | undefined) {
+  return height === undefined ? undefined : { height: `${height}px` }
+}
 const bandLoaded = ref(false)
 watch(bandCover, src => bandLoaded.value = hasLoadedPicture(src), { immediate: true })
 function handleBandLoad() {
@@ -78,8 +77,11 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
 
 <template>
   <li ref="root" class="favorite-sidebar-item" :class="{ 'is-active': expanded, 'is-selected': selected, 'is-toned': toned }" :style="tone">
-    <div v-if="bandCover" class="favorite-sidebar-item__band" :data-expanded="toned" aria-hidden="true">
-      <div class="favorite-sidebar-item__band-clip">
+    <div
+      v-if="bandCover" ref="band" class="favorite-sidebar-item__band" :style="heightStyle(bandHeight)" aria-hidden="true"
+      @transitionend="bandDisclosure.onTransitionEnd"
+    >
+      <div ref="bandClip" class="favorite-sidebar-item__band-clip">
         <img
           v-if="renderActions" :src="bandCover" alt="" decoding="async" :class="{ 'is-loaded': bandLoaded }"
           @load="handleBandLoad" @error="failedImage = true"
@@ -102,13 +104,11 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
       </span>
     </button>
     <div
-      :id="panelId" ref="panel" class="favorite-sidebar-item__panel" :data-expanded="expanded"
-      :inert="expanded ? undefined : true" :aria-hidden="!expanded"
+      :id="panelId" ref="panel" class="favorite-sidebar-item__panel" :data-expanded="expanded" :style="heightStyle(panelHeight)"
+      :inert="expanded ? undefined : true" :aria-hidden="!expanded" @transitionend="panelDisclosure.onTransitionEnd"
     >
-      <div class="favorite-sidebar-item__clip">
-        <div v-if="renderActions" class="favorite-sidebar-item__actions">
-          <slot />
-        </div>
+      <div v-if="renderActions" ref="actions" class="favorite-sidebar-item__actions">
+        <slot />
       </div>
     </div>
   </li>
@@ -116,6 +116,7 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
 
 <style scoped lang="scss">
 @use "../../../styles/contentCard";
+@use "../../../styles/hoverState";
 @use "../../../styles/imageTone" as *;
 @use "../../../styles/truncateFade";
 .favorite-sidebar-item {
@@ -130,16 +131,13 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
   // Chromium drop a gradient blur's masks: the band fades through a gradient
   // only, as a portrait card does without frosted glass.
   overflow: clip;
-  border-radius: var(--bew-surface-radius);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   color: var(--bew-sidebar-secondary);
   transition:
     $tone-transition,
-    background-color var(--bew-duration-fast) var(--bew-ease-standard),
-    color var(--bew-duration-fast) var(--bew-ease-standard);
-  &:is(:hover, :focus-within) {
-    background: var(--bew-sidebar-control);
-  }
+    background-color var(--bew-duration-moderate) var(--bew-ease-standard),
+    color var(--bew-duration-moderate) var(--bew-ease-standard);
   // The rail's own selection face: the row lies flat on the rail glass.
   &.is-active,
   &.is-selected {
@@ -158,17 +156,13 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
   }
 }
 // The cover unfolds across the top with the actions below (same disclosure).
-.favorite-sidebar-item__band {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows var(--bew-duration-normal) var(--bew-ease-standard);
-  &[data-expanded="true"] {
-    grid-template-rows: 1fr;
-  }
+.favorite-sidebar-item__band,
+.favorite-sidebar-item__panel {
+  overflow: clip;
+  transition: height var(--bew-duration-normal) var(--bew-ease-standard);
 }
 .favorite-sidebar-item__band-clip {
   position: relative;
-  min-height: 0;
   overflow: hidden;
   > img {
     display: block;
@@ -207,8 +201,16 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
   line-height: var(--bew-line-height-control);
   text-align: start;
   cursor: pointer;
+  // The trigger owns hover while the row keeps its independent cover-tone transition.
+  @include hoverState.transition(
+    (background-color),
+    ".favorite-sidebar-item:not(.is-active, .is-selected):is(:hover, :focus-within) > &"
+  );
+  .favorite-sidebar-item:not(.is-active, .is-selected):is(:hover, :focus-within) > & {
+    background: var(--bew-hover-bg);
+  }
   &:disabled {
-    opacity: 0.56;
+    opacity: var(--bew-disabled-opacity);
     cursor: default;
   }
 }
@@ -260,20 +262,13 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
   }
 }
 .favorite-sidebar-item__panel {
-  display: grid;
-  grid-template-rows: 0fr;
   opacity: 0;
   transition:
-    grid-template-rows var(--bew-duration-normal) var(--bew-ease-standard),
+    height var(--bew-duration-normal) var(--bew-ease-standard),
     opacity var(--bew-duration-normal) var(--bew-ease-standard);
   &[data-expanded="true"] {
-    grid-template-rows: 1fr;
     opacity: 1;
   }
-}
-.favorite-sidebar-item__clip {
-  min-height: 0;
-  overflow: hidden;
 }
 .favorite-sidebar-item__actions {
   // One row: Play All takes the room left by the icon actions after it.
@@ -301,19 +296,16 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
     font-weight: var(--bew-font-weight-regular);
     line-height: var(--bew-line-height-control);
     cursor: pointer;
-    transition:
-      background-color var(--bew-duration-fast) var(--bew-ease-standard),
-      color var(--bew-duration-fast) var(--bew-ease-standard),
-      transform var(--bew-duration-fast) var(--bew-ease-standard);
+    @include hoverState.transition((background-color, color, transform), "&:hover:not(:disabled)");
     &:hover:not(:disabled) {
-      color: var(--bew-on-theme-surface);
-      background: var(--bew-theme-surface-hover);
+      color: var(--bew-text-1);
+      background: var(--bew-pressed-bg);
     }
     &:active:not(:disabled) {
       transform: scale(var(--bew-control-press-scale));
     }
     &:disabled {
-      opacity: 0.56;
+      opacity: var(--bew-disabled-opacity);
       cursor: default;
     }
     > span:first-child {
@@ -329,11 +321,8 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
     border-radius: var(--bew-interactive-radius);
     color: var(--bew-text-1);
     &:hover:not(:disabled) {
-      color: var(--bew-on-theme-surface);
-      background: var(--bew-theme-surface-hover);
-    }
-    &.danger {
-      color: var(--bew-error-foreground);
+      color: var(--bew-text-1);
+      background: var(--bew-pressed-bg);
     }
   }
   // A management bar that follows takes its own line.
@@ -349,11 +338,10 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
 // Actions on the card colour take its fills.
 .is-toned .favorite-sidebar-item__actions {
   --bew-content-alt-solid: var(--bew-fill-2);
-  --bew-theme-surface-hover: var(--bew-fill-3);
-  --bew-on-theme-surface: var(--bew-text-1);
 }
 @media (prefers-reduced-motion: reduce) {
   .favorite-sidebar-item,
+  .favorite-sidebar-item__trigger,
   .favorite-sidebar-item__panel,
   .favorite-sidebar-item__band,
   .favorite-sidebar-item__band-clip > img,

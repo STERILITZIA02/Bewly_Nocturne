@@ -1,3 +1,5 @@
+import { asRecord } from '~/utils/plainObject'
+
 import type {
   MessageBlockWordsData,
   MessageServerSettingField,
@@ -19,12 +21,6 @@ export const MESSAGE_SERVER_SETTING_VALUES = {
 export const MESSAGE_SERVER_SETTING_FIELDS = Object.freeze(
   Object.keys(MESSAGE_SERVER_SETTING_VALUES) as MessageServerSettingField[],
 )
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
 
 function isSuccessfulResponse(value: unknown): value is MessageServerSettingsApiResponse<unknown> {
   const response = asRecord(value)

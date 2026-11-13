@@ -14,6 +14,63 @@ function deferred() {
 }
 
 export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, flush }) {
+  check('audit search cards: shared posters retain metadata, destination and selectable episodes', async () => {
+    const host = document.body.appendChild(document.createElement('div'))
+    const i18n = { useI18n: () => ({ t: (key, values) => `${key}${values ? ` ${Object.values(values).join(' ')}` : ''}` }) }
+    const link = { props: ['href'], setup: (props, { slots }) => () => Vue.h('a', { href: props.href }, slots.default?.()) }
+    const card = await compileComponent('../src/components/BangumiCard/BangumiCard.vue', {
+      '~/components/ALink.vue': { default: link },
+      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }) },
+      '~/composables/useVideoCardSharedStyles': { useVideoCardSharedStyles: () => ({ textStyle: Vue.ref({}) }) },
+      '~/utils/main': { removeHttpFromUrl: value => value },
+      './BangumiCardSkeleton.vue': { default: { render: () => null } },
+    })
+    const episodes = await compileComponent('../src/components/MediaEpisodeSelect/MediaEpisodeSelect.vue', {
+      'vue-i18n': i18n,
+      '@vueuse/core': { onClickOutside: () => () => {} },
+      '~/components/ALink.vue': { default: link },
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ mainAppRef: Vue.ref(host) }) },
+      '~/composables/useFloatingMenuPosition': { useFloatingMenuPosition: () => ({ position: Vue.ref({ top: 0, left: 0, width: 240, maxHeight: 300, openUp: false }), scheduleUpdate() {}, start() {}, stop() {} }) },
+      '~/constants/layout': await import('../src/constants/layout'),
+    })
+    const SearchCard = await compileComponent('../src/contentScripts/views/SearchResults/components/SearchMediaCard.vue', {
+      'vue-i18n': i18n,
+      '~/components/BangumiCard/BangumiCard.vue': { default: card },
+      '~/components/MediaEpisodeSelect/MediaEpisodeSelect.vue': { default: episodes },
+      '../searchTransforms': await loadSourceModule('../src/contentScripts/views/SearchResults/searchTransforms.ts', {
+        '~/utils/advertising': await import('../src/utils/advertising'),
+      }),
+    })
+    const item = Vue.ref({ season_id: 1, title: '<em class="keyword">Anime</em>', url: 'https://www.bilibili.com/bangumi/play/ss1', cover: '//example.test/cover.jpg', evaluate: 'Full description', styles: ['Drama'], areas: [{ name: 'Japan' }], media_score: { score: 9.4 }, eps: [{ id: 10, title: '1', url: 'https://www.bilibili.com/bangumi/play/ep10' }] })
+    const app = Vue.createApp({ setup: () => () => Vue.h(SearchCard, { item: item.value }) })
+    app.config.globalProperties.$t = key => key
+    try {
+      app.mount(host)
+      assert.equal(host.querySelector('.bangumi-card__title').textContent.trim(), 'Anime')
+      assert.equal(host.querySelector('.bangumi-card__overlay').getAttribute('href'), item.value.url)
+      assert.ok(host.querySelector('.search-media-caption').textContent.includes('9.4'))
+      assert.ok(host.querySelector('.search-media-caption').textContent.includes('Japan'))
+      assert.ok(host.querySelector('.bangumi-card__details').textContent.includes('Full description'))
+      assert.ok(host.querySelector('.bangumi-card__details').textContent.includes('Drama'))
+      host.querySelector('.select-button').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }))
+      await flush()
+      assert.equal(host.querySelector('.dropdown-item').getAttribute('href'), item.value.eps[0].url)
+      host.querySelector('.select-button').click()
+      await flush()
+      item.value = { type: 'media_ft', media_id: 2, title: 'Film', goto_url: 'https://www.bilibili.com/bangumi/play/ep20', cover: '//example.test/film.jpg', desc: 'Film description', styles: 'Documentary', areas: 'UK', index_show: 'Complete', media_score: { score: 8.5 }, eps: [{ id: 20, title: 'Main', url: 'https://www.bilibili.com/bangumi/play/ep20' }] }
+      await flush()
+      assert.equal(host.querySelector('.bangumi-card__overlay').getAttribute('href'), item.value.goto_url)
+      assert.ok(host.querySelector('.search-media-caption').textContent.includes('Complete'))
+      host.querySelector('.select-button').click()
+      await flush()
+      assert.equal(host.querySelector('.dropdown-item').getAttribute('href'), item.value.eps[0].url)
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
   const buttonStub = {
     props: ['type', 'label', 'size'],
     emits: ['click'],

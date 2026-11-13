@@ -21,9 +21,17 @@ interface Dependencies {
 
 /** Folder metadata/editor lifecycle is independent of the video grid and pagination. */
 export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, error, confirm }: Dependencies) {
-  const editor = reactive({ visible: false, closing: false, id: 0, loading: false, failed: false })
+  const editor = reactive({
+    phase: 'hidden' as 'hidden' | 'loading' | 'editing' | 'failed' | 'closing',
+    id: 0,
+    get visible() { return this.phase !== 'hidden' },
+    get closing() { return this.phase === 'closing' },
+    get loading() { return this.phase === 'loading' },
+    get failed() { return this.phase === 'failed' },
+  })
   const form = ref<FavoriteFolderForm>({ title: '', intro: '', cover: '', privacy: 0 })
-  const busy = ref(false)
+  const operation = ref<'idle' | 'saving' | 'pinning' | 'cleaning' | 'like' | 'subscribe'>('idle')
+  const busy = computed(() => operation.value !== 'idle')
   const pending = computed(() => busy.value || writes.pending.value)
   const info = ref<Info>()
   const infoFailed = ref(false)
@@ -78,7 +86,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
     editorController?.abort()
     const version = ++editorVersion
     const owner = data.capture()
-    Object.assign(editor, { visible: true, closing: false, id, loading: Boolean(id), failed: false })
+    Object.assign(editor, { phase: id ? 'loading' : 'editing', id })
     form.value = { title: '', intro: '', cover: '', privacy: 0 }
     if (!id)
       return
@@ -93,11 +101,11 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
     }
     catch {
       if (owner.isCurrent() && version === editorVersion)
-        editor.failed = true
+        editor.phase = 'failed'
     }
     finally {
-      if (owner.isCurrent() && version === editorVersion)
-        editor.loading = false
+      if (owner.isCurrent() && version === editorVersion && editor.phase === 'loading')
+        editor.phase = 'editing'
     }
   }
 
@@ -106,13 +114,12 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
       return
     editorVersion++
     editorController?.abort()
-    editor.visible = false
-    editor.closing = false
+    editor.phase = 'hidden'
   }
 
   async function save(value: FavoriteFolderForm, file?: File) {
     const owner = data.capture()
-    if (pending.value || editor.closing || editor.loading || editor.failed || !owner.isCurrent())
+    if (pending.value || editor.phase !== 'editing' || !owner.isCurrent())
       return
     const draft = { ...value, title: value.title.trim() }
     if (!draft.title || draft.title.length > FAVORITE_FOLDER_TITLE_LIMIT || draft.intro.length > FAVORITE_FOLDER_INTRO_LIMIT) {
@@ -126,7 +133,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
     const id = editor.id
     const version = ++operationVersion
     const csrf = getCSRF()
-    busy.value = true
+    operation.value = 'saving'
     const current = () => owner.isCurrent() && version === operationVersion
     try {
       if (file) {
@@ -148,7 +155,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
         return
       // Commit the closed state before refreshing; keep the view alive only for
       // its exit. A slow/failed refresh must never invite duplicate creation.
-      editor.closing = true
+      editor.phase = 'closing'
       await data.getFavoriteCategories()
       if (!current())
         return
@@ -179,7 +186,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
     }
     finally {
       if (version === operationVersion)
-        busy.value = false
+        operation.value = 'idle'
     }
   }
 
@@ -188,7 +195,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
       return
     const owner = data.capture()
     const version = ++operationVersion
-    busy.value = true
+    operation.value = 'pinning'
     try {
       // Sort the authoritative complete list; do not overwrite folders created in another tab.
       data.invalidateReads()
@@ -209,7 +216,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
     }
     finally {
       if (version === operationVersion)
-        busy.value = false
+        operation.value = 'idle'
     }
   }
 
@@ -218,7 +225,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
       return
     const transaction = writes.prepare({ kind: 'clean', folderId: id })
     const version = ++operationVersion
-    busy.value = true
+    operation.value = 'cleaning'
     try {
       if (!await confirm('favorites.clean_invalid_confirm'))
         return
@@ -233,7 +240,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
     }
     finally {
       if (version === operationVersion)
-        busy.value = false
+        operation.value = 'idle'
     }
   }
 
@@ -248,7 +255,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
     if (kind === 'subscribe' && String(mid) === String(transaction.owner.accountId))
       return
     const version = ++operationVersion
-    busy.value = true
+    operation.value = kind
     try {
       const result = await writes.execute(transaction)
       if (!result || result.kind !== kind || !transaction.owner.isCurrent() || version !== operationVersion)
@@ -269,7 +276,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
     }
     finally {
       if (version === operationVersion)
-        busy.value = false
+        operation.value = 'idle'
     }
   }
 
@@ -278,9 +285,8 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
     editorVersion++
     infoController?.abort()
     editorController?.abort()
-    editor.visible = false
-    editor.closing = false
-    busy.value = false
+    editor.phase = 'hidden'
+    operation.value = 'idle'
     info.value = undefined
     infoFailed.value = false
     infoLoading.value = false

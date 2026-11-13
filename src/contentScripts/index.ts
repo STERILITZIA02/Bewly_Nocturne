@@ -35,6 +35,7 @@ import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
+import { isFestivalPage } from '~/utils/festivalPage'
 import { supportsHighlightInheritance } from '~/utils/highlightInheritance'
 import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
@@ -228,10 +229,6 @@ if (shouldInitializeContentScript && isHomePage()) {
     time: new Date().toLocaleString(),
     version,
   })
-}
-
-function isFestivalPage(): boolean {
-  return /https?:\/\/(?:www\.)?bilibili\.com\/festival\/.*/.test(document.URL)
 }
 
 function isSupportedPages(): boolean {

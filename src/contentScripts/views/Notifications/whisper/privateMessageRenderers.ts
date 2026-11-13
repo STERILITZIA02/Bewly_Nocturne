@@ -1,5 +1,6 @@
 import type { PrivateMessage } from '~/background/privateMessage/types'
 import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
+import { asRecord } from '~/utils/plainObject'
 
 export type ParsedPrivateMessageContent
   = | PrivateMessageTextContent
@@ -194,12 +195,6 @@ interface PrivateMessageRenderer {
 
 const CONTENT_LOSSLESS_FIELDS = new Set(['id', 'rid', 'sourceID'])
 const URL_PATTERN = /https?:\/\/\S+/giu
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
 
 function parseContentRecord(content: string): Record<string, unknown> | null {
   try {

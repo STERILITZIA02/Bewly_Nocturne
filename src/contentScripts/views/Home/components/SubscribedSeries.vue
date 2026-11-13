@@ -9,6 +9,7 @@ import type { DataItem as MomentItem, MomentResult } from '~/models/moment/momen
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveCookieMatchedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
+import { jumpToLoginPage } from '~/utils/bilibiliLogin'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { getUserID } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
@@ -268,10 +269,6 @@ async function handleLoadMore() {
   }
 }
 
-function jumpToLoginPage() {
-  location.href = 'https://passport.bilibili.com/login'
-}
-
 defineExpose({ initData })
 </script>
 
@@ -336,7 +333,7 @@ defineExpose({ initData })
   color: var(--bew-theme-foreground);
   font-weight: var(--bew-font-weight-regular);
   &:hover {
-    background: var(--bew-fill-1);
+    background: var(--bew-hover-bg);
   }
 }
 .series-updates {
@@ -347,7 +344,7 @@ defineExpose({ initData })
     color: var(--bew-text-2);
     cursor: pointer;
     &:hover {
-      background: var(--bew-fill-1);
+      background: var(--bew-hover-bg);
     }
   }
 }
@@ -365,7 +362,7 @@ defineExpose({ initData })
   overflow-wrap: anywhere;
   color: var(--bew-text-1);
   &:hover {
-    background: var(--bew-fill-1);
+    background: var(--bew-hover-bg);
   }
 }
 .series-update-time {

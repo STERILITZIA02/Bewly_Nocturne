@@ -2,12 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import ContentFilterEntry from '~/components/ContentFilterEntry.vue'
 import type { LibraryFilterGroup } from '~/components/LibraryFilterMenu.vue'
 import LibraryFilterMenu from '~/components/LibraryFilterMenu.vue'
 import LibrarySearchField from '~/components/LibrarySearchField.vue'
 import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import { useBewlyApp } from '~/composables/useAppProvider'
+import { MOMENT_TYPE_FILTER_OPTIONS } from '~/constants/momentFilters'
 import { settings } from '~/logic'
 import { vLayoutEditable } from '~/logic/layoutEdit'
 import { numFormatter } from '~/utils/dataFormatter'
@@ -35,6 +36,7 @@ const emit = defineEmits<{
   (event: 'search', value: MomentSearch): void
 }>()
 const { t } = useI18n()
+const { openSettingsAt } = useBewlyApp()
 const options = computed(() => (['all', 'video', 'draw', 'pgc', 'article'] as const).map(value => ({ value, label: t(`moments.filter_${value}`) })))
 const stats = [
   { key: 'following', path: 'fans/follow', label: 'moments.following' },
@@ -57,13 +59,36 @@ function submitKeyword() {
 }
 const KIND_ICONS = { all: 'i-tabler:list', original: 'i-tabler:pencil', forward: 'i-tabler:repeat', video: 'i-tabler:video', draw: 'i-tabler:photo', live: 'i-tabler:broadcast', article: 'i-tabler:article' } as const
 const TIME_ICONS = { all: 'i-tabler:infinity', day: 'i-tabler:clock', week: 'i-tabler:calendar-week', month: 'i-tabler:calendar-month', year: 'i-tabler:calendar' } as const
-const filterActive = computed(() => props.search.kind !== 'all' || props.search.time !== 'all')
+// The funnel also holds the persistent content filter (the old separate
+// "Moments filter" entry): shown types the search's type choice does not
+// already offer, the keyword filter and a way to the full settings.
+const SHOWN_TYPES = MOMENT_TYPE_FILTER_OPTIONS.filter(option => !('searchKind' in option))
+const filterActive = computed(() => props.search.kind !== 'all' || props.search.time !== 'all'
+  || settings.value.momentsEnableKeywordFilter || MOMENT_TYPE_FILTER_OPTIONS.some(option => settings.value[option.setting]))
 const filterGroups = computed<LibraryFilterGroup[]>(() => [
   { key: 'kind', title: t('moments.search_type'), value: props.search.kind, options: MOMENT_KINDS.map(kind => ({ value: kind, label: t(`moments.search_kind_${kind}`), icon: KIND_ICONS[kind] })) },
   { key: 'time', title: t('moments.search_time'), value: props.search.time, options: MOMENT_TIME_RANGES.map(time => ({ value: time, label: t(`moments.search_time_${time}`), icon: TIME_ICONS[time] })) },
+  { key: 'shown', title: t('settings.moments_shown_types'), toggle: true, options: SHOWN_TYPES.map(option => ({ value: option.setting, label: t(option.labelKey), icon: option.icon, checked: !settings.value[option.setting] })) },
+  { key: 'filter', title: t('settings.moments_filter_entry'), toggle: true, options: [
+    { value: 'keyword', label: t('settings.moments_enable_keyword_filter'), icon: 'i-tabler:letter-case', checked: settings.value.momentsEnableKeywordFilter },
+    { value: 'settings', label: t('settings.filter_settings'), icon: 'i-tabler:settings', action: true, leaves: true },
+  ] },
 ])
 function selectFilter(key: string, value: string) {
-  emit('search', { ...props.search, keyword: keyword.value.trim(), [key]: value })
+  if (key === 'shown') {
+    const option = SHOWN_TYPES.find(option => option.setting === value)
+    if (option)
+      settings.value[option.setting] = !settings.value[option.setting]
+  }
+  else if (key === 'filter') {
+    if (value === 'keyword')
+      settings.value.momentsEnableKeywordFilter = !settings.value.momentsEnableKeywordFilter
+    else
+      openSettingsAt({ category: 'bewly-pages', page: 'moments', settingId: 'settings.moments_filtered_types' })
+  }
+  else {
+    emit('search', { ...props.search, keyword: keyword.value.trim(), [key]: value })
+  }
 }
 </script>
 
@@ -81,7 +106,6 @@ function selectFilter(key: string, value: string) {
         <LibraryFilterMenu :label="t('moments.search_filter')" :groups="filterGroups" @select="selectFilter" />
       </template>
     </LibrarySearchField>
-    <ContentFilterEntry kind="moments" />
     <div
       v-if="settings.momentsSidebarShowUserCard || settings.momentsSidebarShowPublish || settings.momentsSidebarShowLive"
       class="moments-sidebar__modules"
@@ -127,7 +151,7 @@ function selectFilter(key: string, value: string) {
         <i i-tabler:external-link aria-hidden="true" />
       </a>
       <section v-if="settings.momentsSidebarShowLive && (loading || liveUsers.length)" class="moments-live-card" :aria-busy="loading">
-        <header><strong>{{ t('moments.live_now') }}</strong><span v-if="!loading || liveUsers.length">{{ liveCount }}</span></header>
+        <header><strong>{{ t('moment_card.live_now') }}</strong><span v-if="!loading || liveUsers.length">{{ liveCount }}</span></header>
         <div class="moments-live-card__list">
           <template v-if="loading && !liveUsers.length">
             <div v-for="index in 5" :key="index" class="moments-live-card__row" data-bew-skeleton-group aria-hidden="true">
@@ -282,7 +306,7 @@ function selectFilter(key: string, value: string) {
     line-height: var(--bew-line-height-caption);
   }
   &:hover {
-    background: var(--bew-fill-1);
+    background: var(--bew-hover-bg);
   }
 }
 .moments-publish-link {

@@ -11,6 +11,14 @@
   align-items: stretch;
 }
 
+.bew-grid-adaptive-poster {
+  display: grid;
+  column-gap: var(--bew-grid-gutter);
+  row-gap: var(--bew-card-row-gap);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--bew-poster-card-min-width)), 1fr));
+  align-items: start;
+}
+
 .bew-grid-two-columns {
   display: grid;
   column-gap: var(--bew-layout-content-gap);

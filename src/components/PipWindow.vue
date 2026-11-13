@@ -24,11 +24,10 @@ const currentUrl = ref<string>(props.url)
 const { isDark, appearanceStyle, accentColor, motionPreference } = useDark()
 let pipHost: HTMLElement | null = null
 let disposed = false
-let closing = false
-let closed = false
+let phase: 'opening' | 'open' | 'closing' | 'closed' = 'opening'
 const externalHref = computed(() => resolveIframeExternalUrl(iframeRef.value, '', currentUrl.value))
 watch(() => props.url, (url) => {
-  if (!disposed && !closing && !closed)
+  if (!disposed && (phase === 'opening' || phase === 'open'))
     currentUrl.value = url
 })
 
@@ -90,7 +89,7 @@ async function openPipWindow() {
       await handleClose()
       return
     }
-    if (disposed || closing || closed) {
+    if (disposed || phase !== 'opening') {
       openedWindow.close()
       return
     }
@@ -111,6 +110,7 @@ async function openPipWindow() {
     applyPipColors()
 
     openedWindow.addEventListener('pagehide', handleClose, { once: true })
+    phase = 'open'
   }
   else {
     const width = window.innerWidth * 0.8
@@ -127,7 +127,7 @@ function syncExternalHref(event: Event) {
 }
 
 function openInNewTab(event: MouseEvent) {
-  if (closing || disposed || closed) {
+  if (disposed || phase === 'closing' || phase === 'closed') {
     event.preventDefault()
     return
   }
@@ -140,10 +140,10 @@ function openInNewTab(event: MouseEvent) {
 }
 
 async function handleClose() {
-  if (closing || closed)
+  if (phase === 'closing' || phase === 'closed')
     return
 
-  closing = true
+  phase = 'closing'
   await releaseIframeResources()
   try {
     pipWindowEl.value?.close()
@@ -153,8 +153,7 @@ async function handleClose() {
   }
   pipWindowEl.value = null
   pipHost = null
-  closed = true
-  closing = false
+  phase = 'closed'
   if (!disposed)
     emit('close')
 }

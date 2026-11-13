@@ -134,7 +134,77 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       void loadNextPage()
   }, { flush: 'post' })
 
-  async function initData() {
+  function snapshot() {
+    if (!lifetime.capture().isCurrent() || isLoading.value || isFullPageLoading.value
+      || categoryState.loading || subscriptionState.loading || categoryState.failed || subscriptionState.failed
+      || failedContentPage.value !== null || stalledContentPage.value !== null || repair || categoriesDirty) {
+      return
+    }
+    return {
+      account: viewAccount,
+      categories: favoriteCategories.slice(),
+      seasons: collectedFavoriteSeasons.slice(),
+      resources: favoriteResources.slice(),
+      articles: favoriteArticles.slice(),
+      otherItems: otherFavoriteItems.slice(),
+      categoryState: { ...categoryState },
+      subscriptionState: { ...subscriptionState },
+      covers: { ...folderCoverLoader.covers },
+      resourcePages: new Map(resourcePages),
+      articleIds: new Set(articleIds),
+      otherItemIds: new Set(otherItemIds),
+      otherCounts: { ...otherFavoriteCounts },
+      keywords: { ...keywords },
+      view: favoriteView.value,
+      categoryId: selectedCategory.value?.id,
+      seasonKey: selectedSeason.value && getFavoriteSourceKey(selectedSeason.value),
+      cover: activatedCategoryCover.value,
+      page: currentPageNum.value,
+      searchScope: searchScope.value,
+      videoOrder: videoOrder.value,
+      subscriptionFilter: subscriptionFilter.value,
+      otherType: otherFavoriteType.value,
+      otherSearchScope: otherSearchScope.value,
+      noMore: noMoreContent.value,
+      seasonComplete: loadedSeasonComplete.value,
+      articleCount: articleFavoriteCount.value,
+      articleOffset: articleFavoriteOffset.value,
+    }
+  }
+
+  async function initData(saved?: ReturnType<typeof snapshot>) {
+    if (saved && saved.account === viewAccount && lifetime.capture().isCurrent()) {
+      favoriteCategories.splice(0, favoriteCategories.length, ...saved.categories)
+      collectedFavoriteSeasons.splice(0, collectedFavoriteSeasons.length, ...saved.seasons)
+      favoriteResources.splice(0, favoriteResources.length, ...saved.resources)
+      favoriteArticles.splice(0, favoriteArticles.length, ...saved.articles)
+      otherFavoriteItems.splice(0, otherFavoriteItems.length, ...saved.otherItems)
+      Object.assign(categoryState, saved.categoryState)
+      Object.assign(subscriptionState, saved.subscriptionState)
+      Object.assign(keywords, saved.keywords)
+      Object.assign(otherFavoriteCounts, saved.otherCounts)
+      for (const [id, cover] of Object.entries(saved.covers))
+        folderCoverLoader.seed(Number(id), cover)
+      saved.resourcePages.forEach((keys, page) => resourcePages.set(page, keys))
+      saved.articleIds.forEach(id => articleIds.add(id))
+      saved.otherItemIds.forEach(id => otherItemIds.add(id))
+      favoriteView.value = saved.view
+      selectedCategory.value = favoriteCategories.find(folder => folder.id === saved.categoryId)
+      selectedSeason.value = collectedFavoriteSeasons.find(season => getFavoriteSourceKey(season) === saved.seasonKey)
+      activatedCategoryCover.value = saved.cover
+      currentPageNum.value = saved.page
+      searchScope.value = saved.searchScope
+      videoOrder.value = saved.videoOrder
+      subscriptionFilter.value = saved.subscriptionFilter
+      otherFavoriteType.value = saved.otherType
+      otherSearchScope.value = saved.otherSearchScope
+      noMoreContent.value = saved.noMore
+      loadedSeasonComplete.value = saved.seasonComplete
+      articleFavoriteCount.value = saved.articleCount
+      articleFavoriteOffset.value = saved.articleOffset
+      isFullPageLoading.value = false
+      return
+    }
     reader.invalidate()
     if (!lifetime.capture().isCurrent()) {
       isFullPageLoading.value = false
@@ -810,6 +880,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     articleFavoriteCount,
     articleFavoriteOffset,
     initData,
+    snapshot,
     getFavoriteCategories,
     retryFavoritesBootstrap,
     loadSelectedContent,

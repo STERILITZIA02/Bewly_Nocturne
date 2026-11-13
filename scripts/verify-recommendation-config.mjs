@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
@@ -152,10 +151,6 @@ export function registerRecommendationConfigChecks(check, { Vue, flush, compileC
       mode.selectRecommendationMode('webNoCookie')
       assert.equal(mode.getRecommendationModeOption(), 'webNoCookie')
       assert.equal(settings.value.desktopColumns, 5)
-      const switcher = await readFile(new URL('../src/contentScripts/views/Home/components/RecommendationModeSwitcher.vue', import.meta.url), 'utf8')
-      assert.match(switcher, /v-if="visibleOptions.length"/)
-      const preferences = await readFile(new URL('../src/components/Settings/PluginComponentsAndPages/Home/Home.vue', import.meta.url), 'utf8')
-      assert.match(preferences, /:options="recommendationModeOptions"/)
     }
     finally {
       stop()
@@ -185,6 +180,7 @@ export function registerRecommendationConfigChecks(check, { Vue, flush, compileC
     }
     const provider = { haveScrollbar: async () => true, handleBackToTop() {}, ...Object.fromEntries(['handleReachBottom', 'handlePageRefresh', 'undoForwardState', 'handleUndoRefresh', 'handleForwardRefresh'].map(key => [key, Vue.ref()])) }
     const owners = []
+    const filtersActive = Vue.ref(true)
     const statRequests = []
     const statsApi = { video: { getVideoInfo({ aid: aidString }, { signal }) {
       const aid = Number(aidString)
@@ -235,7 +231,7 @@ export function registerRecommendationConfigChecks(check, { Vue, flush, compileC
         './recommendationFeed': await import('../src/contentScripts/views/Home/recommendationFeed'),
         './recommendationState': await import('../src/contentScripts/views/Home/recommendationState'),
         './useRecommendationHistory': await import('../src/contentScripts/views/Home/useRecommendationHistory'),
-        './useRecommendationFilters': { useRecommendationFilters: () => ({ filterFunc: Vue.ref(null), appFilterFunc: Vue.ref(async items => items.map(() => true)), hasActiveWebRecommendationFilter: Vue.ref(true), hasActiveAppRecommendationFilter: Vue.ref(true), hasActiveRecommendationFilter: Vue.ref(true), requiresManualFilteredPaging: Vue.ref(false), recommendationFilterSettingsSignature: Vue.computed(() => JSON.stringify([settings.value.enableFilterByLikeCount, settings.value.filterByLikeCount])), resetFilteredFeedPagingState() {}, recordFilteredFeedBatch() {} }) },
+        './useRecommendationFilters': { useRecommendationFilters: () => ({ filterFunc: Vue.ref(null), appFilterFunc: Vue.ref(async items => items.map(() => true)), hasActiveWebRecommendationFilter: filtersActive, hasActiveAppRecommendationFilter: filtersActive, hasActiveRecommendationFilter: filtersActive, requiresManualFilteredPaging: Vue.ref(false), recommendationFilterSettingsSignature: Vue.computed(() => JSON.stringify([settings.value.enableFilterByLikeCount, settings.value.filterByLikeCount])), resetFilteredFeedPagingState() {}, recordFilteredFeedBatch() {} }) },
         './useWebRecommendationCursor': await loadSourceModule('../src/contentScripts/views/Home/useWebRecommendationCursor.ts', { '~/logic': { settings, noCookieForYouRecommendationState: Vue.ref({ showlistGroups: [], nextFreshIdx: 1 }) } }),
       })
       const host = document.body.appendChild(document.createElement('div'))
@@ -388,6 +384,24 @@ export function registerRecommendationConfigChecks(check, { Vue, flush, compileC
       statRequests.at(-1).pending.resolve({ code: 0, data: { aid: 11, stat: { like: 201 } } })
       await flush()
       assert.deepEqual(Array.from(fifth.state.currentVideoList.value, row => row.item.param), ['11'])
+      fifth.stop()
+      filtersActive.value = false
+      settings.value.enableFilterByLikeCount = false
+      const viewport = deferred()
+      let viewportReads = 0
+      provider.haveScrollbar = () => {
+        viewportReads++
+        return viewport.promise
+      }
+      const retiring = await mount()
+      requests.at(-1).pending.resolve(response(20))
+      await flush()
+      assert.equal(viewportReads, 1)
+      retiring.slots.get('appConsecutiveEmptyLoads').value = 5
+      retiring.stop()
+      viewport.resolve(false)
+      await flush()
+      assert.equal(retiring.state.noMoreContent.value, false, 'a late viewport measurement cannot commit an exhausted cursor to the retired feed')
     }
     finally {
       for (const owner of owners)

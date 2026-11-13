@@ -64,8 +64,8 @@ export function updateCommentReplyPageControl(renderer: HTMLElement, options: {
       .${COMMENT_REPLY_PAGE_CONTROL_CLASS} input, .${COMMENT_REPLY_PAGE_CONTROL_CLASS} button { box-sizing: border-box; min-height: var(--bew-control-height-sm, 28px); border: 0; border-radius: var(--bew-interactive-radius, 8px); font: inherit; color: var(--bew-text-1, var(--text1)); background: var(--bew-content-solid, var(--bg2)); padding-inline: var(--bew-space-2, 8px); }
       .${COMMENT_REPLY_PAGE_CONTROL_CLASS} input { width: 8ch; }
       .${COMMENT_REPLY_PAGE_CONTROL_CLASS} button { cursor: pointer; }
-      .${COMMENT_REPLY_PAGE_CONTROL_CLASS} button:hover { background: var(--bew-theme-surface, var(--graph_bg_regular)); }
-      .${COMMENT_REPLY_PAGE_CONTROL_CLASS} button:active { background: var(--bew-theme-surface-hover, var(--graph_bg_thick)); }
+      .${COMMENT_REPLY_PAGE_CONTROL_CLASS} button:hover { background: var(--bew-selected-bg, var(--graph_bg_regular)); }
+      .${COMMENT_REPLY_PAGE_CONTROL_CLASS} button:active { background: var(--bew-pressed-bg, var(--graph_bg_thick)); }
       .${COMMENT_REPLY_PAGE_CONTROL_CLASS} :focus-visible { outline: var(--bew-focus-ring, 1px solid CanvasText); outline-offset: 2px; }
     `
     root.append(style)

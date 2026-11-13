@@ -101,13 +101,13 @@ defineExpose({
 
 .article-search-page {
   width: 100%;
-  padding-bottom: 2rem;
+  padding-bottom: var(--bew-space-8);
 }
 
 .article-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: var(--bew-grid-gutter);
 
   @media (max-width: breakpoints.$grid-md) {
     grid-template-columns: 1fr;
@@ -115,13 +115,13 @@ defineExpose({
 }
 
 .error-message {
-  padding: 2rem;
+  padding: var(--bew-space-8);
   text-align: center;
   color: var(--bew-error-color);
 }
 
 .empty-state {
-  padding: 2rem;
+  padding: var(--bew-space-8);
   text-align: center;
   color: var(--bew-text-2);
 }

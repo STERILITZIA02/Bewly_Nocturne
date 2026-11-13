@@ -211,7 +211,7 @@ export function registerCompatibleAChecks(check, { Vue, flush, compileComponent 
       'vue-toastification': { useToast: () => ({ error() {} }) },
       '~/components/Empty.vue': { default: { render: () => null } },
       '~/components/Tooltip.vue': { default: { props: ['content', 'placement', 'teleport'], setup: (_props, { slots }) => () => slots.default?.() } },
-      '~/composables/useOptimizedScroll': { useOptimizedScroll() {} },
+      '~/composables/useLoadMoreSentinel': { useLoadMoreSentinel() {} },
       '~/stores/topBarStore': { useTopBarStore: () => store },
       '~/utils/accountLifetime': await import('../src/utils/accountLifetime'),
       '~/utils/accountScope': await import('../src/utils/accountScope'),

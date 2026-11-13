@@ -14,9 +14,10 @@ interface WidescreenLoadingActions {
 }
 
 export function createWidescreenLoading(actions: WidescreenLoadingActions) {
-  let loadingOverlay: HTMLElement | null = null
-
-  let loadingStyleEl: HTMLStyleElement | null = null
+  let surface:
+    | { phase: 'hidden' }
+    | { phase: 'visible' | 'leaving', overlay: HTMLElement, style: HTMLStyleElement }
+      = { phase: 'hidden' }
 
   let loadingFadeTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -28,15 +29,18 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
 
   let loadingExitTimer: ReturnType<typeof setTimeout> | undefined
 
-  let loadingMayDismissOnPlaying = false
-
-  let loadingSuppressedUntilExit = false
+  let dismissal: 'layout' | 'playing' | 'suppressed' = 'layout'
 
   function showWidescreenLoading() {
-    if (loadingOverlay)
+    if (surface.phase === 'visible')
       return
+    if (surface.phase === 'leaving') {
+      const policy = dismissal
+      removeWidescreenLoading(true)
+      dismissal = policy
+    }
 
-    loadingStyleEl = injectLoadingStyle()
+    const style = injectLoadingStyle()
 
     const overlay = document.createElement('div')
     overlay.id = LOADING_ROOT_ID
@@ -59,11 +63,11 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
     overlay.appendChild(content)
     const mountTarget = document.body ?? document.documentElement
     mountTarget.appendChild(overlay)
-    loadingOverlay = overlay
+    surface = { phase: 'visible', overlay, style }
 
     loadingExitTimer = setTimeout(() => {
       loadingExitTimer = undefined
-      if (loadingOverlay !== overlay)
+      if (surface.phase !== 'visible' || surface.overlay !== overlay)
         return
 
       const exitButton = document.createElement('button')
@@ -97,17 +101,18 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
     // commits; only an automatic continuation may keep its video in view.
     if (session.entering || session.current)
       return false
-    return loadingMayDismissOnPlaying
+    return dismissal === 'playing'
   }
 
   function dismissWidescreenLoadingForPlaying() {
-    loadingSuppressedUntilExit = true
+    dismissal = 'suppressed'
     removeWidescreenLoading()
   }
 
   function removeWidescreenLoading(immediate = false) {
     loadingPlaybackCleanup?.()
-    loadingMayDismissOnPlaying = false
+    if (dismissal !== 'suppressed')
+      dismissal = 'layout'
 
     if (loadingExitTimer) {
       clearTimeout(loadingExitTimer)
@@ -128,29 +133,29 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
       loadingFadeFrame = undefined
     }
 
-    const overlay = loadingOverlay
-    const styleEl = loadingStyleEl
-    if (!overlay && !styleEl)
+    const retiring = surface
+    if (retiring.phase === 'hidden')
       return
+    const { overlay, style } = retiring
 
     const remove = () => {
-      overlay?.remove()
-      styleEl?.remove()
-      if (loadingOverlay === overlay)
-        loadingOverlay = null
-      if (loadingStyleEl === styleEl)
-        loadingStyleEl = null
-      loadingFadeTimer = undefined
+      overlay.remove()
+      style.remove()
+      if (surface === retiring) {
+        surface = { phase: 'hidden' }
+        loadingFadeTimer = undefined
+      }
     }
 
-    if (immediate || !overlay) {
+    if (immediate) {
       remove()
       return
     }
 
+    retiring.phase = 'leaving'
     loadingFadeFrame = requestAnimationFrame(() => {
       loadingFadeFrame = undefined
-      if (loadingOverlay === overlay && overlay.isConnected) {
+      if (surface === retiring && overlay.isConnected) {
         // The player ring closes while the overlay fades out.
         overlay.setAttribute('data-bew-loading-complete', '')
         overlay.classList.add('is-leaving')
@@ -160,13 +165,14 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
   }
 
   function prepare(allowPlayingDismiss = false) {
-    if (session.current || loadingSuppressedUntilExit)
+    if (session.current || dismissal === 'suppressed')
       return
 
-    loadingMayDismissOnPlaying ||= allowPlayingDismiss
+    if (allowPlayingDismiss)
+      dismissal = 'playing'
     showWidescreenLoading()
     const video = getVideoElement()
-    if (loadingOverlay
+    if (surface.phase !== 'hidden'
       && video
       && !video.paused
       && !video.ended
@@ -175,7 +181,7 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
       return
     }
 
-    if (!loadingOverlay)
+    if (surface.phase === 'hidden')
       return
 
     if (!loadingPreparationFallbackTimer) {
@@ -183,7 +189,7 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
         loadingPreparationFallbackTimer = undefined
         if (session.entering)
           return
-        loadingSuppressedUntilExit = true
+        dismissal = 'suppressed'
         removeWidescreenLoading()
         actions.onPreparationTimeout()
       }, PREPARED_LOADING_TIMEOUT)
@@ -191,18 +197,21 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
   }
 
   function syncLabels() {
-    const loadingLabel = loadingOverlay?.querySelector<HTMLElement>('.bewly-widescreen-loading-label')
+    if (surface.phase === 'hidden')
+      return
+    const loadingLabel = surface.overlay.querySelector<HTMLElement>('.bewly-widescreen-loading-label')
     if (loadingLabel)
       loadingLabel.textContent = t('widescreen.loading')
-    const loadingExitButton = loadingOverlay?.querySelector<HTMLButtonElement>('.bewly-widescreen-loading-exit')
+    const loadingExitButton = surface.overlay.querySelector<HTMLButtonElement>('.bewly-widescreen-loading-exit')
     if (loadingExitButton)
       loadingExitButton.textContent = t('widescreen.exit_loading')
   }
 
   function alignToCurrentLayout() {
     const currentState = session.current
-    if (!loadingOverlay || !currentState)
+    if (surface.phase === 'hidden' || !currentState)
       return
+    const loadingOverlay = surface.overlay
     // The skeleton shares the shell's grid; pin each part to the measured
     // surface so the crossfade has no residual offset.
     for (const [selector, source] of [
@@ -233,7 +242,7 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
   }
 
   function reset() {
-    loadingSuppressedUntilExit = false
+    dismissal = 'layout'
     removeWidescreenLoading(true)
   }
 
@@ -244,6 +253,6 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
     syncLabels,
     alignToCurrentLayout,
     reset,
-    get hasOverlay() { return Boolean(loadingOverlay) },
+    get hasOverlay() { return surface.phase !== 'hidden' },
   }
 }

@@ -144,8 +144,8 @@ onScopeDispose(() => releaseMotion?.())
 }
 
 .collapse-icon {
-  width: 20px;
-  height: 20px;
+  width: var(--bew-icon-size-md);
+  height: var(--bew-icon-size-md);
   flex: 0 0 auto;
   color: var(--bew-text-2);
   font-size: var(--bew-icon-size-md);

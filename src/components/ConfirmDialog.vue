@@ -96,7 +96,7 @@ onBeforeUnmount(() => {
           <CloseButton
             class="bew-confirm-dialog__close"
             :label="$t('common.close')"
-            size="medium"
+            size="md"
             @click="finish(false)"
           />
         </header>

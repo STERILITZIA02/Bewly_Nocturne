@@ -37,6 +37,7 @@ import type { CollectedFavoriteSeason, FavoriteSource } from '~/models/video/fav
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
+import { jumpToLoginPage } from '~/utils/bilibiliLogin'
 import { isFavoriteFolderPrivate } from '~/utils/favoriteFolder'
 import { getFavoriteResourceKey, getFavoriteSourceKey } from '~/utils/favoriteResource'
 import {
@@ -77,6 +78,7 @@ const { handlePageRefresh, handleReachBottom, haveScrollbar, openSettingsAt } = 
 const topBarStore = useTopBarStore()
 const viewOwner = crypto.randomUUID()
 const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
+const viewState = usePageViewState('favorites')
 const data = useFavoritesData({ api: api.favorite, getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null, haveScrollbar, t })
 const { favoriteCategories, collectedFavoriteSeasons, favoriteResources, favoriteView, selectedCategory, selectedSeason, keyword, searchScope, isLoading, isFullPageLoading, bootstrapFailed, failedContentPage, stalledContentPage, noMoreContent, loadedSeasonComplete, articleFavoriteCount, initData, retryFavoritesBootstrap, loadSelectedContent, loadNextPage, retryFavoriteContent, contentVersion, categoryState, subscriptionState, loadMoreSubscriptions } = data
 const { visibleSubscriptions, visibleResources, visibleArticles, folderCovers, loadFolderCover } = data
@@ -91,9 +93,9 @@ const writes = useFavoriteWrites({ api: api.favorite, capture: data.capture, get
 } })
 const folders = useFavoriteFolderManager({ api: { getFavoriteFolderInfo: data.reads.getFavoriteFolderInfo, uploadFavoriteCover: api.favorite.uploadFavoriteCover }, data, writes, getCSRF, notify: notifyTopBarFavoritesChanged, error: key => toast.error(t(key)), confirm: key => showConfirmDialog(t(key)) })
 const { editor: folderEditor, form: folderForm, info: folderInfo, infoLoading: folderInfoLoading, infoFailed: folderInfoFailed, currentFolderId } = folders
-const viewState = usePageViewState('favorites')
+viewState.capture('data', () => writes.pending.value ? undefined : ({ revision: topBarStore.favoriteStateVersion, snapshot: data.snapshot() }))
 const restoredFilter = normalizeFavoriteFilterQuery(viewState.read<FavoriteFilterQuery>('filter', EMPTY_FAVORITE_FILTER))
-const filterKeyword = ref('')
+const filterKeyword = viewState.ref('filterKeyword', '')
 const filterScan = useFavoriteFilterScan({
   api: { getFavoriteResources: data.reads.getFavoriteResources, getFavoritePartitions: api.favorite.getFavoritePartitions },
   invalidatePage: data.invalidateResourcePage,
@@ -413,7 +415,8 @@ function selectRailFilter(key: string, value: string) {
 
 onMounted(() => {
   initPageAction()
-  void initData()
+  const saved = viewState.read<{ revision: number, snapshot: ReturnType<typeof data.snapshot> } | undefined>('data', undefined)
+  void initData(saved?.revision === topBarStore.favoriteStateVersion ? saved?.snapshot : undefined)
 })
 // A keyword from the search bar searches every folder; before the folders
 // arrive, the first load already reads it.
@@ -831,10 +834,6 @@ function handleSubscriptionDirectoryScroll(event: Event) {
   }
 }
 
-function jumpToLoginPage() {
-  location.href = 'https://passport.bilibili.com/login'
-}
-
 async function handleUnfavorite(resource: FavoriteResource) {
   const sourceId = filterActive.value
     ? filterScan.getSourceId(resource as unknown as FavoriteItem) ?? (searchScope.value === 'current' ? selectedCategory.value?.id : undefined)
@@ -1023,7 +1022,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
       </LibraryHeroCarousel>
 
       <Empty
-        v-if="bootstrapFailed" text-only fill :description="t('common.load_failed')" :action-label="t('common.operation.refresh')"
+        v-if="bootstrapFailed" fill :description="t('common.load_failed')" :action-label="t('common.operation.refresh')"
         @action="retryFavoritesBootstrap"
       />
 
@@ -1043,9 +1042,9 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
         <div v-else-if="isLoading || isFullPageLoading" class="article-favorites-grid" aria-hidden="true">
           <ArticleCardSkeleton v-for="index in 6" :key="`favorite-article-initial-${index}`" />
         </div>
-        <Empty v-else-if="failedContentPage === null && stalledContentPage === null" text-only fill role="status" :description="t(keyword.trim() ? 'library_tools.no_matches' : otherFavoriteType === 'course' ? 'favorites.course_empty' : 'common.no_data')" />
+        <Empty v-else-if="failedContentPage === null && stalledContentPage === null" fill role="status" :description="t(keyword.trim() ? 'library_tools.no_matches' : otherFavoriteType === 'course' ? 'favorites.course_empty' : 'common.no_data')" />
         <Empty
-          v-if="(failedContentPage !== null || stalledContentPage !== null) && !isLoading" text-only :fill="!otherCards.length" :description="t('common.load_failed')" role="alert"
+          v-if="(failedContentPage !== null || stalledContentPage !== null) && !isLoading" :fill="!otherCards.length" :description="t('common.load_failed')" role="alert"
           :action-label="t('common.operation.refresh')" @action="retryFavoriteContent"
         />
       </template>
@@ -1053,20 +1052,20 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
       <template v-else>
         <Empty
           v-if="!filterActive && favoriteView === 'video' && searchScope === 'all' && !keyword.trim() && favoriteResources.length === 0 && !isLoading"
-          text-only fill
+          fill
           :description="t('favorites.global_search_hint')"
         />
 
         <!-- A new folder's grid fades in once the old one has faded out. -->
         <Transition name="page-fade" mode="out-in" v-bind="retiringTransition">
           <Empty
-            v-if="!filterActive && favoriteView === 'season' && keyword.trim() && !visibleResources.length && noMoreContent && !isLoading && failedContentPage === null && stalledContentPage === null" text-only fill :description="t('library_tools.no_matches')" role="status"
+            v-if="!filterActive && favoriteView === 'season' && keyword.trim() && !visibleResources.length && noMoreContent && !isLoading && failedContentPage === null && stalledContentPage === null" fill :description="t('library_tools.no_matches')" role="status"
           />
           <VideoCardGrid
             v-else
             ref="resourceGrid"
             :key="favoriteGridStateKey"
-            text-only-states
+            inline-states
             :state-key="favoriteGridStateKey"
             :items="gridItems"
             :transform-item="transformFavoriteItem"
@@ -1180,7 +1179,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
           <div v-if="isManagingFolder" class="sidebar-manage-bar">
             <button class="sidebar-manage-select" :aria-pressed="isAllFoldersSelected" :disabled="isSidebarOperating" @click="toggleSelectAllFolders">
               <span :class="isAllFoldersSelected ? 'i-tabler:checkbox' : 'i-tabler:square'" />
-              {{ isAllFoldersSelected ? t('favorites.unselect_all') : t('favorites.select_all') }}
+              {{ isAllFoldersSelected ? t('common.unselect_all') : t('common.select_all') }}
             </button>
             <span class="sidebar-selected-count">{{ selectedFolderCount }}</span>
             <Tooltip :content="t('favorites.edit_folder')" placement="left" type="dark">
@@ -1195,7 +1194,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
             </Tooltip>
             <Tooltip :content="t('common.operation.delete')" placement="left" type="dark">
               <button
-                class="sidebar-manage-action danger"
+                class="sidebar-manage-action"
                 :disabled="selectedFolderCount === 0 || isSidebarOperating"
                 :aria-label="t('common.operation.delete')"
                 @click="handleBatchDeleteFolders"
@@ -1230,7 +1229,8 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               />
               <Tooltip v-if="!isManagingFolder && !isBatchManaging" :content="t('favorites.folder_more')" placement="top">
                 <IconButton
-                  class="bew-icon-button--control favorite-folder-icon-action" shape="smooth-rect" :label="t('favorites.folder_more')" aria-haspopup="menu"
+                  variant="filled" size="control" class="favorite-folder-icon-action" shape="smooth-rect" :label="t('favorites.folder_more')"
+                  aria-haspopup="menu"
                   :disabled="isSidebarOperating" @click="openFolderMenu($event, getFolderMenuActions(item))"
                 >
                   <i i-tabler:dots />
@@ -1261,7 +1261,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               </button>
               <Tooltip :content="t(isManagingSeason ? 'favorites.sidebar_manage_exit' : 'favorites.sidebar_manage')" placement="top">
                 <IconButton
-                  class="bew-icon-button--control favorite-folder-icon-action" shape="smooth-rect" :label="t(isManagingSeason ? 'favorites.sidebar_manage_exit' : 'favorites.sidebar_manage')"
+                  variant="filled" size="control" class="favorite-folder-icon-action" shape="smooth-rect" :label="t(isManagingSeason ? 'favorites.sidebar_manage_exit' : 'favorites.sidebar_manage')"
                   :aria-pressed="isManagingSeason" :disabled="isSidebarOperating" @click="toggleCurrentSidebarManage"
                 >
                   <i :class="isManagingSeason ? 'i-tabler:x' : 'i-tabler:list-check'" />
@@ -1269,7 +1269,8 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               </Tooltip>
               <Tooltip v-if="!isManagingSeason" :content="t('favorites.folder_more')" placement="top">
                 <IconButton
-                  class="bew-icon-button--control favorite-folder-icon-action" shape="smooth-rect" :label="t('favorites.folder_more')" aria-haspopup="menu"
+                  variant="filled" size="control" class="favorite-folder-icon-action" shape="smooth-rect" :label="t('favorites.folder_more')"
+                  aria-haspopup="menu"
                   @click="openFolderMenu($event, getSeasonMenuActions(item))"
                 >
                   <i i-tabler:dots />
@@ -1278,12 +1279,12 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               <div v-if="isManagingSeason" class="sidebar-manage-bar">
                 <button class="sidebar-manage-select" :aria-pressed="isAllSeasonsSelected" :disabled="isSidebarOperating" @click="toggleSelectAllSeasons">
                   <span :class="isAllSeasonsSelected ? 'i-tabler:checkbox' : 'i-tabler:square'" />
-                  {{ isAllSeasonsSelected ? t('favorites.unselect_all') : t('favorites.select_all') }}
+                  {{ isAllSeasonsSelected ? t('common.unselect_all') : t('common.select_all') }}
                 </button>
                 <span class="sidebar-selected-count">{{ selectedSeasonCount }}</span>
                 <Tooltip :content="t('favorites.unfavorite')" placement="left" type="dark">
                   <button
-                    class="sidebar-manage-action danger"
+                    class="sidebar-manage-action"
                     :disabled="selectedSeasonCount === 0 || isSidebarOperating"
                     :aria-label="t('favorites.unfavorite')"
                     @click="handleBatchUnfavSeasons"
@@ -1306,9 +1307,9 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               <span class="category-count">{{ otherFavoriteCounts[option.value] ?? '—' }}</span>
             </button>
           </div>
-          <Empty v-if="favoriteView === 'season' && !visibleSubscriptions.length && !subscriptionState.loading && !subscriptionState.hasMore && !subscriptionState.failed" text-only fill :description="t('library_tools.no_matches')" role="status" />
+          <Empty v-if="favoriteView === 'season' && !visibleSubscriptions.length && !subscriptionState.loading && !subscriptionState.hasMore && !subscriptionState.failed" fill :description="t('library_tools.no_matches')" role="status" />
           <Empty
-            v-if="favoriteView === 'season' && !visibleSubscriptions.length && subscriptionState.failed" text-only fill :description="t('common.load_failed')" :action-label="t('common.operation.refresh')"
+            v-if="favoriteView === 'season' && !visibleSubscriptions.length && subscriptionState.failed" fill :description="t('common.load_failed')" :action-label="t('common.operation.refresh')"
             @action="loadMoreSubscriptions(true)"
           />
           <div v-if="favoriteView === 'season' && (subscriptionState.hasMore || subscriptionState.failed) && (visibleSubscriptions.length || !subscriptionState.failed)" class="favorites-directory-more">
@@ -1325,7 +1326,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
     </template>
   </LibraryWorkspace>
   <Empty
-    v-else text-only class="library-workspace-login" :description="t('common.please_log_in_first')" :action-label="t('common.login')"
+    v-else class="library-workspace-login" :description="t('common.please_log_in_first')" :action-label="t('common.login')"
     @action="jumpToLoginPage"
   />
 </template>
@@ -1369,7 +1370,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
     color: var(--bew-text-1);
   }
   &:disabled {
-    opacity: 0.5;
+    opacity: var(--bew-disabled-opacity);
     cursor: default;
   }
 }
@@ -1434,11 +1435,6 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   background: var(--bew-sidebar-control-hover);
 }
 
-.sidebar-manage-action.danger:hover:not(:disabled) {
-  color: var(--bew-error-color);
-  background: var(--bew-sidebar-control-hover);
-}
-
 .sidebar-manage-action span,
 .sidebar-manage-select span {
   width: var(--bew-control-icon-size);
@@ -1448,7 +1444,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 .sidebar-manage-action:disabled,
 .sidebar-manage-select:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: var(--bew-disabled-opacity);
 }
 
 .sidebar-manage-bar {
@@ -1601,17 +1597,6 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   gap: var(--bew-space-4);
 }
 
-.content-loading {
-  display: grid;
-  place-items: center;
-  min-height: 64px;
-  padding: var(--bew-space-4);
-}
-
-.content-loading--initial {
-  min-height: 240px;
-}
-
 .favorite-card-action {
   display: grid;
   place-items: center;
@@ -1672,15 +1657,15 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 }
 
 .batch-target-folder.active {
-  color: var(--bew-on-theme-surface);
+  color: var(--bew-text-1);
   border-color: var(--bew-selected-bg);
-  background: var(--bew-theme-surface);
+  background: var(--bew-selected-bg);
 }
 
 .batch-target-folder-icon,
 .batch-target-folder-check {
-  width: 18px;
-  height: 18px;
+  width: var(--bew-icon-size-sm);
+  height: var(--bew-icon-size-sm);
 }
 
 .batch-target-folder-title {

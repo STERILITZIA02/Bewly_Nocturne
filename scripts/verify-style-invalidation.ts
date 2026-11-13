@@ -107,6 +107,7 @@ async function main() {
   const layout = await loadSourceModule('../src/utils/bewlyWidescreen/styles/layout.ts', {
     '~/constants/globalEvents': await import('../src/constants/globalEvents'),
     '~/styles/loadingRing.scss?inline': { default: compileFile(`${styles}loadingRing.scss`) },
+    '~/styles/playbackText.scss?inline': { default: compileFile(`${styles}playbackText.scss`) },
     '~/styles/segmentControl.scss?inline': { default: compileFile(`${styles}segmentControl.scss`) },
     '~/styles/segmentLiquidIndicator.scss?inline': { default: compileFile(`${styles}segmentLiquidIndicator.scss`) },
     '~/styles/sendButton.scss?inline': { default: compileFile(`${styles}sendButton.scss`) },

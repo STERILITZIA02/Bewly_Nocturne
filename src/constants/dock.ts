@@ -7,6 +7,13 @@ export function normalizeDockPosition(value: unknown): DockPosition {
   return value === 'right' ? 'right' : 'bottom'
 }
 
+export const DOCK_BADGE_MODES = ['number', 'dot', 'none'] as const
+export type DockBadgeMode = typeof DOCK_BADGE_MODES[number]
+
+export function normalizeDockBadgeMode(value: unknown): DockBadgeMode {
+  return value === 'dot' || value === 'none' ? value : 'number'
+}
+
 export function shouldShowDockCollapseButton(mode: DockCollapseMode): boolean {
   return mode === 'button'
 }

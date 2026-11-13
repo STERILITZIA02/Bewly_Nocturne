@@ -1,7 +1,7 @@
 import { shallowRef, watch } from 'vue'
 
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
-import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS, BEWLY_WIDESCREEN_MANUAL_TOGGLE } from '~/constants/globalEvents'
+import { BEWLY_WIDESCREEN_CONTROLS_VISIBILITY, BEWLY_WIDESCREEN_MANUAL_TOGGLE } from '~/constants/globalEvents'
 import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { VideoInfo } from '~/models/video/videoInfo'
@@ -21,6 +21,7 @@ import { createWidescreenLoading } from '~/utils/bewlyWidescreen/loading'
 import { setupActiveWidescreenControl, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
 import { classifyWidescreenMutation, disableNativeLightOffMode, findCommentRoot, isReadyForLayout, isWidescreenTransferContentReady, leaveMutuallyExclusivePlayerModes, removeMovedNode, restoreCommentPrewarm, restoreMovedNodes } from '~/utils/bewlyWidescreen/nativeDom'
 import { clearEpisodeSectionMarker, setupPlaylistToggle, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
+import { setupRailHeadTone } from '~/utils/bewlyWidescreen/railHeadTone'
 import { railTabs } from '~/utils/bewlyWidescreen/railTabs'
 import { session } from '~/utils/bewlyWidescreen/session'
 import { createRoot, setActiveTab, syncShellLabels } from '~/utils/bewlyWidescreen/shell'
@@ -50,20 +51,14 @@ let pageReadyFallbackTimer: ReturnType<typeof setTimeout> | undefined
 
 let pageReadyHandler: (() => void) | undefined
 
-let pageReadyForLayout = false
-
-let playerReadyForLayout = false
-
-let contentReadyForLayout = false
-
-/** Every transferable native structure is present (not the settle fallback). */
-let structureReadyForLayout = false
-
-let pageReadySince: number | undefined
-
-let readinessStableSince: number | undefined
-
-let waitingForLoad = false
+interface LayoutReadiness {
+  page: { phase: 'loading' } | { phase: 'ready', since: number }
+  layout: { phase: 'waiting' } | { phase: 'stabilizing', since: number }
+  playerReady: boolean
+  /** Native structures are present, independently of the settle fallback. */
+  structureReady: boolean
+}
+let readiness: LayoutReadiness | undefined
 
 let pendingSidebarPosition: 'left' | 'right' = 'right'
 let pendingApplication: PlayerModeApplication | undefined
@@ -327,6 +322,8 @@ function cleanupState(currentState: BewlyWidescreenState) {
   currentState.commentComposerCleanup?.()
   currentState.commentComposerCleanup = undefined
   currentState.idleProgressCleanup?.()
+  currentState.railHeadToneCleanup?.()
+  currentState.railHeadToneCleanup = undefined
   currentState.activeControlCleanup?.()
   currentState.activeControlCleanup = undefined
   clearAspectObservers(currentState)
@@ -384,7 +381,8 @@ function cleanupState(currentState: BewlyWidescreenState) {
   currentState.root.remove()
   currentState.backdrop.remove()
   currentState.styleEl.remove()
-  document.body.classList.remove(BODY_CLASS, BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS)
+  document.body.classList.remove(BODY_CLASS)
+  window.dispatchEvent(new CustomEvent(BEWLY_WIDESCREEN_CONTROLS_VISIBILITY, { detail: false }))
   window.dispatchEvent(new Event('resize'))
 }
 
@@ -503,6 +501,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   setupFillToggle(nextState)
   nextState.commentComposerCleanup = setupPlaybackCommentComposer(nextState.panels.comment)
   setupIdleProgress(nextState)
+  nextState.railHeadToneCleanup = setupRailHeadTone(nextState)
   if (settings.value.showVerticalVideoZoomButton)
     initVerticalVideoZoom()
   schedulePlayerResizeSync(nextState)
@@ -540,13 +539,7 @@ function clearReadyWait() {
     pageReadyFallbackTimer = undefined
   }
   clearPageReadyHandler()
-  pageReadyForLayout = false
-  playerReadyForLayout = false
-  contentReadyForLayout = false
-  structureReadyForLayout = false
-  pageReadySince = undefined
-  readinessStableSince = undefined
-  waitingForLoad = false
+  readiness = undefined
 }
 
 function clearPageReadyHandler() {
@@ -557,19 +550,22 @@ function clearPageReadyHandler() {
   pageReadyHandler = undefined
 }
 
-function hasWidescreenTransferSettleElapsed() {
-  return pageReadySince !== undefined
-    && Date.now() - pageReadySince >= TRANSFER_SETTLE_DELAY
-}
-
 function waitForReadyLayout() {
   clearReadyWait()
   const readinessStartedAt = Date.now()
-  pageReadyForLayout = document.readyState === 'complete'
-  pageReadySince = pageReadyForLayout ? Date.now() : undefined
-  waitingForLoad = !pageReadyForLayout
+  const attempt: LayoutReadiness = {
+    page: document.readyState === 'complete' ? { phase: 'ready', since: readinessStartedAt } : { phase: 'loading' },
+    layout: { phase: 'waiting' },
+    playerReady: false,
+    structureReady: false,
+  }
+  readiness = attempt
+  const hasTransferSettled = () => attempt.page.phase === 'ready'
+    && Date.now() - attempt.page.since >= TRANSFER_SETTLE_DELAY
 
   const tryCommitLayout = () => {
+    if (readiness !== attempt)
+      return true
     if (pendingApplication && !pendingApplication.shouldApply()) {
       exitBewlyWidescreen()
       return true
@@ -582,20 +578,21 @@ function waitForReadyLayout() {
     // and other `load` dependencies never hold the skeleton. Only the settle
     // fallback (structure still incomplete) waits for load or its bound.
     if (!canCommitWidescreenLayout({
-      pageReady: pageReadyForLayout || (structureReadyForLayout && document.readyState !== 'loading'),
-      playerReady: playerReadyForLayout,
-      contentReady: contentReadyForLayout,
+      pageReady: attempt.page.phase === 'ready' || (attempt.structureReady && document.readyState !== 'loading'),
+      playerReady: attempt.playerReady,
+      contentReady: attempt.structureReady || hasTransferSettled(),
     })) {
-      readinessStableSince = undefined
+      attempt.layout = { phase: 'waiting' }
       return false
     }
     const now = Date.now()
-    readinessStableSince ??= now
-    if (now - readinessStableSince < READY_STABILITY_DELAY)
+    if (attempt.layout.phase === 'waiting')
+      attempt.layout = { phase: 'stabilizing', since: now }
+    if (now - attempt.layout.since < READY_STABILITY_DELAY)
       return false
     if (!applyNow(pendingSidebarPosition)) {
-      playerReadyForLayout = false
-      readinessStableSince = undefined
+      attempt.playerReady = false
+      attempt.layout = { phase: 'waiting' }
       return false
     }
     clearReadyWait()
@@ -603,9 +600,11 @@ function waitForReadyLayout() {
   }
 
   const scheduleAttempt = () => {
-    if (readyFrame !== undefined)
+    if (readiness !== attempt || readyFrame !== undefined)
       return
     readyFrame = requestAnimationFrame(() => {
+      if (readiness !== attempt)
+        return
       readyFrame = undefined
       if (session.current) {
         clearReadyWait()
@@ -615,14 +614,12 @@ function waitForReadyLayout() {
         exitBewlyWidescreen()
         return
       }
-      playerReadyForLayout = isReadyForLayout()
-      structureReadyForLayout = isWidescreenTransferContentReady()
-      contentReadyForLayout = structureReadyForLayout
-        || hasWidescreenTransferSettleElapsed()
+      attempt.playerReady = isReadyForLayout()
+      attempt.structureReady = isWidescreenTransferContentReady()
       if (!tryCommitLayout() && readyPollTimer === undefined
         && (Date.now() - readinessStartedAt < READY_POLL_FAST_DURATION
-          || ((pageReadyForLayout || structureReadyForLayout) && playerReadyForLayout
-            && (!hasWidescreenTransferSettleElapsed() || readinessStableSince !== undefined)))) {
+          || ((attempt.page.phase === 'ready' || attempt.structureReady) && attempt.playerReady
+            && (!hasTransferSettled() || attempt.layout.phase === 'stabilizing')))) {
         readyPollTimer = setTimeout(() => {
           readyPollTimer = undefined
           scheduleAttempt()
@@ -646,22 +643,22 @@ function waitForReadyLayout() {
   }
   for (const name of ['loadedmetadata', 'loadeddata', 'resize'])
     document.addEventListener(name, readyMetadataHandler, true)
-  if (!pageReadyForLayout) {
+  if (attempt.page.phase === 'loading') {
     pageReadyHandler = () => {
+      if (readiness !== attempt)
+        return
       if (pageReadyFallbackTimer !== undefined) {
         clearTimeout(pageReadyFallbackTimer)
         pageReadyFallbackTimer = undefined
       }
-      pageReadyForLayout = true
-      pageReadySince = Date.now()
-      waitingForLoad = false
+      attempt.page = { phase: 'ready', since: Date.now() }
       clearPageReadyHandler()
       scheduleAttempt()
     }
     window.addEventListener('load', pageReadyHandler, { once: true })
     pageReadyFallbackTimer = setTimeout(() => {
       pageReadyFallbackTimer = undefined
-      if (!pageReadyForLayout && document.readyState !== 'loading')
+      if (readiness === attempt && attempt.page.phase === 'loading' && document.readyState !== 'loading')
         pageReadyHandler?.()
     }, PAGE_READY_FALLBACK_DELAY)
     if (document.readyState === 'complete')
@@ -689,7 +686,7 @@ export function applyBewlyWidescreen(
     return
   }
   startWidescreenLanguageWatch()
-  if (session.current || session.entering || waitingForLoad || readyObserver || readyFrame !== undefined)
+  if (session.current || session.entering || readiness)
     return
 
   session.entering = true
@@ -753,7 +750,6 @@ export function exitBewlyWidescreen({ userInitiated = false }: ExitBewlyWidescre
   clearPageReadyHandler()
   loading.reset()
   pendingApplication = undefined
-  waitingForLoad = false
   session.entering = false
 
   if (!session.current)
@@ -784,6 +780,6 @@ export function isBewlyWidescreenEngaged() {
     hasReadyRetry: !!readyObserver
       || readyFrame !== undefined
       || !!pageReadyHandler,
-    waitingForLoad,
+    waitingForLoad: readiness?.page.phase === 'loading',
   })
 }

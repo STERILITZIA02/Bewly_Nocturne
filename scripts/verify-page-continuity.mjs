@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import { applyMotionPreference } from '../src/utils/reducedMotion'
+import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 function animationFixture() {
@@ -45,6 +46,281 @@ function animationFixture() {
 }
 
 export function registerPageContinuityChecks(check, { Vue, flush, compileComponent }) {
+  check('Page continuity: search returns without rereading, retaining cursor/empty results and isolating query/account/pagination', async () => {
+    const viewState = await import('../src/composables/usePageViewState')
+    const pagination = await import('../src/contentScripts/views/SearchResults/composables/usePagination')
+    const loadMore = await import('../src/contentScripts/views/SearchResults/composables/useLoadMore')
+    const helpers = await import('../src/contentScripts/views/SearchResults/utils/searchHelpers')
+    const settings = Vue.ref({ searchResultsPaginationMode: 'scroll', depersonalizeSearchResults: false })
+    const account = Vue.reactive({ isLogin: true, userInfo: { mid: 1 } })
+    const active = Vue.ref(true)
+    const category = Vue.ref('video')
+    const keyword = Vue.ref('first')
+    const page = Vue.ref(1)
+    const reads = []
+    let pending
+    const requests = await loadSourceModule('../src/contentScripts/views/SearchResults/composables/useSearchRequest.ts', {
+      'vue': Vue,
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      '~/composables/usePageViewState': viewState,
+      '~/logic': { settings },
+      '~/stores/topBarStore': { useTopBarStore: () => account },
+      '~/utils/accountScope': await import('../src/utils/accountScope'),
+      '~/utils/main': { getUserID: () => account.userInfo.mid },
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      '~/utils/searchRequest': { requestSearch: async (request, signal) => {
+        reads.push({ ...request, signal })
+        if (pending)
+          return pending
+        return { code: 0, data: { result: keyword.value === 'empty' ? [] : [{ id: request.page }], numPages: 4, numResults: 4, context: `cursor-${request.page}` } }
+      } },
+    })
+    const list = await loadSourceModule('../src/contentScripts/views/SearchResults/composables/useSearchListPage.ts', {
+      'vue': Vue,
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ haveScrollbar: async () => true, handleBackToTop() {} }) },
+      '~/logic': { settings },
+      '../utils/searchHelpers': helpers,
+      './useLoadMore': loadMore,
+      './usePagination': pagination,
+      './useSearchRequest': requests,
+    })
+    let current
+    const Page = { setup() {
+      current = list.useSearchListPage({
+        category: category.value,
+        keyword: () => keyword.value,
+        initialPage: () => page.value,
+        buildRequest: context => ({ searchType: category.value, keyword: context.keyword, page: context.page, context: context.context }),
+        itemKey: item => String(item.id),
+        onPageChange: value => page.value = value,
+      })
+      return () => null
+    } }
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ setup() {
+      viewState.providePageViewState(() => String(account.userInfo.mid))
+      return () => active.value ? Vue.h(Page, { key: category.value }) : null
+    } })
+    const leave = async () => {
+      active.value = false
+      await flush()
+    }
+    const enter = async () => {
+      active.value = true
+      await flush()
+    }
+    try {
+      app.mount(host)
+      await flush()
+      await current.performSearch(true)
+      assert.deepEqual(current.results.value.map(item => item.id), [1, 2])
+      category.value = 'article'
+      await flush()
+      const count = reads.length
+      category.value = 'video'
+      await flush()
+      assert.equal(reads.length, count, 'revisiting a category restores accepted data without another request')
+      assert.deepEqual(current.results.value.map(item => item.id), [1, 2])
+      assert.equal(current.currentPage.value, 2)
+      await current.performSearch(true)
+      assert.equal(reads.at(-1).page, 3)
+      assert.equal(reads.at(-1).context, 'cursor-2')
+
+      await leave()
+      keyword.value = 'empty'
+      await enter()
+      assert.deepEqual(current.results.value, [])
+      const emptyReads = reads.length
+      await leave()
+      await enter()
+      assert.equal(reads.length, emptyReads, 'a completed empty result also stays cached')
+
+      await leave()
+      account.userInfo.mid = 2
+      await enter()
+      assert.equal(reads.length, emptyReads + 1, 'another account does not inherit the parked result')
+      await leave()
+      settings.value.searchResultsPaginationMode = 'pagination'
+      page.value = 2
+      keyword.value = 'numbered'
+      await enter()
+      assert.equal(reads.at(-1).page, 2)
+      await leave()
+      page.value = 3
+      await enter()
+      assert.equal(reads.at(-1).page, 3, 'a different URL page cannot restore the previous numbered page')
+
+      await leave()
+      let complete
+      pending = new Promise(resolve => complete = resolve)
+      keyword.value = 'pending'
+      await enter()
+      const abandoned = reads.at(-1)
+      await leave()
+      assert.equal(abandoned.signal.aborted, true)
+      pending = undefined
+      await enter()
+      const accepted = current.results.value
+      complete({ code: 0, data: { result: [{ id: 999 }], numPages: 1 } })
+      await flush()
+      assert.equal(current.results.value, accepted, 'the departed owner cannot publish into the new page')
+      assert.ok(!current.results.value.some(item => item.id === 999))
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
+  check('Page continuity: anime timetable reuses accepted days, refreshes explicitly and cancels on leave', async () => {
+    const { providePageViewState } = await import('../src/composables/usePageViewState')
+    const active = Vue.ref(true)
+    const calls = []
+    let response = Promise.resolve({ code: 0, result: [] })
+    const TimeTable = await compileComponent('../src/contentScripts/views/Anime/components/AnimeTimeTable.vue', {
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      '~/utils/api': { default: { anime: { getAnimeTimeTable: (_params, options) => {
+        calls.push(options.signal)
+        return response
+      } } } },
+      '~/utils/main': { removeHttpFromUrl: value => value },
+      '~/utils/messaging': { reportRuntimeFailure: () => true },
+      './AnimeTimeTableSkeleton.vue': { default: { render: () => null } },
+    }, { renderTemplate: false })
+    let current
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ setup() {
+      providePageViewState(() => '1')
+      return () => active.value ? Vue.h(TimeTable, { ref: value => current = value }) : null
+    } })
+    try {
+      app.mount(host)
+      await flush()
+      assert.equal(calls.length, 1)
+      active.value = false
+      await flush()
+      active.value = true
+      await flush()
+      assert.equal(calls.length, 1, 'a completed empty timetable is not requested again on page entry')
+      response = new Promise(() => {})
+      current.refreshAnimeTimeTable()
+      assert.equal(calls.length, 2, 'manual refresh still reads the server')
+      active.value = false
+      await flush()
+      assert.equal(calls[1].aborted, true, 'hidden pages release their network request')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
+  check('Page continuity: cloud-sync availability cannot enable after cancellation or settings disposal', async () => {
+    const protocol = await import('../src/utils/settingsCloudSyncProtocol')
+    for (const end of ['cancel', 'dispose', 'success', 'initialization-failed']) {
+      const preference = Vue.ref(false)
+      const messages = []
+      const notices = []
+      let release
+      let toggle
+      const slots = { setup: (_, { slots }) => () => Vue.h('div', slots.default?.()) }
+      const component = await compileComponent('../src/components/Settings/PluginComponentsAndPages/General/SettingsData.vue', {
+        'vue-i18n': { useI18n: () => ({ t: key => key }) },
+        'vue-toastification': { useToast: () => ({ error: value => notices.push(value), warning: value => notices.push(value) }) },
+        '~/composables/useSettingsCloudSyncPreference': { useSettingsCloudSyncPreference: () => preference },
+        '~/composables/useStorageLocal': { useStorageLocal: () => Vue.ref(protocol.DEFAULT_SETTINGS_CLOUD_SYNC_STATUS) },
+        '~/utils/settingsCloudSyncProtocol': protocol,
+        '~/utils/messaging': { sendMessage: (type) => {
+          messages.push(type)
+          return new Promise(resolve => release = resolve)
+        } },
+        '../../Advanced/Maintenance.vue': { default: { render: () => null } },
+        '../../components/SettingsItem.vue': { default: slots },
+        '../../components/SettingsItemGroup.vue': { default: slots },
+      })
+      const host = document.body.appendChild(document.createElement('div'))
+      const app = Vue.createApp(component)
+      app.config.globalProperties.$t = key => key
+      app.component('Radio', { setup: (_, { emit }) => {
+        toggle = value => emit('update:modelValue', value)
+        return () => Vue.h('input')
+      } })
+      let disposed = false
+      try {
+        app.mount(host)
+        toggle(true)
+        await flush()
+        if (end === 'cancel') {
+          toggle(false)
+        }
+        else if (end === 'dispose') {
+          app.unmount()
+          disposed = true
+        }
+        release({ state: 'empty' })
+        await flush()
+        if (end === 'cancel' || end === 'dispose') {
+          assert.deepEqual(messages, [protocol.SETTINGS_CLOUD_SYNC_AVAILABILITY_MESSAGE], `${end} invalidates the not-yet-sent enable`)
+          assert.equal(preference.value, false)
+          assert.deepEqual(notices, [])
+        }
+        else {
+          assert.deepEqual(messages, [protocol.SETTINGS_CLOUD_SYNC_AVAILABILITY_MESSAGE, protocol.SETTINGS_CLOUD_SYNC_ENABLE_MESSAGE])
+          preference.value = true
+          await flush()
+          if (end === 'initialization-failed')
+            preference.value = false
+          release(end === 'success' ? { ok: true } : { ok: false, reason: 'initialization-failed' })
+          await flush()
+          assert.equal(preference.value, end === 'success')
+          assert.deepEqual(notices, end === 'success' ? [] : ['settings.sync_cloud_enable_failed'], 'the intermediate preference publication cannot discard the final enable result')
+        }
+      }
+      finally {
+        if (!disposed)
+          app.unmount()
+        host.remove()
+      }
+    }
+  })
+
+  check('Page continuity: page-mode persistence cannot redirect a newer navigation', async () => {
+    const settings = Vue.ref({ pageMode: 'original' })
+    let finish
+    let fail
+    settings.flush = () => new Promise((resolve, reject) => {
+      finish = resolve
+      fail = reject
+    })
+    const navigations = []
+    const location = { href: 'https://www.bilibili.com/', assign: url => navigations.push(url) }
+    const controller = await loadSourceFunctions('../src/composables/usePageModeSwitcher.ts', ['pageModeNavigation', 'pageModeChangePending', 'selectPageMode'], {
+      shallowRef: Vue.shallowRef,
+      computed: Vue.computed,
+      settings,
+      window: { location },
+      resolvePageModeTarget: () => ({ preferencePage: 'favorites' }),
+      resolvePageModeNavigationUrl: () => 'https://www.bilibili.com/?page=favorites',
+      useSettingsStore: () => ({ getDockItemIsUseOriginalBiliPage: () => false }),
+    })
+    const old = controller.selectPageMode('bewly', 'favorites')
+    assert.equal(controller.pageModeChangePending.value, true)
+    location.href = 'https://www.bilibili.com/video/BVfixture'
+    finish()
+    await old
+    assert.deepEqual(navigations, [])
+    assert.equal(settings.value.pageMode, 'bewly', 'the chosen preference still persists')
+    assert.equal(controller.pageModeChangePending.value, false)
+    const current = controller.selectPageMode('custom', 'favorites')
+    finish()
+    await current
+    assert.deepEqual(navigations, ['https://www.bilibili.com/?page=favorites'])
+    const rejected = controller.selectPageMode('original', 'favorites')
+    fail(new Error('fixture write failure'))
+    await rejected
+    assert.equal(settings.value.pageMode, 'custom', 'a failed persistence retains the previous preference')
+  })
+
   check('Page continuity: interrupted Anime sections resume independently while completed empty sections stay cached', async () => {
     const { providePageViewState } = await import('../src/composables/usePageViewState')
     const requests = { watch: [], popular: [], recommendations: 0 }
@@ -224,6 +500,14 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
       await flush()
       assert.equal(swaps, 0)
       assert.equal(done, 0)
+      const enteringScope = Vue.effectScope()
+      const entering = enteringScope.run(() => useReadyPageTransition(() => 'entry', async () => {}))
+      await flush()
+      entering.onEnter(element, () => done++)
+      enteringScope.stop()
+      fixture.records.at(-1).finish()
+      await flush()
+      assert.equal(done, 0, 'an entry cancelled by disposal cannot call back into the retired view')
     }
     finally {
       scope.stop()
@@ -409,6 +693,7 @@ export function registerPageContinuityChecks(check, { Vue, flush, compileCompone
       '@vueuse/core': { useMediaQuery: () => Vue.ref(false) },
       '~/components/LiquidSegmentIndicator.vue': { default: blank },
       '~/components/PageAsyncLoading.vue': { default: blank },
+      '~/components/ContentFilterEntry.vue': { default: blank },
       '~/composables/useAppProvider': { useBewlyApp: () => provider },
       '~/composables/useHomeTabState': tabState,
       '~/constants/layout': layout,

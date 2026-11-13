@@ -114,11 +114,11 @@ async function save() {
     border-radius: var(--bew-interactive-radius);
     cursor: pointer;
     &:hover {
-      background: var(--bew-fill-1);
+      background: var(--bew-hover-bg);
     }
     &:has(input:checked) {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
     &:has(input:disabled) {
       cursor: default;

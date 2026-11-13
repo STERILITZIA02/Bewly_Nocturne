@@ -177,11 +177,11 @@ function formatTime(timestamp: number) {
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   &[aria-current="true"] {
-    background: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
   }
   &:not([aria-current="true"]):hover {
-    background: var(--bew-fill-1);
+    background: var(--bew-hover-bg);
   }
 }
 .private-history-results__heading {
@@ -249,7 +249,7 @@ function formatTime(timestamp: number) {
     inset: 0;
     width: 100%;
     height: 100%;
-    transition: opacity var(--bew-duration-fast) ease;
+    transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
   }
 }
 .private-history-results__search-icon {

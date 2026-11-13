@@ -1,7 +1,8 @@
-import type { ShallowRef } from 'vue'
+import type { Ref, ShallowRef } from 'vue'
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { usePageViewState } from '~/composables/usePageViewState'
 import type { SearchRequest } from '~/constants/searchApi'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -13,11 +14,19 @@ import { requestSearch } from '~/utils/searchRequest'
 
 import type { SearchCategory } from '../types'
 
+export interface SearchViewState {
+  restored: boolean
+  retain: <T>(name: string, field: Ref<T>) => void
+}
+
 /**
  * 搜索请求的通用 composable
  * 管理搜索状态、错误处理和请求取消
  */
-export function useSearchRequest<T = any>(category: SearchCategory) {
+export function useSearchRequest<T = any>(category: SearchCategory, viewOptions?: {
+  identity: () => unknown
+  page: () => number | undefined
+}) {
   const { t } = useI18n()
   const topBarStore = useTopBarStore()
   const isLoading = ref(false)
@@ -50,6 +59,22 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
   }
   const requestScope = computed(getRequestScope)
   watch(requestScope, cancelActiveRequest, { flush: 'sync' })
+  const parked = viewOptions ? usePageViewState(`search:${category}`) : undefined
+  const viewIdentity = () => JSON.stringify([getRequestScope(), viewOptions?.identity()])
+  const restored = !!parked && parked.read('identity', '') === viewIdentity()
+    && (settings.value.searchResultsPaginationMode === 'scroll' || parked.read('currentPage', 0) === (viewOptions?.page() || 1))
+  let acceptedIdentity = restored ? viewIdentity() : ''
+  const view: SearchViewState = {
+    restored,
+    retain(name, field) {
+      if (restored && parked)
+        field.value = parked.read(name, field.value)
+      parked?.capture(name, () => field.value)
+    },
+  }
+  view.retain('results', results)
+  // A pending/failed response must not park a new list with an old page cursor.
+  parked?.capture('identity', () => isLoading.value || error.value ? '' : acceptedIdentity)
 
   /**
    * 执行搜索请求
@@ -78,6 +103,7 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
     const controller = new AbortController()
     activeController = controller
     const scope = getRequestScope()
+    const identity = viewIdentity()
     activeRequestToken = requestToken
     const isCurrent = () => !disposed && activeRequestToken === requestToken && getRequestScope() === scope
 
@@ -94,6 +120,8 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
       }
 
       const processed = await waitWithSignal(Promise.resolve(processResponse(response, isCurrent)), controller.signal)
+      if (processed && isCurrent())
+        acceptedIdentity = identity
       return processed && isCurrent()
     }
     catch (err) {
@@ -128,6 +156,7 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
    * 重置搜索状态
    */
   function reset() {
+    acceptedIdentity = ''
     isLoading.value = false
     results.value = null
     error.value = ''
@@ -145,6 +174,7 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
     error,
     results,
     requestScope,
+    view,
     search,
     reset,
   }

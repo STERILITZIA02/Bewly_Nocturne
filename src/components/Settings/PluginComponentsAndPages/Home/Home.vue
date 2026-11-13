@@ -446,8 +446,8 @@ function handleToggleHomeTab(tab: any) {
                 flex="~ gap-2 items-center" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-interactive-radius" cursor-all-scroll
                 duration-300
                 :style="{
-                  background: element.visible ? 'var(--bew-theme-surface)' : 'var(--bew-fill-1)',
-                  color: element.visible ? 'var(--bew-on-theme-surface)' : 'var(--bew-text-1)',
+                  background: element.visible ? 'var(--bew-selected-bg)' : 'var(--bew-fill-1)',
+                  color: element.visible ? 'var(--bew-text-1)' : 'var(--bew-text-1)',
                 }"
                 @click="handleToggleHomeTab(element)"
                 @keydown.alt.left.prevent="moveHomeTab(element.page, -1)"

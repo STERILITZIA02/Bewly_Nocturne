@@ -5,7 +5,7 @@ import { resolveWidescreenSidebarHydrationPhase } from '../src/utils/bewlyWidesc
 import { patchCommentTransferLifecycle, transferCommentNode } from '../src/utils/commentDomTransfer'
 import { buildCommentTree } from '../src/utils/commentTree'
 import * as geometry from '../src/utils/commentTreeGeometry'
-import { playbackSourceFiles, readPlaybackSource } from './playbackSource'
+import { playbackSourceFiles } from './playbackSource'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 
 const widescreenFile = playbackSourceFiles
@@ -205,11 +205,6 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     assert.equal(time.tasks.size, 0)
     assert.equal(frames.size, 0)
     assert.equal(document.head.querySelectorAll('style').length, initialStyles)
-  })
-
-  check('DOM fixture: photo preview stays above the playback page', async () => {
-    const source = await readPlaybackSource()
-    assert.match(source, /body\.\$\{BODY_CLASS\} > :is\(\$\{PHOTO_VIEWER_SELECTOR\}\) \{\s*z-index: var\(--bew-z-hud\)/)
   })
 
   check('DOM fixture: transferring native comments preserves state; real removal still cleans up', () => {

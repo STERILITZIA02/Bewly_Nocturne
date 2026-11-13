@@ -6,22 +6,27 @@ import ContextMenu from '~/components/ContextMenu.vue'
 
 /**
  * The filter behind a rail search field's funnel (its `#filter` slot): one
- * menu of titled single-choice groups that apply at once. Every rail filter
- * (Moments, Favorites, History, Watch Later, Messages) uses it. A group whose
+ * menu of titled groups that apply at once. Every rail filter (Moments,
+ * Favorites, History, Watch Later, Messages) uses it. A group is single-choice
+ * (`value`), or `toggle` with each option's own `checked`. A group whose
  * options are still loading marks one `pending` (its check becomes the ring);
- * an `action` option (such as a retry) runs instead of being chosen.
+ * an `action` option (such as a retry) runs instead of being chosen, and
+ * `leaves` closes the menu as it goes elsewhere (opening settings).
  */
 export interface LibraryFilterOption {
   value: string
   label: string
   icon: string
+  checked?: boolean
   pending?: boolean
   action?: boolean
+  leaves?: boolean
 }
 export interface LibraryFilterGroup {
   key: string
   title: string
-  value: string
+  value?: string
+  toggle?: boolean
   options: LibraryFilterOption[]
 }
 
@@ -31,8 +36,10 @@ const emit = defineEmits<{ (event: 'select', key: string, value: string): void, 
 const menu = ref<{ anchor: { x: number, y: number }, trigger: HTMLElement }>()
 const options = computed<ContextMenuOption[]>(() => props.groups.flatMap(group => group.options.map((option): ContextMenuOption => {
   const item = { value: `${group.key}:${option.value}`, label: option.label, icon: option.icon, section: group.title, pending: option.pending }
-  return option.action
-    ? { ...item, closeOnSelect: false }
+  if (option.action)
+    return { ...item, closeOnSelect: Boolean(option.leaves) }
+  return group.toggle
+    ? { ...item, kind: 'toggle', closeOnSelect: false, checked: Boolean(option.checked) }
     : { ...item, kind: 'radio', closeOnSelect: false, checked: group.value === option.value }
 })))
 

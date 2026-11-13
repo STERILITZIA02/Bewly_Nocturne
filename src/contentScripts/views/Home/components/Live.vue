@@ -7,6 +7,7 @@ import type { GridLayoutType } from '~/logic'
 import { parseDedeUserID } from '~/logic/loginStatus'
 import type { FollowingLiveResult, List as FollowingLiveItem } from '~/models/live/getFollowingLiveList'
 import api from '~/utils/api'
+import { jumpToLoginPage } from '~/utils/bilibiliLogin'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 
@@ -261,10 +262,6 @@ async function handleLoadMore() {
         requestFailed.value = false
     }
   }
-}
-
-function jumpToLoginPage() {
-  location.href = 'https://passport.bilibili.com/login'
 }
 
 defineExpose({ initData })

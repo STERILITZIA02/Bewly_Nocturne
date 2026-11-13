@@ -554,7 +554,7 @@ defineExpose({ refresh })
 }
 
 .native-notification-feed__original-link:hover {
-  background: var(--bew-fill-1);
+  background: var(--bew-content-solid-hover);
 }
 
 .native-notification-feed__pagination-state {

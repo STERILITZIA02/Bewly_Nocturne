@@ -1,4 +1,5 @@
 import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
+import { asRecord } from '~/utils/plainObject'
 
 import type { DisplayPrivateSession } from './privateSession'
 
@@ -22,12 +23,6 @@ export type PrivateRecipientSelection
     | { recipient: TransientPrivateRecipient }
 
 const PRIVATE_RECIPIENT_PAGE_SIZE = 10
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
 
 function toText(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : ''

@@ -58,6 +58,7 @@ import { BadgeText } from '~/models/moment/moment'
 import type { AccountId } from '~/utils/accountScope'
 import { getAccountScopedStorageKey, isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
+import { jumpToLoginPage } from '~/utils/bilibiliLogin'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { reportRuntimeFailure } from '~/utils/messaging'
 
@@ -853,10 +854,6 @@ async function resumeFollowingData() {
     else
       await loadUserMoments(selectedUploader.value, 3, token)
   }
-}
-
-function jumpToLoginPage() {
-  location.href = 'https://passport.bilibili.com/login'
 }
 
 function resetFollowingAccountState(accountMid: AccountId) {

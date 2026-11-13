@@ -170,6 +170,12 @@ const gridColumnOptions = computed(() => [
         </SettingsItem>
       </template>
       <SettingsItem
+        setting-id="settings.show_video_watched_badge" :title="$t('settings.show_video_watched_badge')"
+        right-width="auto"
+      >
+        <Radio v-model="settings.showVideoWatchedBadge" />
+      </SettingsItem>
+      <SettingsItem
         setting-id="settings.moments_filtered_types" :title="$t('settings.moments_filtered_types')"
         :desc="$t('settings.moments_filtered_types_desc')"
       >

@@ -11,8 +11,8 @@
   }
 
   .list-header-filter .list-header-filter__btn.active {
-    color: var(--bew-on-theme-surface);
-    background: var(--bew-theme-surface);
+    color: var(--bew-text-1);
+    background: var(--bew-selected-bg);
   }
 
   // #endregion
@@ -40,10 +40,10 @@
     }
 
     .watch-later-list header .s-btn:hover {
-      color: var(--bew-on-theme-color);
+      background-color: var(--bew-hover-bg);
+      color: var(--bew-text-1);
     }
 
-    .watch-later-list header .s-btn:hover,
     .bili-dialog .con .btn-box .btn-submit {
       background-color: var(--bew-theme-color);
       color: var(--bew-on-theme-color);

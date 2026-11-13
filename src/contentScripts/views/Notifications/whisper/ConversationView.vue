@@ -53,7 +53,7 @@ usePrivateMessagePreviews(() => props.active, () => topBarStore.userInfo.mid || 
 const displayName = computed(() => (
   props.session?.name
   || props.recipient?.name
-  || t('notifications.whisper.unknown_user')
+  || t('notifications.unknown_user')
 ))
 const avatarUrl = computed(() => props.session?.avatar ?? props.recipient?.avatar ?? '')
 const selfDisplayName = computed(() => (
@@ -550,10 +550,10 @@ defineExpose({
               {{ t('notifications.whisper.messages.loading') }}
             </div>
             <div v-else-if="searchMode && historySearch?.state.contextError" class="conversation-view__state">
-              <Empty text-only :description="t('notifications.whisper.search.context_error')" :action-label="t('notifications.actions.retry')" @action="historySearch?.select(historySearch.state.selectedKey)" />
+              <Empty :description="t('notifications.whisper.search.context_error')" :action-label="t('notifications.actions.retry')" @action="historySearch?.select(historySearch.state.selectedKey)" />
             </div>
             <div v-else-if="!searchMode && state.errorKind && !timelineItems.length" class="conversation-view__state">
-              <Empty text-only :description="errorMessage" :action-label="t('notifications.actions.retry')" @action="retry" />
+              <Empty :description="errorMessage" :action-label="t('notifications.actions.retry')" @action="retry" />
             </div>
 
             <template v-else>
@@ -596,7 +596,7 @@ defineExpose({
                 />
               </div>
               <div v-else class="conversation-view__state">
-                <Empty text-only :description="t(searchMode ? 'notifications.whisper.search.select_result' : 'notifications.whisper.messages.empty')" />
+                <Empty :description="t(searchMode ? 'notifications.whisper.search.select_result' : 'notifications.whisper.messages.empty')" />
               </div>
             </template>
           </div>

@@ -1,7 +1,8 @@
+import { readRenderedLoudnessOption } from '~/utils/nativeLoudness'
+
 export function readNativeLoudnessState(player: Element | null): 'off' | 'on' | 'unknown' {
-  const inputs = player?.querySelectorAll<HTMLInputElement>('.bpx-player-ctrl-setting-loudness input')
-  const selected = inputs && Array.from(inputs).filter(input => input.checked)
-  return selected?.length === 1 ? (selected[0].value === '0' ? 'off' : 'on') : 'unknown'
+  const option = readRenderedLoudnessOption(player)
+  return option === undefined ? 'unknown' : option ? 'on' : 'off'
 }
 
 /**

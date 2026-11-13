@@ -41,7 +41,7 @@ export function injectLoadingStyle() {
       width: 100%;
       height: 100%;
       font-size: var(--bew-font-size-control, 13px);
-      line-height: var(--bew-line-height-control, 18px);
+      line-height: var(--bew-line-height-control, 16px);
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-status {
@@ -286,9 +286,9 @@ export function injectLoadingStyle() {
       }
     }
 
-    /* The column: the tabs on the head's glass band, then (one space-3
-       below the band's hairline, as the panels start) the info card and
-       the recommendations, both on the content line. */
+    /* The column: the tabs on the head's glass band, then (16px below the
+       band's hairline, as the overview starts) the info and the
+       recommendations, flat sections on the content line. */
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-sidebar {
       position: relative;
       display: flex;
@@ -342,31 +342,29 @@ export function injectLoadingStyle() {
       corner-shape: var(--bew-corner-shape);
     }
 
+    /* Out to the column's edges, for the hairline that closes the info. */
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-info {
       display: flex;
       flex: none;
       flex-direction: column;
       min-width: 0;
       min-height: 0;
+      margin-inline: calc(var(--bewly-widescreen-page-padding) * -1);
       overflow: hidden;
     }
 
-    /* The info card (layout.ts), with the section break below it that the
-       real info's height includes. Its spacing is the card's: title to meta
-       8, meta to author 16, author to actions 12, actions to description 16. */
+    /* The info section (layout.ts): flat, closed by the hairline that
+       reaches the column's edges, 16px above it (the recommendations pad the
+       16px below). Its spacing is the section's: title to meta 8, meta to
+       author 16, author to actions 12, actions to description 16. */
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-sidebar-top {
       display: flex;
       flex: none;
       flex-direction: column;
       min-height: 0;
-      margin-bottom: var(--bew-space-6);
-      padding: var(--bew-space-4);
+      padding: var(--bew-space-1) var(--bewly-widescreen-page-padding) var(--bew-space-4);
       overflow: hidden;
-      border: var(--bew-hairline) solid var(--bew-edge-color);
-      border-radius: var(--bew-surface-radius);
-      corner-shape: var(--bew-corner-shape);
-      background: var(--bew-elevated-over-page);
-      box-shadow: var(--bew-shadow-1);
+      border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-info-head {

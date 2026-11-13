@@ -389,7 +389,7 @@ defineExpose({ refresh })
           />
 
           <div v-else-if="accountState === 'logged-out'" class="whisper-workspace__state">
-            <Empty text-only :description="t('notifications.whisper.errors.login-required')">
+            <Empty :description="t('notifications.whisper.errors.login-required')">
               <ALink :href="originalUrl" type="content" class="whisper-workspace__original-link">
                 {{ t('notifications.actions.open_original') }}
               </ALink>
@@ -406,7 +406,7 @@ defineExpose({ refresh })
             v-else-if="controller.state.errorKind && !controller.state.items.length"
             class="whisper-workspace__state"
           >
-            <Empty text-only :description="errorMessage" :action-label="t('notifications.actions.retry')" @action="retry">
+            <Empty :description="errorMessage" :action-label="t('notifications.actions.retry')" @action="retry">
               <div class="whisper-workspace__state-actions">
                 <ALink :href="originalUrl" type="content" class="whisper-workspace__original-link">
                   {{ t('notifications.actions.open_original') }}

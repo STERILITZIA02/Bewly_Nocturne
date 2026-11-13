@@ -207,7 +207,7 @@ export function createMomentAdapter(
       || {}
     const liveArea = pickText(live?.area_name, live?.desc_first)
     const livePopularity = live?.online
-      ? t('moments.live_popularity', { count: numFormatter(live.online) })
+      ? t('moment_card.live_popularity', { count: numFormatter(live.online) })
       : pickText(live?.desc_second)
 
     const chargeBadge = pickText(iconBadge.text, isChargeExclusive ? t('moments.charge_exclusive') : '')
@@ -529,9 +529,9 @@ export function createMomentAdapter(
             fallback: content.isChargeExclusive
               ? (content.chargeBadge || t('moments.charge_exclusive_moment'))
               : content.isLive
-                ? t('moments.live_moment')
+                ? t('moment_card.live_moment')
                 : content.isVideo
-                  ? t('moments.video_moment')
+                  ? t('moment_card.video_moment')
                   : content.images.length
                     ? t('moments.image_moment')
                     : content.text

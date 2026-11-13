@@ -19,6 +19,7 @@ interface Bangumi {
   coverHover?: string
   tags?: string[]
   title: string
+  actionLabel?: string
   desc: string
   evaluate?: string
   capsuleText?: string
@@ -58,7 +59,7 @@ const { textStyle } = useVideoCardSharedStyles()
         class="bangumi-card__overlay"
         :href="bangumi.url"
         type="videoCard"
-        :aria-label="bangumi.title"
+        :aria-label="bangumi.actionLabel || bangumi.title"
       />
       <!-- Cover -->
       <div
@@ -174,20 +175,22 @@ const { textStyle } = useVideoCardSharedStyles()
             {{ bangumi.title }}
           </span>
         </p>
-        <p v-if="bangumi.view || bangumi.follow" text="sm $bew-text-2" mb-2>
-          <span v-if="bangumi.view" mr-4>{{ $t('common.view', { count: numFormatter(bangumi.view) }, bangumi.view) }}</span>
-          <span v-if="bangumi.follow">{{ $t('common.anime_follow_count', { count: numFormatter(bangumi.follow) }, bangumi.follow) }}</span>
-        </p>
-        <div text="sm $bew-text-2" flex flex-wrap gap-2 items-center>
-          <div
-            v-if="bangumi.capsuleText && bangumi.capsuleText.trim()"
-            class="bangumi-capsule"
-            text="$bew-text-3"
-          >
-            {{ bangumi.capsuleText }}
+        <slot name="caption">
+          <p v-if="bangumi.view || bangumi.follow" text="sm $bew-text-2" mb-2>
+            <span v-if="bangumi.view" mr-4>{{ $t('common.view', { count: numFormatter(bangumi.view) }, bangumi.view) }}</span>
+            <span v-if="bangumi.follow">{{ $t('common.anime_follow_count', { count: numFormatter(bangumi.follow) }, bangumi.follow) }}</span>
+          </p>
+          <div text="sm $bew-text-2" flex flex-wrap gap-2 items-center>
+            <div
+              v-if="bangumi.capsuleText && bangumi.capsuleText.trim()"
+              class="bangumi-capsule"
+              text="$bew-text-3"
+            >
+              {{ bangumi.capsuleText }}
+            </div>
+            <span lh="$bew-line-height-body"> {{ bangumi.desc }} </span>
           </div>
-          <span lh="$bew-line-height-body"> {{ bangumi.desc }} </span>
-        </div>
+        </slot>
       </div>
     </div>
     <BangumiCardSkeleton

@@ -62,7 +62,7 @@ function toggleAll() {
         </p>
         <div v-if="ready" class="open-tabs-dialog__selection">
           <Button type="tertiary" :disabled="busy" @click="toggleAll">
-            {{ $t(allSelected ? 'favorites.unselect_all' : 'favorites.select_all') }}
+            {{ $t(allSelected ? 'common.unselect_all' : 'common.select_all') }}
           </Button>
           <span role="status">{{ $t('library_tools.selected_tabs', { count: selectedTabIds.length, total: counts.total }) }}</span>
         </div>

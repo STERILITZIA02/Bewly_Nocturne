@@ -34,7 +34,7 @@ function acknowledgeCurrentVersion() {
       type="button"
       @click="dialogVisible = true"
     >
-      <span class="version-reminder-trigger__icon" i-tabler:bell-ringing />
+      <span class="version-reminder-trigger__dot" aria-hidden="true" />
       <span class="version-reminder-trigger__text">
         <strong>{{ $t('version_reminder.trigger') }}</strong>
         <small>v{{ version }}</small>
@@ -91,36 +91,37 @@ function acknowledgeCurrentVersion() {
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/sidebarSurface";
+
+// A notice, not an action: the same glass as the reload prompt (surface radius,
+// glass tint and rim) with an accent dot, not a block of the theme colour
+// (user-approved 2026-11-13).
 .version-reminder-trigger {
+  @include sidebarSurface.material;
   appearance: none;
   position: fixed;
   left: var(--bew-space-6);
   bottom: var(--bew-space-6);
-  z-index: 50;
+  // Over the page, under the top bar and the Dock.
+  z-index: calc(var(--bew-z-topbar) - 1);
   display: flex;
-  gap: var(--bew-space-2);
+  gap: var(--bew-space-3);
   align-items: center;
-  min-height: 42px;
-  padding: var(--bew-space-2) var(--bew-space-3);
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
-  border: 1px solid var(--bew-theme-color);
+  min-height: var(--bew-control-height-lg);
+  padding: var(--bew-space-2) var(--bew-space-4) var(--bew-space-2) var(--bew-space-3);
+  color: var(--bew-text-1);
+  border: var(--bew-glass-edge-width) solid var(--bew-glass-edge-color);
   border-radius: var(--bew-surface-radius);
   corner-shape: round;
-  box-shadow: var(--bew-shadow-2);
+  box-shadow: var(--bew-glass-shadow);
   cursor: pointer;
   transition:
-    color var(--bew-duration-fast) var(--bew-ease-standard),
-    background-color var(--bew-duration-fast) var(--bew-ease-standard),
-    border-color var(--bew-duration-fast) var(--bew-ease-standard),
     box-shadow var(--bew-duration-fast) var(--bew-ease-standard),
-    transform var(--bew-duration-fast) var(--bew-ease-emphasized);
+    transform var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
 .version-reminder-trigger:hover {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
-  box-shadow: var(--bew-shadow-4);
+  box-shadow: var(--bew-shadow-3);
 }
 
 .version-reminder-trigger:focus-visible {
@@ -129,13 +130,16 @@ function acknowledgeCurrentVersion() {
 }
 
 .version-reminder-trigger:active {
-  box-shadow: var(--bew-shadow-1);
+  transform: scale(var(--bew-control-press-scale));
 }
 
-.version-reminder-trigger__icon {
-  width: 20px;
-  height: 20px;
-  color: var(--bew-on-theme-color);
+.version-reminder-trigger__dot {
+  flex: none;
+  width: var(--bew-space-2);
+  height: var(--bew-space-2);
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
+  background: var(--bew-accent-marker);
 }
 
 .version-reminder-trigger__text {
@@ -152,9 +156,9 @@ function acknowledgeCurrentVersion() {
 
 .version-reminder-trigger__text small {
   margin-top: var(--bew-space-0-5);
+  color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
-  color: var(--bew-on-theme-color);
 }
 
 .version-reminder-dialog {
@@ -188,8 +192,8 @@ function acknowledgeCurrentVersion() {
 }
 
 .version-reminder-dialog__link:hover {
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 
 .version-reminder-dialog__link-icon {
@@ -230,20 +234,32 @@ function acknowledgeCurrentVersion() {
 .version-reminder-enter-active,
 .version-reminder-leave-active {
   transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+    opacity var(--bew-duration-fast) var(--bew-ease-standard),
+    transform var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
 .version-reminder-enter-from,
 .version-reminder-leave-to {
   opacity: 0;
-  transform: translateY(12px);
+  transform: translateY(var(--bew-space-3));
 }
 
 @media (max-width: 560px) {
   .version-reminder-trigger {
-    left: 16px;
-    bottom: 16px;
+    left: var(--bew-space-4);
+    bottom: var(--bew-space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .version-reminder-trigger,
+  .version-reminder-enter-active,
+  .version-reminder-leave-active {
+    transition: none;
+  }
+
+  .version-reminder-trigger:active {
+    transform: none;
   }
 }
 </style>

@@ -1,9 +1,4 @@
 .bewly-design.homePage {
-  .header-channel {
-    // margin-top: 10px;
-    // display: none;
-  }
-
   // fix when the container does not fill the recommended container in large screen situations
   .recommended-container_floor-aside .container {
     max-width: 100% !important;
@@ -14,8 +9,6 @@
     background-color: transparent;
     backdrop-filter: var(--bew-filter-glass-1);
     background: var(--bew-glass-tint);
-    // margin: 10px 20px;
-    // width: calc(100% - 40px);
     box-shadow: var(--bew-shadow-2);
   }
 

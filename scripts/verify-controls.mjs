@@ -83,7 +83,6 @@ export function registerControlChecks(check, { Vue, flush, compileComponent }) {
       input.dispatchEvent(new Event('input', { bubbles: true }))
       assert.equal(changes.at(-1), -25.25)
       const css = await readFile(new URL('../src/components/Slider.vue', import.meta.url), 'utf8')
-      assert.match(css, /font-variant-numeric: tabular-nums/)
       assert.doesNotMatch(css, /(?:measureText|getBoundingClientRect|ResizeObserver)/)
     }
     finally {

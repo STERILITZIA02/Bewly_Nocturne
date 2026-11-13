@@ -128,7 +128,7 @@ defineExpose({ focus })
 }
 
 .b-input[aria-disabled="true"] {
-  opacity: 0.5;
+  opacity: var(--bew-disabled-opacity);
   cursor: default;
 }
 </style>

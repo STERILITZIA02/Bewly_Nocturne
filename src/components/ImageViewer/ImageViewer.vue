@@ -750,7 +750,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="bew-image-viewer__chrome" :class="{ 'is-hidden': chromeHidden }">
-      <CloseButton class="bew-image-viewer__close" :label="t('image_viewer.close')" size="large" variant="overlay" @click="emit('close')" />
+      <CloseButton class="bew-image-viewer__close" :label="t('image_viewer.close')" size="lg" variant="overlay" @click="emit('close')" />
       <template v-if="count > 1">
         <IconButton class="bew-image-viewer__nav bew-image-viewer__nav--prev" :label="t('image_viewer.previous')" @click="go(-1)">
           <i class="i-tabler:chevron-left" aria-hidden="true" />

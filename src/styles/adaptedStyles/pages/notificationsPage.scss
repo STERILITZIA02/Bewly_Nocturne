@@ -190,7 +190,7 @@ html.bewly-design.notificationsPage {
     .bl-button--shallow-o.active,
     .bl-button--shallow-o[active],
     .cs-actions-wrap .cs-actions .cs-action-item:hover {
-      background-color: var(--bew-theme-surface-hover);
+      background-color: var(--bew-pressed-bg);
     }
 
     .space-right .space-right-bottom .bili-im .right .dialog .send-box .btn-box.send-btn.active:hover,
@@ -580,13 +580,13 @@ html.notificationsPage.bewly-notifications-embedded {
   }
 
   .message-main .interaction-item:hover {
-    background: var(--bew-fill-1) !important;
+    background: var(--bew-hover-bg) !important;
   }
 
   .message-main .interaction-item.active,
   .message-main .interaction-item[aria-current="page"] {
-    color: var(--bew-on-theme-surface);
-    background: var(--bew-theme-surface) !important;
+    color: var(--bew-text-1);
+    background: var(--bew-selected-bg) !important;
   }
 
   #message-navbar,
@@ -727,8 +727,8 @@ html.notificationsPage.bewly-notifications-embedded {
   .list-item.active,
   .tab-list .tab-item.active,
   .button-box .item > button.active {
-    color: var(--bew-on-theme-surface) !important;
-    background: var(--bew-theme-surface) !important;
+    color: var(--bew-text-1) !important;
+    background: var(--bew-selected-bg) !important;
   }
 
   .list-item.top:not(.active) {

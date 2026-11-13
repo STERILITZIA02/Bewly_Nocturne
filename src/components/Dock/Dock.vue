@@ -13,6 +13,7 @@ import { uiPx } from '~/composables/useUiScale'
 import {
   getDockCollapsedStateForMode,
   getPreservedDockStageSize,
+  normalizeDockBadgeMode,
   normalizeDockPosition,
   resolveDockCollapsedShellSize,
   shouldAutoCollapseDock,
@@ -64,8 +65,10 @@ const topBarStore = useTopBarStore()
 const { t } = useI18n()
 // Read the same account-scoped authority as TopBar; Dock never starts polling
 // or acknowledges messages merely because its badge is visible.
+const dockBadgeMode = computed(() => normalizeDockBadgeMode(settings.value.dockBadgeMode))
+
 const dockBadges = computed<Partial<Record<AppPage, { count: number, label: string }>>>(() => {
-  if (!topBarStore.isLogin || !settings.value.showDockBadges)
+  if (!topBarStore.isLogin || dockBadgeMode.value === 'none')
     return {}
   const result: Partial<Record<AppPage, { count: number, label: string }>> = {}
   const sources = [
@@ -97,15 +100,17 @@ const DOCK_SHELL_COMPLETION_BUFFER_MS = 50
 const dockContentHover = ref<boolean>(false)
 const dockInteractionActive = ref(false)
 const dockReady = ref(false)
-const isDockCollapsed = ref(false)
-const isDockTransitioning = ref(false)
-const isDockContentVisible = ref(true)
-const isDockCollapsedTriggerVisible = ref(false)
+type DockPhase = 'expanded' | 'hiding-content' | 'preparing-collapse' | 'collapsing' | 'collapsed' | 'expanding'
+const dockPhase = ref<DockPhase>('expanded')
+const isDockCollapsed = computed(() => dockPhase.value === 'collapsed' || dockPhase.value === 'collapsing')
+const isDockTransitioning = computed(() => ['preparing-collapse', 'collapsing', 'expanding'].includes(dockPhase.value))
+const isDockContentVisible = computed(() => dockPhase.value === 'expanded')
+const isDockCollapsedTriggerVisible = computed(() => dockPhase.value === 'collapsed')
 const expandedDockWidth = ref(0)
 const expandedDockHeight = ref(0)
 const expandedDockShellWidth = ref(0)
 const expandedDockShellHeight = ref(0)
-const dockMorphDirection = ref<'collapse' | 'expand'>()
+const dockMorphDirection = computed(() => dockPhase.value === 'expanding' ? 'expand' : ['preparing-collapse', 'collapsing'].includes(dockPhase.value) ? 'collapse' : undefined)
 let dockReadyFrame: number | undefined
 let dockMorphFrame: number | undefined
 let dockContentTimer: ReturnType<typeof setTimeout> | undefined
@@ -319,13 +324,7 @@ function completeDockMorph(direction: 'collapse' | 'expand') {
     dockMorphCompletionTimer = undefined
   }
 
-  isDockTransitioning.value = false
-  dockMorphDirection.value = undefined
-
-  if (direction === 'collapse')
-    isDockCollapsedTriggerVisible.value = true
-  else
-    isDockContentVisible.value = true
+  dockPhase.value = direction === 'collapse' ? 'collapsed' : 'expanded'
 }
 
 function scheduleDockMorphCompletion(direction: 'collapse' | 'expand') {
@@ -344,12 +343,10 @@ function scheduleDockMorphCompletion(direction: 'collapse' | 'expand') {
 
 async function startDockShellCollapse() {
   cacheExpandedDockSize()
-  isDockTransitioning.value = dockReady.value
-  dockMorphDirection.value = 'collapse'
+  dockPhase.value = 'preparing-collapse'
   const generation = dockMorphGeneration
 
   if (!dockReady.value) {
-    isDockCollapsed.value = true
     completeDockMorph('collapse')
     return
   }
@@ -364,7 +361,7 @@ async function startDockShellCollapse() {
   dockMorphFrame = requestAnimationFrame(() => {
     if (generation !== dockMorphGeneration || dockMorphDirection.value !== 'collapse')
       return
-    isDockCollapsed.value = true
+    dockPhase.value = 'collapsing'
     dockMorphFrame = undefined
     scheduleDockMorphCompletion('collapse')
   })
@@ -377,10 +374,10 @@ function collapseDock() {
     return
 
   cacheExpandedDockSize()
-  isDockContentVisible.value = false
-  isDockCollapsedTriggerVisible.value = false
+  const expanding = dockPhase.value === 'expanding'
+  dockPhase.value = 'hiding-content'
 
-  if (dockMorphDirection.value === 'expand' || preferredReducedMotion.value) {
+  if (expanding || preferredReducedMotion.value) {
     clearDockMorphSchedule()
     void startDockShellCollapse()
     return
@@ -398,28 +395,19 @@ function expandDock() {
 
   if (dockContentTimer !== undefined || (dockMorphDirection.value === 'collapse' && !isDockCollapsed.value)) {
     clearDockMorphSchedule()
-    isDockTransitioning.value = false
-    dockMorphDirection.value = undefined
-    isDockContentVisible.value = true
+    dockPhase.value = 'expanded'
     return
   }
 
   if (!isDockCollapsed.value) {
-    isDockContentVisible.value = true
+    dockPhase.value = 'expanded'
     return
   }
 
   clearDockMorphSchedule()
-  isDockContentVisible.value = false
-  isDockCollapsedTriggerVisible.value = false
-  isDockTransitioning.value = dockReady.value
-  dockMorphDirection.value = dockReady.value ? 'expand' : undefined
-  isDockCollapsed.value = false
+  dockPhase.value = dockReady.value ? 'expanding' : 'expanded'
 
-  if (!dockReady.value) {
-    isDockContentVisible.value = true
-  }
-  else {
+  if (dockReady.value) {
     scheduleDockMorphCompletion('expand')
   }
 }
@@ -441,9 +429,7 @@ watch(preferredReducedMotion, (value) => {
     return
   const direction = dockMorphDirection.value ?? 'collapse'
   clearDockMorphSchedule()
-  isDockCollapsed.value = direction === 'collapse'
-  dockMorphDirection.value = direction
-  completeDockMorph(direction)
+  dockPhase.value = direction === 'collapse' ? 'collapsed' : 'expanded'
 })
 
 function handleDockItemClick($event: MouseEvent, dockItem: DockItem) {
@@ -742,14 +728,14 @@ const dockShellGeometry = computed(() => {
   const height = dockPosition.value === 'right' ? longSide : shortSide
   const expandedWidth = expandedDockShellWidth.value || collapsedSize
   const expandedHeight = expandedDockShellHeight.value || collapsedSize
-  return { width, height, expandedWidth, expandedHeight, radius: collapsedSize / 2 }
+  return { width, height, expandedWidth, expandedHeight }
 })
 
 const dockShellStyle = computed((): CSSProperties => {
-  const { width, height, expandedWidth, expandedHeight, radius } = dockShellGeometry.value
+  const { width, height, expandedWidth, expandedHeight } = dockShellGeometry.value
   const collapsedRadius = Math.min(width, height) / 2
   return {
-    '--dock-shell-radius': `${radius}px`,
+    '--dock-shell-radius': `${Math.min(expandedWidth, expandedHeight) / 2}px`,
     '--dock-collapsed-width': `${width}px`,
     '--dock-collapsed-height': `${height}px`,
     '--dock-wake-width': `${expandedDockWidth.value || expandedWidth}px`,
@@ -829,7 +815,7 @@ onUnmounted(() => {
           @wheel="handleDockWheel"
         >
           <div v-layout-editable="'dock-items'" class="dock-page-navigation bew-segment-control">
-            <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator" :active-key="activeDockItemPage" :motion-scope="PAGE_MOTION" />
+            <LiquidSegmentIndicator ref="dockIndicatorRef" :active-key="activeDockItemPage" :motion-scope="PAGE_MOTION" />
 
             <div
               v-for="dockItem in currentDockItems"
@@ -850,7 +836,10 @@ onUnmounted(() => {
               >
                 <span class="dock-tab__glyph">
                   <span class="dock-tab__icon" :class="dockItem.dockIcon" aria-hidden="true" />
-                  <CountBadge v-if="dockBadges[dockItem.page]" :count="dockBadges[dockItem.page]!.count" class="dock-count-badge" aria-hidden="true" />
+                  <template v-if="dockBadges[dockItem.page]">
+                    <CountBadge v-if="dockBadgeMode === 'number'" :count="dockBadges[dockItem.page]!.count" class="dock-count-badge" aria-hidden="true" />
+                    <span v-else class="dock-dot-badge bew-shape-circle" aria-hidden="true" />
+                  </template>
                 </span>
                 <span v-if="settings.showDockItemNames" class="dock-tab__label" aria-hidden="true">{{ $t(dockItem.i18nKey) }}</span>
               </button>
@@ -1396,15 +1385,25 @@ onUnmounted(() => {
     @include dockTab.label;
   }
 
-  .dock-page-navigation__indicator {
-    corner-shape: var(--bew-corner-shape-capsule);
-  }
-
   .dock-count-badge {
     // An extra 2px optical overlap anchors the badge to the glyph's upper right.
     position: absolute;
     top: calc(-1 * var(--bew-space-1));
     left: calc(100% - var(--bew-space-1) - var(--bew-space-0-5));
+    z-index: 2;
+  }
+
+  .dock-dot-badge {
+    // Anchor the 8px dot to the glyph's upper right with 2px overlap.
+    position: absolute;
+    top: calc(-1 * var(--bew-space-0-5));
+    left: calc(100% - var(--bew-space-0-5));
+    width: var(--bew-space-2);
+    height: var(--bew-space-2);
+    border-radius: 50%;
+    corner-shape: var(--bew-corner-shape-round);
+    background: var(--bew-accent-marker);
+    pointer-events: none;
     z-index: 2;
   }
 
@@ -1420,10 +1419,10 @@ onUnmounted(() => {
     box-sizing: border-box;
     transition:
       transform 300ms var(--bew-ease-emphasized, cubic-bezier(0.34, 1.3, 0.64, 1)),
-      background 300ms ease,
-      color 300ms ease,
-      box-shadow 300ms ease,
-      opacity 300ms ease;
+      background var(--bew-duration-moderate) var(--bew-ease-standard),
+      color var(--bew-duration-moderate) var(--bew-ease-standard),
+      box-shadow var(--bew-duration-moderate) var(--bew-ease-standard),
+      opacity var(--bew-duration-moderate) var(--bew-ease-standard);
     box-shadow: var(--dock-surface-shadow);
 
     &:hover {

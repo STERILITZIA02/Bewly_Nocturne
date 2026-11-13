@@ -9,7 +9,7 @@ import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import Tooltip from '~/components/Tooltip.vue'
-import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
+import { useLoadMoreSentinel } from '~/composables/useLoadMoreSentinel'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
@@ -20,14 +20,11 @@ import { mergeFavoriteSeasonPage } from '~/utils/favoriteSeason'
 import { getUserID, removeHttpFromUrl, scrollToTop } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { retiringListTransition } from '~/utils/motionPresence'
+import { isRecord } from '~/utils/plainObject'
 import { updateOwnedWatchLater } from '~/utils/watchLater'
 
 import type { FavoriteCategory, FavoriteResource } from '../../types'
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object'
-}
 
 function isValidFavoriteCategory(value: unknown): value is FavoriteCategory {
   return isRecord(value)
@@ -150,7 +147,6 @@ watch(currentAccountId, (accountId) => {
     void refreshFavoriteData()
 }, { immediate: true })
 
-// 使用 useOptimizedScroll 处理滚动加载
 function handleReachBottom() {
   if (!displayingCurrentFolder.value || isLoadingCategories.value || isLoading.value || noMoreContent.value || favoriteResources.length === 0)
     return
@@ -160,11 +156,8 @@ function handleReachBottom() {
   }
 }
 
-useOptimizedScroll(
-  favoriteVideosWrap,
-  { onReachBottom: handleReachBottom },
-  { bottomThreshold: 400, throttleDelay: 100 },
-)
+const loadMoreSentinel = ref<HTMLElement>()
+useLoadMoreSentinel(favoriteVideosWrap, loadMoreSentinel, handleReachBottom, () => favoriteResources.length)
 
 function resetFavoriteState() {
   stalledPageStart = undefined
@@ -442,7 +435,7 @@ defineExpose({
 
         <Empty
           v-if="!isLoadingCategories && !isLoading && !resourceRequestFailed && favoriteResources.length === 0"
-          class="bew-popover__state"
+          :description="t('common.no_data')" class="bew-popover__state"
         />
 
         <!-- favorites -->
@@ -513,6 +506,7 @@ defineExpose({
         <Transition name="fade">
           <PopoverListSkeleton v-if="isLoading && !isRefreshingResources && favoriteResources.length !== 0 && currentPageNum > 1" :count="2" />
         </Transition>
+        <div ref="loadMoreSentinel" aria-hidden="true" />
       </div>
     </main>
   </div>

@@ -1,12 +1,11 @@
 <script lang="ts" setup>
-import { ref } from 'vue'
-
 import Logo from '~/components/Logo.vue'
 import SearchBar from '~/components/SearchBar/SearchBar.vue'
+import { usePageViewState } from '~/composables/usePageViewState'
 import { uiPx } from '~/composables/useUiScale'
 import { settings } from '~/logic'
 
-const searchInput = ref<string>('')
+const searchInput = usePageViewState('search').ref('input', '')
 </script>
 
 <template>

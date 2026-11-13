@@ -62,4 +62,11 @@ const LV6_LIGHTNING_ICON = `
           fill="#FF0000"></path>
 </svg>
 `// lv6闪电
-export { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON, LV6_LIGHTNING_ICON }
+const LEVEL_ICONS = [LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON]
+
+/** The level badge; a senior (hardcore) LV6 member gets the lightning badge. */
+export function getLvIcon(level: number, senior = false): string {
+  if (level === 6 && senior)
+    return LV6_LIGHTNING_ICON
+  return LEVEL_ICONS[level] ?? LV0_ICON
+}

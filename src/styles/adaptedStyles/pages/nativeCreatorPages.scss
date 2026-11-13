@@ -34,8 +34,8 @@ html.bewly-design[data-bewly-native-site="academy"] {
     }
 
     &:is(.selected, .active) {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
   }
 
@@ -358,8 +358,8 @@ html.bewly-design[data-bewly-native-site="materials"] {
         }
 
         .tags .tag {
-          color: var(--bew-on-theme-surface);
-          background: var(--bew-theme-surface);
+          color: var(--bew-text-1);
+          background: var(--bew-selected-bg);
           border-color: var(--bew-separator-color);
           border-radius: var(--bew-pill-radius);
           corner-shape: var(--bew-corner-shape-capsule);
@@ -444,8 +444,8 @@ html.bewly-design[data-bewly-native-site="materials"] {
 
   .manage-nav .manage-nav-item-sub-item.active,
   .manage-nav .router-link-exact-active > .manage-nav-item-sub-item {
-    background: var(--bew-theme-surface) !important;
-    color: var(--bew-on-theme-surface) !important;
+    background: var(--bew-selected-bg) !important;
+    color: var(--bew-text-1) !important;
 
     .sub-text {
       color: inherit !important;
@@ -459,8 +459,8 @@ html.bewly-design[data-bewly-native-site="materials"] {
     corner-shape: var(--bew-corner-shape);
 
     &.u-head-item-active {
-      background: var(--bew-theme-surface) !important;
-      color: var(--bew-on-theme-surface) !important;
+      background: var(--bew-selected-bg) !important;
+      color: var(--bew-text-1) !important;
     }
   }
 
@@ -518,8 +518,8 @@ html.bewly-design[data-bewly-native-site="materials"] {
       }
 
       &.active {
-        background: var(--bew-theme-surface);
-        color: var(--bew-on-theme-surface);
+        background: var(--bew-selected-bg);
+        color: var(--bew-text-1);
       }
 
       > :is(.title, .num) {
@@ -577,8 +577,8 @@ html.bewly-design[data-bewly-native-site="materials"] {
     }
 
     &.active {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
   }
 
@@ -838,8 +838,8 @@ html.bewly-design[data-bewly-native-site="music-portal"] {
   }
 
   .NavBar :is(.menu-item-group, .menu-item).active {
-    background: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface) !important;
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1) !important;
 
     > span {
       color: inherit;
@@ -852,8 +852,8 @@ html.bewly-design[data-bewly-native-site="music-portal"] {
     corner-shape: var(--bew-corner-shape);
 
     &.active {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
   }
 
@@ -863,8 +863,8 @@ html.bewly-design[data-bewly-native-site="music-portal"] {
   }
 
   .help-center .warning-description {
-    background: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1139,8 +1139,8 @@ html.bewly-design[data-bewly-native-site="creator-data"] {
   }
 
   .page-link {
-    background: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
 
@@ -1157,8 +1157,8 @@ html.bewly-design[data-bewly-native-site="creator-data"] {
 
   .cell.active,
   .cell.active .cell-bg {
-    background: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
   }
 
   .select {
@@ -1316,8 +1316,8 @@ html.bewly-design[data-bewly-native-site="creator-quests"] {
   }
 
   .ups-tag {
-    background: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
     border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-capsule);
   }
@@ -1359,8 +1359,8 @@ html.bewly-design[data-bewly-native-site="creator-quests"] {
   }
 
   .button-item.active {
-    background: var(--bew-theme-surface) !important;
-    color: var(--bew-on-theme-surface) !important;
+    background: var(--bew-selected-bg) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .shop-ways-block .button-item {
@@ -1531,11 +1531,11 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   }
 
   .combo.is-selected {
-    background: var(--bew-theme-surface) !important;
+    background: var(--bew-selected-bg) !important;
     border-color: var(--bew-focus-ring-color);
 
     :is(.name, .price) {
-      color: var(--bew-on-theme-surface) !important;
+      color: var(--bew-text-1) !important;
     }
   }
 
@@ -1574,8 +1574,8 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
     corner-shape: var(--bew-corner-shape);
 
     &.selected {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
       border-color: var(--bew-focus-ring-color);
     }
   }
@@ -1645,7 +1645,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
 
   .data-content .tabs-bg,
   .data-content .select-item.selected {
-    background: var(--bew-theme-surface);
+    background: var(--bew-selected-bg);
     border-color: var(--bew-focus-ring-color);
   }
 
@@ -1653,7 +1653,7 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
     color: var(--bew-text-2);
 
     &.selected {
-      color: var(--bew-on-theme-surface);
+      color: var(--bew-text-1);
     }
   }
 
@@ -1691,8 +1691,8 @@ html.bewly-design[data-bewly-native-site="creator-promotion"] {
   .bd-select-dropdown__item.is-hovering,
   .bd-select-dropdown__item.is-selected,
   .bd-date-table td.in-range .bd-date-table-cell {
-    background: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface) !important;
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1) !important;
   }
 
   .bd-date-table :is(td.start-date, td.end-date) span {

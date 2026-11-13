@@ -438,11 +438,9 @@ const pageTransition = useReadyPageTransition(() => showBewlyPage.value ? pages[
     displayedPage.value = activatedPage.value
     pendingPageScroll ??= pageViewCache.scroll.get(pageScrollKey(activatedPage.value)) ?? 0
     restorePageScroll()
-    if (typeof ResizeObserver !== 'undefined') {
-      scrollRestoreObserver?.disconnect()
-      scrollRestoreObserver = new ResizeObserver(restorePageScroll)
-      scrollRestoreObserver.observe(element)
-    }
+    scrollRestoreObserver?.disconnect()
+    scrollRestoreObserver = new ResizeObserver(restorePageScroll)
+    scrollRestoreObserver.observe(element)
   },
   onSettled() {
     isPageSwitching.value = false

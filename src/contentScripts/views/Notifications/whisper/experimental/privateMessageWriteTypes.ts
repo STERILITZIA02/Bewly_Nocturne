@@ -42,13 +42,15 @@ export interface PrivateTextSendDiagnostic {
   apiCode: number | null
 }
 
-export interface PrivateImageDraftState {
-  failureKind: PrivateImageFailureKind | null
+export type PrivateImageDeliveryState
+  = | { status: 'ready' | 'preparing' | 'uploading' | 'sending' | 'reconciling', failureKind: null }
+    | { status: 'failed', failureKind: PrivateImageFailureKind }
+
+export type PrivateImageDraftState = PrivateImageDeliveryState & {
   fileName: string
   localId: string
   objectUrl: string
   size: number
-  status: 'ready' | 'preparing' | 'uploading' | 'sending' | 'reconciling' | 'failed'
 }
 
 export interface PrivateConversationWriteState {
@@ -56,7 +58,8 @@ export interface PrivateConversationWriteState {
   items: DisplayPrivateMessage[]
   generation: number
   draft: string
-  sending: boolean
+  operation: 'idle' | 'text' | 'image'
+  readonly sending: boolean
   imageDraft: PrivateImageDraftState | null
   lastTextSendOutcome: PrivateTextSendOutcome
   lastTextSendDiagnostic: PrivateTextSendDiagnostic | null

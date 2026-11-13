@@ -994,6 +994,12 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       '~/utils/dataFormatter': { calcCurrentTime: String },
       '~/utils/main': { getCSRF: () => account.isLogin ? 'csrf' : '', getUserID: () => String(account.userInfo.mid), openLinkToNewTab() {}, removeHttpFromUrl: value => value ?? '' },
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      // Virtualization is independent of CSS frame delivery; motion has its own checks.
+      '~/utils/motionPresence': { retiringTransition: {
+        ...(await import('../src/utils/motionPresence')).retiringTransition,
+        css: false,
+        onLeave: (_element, done) => queueMicrotask(done),
+      } },
       '~/utils/playbackProgress': await import('../src/utils/playbackProgress'),
       '~/utils/tabs': {},
       '~/utils/watchLater': { updateOwnedWatchLater: () => {
@@ -1126,7 +1132,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       assert.equal(batchToggle.getAttribute('aria-checked'), 'true')
       assert.ok(root.querySelectorAll('.watch-later-selection input').length > 0)
       assert.ok(root.querySelector('[data-grid-aid]').hasAttribute('inert'), 'batch mode prevents card navigation')
-      Array.from(root.querySelectorAll('.library-workspace__rail button')).find(button => button.textContent.trim() === 'watch_later.select_all').click()
+      Array.from(root.querySelectorAll('.library-workspace__rail button')).find(button => button.textContent.trim() === 'common.select_all').click()
       await settle()
       assert.ok([...root.querySelectorAll('.watch-later-selection input')].every(input => input.checked))
       batchToggle.click()

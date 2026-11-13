@@ -52,9 +52,10 @@ const {
   error,
   results,
   requestScope,
+  view,
   search,
   reset: resetSearch,
-} = useSearchRequest<any[]>('user')
+} = useSearchRequest<any[]>('user', { identity: () => [props.keyword.trim(), props.filters], page: () => props.initialPage })
 
 // 分页管理
 const {
@@ -66,7 +67,7 @@ const {
   updatePage,
   getNextPage,
   reset: resetPagination,
-} = usePagination()
+} = usePagination(view)
 
 // 无限加载管理
 const {
@@ -86,6 +87,7 @@ const {
   return { success, appendedCount }
 }, {
   isLoading: () => isLoading.value,
+  view,
 })
 
 // 监听关键词变化
@@ -108,7 +110,9 @@ watch(() => props.keyword, async (newKeyword, oldKeyword) => {
 // 组件挂载时立即执行搜索
 onMounted(() => {
   const keyword = props.keyword.trim()
-  if (keyword) {
+  if (view.restored)
+    void batchQueryUserRelations((results.value ?? []).map(user => user.mid).filter(Boolean))
+  if (keyword && !view.restored) {
     // 如果有初始页码，先设置页码
     if (props.initialPage && props.initialPage > 1) {
       updatePage(props.initialPage)
@@ -296,13 +300,13 @@ defineExpose({
 
 .user-search-page {
   width: 100%;
-  padding-bottom: 2rem;
+  padding-bottom: var(--bew-space-8);
 }
 
 .user-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
+  gap: var(--bew-grid-gutter);
 
   @media (max-width: breakpoints.$grid-lg) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -314,13 +318,13 @@ defineExpose({
 }
 
 .error-message {
-  padding: 2rem;
+  padding: var(--bew-space-8);
   text-align: center;
   color: var(--bew-error-color);
 }
 
 .empty-state {
-  padding: 2rem;
+  padding: var(--bew-space-8);
   text-align: center;
   color: var(--bew-text-2);
 }

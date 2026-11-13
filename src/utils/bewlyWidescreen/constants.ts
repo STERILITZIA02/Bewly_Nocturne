@@ -48,6 +48,15 @@ export const COMMENT_COMPOSER_HEIGHT_PROPERTY = '--bewly-widescreen-composer-hei
 /** The cover's average colour and its blurred colours (syncCoverTone), on the video area and the backdrop. */
 export const COVER_TONE_PROPERTY = '--bewly-widescreen-cover-tone'
 export const COVER_FIELD_PROPERTY = '--bewly-widescreen-cover-field'
+/**
+ * The player canvas laid over the cover's colours while the video fills the
+ * window or the screen: a colour, so the letterbox crosses between the two.
+ */
+export const LETTERBOX_VEIL_PROPERTY = '--bewly-widescreen-letterbox-veil'
+/** On the video area: `canvas` while the video fills the window (syncDisplayModeAttributes). */
+export const LETTERBOX_ATTRIBUTE = 'data-bewly-letterbox'
+/** On a rail tab (and the tab list, for its plate): `dark` or `light`, what lies under the head's glass there (railHeadTone.ts). */
+export const RAIL_HEAD_TONE_ATTRIBUTE = 'data-bewly-under'
 export const PGC_MEDIA_INFO_SELECTOR = '[class*="mediainfo_mediaInfoWrap"]'
 export const PGC_TOOLBAR_SELECTOR = `.player-left-components > .toolbar, #${ROOT_ID} .bewly-widescreen-action-slot > .toolbar`
 export const PGC_REACT_BRIDGE_ATTRIBUTE = 'data-bewly-react-bridge'
@@ -70,6 +79,15 @@ export const EPISODE_SECTION_CLASS = 'bewly-widescreen-episode-section'
 
 /** The rail's fold control (disclosureToggle.ts). */
 export const DISCLOSURE_TOGGLE_CLASS = 'bewly-widescreen-disclosure-toggle'
+
+/**
+ * The toggle's Tabler chevron-down (stroke 1.75, as UnoCSS draws it) as a CSS
+ * mask, for native fold buttons restyled without DOM of ours (a collection
+ * video's parts): paint `currentColor` through it and turn it like the toggle.
+ */
+export const DISCLOSURE_CHEVRON_MASK = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.75' d='m6 9l6 6l6-6'/></svg>`,
+)}")`
 
 /** Class-less parts of Bilibili's dialogs, marked for their styles (actionEffects.ts markNativeDialog). */
 export const NATIVE_DIALOG_CHECK_CLASS = 'bewly-native-dialog-check'

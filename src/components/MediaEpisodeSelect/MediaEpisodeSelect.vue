@@ -18,6 +18,7 @@ interface Episode {
 
 const props = defineProps<{
   episodes: Episode[]
+  compact?: boolean
 }>()
 
 const { mainAppRef } = useBewlyApp()
@@ -117,6 +118,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
     v-if="hasEpisodes"
     ref="containerRef"
     class="media-episode-select"
+    :class="{ 'media-episode-select--compact': compact }"
     pos="relative"
     @keydown="handleKeydown"
     @focusout="handleFocusOut"
@@ -217,6 +219,20 @@ watch(isOpen, async (open, _previous, onCleanup) => {
   margin-top: var(--bew-space-3);
 }
 
+.media-episode-select--compact {
+  width: auto;
+  margin-top: 0;
+
+  .select-button {
+    width: auto;
+    min-height: var(--bew-control-height-sm);
+    gap: var(--bew-space-1);
+    padding: var(--bew-space-1) var(--bew-space-2);
+    font-size: var(--bew-font-size-caption);
+    line-height: var(--bew-line-height-caption);
+  }
+}
+
 .select-button {
   min-height: var(--bew-control-height);
   border: var(--bew-hairline) solid transparent;
@@ -227,7 +243,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
   transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
 
   &:hover {
-    background: var(--bew-fill-2);
+    background: var(--bew-hover-bg);
   }
   &.is-open {
     background: var(--bew-control-selected-background);
@@ -264,8 +280,8 @@ watch(isOpen, async (open, _previous, onCleanup) => {
     padding: var(--bew-space-0-5) var(--bew-space-2);
     border-radius: var(--bew-pill-radius);
     corner-shape: var(--bew-corner-shape-capsule);
-    background: var(--bew-theme-surface-hover);
-    color: var(--bew-on-theme-surface);
+    background: var(--bew-pressed-bg);
+    color: var(--bew-text-1);
     font-size: var(--bew-font-size-control);
     line-height: var(--bew-line-height-control);
   }

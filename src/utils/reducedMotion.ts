@@ -1,4 +1,4 @@
-import { splitCssSelectors } from './cssSelectors'
+import { splitCssSelectors } from './cssSelectors.ts'
 
 export type MotionPreference = 'system' | 'reduce' | 'full'
 export type MotionStyleScope = 'host' | 'shadow' | 'native-shadow' | 'universal'

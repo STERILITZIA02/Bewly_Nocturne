@@ -170,6 +170,14 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       loading.remove()
       time.step()
       assert.ok(overlay.classList.contains('is-leaving'))
+      const oldRemoval = [...timers.values()].at(-1)
+      session.current = null
+      session.entering = true
+      loading.prepare()
+      const replacement = document.getElementById(constants.LOADING_ROOT_ID)
+      assert.ok(replacement && !replacement.classList.contains('is-leaving'), 'a new preparation must retain its loading surface while the old one leaves')
+      oldRemoval()
+      assert.ok(replacement.isConnected && loading.hasOverlay, 'the old fade completion cannot remove the new preparation')
       loading.reset()
       assert.equal(timers.size, 0)
       assert.equal(time.frames.size, 0)
@@ -276,6 +284,7 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
     let ending = false
     let descriptionMeasurements = 0
     const geometry = await loadSourceModule('../src/utils/bewlyWidescreen/geometry.ts', {
+      '~/constants/globalEvents': events,
       '~/logic': { settings },
       '~/utils/bewlyWidescreen/actionEffects': { scheduleActionGeometrySync() {} },
       '~/utils/bewlyWidescreen/constants': constants,
@@ -445,7 +454,6 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       window.removeEventListener('resize', onResize)
       geometry.clearPlayerResizeSync(state)
       geometry.clearAuxiliaryControlGeometry()
-      document.body.classList.remove(events.BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS)
       host.remove()
       root.remove()
     }

@@ -1,3 +1,5 @@
+import { isPlainObject } from '~/utils/plainObject'
+
 export interface FilterRule {
   keyword: string
   remark: string
@@ -21,13 +23,6 @@ export const FILTER_RULE_IMPORT_MAX_ITEMS = 2000
 
 const FILTER_RULE_KEYS = new Set(['keyword', 'remark'])
 const BLOCKED_FILTER_RULE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (Object.prototype.toString.call(value) !== '[object Object]')
-    return false
-  const prototype = Object.getPrototypeOf(value)
-  return prototype === null || prototype === Object.prototype
-}
 
 function compileRegexKeyword(keyword: string): RegExp | null | undefined {
   const startsWithSlash = keyword.startsWith('/')

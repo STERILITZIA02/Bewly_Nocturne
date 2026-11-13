@@ -7,30 +7,30 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
-import ALink from '~/components/ALink.vue'
 import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
-import BangumiEpisodeList from '~/components/BangumiEpisodeList/BangumiEpisodeList.vue'
-import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSelect.vue'
+import Button from '~/components/Button.vue'
 import UserAvatarLink from '~/components/UserCard/UserAvatarLink.vue'
 import AdvertisementCard from '~/components/VideoCard/AdvertisementCard.vue'
 import VideoCard from '~/components/VideoCard/VideoCard.vue'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { uiPx } from '~/composables/useUiScale'
 import { useUserRelations } from '~/composables/useUserRelations'
+import { GRID_GUTTER } from '~/constants/layout'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { toAdvertisementCard, toSearchBrandAdvertisementCards } from '~/utils/advertising'
 import { numFormatter } from '~/utils/dataFormatter'
-import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON } from '~/utils/lvIcons'
+import { getLvIcon } from '~/utils/lvIcons'
 import { getUserID } from '~/utils/main'
-import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
 import { changeUserRelation } from '~/utils/userRelation'
 
 import AllSearchSkeleton from '../components/AllSearchSkeleton.vue'
 import Pagination from '../components/Pagination.vue'
 import EsportsMatchCard from '../components/renderers/EsportsMatchCard.vue'
 import SearchEmptyState from '../components/SearchEmptyState.vue'
+import SearchMediaCard from '../components/SearchMediaCard.vue'
 import { useLoadMore } from '../composables/useLoadMore'
 import { refreshSearchPage, usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
@@ -38,13 +38,11 @@ import { mergeSections } from '../searchSections'
 import {
   convertActivityData,
   convertArticleCardData,
-  convertBangumiHighlight,
   convertLiveRoomData,
   convertUserHighlight,
   convertVideoData,
   convertWebGameData,
   isAdVideo,
-  removeHighlight,
   removeUnusedActivityCard,
 } from '../searchTransforms'
 import type { VideoSearchFilters } from '../types'
@@ -90,9 +88,10 @@ const {
   error,
   results,
   requestScope,
+  view,
   search,
   reset: resetSearch,
-} = useSearchRequest<any>('all')
+} = useSearchRequest<any>('all', { identity: () => [props.keyword.trim(), props.filters], page: () => props.initialPage })
 
 // 分页管理
 const {
@@ -105,7 +104,7 @@ const {
   updatePage,
   getNextPage,
   reset: resetPagination,
-} = usePagination()
+} = usePagination(view)
 
 // 无限加载管理
 const {
@@ -125,6 +124,7 @@ const {
   return { success, appendedCount }
 }, {
   isLoading: () => isLoading.value,
+  view,
 })
 
 // 是否在翻页模式的非首页
@@ -135,25 +135,17 @@ const isInPaginationNonFirstPage = computed(() => {
 // 容器宽度和间距
 const searchContentRef = ref<HTMLElement | null>(null)
 const searchContentWidth = ref(0)
-const videoGridGap = ref(16)
+const videoGridGap = computed(() => uiPx(GRID_GUTTER))
 
 useResizeObserver(searchContentRef, (entries) => {
   const entry = entries[0]
   searchContentWidth.value = entry.contentRect.width
 })
 
-function updateVideoGridGap() {
-  if (typeof window === 'undefined')
-    return
-  const gap = Number.parseFloat(getComputedStyle(document.documentElement).fontSize || '16')
-  if (Number.isFinite(gap))
-    videoGridGap.value = gap
-}
-
 // 赛事卡片样式计算
 const esportsCardStyle = computed(() => {
   const containerWidth = searchContentWidth.value
-  const cardMinWidth = 250
+  const cardMinWidth = uiPx(250)
   const gap = videoGridGap.value
   const maxCards = 5
 
@@ -173,7 +165,7 @@ const esportsCardStyle = computed(() => {
 // 用户代表作列数
 const userSamplesColumns = computed(() => {
   const containerWidth = searchContentWidth.value
-  const cardMinWidth = 180
+  const cardMinWidth = uiPx(180)
   const gap = videoGridGap.value
 
   if (!containerWidth || !Number.isFinite(containerWidth) || containerWidth <= 0)
@@ -217,12 +209,6 @@ const activityAndGameItems = computed(() => {
 
   return items
 })
-
-// 等级图标
-const levelIcons: string[] = [LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON]
-function getLvIcon(level: number): string {
-  return levelIcons[level] || LV0_ICON
-}
 
 // 关注操作
 async function handleUserFollow(mid: number) {
@@ -284,23 +270,19 @@ const videoList = computed(() => {
 })
 
 onMounted(() => {
-  updateVideoGridGap()
   if (searchContentRef.value)
     searchContentWidth.value = searchContentRef.value.clientWidth
-  if (typeof window !== 'undefined')
-    window.addEventListener('resize', updateVideoGridGap)
 
   const keyword = props.keyword.trim()
-  if (keyword) {
+  if (view.restored) {
+    const users = results.value?.result?.find((section: any) => section.result_type === 'bili_user')?.data ?? []
+    void batchQueryUserRelations(users.map((user: any) => user.mid).filter(Boolean))
+  }
+  if (keyword && !view.restored) {
     if (props.initialPage && props.initialPage > 1)
       updatePage(props.initialPage)
     performSearch(false)
   }
-})
-
-onUnmounted(() => {
-  if (typeof window !== 'undefined')
-    window.removeEventListener('resize', updateVideoGridGap)
 })
 
 watch(requestScope, () => {
@@ -485,7 +467,7 @@ defineExpose({
         <h3 text="lg $bew-text-1" mb-3 mt-6>
           {{ t('search.sections.activities') }}
         </h3>
-        <div class="activity-results" grid="~ cols-1 md:cols-2 lg:cols-3 gap-4">
+        <div class="activity-results" grid="~ cols-1 md:cols-2 lg:cols-3 gap-$bew-grid-gutter">
           <a
             v-for="item in activityAndGameItems"
             :key="item.id"
@@ -524,7 +506,7 @@ defineExpose({
         <div
           v-else-if="!isInPaginationNonFirstPage && !settings.blockAds && section?.result_type === 'brand_ad' && Array.isArray(section.data) && section.data.length"
           class="brand-advertisement-results"
-          grid="~ cols-1 md:cols-2 lg:cols-3 gap-4"
+          grid="~ cols-1 md:cols-2 lg:cols-3 gap-$bew-grid-gutter"
         >
           <AdvertisementCard
             v-for="advertisement in section.data.flatMap(toSearchBrandAdvertisementCards)"
@@ -542,105 +524,20 @@ defineExpose({
             {{ section.result_type === 'media_ft' ? t('search.categories.media_ft') : t('search.categories.bangumi') }}
           </h3>
           <!-- 影视 -->
-          <div v-if="section.result_type === 'media_ft'" class="media-ft-highlight-grid">
-            <div
+          <div v-if="section.result_type === 'media_ft'" class="bew-grid-adaptive-poster">
+            <SearchMediaCard
               v-for="item in section.data.slice(0, 2)"
-              :key="item.season_id || item.media_id || item.id"
-              class="bew-media-result-card"
-            >
-              <ALink
-                class="bew-media-result-cover"
-                :href="item.goto_url || item.url || `https://www.bilibili.com/bangumi/media/md${item.media_id}`"
-                type="videoCard"
-                tabindex="-1"
-                aria-hidden="true"
-              >
-                <img :src="item.cover" :alt="removeHighlight(item.title)">
-                <div v-if="item.badges && item.badges.length" class="bew-media-result-badge">
-                  {{ item.badges[0].text }}
-                </div>
-              </ALink>
-              <div class="bew-media-result-info">
-                <div
-                  class="bew-media-result-title bew-search-highlight"
-                  v-html="sanitizeSearchHighlight(item.title)"
-                />
-                <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
-                  <span v-if="item.media_score?.score" text="$bew-text-1" tabular-nums>
-                    {{ t('search.media.score', { score: item.media_score.score.toFixed(1) }) }}
-                  </span>
-                  <span v-if="item.areas">{{ item.areas }}</span>
-                  <span v-if="item.styles">{{ item.styles }}</span>
-                  <span v-if="item.index_show">{{ item.index_show }}</span>
-                </div>
-                <div v-if="item.desc" class="bew-media-result-desc">
-                  {{ removeHighlight(item.desc) }}
-                </div>
-                <MediaEpisodeSelect
-                  v-if="item.eps && item.eps.length"
-                  :episodes="item.eps.map((ep: any) => ({
-                    id: ep.id,
-                    title: ep.title || ep.index,
-                    url: ep.url,
-                    cover: ep.cover,
-                    badge: ep.badges?.[0]?.text,
-                  }))"
-                />
-                <div class="bew-media-result-actions" flex items-center gap-3>
-                  <ALink
-                    class="bew-media-result-button"
-                    :href="item.goto_url || item.url || `https://www.bilibili.com/bangumi/media/md${item.media_id}`"
-                    type="videoCard"
-                    :aria-label="`${t('search.media.watch_now')}：${removeHighlight(item.title)}`"
-                  >
-                    {{ t('search.media.watch_now') }}
-                  </ALink>
-                </div>
-              </div>
-            </div>
+              :key="item.season_id || item.media_id || item.id || item.title"
+              :item="{ ...item, url: item.goto_url || item.url || `https://www.bilibili.com/bangumi/media/md${item.media_id}` }" movie
+            />
           </div>
           <!-- 番剧 -->
-          <div v-else class="bangumi-highlight-grid">
-            <div
-              v-for="bangumi in section.data.slice(0, 2).map(convertBangumiHighlight)"
-              :key="bangumi.id || bangumi.title"
-              class="bew-media-result-card"
-            >
-              <ALink class="bew-media-result-cover" :href="bangumi.url" type="videoCard" tabindex="-1" aria-hidden="true">
-                <img :src="bangumi.cover" :alt="bangumi.title">
-                <div v-if="bangumi.badge?.text || bangumi.capsuleText" class="bew-media-result-badge">
-                  {{ bangumi.badge?.text || bangumi.capsuleText }}
-                </div>
-              </ALink>
-              <div class="bew-media-result-info">
-                <div class="bew-media-result-title">
-                  {{ bangumi.title }}
-                </div>
-                <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
-                  <span v-if="bangumi.score" text="$bew-text-1" tabular-nums>
-                    {{ t('search.media.score', { score: bangumi.score?.toFixed(1) }) }}
-                  </span>
-                  <span v-if="bangumi.areas">{{ bangumi.areas }}</span>
-                  <span v-if="bangumi.episodeCount">{{ t('search.media.episode_count', { count: bangumi.episodeCount }) }}</span>
-                  <span v-if="bangumi.publishDateFormatted">{{ t('search.media.premiere', { date: bangumi.publishDateFormatted }) }}</span>
-                </div>
-                <div v-if="bangumi.desc" class="bew-media-result-desc">
-                  {{ bangumi.desc }}
-                </div>
-                <div v-if="bangumi.tags?.length" class="bew-media-result-tags">
-                  <span v-for="tag in bangumi.tags" :key="tag">{{ tag }}</span>
-                </div>
-                <BangumiEpisodeList
-                  v-if="bangumi.episodes?.length"
-                  :episodes="bangumi.episodes ?? []"
-                />
-                <div class="bew-media-result-actions" flex items-center gap-3>
-                  <ALink class="bew-media-result-button" :href="bangumi.url" type="videoCard" :aria-label="`${bangumi.buttonText || t('search.media.watch_now')}：${bangumi.title}`">
-                    {{ bangumi.buttonText || t('search.media.watch_now') }}
-                  </ALink>
-                </div>
-              </div>
-            </div>
+          <div v-else class="bew-grid-adaptive-poster">
+            <SearchMediaCard
+              v-for="bangumi in section.data.slice(0, 2)"
+              :key="bangumi.season_id || bangumi.media_id || bangumi.id || bangumi.title"
+              :item="bangumi"
+            />
           </div>
         </div>
 
@@ -652,7 +549,7 @@ defineExpose({
           <h3 text="lg $bew-text-1" mb-3 mt-6>
             {{ t('search.sections.schedule') }}
           </h3>
-          <div class="esports-grid" flex="~ wrap gap-4" mb-4>
+          <div class="esports-grid" flex="~ wrap gap-$bew-grid-gutter" mb-4>
             <template v-for="contestData in section.data" :key="`esports-data-${contestData.contest?.[0]?.ID}`">
               <EsportsMatchCard
                 v-for="contest in contestData.contest?.slice(0, 5)"
@@ -697,10 +594,10 @@ defineExpose({
                       class="user-level-badge-icon"
                       v-html="DOMPurify.sanitize(getLvIcon(user.level))"
                     />
-                    <div v-if="user.gender === 1" class="gender-icon-badge gender-male">
+                    <div v-if="user.gender === 1" class="gender-icon-badge">
                       <div i-tabler:gender-male />
                     </div>
-                    <div v-else-if="user.gender === 2" class="gender-icon-badge gender-female">
+                    <div v-else-if="user.gender === 2" class="gender-icon-badge">
                       <div i-tabler:gender-female />
                     </div>
                     <span v-if="user.officialVerify" class="user-highlight-verify">
@@ -715,16 +612,16 @@ defineExpose({
                     {{ user.desc }}
                   </div>
                 </div>
-                <button
-                  type="button"
+                <Button
                   class="user-highlight-follow"
-                  :class="{ followed: userRelations[user.mid]?.isFollowing }"
+                  :type="userRelations[user.mid]?.isFollowing ? 'secondary' : 'primary'"
+                  center
                   :disabled="isUserFollowPending(user.mid)"
                   :aria-busy="isUserFollowPending(user.mid)"
                   @click.stop="handleUserFollow(user.mid)"
                 >
                   {{ userRelations[user.mid]?.isFollowing ? t('search.user.following') : t('search.user.follow') }}
-                </button>
+                </Button>
               </div>
               <div
                 v-if="user.samples && user.samples.length"
@@ -766,7 +663,7 @@ defineExpose({
         <div
           v-else-if="!isInPaginationNonFirstPage && section?.result_type === 'article' && Array.isArray(section.data) && section.data.length"
           class="article-results"
-          grid="~ cols-1 md:cols-2 gap-4"
+          grid="~ cols-1 md:cols-2 gap-$bew-grid-gutter"
         >
           <ArticleCard
             v-for="article in section.data.map(convertArticleCardData)"
@@ -819,33 +716,37 @@ defineExpose({
 
 <style scoped lang="scss">
 @use "../../../../styles/truncateFade";
-@use "../../../../styles/breakpoints";
+@use "../../../../styles/contentCard";
+@use "../../../../styles/hoverState";
 
 .all-search-page {
   width: 100%;
-  padding-bottom: 2rem;
+  padding-bottom: var(--bew-space-8);
 }
 
+// Result cards share the media result card surface (mediaResults.scss).
 .activity-card {
   box-sizing: border-box;
   display: flex;
-  gap: 1rem;
-  padding: 1rem;
-  background: var(--bew-elevated);
-  border-radius: var(--bew-surface-radius);
+  gap: var(--bew-space-4);
+  padding: var(--bew-space-4);
+  background: var(--bew-content-solid);
   border: var(--bew-hairline) solid var(--bew-edge-color);
+  border-radius: var(--bew-surface-radius);
   text-decoration: none;
   color: inherit;
+  @include contentCard.surface($press: false);
 }
 
 .activity-cover {
+  position: relative;
   width: 120px;
   min-width: 120px;
   aspect-ratio: 4 / 3;
   border-radius: var(--bew-thumb-radius);
-  border: 0;
   overflow: hidden;
   background: var(--bew-skeleton);
+  @include contentCard.media-frame;
 
   img {
     display: block;
@@ -860,7 +761,7 @@ defineExpose({
 .activity-info {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--bew-space-2);
 }
 
 .activity-title {
@@ -879,44 +780,33 @@ defineExpose({
 
 .activity-badge {
   align-self: flex-start;
-  padding: 0.25rem 0.5rem;
+  padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-capsule);
-  background: var(--bew-theme-surface-hover);
-  color: var(--bew-on-theme-surface);
+  background: var(--bew-pressed-bg);
+  color: var(--bew-text-1);
   font-size: var(--bew-font-size-control);
-}
-
-.bangumi-highlight-grid,
-.media-ft-highlight-grid {
-  display: grid;
-  gap: 1.5rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-
-  @media (max-width: breakpoints.$grid-lg) {
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  }
 }
 
 .user-highlight-grid {
   display: grid;
-  gap: 1rem;
+  gap: var(--bew-grid-gutter);
 }
 
 .user-highlight-card {
   box-sizing: border-box;
-  background: var(--bew-elevated);
-  border-radius: var(--bew-surface-radius);
+  background: var(--bew-content-solid);
   border: var(--bew-hairline) solid var(--bew-edge-color);
-  padding: 1rem;
+  border-radius: var(--bew-surface-radius);
+  padding: var(--bew-space-4);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--bew-space-3);
 }
 
 .user-highlight-avatar {
-  width: 56px;
-  height: 56px;
+  width: calc(var(--bew-space-12) + var(--bew-space-2));
+  height: calc(var(--bew-space-12) + var(--bew-space-2));
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
   object-fit: cover;
@@ -924,54 +814,20 @@ defineExpose({
 }
 
 .user-highlight-verify {
-  margin-left: 0.5rem;
-  padding: 0.1rem 0.5rem;
+  margin-left: var(--bew-space-2);
+  padding: var(--bew-space-0-5) var(--bew-space-2);
   border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-capsule);
-  background: var(--bew-theme-surface-hover);
-  color: var(--bew-on-theme-surface);
+  background: var(--bew-pressed-bg);
+  color: var(--bew-text-1);
   font-size: var(--bew-font-size-control);
 }
 
-.user-highlight-follow {
+// The one follow button (Button.vue).
+.user-highlight-follow.b-button {
+  min-width: calc(var(--bew-space-10) * 2);
   margin-left: auto;
-  padding: 0.5rem 1.25rem;
-  min-height: var(--bew-control-height);
-  border-radius: var(--bew-interactive-radius);
-  background: var(--bew-theme-color);
-  color: var(--bew-on-theme-color);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-regular);
-  border: 1px solid var(--bew-theme-color);
-  cursor: pointer;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
   white-space: nowrap;
-  min-width: 80px;
-  user-select: none;
-
-  &:hover:not(:disabled) {
-    filter: brightness(1.1);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  &.followed {
-    background: var(--bew-fill-1);
-    color: var(--bew-text-2);
-    border: var(--bew-hairline) solid transparent;
-
-    &:hover:not(:disabled) {
-      background: var(--bew-fill-2);
-    }
-  }
 }
 
 .user-highlight-desc {
@@ -998,19 +854,13 @@ defineExpose({
   justify-content: center;
   font-size: var(--bew-font-size-title);
   flex-shrink: 0;
-
-  &.gender-male {
-    color: rgb(93, 193, 255);
-  }
-
-  &.gender-female {
-    color: rgb(255, 135, 182);
-  }
+  // Neutral like the user card's gender mark: the icon already says which.
+  color: var(--bew-text-3);
 }
 
 .user-highlight-samples {
   display: grid;
-  gap: 1rem;
+  gap: var(--bew-grid-gutter);
 }
 
 .user-highlight-sample-placeholder {
@@ -1021,20 +871,15 @@ defineExpose({
 .more-esports-button {
   display: block;
   text-align: center;
-  padding: 0.5rem;
+  padding: var(--bew-space-2);
   font-size: var(--bew-font-size-control);
   color: var(--bew-theme-foreground);
   text-decoration: none;
   border-radius: var(--bew-interactive-radius);
-  transition:
-    background-color 0.3s ease,
-    color 0.3s ease,
-    border-color 0.3s ease,
-    box-shadow 0.3s ease,
-    transform 0.3s ease;
+  @include hoverState.transition;
 
   &:hover {
-    background: var(--bew-theme-surface);
+    background: var(--bew-selected-bg);
   }
 }
 
@@ -1042,21 +887,10 @@ defineExpose({
   display: grid;
 }
 
+// Capsules (badges) keep their capsule shape from their own rules.
 .activity-card,
 .activity-cover,
-.activity-badge,
-.bew-media-result-card,
-.bew-media-result-card,
-.bew-media-result-cover,
-.bew-media-result-cover,
-.bew-media-result-badge,
-.bew-media-result-badge,
-.bew-media-result-tags span,
-.bew-media-result-button,
-.bew-media-result-button,
 .user-highlight-card,
-.user-highlight-verify,
-.user-highlight-follow,
 .more-esports-button {
   corner-shape: var(--bew-corner-shape);
 }

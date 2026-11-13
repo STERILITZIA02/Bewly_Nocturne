@@ -4,15 +4,12 @@ import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerApprovedUpstreamChecks(check, { Vue, compileComponent, flush }) {
   check('approved upstream: quick filters persist the existing policy fields and open their exact settings', async () => {
-    const { MOMENT_TYPE_FILTER_OPTIONS } = await import('../src/constants/momentFilters')
-    const settings = Vue.ref({ recommendationMode: 'app', enableFilterByLikeCount: false, momentsEnableKeywordFilter: false, ...Object.fromEntries(MOMENT_TYPE_FILTER_OPTIONS.map(option => [option.setting, false])) })
-    const kind = Vue.ref('recommendation')
+    const settings = Vue.ref({ recommendationMode: 'app', enableFilterByLikeCount: false })
     const destinations = []
     const host = document.body.appendChild(document.createElement('div'))
     const Entry = await compileComponent('../src/components/ContentFilterEntry.vue', {
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       '~/logic': { settings },
-      '~/constants/momentFilters': { MOMENT_TYPE_FILTER_OPTIONS },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ openSettingsAt: target => destinations.push(target) }) },
       '~/components/Tooltip.vue': { default: { inheritAttrs: false, setup: (_props, { slots }) => () => slots.default?.() } },
       '~/components/ContextMenu.vue': { default: {
@@ -29,7 +26,7 @@ export function registerApprovedUpstreamChecks(check, { Vue, compileComponent, f
         }, option.label))),
       } },
     })
-    const app = Vue.createApp({ render: () => Vue.h(Entry, { kind: kind.value }) })
+    const app = Vue.createApp({ render: () => Vue.h(Entry) })
     try {
       app.mount(host)
       host.querySelector('[aria-haspopup="menu"]').click()
@@ -38,19 +35,6 @@ export function registerApprovedUpstreamChecks(check, { Vue, compileComponent, f
       assert.equal(settings.value.enableFilterByLikeCount, true, 'APP likes use the same existing filter setting')
       host.querySelector('[data-filter="settings"]').click()
       assert.equal(destinations.at(-1).settingId, 'settings.filter_by_view_count')
-      kind.value = 'moments'
-      await flush()
-      host.querySelector('[aria-haspopup="menu"]').click()
-      await flush()
-      const videos = host.querySelector('[data-filter="momentsHideVideoDynamics"]')
-      assert.equal(videos.getAttribute('aria-checked'), 'true', 'checked types remain visible, just like Settings')
-      videos.click()
-      await flush()
-      assert.equal(settings.value.momentsHideVideoDynamics, true)
-      assert.equal(videos.getAttribute('aria-checked'), 'false')
-      host.querySelector('[data-filter="settings"]').click()
-      assert.equal(destinations.at(-1).page, 'moments')
-      assert.equal(destinations.at(-1).settingId, 'settings.moments_filtered_types')
     }
     finally {
       app.unmount()

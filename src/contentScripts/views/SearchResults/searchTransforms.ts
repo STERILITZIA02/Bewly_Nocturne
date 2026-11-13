@@ -1,7 +1,10 @@
-import type { Video } from '~/components/VideoCard/types'
+import type { Author, Video } from '~/components/VideoCard/types'
 import { isBilibiliAdvertisement, toAdvertisementCard } from '~/utils/advertising'
 import { parseStatNumber } from '~/utils/dataFormatter'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
+import { isRecord } from '~/utils/plainObject'
+
+import type { SearchActivityResult, SearchArticleResult, SearchEpisodeResult, SearchGameResult, SearchLiveResult, SearchMediaResult, SearchUserResult, SearchVideoResult } from './types'
 
 export function removeHighlight(text?: string): string {
   if (typeof text !== 'string' || !text)
@@ -14,7 +17,7 @@ export function removeHighlight(text?: string): string {
 /**
  * 检查视频是否是广告
  */
-export function isAdVideo(video: any): boolean {
+export function isAdVideo(video: unknown): boolean {
   return isBilibiliAdvertisement(video)
 }
 
@@ -34,7 +37,7 @@ function formatDuration(totalSeconds: number): string {
   return `${minutes}:${`${remainingSeconds}`.padStart(2, '0')}`
 }
 
-export function convertVideoData(video: any): Video {
+export function convertVideoData(video: SearchVideoResult): Video {
   if (isBilibiliAdvertisement(video)) {
     const card = toAdvertisementCard(video)
     return { ...card, title: removeHighlight(card.title) }
@@ -67,7 +70,7 @@ export function convertVideoData(video: any): Video {
   const capsuleText = video.type === 'ketang' ? undefined : removeHighlight(video.typename || '').trim()
 
   // 处理 author 字段：确保始终返回正确的对象格式
-  let author: any
+  let author: Author
 
   // 课堂类型特殊处理：使用特殊标记表示需要显示图标而不是头像
   if (video.type === 'ketang') {
@@ -134,7 +137,7 @@ export function convertVideoData(video: any): Video {
   }
 }
 
-export function convertBangumiCardData(item: any) {
+export function convertBangumiCardData(item: SearchMediaResult) {
   const cover = item.cover || item.square_cover || item.vertical_cover || item.horizontal_cover
   const sanitizedCover = typeof cover === 'string' && cover.startsWith('//') ? `https:${cover}` : cover
   const url = item.url
@@ -152,7 +155,7 @@ export function convertBangumiCardData(item: any) {
   const descText = typeof item.desc === 'string' ? removeHighlight(item.desc) : ''
 
   const tags = styles
-    .map((style: any) => {
+    .map((style) => {
       if (typeof style === 'string')
         return removeHighlight(style)
       if (typeof style?.style_name === 'string')
@@ -165,7 +168,7 @@ export function convertBangumiCardData(item: any) {
 
   return {
     url,
-    cover: sanitizedCover,
+    cover: sanitizedCover || '',
     title: removeHighlight(item.title),
     desc: sanitizeBangumiDescription(evaluate || descText),
     evaluate,
@@ -183,12 +186,12 @@ export function convertBangumiCardData(item: any) {
   }
 }
 
-export function convertBangumiHighlight(item: any) {
+export function convertBangumiHighlight(item: SearchMediaResult) {
   const id = item.season_id || item.media_id || item.id
   const base = convertBangumiCardData(item)
   const score = Number(item.media_score?.score ?? item.score)
   const bizTips = Array.isArray(item.styles)
-    ? item.styles.map((style: any) => (typeof style === 'string' ? removeHighlight(style) : style?.style_name ?? style?.name)).filter(Boolean)
+    ? item.styles.map(style => (typeof style === 'string' ? removeHighlight(style) : style?.style_name ?? style?.name)).filter((tag): tag is string => Boolean(tag))
     : []
   const publishTimestamp = Number(item.pubtime || item.publish_time || item.ctime)
   const publishDateFormatted = formatPublishDate(publishTimestamp)
@@ -201,7 +204,7 @@ export function convertBangumiHighlight(item: any) {
     url: base.url,
     score: Number.isFinite(score) ? score : undefined,
     seasonType: removeHighlight(item.season_type_name || item.season_title || ''),
-    areas: Array.isArray(item.areas) ? item.areas.map((area: any) => removeHighlight(typeof area === 'string' ? area : area?.name)).filter(Boolean).join(' / ') : '',
+    areas: Array.isArray(item.areas) ? item.areas.map(area => removeHighlight(typeof area === 'string' ? area : area?.name)).filter(Boolean).join(' / ') : '',
     publishDate: publishTimestamp,
     publishDateFormatted,
     episodeCount,
@@ -222,12 +225,12 @@ export interface BangumiEpisode {
   number?: number
 }
 
-export function convertUserCardData(user: any, sampleTitle: (index: number) => string) {
+export function convertUserCardData(user: SearchUserResult, sampleTitle: (index: number) => string) {
   user = user && typeof user === 'object' ? user : {}
   const roomid = Number(user.roomid || user.room_id)
   const verifyInfo = user.official_verify?.desc || user.verify_info || ''
   // 兼容live_user数据结构：uid->mid, uface->face
-  const mid = user.mid || user.uid
+  const mid = user.mid || user.uid || 0
   const face = user.upic || user.face || user.uface || ''
   return {
     mid,
@@ -248,7 +251,7 @@ export function convertUserCardData(user: any, sampleTitle: (index: number) => s
   }
 }
 
-export function convertUserHighlight(user: any, sampleTitle: (index: number) => string) {
+export function convertUserHighlight(user: SearchUserResult, sampleTitle: (index: number) => string) {
   const base = convertUserCardData(user, sampleTitle)
   return {
     ...base,
@@ -258,14 +261,14 @@ export function convertUserHighlight(user: any, sampleTitle: (index: number) => 
   }
 }
 
-export function convertArticleCardData(article: any) {
+export function convertArticleCardData(article: SearchArticleResult) {
   const cover = (Array.isArray(article.image_urls) && article.image_urls[0])
     || article.pic
     || article.cover
 
   const tags = Array.isArray(article.tags)
     ? article.tags
-      .map((tag: any) => {
+      .map((tag) => {
         if (typeof tag === 'string')
           return { name: removeHighlight(tag) }
         if (typeof tag?.name === 'string')
@@ -293,7 +296,7 @@ export function convertArticleCardData(article: any) {
   }
 }
 
-export function convertMediaFtHighlight(item: any) {
+export function convertMediaFtHighlight(item: SearchMediaResult) {
   const cover = item.cover || item.square_cover || item.vertical_cover || item.horizontal_cover
   const url = item.url
     || item.goto_url
@@ -310,9 +313,9 @@ export function convertMediaFtHighlight(item: any) {
   const indexShow = typeof item.index_show === 'string' ? item.index_show : ''
 
   const episodes = Array.isArray(item.eps)
-    ? item.eps.map((ep: any) => ({
-        id: ep.id,
-        title: ep.title || ep.index,
+    ? item.eps.map(ep => ({
+        id: String(ep.id ?? ep.ep_id ?? ep.url ?? ep.index ?? ''),
+        title: String(ep.title || ep.index || ''),
         url: ep.url,
         cover: ep.cover,
         badge: ep.badges?.[0]?.text,
@@ -334,7 +337,7 @@ export function convertMediaFtHighlight(item: any) {
   }
 }
 
-export function convertActivityData(item: any) {
+export function convertActivityData(item: SearchActivityResult) {
   const cover = typeof item.cover === 'string'
     ? item.cover.startsWith('//') ? `https:${item.cover}` : item.cover
     : undefined
@@ -352,11 +355,11 @@ export function convertActivityData(item: any) {
   }
 }
 
-export function removeUnusedActivityCard(item: any) {
+export function removeUnusedActivityCard(item: SearchActivityResult) {
   return item.card_type !== 2
 }
 
-export function convertLiveRoomData(live: any): Video {
+export function convertLiveRoomData(live: SearchLiveResult): Video {
   const cover = live.cover || live.user_cover || live.pic
   const sanitizedCover = typeof cover === 'string' && cover.startsWith('//')
     ? `https:${cover}`
@@ -388,7 +391,7 @@ export function convertLiveRoomData(live: any): Video {
   }
 }
 
-export function isMediaFtItem(item: any): boolean {
+export function isMediaFtItem(item: SearchMediaResult): boolean {
   // The same PGC season contract is used by Ranking: 1/4 are anime/Guochuang;
   // 2/3/5/7 are film, documentary, TV and variety. Do not treat all PGC as film.
   return item?.type === 'media_ft'
@@ -396,11 +399,11 @@ export function isMediaFtItem(item: any): boolean {
     || [2, 3, 5, 7].includes(Number(item?.season_type))
 }
 
-function extractBangumiEpisodes(item: any): BangumiEpisode[] {
+function extractBangumiEpisodes(item: SearchMediaResult): BangumiEpisode[] {
   const foundEpisodes: BangumiEpisode[] = []
   const seenEpisodeIds = new Set<string>()
 
-  const pushEpisode = (episode: any) => {
+  const pushEpisode = (episode: SearchEpisodeResult) => {
     if (!episode)
       return
     const episodeId = episode.id || episode.ep_id
@@ -429,7 +432,7 @@ function extractBangumiEpisodes(item: any): BangumiEpisode[] {
     })
   }
 
-  const collectFromArray = (arr: any[]) => {
+  const collectFromArray = (arr: unknown[]) => {
     arr.forEach((entry) => {
       if (!entry)
         return
@@ -437,9 +440,9 @@ function extractBangumiEpisodes(item: any): BangumiEpisode[] {
         collectFromArray(entry)
         return
       }
-      if (typeof entry === 'object') {
+      if (isRecord(entry)) {
         if ('title' in entry || 'index_title' in entry || 'long_title' in entry)
-          pushEpisode(entry)
+          pushEpisode(entry as SearchEpisodeResult)
 
         ;['episodes', 'items', 'data', 'modules'].forEach((key) => {
           const value = entry[key]
@@ -471,7 +474,7 @@ function extractBangumiEpisodes(item: any): BangumiEpisode[] {
   return foundEpisodes
 }
 
-function resolveEpisodeNumber(source: any, fallbackTitle: string): number | undefined {
+function resolveEpisodeNumber(source: SearchEpisodeResult, fallbackTitle: string): number | undefined {
   const values: Array<string | number | undefined> = [
     source?.order,
     source?.episode,
@@ -504,9 +507,9 @@ function resolveEpisodeNumber(source: any, fallbackTitle: string): number | unde
   return undefined
 }
 
-function convertUserSamples(source: any, limit: number, sampleTitle: (index: number) => string): any[] {
+function convertUserSamples(source: SearchUserResult, limit: number, sampleTitle: (index: number) => string) {
   const list = Array.isArray(source?.res) ? source.res : []
-  const samples: any[] = []
+  const samples: Array<{ id: string, title: string, cover?: string, url?: string, duration?: number, durationStr?: string, play?: number, aid?: number, bvid?: string }> = []
 
   for (let index = 0; index < list.length; index += 1) {
     const item = list[index]
@@ -537,7 +540,7 @@ function convertUserSamples(source: any, limit: number, sampleTitle: (index: num
   return samples
 }
 
-function normalizeMediaCover(value: any): string | undefined {
+function normalizeMediaCover(value: unknown): string | undefined {
   if (typeof value !== 'string' || !value)
     return undefined
   if (value.startsWith('//'))
@@ -545,7 +548,7 @@ function normalizeMediaCover(value: any): string | undefined {
   return value
 }
 
-function resolveUserSampleUrl(sample: any): string | undefined {
+function resolveUserSampleUrl(sample: SearchVideoResult): string | undefined {
   if (typeof sample?.arcurl === 'string' && sample.arcurl)
     return sample.arcurl
   if (typeof sample?.bvid === 'string' && sample.bvid)
@@ -555,7 +558,7 @@ function resolveUserSampleUrl(sample: any): string | undefined {
   return undefined
 }
 
-function parseCountNumber(value: any): number | undefined {
+function parseCountNumber(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value))
     return value
   if (typeof value === 'string') {
@@ -575,7 +578,7 @@ function parseCountNumber(value: any): number | undefined {
   return undefined
 }
 
-function normalizeDuration(value: any): string | undefined {
+function normalizeDuration(value: unknown): string | undefined {
   if (typeof value === 'string') {
     const trimmed = value.trim()
     return trimmed || undefined
@@ -589,10 +592,10 @@ function normalizeDuration(value: any): string | undefined {
   return undefined
 }
 
-function extractVideoTags(video: any): string[] {
+function extractVideoTags(video: SearchVideoResult): string[] {
   const rawValues: string[] = []
 
-  const pushValue = (value: any) => {
+  const pushValue = (value: unknown) => {
     if (typeof value === 'string')
       rawValues.push(value)
   }
@@ -635,7 +638,7 @@ function extractVideoTags(video: any): string[] {
   return result
 }
 
-function parseDurationToSeconds(raw: any): number | undefined {
+function parseDurationToSeconds(raw: unknown): number | undefined {
   if (raw === null || raw === undefined)
     return undefined
 
@@ -682,8 +685,8 @@ function formatPublishDate(timestamp?: number): string {
   return `${year}-${month}-${day}`
 }
 
-function resolveBangumiEpisodeCount(item: any, episodes: BangumiEpisode[]): number | undefined {
-  const normalizeNumber = (value: any) => {
+function resolveBangumiEpisodeCount(item: SearchMediaResult, episodes: BangumiEpisode[]): number | undefined {
+  const normalizeNumber = (value: unknown) => {
     const number = Number(value)
     return Number.isFinite(number) && number > 0 ? number : undefined
   }
@@ -730,7 +733,7 @@ function resolveBangumiEpisodeCount(item: any, episodes: BangumiEpisode[]): numb
 /**
  * 转换游戏卡片数据
  */
-export function convertWebGameData(game: any) {
+export function convertWebGameData(game: SearchGameResult) {
   const cover = typeof game.game_icon === 'string'
     ? game.game_icon.startsWith('//') ? `https:${game.game_icon}` : game.game_icon
     : undefined

@@ -72,8 +72,8 @@ html.bewly-design:is(.esportsPage, [data-bewly-native-site="esports"]) {
   .game-next .schedule > .title .right,
   .game-next .game-link,
   .bili-game-local .default-btn {
-    background: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
     border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
@@ -81,7 +81,7 @@ html.bewly-design:is(.esportsPage, [data-bewly-native-site="esports"]) {
 
   .game-next .schedule .btn:hover,
   .bili-game-local .default-btn:hover {
-    background: var(--bew-theme-surface-hover);
+    background: var(--bew-pressed-bg);
   }
 
   .bili-game-local .content-all > .active,

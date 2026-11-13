@@ -26,29 +26,17 @@ type SizeListener = (width: number) => void
 const listeners = new Map<HTMLElement, SizeListener>()
 let observer: ResizeObserver | undefined
 
-function measureAll() {
-  for (const [element, listener] of listeners)
-    listener(element.getBoundingClientRect().width)
-}
-
 /**
  * One observer for mounted covers, no scroll listener or per-image polling.
  * ResizeObserver reports the first width before paint, so only covers that set
  * their source during mount (`immediate`) pay for a synchronous layout read.
  */
 export function observeCoverWidth(element: HTMLElement, listener: SizeListener, immediate = false): () => void {
-  if (!listeners.size) {
-    if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(entries => entries.forEach(entry => listeners.get(entry.target as HTMLElement)?.(entry.contentRect.width)))
-    }
-    else {
-      window.addEventListener('resize', measureAll, { passive: true })
-    }
-  }
+  observer ??= new ResizeObserver(entries => entries.forEach(entry => listeners.get(entry.target as HTMLElement)?.(entry.contentRect.width)))
   listeners.set(element, listener)
-  if (immediate || !observer)
+  if (immediate)
     listener(element.getBoundingClientRect().width)
-  observer?.observe(element)
+  observer.observe(element)
   return () => {
     if (listeners.get(element) !== listener)
       return
@@ -57,7 +45,6 @@ export function observeCoverWidth(element: HTMLElement, listener: SizeListener, 
     if (!listeners.size) {
       observer?.disconnect()
       observer = undefined
-      window.removeEventListener('resize', measureAll)
     }
   }
 }

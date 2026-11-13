@@ -62,9 +62,9 @@
   }
 
   .Vue-Toastification__icon {
-    width: 18px;
-    height: 18px;
-    flex: 0 0 18px;
+    width: var(--bew-icon-size-sm);
+    height: var(--bew-icon-size-sm);
+    flex: 0 0 var(--bew-icon-size-sm);
     margin: 1px 0 0;
     color: var(--bew-toast-accent);
   }
@@ -83,10 +83,10 @@
 
   .Vue-Toastification__close-button.bewly-toast__close {
     display: inline-flex;
-    width: 24px;
-    height: 24px;
+    width: var(--bew-icon-button-size-sm);
+    height: var(--bew-icon-button-size-sm);
     aspect-ratio: 1;
-    flex: 0 0 24px;
+    flex: 0 0 var(--bew-icon-button-size-sm);
     align-items: center;
     justify-content: center;
     margin: calc(var(--bew-space-0-5) * -1) calc(var(--bew-space-0-5) * -1) calc(var(--bew-space-0-5) * -1) 0;

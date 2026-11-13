@@ -200,7 +200,7 @@ onBeforeUnmount(() => {
 }
 .moment-forward-topic-picker__results button:hover,
 .moment-forward-topic-picker__state button:hover {
-  background: var(--bew-fill-1);
+  background: var(--bew-hover-bg);
 }
 .moment-forward-topic-picker__results button:focus-visible,
 .moment-forward-topic-picker__state button:focus-visible,

@@ -29,24 +29,21 @@ const state = computed<VideoWatchState | undefined>((previous) => {
 </template>
 
 <style scoped>
+/* The same quiet marker as "followed" beside an uploader's name
+   (VideoCardAuthorName): a neutral capsule with no outline. */
 .video-watched-tag {
   display: inline-flex;
   align-items: center;
   margin-right: var(--bew-space-1);
-  padding: 0 var(--bew-space-1);
-  border: 1px solid var(--bew-text-3);
+  padding-inline: var(--bew-space-2);
   border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-text-2);
-  background: var(--bew-fill-2);
+  background: var(--bew-fill-1);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
   vertical-align: 0.08em;
   white-space: nowrap;
-}
-
-:host(.dark) .video-watched-tag {
-  color: var(--bew-text-1);
 }
 </style>

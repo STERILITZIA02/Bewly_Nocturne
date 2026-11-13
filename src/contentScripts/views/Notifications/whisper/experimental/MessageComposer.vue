@@ -233,7 +233,6 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
       <Tooltip :content="t('notifications.whisper.messages.remove_image')" placement="top">
         <IconButton
           class="message-composer__action"
-          shape="circle"
           :label="t('notifications.whisper.messages.remove_image')"
           @click="emit('removeImage', imageDraft.localId)"
         >
@@ -247,7 +246,6 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
         <Tooltip :content="emotePickerOpen ? '' : t('notifications.whisper.messages.select_emote')" placement="top">
           <IconButton
             class="message-composer__action"
-            shape="circle"
             :label="t('notifications.whisper.messages.select_emote')"
             :aria-expanded="emotePickerOpen"
             :disabled="Boolean(disabledReason)"
@@ -281,7 +279,6 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
       <Tooltip v-if="enableImage" :content="t('notifications.whisper.messages.select_image')" placement="top">
         <IconButton
           class="message-composer__action"
-          shape="circle"
           :label="t('notifications.whisper.messages.select_image')"
           :disabled="!canSelectImage"
           @click="openImagePicker"

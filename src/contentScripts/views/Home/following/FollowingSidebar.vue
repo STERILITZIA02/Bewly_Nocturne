@@ -260,13 +260,13 @@ onMounted(() => emit('scrollElement', scroller.value))
     background-color var(--bew-duration-fast),
     color var(--bew-duration-fast);
   &:hover:not(:disabled):not(.active) {
-    background: var(--bew-fill-2);
+    background: var(--bew-hover-bg);
   }
   &:active:not(:disabled):not(.active) {
     background: var(--bew-fill-3);
   }
   &:disabled {
-    opacity: 0.5;
+    opacity: var(--bew-disabled-opacity);
     cursor: default;
   }
   &:focus-visible {

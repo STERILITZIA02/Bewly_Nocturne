@@ -35,7 +35,7 @@ defineEmits<{ (event: 'toggle', trigger: MouseEvent): void }>()
   }
   &:disabled {
     cursor: not-allowed;
-    opacity: 0.5;
+    opacity: var(--bew-disabled-opacity);
   }
 }
 .history-day-toggle__chevron {

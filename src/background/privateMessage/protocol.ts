@@ -1,3 +1,5 @@
+import { isRecord } from '~/utils/plainObject'
+
 import type {
   AckPrivateSessionOptions,
   GetNewPrivateSessionsOptions,
@@ -32,10 +34,6 @@ function requireIdentifier(value: string, fieldName: string): string {
   if (!/^\d+$/.test(normalized))
     throw new TypeError(`${fieldName} must be an unsigned decimal string`)
   return normalized
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function asNumber(value: unknown, fallback = 0): number {

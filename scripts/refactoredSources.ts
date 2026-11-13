@@ -21,16 +21,6 @@ export const FOR_YOU_SOURCE_FILES = [
   '../src/contentScripts/views/Home/useWebRecommendationCursor.ts',
 ] as const
 
-export const FAVORITES_SOURCE_FILES = [
-  '../src/contentScripts/views/Favorites/FavoritesPage.vue',
-  '../src/contentScripts/views/Favorites/FavoriteFolderEditor.vue',
-  '../src/contentScripts/views/Favorites/useFavoriteFolderManager.ts',
-  '../src/contentScripts/views/Favorites/favoritesLayout.scss',
-  '../src/contentScripts/views/Favorites/useFavoritesData.ts',
-  '../src/contentScripts/views/Favorites/useFavoriteWrites.ts',
-  '../src/contentScripts/views/Favorites/favoriteAdapters.ts',
-] as const
-
 export async function readSourceFiles(files: readonly string[]) {
   return (await Promise.all(files.map(file => readFile(new URL(file, import.meta.url), 'utf8')))).join('\n')
 }

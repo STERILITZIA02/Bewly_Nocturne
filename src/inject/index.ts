@@ -332,7 +332,7 @@ else if (shouldInitializePageScript) {
     #${COMMENT_REPLY_TREE_GUIDES_ID} .bewly-comment-reply-branch__author,
     #${COMMENT_REPLY_TREE_GUIDES_ID} .bewly-comment-reply-tail__label {
       fill: var(--bew-text-2, var(--text2, #61666d));
-      font-size: var(--bew-font-size-caption, 12px);
+      font-size: var(--bew-font-size-caption, 11px);
       font-weight: var(--bew-font-weight-regular, 400);
       pointer-events: none;
     }
@@ -362,12 +362,12 @@ else if (shouldInitializePageScript) {
     :host-context(#bewly-widescreen-root) :is(#user-name, #user-name a) {
       font-size: var(--bew-font-size-control, 13px) !important;
       font-weight: var(--bew-font-weight-regular, 400) !important;
-      line-height: var(--bew-line-height-control, 18px) !important;
+      line-height: var(--bew-line-height-control, 16px) !important;
     }
     :host-context(#bewly-widescreen-root) #location {
       color: var(--bew-text-3) !important;
-      font-size: var(--bew-font-size-caption, 12px) !important;
-      line-height: var(--bew-line-height-caption, 16px) !important;
+      font-size: var(--bew-font-size-caption, 11px) !important;
+      line-height: var(--bew-line-height-caption, 14px) !important;
     }
     :host-context(#bewly-widescreen-root) #user-name a {
       color: var(--bew-text-1) !important;
@@ -481,7 +481,7 @@ else if (shouldInitializePageScript) {
       css: `
         :host-context(#bewly-widescreen-root) #contents {
           font-size: var(--bew-font-size-body) !important;
-          line-height: var(--bew-line-height-body) !important;
+          line-height: var(--bew-line-height-reading) !important;
         }
         :host-context(#bewly-widescreen-root) #contents a {
           color: var(--bew-theme-foreground) !important;
@@ -526,8 +526,8 @@ else if (shouldInitializePageScript) {
 
         :host-context(#bewly-widescreen-root) #view-more {
           color: var(--bew-text-3) !important;
-          font-size: var(--bew-font-size-caption, 12px) !important;
-          line-height: var(--bew-line-height-caption, 16px) !important;
+          font-size: var(--bew-font-size-caption, 11px) !important;
+          line-height: var(--bew-line-height-caption, 14px) !important;
         }
 
         /* "View" is a quiet action like reply: it brightens, it is not a link. */
@@ -588,7 +588,7 @@ else if (shouldInitializePageScript) {
           font: inherit;
           font-size: var(--bew-font-size-control, 13px);
           font-weight: var(--bew-font-weight-regular, 400);
-          line-height: var(--bew-line-height-control, 18px);
+          line-height: var(--bew-line-height-control, 16px);
           cursor: pointer;
           transition:
             color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
@@ -666,11 +666,12 @@ else if (shouldInitializePageScript) {
           padding-left: calc(var(--bew-control-height-lg, 40px) + var(--bew-space-3, 12px));
         }
 
-        /* Reading text: the content box takes the body size its rich text
-           already uses, so no taller native line box sits around it. */
+        /* Reading text: the content box takes the body size and the reading
+           line height its rich text already uses, so no other native line
+           box sits around it. */
         :host-context(#bewly-widescreen-root) #content {
-          font-size: var(--bew-font-size-body, 15px);
-          line-height: var(--bew-line-height-body, 24px);
+          font-size: var(--bew-font-size-body, 13px);
+          line-height: var(--bew-line-height-reading, 20px);
         }
       `,
     },
@@ -1321,21 +1322,38 @@ else if (shouldInitializePageScript) {
     addTarget(component)
     replyContainer.querySelectorAll(MISSING_COMMENT_PARENT_SELECTOR).forEach(addTarget)
 
+    const abort = state.imageLoadAbort ??= new AbortController()
+    const imageLoadListeners = state.imageLoadListeners ??= new WeakSet<HTMLImageElement>()
+    const onImageLayout = () => scheduleCommentReplyTreeLayoutUpdate(component)
+
     // 主评论图片和正文可能分别位于多层 shadow root；只观察外层 renderer
     // 在某些布局下无法捕获内部图片高度变化，导致回复坐标仍停留在旧位置。
     // Each ShadowRoot boundary keeps its own targets, but inside one tree scope
     // a box already covered by an observed ancestor adds nothing.
     const layoutTargetSelector = '#body, #main, #header, #content, #pictures, #footer, #user-avatar, bili-comment-pictures-renderer, bili-rich-text, img'
+    const mediaHostSelector = 'bili-comment-renderer, bili-comment-reply-renderer, bili-comment-replies-renderer, bili-comment-user-info, bili-comment-pictures-renderer, bili-rich-text, bili-avatar'
     const collectNestedLayoutTargets = (root: ParentNode) => {
       const candidates = Array.from(root.querySelectorAll<HTMLElement>(layoutTargetSelector))
       candidates
         .filter(candidate => !candidates.some(other => other !== candidate && other.contains(candidate)))
         .forEach(addTarget)
-      root.querySelectorAll<HTMLElement>('*').forEach((element) => {
+      // The same pass covers late images and late Shadow roots without walking
+      // every text wrapper, action button and menu descendant on each update.
+      for (const candidate of candidates) {
+        if (!(candidate instanceof HTMLImageElement) || candidate.complete || imageLoadListeners.has(candidate))
+          continue
+        imageLoadListeners.add(candidate)
+        candidate.addEventListener('load', onImageLayout, { once: true, signal: abort.signal })
+        candidate.addEventListener('error', onImageLayout, { once: true, signal: abort.signal })
+      }
+      root.querySelectorAll<HTMLElement>(mediaHostSelector).forEach((element) => {
         if (element.shadowRoot)
           collectNestedLayoutTargets(element.shadowRoot)
       })
     }
+    const imageRoot = threadHost ?? component
+    if (imageRoot instanceof HTMLElement)
+      collectNestedLayoutTargets(imageRoot)
     if (threadRoot)
       collectNestedLayoutTargets(threadRoot)
     else if (component instanceof HTMLElement && component.shadowRoot)
@@ -1406,33 +1424,6 @@ else if (shouldInitializePageScript) {
       state.observedReplyContainer = replyContainer
       state.replyContainerMutationObserver = observer
       state.processReplyMutations = process
-    }
-
-    // 每次更新都补一次图片监听，避免图片/嵌套 shadow 在首次更新后才挂载时漏监听。
-    // 主评论/回复内图片异步解码完成也会改变高度。
-    const imageRoot = threadHost ?? component
-    if (imageRoot instanceof HTMLElement) {
-      const abort = state.imageLoadAbort ?? new AbortController()
-      state.imageLoadAbort = abort
-      const imageLoadListeners = state.imageLoadListeners ?? new WeakSet<HTMLImageElement>()
-      state.imageLoadListeners = imageLoadListeners
-      const onImageLayout = () => scheduleCommentReplyTreeLayoutUpdate(component)
-      const listenImages = (root: ParentNode) => {
-        root.querySelectorAll('img').forEach((img) => {
-          if (img.complete || imageLoadListeners.has(img))
-            return
-          imageLoadListeners.add(img)
-          img.addEventListener('load', onImageLayout, { once: true, signal: abort.signal })
-          img.addEventListener('error', onImageLayout, { once: true, signal: abort.signal })
-        })
-        root.querySelectorAll<HTMLElement>('*').forEach((element) => {
-          if (element.shadowRoot)
-            listenImages(element.shadowRoot)
-        })
-      }
-      listenImages(imageRoot)
-      if (imageRoot.shadowRoot)
-        listenImages(imageRoot.shadowRoot)
     }
   }
 
@@ -2889,26 +2880,6 @@ else if (shouldInitializePageScript) {
     rootReplyAuthorByThread.set(threadRootKey, authorMid)
   }
 
-  function tryResolveRootAuthorFromDom(replyItem: any, rootRpid: string): string | null {
-    const rootReplyElements = document.querySelectorAll('bili-comment-user-info')
-    for (let i = 0; i < rootReplyElements.length; i += 1) {
-      const component = rootReplyElements[i] as any
-      const data = component?.data
-      if (!data)
-        continue
-
-      const dataRpid = getReplyRpid(data)
-      if (dataRpid !== rootRpid)
-        continue
-
-      const rootAuthorMid = getReplyMemberMid(data)
-      if (rootAuthorMid)
-        return rootAuthorMid
-    }
-
-    return null
-  }
-
   function isSubReplyByRootAuthor(replyItem: any): boolean {
     const rootRpid = getReplyRootRpid(replyItem)
     if (!rootRpid || rootRpid === '0')
@@ -2919,12 +2890,7 @@ else if (shouldInitializePageScript) {
       return false
 
     const threadRootKey = getThreadRootKey(replyItem, rootRpid)
-    let rootAuthorMid = rootReplyAuthorByThread.get(threadRootKey)
-    if (!rootAuthorMid) {
-      rootAuthorMid = tryResolveRootAuthorFromDom(replyItem, rootRpid) ?? undefined
-      if (rootAuthorMid)
-        rootReplyAuthorByThread.set(threadRootKey, rootAuthorMid)
-    }
+    const rootAuthorMid = rootReplyAuthorByThread.get(threadRootKey)
 
     return rootAuthorMid === authorMid
   }
@@ -2978,7 +2944,7 @@ else if (shouldInitializePageScript) {
     }
     // 楼主标签使用主题色，明暗模式由主题变量自动适配
     else if (id === 'host-tag') {
-      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); font-weight: var(--bew-font-weight-regular, 400); color: var(--bew-on-theme-surface); background-color: var(--bew-theme-surface); border-radius: var(--bew-radius-tiny, 4px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
+      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); font-weight: var(--bew-font-weight-regular, 400); color: var(--bew-text-1); background-color: var(--bew-selected-bg); border-radius: var(--bew-radius-tiny, 4px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
       element.textContent = String(text)
     }
     else {

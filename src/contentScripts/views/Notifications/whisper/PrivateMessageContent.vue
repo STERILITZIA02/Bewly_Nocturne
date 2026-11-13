@@ -438,7 +438,7 @@ watch(() => props.content, () => {
 }
 
 a.private-message-content__card:not(:has(.private-message-content__cover)):hover {
-  background: var(--bew-fill-1);
+  background: var(--bew-hover-bg);
 }
 
 .private-message-content__cover {

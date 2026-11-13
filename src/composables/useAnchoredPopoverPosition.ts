@@ -88,11 +88,9 @@ export function useAnchoredPopoverPosition(
     if (disposed || !triggerElement || !popupElement || !visible.value)
       return
 
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(scheduleUpdate)
-      resizeObserver.observe(triggerElement)
-      resizeObserver.observe(popupElement)
-    }
+    resizeObserver = new ResizeObserver(scheduleUpdate)
+    resizeObserver.observe(triggerElement)
+    resizeObserver.observe(popupElement)
     window.addEventListener('resize', scheduleUpdate)
     window.addEventListener('scroll', scheduleUpdate, true)
     window.visualViewport?.addEventListener('resize', scheduleUpdate)

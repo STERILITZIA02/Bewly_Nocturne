@@ -14,11 +14,18 @@ import { useSettingsStore } from '~/stores/settingsStore'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
+import SettingsSegmentedControl from '../../components/SettingsSegmentedControl.vue'
 
 const { t } = useI18n()
 const mainStore = useMainStore()
 const settingsStore = useSettingsStore()
 const dockPositions = computed(() => DOCK_POSITIONS.map(value => ({ label: t(`common.position.${value}`), value })))
+
+const dockBadgeOptions = computed(() => [
+  { label: t('settings.dock_badges_opt.number'), value: 'number' },
+  { label: t('settings.dock_badges_opt.dot'), value: 'dot' },
+  { label: t('settings.dock_badges_opt.none'), value: 'none' },
+])
 
 const dockCollapseModeOptions = computed((): { label: string, value: DockCollapseMode }[] => {
   return [
@@ -95,8 +102,8 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
       <SettingsItem setting-id="settings.show_dock_item_names" :title="$t('settings.show_dock_item_names')" right-width="auto">
         <Radio v-model="settings.showDockItemNames" />
       </SettingsItem>
-      <SettingsItem setting-id="settings.show_dock_badges" :title="$t('settings.show_dock_badges')" :desc="$t('settings.show_dock_badges_desc')" right-width="auto">
-        <Radio v-model="settings.showDockBadges" />
+      <SettingsItem setting-id="settings.dock_badges" :title="$t('settings.dock_badges')" :desc="$t('settings.dock_badges_desc')" right-width="auto">
+        <SettingsSegmentedControl v-model="settings.dockBadgeMode" :label="$t('settings.dock_badges')" :options="dockBadgeOptions" />
       </SettingsItem>
       <SettingsItem
         setting-id="navigation.dock.collapseMode"
@@ -146,8 +153,8 @@ function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
                 flex="~ gap-2 justify-between items-center wrap" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-interactive-radius" cursor-all-scroll
                 duration-300
                 :style="{
-                  background: element.visible ? 'var(--bew-theme-surface)' : 'var(--bew-fill-1)',
-                  color: element.visible ? 'var(--bew-on-theme-surface)' : 'var(--bew-text-1)',
+                  background: element.visible ? 'var(--bew-selected-bg)' : 'var(--bew-fill-1)',
+                  color: element.visible ? 'var(--bew-text-1)' : 'var(--bew-text-1)',
                 }"
                 @click="handleToggleDockItem(element)"
               >

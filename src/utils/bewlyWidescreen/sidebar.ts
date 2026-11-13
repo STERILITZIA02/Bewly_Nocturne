@@ -314,11 +314,10 @@ function shortenCommentTimes(panel: HTMLElement) {
 }
 
 export function clearSidebarHydration(currentState: BewlyWidescreenState) {
-  if (currentState.sidebarHydrationTimer)
-    clearTimeout(currentState.sidebarHydrationTimer)
-  currentState.sidebarHydrationTimer = undefined
-  currentState.sidebarHydrationResumeCleanup?.()
-  currentState.sidebarHydrationResumeCleanup = undefined
+  const hydration = currentState.hydration
+  currentState.hydration = undefined
+  clearTimeout(hydration?.timer)
+  hydration?.resumeCleanup?.()
 }
 
 function runSidebarHydration(currentState: BewlyWidescreenState): WidescreenSidebarReadiness | null {
@@ -348,23 +347,27 @@ export function startSidebarHydration(currentState: BewlyWidescreenState) {
   // the native list's lazy-load observer, so hydration pauses and starts a
   // fresh budget when the page shows again.
   currentState.sidebarHydrationTimedOut = false
-  currentState.commentListReloadRequested = false
+  const hydration: NonNullable<BewlyWidescreenState['hydration']> = { phase: 'hydrating', reloadRequested: false }
+  currentState.hydration = hydration
   const startedAt = Date.now()
 
   const hydrate = () => {
-    currentState.sidebarHydrationTimer = undefined
+    if (currentState.hydration !== hydration)
+      return
+    hydration.timer = undefined
     if (session.current !== currentState || !currentState.root.isConnected || currentState.navigationPending)
       return
     if (document.hidden) {
+      hydration.phase = 'paused'
       const resume = () => {
-        if (document.hidden)
+        if (document.hidden || currentState.hydration !== hydration)
           return
         clearSidebarHydration(currentState)
         if (session.current === currentState && currentState.root.isConnected && !currentState.navigationPending)
           startSidebarHydration(currentState)
       }
       document.addEventListener('visibilitychange', resume)
-      currentState.sidebarHydrationResumeCleanup = () => document.removeEventListener('visibilitychange', resume)
+      hydration.resumeCleanup = () => document.removeEventListener('visibilitychange', resume)
       return
     }
 
@@ -381,6 +384,7 @@ export function startSidebarHydration(currentState: BewlyWidescreenState) {
       elapsed,
       nativeRequestPending,
     })
+    hydration.phase = phase
     if (phase === 'complete')
       return
     if (phase === 'stopped') {
@@ -392,9 +396,9 @@ export function startSidebarHydration(currentState: BewlyWidescreenState) {
       // The prewarm only works while it pins the current list; Bilibili may
       // re-render it below the fold. Release the list's lazy-load wait every
       // tick, and reload once a first page that outlasts the budget.
-      const reload = phase !== 'hydrating' && nativeRequestPending && !currentState.commentListReloadRequested
+      const reload = phase !== 'hydrating' && nativeRequestPending && !hydration.reloadRequested
       if (reload)
-        currentState.commentListReloadRequested = true
+        hydration.reloadRequested = true
       wakeNativeCommentList(reload)
     }
     if (phase === 'recovering') {
@@ -409,7 +413,7 @@ export function startSidebarHydration(currentState: BewlyWidescreenState) {
     const interval = phase === 'recovering'
       ? SIDEBAR_HYDRATION_RECOVERY_INTERVAL
       : elapsed < SIDEBAR_HYDRATION_FAST_DURATION ? SIDEBAR_HYDRATION_FAST_INTERVAL : SIDEBAR_HYDRATION_INTERVAL
-    currentState.sidebarHydrationTimer = setTimeout(hydrate, interval)
+    hydration.timer = setTimeout(hydrate, interval)
   }
 
   hydrate()
@@ -530,7 +534,7 @@ export function scheduleSidebarRefresh(currentState = session.current) {
     if (readiness?.complete) {
       clearSidebarHydration(currentState)
     }
-    else if (!currentState.sidebarHydrationTimer && !currentState.sidebarHydrationTimedOut) {
+    else if (!currentState.hydration?.timer && currentState.hydration?.phase !== 'paused' && !currentState.sidebarHydrationTimedOut) {
       startSidebarHydration(currentState)
     }
   })

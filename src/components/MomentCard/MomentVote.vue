@@ -241,7 +241,7 @@ onBeforeUnmount(controller.invalidate)
   background: var(--bew-fill-2);
 }
 .moment-vote__option:not(.is-locked):active {
-  background: var(--bew-theme-surface);
+  background: var(--bew-selected-bg);
 }
 .moment-vote__option.is-locked {
   cursor: default;
@@ -309,7 +309,7 @@ onBeforeUnmount(controller.invalidate)
   filter: brightness(0.9);
 }
 .moment-vote button:disabled {
-  opacity: 0.5;
+  opacity: var(--bew-disabled-opacity);
   cursor: default;
 }
 </style>

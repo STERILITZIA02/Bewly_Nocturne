@@ -339,12 +339,6 @@ function createObserver() {
   if (!element)
     return
   stopRootSubscription = subscribeImageLoadRoot(getObserverRoot())
-  if (typeof IntersectionObserver === 'undefined') {
-    isWithinRetainedRange = true
-    startLoad()
-    return
-  }
-
   stopObserving = observeIntersection(
     element,
     getObserverRoot(),
@@ -586,7 +580,7 @@ onBeforeUnmount(() => {
 .image-transition {
   position: relative;
   z-index: 1;
-  transition: opacity 0.28s ease-out;
+  transition: opacity var(--bew-duration-moderate) var(--bew-ease-out);
 }
 
 .image-transition--instant {

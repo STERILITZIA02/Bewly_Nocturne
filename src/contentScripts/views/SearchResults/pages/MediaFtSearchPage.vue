@@ -3,15 +3,14 @@ import '../components/mediaResults.scss'
 
 import { useI18n } from 'vue-i18n'
 
-import ALink from '~/components/ALink.vue'
+import BangumiCardSkeleton from '~/components/BangumiCard/BangumiCardSkeleton.vue'
 import Empty from '~/components/Empty.vue'
-import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSelect.vue'
 
-import MediaHighlightSkeleton from '../components/MediaHighlightSkeleton.vue'
 import Pagination from '../components/Pagination.vue'
 import SearchEmptyState from '../components/SearchEmptyState.vue'
+import SearchMediaCard from '../components/SearchMediaCard.vue'
 import { useSearchListPage } from '../composables/useSearchListPage'
-import { convertMediaFtHighlight } from '../searchTransforms'
+import type { SearchMediaResult } from '../types'
 
 const props = defineProps<{
   keyword: string
@@ -24,7 +23,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const { paginationMode, isLoading, error, results, totalResults, hasMore, requestLoadMore, needsManualLoadMore, resumeLoadMore, currentPage, totalPages, handlePageChange, refreshCurrentPage, restorePage } = useSearchListPage<any>({
+const { paginationMode, isLoading, error, results, totalResults, hasMore, requestLoadMore, needsManualLoadMore, resumeLoadMore, currentPage, totalPages, handlePageChange, refreshCurrentPage, restorePage } = useSearchListPage<SearchMediaResult>({
   category: 'media_ft',
   keyword: () => props.keyword,
   initialPage: () => props.initialPage,
@@ -60,69 +59,17 @@ defineExpose({
     </div>
 
     <div v-else class="media-ft-results">
-      <div class="bew-media-result-grid">
-        <MediaHighlightSkeleton
+      <div class="bew-grid-adaptive-poster">
+        <BangumiCardSkeleton
           v-for="index in (isLoading && (!results || results.length === 0) ? 4 : 0)"
           :key="`media-ft-initial-skeleton-${index}`"
         />
-        <div
-          v-for="item in (results || []).map(convertMediaFtHighlight)"
-          :key="item.id || item.title"
-          class="bew-media-result-card"
-        >
-          <ALink
-            class="bew-media-result-cover"
-            :href="item.url"
-            type="videoCard"
-            tabindex="-1"
-            aria-hidden="true"
-          >
-            <img
-              :src="item.cover"
-              :alt="item.title"
-            >
-            <div v-if="item.badge" class="bew-media-result-badge">
-              {{ item.badge }}
-            </div>
-          </ALink>
-          <div class="bew-media-result-info">
-            <div class="bew-media-result-title">
-              {{ item.title }}
-            </div>
-            <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
-              <span v-if="item.score" text="$bew-text-1" tabular-nums>
-                {{ t('search.media.score', { score: item.score?.toFixed(1) }) }}
-              </span>
-              <span v-if="item.areas">
-                {{ item.areas }}
-              </span>
-              <span v-if="item.styles">
-                {{ item.styles }}
-              </span>
-              <span v-if="item.indexShow">
-                {{ item.indexShow }}
-              </span>
-            </div>
-            <div v-if="item.desc" class="bew-media-result-desc">
-              {{ item.desc }}
-            </div>
-            <MediaEpisodeSelect
-              v-if="item.episodes && item.episodes.length"
-              :episodes="item.episodes"
-            />
-            <div class="bew-media-result-actions" flex items-center gap-3>
-              <ALink
-                class="bew-media-result-button"
-                :href="item.url"
-                type="videoCard"
-                :aria-label="`${t('search.media.watch_now')}：${item.title}`"
-              >
-                {{ t('search.media.watch_now') }}
-              </ALink>
-            </div>
-          </div>
-        </div>
-        <MediaHighlightSkeleton
+        <SearchMediaCard
+          v-for="item in (results || [])"
+          :key="item.season_id || item.media_id || item.id || item.title"
+          :item="item" movie
+        />
+        <BangumiCardSkeleton
           v-for="index in (isLoading && results && results.length > 0 ? 2 : 0)"
           :key="`media-ft-more-skeleton-${index}`"
         />

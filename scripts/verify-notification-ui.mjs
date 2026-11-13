@@ -616,6 +616,8 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
     })
     const polls = new Map()
     let requests = 0
+    let finishPoll
+    let saved = 0
     const Authorization = await compileComponent('../src/components/AppAuthorizationDialog.vue', {
       'vue-i18n': i18n,
       'vue-toastification': { useToast: () => ({ success() {} }) },
@@ -628,8 +630,11 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
           return { code: 0, data: { url: 'https://www.bilibili.com/fixture-qr', auth_code: 'fixture' } }
         },
         hasValidAppAuthTokens: () => false,
-        pollAppLoginQRCode: async () => ({ code: 86039 }),
-        saveAppAuthTokens() {},
+        pollAppLoginQRCode: () => new Promise(resolve => finishPoll = resolve),
+        saveAppAuthTokens() {
+          saved++
+          return true
+        },
       },
     }, { globals: {
       setTimeout: (run) => {
@@ -651,6 +656,14 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
       assert.ok(host.querySelector('[data-qr]'))
       assert.equal(host.querySelector('.dialog__surface').getAttribute('style'), null, 'the dialog is a solid window; its paint is in the stylesheet')
       assert.equal(polls.size, 1)
+      const oldPoll = polls.get(1)()
+      ;[...host.querySelectorAll('button')].find(button => button.textContent.includes('common.operation.refresh')).click()
+      await flush()
+      assert.equal(requests, 2)
+      finishPoll({ code: 0, data: { access_token: 'fixture-retired-token' } })
+      await oldPoll
+      assert.equal(saved, 0, 'a replaced QR attempt cannot save its late successful response')
+      assert.equal(polls.size, 1, 'the current attempt retains its own poll')
     }
     finally {
       app.unmount()

@@ -1,6 +1,6 @@
 import { useMutationObserver } from '@vueuse/core'
 import type { ComputedRef, MaybeRefOrGetter } from 'vue'
-import { computed, ref, toValue, watch } from 'vue'
+import { computed, ref, shallowRef, toValue, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
@@ -32,7 +32,8 @@ const PAGE_MODE_LABEL_KEYS: Readonly<Record<PageMode, string>> = {
   custom: 'dock.page_mode_custom',
 }
 
-export const pageModeChangePending = ref(false)
+const pageModeNavigation = shallowRef<{ source: string, destination: string, selected: PageMode, previous: PageMode }>()
+export const pageModeChangePending = computed(() => pageModeNavigation.value !== undefined)
 
 export async function selectPageMode(selectedPageMode: PageMode, activatedPage: AppPage) {
   if (pageModeChangePending.value || selectedPageMode === settings.value.pageMode)
@@ -46,18 +47,19 @@ export async function selectPageMode(selectedPageMode: PageMode, activatedPage: 
   const navigationUrl = resolvePageModeNavigationUrl(currentHref, target, useSettingsStore().getDockItemIsUseOriginalBiliPage(target.preferencePage))
   if (!navigationUrl || navigationUrl === currentHref)
     return
-  pageModeChangePending.value = true
+  const navigation = { source: currentHref, destination: navigationUrl, selected: selectedPageMode, previous: previousPageMode }
+  pageModeNavigation.value = navigation
   try {
     await settings.flush()
-    if (settings.value.pageMode === selectedPageMode)
-      window.location.assign(navigationUrl)
+    if (window.location.href === navigation.source && settings.value.pageMode === navigation.selected)
+      window.location.assign(navigation.destination)
   }
   catch {
-    if (settings.value.pageMode === selectedPageMode)
-      settings.value = { ...settings.value, pageMode: previousPageMode }
+    if (settings.value.pageMode === navigation.selected)
+      settings.value = { ...settings.value, pageMode: navigation.previous }
   }
   finally {
-    pageModeChangePending.value = false
+    pageModeNavigation.value = undefined
   }
 }
 

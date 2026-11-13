@@ -1,4 +1,5 @@
 import { isContentScriptTargetUrl } from '~/constants/contentScript'
+import { isPlainObject } from '~/utils/plainObject'
 
 type IframeMessageTarget = Pick<HTMLIFrameElement, 'contentWindow' | 'getAttribute'>
 
@@ -41,13 +42,6 @@ function getMomentPageId(value: string, baseUrl?: string): string | undefined {
 function getReadyState(iframe: IframeMessageTarget) {
   const state = iframeMessagingReadyStates.get(iframe)
   return state?.contentWindow === iframe.contentWindow && state.src === iframe.getAttribute('src') ? state : undefined
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (Object.prototype.toString.call(value) !== '[object Object]')
-    return false
-  const prototype = Object.getPrototypeOf(value)
-  return prototype === null || prototype === Object.prototype
 }
 
 function getHttpOrigin(value: string, baseUrl?: string): string | undefined {

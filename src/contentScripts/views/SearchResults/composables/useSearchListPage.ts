@@ -17,29 +17,32 @@ interface SearchListRequestContext {
   context: string
 }
 
-interface SearchListPageOptions<T> {
+interface SearchListPageOptions<T, Source> {
   category: SearchCategory
   keyword: () => string
   initialPage: () => number | undefined
   buildRequest: (context: SearchListRequestContext) => SearchRequest
   itemKey: (item: T) => string
-  transformItems?: (items: any[]) => T[]
+  transformItems?: (items: Source[]) => T[]
   onPageChange: (page: number) => void
 }
 
 /** Array-result pages share request ownership and pagination, while retaining their own adapters and views. */
-export function useSearchListPage<T>(options: SearchListPageOptions<T>) {
+export function useSearchListPage<T, Source = T>(options: SearchListPageOptions<T, Source>) {
   const { haveScrollbar, handleBackToTop } = useBewlyApp()
   const paginationMode = computed(() => settings.value.searchResultsPaginationMode)
-  const request = useSearchRequest<T[]>(options.category)
+  const request = useSearchRequest<T[]>(options.category, {
+    identity: () => options.buildRequest({ keyword: options.keyword().trim(), page: 1, loadMore: false, context: '' }),
+    page: options.initialPage,
+  })
   const { isLoading, error, results, requestScope } = request
-  const pagination = usePagination()
+  const pagination = usePagination(request.view)
   const { currentPage, totalResults, totalPages } = pagination
   const loadMore = useLoadMore(async () => {
     const previousCount = results.value?.length ?? 0
     const success = await performSearch(true)
     return { success, appendedCount: Math.max(0, (results.value?.length ?? 0) - previousCount) }
-  }, { isLoading: () => isLoading.value })
+  }, { isLoading: () => isLoading.value, view: request.view })
 
   function runSearch(page: number, append: boolean, updateUrl = false): Promise<boolean> {
     const keyword = options.keyword().trim()
@@ -50,8 +53,8 @@ export function useSearchListPage<T>(options: SearchListPageOptions<T>) {
       const rawData = response.data
       if (!rawData)
         return false
-      const rawItems = Array.isArray(rawData.result) ? rawData.result : []
-      const incoming = options.transformItems ? options.transformItems(rawItems) : rawItems as T[]
+      const rawItems: Source[] = Array.isArray(rawData.result) ? rawData.result : []
+      const incoming = options.transformItems ? options.transformItems(rawItems) : rawItems as unknown as T[]
       results.value = append && results.value
         ? dedupeByKey([...results.value, ...incoming], options.itemKey)
         : incoming
@@ -115,7 +118,7 @@ export function useSearchListPage<T>(options: SearchListPageOptions<T>) {
       void performSearch(false)
   })
   onMounted(() => {
-    if (!options.keyword().trim())
+    if (!options.keyword().trim() || request.view.restored)
       return
     const page = options.initialPage()
     if (page && page > 1)

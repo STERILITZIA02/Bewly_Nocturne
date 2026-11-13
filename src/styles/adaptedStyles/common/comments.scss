@@ -65,7 +65,7 @@
 
     // 登录后查看评论
     .reply-list .login-prompt:hover {
-      background-color: var(--bew-theme-surface-hover);
+      background-color: var(--bew-pressed-bg);
     }
 
     .reply-content-container .reply-content .icon,
@@ -104,7 +104,7 @@
 
     @keyframes jumpReply {
       0% {
-        background-color: var(--bew-theme-surface);
+        background-color: var(--bew-selected-bg);
       }
       100% {
         background-color: var(--bew-fill-1);
@@ -258,7 +258,6 @@
     .bb-comment .comment-send-lite.comment-send-lite,
     .comment-bilibili-fold .comment-send-lite.comment-send-lite,
     .comment-wrapper .comment-m {
-      // background-color: var(--bew-content-solid);
       background-color: var(--bew-bg);
     }
 

@@ -5,12 +5,13 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import ALink from '~/components/ALink.vue'
+import Button from '~/components/Button.vue'
 import LoadingRing from '~/components/LoadingRing.vue'
 import UserAvatarLink from '~/components/UserCard/UserAvatarLink.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
-import { numFormatter } from '~/utils/dataFormatter'
-import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON } from '~/utils/lvIcons'
+import { calcCurrentTime, numFormatter } from '~/utils/dataFormatter'
+import { getLvIcon } from '~/utils/lvIcons'
 import { getUserID } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { changeUserRelation } from '~/utils/userRelation'
@@ -57,12 +58,16 @@ interface UserSample {
   title: string
   cover?: string
   url?: string
-  duration?: string
+  duration?: string | number
+  durationStr?: string
   play?: number
 }
 
 const sampleList = computed(() => {
-  return (props.samples || []).slice(0, 7)
+  return (props.samples || []).slice(0, 7).map(sample => ({
+    ...sample,
+    durationLabel: sample.durationStr || (typeof sample.duration === 'number' ? calcCurrentTime(sample.duration) : sample.duration),
+  }))
 })
 
 const isFollowing = ref(props.isFollowed === 1)
@@ -84,20 +89,6 @@ onScopeDispose(() => followGeneration++)
 const followButtonText = computed(() => {
   return isFollowing.value ? t('search.user.following') : t('search.user.follow')
 })
-
-const levelIcons: string[] = [
-  LV0_ICON,
-  LV1_ICON,
-  LV2_ICON,
-  LV3_ICON,
-  LV4_ICON,
-  LV5_ICON,
-  LV6_ICON,
-]
-
-function getLvIcon(level: number): string {
-  return levelIcons[level] || LV0_ICON
-}
 
 async function handleFollowClick(e: Event) {
   e.preventDefault()
@@ -209,10 +200,10 @@ async function handleFollowClick(e: Event) {
               class="user-level-icon"
               v-html="DOMPurify.sanitize(getLvIcon(level))"
             />
-            <div v-if="gender === 1" class="gender-icon gender-male">
+            <div v-if="gender === 1" class="gender-icon">
               <div i-tabler:gender-male />
             </div>
-            <div v-else-if="gender === 2" class="gender-icon gender-female">
+            <div v-else-if="gender === 2" class="gender-icon">
               <div i-tabler:gender-female />
             </div>
           </div>
@@ -233,15 +224,15 @@ async function handleFollowClick(e: Event) {
             text="xs $bew-text-3"
           >
             <div v-if="liveStatus === 1" flex items-center gap-1 class="live-status-badge">
-              <div i-tabler:live-photo w-3.5 h-3.5 />
+              <div i-tabler:live-photo w="$bew-icon-size-xs" h="$bew-icon-size-xs" />
               <span>{{ $t('search.user.live') }}</span>
             </div>
             <div v-if="videos" flex items-center gap-1>
-              <div i-tabler:video w-3.5 h-3.5 />
+              <div i-tabler:video w="$bew-icon-size-xs" h="$bew-icon-size-xs" />
               <span>{{ $t('search.user.submissions_count', { count: numFormatter(videos) }) }}</span>
             </div>
             <div v-if="fans" flex items-center gap-1>
-              <div i-tabler:users w-3.5 h-3.5 />
+              <div i-tabler:users w="$bew-icon-size-xs" h="$bew-icon-size-xs" />
               <span>{{ $t('search.user.followers_count', { count: numFormatter(fans) }) }}</span>
             </div>
           </div>
@@ -251,17 +242,17 @@ async function handleFollowClick(e: Event) {
             v-if="showFollowButton"
             flex items-center
           >
-            <button
-              type="button"
+            <Button
               class="user-card__interactive follow-button-compact"
-              :class="{ followed: isFollowing }"
+              :type="isFollowing ? 'secondary' : 'primary'"
+              center
               :disabled="isFollowLoading"
               :aria-busy="isFollowLoading"
               @click="handleFollowClick"
             >
               <LoadingRing :loading="isFollowLoading" />
               {{ followButtonText }}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -314,8 +305,8 @@ async function handleFollowClick(e: Event) {
             v-if="isVerified && verifyInfo"
             class="verify-badge"
             flex items-center gap-1
-            text="xs $bew-on-theme-surface"
-            bg="$bew-theme-surface"
+            text="xs $bew-text-1"
+            bg="$bew-selected-bg"
             px-2 py-0.5 rounded="$bew-pill-radius"
           >
             <div i-tabler:rosette-discount-check />
@@ -361,8 +352,8 @@ async function handleFollowClick(e: Event) {
                 :src="sample.cover"
                 :alt="sample.title"
               >
-              <div v-if="sample.duration" class="sample-duration">
-                {{ sample.duration }}
+              <div v-if="sample.durationLabel" class="sample-duration">
+                {{ sample.durationLabel }}
               </div>
               <div v-if="sample.play !== undefined" class="sample-play">
                 <div i-tabler:player-play />
@@ -407,11 +398,9 @@ async function handleFollowClick(e: Event) {
   z-index: 2;
 }
 
-.follow-button,
 .sample-cover,
 .sample-duration,
-.sample-play,
-.follow-button-compact {
+.sample-play {
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -438,60 +427,8 @@ async function handleFollowClick(e: Event) {
   justify-content: center;
   font-size: var(--bew-font-size-body);
   flex-shrink: 0;
-
-  &.gender-male {
-    color: rgb(93, 193, 255); // 淡蓝色
-  }
-
-  &.gender-female {
-    color: rgb(255, 135, 182); // 淡粉色
-  }
-}
-
-.verify-compact {
-  max-width: 100%;
-  @include truncateFade.line;
-}
-
-.follow-button {
-  min-height: var(--bew-control-height);
-  padding: 0 var(--bew-space-5);
-  border-radius: var(--bew-interactive-radius);
-  background: var(--bew-theme-color);
-  color: var(--bew-on-theme-color);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-control);
-  border: none;
-  cursor: pointer;
-  transition:
-    color var(--bew-duration-normal) var(--bew-ease-standard),
-    background-color var(--bew-duration-normal) var(--bew-ease-standard),
-    border-color var(--bew-duration-normal) var(--bew-ease-standard),
-    filter var(--bew-duration-normal) var(--bew-ease-standard),
-    transform var(--bew-duration-normal) var(--bew-ease-emphasized);
-  white-space: nowrap;
-  min-width: 80px;
-
-  &:hover:not(:disabled) {
-    filter: brightness(1.1);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  &.followed {
-    background: var(--bew-fill-2);
-    color: var(--bew-text-2);
-    border: var(--bew-hairline) solid var(--bew-edge-color);
-
-    &:hover:not(:disabled) {
-      background: var(--bew-fill-3);
-      color: var(--bew-text-1);
-    }
-  }
+  // Only the avatar carries colour on this card (user-approved 2026-11-13).
+  color: var(--bew-text-3);
 }
 
 .sample-list {
@@ -597,28 +534,30 @@ async function handleFollowClick(e: Event) {
 }
 
 .bili-avatar-icon-business {
-  background: linear-gradient(135deg, #ff6699 0%, #ff8cb6 100%);
+  background: var(--bew-neutral-fg);
 
   &::before {
     content: "";
     display: block;
     width: 100%;
     height: 100%;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M8 0L10.5 5.5L16 6.5L11.5 10.5L13 16L8 13L3 16L4.5 10.5L0 6.5L5.5 5.5L8 0Z'/%3E%3C/svg%3E")
-      center/60% no-repeat;
+    background: var(--bew-neutral-bg);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M8 0L10.5 5.5L16 6.5L11.5 10.5L13 16L8 13L3 16L4.5 10.5L0 6.5L5.5 5.5L8 0Z'/%3E%3C/svg%3E")
+      center / 60% no-repeat;
   }
 }
 
 .bili-avatar-icon-personal {
-  background: linear-gradient(135deg, #23ade5 0%, #3db8f5 100%);
+  background: var(--bew-neutral-fg);
 
   &::before {
     content: "";
     display: block;
     width: 100%;
     height: 100%;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13 5L6 12L3 9L4 8L6 10L12 4L13 5Z'/%3E%3C/svg%3E")
-      center/70% no-repeat;
+    background: var(--bew-neutral-bg);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13 5L6 12L3 9L4 8L6 10L12 4L13 5Z'/%3E%3C/svg%3E")
+      center / 70% no-repeat;
   }
 }
 
@@ -640,52 +579,12 @@ async function handleFollowClick(e: Event) {
   }
 }
 
-.follow-button-compact {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--bew-space-1);
-  min-height: 28px;
-  padding: 0 var(--bew-space-3);
-  border-radius: var(--bew-interactive-radius);
-  background: var(--bew-theme-color);
-  color: var(--bew-on-theme-color);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-control);
-  border: 1px solid var(--bew-theme-color);
-  cursor: pointer;
-  transition:
-    color var(--bew-duration-normal) var(--bew-ease-standard),
-    background-color var(--bew-duration-normal) var(--bew-ease-standard),
-    border-color var(--bew-duration-normal) var(--bew-ease-standard),
-    filter var(--bew-duration-normal) var(--bew-ease-standard),
-    transform var(--bew-duration-normal) var(--bew-ease-emphasized);
+// The one follow button (Button.vue): the accent while not following, neutral
+// after. On this card it is a control-item high.
+.follow-button-compact.b-button {
+  --b-button-height: var(--bew-control-height-sm);
+
+  min-width: calc(var(--bew-space-10) * 1.5);
   white-space: nowrap;
-  min-width: 60px;
-  user-select: none;
-
-  &:hover:not(:disabled) {
-    filter: brightness(1.1);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-
-  &.followed {
-    background: var(--bew-fill-1);
-    color: var(--bew-text-2);
-    border: var(--bew-hairline) solid transparent;
-
-    &:hover:not(:disabled) {
-      background: var(--bew-fill-2);
-    }
-  }
 }
 </style>

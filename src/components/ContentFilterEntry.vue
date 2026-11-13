@@ -7,14 +7,14 @@ import ContextMenu from '~/components/ContextMenu.vue'
 import IconButton from '~/components/IconButton.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
-import { MOMENT_TYPE_FILTER_OPTIONS } from '~/constants/momentFilters'
 import { settings } from '~/logic'
 
-const props = defineProps<{ kind: 'recommendation' | 'moments' }>()
+// The recommendation feed's quick filters. (Moments keeps its own in the rail
+// search field's funnel menu.)
 const { t } = useI18n()
 const { openSettingsAt } = useBewlyApp()
 const menu = ref<{ anchor: { x: number, y: number }, trigger: HTMLElement }>()
-const title = computed(() => t(props.kind === 'moments' ? 'settings.moments_filter_entry' : 'settings.recommendation_filter_entry'))
+const title = computed(() => t('settings.recommendation_filter_entry'))
 const recommendationOptions = [
   { setting: 'filterOutVerticalVideos', labelKey: 'settings.filter_out_vertical_videos', icon: 'i-tabler:device-mobile', mode: 'app' },
   { setting: 'enableFilterByViewCount', labelKey: 'settings.filter_by_view_count', icon: 'i-tabler:eye' },
@@ -25,9 +25,7 @@ const recommendationOptions = [
   { setting: 'enableFilterByUser', labelKey: 'settings.filter_by_user', icon: 'i-tabler:user' },
   { setting: 'disableFilterForFollowedUser', labelKey: 'settings.disable_filters_for_followed_users', icon: 'i-tabler:user-check' },
 ] as const
-const definitions = computed(() => props.kind === 'moments'
-  ? [...MOMENT_TYPE_FILTER_OPTIONS, { setting: 'momentsEnableKeywordFilter' as const, labelKey: 'settings.moments_enable_keyword_filter', icon: 'i-tabler:letter-case' }]
-  : recommendationOptions.filter(option => !('mode' in option) || option.mode === (settings.value.recommendationMode === 'app' ? 'app' : 'web')))
+const definitions = computed(() => recommendationOptions.filter(option => !('mode' in option) || option.mode === (settings.value.recommendationMode === 'app' ? 'app' : 'web')))
 const active = computed(() => definitions.value.some(option => option.setting !== 'disableFilterForFollowedUser' && settings.value[option.setting]))
 const options = computed<ContextMenuOption[]>(() => [
   ...definitions.value.map(option => ({
@@ -36,8 +34,8 @@ const options = computed<ContextMenuOption[]>(() => [
     icon: option.icon,
     kind: 'toggle' as const,
     closeOnSelect: false,
-    checked: props.kind === 'moments' && option.setting !== 'momentsEnableKeywordFilter' ? !settings.value[option.setting] : settings.value[option.setting],
-    section: props.kind === 'moments' && option.setting !== 'momentsEnableKeywordFilter' ? t('settings.moments_shown_types') : title.value,
+    checked: settings.value[option.setting],
+    section: title.value,
   })),
   { value: 'settings', label: t('settings.filter_settings'), icon: 'i-tabler:settings' },
 ])
@@ -48,7 +46,7 @@ function open(event: MouseEvent) {
 }
 function select(value: string | number) {
   if (value === 'settings') {
-    openSettingsAt({ category: 'bewly-pages', page: props.kind === 'moments' ? 'moments' : 'home', settingId: props.kind === 'moments' ? 'settings.moments_filtered_types' : 'settings.filter_by_view_count' })
+    openSettingsAt({ category: 'bewly-pages', page: 'home', settingId: 'settings.filter_by_view_count' })
     return
   }
   const option = definitions.value.find(option => option.setting === value)
@@ -58,14 +56,7 @@ function select(value: string | number) {
 </script>
 
 <template>
-  <button
-    v-if="kind === 'moments'" type="button" class="library-sidebar-action" :aria-expanded="Boolean(menu)" aria-haspopup="menu"
-    @click="open"
-  >
-    <i i-tabler:filter :class="{ 'content-filter-active': active }" aria-hidden="true" />
-    <span>{{ title }}</span>
-  </button>
-  <Tooltip v-else :content="title">
+  <Tooltip :content="title">
     <IconButton :label="title" :aria-expanded="Boolean(menu)" aria-haspopup="menu" :class="{ 'content-filter-active': active }" @click="open">
       <i i-tabler:filter aria-hidden="true" />
     </IconButton>

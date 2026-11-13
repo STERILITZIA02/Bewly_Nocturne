@@ -165,6 +165,70 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
   })
   const page = (medias, count = medias.length, has_more = false) => ({ code: 0, data: { medias, info: { media_count: count, cover: 'cover' }, has_more } })
 
+  check('Page continuity: favorites restore selection and accepted pages without requests, and resume the correct boundary', async () => {
+    const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
+    const reads = []
+    let account = 1
+    let pending
+    const api = {
+      getFavoriteCategories: async () => {
+        reads.push('folders')
+        return { code: 0, data: { list: [{ id: 1, title: 'first' }, { id: 2, title: 'second' }] } }
+      },
+      getCollectedFavoriteSeasons: async () => {
+        reads.push('subscriptions')
+        return { code: 0, data: { list: [], count: 0, has_more: false } }
+      },
+      getFavoriteResources: async ({ media_id, pn }, { signal }) => {
+        reads.push({ media_id, pn, signal })
+        return pending ?? page([video(pn)], 4, pn < 4)
+      },
+    }
+    const create = () => useFavoritesData({ api, getAccountId: () => account, haveScrollbar: async () => true, t: key => key })
+    let data = create()
+    try {
+      await data.initData()
+      await flush()
+      data.selectedCategory.value = data.favoriteCategories[1]
+      await data.loadSelectedContent()
+      await data.loadNextPage()
+      const saved = data.snapshot()
+      assert.ok(saved)
+      const count = reads.length
+      data.dispose()
+      data = create()
+      await data.initData(saved)
+      assert.equal(reads.length, count, 'the directory and already accepted content stay reusable')
+      assert.equal(data.selectedCategory.value.id, 2)
+      assert.equal(data.currentPageNum.value, 2)
+      assert.equal(data.folderCovers[2], 'cover')
+      assert.deepEqual(data.favoriteResources.map(item => item.id), [1, 2])
+      await data.loadNextPage()
+      assert.equal(reads.at(-1).pn, 3)
+      assert.equal(reads.at(-1).media_id, 2)
+      assert.deepEqual(data.favoriteResources.map(item => item.id), [1, 2, 3])
+
+      pending = new Promise(() => {})
+      void data.loadNextPage()
+      await flush()
+      assert.equal(data.snapshot(), undefined, 'a pending page cannot be paired with a completed cursor')
+      const signal = reads.at(-1).signal
+      data.dispose()
+      assert.equal(signal.aborted, true)
+      pending = undefined
+      account = 2
+      data = create()
+      await data.initData(saved)
+      await flush()
+      assert.equal(data.selectedCategory.value.id, 1, 'another account cannot inherit the selected folder')
+      assert.equal(data.currentPageNum.value, 1)
+      assert.deepEqual(data.favoriteResources.map(item => item.id), [1])
+      data.invalidateResourceSources([1])
+      assert.equal(data.snapshot(), undefined, 'an invalidated list must be reconciled before it can be parked')
+    }
+    finally { data.dispose() }
+  })
+
   check('favorite refresh keeps old cards through pending/error/retry and commits the first replacement once', async () => {
     const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
     const reads = []
@@ -466,23 +530,17 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
     finally { data.dispose() }
   })
 
-  check('text-only states: no illustration is mounted and the retry action remains keyboard accessible', async () => {
-    const Empty = await compileComponent('../src/components/Empty.vue', {
-      '~/utils/messaging': { getExtensionAssetUrl: () => 'https://example.test/empty.png' },
-    })
-    const textOnly = Vue.ref(true)
+  check('empty states: no illustration is mounted and the retry action remains keyboard accessible', async () => {
+    const Empty = await compileComponent('../src/components/Empty.vue')
     let retries = 0
     const host = document.body.appendChild(document.createElement('div'))
-    const app = Vue.createApp({ setup: () => () => Vue.h(Empty, { description: 'Retry the request', textOnly: textOnly.value, fill: true, actionLabel: 'Retry', onAction: () => retries++ }) })
+    const app = Vue.createApp({ setup: () => () => Vue.h(Empty, { description: 'Retry the request', fill: true, actionLabel: 'Retry', onAction: () => retries++ }) })
     app.mount(host)
     try {
       assert.equal(host.querySelector('img'), null)
       assert.equal(host.querySelector('button').type, 'button')
       host.querySelector('button').click()
       assert.equal(retries, 1)
-      textOnly.value = false
-      await Vue.nextTick()
-      assert.ok(host.querySelector('img'), 'ordinary pages retain their existing illustrated state')
     }
     finally {
       app.unmount()
@@ -494,7 +552,7 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
     const Actions = await compileComponent('../src/contentScripts/views/Favorites/FavoriteResourceActions.vue', {
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       '~/components/IconButton.vue': { default: await compileComponent('../src/components/IconButton.vue') },
-      '~/components/Tooltip.vue': { default: { setup: (_props, { slots }) => () => slots.default?.() } },
+      '~/components/Tooltip.vue': { default: { props: ['content', 'placement'], setup: (_props, { slots }) => () => slots.default?.() } },
     })
     const state = Vue.reactive({ managing: false, pending: false, total: 2, selectedCount: 0, allSelected: false, canTransfer: true })
     const events = []
@@ -956,7 +1014,7 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       'vue-toastification': { useToast: () => ({ error: message => toasts.push(message) }) },
       '~/components/Empty.vue': { default: { render: () => null } },
-      '~/composables/useOptimizedScroll': { useOptimizedScroll() {} },
+      '~/composables/useLoadMoreSentinel': { useLoadMoreSentinel() {} },
       '~/stores/topBarStore': { useTopBarStore: () => store },
       '~/utils/accountScope': await import('../src/utils/accountScope'),
       '~/utils/api': { default: { favorite: {
@@ -1015,7 +1073,7 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       'vue-toastification': { useToast: () => ({ error() {} }) },
       '~/components/Empty.vue': { default: { render: () => null } },
-      '~/composables/useOptimizedScroll': { useOptimizedScroll: (_ref, callbacks) => { reachBottom = callbacks.onReachBottom } },
+      '~/composables/useLoadMoreSentinel': { useLoadMoreSentinel: (_root, _sentinel, onReach) => { reachBottom = onReach } },
       '~/stores/topBarStore': { useTopBarStore: () => store },
       '~/utils/accountScope': await import('../src/utils/accountScope'),
       '~/utils/api': { default: api },

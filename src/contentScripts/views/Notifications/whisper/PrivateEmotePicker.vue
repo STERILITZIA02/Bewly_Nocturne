@@ -228,7 +228,7 @@ watch(() => activePackage.value ? getPackageKey(activePackage.value) : '', () =>
 
 .private-emote-picker__package-button:hover {
   color: var(--bew-text-1);
-  background: var(--bew-fill-2);
+  background: var(--bew-hover-bg);
 }
 
 .private-emote-picker__package-button[aria-selected="true"] {
@@ -274,12 +274,12 @@ watch(() => activePackage.value ? getPackageKey(activePackage.value) : '', () =>
 }
 
 .private-emote-picker__item:hover {
-  background: var(--bew-fill-2);
+  background: var(--bew-hover-bg);
 }
 
 .private-emote-picker__item:active {
   background: var(--bew-fill-3);
-  transform: scale(0.92);
+  transform: scale(var(--bew-item-press-scale));
 }
 
 .private-emote-picker__item:focus-visible {

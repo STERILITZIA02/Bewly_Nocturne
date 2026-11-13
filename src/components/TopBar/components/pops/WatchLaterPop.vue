@@ -11,7 +11,7 @@ import Progress from '~/components/Progress.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
 import { useBewlyApp } from '~/composables/useAppProvider'
-import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
+import { useLoadMoreSentinel } from '~/composables/useLoadMoreSentinel'
 import { settings } from '~/logic'
 import type { List as WatchLaterItem } from '~/models/video/watchLater'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -61,7 +61,6 @@ const hasMoreContent = computed(() => {
   return watchLaterList.value.length < watchLaterCount.value
 })
 
-// 使用 useOptimizedScroll 处理滚动加载
 function handleReachBottom() {
   if (isLoadingWatchLater.value || !hasMoreContent.value)
     return
@@ -69,11 +68,8 @@ function handleReachBottom() {
   topBarStore.loadMoreWatchLaterList()
 }
 
-useOptimizedScroll(
-  scrollContainer,
-  { onReachBottom: handleReachBottom },
-  { bottomThreshold: 400, throttleDelay: 100 },
-)
+const loadMoreSentinel = ref<HTMLElement>()
+useLoadMoreSentinel(scrollContainer, loadMoreSentinel, handleReachBottom, () => watchLaterList.value.length)
 
 onMounted(async () => {
   await topBarStore.syncWatchLaterState(true)
@@ -199,11 +195,11 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem, event?: MouseE
 
       <Empty
         v-if="!isLoadingWatchLater && watchLaterList.length === 0 && watchLaterPageState !== 'failed' && watchLaterPageState !== 'stalled'"
-        class="bew-popover__state"
+        :description="t('common.no_data')" class="bew-popover__state"
       />
 
       <Empty
-        v-if="!isLoadingWatchLater && (watchLaterPageState === 'failed' || watchLaterPageState === 'stalled')" text-only
+        v-if="!isLoadingWatchLater && (watchLaterPageState === 'failed' || watchLaterPageState === 'stalled')"
         :description="t(watchLaterPageState === 'stalled' ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="t('common.retry')"
         @action="topBarStore.loadMoreWatchLaterList(true)"
       />
@@ -302,6 +298,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem, event?: MouseE
       >
         {{ $t('common.no_more_content') }}
       </div>
+      <div ref="loadMoreSentinel" aria-hidden="true" />
     </main>
   </div>
 </template>

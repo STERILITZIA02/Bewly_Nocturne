@@ -105,22 +105,6 @@ html.dark.bewly-design {
   }
 }
 
-// Adjust broken image icon
-.bewly-wrapper img:not(.pswp__img) {
-  position: relative;
-
-  &::before {
-    content: "";
-    display: block;
-    width: 100%;
-    height: 100%;
-    // background-image: url("/assets/broken-image.png");
-    background-size: 25px;
-    background-position: center;
-    background-repeat: no-repeat;
-  }
-}
-
 .bewly-wrapper {
   font-size: var(--bew-font-size-body);
   line-height: var(--bew-line-height-body);

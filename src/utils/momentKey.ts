@@ -1,15 +1,11 @@
+import { asObject } from './plainObject'
+
 function toStablePart(value: unknown): string {
   if (typeof value === 'string')
     return value.trim()
   if (typeof value === 'number' && Number.isFinite(value))
     return String(value)
   return ''
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object'
-    ? value as Record<string, unknown>
-    : undefined
 }
 
 function hashStableIdentity(value: string): string {
@@ -22,7 +18,7 @@ function hashStableIdentity(value: string): string {
 }
 
 export function resolveStableMomentKey(value: unknown, kind: 'moment' | 'live'): string {
-  const item = asRecord(value) ?? {}
+  const item = asObject(value)
   const apiId = toStablePart(item.id_str)
   if (apiId)
     return `${kind}:api:${apiId}`
@@ -39,7 +35,7 @@ export function resolveStableMomentKey(value: unknown, kind: 'moment' | 'live'):
   if (link)
     return `${kind}:link:${link}`
 
-  const author = asRecord(item.author)
+  const author = asObject(item.author)
   const composite = [
     kind,
     toStablePart(item.type),

@@ -1,5 +1,6 @@
 import { COMMENT_REPLY_BATCH_MAX, COMMENT_REPLY_CONTAINER_HEIGHT } from '~/constants/commentReading'
 import type { CommentReplyPaginationMode, CommentReplyTreeMode } from '~/logic/storage'
+import { isPlainObject } from '~/utils/plainObject'
 
 import { LOCAL_LOUDNESS_RANGE } from './localLoudnessProtocol'
 
@@ -29,13 +30,6 @@ export interface PageSettingsPayload {
   showCommentHostTag: boolean
   showIPLocation: boolean
   showSex: boolean
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (Object.prototype.toString.call(value) !== '[object Object]')
-    return false
-  const prototype = Object.getPrototypeOf(value)
-  return prototype === null || prototype === Object.prototype
 }
 
 function isOneOf<T extends string>(value: unknown, options: readonly T[]): value is T {

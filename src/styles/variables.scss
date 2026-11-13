@@ -7,7 +7,7 @@
   --bew-sidebar-secondary: var(--bew-text-2);
   --bew-sidebar-muted: var(--bew-text-3);
   --bew-sidebar-control: var(--bew-content-alt-solid);
-  --bew-sidebar-control-hover: var(--bew-theme-surface-hover);
+  --bew-sidebar-control-hover: var(--bew-pressed-bg);
 }
 
 :host,
@@ -54,6 +54,9 @@
   --bew-line-height-ui: var(--bew-line-height-control);
   --bew-line-height-help: var(--bew-line-height-callout);
   --bew-line-height-body: calc(16px * var(--bew-effective-font-scale));
+  // Long passages read at the body size (a video's description, comment
+  // text): 13/20 (user-approved 2026-11-12). Titles, controls and lists keep 13/16.
+  --bew-line-height-reading: calc(20px * var(--bew-effective-font-scale));
   --bew-line-height-title: var(--bew-line-height-body);
   --bew-line-height-subheading: calc(20px * var(--bew-effective-font-scale));
   --bew-line-height-heading: calc(22px * var(--bew-effective-font-scale));
@@ -62,7 +65,11 @@
   --bew-font-weight-regular: 400;
   // Section headings are emphasized; content and control labels stay regular.
   --bew-label-weight: var(--bew-font-weight-regular);
+  // Press feedback by target size: buttons and media, small cells, bare glyphs.
   --bew-control-press-scale: 0.97;
+  --bew-item-press-scale: 0.94;
+  --bew-icon-press-scale: 0.9;
+  --bew-disabled-opacity: 0.5;
   // Selecting or focusing an element never adds an emphasis border (user rule).
   // The ring tokens draw nothing, and focus/selected border colours resolve to
   // the resting border, so states read through background and text tone only.
@@ -133,6 +140,9 @@
   --bew-space-5: #{ui(20px)};
   --bew-space-6: #{ui(24px)};
   --bew-space-8: #{ui(32px)};
+  // One height for every list row of icon + label: rail actions, settings
+  // navigation and context menus.
+  --bew-row-height: var(--bew-space-8);
   --bew-space-10: #{ui(40px)};
   --bew-space-12: #{ui(48px)};
   // #endregion
@@ -151,6 +161,7 @@
   // 320x168 minimum: 14/15 of the former 16:9 height, with integer dimensions.
   // Keep aligned with the video cover constants in constants/layout.ts.
   --bew-video-card-min-width: #{ui(320px)};
+  --bew-poster-card-min-width: #{ui(200px)};
   --bew-video-card-horizontal-cover-max-width: #{ui(400px)};
   --bew-video-cover-aspect-ratio: 40 / 21;
   --bew-card-inset: var(--bew-space-4);
@@ -163,7 +174,6 @@
   --bew-compact-card-hover-scale: 1.04;
   --bew-card-hover-blur-radius: 6px;
   --bew-card-row-gap: var(--bew-space-8);
-  --bew-card-avatar-size: var(--bew-space-8);
   --bew-card-sample-min-width: calc(var(--bew-space-10) * 4);
   --bew-cover-overlay-inset: var(--bew-space-2);
   --bew-cover-scrim: rgb(0 0 0 / 56%);
@@ -171,7 +181,6 @@
   // evenly so the window reads as the one thing to act on (user-specified).
   --bew-modal-backdrop: rgb(0 0 0 / 36%);
   --bew-layout-sidebar-width: #{ui(200px)};
-  --bew-library-filter-padding: var(--bew-space-2);
   --bew-moments-hot-search-width: clamp(#{ui(240px)}, 18vw, #{ui(300px)});
   // Moments up-list tiles are squares as tall as the smallest video card cover (40:21).
   --bew-moments-up-tile-size: calc(var(--bew-video-card-min-width) * 21 / 40);
@@ -188,7 +197,6 @@
   );
   --bew-history-timeline-color: var(--bew-wheel-text-active);
   // Keep the outer contour offset by the actual inset from the inner controls.
-  --bew-library-filter-radius: calc(var(--bew-interactive-radius) + var(--bew-library-filter-padding));
   --bew-notifications-list-max-width: #{ui(360px)};
   --bew-sidebar-base-width: calc(clamp(#{ui(256px)}, 24vw, var(--bew-notifications-list-max-width)) * 0.9);
   --bew-sidebar-message-width: calc(var(--bew-sidebar-base-width) * 1.2);
@@ -215,9 +223,8 @@
   --bew-sidebar-label-inset: min(var(--bew-space-2), calc(var(--bew-control-height) / 2));
   --bew-sidebar-action-padding: var(--bew-space-2);
   // Rail rows sit close (user-specified: half the old gap between their texts).
-  --bew-sidebar-action-height: var(--bew-space-8);
+  --bew-sidebar-action-height: var(--bew-row-height);
   --bew-sidebar-action-inset: calc(var(--bew-sidebar-label-inset) - var(--bew-sidebar-action-padding));
-  --bew-sidebar-action-hover: var(--bew-hover-bg);
   --bew-sidebar-selected-bg: var(--bew-control-selected-background);
   --bew-wheel-text-active: var(--bew-text-1);
   --bew-wheel-text: rgb(from var(--bew-text-1) r g b / 67%);
@@ -247,14 +254,9 @@
   --bew-widescreen-episode-max-height: 560px;
   --bew-media-search-max-width: 1920px;
   --bew-search-bar-max-width: #{ui(680px)};
-  --bew-media-result-cover-width: #{ui(160px)};
   --bew-media-episode-control-width: #{ui(240px)};
   --bew-layout-home-search-stage-lead-height: #{ui(128px)};
   --bew-layout-home-search-stage-tail-height: #{ui(64px)};
-  --bew-layout-home-search-stage-height: calc(
-    var(--bew-layout-home-search-stage-lead-height) + var(--bew-top-bar-primary-control-height) +
-      var(--bew-layout-home-search-stage-tail-height)
-  );
   // #endregion
 
   // #region Stacking
@@ -304,6 +306,8 @@
   --bew-ease-in-out: ease-in-out;
   // Subtle interactive press/hover (avoid extreme overshoot)
   --bew-ease-emphasized: cubic-bezier(0.34, 1.3, 0.64, 1);
+  // Fast start, long soft landing: a surface growing out of its control.
+  --bew-ease-decelerate: cubic-bezier(0.16, 1, 0.3, 1);
   // Indeterminate loading ring: one turn per spin, then the arc closes on completion.
   --bew-loading-ring-spin-duration: 900ms;
   --bew-loading-ring-close-duration: var(--bew-duration-moderate);
@@ -408,7 +412,6 @@
 
   --bew-top-bar-height: #{ui(64px)};
   --bew-top-bar-inline-padding: var(--bew-space-12);
-  --bew-popover-gap: var(--bew-space-1);
   --bew-popover-max-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
   --bew-popover-surface-background: var(--bew-glass-tint);
   --bew-popover-surface-background-solid: var(--bew-elevated-solid);
@@ -468,10 +471,6 @@
   // #endregion
 
   // #region Theme Color & Status Colors
-  // To add a hover effect to theme or status colors, use the `--bew-*-color` for the base color and `--bew-*-color-80` for the hover state
-
-  --bew-logo-color: var(--bew-theme-color);
-
   --bew-bili-blue: hsl(195 100% 42%);
   --bew-bili-pink: hsl(343 94% 72%);
   --bew-vip-foreground: #b53662;
@@ -496,74 +495,30 @@
   --bew-theme-checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3 7.2 5.7 10 11 4.5' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --bew-theme-foreground: hsl(195 100% 32%);
   --bew-theme-focus-ring: hsl(195 100% 36%);
-  --bew-hover-bg: color-mix(in srgb, var(--bew-neutral-fg) 7%, transparent);
-  --bew-selected-bg: color-mix(in srgb, var(--bew-neutral-fg) 8%, var(--bew-content-solid));
-  --bew-pressed-bg: color-mix(in srgb, var(--bew-neutral-fg) 9%, var(--bew-content-solid));
+  // One strength for every hover tint; dark raises it so hover reads on dark
+  // surfaces and glass. Selected and pressed sit just above it.
+  --bew-hover-mix: 7%;
+  --bew-hover-bg: color-mix(in srgb, var(--bew-neutral-fg) var(--bew-hover-mix), transparent);
+  --bew-selected-bg: color-mix(
+    in srgb,
+    var(--bew-neutral-fg) calc(var(--bew-hover-mix) + 1%),
+    var(--bew-content-solid)
+  );
+  --bew-pressed-bg: color-mix(in srgb, var(--bew-neutral-fg) calc(var(--bew-hover-mix) + 2%), var(--bew-content-solid));
   // Selection reads through --bew-selected-bg alone; no ring (user rule).
   --bew-selected-ring: 0 0 0 transparent;
-  // Compatibility aliases for existing secondary surfaces; never tinted by accent.
-  --bew-theme-surface: var(--bew-selected-bg);
-  --bew-theme-surface-hover: var(--bew-pressed-bg);
-  --bew-on-theme-surface: var(--bew-text-1);
-  --bew-theme-color-10: color-mix(in oklab, var(--bew-theme-color), transparent 90%);
-  --bew-theme-color-20: color-mix(in oklab, var(--bew-theme-color), transparent 80%);
-  --bew-theme-color-30: color-mix(in oklab, var(--bew-theme-color), transparent 70%);
-  --bew-theme-color-40: color-mix(in oklab, var(--bew-theme-color), transparent 60%);
-  --bew-theme-color-50: color-mix(in oklab, var(--bew-theme-color), transparent 50%);
-  --bew-theme-color-60: color-mix(in oklab, var(--bew-theme-color), transparent 40%);
-  --bew-theme-color-70: color-mix(in oklab, var(--bew-theme-color), transparent 30%);
-  --bew-theme-color-80: color-mix(in oklab, var(--bew-theme-color), transparent 20%);
-  --bew-theme-color-90: color-mix(in oklab, var(--bew-theme-color), transparent 10%);
 
   --bew-info-color: hsl(198 93% 60%);
-  --bew-info-color-10: color-mix(in oklab, var(--bew-info-color), transparent 90%);
-  --bew-info-color-20: color-mix(in oklab, var(--bew-info-color), transparent 80%);
-  --bew-info-color-30: color-mix(in oklab, var(--bew-info-color), transparent 70%);
-  --bew-info-color-40: color-mix(in oklab, var(--bew-info-color), transparent 60%);
-  --bew-info-color-50: color-mix(in oklab, var(--bew-info-color), transparent 50%);
-  --bew-info-color-60: color-mix(in oklab, var(--bew-info-color), transparent 40%);
-  --bew-info-color-70: color-mix(in oklab, var(--bew-info-color), transparent 30%);
-  --bew-info-color-80: color-mix(in oklab, var(--bew-info-color), transparent 20%);
-  --bew-info-color-90: color-mix(in oklab, var(--bew-info-color), transparent 10%);
 
   --bew-success-color: hsl(164 60% 40%);
   --bew-success-foreground: color-mix(in srgb, var(--bew-success-color) 65%, black);
-  --bew-success-color-10: color-mix(in oklab, var(--bew-success-color), transparent 90%);
-  --bew-success-color-20: color-mix(in oklab, var(--bew-success-color), transparent 80%);
-  --bew-success-color-30: color-mix(in oklab, var(--bew-success-color), transparent 70%);
-  --bew-success-color-40: color-mix(in oklab, var(--bew-success-color), transparent 60%);
-  --bew-success-color-50: color-mix(in oklab, var(--bew-success-color), transparent 50%);
-  --bew-success-color-60: color-mix(in oklab, var(--bew-success-color), transparent 40%);
-  --bew-success-color-70: color-mix(in oklab, var(--bew-success-color), transparent 30%);
-  --bew-success-color-80: color-mix(in oklab, var(--bew-success-color), transparent 20%);
-  --bew-success-color-90: color-mix(in oklab, var(--bew-success-color), transparent 10%);
 
   --bew-warning-color: #f59e0b;
   --bew-warning-foreground: color-mix(in srgb, var(--bew-warning-color) 55%, black);
-  --bew-warning-color-10: color-mix(in oklab, var(--bew-warning-color), transparent 90%);
-  --bew-warning-color-20: color-mix(in oklab, var(--bew-warning-color), transparent 80%);
-  --bew-warning-color-30: color-mix(in oklab, var(--bew-warning-color), transparent 70%);
-  --bew-warning-color-40: color-mix(in oklab, var(--bew-warning-color), transparent 60%);
-  --bew-warning-color-50: color-mix(in oklab, var(--bew-warning-color), transparent 50%);
-  --bew-warning-color-60: color-mix(in oklab, var(--bew-warning-color), transparent 40%);
-  --bew-warning-color-70: color-mix(in oklab, var(--bew-warning-color), transparent 30%);
-  --bew-warning-color-80: color-mix(in oklab, var(--bew-warning-color), transparent 20%);
-  --bew-warning-color-90: color-mix(in oklab, var(--bew-warning-color), transparent 10%);
 
   --bew-error-color: hsl(358 75% 59%);
   --bew-error-foreground: color-mix(in srgb, var(--bew-error-color) 84%, black);
-  // Text of an irreversible action (clear all): a plain alarm red rather than
-  // the softer error tone (user-specified); Apple's high-contrast system red.
-  --bew-destructive-foreground: #d70015;
   --bew-error-color-10: color-mix(in oklab, var(--bew-error-color), transparent 90%);
-  --bew-error-color-20: color-mix(in oklab, var(--bew-error-color), transparent 80%);
-  --bew-error-color-30: color-mix(in oklab, var(--bew-error-color), transparent 70%);
-  --bew-error-color-40: color-mix(in oklab, var(--bew-error-color), transparent 60%);
-  --bew-error-color-50: color-mix(in oklab, var(--bew-error-color), transparent 50%);
-  --bew-error-color-60: color-mix(in oklab, var(--bew-error-color), transparent 40%);
-  --bew-error-color-70: color-mix(in oklab, var(--bew-error-color), transparent 30%);
-  --bew-error-color-80: color-mix(in oklab, var(--bew-error-color), transparent 20%);
-  --bew-error-color-90: color-mix(in oklab, var(--bew-error-color), transparent 10%);
   // #endregion
 
   // The only theme-dependent neutral pigments. All reading surfaces, text,
@@ -605,7 +560,11 @@
   // (user-specified, 2026-10-29): a clearer pane with a faint grey body, so it
   // still reads on a white page; the dark values are set under .dark.
   --bew-glass-tint-solid: color-mix(in srgb, var(--bew-neutral-fg) 3%, var(--bew-neutral-raised));
-  --bew-glass-tint-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-glass-tint-solid));
+  --bew-glass-tint-solid-hover: color-mix(
+    in srgb,
+    var(--bew-neutral-fg) var(--bew-hover-mix),
+    var(--bew-glass-tint-solid)
+  );
   --bew-glass-opacity: 0.72;
   --bew-glass-tint: rgb(from var(--bew-glass-tint-solid) r g b / var(--bew-glass-opacity));
   --bew-glass-tint-hover: rgb(from var(--bew-glass-tint-solid-hover) r g b / var(--bew-glass-opacity));
@@ -614,18 +573,24 @@
   --bew-content-opacity: 0.68;
 
   --bew-content-solid: var(--bew-neutral-surface);
-  --bew-content-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-neutral-surface));
+  --bew-content-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) var(--bew-hover-mix), var(--bew-neutral-surface));
   --bew-content-alt-solid: color-mix(in srgb, var(--bew-neutral-fg) 3%, var(--bew-neutral-surface));
-  --bew-content-alt-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-content-alt-solid));
+  --bew-content-alt-solid-hover: color-mix(
+    in srgb,
+    var(--bew-neutral-fg) var(--bew-hover-mix),
+    var(--bew-content-alt-solid)
+  );
   --bew-content: rgb(from var(--bew-content-solid) r g b / var(--bew-content-opacity));
-  --bew-content-hover: rgb(from var(--bew-content-solid-hover) r g b / var(--bew-content-opacity));
   --bew-content-alt: rgb(from var(--bew-content-alt-solid) r g b / var(--bew-content-opacity));
-  --bew-content-alt-hover: rgb(from var(--bew-content-alt-solid-hover) r g b / var(--bew-content-opacity));
 
   --bew-elevated-solid: var(--bew-neutral-raised);
-  --bew-elevated-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-neutral-raised));
+  --bew-elevated-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) var(--bew-hover-mix), var(--bew-neutral-raised));
   --bew-elevated-alt-solid: var(--bew-neutral-raised);
-  --bew-elevated-alt-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-elevated-alt-solid));
+  --bew-elevated-alt-solid-hover: color-mix(
+    in srgb,
+    var(--bew-neutral-fg) var(--bew-hover-mix),
+    var(--bew-elevated-alt-solid)
+  );
   --bew-elevated: rgb(from var(--bew-elevated-solid) r g b / var(--bew-content-opacity));
   // What --bew-elevated looks like over the page, as an opaque colour: for
   // surfaces that can overlap one another (a hovered moment card).
@@ -635,15 +600,12 @@
     var(--bew-homepage-bg)
   );
   --bew-elevated-hover: rgb(from var(--bew-elevated-solid-hover) r g b / var(--bew-content-opacity));
-  --bew-elevated-alt: rgb(from var(--bew-elevated-alt-solid) r g b / var(--bew-content-opacity));
-  --bew-elevated-alt-hover: rgb(from var(--bew-elevated-alt-solid-hover) r g b / var(--bew-content-opacity));
 
   --bew-fill-1: color-mix(in srgb, var(--bew-neutral-fg) 5%, transparent);
   --bew-fill-2: color-mix(in srgb, var(--bew-neutral-fg) 9%, transparent);
   --bew-fill-3: color-mix(in srgb, var(--bew-neutral-fg) 14%, transparent);
   --bew-fill-4: color-mix(in srgb, var(--bew-neutral-fg) 22%, transparent);
   --bew-fill-alt: color-mix(in srgb, var(--bew-neutral-bg) 45%, transparent);
-  --bew-surface-inset-bg: color-mix(in srgb, var(--bew-neutral-fg) 4%, transparent);
   --bew-skeleton: color-mix(in srgb, var(--bew-neutral-fg) 7%, transparent);
   // Lines have three roles (user-approved border system, 2026-10-24): a
   // separator inside a surface, the edge of a surface (cards, panels, popovers,
@@ -714,12 +676,15 @@
   --bew-success-foreground: color-mix(in srgb, var(--bew-success-color) 80%, white);
   --bew-warning-foreground: var(--bew-warning-color);
   --bew-error-foreground: color-mix(in srgb, var(--bew-error-color) 84%, white);
-  --bew-destructive-foreground: #ff453a;
+  --bew-hover-mix: 12%;
+  --bew-fill-1: color-mix(in srgb, var(--bew-neutral-fg) 6%, transparent);
+  --bew-fill-2: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  --bew-fill-3: color-mix(in srgb, var(--bew-neutral-fg) 17%, transparent);
+  --bew-fill-4: color-mix(in srgb, var(--bew-neutral-fg) 24%, transparent);
   // A dark page needs more dimming to set the raised window apart.
   --bew-modal-backdrop: rgb(0 0 0 / 56%);
   // Dark glass over pure black reads #20211f (user-specified): tint × opacity.
   --bew-glass-tint-solid: rgb(44.44 45.83 43.06);
-  --bew-sidebar-action-hover: color-mix(in srgb, var(--bew-neutral-bg) 18%, transparent);
   // The rail is lighter than solid content here, so a solid selected plate would
   // sink below it; lift the rail instead.
   --bew-sidebar-selected-bg: var(--bew-fill-3);
@@ -754,7 +719,6 @@
 
   // #endregion
 
-  --bew-logo-color: var(--bew-text-1);
   --bew-vip-foreground: #fb7299;
 
   --bew-theme-color-auto: var(--bew-text-1);
@@ -769,14 +733,12 @@
   --bew-neutral-inset: color-mix(in srgb, var(--bew-neutral-fg) 1.5%, var(--bew-neutral-bg));
   // Compatibility names remain aliases, never an independent palette.
   --bew-dark-page-bg: var(--bew-neutral-canvas);
-  --bew-dark-glass-base: var(--bew-neutral-surface);
   // Match saved article cards without changing the light notification palette.
   --bew-notifications-card-background: var(--bew-elevated);
   --bew-notifications-card-background-hover: var(--bew-elevated-hover);
   --bew-notifications-reference-background: var(--bew-fill-1);
 
   --bew-fill-alt: var(--bew-fill-1);
-  --bew-surface-inset-bg: color-mix(in srgb, var(--bew-neutral-bg) 20%, transparent);
 }
 
 @media (prefers-contrast: more) {
@@ -801,8 +763,6 @@
   --bew-glass-edge-color: var(--bew-edge-color);
   --bew-glass-opacity: 1;
   --bew-content-opacity: 1;
-  --bew-elevated-alt: var(--bew-elevated-alt-solid);
-  --bew-elevated-alt-hover: var(--bew-elevated-alt-solid-hover);
   --bew-filter-glass-1: none;
   --bew-glass-blur-radius: 0px;
   --bew-fill-alt: var(--bew-content-solid);
@@ -848,9 +808,9 @@
   --line_bold: var(--bew-field-edge-color-hover);
 
   --brand_pink: var(--bew-theme-color);
-  --brand_pink_thin: var(--bew-theme-surface);
+  --brand_pink_thin: var(--bew-selected-bg);
   --brand_blue: var(--bew-theme-color);
-  --brand_blue_thin: var(--bew-theme-surface);
+  --brand_blue_thin: var(--bew-selected-bg);
 
   --brand_pink_hover: var(--bew-theme-color);
   --brand_pink_active: var(--bew-theme-color);

@@ -306,12 +306,15 @@ export function syncCoverTone(currentState: BewlyWidescreenState) {
   const cover = currentState.videoInfoData?.pic
   if (!cover)
     return
-  // Only the video area and the backdrop read them (layout.ts).
+  // Neither inherits (layout.ts): each is written where it is read, on the
+  // video area, the backdrop and the column, which is frosted over the same
+  // colours.
   const apply = (property: string, value: string) => {
     if (session.current !== currentState || currentState.videoInfoData?.pic !== cover)
       return
     currentState.playerEl.querySelector<HTMLElement>('.bpx-player-video-area')?.style.setProperty(property, value)
     currentState.backdrop.style.setProperty(property, value)
+    currentState.sidebarEl.style.setProperty(property, value)
   }
   void readImageBandTone(getMomentThumbnailUrl(cover, 64), 0, 1, 'rows').then(tone => tone && apply(COVER_TONE_PROPERTY, tone.color))
   void readCoverField(getMomentThumbnailUrl(cover, 160)).then(field => field && apply(COVER_FIELD_PROPERTY, `url("${field}")`))

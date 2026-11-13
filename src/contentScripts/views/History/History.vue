@@ -38,6 +38,7 @@ import { Business } from '~/models/history/history'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
+import { jumpToLoginPage } from '~/utils/bilibiliLogin'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getAdaptiveGridColumnCount } from '~/utils/gridLayout'
 import { getHistoryUrl, getHistoryVideoIdentity } from '~/utils/historyTarget'
@@ -507,10 +508,6 @@ async function handleTurnOnWatchHistory() {
   if (result && owner.isCurrent())
     setHistoryPauseStatus(false)
 }
-
-function jumpToLoginPage() {
-  location.href = 'https://passport.bilibili.com/login'
-}
 </script>
 
 <template>
@@ -521,10 +518,10 @@ function jumpToLoginPage() {
       </p>
       <LoadingFill v-if="pendingPhase !== 'idle'" ref="pendingRef" :loading="pendingLoading" />
       <Empty
-        v-else-if="requestFailed && !isLoading && historyList.length === 0" text-only fill :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')"
+        v-else-if="requestFailed && !isLoading && historyList.length === 0" fill :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')"
         @action="retryHistoryRequest"
       />
-      <Empty v-else-if="noMoreContent && !isLoading && !historyList.length" text-only fill :description="t(filtersActive ? 'library_tools.no_matches' : 'common.no_data')" role="status" />
+      <Empty v-else-if="noMoreContent && !isLoading && !historyList.length" fill :description="t(filtersActive ? 'library_tools.no_matches' : 'common.no_data')" role="status" />
       <HistoryGroupSkeleton v-else-if="showSkeletons && !historyList.length" :cards="cardColumns + 1" />
 
       <!-- One row per group; a new interval or starting group (chosen in the
@@ -564,7 +561,7 @@ function jumpToLoginPage() {
       </Transition>
 
       <Empty
-        v-if="requestFailed && !isLoading && historyList.length > 0" text-only class="history-load-more-error" :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')"
+        v-if="requestFailed && !isLoading && historyList.length > 0" class="history-load-more-error" :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')"
         @action="retryHistoryRequest"
       />
 
@@ -580,7 +577,7 @@ function jumpToLoginPage() {
           @update:model-value="selectRailContent"
         />
         <fieldset class="history-controls library-rail-content" :disabled="controlsDisabled" :aria-label="t('history.title')">
-          <div class="library-rail-tools library-rail-tools--ruled">
+          <div class="library-rail-tools">
             <LibrarySearchField
               v-model="keyword" :label="t('history.search_watch_history')" :clearable="Boolean(submittedKeyword)" :filter-active="filterActive" @submit="handleSearch()"
               @clear="clearSearch"
@@ -602,7 +599,7 @@ function jumpToLoginPage() {
               <template #left>
                 <i :class="batch.managing.value ? 'i-tabler:check' : 'i-tabler:list-check'" />
               </template>
-              {{ t('watch_later.batch_manage') }}
+              {{ t('common.batch_manage') }}
             </Button>
             <Transition name="page-fade" mode="out-in" v-bind="retiringTransition">
               <div v-if="batch.managing.value" key="selection" class="library-rail-actions">
@@ -610,7 +607,7 @@ function jumpToLoginPage() {
                   <template #left>
                     <i i-tabler:checks />
                   </template>
-                  {{ t(batch.allSelected.value ? 'watch_later.unselect_all' : 'history.select_results') }}
+                  {{ t(batch.allSelected.value ? 'common.unselect_all' : 'history.select_results') }}
                 </Button>
                 <Button class="library-sidebar-action" type="primary" :disabled="!batch.selected.value.size" @click="batch.removeSelected">
                   <template #left>
@@ -671,7 +668,7 @@ function jumpToLoginPage() {
                   {{ $t('history.turn_on_watch_history') }}
                 </Button>
                 <Button
-                  class="library-sidebar-action history-action--danger"
+                  class="library-sidebar-action"
                   :disabled="isClearingHistory"
                   @click="handleClearAllWatchHistory"
                 >
@@ -723,7 +720,7 @@ function jumpToLoginPage() {
     </template>
   </LibraryWorkspace>
   <Empty
-    v-else text-only class="library-workspace-login" :description="t('common.please_log_in_first')" :action-label="t('common.login')"
+    v-else class="library-workspace-login" :description="t('common.please_log_in_first')" :action-label="t('common.login')"
     @action="jumpToLoginPage"
   />
 </template>
@@ -734,9 +731,6 @@ function jumpToLoginPage() {
 .history-action--success {
   --bew-library-action-foreground: var(--bew-success-foreground);
 }
-.history-action--danger {
-  --bew-library-action-foreground: var(--bew-destructive-foreground);
-}
 .history-controls {
   min-width: 0;
   padding: 0;
@@ -745,7 +739,7 @@ function jumpToLoginPage() {
 }
 .history-batch-error {
   margin: 0;
-  color: var(--bew-error-foreground);
+  color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
 }
 .history-query-summary {

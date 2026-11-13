@@ -54,6 +54,9 @@ const PGC_SCROLLERS: [selector: string, fade: string][] = [
   ['[class*="SectionTabs_scroller"], [class*="PageTabs_wrap"]', SCROLL_EDGE_FADE_INLINE_CLASS],
 ]
 
+// A collection video's parts scroll beside its card (layout.ts).
+const PART_LIST_SELECTOR = '.multi-p > .page-list'
+
 export function clearEpisodeSectionMarker(panel: HTMLElement, movedNodes: MovedNode[]) {
   for (const { node } of movedNodes)
     node.classList.remove(...EPISODE_SECTION_CLASSES)
@@ -63,6 +66,7 @@ export function clearEpisodeSectionMarker(panel: HTMLElement, movedNodes: MovedN
   for (const [selector, fade] of PGC_SCROLLERS)
     panel.querySelectorAll(selector).forEach(node => node.classList.remove(fade))
   panel.querySelector('#playlist-video-action-list')?.classList.remove(SCROLL_EDGE_FADE_CLASS)
+  panel.querySelectorAll(PART_LIST_SELECTOR).forEach(node => node.classList.remove(SCROLL_EDGE_FADE_CLASS))
   panel.querySelectorAll(`[${PGC_SECTION_ATTRIBUTE}]`).forEach((section) => {
     section.querySelector(`.${DISCLOSURE_TOGGLE_CLASS}`)?.remove()
     section.removeAttribute(PGC_SECTION_ATTRIBUTE)
@@ -218,6 +222,10 @@ export function syncEpisodeSectionMarker(currentState: BewlyWidescreenState) {
     episodeSection?.classList.remove(SCROLL_EDGE_FADE_CLASS)
     actionList.classList.add(SCROLL_EDGE_FADE_CLASS)
   }
+  panel.querySelectorAll(PART_LIST_SELECTOR).forEach((node) => {
+    if (!node.classList.contains(SCROLL_EDGE_FADE_CLASS))
+      node.classList.add(SCROLL_EDGE_FADE_CLASS)
+  })
   if (isPgc)
     syncPgcSections(panel)
   placePlaylistToggleButton(currentState)

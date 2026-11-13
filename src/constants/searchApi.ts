@@ -1,3 +1,5 @@
+import { isRecord } from '~/utils/plainObject'
+
 export const SEARCH_TYPES = [
   'all',
   'video',
@@ -201,10 +203,6 @@ const SEARCH_METHOD_BY_TYPE: Record<SearchType, SearchApiMethod> = {
 }
 
 const SEARCH_TYPE_SET = new Set<string>(SEARCH_TYPES)
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 function positiveInteger(value: unknown, fallback: number): number {
   const parsed = Number(value)

@@ -18,7 +18,7 @@ import { useLoadMore } from '../composables/useLoadMore'
 import { refreshSearchPage, usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
 import { convertLiveRoomData, convertUserCardData } from '../searchTransforms'
-import type { LiveSearchFilters } from '../types'
+import type { LiveSearchFilters, SearchLiveResult, SearchUserResult } from '../types'
 import { dedupeByKey } from '../utils/searchHelpers'
 
 const props = defineProps<{
@@ -34,7 +34,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-function convertSearchUser(user: unknown) {
+function convertSearchUser(user: SearchUserResult) {
   return convertUserCardData(user, index => t('search.user.sample_title', { index }))
 }
 
@@ -56,9 +56,10 @@ const {
   error,
   results,
   requestScope,
+  view,
   search,
   reset: resetSearch,
-} = useSearchRequest<any>('live')
+} = useSearchRequest<any>('live', { identity: () => [props.keyword.trim(), props.filters], page: () => props.initialPage })
 
 // 分页管理
 const {
@@ -70,11 +71,13 @@ const {
   updatePage,
   getNextPage,
   reset: resetPagination,
-} = usePagination()
+} = usePagination(view)
 
 // 直播间和主播的独立总数
 const liveRoomTotalResults = ref(0)
 const liveUserTotalResults = ref(0)
+view.retain('liveRoomTotalResults', liveRoomTotalResults)
+view.retain('liveUserTotalResults', liveUserTotalResults)
 
 // 无限加载管理
 const {
@@ -94,17 +97,18 @@ const {
   return { success, appendedCount }
 }, {
   isLoading: () => isLoading.value,
+  view,
 })
 
 // 获取直播间列表
-const liveRoomList = computed(() => {
+const liveRoomList = computed<SearchLiveResult[]>(() => {
   if (!results.value?.result)
     return []
   return Array.isArray(results.value.result.live_room) ? results.value.result.live_room : []
 })
 
 // 获取主播列表
-const liveUserList = computed(() => {
+const liveUserList = computed<SearchUserResult[]>(() => {
   if (!results.value?.result)
     return []
   return Array.isArray(results.value.result.live_user) ? results.value.result.live_user : []
@@ -115,7 +119,7 @@ const gridLayout: GridLayoutType = 'adaptive'
 
 // 转换后的直播间列表
 const transformedLiveRoomList = computed(() => {
-  return liveRoomList.value.map((live: unknown) => convertLiveRoomData(live))
+  return liveRoomList.value.map(convertLiveRoomData)
 })
 
 // 检查是否在翻页模式下且不在第一页
@@ -172,7 +176,9 @@ watch(() => props.keyword, async (newKeyword, oldKeyword) => {
 // 组件挂载时立即执行搜索
 onMounted(() => {
   const keyword = props.keyword.trim()
-  if (keyword) {
+  if (view.restored)
+    void batchQueryUserRelations(liveUserList.value.map((user: any) => user.mid).filter(Boolean))
+  if (keyword && !view.restored) {
     // 如果有初始页码，先设置页码
     if (props.initialPage && props.initialPage > 1) {
       updatePage(props.initialPage)
@@ -397,7 +403,7 @@ defineExpose({
               {{ t('search.result_count', { count: formatResultCount(filters.subCategory === 'live_user' ? totalResults : (liveUserTotalResults || liveUserList.length)) }) }}
             </span>
           </div>
-          <div grid="~ cols-3 gap-4">
+          <div grid="~ cols-3 gap-$bew-grid-gutter">
             <UserCardSkeleton
               v-for="index in (isLoading && liveUserList.length === 0 ? 3 : 0)"
               :key="`live-user-initial-skeleton-${index}`"
@@ -409,7 +415,7 @@ defineExpose({
               :key="user.mid || user.uid"
               v-bind="{
                 ...convertSearchUser(user),
-                isFollowed: userRelations[user.mid || user.uid]?.isFollowing ? 1 : 0,
+                isFollowed: userRelations[user.mid || user.uid || 0]?.isFollowing ? 1 : 0,
               }"
               :compact="true"
             />
@@ -429,7 +435,6 @@ defineExpose({
               px-6 py-2 rounded="$bew-interactive-radius"
               bg="$bew-fill-1 hover:$bew-fill-2"
               text="sm $bew-text-1"
-              transition-colors duration-200
               @click="handleSwitchToLiveUser"
             >
               {{ t('search.live.more_streamers', { count: Math.max((liveUserTotalResults || 0) - 6, 0) }) }}
@@ -495,9 +500,11 @@ defineExpose({
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/hoverState";
+
 .live-search-page {
   width: 100%;
-  padding-bottom: 2rem;
+  padding-bottom: var(--bew-space-8);
 }
 
 .live-results {
@@ -508,6 +515,7 @@ defineExpose({
   cursor: pointer;
   border: none;
   outline: none;
+  @include hoverState.transition;
 
   &:focus-visible {
     outline: var(--bew-focus-ring, 1px solid CanvasText);
@@ -516,7 +524,7 @@ defineExpose({
 }
 
 .error-message {
-  padding: 2rem;
+  padding: var(--bew-space-8);
   text-align: center;
   color: var(--bew-error-color);
 }

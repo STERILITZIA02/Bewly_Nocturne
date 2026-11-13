@@ -28,22 +28,22 @@ export function canFavoriteVideo(video: Partial<Video>) {
 export function createVideoFavoriteSelection(video: Partial<Video>, deps: Dependencies) {
   const folders = shallowRef<VideoFavoriteFolder[]>([])
   const selected = ref<number[]>([])
-  const loading = ref(false)
-  const saving = ref(false)
+  const phase = ref<'idle' | 'loading' | 'saving' | 'closed'>('idle')
+  const loading = computed(() => phase.value === 'loading')
+  const saving = computed(() => phase.value === 'saving')
   const loaded = ref(false)
   const error = ref<'read' | 'save' | 'verify' | ''>('')
-  const needsVerification = ref(false)
+  const desired = shallowRef<Set<number>>()
+  const needsVerification = computed(() => desired.value !== undefined)
   const lifetime = createAccountLifetime(deps.account)
   const owner = lifetime.capture()
   const csrf = deps.csrf()
   const controller = new AbortController()
   let initial = new Set<number>()
-  let desired: Set<number> | undefined
   let aid = validId(video.aid) ? video.aid : undefined
-  const closed = ref(false)
   const sameAccount = () => owner.accountId !== null && deps.account() === owner.accountId && !!csrf && deps.csrf() === csrf
-  const current = () => !closed.value && owner.isCurrent() && sameAccount()
-  const editable = computed(() => loaded.value && !loading.value && !saving.value && !needsVerification.value && !closed.value)
+  const current = () => phase.value !== 'closed' && owner.isCurrent() && sameAccount()
+  const editable = computed(() => loaded.value && phase.value === 'idle' && !needsVerification.value)
   const full = (folder: VideoFavoriteFolder) => Number.isSafeInteger(folder.max_count) && folder.max_count! >= 0 && folder.media_count >= folder.max_count!
 
   async function read() {
@@ -59,13 +59,12 @@ export function createVideoFavoriteSelection(video: Partial<Video>, deps: Depend
     }
     const next = list || []
     const members = new Set(next.filter(folder => folder.fav_state === 1).map(folder => folder.id))
-    if (desired && (members.size !== desired.size || [...desired].some(id => !members.has(id))))
+    if (desired.value && (members.size !== desired.value.size || [...desired.value].some(id => !members.has(id))))
       throw new Error('favorite membership not yet confirmed')
     folders.value = next
     initial = members
     selected.value = [...members]
-    desired = undefined
-    needsVerification.value = false
+    desired.value = undefined
     loaded.value = true
     return true
   }
@@ -73,7 +72,7 @@ export function createVideoFavoriteSelection(video: Partial<Video>, deps: Depend
   async function load() {
     if (!current() || loading.value || saving.value)
       return false
-    loading.value = true
+    phase.value = 'loading'
     error.value = ''
     try {
       if (!canFavoriteVideo(video))
@@ -93,7 +92,7 @@ export function createVideoFavoriteSelection(video: Partial<Video>, deps: Depend
     }
     finally {
       if (current())
-        loading.value = false
+        phase.value = 'idle'
     }
   }
 
@@ -121,7 +120,7 @@ export function createVideoFavoriteSelection(video: Partial<Video>, deps: Depend
       release = resolve
     })
     submitted.set(key, settled)
-    saving.value = true
+    phase.value = 'saving'
     error.value = ''
     try {
       const response = await deps.write({ rid: aid, add_media_ids: added.map(folder => folder.id).join(','), del_media_ids: removed.map(folder => folder.id).join(','), csrf })
@@ -136,15 +135,13 @@ export function createVideoFavoriteSelection(video: Partial<Video>, deps: Depend
         await deps.changed().catch(() => undefined)
       if (!current())
         return false
-      desired = target
+      desired.value = target
       initial = new Set(target)
-      needsVerification.value = true
       return await read()
     }
     catch {
       if (current()) {
-        needsVerification.value = true
-        desired = target
+        desired.value = target
         error.value = 'verify'
       }
       return false
@@ -154,11 +151,11 @@ export function createVideoFavoriteSelection(video: Partial<Video>, deps: Depend
         submitted.delete(key)
       release()
       if (current())
-        saving.value = false
+        phase.value = 'idle'
     }
   }
   return { folders, selected, loading, saving, loaded, error, editable, needsVerification, full, load, save, toggle, close() {
-    closed.value = true
+    phase.value = 'closed'
     controller.abort()
     lifetime.dispose()
   } }

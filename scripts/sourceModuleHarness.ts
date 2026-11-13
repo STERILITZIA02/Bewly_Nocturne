@@ -34,6 +34,12 @@ export async function loadSourceModule(file: string, imports: Record<string, unk
   if (source.includes('from \'~/utils/dataFormatter\'') && !('~/utils/dataFormatter' in imports))
     imports = { '~/utils/dataFormatter': await dataFormatterFixture(imports['~/logic'], imports['~/utils/i18n']), ...imports }
   for (const [name, path] of [
+    ['~/composables/usePageViewState', '../src/composables/usePageViewState'],
+    ['~/constants/contentScript', '../src/constants/contentScript'],
+    ['~/utils/bilibiliLogin', '../src/utils/bilibiliLogin'],
+    ['~/utils/festivalPage', '../src/utils/festivalPage'],
+    ['~/utils/lvIcons', '../src/utils/lvIcons'],
+    ['~/utils/plainObject', '../src/utils/plainObject'],
     ['~/utils/searchUrl', '../src/utils/searchUrl'],
     ['./searchUrl', '../src/utils/searchUrl'],
     ['./pageSearch', '../src/utils/pageSearch'],
@@ -93,8 +99,9 @@ export async function loadSourceModule(file: string, imports: Record<string, unk
   }
   // Dependency-free helpers; fixtures may still override them. They run in the
   // fixture's own sandbox so defaults such as `location.href` read its globals.
-  for (const name of ['abort', 'appearance', 'appearanceThemes', 'appearancePresets', 'historyCursor', 'momentsReadPosition', 'scrollIntent', 'bilibiliLocale', 'bilibiliLiveContext', 'viewSnapshotBudget', 'fullscreenChange', 'pageBridgeChannel', 'videoMetadataBridge', 'playbackTab', 'themeColor', 'motionPriority', 'reducedMotion', 'cssSelectors', 'htmlDecode', 'uriParse', 'textAutospace', 'uiScale', 'viewportGeometry']) {
-    for (const path of [`~/utils/${name}`, `../utils/${name}`, `./${name}`]) {
+  for (const name of ['abort', 'appearance', 'appearanceThemes', 'appearancePresets', 'historyCursor', 'momentsReadPosition', 'paginationState', 'plainObject', 'scrollIntent', 'bilibiliLocale', 'bilibiliUrl', 'bilibiliLiveContext', 'viewSnapshotBudget', 'fullscreenChange', 'pageBridgeChannel', 'videoMetadataBridge', 'nativeLoudness', 'clipboardSelection', 'playbackTab', 'themeColor', 'motionPriority', 'reducedMotion', 'cssSelectors', 'htmlDecode', 'uriParse', 'textAutospace', 'uiScale', 'viewportGeometry']) {
+    // Modules Node also loads directly (vite's style split) spell the extension out.
+    for (const path of [`~/utils/${name}`, `../utils/${name}`, `./${name}`, `./${name}.ts`]) {
       if (source.includes(`from '${path}'`) && !(path in imports))
         imports = { [path]: await loadSourceModule(`../src/utils/${name}.ts`, {}, globals), ...imports }
     }
@@ -103,7 +110,7 @@ export async function loadSourceModule(file: string, imports: Record<string, unk
   const browserWindow = Reflect.get(globalThis, 'window')
   const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: false } }).outputText
   vm.runInNewContext(code, {
-    ...Object.fromEntries(['window', 'location', 'document', 'navigator', 'Document', 'Node', 'Element', 'HTMLElement', 'HTMLVideoElement', 'HTMLMediaElement', 'HTMLImageElement', 'HTMLIFrameElement', 'ShadowRoot', 'MutationObserver', 'CustomEvent', 'Event', 'ResizeObserver', 'IntersectionObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'getComputedStyle'].map(name => [name, Reflect.get(globalThis, name) ?? (browserWindow ? Reflect.get(browserWindow, name) : undefined)])),
+    ...Object.fromEntries(['window', 'location', 'document', 'navigator', 'Document', 'Node', 'Element', 'HTMLElement', 'HTMLVideoElement', 'HTMLMediaElement', 'HTMLImageElement', 'HTMLIFrameElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'ShadowRoot', 'MutationObserver', 'CustomEvent', 'Event', 'MouseEvent', 'ResizeObserver', 'IntersectionObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'getComputedStyle'].map(name => [name, Reflect.get(globalThis, name) ?? (browserWindow ? Reflect.get(browserWindow, name) : undefined)])),
     exports,
     require(name: string) {
       if (!(name in imports))

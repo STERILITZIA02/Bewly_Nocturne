@@ -131,7 +131,7 @@ onBeforeUnmount(() => {
   align-content: start;
   gap: var(--bew-space-2);
 }
-// Floating glass pills: the same material, rim and lift as the top bar capsule.
+// Floating glass buttons: the same material, rim and lift as the top bar group.
 .moments-reading__button {
   @include sidebarSurface.floating;
   display: flex;

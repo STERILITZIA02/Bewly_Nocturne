@@ -31,8 +31,6 @@ export function revealSelectionRow(row: HTMLElement, viewport: HTMLElement) {
  */
 export function keepSelectionScrollAnchor(row: HTMLElement, viewport: HTMLElement) {
   owners.get(viewport)?.()
-  if (typeof ResizeObserver !== 'function')
-    return () => {}
   const bounds = viewport.getBoundingClientRect()
   const trigger = row.querySelector<HTMLElement>('button') ?? row
   const top = Math.max(bounds.top, Math.min(trigger.getBoundingClientRect().top, bounds.bottom - trigger.offsetHeight))

@@ -1,4 +1,5 @@
 import { getBilibiliLogicalPathname } from './bilibiliLocale'
+import type { NativeAudioSettings } from './nativeLoudness'
 import { getPageBridgeChannelId } from './pageBridgeChannel'
 
 export const VIDEO_METADATA_REQUEST = 'bewly:video-metadata:request'
@@ -90,6 +91,7 @@ export interface NativeMediaSnapshot {
   unit?: NativePlaybackUnit
   listenOwner?: number
   btr: { installed: boolean, ownsMedia: boolean, listenHandoffVersion: number }
+  audio?: NativeAudioSettings
 }
 
 function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quality' | 'playback' | 'switchPlayback' | 'listen' | 'listenReturn' | 'listenResume' | 'listenRelease' | 'listenMediaSession' | 'adjustVolume', value: unknown = true) {
@@ -147,7 +149,13 @@ export function readNativeMediaSnapshot(video: HTMLElement): NativeMediaSnapshot
     || [unit.episodeId, unit.seasonId].some(id => id !== undefined && (!Number.isSafeInteger(id) || id <= 0)))) {
     return
   }
-  return { unit, btr, listenOwner: typeof data?.listenOwner === 'number' && Number.isSafeInteger(data.listenOwner) && data.listenOwner > 0 ? data.listenOwner : undefined }
+  const audio = data?.audio as NativeAudioSettings | undefined
+  return {
+    unit,
+    btr,
+    audio: audio && [0, 1, 2].includes(audio.loudness) && typeof audio.gain === 'number' && Number.isFinite(audio.gain) ? audio : undefined,
+    listenOwner: typeof data?.listenOwner === 'number' && Number.isSafeInteger(data.listenOwner) && data.listenOwner > 0 ? data.listenOwner : undefined,
+  }
 }
 
 export function getNativePlaybackUnitKey(unit: NativePlaybackUnit) {
@@ -158,7 +166,7 @@ export interface ListenSuspendRequest { unit: string, gate: number, previousGate
 
 export function suspendNativePlayback(video: HTMLElement, unit: NativePlaybackUnit, gate: number, previousGate?: number) {
   const value = readComponentSnapshot(video, 'listen', { unit: getNativePlaybackUnitKey(unit), gate, previousGate })?.suspended
-  return value === 'interrupted' || value === 'btr-companion-required' ? value : value === true
+  return value === 'interrupted' ? value : value === true
 }
 
 export function releaseNativeListen(gate: number) {

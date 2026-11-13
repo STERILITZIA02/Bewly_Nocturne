@@ -331,7 +331,7 @@ export function registerLocalLoudnessChecks(check, { Vue, flush }) {
       },
       revokeObjectURL: id => urls.delete(id),
     } })
-    const compat = await loadSourceModule('../src/inject/audio/localLoudnessCompatibility.ts', {}, {
+    const compat = await loadSourceModule('../src/inject/audio/localLoudnessCompatibility.ts', { '~/utils/nativeLoudness': await import('../src/utils/nativeLoudness') }, {
       document: { createElement: () => ({ getContext: () => ({ drawImage() {}, getImageData() {
         if (!safeMedia)
           throw new Error('SecurityError')

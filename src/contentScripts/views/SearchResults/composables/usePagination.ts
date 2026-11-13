@@ -1,5 +1,7 @@
 import { computed, ref } from 'vue'
 
+import type { SearchViewState } from './useSearchRequest'
+
 const PAGE_SIZE = 30
 
 /** Scroll refresh replaces the list from page one; numbered paging retains its page. */
@@ -54,11 +56,14 @@ export interface PaginationInfo {
  * 分页管理的通用 composable
  * 处理总数、总页数的提取和计算
  */
-export function usePagination() {
+export function usePagination(view?: SearchViewState) {
   const currentPage = ref(0)
   const totalResults = ref(0)
   const totalPages = ref(0)
   const context = ref('')
+  for (const [name, field] of Object.entries({ currentPage, totalResults, totalPages }))
+    view?.retain(name, field)
+  view?.retain('context', context)
 
   /**
    * 从 API 响应中提取分页信息
