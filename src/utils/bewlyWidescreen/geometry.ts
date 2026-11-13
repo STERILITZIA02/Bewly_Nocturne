@@ -1,6 +1,7 @@
+import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_ATTRIBUTE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { scheduleActionGeometrySync } from '~/utils/bewlyWidescreen/actionEffects'
-import { COVER_FIELD_PROPERTY, COVER_TONE_PROPERTY, HIGH_ENERGY_PROGRESS_PIN_SELECTOR, HIGH_ENERGY_PROGRESS_SELECTOR, NATIVE_PLAYER_ANCESTOR_CLASS, NATIVE_PLAYER_CLASS, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, PLAYER_DISPLAY_MODE_ATTRIBUTE, PLAYER_ZOOMING_ATTRIBUTE, READY_STABILITY_DELAY, VIEWER_COUNT_MIRRORED_ATTRIBUTE } from '~/utils/bewlyWidescreen/constants'
+import { COVER_FIELD_PROPERTY, COVER_TONE_PROPERTY, HIGH_ENERGY_PROGRESS_PIN_SELECTOR, HIGH_ENERGY_PROGRESS_SELECTOR, LETTERBOX_ATTRIBUTE, NATIVE_PLAYER_ANCESTOR_CLASS, NATIVE_PLAYER_CLASS, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, PLAYER_DISPLAY_MODE_ATTRIBUTE, PLAYER_ZOOMING_ATTRIBUTE, READY_STABILITY_DELAY, VIEWER_COUNT_MIRRORED_ATTRIBUTE } from '~/utils/bewlyWidescreen/constants'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
 import { getNativePlayerContainer, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
 import { exitNativeMiniPlayer } from '~/utils/bewlyWidescreen/nativeDom'
@@ -160,10 +161,12 @@ export function clearAnchoredPlayerElement(playerEl: HTMLElement) {
   playerEl.classList.remove(NATIVE_PLAYER_CLASS)
   playerEl.removeAttribute(PLAYER_DISPLAY_MODE_ATTRIBUTE)
   playerEl.removeAttribute(PLAYER_ZOOMING_ATTRIBUTE)
+  playerEl.removeAttribute(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_ATTRIBUTE)
   playerEl.style.removeProperty('--bewly-widescreen-controls-glass-height')
   const videoArea = playerEl.querySelector<HTMLElement>('.bpx-player-video-area')
   videoArea?.style.removeProperty(COVER_TONE_PROPERTY)
   videoArea?.style.removeProperty(COVER_FIELD_PROPERTY)
+  videoArea?.removeAttribute(LETTERBOX_ATTRIBUTE)
   ANCHORED_PLAYER_GEOMETRY_PROPERTIES.forEach(property => playerEl.style.removeProperty(property))
   document.querySelectorAll(`.${NATIVE_PLAYER_ANCESTOR_CLASS}`).forEach(node => node.classList.remove(NATIVE_PLAYER_ANCESTOR_CLASS))
 }
@@ -194,6 +197,12 @@ export function syncDisplayModeAttributes(currentState: BewlyWidescreenState) {
     if (element.dataset.displayMode !== mode)
       element.dataset.displayMode = mode
   }
+  // The letterbox starts crossing to the mode's colour with the zoom, not at
+  // its settled frame; only the video area's own background reads it.
+  const videoArea = currentState.playerEl.querySelector<HTMLElement>('.bpx-player-video-area')
+  const letterbox = mode === 'fill' ? 'canvas' : 'cover'
+  if (videoArea && videoArea.getAttribute(LETTERBOX_ATTRIBUTE) !== letterbox)
+    videoArea.setAttribute(LETTERBOX_ATTRIBUTE, letterbox)
   const restMode = currentState.heldRestMode ?? mode
   if (currentState.playerEl.getAttribute(PLAYER_DISPLAY_MODE_ATTRIBUTE) !== restMode)
     currentState.playerEl.setAttribute(PLAYER_DISPLAY_MODE_ATTRIBUTE, restMode)

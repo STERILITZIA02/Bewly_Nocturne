@@ -6,8 +6,6 @@ const owners = new WeakMap<Document, Owner>()
 export function observeSkeletonGroup(block: HTMLElement) {
   const doc = block.ownerDocument
   const group = block.closest<HTMLElement>('[data-bew-skeleton-group], article, li, [role="status"]') ?? block.parentElement ?? block
-  if (typeof IntersectionObserver === 'undefined')
-    return () => {}
   let owner = owners.get(doc)
   if (!owner) {
     const groups = new Map<HTMLElement, Group>()

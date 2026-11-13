@@ -50,8 +50,9 @@ export interface PrivateRecipientSearchState extends PrivateRecipientSearchGroup
   query: string
   source: PrivateRecipientSource | null
   loading: boolean
-  searching: boolean
-  complete: boolean
+  pipelinePhase: 'idle' | 'searching' | 'complete'
+  readonly searching: boolean
+  readonly complete: boolean
   groups: Record<PrivateRecipientSource, PrivateRecipientSearchGroup>
 }
 
@@ -102,8 +103,9 @@ export function usePrivateRecipientSearch(
     query: '',
     source: null,
     loading: false,
-    searching: false,
-    complete: false,
+    pipelinePhase: 'idle',
+    get searching() { return this.pipelinePhase === 'searching' },
+    get complete() { return this.pipelinePhase === 'complete' },
     groups,
     // Existing source-specific callers still read the active group; the UI renders both groups.
     get items() { return state.source ? groups[state.source].items : [] },
@@ -119,8 +121,7 @@ export function usePrivateRecipientSearch(
   let request: Promise<void> | null = null
   let activeRequest: ActiveRecipientSearch | null = null
   let pipeline: { generation: number, promise: Promise<void> } | null = null
-  let disposed = false
-  let enabled = true
+  let lifetime: 'active' | 'paused' | 'disposed' = 'active'
   let pacingTimer: ReturnType<typeof setTimeout> | undefined
   let releasePacing: (() => void) | undefined
 
@@ -133,8 +134,7 @@ export function usePrivateRecipientSearch(
   function resetVisibleState() {
     state.source = null
     state.loading = false
-    state.searching = false
-    state.complete = false
+    state.pipelinePhase = 'idle'
     Object.assign(groups.following, emptyGroup())
     Object.assign(groups.global, emptyGroup())
     cancelPacing()
@@ -158,17 +158,20 @@ export function usePrivateRecipientSearch(
   }
 
   function pause() {
-    if (!enabled)
+    if (lifetime !== 'active')
       return
-    enabled = false
+    lifetime = 'paused'
     generation++
     cancelPacing()
     state.loading = false
-    state.searching = false
+    if (state.searching)
+      state.pipelinePhase = 'idle'
     syncVisibilityHandler()
   }
   function resume() {
-    enabled = true
+    if (lifetime === 'disposed')
+      return Promise.resolve()
+    lifetime = 'active'
     syncVisibilityHandler()
     if (state.complete && !groups.following.errorKind && !groups.global.errorKind)
       return Promise.resolve()
@@ -233,7 +236,7 @@ export function usePrivateRecipientSearch(
     const query = state.query
     const mid = currentMid.value
     const queuedGeneration = generation
-    if (disposed || !enabled || !mid || !canSearchPrivateRecipients(query))
+    if (lifetime !== 'active' || !mid || !canSearchPrivateRecipients(query))
       return Promise.resolve()
 
     if (request) {
@@ -247,7 +250,7 @@ export function usePrivateRecipientSearch(
         return request
       }
       return request.then(() => {
-        if (disposed || queuedGeneration !== generation || mid !== currentMid.value || query !== state.query)
+        if (lifetime !== 'active' || queuedGeneration !== generation || mid !== currentMid.value || query !== state.query)
           return
         return search(source, loadMore)
       })
@@ -341,12 +344,11 @@ export function usePrivateRecipientSearch(
       return pipeline.promise
     const epoch = generation
     const account = currentMid.value
-    const current = () => !disposed && enabled && generation === epoch && currentMid.value === account
+    const current = () => lifetime === 'active' && generation === epoch && currentMid.value === account
       && (typeof document === 'undefined' || !document.hidden)
     if (!account || !state.query || !current())
       return Promise.resolve()
-    state.searching = true
-    state.complete = false
+    state.pipelinePhase = 'searching'
     const task = (async () => {
       try {
         await search('following', Boolean(groups.following.loaded && groups.following.errorKind))
@@ -366,11 +368,11 @@ export function usePrivateRecipientSearch(
         // A following-service failure must not hide usable global results.
         await search('global', Boolean(groups.global.loaded && groups.global.errorKind))
         if (current())
-          state.complete = true
+          state.pipelinePhase = 'complete'
       }
       finally {
-        if (generation === epoch)
-          state.searching = false
+        if (generation === epoch && state.searching)
+          state.pipelinePhase = 'idle'
       }
     })().finally(() => {
       if (pipeline?.promise === task)
@@ -385,9 +387,10 @@ export function usePrivateRecipientSearch(
       generation++
       cancelPacing()
       state.loading = false
-      state.searching = false
+      if (state.searching)
+        state.pipelinePhase = 'idle'
     }
-    else if (enabled && state.query && !state.complete) {
+    else if (lifetime === 'active' && state.query && !state.complete) {
       void searchAll()
     }
   }
@@ -396,7 +399,7 @@ export function usePrivateRecipientSearch(
     if (typeof document === 'undefined')
       return
     document.removeEventListener('visibilitychange', handleVisibility)
-    if (enabled && state.query)
+    if (lifetime === 'active' && state.query)
       document.addEventListener('visibilitychange', handleVisibility)
   }
 
@@ -404,7 +407,7 @@ export function usePrivateRecipientSearch(
   if (getCurrentScope()) {
     watch(() => state.query, syncVisibilityHandler, { flush: 'sync' })
     onScopeDispose(() => {
-      disposed = true
+      lifetime = 'disposed'
       reset()
       document.removeEventListener('visibilitychange', handleVisibility)
     })

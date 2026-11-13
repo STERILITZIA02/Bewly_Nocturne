@@ -42,6 +42,7 @@ import type { List as VideoItem, WatchLaterResult } from '~/models/video/watchLa
 import { useTopBarStore } from '~/stores/topBarStore'
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import api from '~/utils/api'
+import { jumpToLoginPage } from '~/utils/bilibiliLogin'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, getUserID, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
@@ -807,10 +808,6 @@ function handleLinkClick(url: string) {
   }
 }
 
-function jumpToLoginPage() {
-  location.href = 'https://passport.bilibili.com/login'
-}
-
 async function openVideoPageAndRemove(item: VideoItem) {
   const owner = actionLifetime.capture()
   const { aid } = item
@@ -858,10 +855,10 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
         {{ t('common.load_more') }}
       </Button>
       <Empty
-        v-if="requestFailed && !isLoading && filteredItems.length === 0" text-only fill :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')"
+        v-if="requestFailed && !isLoading && filteredItems.length === 0" fill :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')"
         @action="retryWatchLaterRequest"
       />
-      <Empty v-else-if="watchLaterCount === 0 && !filteredItems.length && (!isLoading || isRefreshing)" text-only fill :description="$t('common.no_data')" role="status" />
+      <Empty v-else-if="watchLaterCount === 0 && !filteredItems.length && (!isLoading || isRefreshing)" fill :description="$t('common.no_data')" role="status" />
       <template v-else>
         <!-- The queue's head, one card pinned and covered like the other library heads:
              the first cover, the count, Play All and the stacked queue. -->
@@ -881,7 +878,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
           </LibraryHeroCarousel>
         </Transition>
         <LoadingFill v-if="pendingPhase !== 'idle'" ref="pendingRef" :loading="pendingLoading" />
-        <Empty v-else-if="hasNoMatches" text-only fill :description="t('library_tools.no_matches')" role="status" />
+        <Empty v-else-if="hasNoMatches" fill :description="t('library_tools.no_matches')" role="status" />
         <VideoListSkeleton
           v-else-if="showSkeletons && currentWatchLaterList.length === 0 && watchLaterLayoutMode === 'list'"
           :count="5"
@@ -912,7 +909,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                 rounded="$bew-thumb-radius"
                 flex="~ gap-6 col md:col lg:row items-start"
                 relative
-                group-hover:bg="$bew-fill-2"
+                group-hover:bg="$bew-hover-bg"
                 duration-300 w-full
                 p-2 m-1
                 content-visibility-auto
@@ -970,7 +967,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                       w-fit
                       rounded="$bew-interactive-radius"
                       hover:color="$bew-theme-foreground"
-                      hover:bg="$bew-theme-surface"
+                      hover:bg="$bew-hover-bg"
                       duration-300
                       pr-2
                       :href="getWatchLaterAuthor(item).authorUrl" target="_blank"
@@ -1093,7 +1090,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
         <SmoothLoading v-if="filtersActive && filteredItems.length" :show="isLoading && !isRefreshing" />
         <Empty
           v-if="requestFailed && !isLoading && currentWatchLaterList.length > 0"
-          text-only class="watch-later-load-more-error" :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')" @action="retryWatchLaterRequest"
+          class="watch-later-load-more-error" :description="$t(requestStalled ? 'common.pagination_stalled' : 'common.load_failed')" :action-label="$t('common.operation.refresh')" @action="retryWatchLaterRequest"
         />
       </template>
     </main>
@@ -1102,7 +1099,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
       <div class="library-rail-content">
         <LibrarySidebarHeading :title="t('watch_later.title')" :content-id="contentId" :count="watchLaterCount" />
         <fieldset class="watch-later-controls library-rail-content" :disabled="isItemActionPending()" :aria-label="t('watch_later.title')">
-          <div class="library-rail-tools library-rail-tools--ruled">
+          <div class="library-rail-tools">
             <LibrarySearchField v-model="searchQuery" :label="t('library_tools.watch_later_search')" :filter-active="filterActive">
               <template #filter>
                 <LibraryFilterMenu :label="t('library_tools.filters')" :groups="filterGroups" :disabled="isItemActionPending()" @select="selectFilter" />
@@ -1122,7 +1119,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
               <template #left>
                 <div :class="batch.managing.value ? 'i-tabler:check' : 'i-tabler:list-check'" aria-hidden="true" />
               </template>
-              {{ t('watch_later.batch_manage') }}
+              {{ t('common.batch_manage') }}
             </Button>
             <Transition name="page-fade" mode="out-in" v-bind="retiringTransition">
               <div v-if="batch.managing.value" key="selection" class="library-rail-actions">
@@ -1130,7 +1127,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                   class="library-sidebar-action" :disabled="isLoading || !noMoreContent || !filteredItems.length" :aria-pressed="batch.allSelected.value"
                   @click="batch.toggleAll"
                 >
-                  {{ t(batch.allSelected.value ? 'watch_later.unselect_all' : 'watch_later.select_all') }}
+                  {{ t(batch.allSelected.value ? 'common.unselect_all' : 'common.select_all') }}
                 </Button>
                 <Button
                   type="primary" class="library-sidebar-action" :disabled="isLoading || !batch.selected.value.size"
@@ -1175,7 +1172,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
                   {{ t('watch_later.remove_watched_videos') }}
                 </Button>
                 <Button
-                  v-if="watchLaterCount > 0" class="library-sidebar-action watch-later-action--danger"
+                  v-if="watchLaterCount > 0" class="library-sidebar-action"
                   @click="handleClearAllWatchLater"
                 >
                   <template #left>
@@ -1192,15 +1189,12 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
     <OpenTabsDialog v-if="showOpenTabsDialog" @close="showOpenTabsDialog = false" />
   </LibraryWorkspace>
   <Empty
-    v-else text-only class="library-workspace-login" :description="t('common.please_log_in_first')" :action-label="t('common.login')"
+    v-else class="library-workspace-login" :description="t('common.please_log_in_first')" :action-label="t('common.login')"
     @action="jumpToLoginPage"
   />
 </template>
 
 <style lang="scss" scoped>
-.watch-later-action--danger {
-  --bew-library-action-foreground: var(--bew-destructive-foreground);
-}
 .watch-later-list-card__progress {
   position: absolute;
   inset: auto 0 0;
@@ -1221,7 +1215,7 @@ useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredIt
 }
 .watch-later-batch-error {
   margin: 0;
-  color: var(--bew-error-foreground);
+  color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
 }

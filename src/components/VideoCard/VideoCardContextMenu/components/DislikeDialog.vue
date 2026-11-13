@@ -13,7 +13,6 @@ import { getAppFeedFeedbackReasonKey, getAppFeedFeedbackTarget, isSameAppFeedFee
 import { captureAppAuth, ensureFreshAppAccessToken } from '~/utils/authProvider'
 
 const props = defineProps<{
-  modelValue: boolean
   video: Video
 }>()
 

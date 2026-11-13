@@ -1,6 +1,57 @@
 // https://github.com/SocialSisterYi/bilibili-API-collect/blob/e379d904c2753fa30e9083f59016f07e89d19467/docs/login/login_info.md#%E5%AF%BC%E8%88%AA%E6%A0%8F%E7%94%A8%E6%88%B7%E4%BF%A1%E6%81%AF
 import type { Media as FavoriteMedia } from '~/models/video/favorite'
 
+export interface TopBarMomentAuthor {
+  mid?: number
+  name?: string
+  face?: string
+  jump_url?: string
+}
+
+/** Feed/nav wire row; collaborative submissions retain their original authors. */
+export interface TopBarMomentSource {
+  id_str: string
+  type: number
+  rid?: string | number
+  bvid?: string
+  title?: string
+  author?: TopBarMomentAuthor
+  authors?: TopBarMomentAuthor[]
+  pub_time?: string | number
+  cover?: string
+  jump_url?: string
+  bewlyUnread?: boolean
+  modules?: { module_dynamic?: { major?: { archive?: { bvid?: string }, ugc_season?: { bvid?: string } } } }
+}
+
+export interface TopBarMomentPage {
+  code: number
+  data?: { items: TopBarMomentSource[], offset: string, has_more: boolean, update_baseline: string }
+}
+
+export interface TopBarMomentItem {
+  id_str: string
+  dynamicId?: string
+  unread?: boolean
+  type: string
+  title?: string
+  author?: string
+  authorFace?: string
+  authorJumpUrl?: string
+  pubTime?: string | number
+  cover?: string
+  link?: string
+  rid?: string | number
+  watchLaterAid?: number
+  isCollaborative?: boolean
+  authors?: TopBarMomentAuthor[]
+}
+
+export interface TopBarLiveMomentPage {
+  code: number
+  data?: { list?: Array<{ roomid?: number, id?: number, title?: string, uname?: string, face?: string, pic?: string, link?: string }> }
+}
+
 export interface UserInfo {
   face: string // avatar
   level_info: {

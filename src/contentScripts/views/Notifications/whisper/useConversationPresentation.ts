@@ -125,27 +125,25 @@ export function useConversationPresentation(view: Ref<HTMLElement | null>, activ
     window.addEventListener(MOTION_PREFERENCE_CHANGE, sync, { signal: media.signal })
     window.visualViewport?.addEventListener('resize', sync, { signal: media.signal })
     window.visualViewport?.addEventListener('scroll', sync, { signal: media.signal })
-    if (typeof ResizeObserver !== 'undefined') {
-      resize = new ResizeObserver((entries) => {
-        if (mounted && active()) {
-          if (entries.some(entry => entry.target === view.value)) {
-            updateConversationGeometry()
-            events.layoutSettled()
-          }
-          if (entries.some(entry => entry.target === content.value))
-            events.contentResized()
-          if (composer?.value && entries.some(entry => entry.target === composer.value))
-            updateComposerHeight()
+    resize = new ResizeObserver((entries) => {
+      if (mounted && active()) {
+        if (entries.some(entry => entry.target === view.value)) {
+          updateConversationGeometry()
+          events.layoutSettled()
         }
-      })
-      if (view.value)
-        resize.observe(view.value)
-      if (content.value)
-        resize.observe(content.value)
-      if (composer?.value) {
-        resize.observe(composer.value)
-        updateComposerHeight()
+        if (entries.some(entry => entry.target === content.value))
+          events.contentResized()
+        if (composer?.value && entries.some(entry => entry.target === composer.value))
+          updateComposerHeight()
       }
+    })
+    if (view.value)
+      resize.observe(view.value)
+    if (content.value)
+      resize.observe(content.value)
+    if (composer?.value) {
+      resize.observe(composer.value)
+      updateComposerHeight()
     }
     // Commit compact geometry once. Only the completed expansion releases data.
     openingFrame = requestAnimationFrame(() => {

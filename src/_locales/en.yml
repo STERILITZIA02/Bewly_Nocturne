@@ -10,7 +10,6 @@ library_tools:
   date_custom: Custom dates
   date_range: Custom date range
   days: Jump to a day
-  resume_at: 'Stopped at {time} of {total}'
   video_count: '{count} videos'
   item_count: '{count} items'
   switch_to: 'Switch to {name}'
@@ -21,11 +20,7 @@ library_tools:
   search_scope: Search scope
   selected_tabs: '{count} of {total} tabs selected'
   search_results: 'Results for “{query}”'
-  load_more_matches: Find more earlier records
   no_matches: No matching content
-  date: Choose a date
-  all_dates: All dates
-  content_type: Content type
   type_all: All content
   type_archive: Videos
   type_pgc: Series and films
@@ -33,22 +28,13 @@ library_tools:
   type_article: Articles
   clear_search: Clear search
   watch_later_search: Search titles or creators
-  playback_state: Watch status
-  state_all: All progress
-  state_unstarted: Not started
-  state_watching: In progress
-  state_completed: Completed
-  state_unknown: Progress unknown
-  duration: Video duration
-  duration_all: Any duration
-  duration_short: Up to 10 minutes
-  duration_medium: 10–30 minutes
-  duration_long: Over 30 minutes
   find_messages: Find in loaded conversation messages
   previous_match: Previous match
   next_match: Next match
-  load_more_videos: Load more videos
 common:
+  batch_manage: Batch manage
+  select_all: Select all
+  unselect_all: Deselect all
   volume: Volume {volume}%
   pagination_stalled: The list did not advance. Retry to continue.
   advertisement: Advertisement
@@ -65,19 +51,9 @@ common:
   undo: UNDO
   days: days
   view: no view | {count} view | {count} views
-  viewWithoutNum: ' views'
-  danmaku: no danmaku | {count} danmaku | {count} danmakus
-  danmakuWithoutNum: ' danmakus'
-  like: no like | {count} like | {count} likes
-  likeWithoutNum: ' likes'
   anime_follow_count: no follow | {count} follow | {count} follows
-  year: year ago | years ago
-  month: month ago | months ago
-  week: week ago | weeks ago
-  day: day ago | days ago
   hour: hour ago | hours ago
   minute: minute ago | minutes ago
-  second: second ago | seconds ago
   yesterday: yesterday
   just_now: just now
   please_log_in_first: Please log in first
@@ -87,8 +63,6 @@ common:
   add_to_watch_later: Add to Watch later
   added_to_watch_later: Added to Watch later
   remove_from_watch_later: Remove from Watch later
-  added: Added
-  performance_impact_warn: This feature may cause performance *DECREASE*!
   no_data: No data available
   no_more_content: No more content now, owari da
   load_failed: Failed to load. Please try again later.
@@ -98,12 +72,9 @@ common:
   load_more: Load more
   operation:
     add: Add
-    edit: Edit
     delete: Delete
     confirm: Confirm
     cancel: Cancel
-    enable: Enable
-    disable: Disable
     refresh: Refresh
     reset: Reset
     import: Import
@@ -115,7 +86,6 @@ common:
   table:
     index: Index
     title: Title
-    name: Name
     remark: Remark
     operations: Operations
   position:
@@ -250,8 +220,12 @@ settings:
   show_dock_back_to_top: Show Back to top in Dock
   show_dock_back_to_top_desc: Controls Back to top; refresh and undo remain available.
   show_dock_item_names: Show names in Dock
-  show_dock_badges: Show badges in Dock
-  show_dock_badges_desc: Display only; nothing is marked as read.
+  dock_badges: Dock badges
+  dock_badges_desc: Display only; nothing is marked as read.
+  dock_badges_opt:
+    number: Number
+    dot: Dot
+    none: Off
   show_search_identity_switcher: Show search identity shortcut
   show_search_identity_switcher_desc: Switch between account and guest requests without signing out. Keywords and filters are preserved.
   search_identity: Search identity
@@ -1045,20 +1019,12 @@ topbar:
     bilibili_premium_rewards: Premium Member Rewards
     last_login_time: Last login
     last_login_location: Location
-  noti_dropdown:
-    replys: Replys
-    mentions: Mentions
-    likes: Likes
-    messages: Messages
-    chats: Chats
   moments_dropdown:
     tabs:
       videos: Videos
       all: All
       live: Live
       articles: Articles
-    uploaded: 'uploaded: '
-    now_streaming: 'now streaming: '
     live_status: LIVE
   upload_dropdown:
     article: Article
@@ -1067,6 +1033,7 @@ topbar:
     video: Video
     manager: Manager
 notifications:
+  unknown_user: Unknown user
   insights:
     activity: Recent conversation activity
     activity_scope: Last 7 days · Loaded conversations
@@ -1092,13 +1059,8 @@ notifications:
   section_aria: Open {section}
   unread_count: '{count} unread messages'
   actions:
-    refresh: Refresh
-    refresh_aria: Refresh the current message category
-    refresh_tooltip: Reload the current message category
     retry: Retry
     open_original: Open original
-    open_original_aria: Open {section} in original Bilibili messages
-    open_original_tooltip: Open with the original Bilibili messages page
   sections:
     whisper:
       label: Direct messages
@@ -1195,7 +1157,6 @@ notifications:
       official-assistant: Official assistant
     empty: No direct-message conversations
     empty_filtered: No conversations match these filters
-    unknown_user: Unknown user
     user_fallback: 'User {talkerId}'
     summary_unavailable: No message preview
     select_conversation: Select conversation with {name}
@@ -1286,7 +1247,6 @@ notifications:
       api-error: Failed to load direct messages. Try again
       wbi-unavailable: Direct-message signing is temporarily unavailable
   native:
-    unknown_user: Unknown user
     original_content: Original content
     view_source: View original content
     loading:
@@ -1391,7 +1351,6 @@ moments:
   vote_submitting: Submitting…
   vote_submit_failed: Could not submit vote. Please retry.
   login_to_vote: Log in to vote
-  live_popularity: '{count} popularity'
   charge_exclusive: Charge exclusive
   charge_unlock_hint: Join this creator's Charge to unlock this content
   charge_exclusive_moment: Charge-exclusive post
@@ -1399,8 +1358,6 @@ moments:
   forwarded_moment: Forwarded a post
   bilibili_user: Bilibili user
   original_author: Original author
-  live_moment: Live post
-  video_moment: Video post
   image_moment: Image post
   text_moment: Text post
   original_moment: Original post
@@ -1410,7 +1367,6 @@ moments:
   login_to_watch_later: Log in to add videos to Watch Later
   watch_later_unavailable: Watch Later information is unavailable for this video
   watch_later_failed_retry: Watch Later operation failed. Try again later.
-  user_info: Post user information
   following: Following
   followers: Followers
   moments: Posts
@@ -1432,11 +1388,9 @@ moments:
   search_time_week: Past week
   search_time_month: Past month
   search_time_year: Past year
-  live_now: Live now
   live_badge: LIVE
   live_preview_unavailable: Preview unavailable
   feed_bar: Feed bar
-  feed_groups: Feed groups
   all_moments: All posts
   scroll_frequent_left: Scroll frequently visited creators left
   scroll_frequent_right: Scroll frequently visited creators right
@@ -1444,21 +1398,13 @@ moments:
   scroll_right: Scroll right
   frequent_uploaders: Frequently visited creators
   has_update: New update
-  initial_loading: Preparing posts and images…
   empty: No posts to show
-  loading: Loading…
   no_more: No more posts
   live_room: Live room
   video_playback: Video playback
   detail: Post details
-  opening_live: Opening the live room…
-  opening_video: Opening the video…
-  opening_forward: Opening the forwarded post…
-  loading_detail: Loading post details…
   author_detail: 'Details from {author}'
   open_new_tab: Open in a new tab
-  zoom_out: Zoom out
-  zoom_in: Zoom in
 moment_card:
   video_post: Video post
   copy_link: Copy moment link
@@ -1495,11 +1441,6 @@ moment_card:
   open_detail: Open {author}'s post details
   open_origin_moment: View {name}'s original post
   just_now: Just now
-  charge_exclusive: Charge-exclusive
-  watch_later_added: Added to Watch Later
-  add_watch_later: Add to Watch Later
-  added: Added
-  watch_later: Watch Later
   expand_text: Show more
   collapse_text: Show less
   live_moment: Live post
@@ -1508,10 +1449,7 @@ moment_card:
   additional_content: Additional content
   view_hot_comment: View highlighted comment
   hot_comment: Highlighted comment
-  open_dialog: Open in dialog
-  open_dialog_short: Dialog
   open_new_tab: Open in new tab
-  open_new_tab_short: New tab
   view_comments: View comments
   collapse_comments: Collapse comments
   comments: Comments
@@ -1624,12 +1562,10 @@ video_card:
   group_contribution: '{firstAuthor} and {num} others contributed'
   followed: Following
   video_removed: Video removed
-  watched: Watched
   browsed: Opened
   played: Played
   completed: Completed
   played_progress: 'Played to {time}'
-  visited_recently: Visited within the past month
   watch_later_unavailable: Watch Later information is unavailable for this video
   watch_later_update_failed: Failed to update Watch Later
   feedback_unavailable: Feedback options are unavailable
@@ -1683,7 +1619,6 @@ home:
   weekly_no_matching_series: No matching editions
   precious: Must Watch
   live: Live
-  moments: Moments
   uploaders_with_updates: no uploader with updates | {count} uploader with updates | {count} uploaders with updates
 ranking:
   all: All
@@ -1726,13 +1661,10 @@ history:
   sort_oldest: Earliest watched (loaded records)
   select_results: Select current results
   filters:
-    title: Advanced filters
-    period: Watched date
     period_all: All dates
     period_today: Today
     period_yesterday: Yesterday
     period_week: Past week
-    by_device: Filter by device
     device_all: All devices
     device_pc: PC
     device_phone: Phone
@@ -1741,7 +1673,6 @@ history:
   all_history: All history
   media: Series / Films
   unknown_date: Unknown date
-  clear_failed: Could not clear watch history. Please retry.
   title: Watch History
   search_watch_history: Search watch history
   clear_all_watch_history: Clear all watch history
@@ -1800,21 +1731,10 @@ favorites:
   search_description_only: Description only
   search_season: Search collections or videos in this collection
   search_article: Search favorites in this category
-  collected_season_prefix: Season
   video_section_title: Favorite videos
-  folder_section_title: All folders
   season_section_title: Subscribed folders and series
-  article_section_title: Favorite articles
-  video_count: 'Videos: {count}'
-  article_count: 'Articles: {count}'
   article_load_failed: Failed to load favorite articles. Please try again later.
   unfavorite: Unfavorite
-  unfavorite_confirm: >-
-    Remove selected video(s)?
-
-    This operation cannot be reversed. Are you sure you want to remove the
-    selected video(s) from your favorites?
-  batch_manage: Batch manage
   batch_select_all: Select page
   batch_unselect_all: Unselect all
   batch_select_item: Select video
@@ -1825,7 +1745,6 @@ favorites:
   batch_move_dialog_title: Move to folder
   batch_copy_dialog_desc: Choose a target folder. {count} selected video(s) will be copied after confirmation.
   batch_move_dialog_desc: Choose a target folder. {count} selected video(s) will be moved after confirmation.
-  batch_target_folder: Target folder
   batch_unfavorite: Unfavorite
   batch_unfavorite_confirm: |-
     Remove {count} selected video(s)?
@@ -1835,23 +1754,16 @@ favorites:
   season_play_all_fallback: Start position could not be confirmed; using the native list entry
   sidebar_manage: Manage
   sidebar_manage_exit: Exit manage
-  select_all: Select all
-  unselect_all: Deselect all
   edit_folder: Edit folder
   edit_folder_dialog_title: Edit folder
-  edit_folder_title_placeholder: Enter folder name
   edit_folder_title_empty: Folder name cannot be empty
-  edit_folder_failed: Failed to update the folder. Please try again later.
   folder_visibility: Folder visibility
   folder_public: Public
   folder_private: Private
-  default_folder_locked: The default folder cannot be edited or deleted
   delete_folders_confirm: |-
     Delete the {count} selected folders?
     Videos in them will be unfavorited as well. This cannot be undone.
-  delete_folders_failed: Failed to delete folders, please try again later
   unfav_seasons_confirm: Unfavorite the {count} selected seasons?
-  unfav_seasons_failed: Failed to unfavorite {count} seasons
   search_all_folders: All folders
   search_current_folder: Current folder
   search_placeholder: Search for current favorites
@@ -1880,12 +1792,8 @@ watch_later:
     duration_medium: 10–30 min
     duration_long: 30–60 min
     duration_extraLong: Over 60 min
-  sort_order: Added date
   sort_newest: Newest
   sort_oldest: Oldest
-  batch_manage: Batch manage
-  select_all: Select all
-  unselect_all: Deselect all
   remove_selected: Remove selected ({count})
   auto_remove_failed: Could not remove the completed video from Watch Later. Retry manually later.
   open_tabs:
@@ -1944,14 +1852,14 @@ widescreen:
   listen: Listen to video
   listen_play: Play
   listen_pause: Pause
-  return_video: Return to video
+  listen_lyrics: Lyrics
+  listen_lyrics_language: Subtitle language
   collapse_info: Collapse video info
   expand_info: Expand video info
   collapse_episodes: Collapse episodes
   expand_episodes: Expand episodes
   listen_not_ready: The player is not ready yet. Try again shortly.
   listen_unavailable: This video has no separately playable audio track.
-  listen_btr_companion_required: This BTR version needs the companion patch for listen handoff v1.
   overview: Overview
   panel_load_incomplete: Content could not finish loading. Reload the page or exit Bewly Playback Page to try again.
   reload_page: Reload page
@@ -1967,8 +1875,6 @@ widescreen:
   danmaku_style: Danmaku style
   send_danmaku: Send danmaku
   player_feedback: Playback feedback
-  playlist: Playlist
-  recommendations: Recommendations
   up_next: Up next
   playback_navigation: Playback navigation
   previous_video: Previous video in this tab
@@ -2019,8 +1925,6 @@ search_bar:
   search_in: 'Search {page}'
   search_settings: Search settings
 search_page:
-  hot_search_ranking: Hot Search Ranking
-  loading: Loading...
   no_hot_search_data: No hot search data available
   view_all_esports: View All Esports
 
@@ -2116,7 +2020,6 @@ search:
     episode_count: '{count} episodes'
     premiere: 'Premiere: {date}'
     watch_now: Watch now
-    other: Other
   sections:
     activities: Events
     schedule: Match schedule

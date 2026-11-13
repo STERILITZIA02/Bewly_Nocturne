@@ -7,6 +7,8 @@ import type {
   PrivateSession,
   PrivateSessionsData,
 } from '~/background/privateMessage/types'
+import type { PaginationState } from '~/utils/paginationState'
+import { resolvePaginationPhase, withPaginationState } from '~/utils/paginationState'
 
 import { comparePrivateMessageSeqno } from './privateMessage'
 import type { DisplayPrivateSession, PrivateUserCard } from './privateSession'
@@ -27,14 +29,13 @@ export const PRIVATE_USER_CARD_CACHE_TTL_MS = 600_000
 export const PRIVATE_SESSION_VISIBILITY_STALE_TIME_MS = 60_000
 export const PRIVATE_SESSION_ACTIVATE_STALE_TIME_MS = 300_000
 
-export interface PrivateSessionsState {
+export interface PrivateSessionsState extends PaginationState {
   items: DisplayPrivateSession[]
-  loading: boolean
-  refreshing: boolean
+  firstPage: 'idle' | 'initial' | 'refresh'
+  readonly loading: boolean
+  readonly refreshing: boolean
   loadingMore: boolean
   loaded: boolean
-  noMore: boolean
-  paginationStalled: boolean
   errorKind: PrivateMessageTransportErrorKind | null
   failedOperation: PrivateSessionsFailedOperation
   generation: number
@@ -128,14 +129,13 @@ function normalizeUnreadCount(unreadCount: number): number {
 }
 
 function createState(): PrivateSessionsState {
-  return reactive({
+  return reactive<PrivateSessionsState>(withPaginationState({
     items: [],
-    loading: false,
-    refreshing: false,
+    firstPage: 'idle' as PrivateSessionsState['firstPage'],
+    get loading() { return this.firstPage === 'initial' },
+    get refreshing() { return this.firstPage === 'refresh' },
     loadingMore: false,
     loaded: false,
-    noMore: false,
-    paginationStalled: false,
     errorKind: null,
     failedOperation: null,
     generation: 0,
@@ -145,7 +145,7 @@ function createState(): PrivateSessionsState {
     loadedPageCount: 0,
     loadedAt: 0,
     scrollTop: 0,
-  })
+  }))
 }
 
 export function usePrivateSessions(
@@ -201,12 +201,10 @@ export function usePrivateSessions(
   function resetForAccount() {
     state.generation++
     state.items = []
-    state.loading = false
-    state.refreshing = false
+    state.firstPage = 'idle'
     state.loadingMore = false
     state.loaded = false
-    state.noMore = false
-    state.paginationStalled = false
+    state.pagination = 'ready'
     state.errorKind = null
     state.failedOperation = null
     state.lastObservedUnreadCount = -1
@@ -316,8 +314,7 @@ export function usePrivateSessions(
     clearFailure(operation)
 
     const request = (async () => {
-      state.loading = !state.loaded
-      state.refreshing = state.loaded
+      state.firstPage = state.loaded ? 'refresh' : 'initial'
       try {
         const response = await dependencies.fetchSessions()
         const page = extractSessions(response)
@@ -338,8 +335,7 @@ export function usePrivateSessions(
         incoming.forEach(item => routeSessionKeys.delete(item.key))
         state.items = mergePrivateSessions(retained, incoming)
         state.loaded = true
-        state.noMore = page.hasMore === 0
-        state.paginationStalled = false
+        state.pagination = resolvePaginationPhase(page.hasMore === 0)
         state.loadedPageCount = 1
         state.loadedAt = now()
         updateBounds()
@@ -359,8 +355,7 @@ export function usePrivateSessions(
       }
       finally {
         if (isCurrentRequest(mid, generation, requestContentGeneration)) {
-          state.loading = false
-          state.refreshing = false
+          state.firstPage = 'idle'
         }
       }
     })().finally(() => {
@@ -398,7 +393,7 @@ export function usePrivateSessions(
     clearFailure('incremental')
 
     const request = (async () => {
-      state.refreshing = true
+      state.firstPage = 'refresh'
       try {
         const response = await dependencies.fetchNewSessions(beginTs)
         const page = extractSessions(response)
@@ -442,7 +437,7 @@ export function usePrivateSessions(
           requestIncrementalGeneration === incrementalGeneration
           && isCurrentRequest(mid, generation, requestContentGeneration)
         ) {
-          state.refreshing = false
+          state.firstPage = 'idle'
         }
       }
     })().finally(() => {
@@ -462,7 +457,7 @@ export function usePrivateSessions(
     if (state.paginationStalled && !options.retry)
       return
     if (state.oldestSessionTs <= 0) {
-      state.noMore = true
+      state.pagination = 'complete'
       return
     }
 
@@ -472,7 +467,7 @@ export function usePrivateSessions(
     const generation = state.generation
     const requestContentGeneration = contentGeneration
     const endTs = state.oldestSessionTs
-    state.paginationStalled = false
+    state.pagination = 'ready'
     clearFailure('load-more')
 
     const request = (async () => {
@@ -501,13 +496,13 @@ export function usePrivateSessions(
         incoming.forEach(item => routeSessionKeys.delete(item.key))
         state.items = appendPrivateSessions(state.items, incoming)
         if (page.hasMore !== 0 && !madeProgress) {
-          state.paginationStalled = true
+          state.pagination = 'stalled'
           state.errorKind = 'invalid-response'
           state.failedOperation = 'load-more'
           return
         }
 
-        state.noMore = page.hasMore === 0
+        state.pagination = resolvePaginationPhase(page.hasMore === 0)
         state.loadedPageCount++
         updateBounds()
         clearFailure('load-more')
@@ -536,8 +531,7 @@ export function usePrivateSessions(
   function invalidatePendingRequests() {
     contentGeneration++
     incrementalGeneration++
-    state.loading = false
-    state.refreshing = false
+    state.firstPage = 'idle'
     state.loadingMore = false
     firstPageRequest = null
     olderSessionsRequest = null

@@ -419,11 +419,11 @@ watch(unavailable, (disabled) => {
 
 .select-trigger.is-disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: var(--bew-disabled-opacity);
 }
 
 .select-trigger.is-disabled:hover {
-  background-color: var(--bew-fill-1);
+  background-color: var(--bew-hover-bg);
 }
 
 .select-option {
@@ -433,8 +433,8 @@ watch(unavailable, (disabled) => {
   gap: var(--bew-space-3);
 
   &[aria-selected="true"] {
-    color: var(--bew-on-theme-surface);
-    background: var(--bew-theme-surface);
+    color: var(--bew-text-1);
+    background: var(--bew-selected-bg);
   }
 
   &:focus-visible {

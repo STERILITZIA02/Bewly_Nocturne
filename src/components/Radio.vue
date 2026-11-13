@@ -115,7 +115,7 @@ input[type="checkbox"] {
   }
 
   &:disabled + .radio-switch {
-    opacity: 0.5;
+    opacity: var(--bew-disabled-opacity);
   }
   &:focus-visible + .radio-switch {
     outline: var(--bew-focus-ring, 1px solid CanvasText);

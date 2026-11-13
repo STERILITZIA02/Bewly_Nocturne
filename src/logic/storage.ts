@@ -4,8 +4,8 @@ import browser from 'webextension-polyfill'
 import { useSettingsStorage } from '~/composables/useSettingsStorage'
 import { useStorageLocal } from '~/composables/useStorageLocal'
 import { COMMENT_REPLY_BATCH_DEFAULT, COMMENT_REPLY_CONTAINER_HEIGHT, normalizeCommentReplyBatch, normalizeCommentReplyContainerHeight } from '~/constants/commentReading'
-import type { DockCollapseMode, DockPosition } from '~/constants/dock'
-import { normalizeDockPosition } from '~/constants/dock'
+import type { DockBadgeMode, DockCollapseMode, DockPosition } from '~/constants/dock'
+import { normalizeDockBadgeMode, normalizeDockPosition } from '~/constants/dock'
 import { DEFAULT_SEARCH_BAR_CHARACTER } from '~/constants/imgs'
 import { removeRetiredSettings, RETIRED_LOCAL_STORAGE_KEYS } from '~/constants/retiredSettings'
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
@@ -269,8 +269,8 @@ export interface Settings {
   hideDockRefreshButton: boolean
   // Names under the Dock glyphs; off gives a shorter Dock.
   showDockItemNames: boolean
-  // Unread counts on the Dock glyphs (display only, never read state).
-  showDockBadges: boolean
+  // Unread badges on the Dock glyphs: counts, dots, or hidden (display only, never read state).
+  dockBadgeMode: DockBadgeMode
   /** Dock tab names: caption (`standard`) or the one step smaller caption 2 (`small`). */
   dockLabelSize: 'standard' | 'small'
   enableUndoRefreshButton: boolean // 添加撤销刷新按钮配置项
@@ -554,7 +554,7 @@ export const originalSettings: Settings = {
   showDockBackToTop: true,
   hideDockRefreshButton: false,
   showDockItemNames: true,
-  showDockBadges: true,
+  dockBadgeMode: 'number',
   dockLabelSize: 'standard',
   enableUndoRefreshButton: true, // 默认开启撤销刷新按钮
 
@@ -731,6 +731,7 @@ function normalizeSettings(value: Settings) {
   if (typeof value.momentsStartFromLastSeen !== 'boolean')
     value.momentsStartFromLastSeen = false
   value.dockPosition = normalizeDockPosition(value.dockPosition)
+  value.dockBadgeMode = normalizeDockBadgeMode(value.dockBadgeMode)
   value.themeColor = normalizeThemeColor(value.themeColor)
   const appearanceColors = normalizeAppearanceColors(value.appearanceColors)
   if (appearanceColors !== value.appearanceColors)
@@ -778,7 +779,7 @@ function normalizeSettings(value: Settings) {
 
   // Missing category switches preserve Nocturne's existing reminders. They
   // change badge presentation only, never the server's read/unread state.
-  for (const field of ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount', 'rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters', 'playerAdjustmentEnabled', 'showPlayerAdjustmentButton', 'resumeFromPreviewPosition', 'showDockBackToTop', 'showDockItemNames', 'showDockBadges', 'showSearchIdentitySwitcher'] as const) {
+  for (const field of ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount', 'rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters', 'playerAdjustmentEnabled', 'showPlayerAdjustmentButton', 'resumeFromPreviewPosition', 'showDockBackToTop', 'showDockItemNames', 'showSearchIdentitySwitcher'] as const) {
     if (typeof record[field] !== 'boolean')
       record[field] = originalSettings[field]
   }
@@ -787,37 +788,11 @@ function normalizeSettings(value: Settings) {
   if (record.historyGroupInterval !== 'hour' && record.historyGroupInterval !== 'period' && record.historyGroupInterval !== 'day')
     record.historyGroupInterval = 'day'
 
-  Reflect.deleteProperty(record, 'detectCommentShadowBan')
-  Reflect.deleteProperty(record, 'homeTabsPosition')
-  Reflect.deleteProperty(record, 'enableHomeGridVirtualization')
-  Reflect.deleteProperty(record, 'releaseOffscreenVideoCardImages')
-  Reflect.deleteProperty(record, 'showBewlyOrBiliTopBarSwitcher')
-  Reflect.deleteProperty(record, 'showHomeButtonInTouchMode')
-  Reflect.deleteProperty(record, 'enableFrostedGlass')
-  Reflect.deleteProperty(record, 'alwaysUseTransparentTopBar')
-  Reflect.deleteProperty(record, 'enableTopBarGradient')
-  Reflect.deleteProperty(record, 'showTopBarThemeColorGradient')
-  Reflect.deleteProperty(record, 'useOriginalBilibiliHomepage')
-  Reflect.deleteProperty(record, 'searchPageDarkenOnSearchFocus')
-  Reflect.deleteProperty(record, 'searchPageBlurredOnSearchFocus')
-
-  // 清理已移除的音量均衡功能设置。
-  for (const field of ['enableVolumeNormalization', 'targetVolume', 'normalizationStrength', 'adaptiveGainSpeed', 'voiceGateDb', 'volumeNormalizationDebug'])
-    Reflect.deleteProperty(record, field)
-
-  // 旧布尔开关 → 评论回复树展示模式
   const validCommentReplyTreeModes: CommentReplyTreeMode[] = [
     'lineCollapseMain',
     'lineKeepMain',
     'indentOnly',
   ]
-  if (typeof record.enableCommentReplyTree === 'boolean') {
-    // 旧版开启对应可收起主评论；关闭则回落到新默认（引导线、不收起主评论）
-    record.commentReplyTreeMode = record.enableCommentReplyTree
-      ? 'lineCollapseMain'
-      : 'lineKeepMain'
-    Reflect.deleteProperty(record, 'enableCommentReplyTree')
-  }
   if (!validCommentReplyTreeModes.includes(record.commentReplyTreeMode))
     record.commentReplyTreeMode = originalSettings.commentReplyTreeMode
 

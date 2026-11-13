@@ -90,6 +90,7 @@ export function registerPrivateSessionActionChecks(check, { Vue }) {
     let writes = 0
     let changeServer = true
     let reports = 0
+    let evidence = [{ msg_key: 'invalid-key' }]
     let release
     const owner = scope.run(() => usePrivateSessionActions(mid, {
       active: () => true,
@@ -122,7 +123,7 @@ export function registerPrivateSessionActionChecks(check, { Vue }) {
         assert.equal(input.reason, 4)
         return { code: 0 }
       },
-      messages: async () => ({ code: 0, data: { messages: [{ msg_key: '21' }, { msg_key: '20' }] } }),
+      messages: async () => ({ code: 0, data: { messages: evidence } }),
       reconcile: () => reconciled++,
       blocked: () => removed++,
     }))
@@ -150,6 +151,10 @@ export function registerPrivateSessionActionChecks(check, { Vue }) {
       assert.equal(owner.state.pinned, false)
       assert.equal(await owner.perform('report', { reason: 4, description: 'Advertising' }), false)
       assert.equal(reports, 0, 'report evidence must be prepared before explicit submission')
+      assert.equal(await owner.prepareReport(), false)
+      assert.equal(await owner.perform('report', { reason: 4, description: 'Advertising' }), false)
+      assert.equal(reports, 0, 'rejected evidence never becomes a prepared report')
+      evidence = [{ msg_key: '21' }, { msg_key: '20' }]
       await owner.prepareReport()
       assert.equal(reports, 0)
       await owner.perform('report', { reason: 4, description: 'Advertising' })

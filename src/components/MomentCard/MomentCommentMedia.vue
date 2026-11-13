@@ -110,7 +110,7 @@ function handleOpenImage(index: number, event: MouseEvent) {
   font-size: var(--bew-icon-size-lg);
 }
 .moment-comment-media__item:active {
-  transform: scale(0.99);
+  transform: scale(var(--bew-control-press-scale));
 }
 .moment-comment-media__item:focus-visible {
   outline: var(--bew-focus-ring, 1px solid CanvasText);

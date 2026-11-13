@@ -108,7 +108,7 @@ const { height, onTransitionEnd } = useMeasuredDisclosure(outer, inner, computed
 .library-date-range__error {
   margin: 0;
   padding-inline: var(--bew-sidebar-label-inset);
-  color: var(--bew-error-foreground);
+  color: var(--bew-text-2);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
 }

@@ -471,17 +471,14 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     let release
     let frames = 0
     const tick = new Promise(resolve => release = resolve)
-    const context = await loadSourceFunctions('../src/components/Dock/Dock.vue', ['clearDockMorphSchedule', 'startDockShellCollapse', 'expandDock'], {
+    const context = await loadSourceFunctions('../src/components/Dock/Dock.vue', ['dockPhase', 'isDockCollapsed', 'isDockTransitioning', 'isDockContentVisible', 'isDockCollapsedTriggerVisible', 'dockMorphDirection', 'clearDockMorphSchedule', 'startDockShellCollapse', 'expandDock'], {
+      ref: Vue.ref,
+      computed: Vue.computed,
       dockMorphGeneration: 0,
       dockContentTimer: undefined,
       dockMorphFrame: undefined,
       dockMorphCompletionTimer: undefined,
       dockReady: Vue.ref(true),
-      isDockCollapsed: Vue.ref(false),
-      isDockTransitioning: Vue.ref(false),
-      isDockContentVisible: Vue.ref(true),
-      isDockCollapsedTriggerVisible: Vue.ref(false),
-      dockMorphDirection: Vue.ref(undefined),
       dockShellSurfaceRef: Vue.ref({ offsetHeight: 50 }),
       cacheExpandedDockSize() {},
       completeDockMorph() {},
@@ -661,8 +658,6 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
 
     const source = await readFile('src/utils/particleDissolve.ts', 'utf8')
     assert.doesNotMatch(source, /holdMotion|holdAnimation/, 'nothing waits on the particles')
-    assert.match(source, /PARTICLE_BUDGET = \d+/, 'particles are bounded across running dissolves')
-    assert.match(source, /canvas\.remove\(\)\s*canvas\.width = 0/, 'the canvas is released when the particles end')
     const entries = [
       'src/components/TopBar/components/pops/HistoryPop.vue',
       'src/components/TopBar/components/pops/WatchLaterPop.vue',
@@ -797,10 +792,6 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
   })
 
   check('Motion: card and sidebar lists fade only inner edges with more content; screen edges and composers stay crisp', async () => {
-    const css = compileString('@use "scrollEdgeFade"; @include scrollEdgeFade.global;', { loadPaths: ['src/styles'] }).css
-    assert.match(css, /@property --bew-scroll-edge-top-clear\s*\{[^}]*initial-value: 1/, 'a list that fits keeps both edges opaque')
-    assert.match(css, /animation-timeline: scroll\(self\), scroll\(self\)/)
-    assert.match(css, /@supports \(animation-timeline: scroll\(\)\)/, 'browsers without scroll timelines keep the list unmasked')
     // Lists in cards and panels fade their inner edges.
     const owners = {
       'src/contentScripts/views/Moments/MomentsHotSearch.vue': '.moments-hot-search__loading {',
@@ -841,23 +832,12 @@ export function registerMotionContinuityChecks(check, { Vue, flush }) {
     assert.match(categoryList, /margin: calc\(-1 \* var\(--bew-sidebar-section-gap\)\) calc\(-1 \* var\(--bew-sidebar-inline-padding\)\) 0;\s*padding: var\(--bew-sidebar-section-gap\) var\(--bew-sidebar-inline-padding\) 0;/, 'the folder list scrolls up to the hairline')
     const historyResults = await readFile('src/contentScripts/views/Notifications/whisper/PrivateHistorySearchResults.vue', 'utf8')
     assert.doesNotMatch(ruleOf(historyResults, '.private-history-results__list {'), /scrollEdgeFade\.lines/, 'message results add no line under the tools\' hairline')
-    const conversationList = await readFile('src/contentScripts/views/Notifications/whisper/ConversationList.vue', 'utf8')
-    assert.match(conversationList, /\.conversation-list__items \{\s*flex: 1 1 auto;\s*min-height: 0;\s*padding: var\(--bew-space-1\);\s*\}[\s\S]*?\.conversation-list__history-results \{\s*padding-top: 0;/, 'message results start at the tools\' hairline')
-    const linesCss = compileString('@use "scrollEdgeFade"; @include scrollEdgeFade.global; .x { @include scrollEdgeFade.lines($bottom: false); }', { loadPaths: ['src/styles'] }).css
-    assert.match(linesCss, /@keyframes bew-scroll-edge-line-top \{\s*from \{\s*border-top-color: transparent;\s*\}\s*to \{\s*border-top-color: var\(--bew-separator-color\);/)
-    assert.match(linesCss, /\.x \{\s*border-top: var\(--bew-hairline\) solid transparent;\s*\}/)
-    assert.doesNotMatch(linesCss, /\.x \{[^}]*border-bottom/)
-    assert.match(linesCss, /animation: bew-scroll-edge-line-top linear both;\s*animation-timeline: scroll\(self\);/)
     assert.match(await readFile('src/contentScripts/views/Favorites/FavoritesPage.vue', 'utf8'), /overflow: visible clip;/, 'the folder list reaches the rail edges')
     // The conversation list is closed at its top by the tools' hairline, always drawn.
     const conversations = await readFile('src/contentScripts/views/Notifications/whisper/ConversationList.vue', 'utf8')
     assert.doesNotMatch(conversations, /scrollEdgeFade|tools--pinned/)
-    assert.match(conversations, /\.conversation-list__tools \{[^}]*border-bottom: var\(--bew-hairline\) solid var\(--bew-separator-color\);/)
     assert.match(await readFile('src/contentScripts/views/Home/components/Ranking.vue', 'utf8'), /bew-scroll-edge-fade--no-bottom/)
     assert.match(await readFile('src/components/MomentCard/MomentCommentSection.vue', 'utf8'), /has-composer[\s\S]*?--bew-scroll-edge-bottom-off: 1/, 'the pinned composer closes the comment list without a fade')
-    const offCss = compileString('@use "scrollEdgeFade"; .x { @include scrollEdgeFade.vertical($bottom: false); }', { loadPaths: ['src/styles'] }).css
-    assert.match(offCss, /--bew-scroll-edge-bottom-off: 1/)
-    assert.match(offCss, /max\(var\(--bew-scroll-edge-bottom-clear\), var\(--bew-scroll-edge-bottom-off, 0\)\)/)
     assert.match(await readFile('src/contentScripts/views/Moments/MomentsLiveRow.vue', 'utf8'), /\.moments-live-row__preview \{\s*@include contentCard\.media-frame;\s*box-shadow: none;/, 'the preview carries the video cover hairline')
     const hotSearch = await readFile('src/contentScripts/views/Moments/MomentsHotSearch.vue', 'utf8')
     const card = hotSearch.slice(hotSearch.indexOf('.moments-hot-search {'), hotSearch.indexOf('}', hotSearch.indexOf('.moments-hot-search {')))

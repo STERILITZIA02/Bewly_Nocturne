@@ -472,10 +472,10 @@ onBeforeUnmount(() => {
   font-size: var(--bew-font-size-caption);
   color: var(--bew-text-3);
   background: transparent;
-  transition: color var(--bew-duration-fast) ease;
+  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 .moment-reply__sync:disabled {
-  opacity: 0.5;
+  opacity: var(--bew-disabled-opacity);
   cursor: default;
 }
 .moment-reply__sync[aria-pressed="true"] {
@@ -492,7 +492,7 @@ onBeforeUnmount(() => {
   clip-path: inset(0 100% 0 0);
   transition:
     clip-path var(--bew-duration-normal) var(--bew-ease-standard),
-    opacity var(--bew-duration-fast) ease;
+    opacity var(--bew-duration-fast) var(--bew-ease-standard);
 }
 .moment-reply__sync[aria-pressed="true"] .moment-reply__sync-check {
   opacity: 1;
@@ -501,7 +501,7 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .moment-reply__sync-check {
     clip-path: none;
-    transition: opacity var(--bew-duration-fast) ease;
+    transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
   }
 }
 .moment-reply .bew-send-button {

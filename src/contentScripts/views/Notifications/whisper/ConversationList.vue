@@ -476,7 +476,6 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
 }
 
 .conversation-list__filters {
-  --bew-control-radius: var(--bew-pill-radius);
   --bew-control-item-radius: var(--bew-pill-radius);
   width: 100%;
 }
@@ -484,6 +483,7 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
 .conversation-list__filters .bew-segment-control__item {
   flex: 1 1 0;
   min-width: 0;
+  corner-shape: var(--bew-corner-shape-capsule);
 }
 
 .conversation-list__more {

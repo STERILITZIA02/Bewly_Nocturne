@@ -127,7 +127,7 @@ withDefaults(defineProps<{
   gap: var(--bew-space-3);
   align-items: center;
   padding: var(--bew-space-3);
-  border-radius: var(--bew-surface-radius);
+  border-radius: var(--bew-interactive-radius);
 }
 
 .conversation-list-skeleton__action-space {

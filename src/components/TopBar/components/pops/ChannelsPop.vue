@@ -124,7 +124,7 @@ const otherLinks = computed(() => {
     transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
 
     &:hover {
-      background: var(--bew-fill-1);
+      background: var(--bew-hover-bg);
     }
   }
 }

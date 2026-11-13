@@ -91,7 +91,7 @@ function save() {
         <SkeletonBlock width="10em" height="var(--bew-control-height)" radius="full" />
       </div>
     </div>
-    <Empty v-else-if="failed" text-only :description="t('common.load_failed')" :action-label="t('common.operation.refresh')" @action="emit('retry')" />
+    <Empty v-else-if="failed" :description="t('common.load_failed')" :action-label="t('common.operation.refresh')" @action="emit('retry')" />
     <form v-else ref="formElement" class="folder-editor" @submit.prevent="save">
       <fieldset :disabled="pending" class="folder-editor__fields">
         <label class="folder-editor__cover" :for="`${id}-cover`">

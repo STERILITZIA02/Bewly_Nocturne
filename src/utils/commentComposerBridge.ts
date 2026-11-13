@@ -1,3 +1,5 @@
+import { asObject } from './plainObject'
+
 /**
  * Shared by MAIN and the isolated world for the playback page comment
  * composer. A comment panel carrying this attribute owns its own composer:
@@ -7,10 +9,6 @@
 export const EXTERNAL_COMMENT_COMPOSER_ATTRIBUTE = 'data-bewly-external-composer'
 
 const COMMENT_ID_PATTERN = /^\d+$/
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? value as Record<string, unknown> : {}
-}
 
 function toId(value: unknown) {
   const id = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : ''
@@ -23,16 +21,16 @@ function toId(value: unknown) {
  * neither world needs to pass across the bridge.
  */
 export function toCommentComposerReply(value: unknown) {
-  const raw = asRecord(value)
-  const member = asRecord(raw.member)
-  const content = asRecord(raw.content)
+  const raw = asObject(value)
+  const member = asObject(raw.member)
+  const content = asObject(raw.content)
   const rpid = toId(raw.rpid_str ?? raw.rpid)
   const oid = toId(raw.oid_str ?? raw.oid)
   const type = Number(raw.type)
   if (!rpid || !oid || !Number.isInteger(type) || type <= 0)
     return null
   const pictures = (Array.isArray(content.pictures) ? content.pictures : [])
-    .map(picture => asRecord(picture).img_src)
+    .map(picture => asObject(picture).img_src)
     .filter((src): src is string => typeof src === 'string' && Boolean(src))
     .map(img_src => ({ img_src }))
   return {

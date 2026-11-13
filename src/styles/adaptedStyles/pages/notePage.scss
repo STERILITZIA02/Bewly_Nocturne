@@ -69,12 +69,16 @@
 
     #page-series-index .channel-option.no-channel .create-channel,
     .manage-note--header .tools-btns .publish-btn,
-    .note-single-item .go-video-btn:hover,
     .note-list-del-popup span.btn-ok,
     .dialog-note-footer .btn-confirm,
     .checkbox .box.checked {
       background-color: var(--bew-theme-color);
       color: var(--bew-on-theme-color);
+    }
+
+    .note-single-item .go-video-btn:hover {
+      background-color: var(--bew-hover-bg);
+      color: var(--bew-text-1);
     }
 
     .el-pagination.is-background .el-pager li:not(.disabled).active {

@@ -83,7 +83,7 @@ defineEmits<{ (event: 'toggle'): void }>()
   cursor: not-allowed;
 }
 .watch-later-selection input:disabled + .watch-later-selection__mark {
-  opacity: 0.5;
+  opacity: var(--bew-disabled-opacity);
 }
 @media (prefers-reduced-motion: reduce) {
   .watch-later-selection__mark,

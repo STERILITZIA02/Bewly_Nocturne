@@ -4,6 +4,98 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerUpstreamCommentChecks(check) {
+  check('native comment images: targeted Shadow traversal binds late pictures once and releases listeners', async () => {
+    const thread = document.body.appendChild(document.createElement('bili-comment-thread-renderer'))
+    const threadRoot = thread.attachShadow({ mode: 'open' })
+    const main = threadRoot.appendChild(document.createElement('bili-comment-renderer'))
+    const mainRoot = main.attachShadow({ mode: 'open' })
+    const richText = mainRoot.appendChild(document.createElement('bili-rich-text')).attachShadow({ mode: 'open' })
+    const pictures = mainRoot.appendChild(document.createElement('bili-comment-pictures-renderer')).attachShadow({ mode: 'open' })
+    const component = threadRoot.appendChild(document.createElement('bili-comment-replies-renderer'))
+    const list = component.attachShadow({ mode: 'open' }).appendChild(document.createElement('div'))
+    const image = (root) => {
+      const img = root.appendChild(document.createElement('img'))
+      Object.defineProperty(img, 'complete', { configurable: true, value: false })
+      return img
+    }
+    const first = image(richText)
+    image(pictures)
+    for (let index = 0; index < 100; index++)
+      richText.appendChild(document.createElement('span')).textContent = 'text'
+    let fullTreeQueries = 0
+    let listeners = 0
+    let updates = 0
+    const originals = []
+    for (const prototype of [window.Element.prototype, window.ShadowRoot.prototype]) {
+      const original = prototype.querySelectorAll
+      originals.push(() => prototype.querySelectorAll = original)
+      prototype.querySelectorAll = function (selector) {
+        if (selector === '*')
+          fullTreeQueries++
+        return original.call(this, selector)
+      }
+    }
+    const add = window.HTMLImageElement.prototype.addEventListener
+    window.HTMLImageElement.prototype.addEventListener = function (name, ...options) {
+      if (name === 'load' || name === 'error')
+        listeners++
+      return add.call(this, name, ...options)
+    }
+    const api = await loadSourceFunctions('../src/inject/index.ts', ['observeCommentReplyTreeLayout', 'disconnectCommentReplyTreeResizeObserver'], {
+      HTMLElement,
+      HTMLImageElement: window.HTMLImageElement,
+      Element,
+      AbortController,
+      MutationObserver,
+      ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+      getCommentReplyTreeThreadRoot: () => threadRoot,
+      getCommentReplyTreeRootRenderer: () => main,
+      MISSING_COMMENT_PARENT_SELECTOR: '.bewly-missing-comment-parent',
+      COMMENT_REPLY_TREE_GUIDES_ID: 'tree-guides',
+      isMissingCommentParentMutationNode: () => false,
+      scheduleCommentReplyTreeLayoutUpdate: () => updates++,
+      cancelAnimationFrame() {},
+    })
+    const state = {}
+    try {
+      for (let pass = 0; pass < 10; pass++)
+        api.observeCommentReplyTreeLayout(component, state, list)
+      assert.equal(fullTreeQueries, 0, 'text wrappers and unrelated controls are not enumerated to find media hosts')
+      assert.equal(listeners, 4, 'each pending image gets one load/error pair')
+      first.dispatchEvent(new Event('load'))
+      assert.equal(updates, 1)
+      const late = image(pictures)
+      api.observeCommentReplyTreeLayout(component, state, list)
+      assert.equal(listeners, 6, 'a later native render adds only the newly arrived image')
+      api.disconnectCommentReplyTreeResizeObserver(state)
+      late.dispatchEvent(new Event('load'))
+      assert.equal(updates, 1, 'released threads do not schedule more layout')
+    }
+    finally {
+      api.disconnectCommentReplyTreeResizeObserver(state)
+      originals.forEach(restore => restore())
+      window.HTMLImageElement.prototype.addEventListener = add
+      thread.remove()
+    }
+  })
+
+  check('native root author: Shadow-host data identifies the author within its own thread and oid', async () => {
+    const renderer = document.body.appendChild(document.createElement('bili-comment-renderer'))
+    const info = renderer.attachShadow({ mode: 'open' }).appendChild(document.createElement('bili-comment-user-info'))
+    info.data = { oid_str: '10', rpid_str: '100', root_str: '0', member: { mid: '42' } }
+    const context = await loadSourceFunctions('../src/inject/index.ts', ['cacheRootReplyAuthor', 'isSubReplyByRootAuthor', 'getThreadRootKey', 'getReplyOid', 'getReplyRpid', 'getReplyRootRpid', 'getReplyMemberMid', 'toIdString'], { rootReplyAuthorByThread: new Map() })
+    try {
+      assert.equal(document.querySelectorAll('bili-comment-user-info').length, 0, 'document queries cannot reach the native user-info child')
+      const reply = { oid_str: '10', rpid_str: '101', root_str: '100', member: { mid: '42' } }
+      assert.equal(context.isSubReplyByRootAuthor(reply), false)
+      context.cacheRootReplyAuthor(info.data)
+      assert.equal(context.isSubReplyByRootAuthor(reply), true)
+      assert.equal(context.isSubReplyByRootAuthor({ ...reply, oid_str: '11' }), false)
+      assert.equal(context.isSubReplyByRootAuthor({ ...reply, member: { mid: '43' } }), false)
+    }
+    finally { renderer.remove() }
+  })
+
   check('missing parents: shared placeholders preserve known chains, real arrivals, ordering and unknown metadata', async () => {
     const model = await import('../src/utils/commentMissingParents')
     const dom = await loadSourceModule('../src/inject/commentMissingParents.ts', {})

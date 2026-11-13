@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { useIntersectionObserver } from '@vueuse/core'
-import { computed, onBeforeUnmount, ref, useId } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import MomentVideoPreview from '~/components/MomentCard/MomentVideoPreview.vue'
+import { useMeasuredDisclosure } from '~/composables/useMeasuredDisclosure'
 
 import type { MomentsPortalLiveUser } from './momentPortal'
 import { getSidebarAvatarUrl } from './momentPortal'
@@ -19,6 +20,17 @@ const active = computed(() => props.previews?.hoveredMediaId.value === media.val
 const failed = computed(() => active.value && props.previews?.previewState.value === 'error')
 const url = computed(() => props.previews?.previewUrls[media.value.id] || '')
 const href = computed(() => props.user.jump_url || `https://live.bilibili.com/${props.user.room_id}`)
+// The preview box opens as a measured disclosure; it is measured only while
+// opening, open or closing, so idle rows keep no size observer.
+const reveal = ref<HTMLElement | null>(null)
+const preview = ref<HTMLElement | null>(null)
+const measuring = ref(active.value)
+watch(active, (open) => {
+  if (open)
+    measuring.value = true
+}, { flush: 'sync' })
+const disclosure = useMeasuredDisclosure(reveal, computed(() => measuring.value ? preview.value : null), active, () => measuring.value = false, () => {})
+const revealHeight = disclosure.height
 function enter(event?: MouseEvent) {
   if (Number.isSafeInteger(media.value.roomId) && media.value.roomId! > 0)
     void props.previews?.handleMediaEnter(media.value, event)
@@ -58,9 +70,13 @@ onBeforeUnmount(leave)
       <span class="moments-live-row__info"><strong>{{ user.uname }}</strong><small>{{ user.title }}</small></span>
       <span class="moments-live-row__badge" :title="t('moments.live_badge')"><i i-tabler:broadcast aria-hidden="true" /></span>
     </a>
-    <div :id="previewId" class="moments-live-row__reveal" :data-expanded="active" :inert="active ? undefined : true" :aria-hidden="!active">
+    <div
+      :id="previewId" ref="reveal" class="moments-live-row__reveal" :data-expanded="active" :inert="active ? undefined : true"
+      :aria-hidden="!active"
+      :style="revealHeight === undefined ? undefined : { height: `${revealHeight}px` }" @transitionend="disclosure.onTransitionEnd"
+    >
       <div class="moments-live-row__clip">
-        <div class="moments-live-row__preview">
+        <div ref="preview" class="moments-live-row__preview">
           <div v-if="failed" class="moments-live-row__error" role="status">
             <span>{{ t('moments.live_preview_unavailable') }}</span>
             <button type="button" @click="retry">
@@ -155,16 +171,12 @@ onBeforeUnmount(leave)
     color: var(--bew-text-2);
   }
 }
+// The reveal clips the opening box; the preview keeps its own rounded clip.
 .moments-live-row__reveal {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows var(--bew-duration-normal) var(--bew-ease-standard);
-  &[data-expanded="true"] {
-    grid-template-rows: 1fr;
-  }
+  overflow: clip;
+  transition: height var(--bew-duration-normal) var(--bew-ease-standard);
 }
 .moments-live-row__clip {
-  min-height: 0;
   overflow: hidden;
 }
 // The video cover's hairline drawn over the picture; no shadow, which the

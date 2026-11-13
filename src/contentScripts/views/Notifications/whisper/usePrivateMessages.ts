@@ -4,6 +4,8 @@ import { ref, shallowReactive, shallowRef, watch } from 'vue'
 import type {
   PrivateMessageTransportErrorKind,
 } from '~/background/privateMessage/types'
+import type { PaginationState } from '~/utils/paginationState'
+import { resolvePaginationPhase, withPaginationState } from '~/utils/paginationState'
 
 import type { DisplayPrivateMessage } from './privateMessage'
 import {
@@ -33,15 +35,14 @@ interface AckPrivateMessagesOptions {
   talkerId: string
 }
 
-export interface PrivateConversationState {
+export interface PrivateConversationState extends PaginationState {
   talkerId: string
   items: DisplayPrivateMessage[]
-  loadingInitial: boolean
+  firstPage: 'idle' | 'initial' | 'refresh'
+  readonly loadingInitial: boolean
   loadingOlder: boolean
-  refreshing: boolean
+  readonly refreshing: boolean
   loaded: boolean
-  noMore: boolean
-  paginationStalled: boolean
   errorKind: PrivateMessageTransportErrorKind | null
   failedOperation: 'initial' | 'refresh' | 'load-older' | null
   generation: number
@@ -152,15 +153,12 @@ function hasReachedPrivateMessageHistoryFloor(oldestSeqno: string, minSeqno: str
 }
 
 function createConversationState(talkerId: string, now: number): PrivateConversationState {
-  return shallowReactive({
+  return shallowReactive<PrivateConversationState>(withPaginationState({
     talkerId,
     items: [],
-    loadingInitial: false,
+    firstPage: 'idle' as PrivateConversationState['firstPage'],
     loadingOlder: false,
-    refreshing: false,
     loaded: false,
-    noMore: false,
-    paginationStalled: false,
     errorKind: null,
     failedOperation: null,
     generation: 0,
@@ -179,7 +177,9 @@ function createConversationState(talkerId: string, now: number): PrivateConversa
     newMessagesAvailable: false,
     loadedAt: 0,
     lastAccessedAt: now,
-  })
+    get loadingInitial() { return this.firstPage === 'initial' },
+    get refreshing() { return this.firstPage === 'refresh' },
+  }))
 }
 
 export function usePrivateMessages(
@@ -208,12 +208,10 @@ export function usePrivateMessages(
 
   function invalidateState(state: PrivateConversationState) {
     state.generation++
-    state.loadingInitial = false
+    state.firstPage = 'idle'
     state.loadingOlder = false
-    state.refreshing = false
     state.loaded = false
-    state.noMore = false
-    state.paginationStalled = false
+    state.pagination = 'ready'
     state.errorKind = null
     state.failedOperation = null
     state.items = []
@@ -242,7 +240,7 @@ export function usePrivateMessages(
       replaceConversationItems(state, items)
       if (oldest !== state.items[0]?.msgKey) {
         state.historyBoundarySeqno = state.oldestSeqno
-        state.noMore = false
+        state.pagination = state.paginationStalled ? 'stalled' : 'ready'
       }
     }
 
@@ -362,8 +360,7 @@ export function usePrivateMessages(
     const conversationGeneration = state.generation
     const failedOperation = mode === 'replace' && !state.loaded ? 'initial' : 'refresh'
     const request = (async () => {
-      state.loadingInitial = mode === 'replace' && !state.loaded
-      state.refreshing = mode === 'merge' || state.loaded
+      state.firstPage = mode === 'replace' && !state.loaded ? 'initial' : 'refresh'
       state.errorKind = null
       state.failedOperation = null
       try {
@@ -388,9 +385,8 @@ export function usePrivateMessages(
         if (mode === 'replace') {
           state.historyMinSeqno = data.min_seqno
           state.serverMaxSeqno = maxAckSeqno([state.serverMaxSeqno, data.max_seqno, getLatestPrivateMessageSeqno(incoming)])
-          state.noMore = data.has_more === 0
-            || hasReachedPrivateMessageHistoryFloor(oldestIncomingSeqno, data.min_seqno)
-          state.paginationStalled = false
+          state.pagination = resolvePaginationPhase(data.has_more === 0
+            || hasReachedPrivateMessageHistoryFloor(oldestIncomingSeqno, data.min_seqno))
           state.stalledEndSeqno = ''
           state.stalledRetryAttempted = false
         }
@@ -411,7 +407,7 @@ export function usePrivateMessages(
         state.lastAccessedAt = state.loadedAt
         if (state.items[0]?.msgKey !== mergedItems[0]?.msgKey) {
           state.historyBoundarySeqno = state.oldestSeqno
-          state.noMore = false
+          state.pagination = state.paginationStalled ? 'stalled' : 'ready'
         }
         state.errorKind = null
         state.failedOperation = null
@@ -430,8 +426,7 @@ export function usePrivateMessages(
       }
       finally {
         if (isCurrentRequest(mid, requestAccountGeneration, requestLifecycleGeneration, state, conversationGeneration)) {
-          state.loadingInitial = false
-          state.refreshing = false
+          state.firstPage = 'idle'
         }
       }
     })().finally(() => {
@@ -476,7 +471,7 @@ export function usePrivateMessages(
 
     const pageSize = retryingStall ? 100 : 20
     if (retryingStall) {
-      state.paginationStalled = false
+      state.pagination = 'ready'
       state.stalledRetryAttempted = true
     }
 
@@ -521,8 +516,10 @@ export function usePrivateMessages(
           state.oldestSeqno,
           state.historyMinSeqno,
         )
-        state.noMore = (data.has_more === 0 && (!nextHistoryBoundary || comparePrivateMessageSeqno(state.oldestSeqno, nextHistoryBoundary) <= 0)) || reachedFloor
-        state.paginationStalled = !state.noMore && !madeProgress
+        state.pagination = resolvePaginationPhase(
+          (data.has_more === 0 && (!nextHistoryBoundary || comparePrivateMessageSeqno(state.oldestSeqno, nextHistoryBoundary) <= 0)) || reachedFloor,
+          madeProgress,
+        )
         state.errorKind = state.paginationStalled ? 'invalid-response' : null
         state.failedOperation = state.paginationStalled ? 'load-older' : null
         if (state.paginationStalled) {
@@ -538,7 +535,7 @@ export function usePrivateMessages(
         if (!isCurrentRequest(mid, requestAccountGeneration, requestLifecycleGeneration, state, conversationGeneration))
           return
         if (retryingStall)
-          state.paginationStalled = true
+          state.pagination = 'stalled'
         state.errorKind = typeof error === 'string'
           ? error as PrivateMessageTransportErrorKind
           : 'invalid-response'
@@ -706,9 +703,8 @@ export function usePrivateMessages(
     lifecycleGeneration++
     lifecycleEpoch.value++
     for (const state of states.values()) {
-      state.loadingInitial = false
+      state.firstPage = 'idle'
       state.loadingOlder = false
-      state.refreshing = false
     }
   }
 

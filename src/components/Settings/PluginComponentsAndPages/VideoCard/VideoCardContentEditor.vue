@@ -6,7 +6,6 @@ import SettingsToggleTag from '../../components/SettingsToggleTag.vue'
 type ContentSettingKey
   = | 'showVideoCardAuthorName'
     | 'showVideoCardPublishTime'
-    | 'showVideoWatchedBadge'
 
 interface ContentElement {
   setting: ContentSettingKey
@@ -17,7 +16,6 @@ interface ContentElement {
 const elements = computed<ContentElement[]>(() => [
   { setting: 'showVideoCardAuthorName', labelKey: 'settings.show_video_card_author_name', icon: 'i-tabler:edit' },
   { setting: 'showVideoCardPublishTime', labelKey: 'settings.show_video_card_publish_time', icon: 'i-tabler:calendar-plus' },
-  { setting: 'showVideoWatchedBadge', labelKey: 'settings.show_video_watched_badge', icon: 'i-tabler:eye' },
 ])
 </script>
 

@@ -1,6 +1,7 @@
 import browser from 'webextension-polyfill'
 
 import { AUDIO_CDN_DOMAINS, isAudioCdnHost } from '~/constants/audioCdn'
+import { isContentScriptTargetUrl } from '~/constants/contentScript'
 import type { ListenSession } from '~/utils/listenPlayback'
 import { isListenSession, LISTEN_GATE, LISTEN_RECOVER, LISTEN_RELEASE, LISTEN_SAVE, matchesListenUnit } from '~/utils/listenPlayback'
 import { onMessage } from '~/utils/messaging'
@@ -71,13 +72,17 @@ export function setupListenPlayback() {
   function release(tabId: number, gate: number) {
     return enqueue(() => releaseOwned(tabId, gate))
   }
-  onMessage<{ unit: NativePlaybackUnit, sources: string[], state?: ListenSession }, number | undefined>(LISTEN_GATE, async (data, sender) => {
+  onMessage<{ unit: NativePlaybackUnit, sources: string[], state?: ListenSession, retainNative?: boolean }, number | undefined>(LISTEN_GATE, async (data, sender) => {
     const tabId = sender?.tab?.id
-    if (tabId === undefined || sender?.frameId !== 0 || !sender.url || !matchesListenUnit(sender.url, data?.unit) || !Array.isArray(data.sources))
+    // Chromium keeps the script-context URL across same-document navigation.
+    // The sender identifies the source; ownsRoute checks the current manuscript.
+    if (tabId === undefined || sender?.frameId !== 0 || !isContentScriptTargetUrl(sender.url) || !Array.isArray(data?.sources))
       return
     const sources = Array.from(new Set(data.sources))
-    if (!sources.length || !sources.every(value => URL.canParse(value) && new URL(value).protocol === 'https:' && isAudioCdnHost(new URL(value).hostname)))
+    if ((data.retainNative !== undefined && typeof data.retainNative !== 'boolean')
+      || !sources.length || !sources.every(value => URL.canParse(value) && new URL(value).protocol === 'https:' && isAudioCdnHost(new URL(value).hostname))) {
       return
+    }
     return enqueue(async () => {
       if (!await ownsRoute(tabId, data.unit))
         return
@@ -87,12 +92,17 @@ export function setupListenPlayback() {
         id = FIRST_GATE + crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000_000
       } while (Array.from({ length: sources.length + 2 }, (_, i) => id + i).some(candidate => occupied.has(candidate)))
       const condition = { tabIds: [tabId], initiatorDomains: ['www.bilibili.com'], resourceTypes: ['media', 'xmlhttprequest'] as Rule['condition']['resourceTypes'] }
+      const blockRules: Rule[] = data.retainNative
+        ? []
+        : [
+            { id, priority: 1, action: { type: 'block' }, condition: { ...condition, requestDomains: AUDIO_CDN_DOMAINS.filter(domain => domain !== 'hdslb.com') } },
+            // hdslb also serves unrelated scripts, pictures and JSON for the sidebar.
+            { id: id + 1, priority: 1, action: { type: 'block' }, condition: { ...condition, requestDomains: ['hdslb.com'], regexFilter: '\\.(m4[asv]|mp[34]|flv|webm|aac|flac|ts)(\\?|$)' } },
+          ]
       const addRules: Rule[] = [
-        { id, priority: 1, action: { type: 'block' }, condition: { ...condition, requestDomains: AUDIO_CDN_DOMAINS.filter(domain => domain !== 'hdslb.com') } },
-        // hdslb also serves unrelated scripts, pictures and JSON for the sidebar.
-        { id: id + 1, priority: 1, action: { type: 'block' }, condition: { ...condition, requestDomains: ['hdslb.com'], regexFilter: '\\.(m4[asv]|mp[34]|flv|webm|aac|flac|ts)(\\?|$)' } },
+        ...blockRules,
         ...sources.map((url, i): Rule => ({
-          id: id + 2 + i,
+          id: id + blockRules.length + i,
           priority: 2,
           action: { type: 'allow' },
           condition: { tabIds: [tabId], initiatorDomains: ['www.bilibili.com'], resourceTypes: ['media'], urlFilter: `|${url}|`, isUrlFilterCaseSensitive: true },
@@ -101,7 +111,7 @@ export function setupListenPlayback() {
       const previousGate = gates.get(tabId)?.[0]
       await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: gates.get(tabId) ?? [], addRules })
       const ids = addRules.map(rule => rule.id)
-      const previous = isListenSession(data.state, sender.url!) && (previousGate === undefined || data.state.gate === previousGate)
+      const previous = isListenSession(data.state, data.state?.href ?? '') && (previousGate === undefined || data.state.gate === previousGate)
         ? data.state
         : checkpoints.get(tabId)
       const state = previous && getNativePlaybackUnitKey(previous.unit) === getNativePlaybackUnitKey(data.unit) ? { ...previous, gate: id } : undefined
@@ -130,7 +140,7 @@ export function setupListenPlayback() {
   })
   onMessage<ListenSession, void>(LISTEN_SAVE, async (state, sender) => {
     const tabId = sender?.tab?.id
-    if (tabId === undefined || sender?.frameId !== 0 || !sender.url || !isListenSession(state, sender.url))
+    if (tabId === undefined || sender?.frameId !== 0 || !isContentScriptTargetUrl(sender.url) || !isListenSession(state, state?.href ?? ''))
       return
     await enqueue(async () => {
       const unit = units.get(tabId)
@@ -150,12 +160,12 @@ export function setupListenPlayback() {
   })
   onMessage<undefined, ListenSession | undefined>(LISTEN_RECOVER, async (_, sender) => {
     const tabId = sender?.tab?.id
-    if (tabId === undefined || sender?.frameId !== 0 || !sender.url)
+    if (tabId === undefined || sender?.frameId !== 0 || !isContentScriptTargetUrl(sender.url))
       return
     return enqueue(async () => {
       const state = checkpoints.get(tabId)
       const gate = gates.get(tabId)?.[0]
-      if (state && state.gate === gate && matchesListenUnit(sender.url!, state.unit) && await ownsRoute(tabId, state.unit))
+      if (state && state.gate === gate && await ownsRoute(tabId, state.unit))
         return state
       // An uncommitted or departed document cannot keep network restrictions.
       if (gate !== undefined)

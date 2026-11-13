@@ -43,7 +43,6 @@ defineExpose({ focusHeading })
     <header class="conversation-original-fallback__header">
       <IconButton
         class="conversation-original-fallback__back"
-        shape="circle"
         :label="t('notifications.whisper.back_to_conversations')"
         @click="emit('back')"
       >
@@ -51,14 +50,14 @@ defineExpose({ focusHeading })
       </IconButton>
       <div>
         <strong ref="headingRef" tabindex="-1">
-          {{ session.name || t('notifications.whisper.unknown_user') }}
+          {{ session.name || t('notifications.unknown_user') }}
         </strong>
         <span>{{ sessionKindLabel }}</span>
       </div>
     </header>
 
     <div class="conversation-original-fallback__body">
-      <Empty text-only :description="t('notifications.whisper.fallback_description')">
+      <Empty :description="t('notifications.whisper.fallback_description')">
         <ALink :href="originalUrl" type="content" class="conversation-original-fallback__link">
           {{ t('notifications.whisper.open_original_list') }}
         </ALink>

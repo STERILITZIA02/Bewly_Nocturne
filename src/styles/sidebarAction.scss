@@ -1,3 +1,5 @@
+@use "hoverState";
+
 // Standalone rail actions share the heading's leading edge, with a centered hit area.
 .library-rail-content .library-sidebar-action,
 .library-sidebar-action-skeleton {
@@ -25,8 +27,8 @@
   min-height: var(--bew-sidebar-action-height);
   padding-inline: var(--bew-sidebar-action-padding);
   border: 0;
-  border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-capsule);
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
   background: transparent;
   color: var(--bew-library-action-foreground, var(--bew-text-1));
   font-size: var(--bew-font-size-control);
@@ -35,9 +37,7 @@
   text-align: start;
   text-decoration: none;
   cursor: pointer;
-  transition:
-    background-color var(--bew-duration-fast) var(--bew-ease-standard),
-    color var(--bew-duration-fast) var(--bew-ease-standard);
+  @include hoverState.transition;
 
   &[aria-checked="true"],
   &[aria-pressed="true"] {
@@ -49,7 +49,7 @@
   }
   @media (hover: hover) {
     &:hover:not(:disabled) {
-      background: var(--bew-sidebar-action-hover);
+      background: var(--bew-hover-bg);
     }
   }
   &:focus-visible {

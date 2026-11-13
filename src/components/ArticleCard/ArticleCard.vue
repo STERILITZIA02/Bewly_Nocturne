@@ -107,8 +107,8 @@ function formatDate(timestamp: number | string | undefined) {
         <span
           v-for="tag in tags.slice(0, 2)"
           :key="tag.name"
-          text="xs $bew-on-theme-surface"
-          bg="$bew-theme-surface"
+          text="xs $bew-text-1"
+          bg="$bew-selected-bg"
           px-2 h-6 inline-flex items-center
           rounded="$bew-pill-radius"
         >

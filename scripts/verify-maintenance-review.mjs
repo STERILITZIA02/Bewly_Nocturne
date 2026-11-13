@@ -169,7 +169,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     const hidden = Object.getOwnPropertyDescriptor(document, 'hidden')
     const start = Object.getOwnPropertyDescriptor(document, 'startViewTransition')
     const animate = Object.getOwnPropertyDescriptor(document.documentElement, 'animate')
-    const intervals = new Map()
+    const timers = new Map()
     let id = 0
     let minute = 12 * 60
     let reduced = false
@@ -234,7 +234,11 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
         getHours() { return Math.floor(minute / 60) }
         getMinutes() { return minute % 60 }
       },
-      clearInterval: id => intervals.delete(id),
+      setTimeout: (callback, delay) => {
+        timers.set(++id, { callback, delay })
+        return id
+      },
+      clearTimeout: id => timers.delete(id),
       window: {
         addEventListener: window.addEventListener.bind(window),
         removeEventListener: window.removeEventListener.bind(window),
@@ -242,10 +246,6 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
         matchMedia: () => ({ get matches() {
           return reduced
         } }),
-        setInterval: (callback) => {
-          intervals.set(++id, callback)
-          return id
-        },
       },
     })
     const state = module.useDark()
@@ -254,7 +254,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       settings,
       transitions,
       animations,
-      intervals,
+      timers,
       shadow,
       setMinute(value) { minute = value },
       reduced(value) { reduced = value },
@@ -318,25 +318,28 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     }
   })
 
-  check('review scheduled theme: hidden pages have no clock wakeups; resume uses the current local time immediately', async () => {
+  check('review scheduled theme: hidden pages have no clock wakeups; the one timer waits for the next switch; resume uses the current local time immediately', async () => {
     const fixture = await themeFixture()
     try {
       fixture.settings.value.theme = 'scheduled'
       await flush()
-      assert.equal(fixture.intervals.size, 1)
+      assert.equal(fixture.timers.size, 1)
+      // 12:00 wakes once at the 18:00 switch, not every few seconds.
+      const [timer] = fixture.timers.values()
+      assert.ok(timer.delay > 6 * 3600_000 - 60_000 && timer.delay <= 6 * 3600_000)
       assert.equal(fixture.state.isDark.value, false)
       Object.defineProperty(document, 'hidden', { configurable: true, value: true })
       document.dispatchEvent(new Event('visibilitychange'))
-      assert.equal(fixture.intervals.size, 0)
+      assert.equal(fixture.timers.size, 0)
       fixture.setMinute(21 * 60)
       Object.defineProperty(document, 'hidden', { configurable: true, value: false })
       document.dispatchEvent(new Event('visibilitychange'))
       await flush()
       assert.equal(fixture.state.isDark.value, true)
-      assert.equal(fixture.intervals.size, 1)
+      assert.equal(fixture.timers.size, 1)
       fixture.settings.value.theme = 'auto'
       await flush()
-      assert.equal(fixture.intervals.size, 0)
+      assert.equal(fixture.timers.size, 0)
     }
     finally { fixture.close() }
   })
@@ -830,18 +833,23 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     assert.equal(loader.cacheSize, 0)
   })
 
+  check('review search history native storage: reads the native top bar key without a cross-site frame', async () => {
+    const storage = new Map([['search_history', JSON.stringify([{ value: 'native search', timestamp: 2 }])]])
+    const provider = await loadSourceModule('../src/components/SearchBar/searchHistoryProvider.ts', {}, {
+      navigator: {},
+      window: { localStorage: { getItem: key => storage.get(key) ?? null } },
+      document: { body: {}, querySelectorAll: () => [], createElement() { throw new Error('Native history must not require an external document') } },
+    })
+    assert.deepEqual(Array.from(await provider.getSearchHistory(), item => item.value), ['native search'])
+  })
+
   async function historyFixture(shared = {}) {
-    const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://www.bilibili.com/', pretendToBeVisual: true })
-    const { window } = dom
-    const { document } = window
-    const iframeMessage = await import('../src/utils/iframeMessage')
     const timers = new Map()
     let timer = 0
-    const storage = shared.storage ?? new Map([['search_history:search_history', JSON.stringify([{ value: 'older', timestamp: 1 }, { value: 'newer', timestamp: 2 }])], ['search_history:unrelated', 'keep']])
+    const storage = shared.storage ?? new Map([['search_history', JSON.stringify([{ value: 'older', timestamp: 1 }, { value: 'newer', timestamp: 2 }])], ['unrelated', 'keep']])
     const calls = []
     let readFailure = false
     let writeFailure = false
-    let hold = false
     const clock = {
       setTimeout: (callback) => {
         timers.set(++timer, callback)
@@ -849,105 +857,84 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       },
       clearTimeout: id => timers.delete(id),
     }
-    const respond = (frame, packet, value, id = packet.id) => window.dispatchEvent(new window.MessageEvent('message', { source: frame.contentWindow, origin: new URL(frame.src).origin, data: { type: 'COLS_RES', key: packet.key, id, value } }))
-    const provider = await loadSourceModule('../src/components/SearchBar/searchHistoryProvider.ts', { '~/utils/iframeMessage': {
-      ...iframeMessage,
-      postMessageToIframe: (frame, packet) => {
-        calls.push({ frame, packet })
-        if (packet.type === 'COLS_GET') {
-          if (!hold)
-            queueMicrotask(() => respond(frame, packet, readFailure ? undefined : storage.get(packet.key) ?? null))
-        }
-        else {
-          if (!writeFailure) {
-            if (packet.type === 'COLS_SET')
-              storage.set(packet.key, packet.value)
-            if (packet.type === 'COLS_RM')
-              storage.delete(packet.key)
-          }
-          queueMicrotask(() => respond(frame, packet, undefined))
-        }
-        return true
+    const localStorage = {
+      getItem(key) {
+        calls.push({ type: 'get', key })
+        if (readFailure)
+          throw new Error('Storage read failed')
+        return storage.get(key) ?? null
       },
-    } }, { ...clock, DOMException: window.DOMException, document, navigator: { locks: shared.locks }, window: {
-      addEventListener: window.addEventListener.bind(window),
-      removeEventListener: window.removeEventListener.bind(window),
-      ...clock,
-    } })
+      setItem(key, value) {
+        calls.push({ type: 'set', key, value })
+        if (writeFailure)
+          throw new DOMException('Storage write failed', 'QuotaExceededError')
+        storage.set(key, value)
+      },
+      removeItem(key) {
+        calls.push({ type: 'remove', key })
+        if (writeFailure)
+          throw new DOMException('Storage write failed', 'SecurityError')
+        storage.delete(key)
+      },
+    }
+    const provider = await loadSourceModule('../src/components/SearchBar/searchHistoryProvider.ts', {}, { ...clock, navigator: { locks: shared.locks }, window: { localStorage } })
     return {
       provider,
       calls,
       storage,
       timers,
-      respond,
       readFailure(value) { readFailure = value },
       writeFailure(value) { writeFailure = value },
-      hold(value) { hold = value },
-      async mount() {
-        await flush()
-        document.querySelector('iframe[data-bewly-cols-storage]')?.dispatchEvent(new window.Event('load'))
-        await flush()
-      },
       close() {
-        document.querySelectorAll('iframe[data-bewly-cols-storage]').forEach(frame => frame.remove())
-        dom.window.close()
         assert.equal(timers.size, 0)
       },
     }
   }
 
-  check('review search history: failed reads cannot overwrite native history; clear confirms only its own key and repeated searches move first', async () => {
+  check('review search history: failed reads cannot overwrite native history; clear changes only its own key and repeated searches move first', async () => {
     const fixture = await historyFixture()
     const { provider, calls, storage } = fixture
-    const original = storage.get('search_history:search_history')
+    const original = storage.get('search_history')
     try {
       fixture.readFailure(true)
       const failed = provider.addSearchHistory({ value: 'new', timestamp: 3 }).catch(error => error)
-      await fixture.mount()
       assert.match(String(await failed), /read failed/)
-      assert.equal(storage.get('search_history:search_history'), original)
-      assert.equal(calls.filter(call => call.packet.type !== 'COLS_GET').length, 0)
+      assert.equal(storage.get('search_history'), original)
+      assert.equal(calls.filter(call => call.type !== 'get').length, 0)
       fixture.readFailure(false)
-      storage.set('search_history:search_history', '{bad-json')
+      storage.set('search_history', '{bad-json')
       await assert.rejects(provider.removeSearchHistory('older'), /Invalid search history/)
-      assert.equal(storage.get('search_history:search_history'), '{bad-json')
-      storage.set('search_history:search_history', original)
+      assert.equal(storage.get('search_history'), '{bad-json')
+      storage.set('search_history', original)
       const next = await provider.addSearchHistory({ value: 'older', timestamp: 4 })
       assert.equal(next[0].value, 'older')
       fixture.writeFailure(true)
-      await assert.rejects(provider.clearAllSearchHistory(), /confirm/)
-      assert.ok(storage.get('search_history:search_history'))
+      await assert.rejects(provider.clearAllSearchHistory(), /write failed/)
+      assert.ok(storage.get('search_history'))
       fixture.writeFailure(false)
       assert.equal((await provider.clearAllSearchHistory()).length, 0)
-      assert.equal(storage.has('search_history:search_history'), false)
-      assert.equal(storage.get('search_history:unrelated'), 'keep')
-      assert.equal((await provider.getSearchHistory()).length, 0, 'confirmed native null is a valid empty history')
+      assert.equal(storage.has('search_history'), false)
+      assert.equal(storage.get('unrelated'), 'keep')
+      assert.equal((await provider.getSearchHistory()).length, 0, 'a missing native key is a valid empty history')
     }
     finally { fixture.close() }
   })
 
-  check('review search history correlation: stale responses do not settle a newer read, and a timed-out read never enables a write', async () => {
+  check('review search history: native edits stay visible, repeated searches deduplicate and the stored list stays bounded', async () => {
     const fixture = await historyFixture()
-    const { provider, calls, timers, respond } = fixture
-    fixture.hold(true)
+    const { provider, storage } = fixture
     try {
-      let settled = false
-      const current = provider.getSearchHistory().then((value) => {
-        settled = true
-        return value
-      })
-      await fixture.mount()
-      const { frame, packet } = calls.at(-1)
-      respond(frame, packet, '[]', 'old-request')
-      await flush()
-      assert.equal(settled, false)
-      respond(frame, packet, '[{"value":"actual","timestamp":1}]')
-      assert.equal((await current)[0].value, 'actual')
-      const mutation = provider.addSearchHistory({ value: 'never-write', timestamp: 2 }).catch(error => error)
-      await flush()
-      for (const callback of [...timers.values()]) callback()
-      assert.match(String(await mutation), /timed out/)
-      assert.equal(calls.filter(call => call.packet.type !== 'COLS_GET').length, 0)
+      await provider.getSearchHistory()
+      storage.set('search_history', JSON.stringify([{ value: 'native update', timestamp: 10 }, { value: 'native update', timestamp: 9 }]))
+      assert.equal((await provider.getSearchHistory()).length, 1)
+      assert.equal((await provider.getSearchHistory())[0].timestamp, 10)
+      await Promise.all(Array.from({ length: 25 }, (_, i) => provider.addSearchHistory({ value: `search-${i}`, timestamp: 20 + i })))
+      const saved = JSON.parse(storage.get('search_history'))
+      assert.equal(saved.length, 20)
+      assert.equal(saved[0].value, 'search-24')
+      assert.equal(saved.at(-1).value, 'search-5')
+      await provider.removeSearchHistory('search-15')
+      assert.equal(JSON.parse(storage.get('search_history')).some(item => item.value === 'search-15'), false)
     }
     finally { fixture.close() }
   })
@@ -974,12 +961,10 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     try {
       const a = first.provider.addSearchHistory({ value: 'tab-a', timestamp: 1 })
       const b = second.provider.addSearchHistory({ value: 'tab-b', timestamp: 2 })
-      await first.mount()
       await a
-      await second.mount()
       await b
       assert.equal(maximum, 1)
-      assert.deepEqual(JSON.parse(storage.get('search_history:search_history')).map(item => item.value), ['tab-b', 'tab-a'])
+      assert.deepEqual(JSON.parse(storage.get('search_history')).map(item => item.value), ['tab-b', 'tab-a'])
     }
     finally {
       first.close()
@@ -995,23 +980,6 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       for (const callback of [...fixture.timers.values()]) callback()
       assert.match(String(await waiting), /lock timed out/)
       assert.equal(fixture.calls.length, 0)
-    }
-    finally { fixture.close() }
-  })
-
-  check('review search history frame: a replaced source is never reused for private history', async () => {
-    const fixture = await historyFixture()
-    try {
-      const first = fixture.provider.getSearchHistory()
-      await fixture.mount()
-      await first
-      const oldFrame = fixture.calls[0].frame
-      oldFrame.src = 'https://example.invalid/storage'
-      const next = fixture.provider.getSearchHistory()
-      await fixture.mount()
-      await next
-      assert.notEqual(fixture.calls.at(-1).frame, oldFrame)
-      assert.equal(fixture.calls.at(-1).frame.src, 'https://s1.hdslb.com/bfs/seed/jinkela/short/cols/iframe.html')
     }
     finally { fixture.close() }
   })

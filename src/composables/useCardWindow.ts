@@ -447,23 +447,21 @@ export function useCardWindow(options: {
       releaseViewportFrame = subscribeViewportFrame(root, handleViewportFrame)
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver((entries) => {
-        const dirtyRows = new Set<number>()
-        for (const entry of entries) {
-          const key = elementKeys.get(entry.target)
-          const index = key === undefined ? undefined : indices.get(key)
-          if (index !== undefined)
-            dirtyRows.add(Math.floor(index / options.columns.value))
-        }
-        if (dirtyRows.size)
-          measureMounted(dirtyRows)
-      })
-      slots.forEach(element => resizeObserver?.observe(element))
-      if (options.container.value) {
-        containerObserver = new ResizeObserver(scheduleUpdate)
-        containerObserver.observe(options.container.value)
+    resizeObserver = new ResizeObserver((entries) => {
+      const dirtyRows = new Set<number>()
+      for (const entry of entries) {
+        const key = elementKeys.get(entry.target)
+        const index = key === undefined ? undefined : indices.get(key)
+        if (index !== undefined)
+          dirtyRows.add(Math.floor(index / options.columns.value))
       }
+      if (dirtyRows.size)
+        measureMounted(dirtyRows)
+    })
+    slots.forEach(element => resizeObserver?.observe(element))
+    if (options.container.value) {
+      containerObserver = new ResizeObserver(scheduleUpdate)
+      containerObserver.observe(options.container.value)
     }
     scheduleUpdate()
   }

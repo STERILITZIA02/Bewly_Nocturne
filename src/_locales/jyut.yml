@@ -10,7 +10,6 @@ library_tools:
   date_custom: 自訂日期
   date_range: 自訂日期範圍
   days: 跳去某日
-  resume_at: '睇到 {time} / {total}'
   video_count: '{count} 條片'
   item_count: '{count} 項'
   switch_to: '轉去 {name}'
@@ -21,11 +20,7 @@ library_tools:
   search_scope: 搜尋範圍
   selected_tabs: '已揀 {count} / {total} 個分頁'
   search_results: '「{query}」嘅搜尋結果'
-  load_more_matches: 繼續搵更早紀錄
   no_matches: 搵唔到符合嘅內容
-  date: 揀日期
-  all_dates: 所有日期
-  content_type: 內容類型
   type_all: 全部內容
   type_archive: 影片
   type_pgc: 動畫同影視
@@ -33,22 +28,13 @@ library_tools:
   type_article: 專欄
   clear_search: 清除搜尋
   watch_later_search: 搜尋標題或者 UP 主
-  playback_state: 觀看狀態
-  state_all: 全部進度
-  state_unstarted: 未開始
-  state_watching: 睇緊
-  state_completed: 睇完
-  state_unknown: 進度未知
-  duration: 影片長度
-  duration_all: 全部長度
-  duration_short: 10 分鐘以內
-  duration_medium: 10–30 分鐘
-  duration_long: 30 分鐘以上
   find_messages: 搵呢個對話已載入嘅訊息
   previous_match: 上一個符合項目
   next_match: 下一個符合項目
-  load_more_videos: 繼續載入影片
 common:
+  batch_manage: 批量管理
+  select_all: 全選
+  unselect_all: 取消全選
   volume: 音量 {volume}%
   pagination_stalled: 清單未能繼續載入，請再試。
   advertisement: 廣告
@@ -65,19 +51,9 @@ common:
   undo: 整返返去
   days: 日
   view: '{count}次'
-  viewWithoutNum: 次
-  danmaku: '{count} 彈幕'
-  danmakuWithoutNum: 彈幕
-  like: '{count} 個讚'
-  likeWithoutNum: 讚
   anime_follow_count: '{count}人追緊'
-  year: 年前
-  month: 個月前
-  week: 個禮拜前
-  day: 日前
   hour: 個鐘頭前
   minute: 分鐘前
-  second: 秒前
   yesterday: 尋日
   just_now: 啱啱
   please_log_in_first: 唔該登入先
@@ -87,8 +63,6 @@ common:
   add_to_watch_later: 加到陣間至睇
   added_to_watch_later: 已加到陣間至睇
   remove_from_watch_later: 由陣間至睇剷走
-  added: 已添加
-  performance_impact_warn: 呢個功能可能會降低效能！
   no_data: 暫時冇數據
   no_more_content: 唔使睇喇，冇嘢喇
   load_failed: 載入失敗，請遲啲再試
@@ -98,12 +72,9 @@ common:
   load_more: 撈多啲
   operation:
     add: 新增
-    edit: 編輯
     delete: 刪除
     confirm: 確定
     cancel: 取消
-    enable: 開
-    disable: 閂
     refresh: 重新整理
     reset: 重設
     import: 匯入
@@ -115,7 +86,6 @@ common:
   table:
     index: 索引
     title: 標題
-    name: 名稱
     remark: 備註
     operations: 操作
   position:
@@ -250,8 +220,12 @@ settings:
   show_dock_back_to_top: 顯示 Dock 回頂按鈕
   show_dock_back_to_top_desc: 只控制回頂入口，重新整理同復原仍然可用。
   show_dock_item_names: 顯示 Dock 名稱
-  show_dock_badges: 顯示 Dock 角標
-  show_dock_badges_desc: 只係控制顯示，唔會標做已讀。
+  dock_badges: Dock 角標
+  dock_badges_desc: 只係控制顯示，唔會標做已讀。
+  dock_badges_opt:
+    number: 數字
+    dot: 圓點
+    none: 唔顯示
   show_search_identity_switcher: 顯示搜尋身份快速切換
   show_search_identity_switcher_desc: 喺搜尋結果切換帳號或者訪客請求，唔會登出，保留關鍵字同篩選。
   search_identity: 搜尋身份
@@ -1019,20 +993,12 @@ topbar:
     bilibili_premium_rewards: 大會員福利領取
     last_login_time: 最後登入
     last_login_location: 登入地點
-  noti_dropdown:
-    replys: 覆我
-    mentions: 提我
-    likes: 讚我
-    messages: 系统通知
-    chats: 傾偈室
   moments_dropdown:
     tabs:
       videos: 影片
       all: 全部
       live: 直播
       articles: 文章
-    uploaded: po 咗：
-    now_streaming: 開緊 live：
     live_status: Live 緊
   upload_dropdown:
     article: 寫文
@@ -1041,6 +1007,7 @@ topbar:
     video: Po 片
     manager: 內容管理
 notifications:
+  unknown_user: 未知用戶
   insights:
     activity: 對話最近活動
     activity_scope: 近 7 日 · 已載入對話
@@ -1066,13 +1033,8 @@ notifications:
   section_aria: 打開{section}
   unread_count: '{count} 條未讀訊息'
   actions:
-    refresh: 重新整理
-    refresh_aria: 重新整理而家嘅訊息分類
-    refresh_tooltip: 重新載入而家嘅訊息分類
     retry: 再試
     open_original: 喺原版打開
-    open_original_aria: 喺嗶哩嗶哩原版打開{section}
-    open_original_tooltip: 用嗶哩嗶哩原版訊息頁打開
   sections:
     whisper:
       label: 私訊
@@ -1169,7 +1131,6 @@ notifications:
       official-assistant: 官方助手
     empty: 暫時未有私訊會話
     empty_filtered: 冇符合條件嘅會話
-    unknown_user: 未知用戶
     user_fallback: '用戶 {talkerId}'
     summary_unavailable: 暫時未有訊息摘要
     select_conversation: 揀同{name}嘅會話
@@ -1260,7 +1221,6 @@ notifications:
       api-error: 私訊載入失敗，請再試
       wbi-unavailable: 私訊簽名暫時用唔到
   native:
-    unknown_user: 未知用戶
     original_content: 原始內容
     view_source: 睇原內容
     loading:
@@ -1365,7 +1325,6 @@ moments:
   vote_submitting: 提交中…
   vote_submit_failed: 投票失敗，請再試
   login_to_vote: 請先登入再投票
-  live_popularity: '{count} 人氣'
   charge_exclusive: 充電專屬
   charge_unlock_hint: 加入而家呢位 UP 主嘅充電就可以解鎖
   charge_exclusive_moment: 充電專屬動態
@@ -1373,8 +1332,6 @@ moments:
   forwarded_moment: 轉發咗動態
   bilibili_user: B站用戶
   original_author: 原作者
-  live_moment: 直播動態
-  video_moment: 影片動態
   image_moment: 圖文動態
   text_moment: 純文字動態
   original_moment: 原動態
@@ -1384,7 +1341,6 @@ moments:
   login_to_watch_later: 登入之後先可以加稍後再睇
   watch_later_unavailable: 攞唔到呢條片嘅稍後再睇資料
   watch_later_failed_retry: 稍後再睇操作失敗，遲啲再試
-  user_info: 動態用戶資料
   following: 關注
   followers: 粉絲
   moments: 動態
@@ -1406,11 +1362,9 @@ moments:
   search_time_week: 一個禮拜內
   search_time_month: 一個月內
   search_time_year: 一年內
-  live_now: 直播緊
   live_badge: 直播中
   live_preview_unavailable: 暫時無法預覽
   feed_bar: 動態欄
-  feed_groups: 動態分組
   all_moments: 全部動態
   scroll_frequent_left: 向左捲動經常瀏覽列表
   scroll_frequent_right: 向右捲動經常瀏覽列表
@@ -1418,21 +1372,13 @@ moments:
   scroll_right: 向右捲動
   frequent_uploaders: 經常瀏覽嘅 UP 主
   has_update: 有更新
-  initial_loading: 準備緊動態同圖片…
   empty: 暫時冇動態可以顯示
-  loading: 載入緊…
   no_more: 冇更多動態喇
   live_room: 直播間
   video_playback: 影片播放
   detail: 動態詳情
-  opening_live: 開緊直播間…
-  opening_video: 開緊影片…
-  opening_forward: 開緊轉發動態…
-  loading_detail: 載入緊動態詳情…
   author_detail: '{author} 嘅詳情'
   open_new_tab: 喺新分頁開啟
-  zoom_out: 縮細
-  zoom_in: 放大
 moment_card:
   video_post: 影片投稿
   copy_link: 複製動態連結
@@ -1469,11 +1415,6 @@ moment_card:
   open_detail: 開啟 {author} 嘅動態詳情
   open_origin_moment: 睇 {name} 嘅原動態
   just_now: 啱啱
-  charge_exclusive: 充電專屬
-  watch_later_added: 已加入稍後再睇
-  add_watch_later: 加入稍後再睇
-  added: 已加入
-  watch_later: 稍後再睇
   expand_text: 展開正文
   collapse_text: 收埋正文
   live_moment: 直播動態
@@ -1482,10 +1423,7 @@ moment_card:
   additional_content: 附加內容
   view_hot_comment: 睇熱門留言
   hot_comment: 熱門留言
-  open_dialog: 喺對話框開啟
-  open_dialog_short: 對話框
   open_new_tab: 喺新分頁開啟
-  open_new_tab_short: 新分頁
   view_comments: 睇留言
   collapse_comments: 收起留言
   comments: 留言
@@ -1598,12 +1536,10 @@ video_card:
   group_contribution: '{firstAuthor} 等 {num} 人一齊創作'
   followed: 已關注
   video_removed: 經已鏟咗條片
-  watched: 睇過
   browsed: 瀏覽過
   played: 播放過
   completed: 睇完
   played_progress: '睇到 {time}'
-  visited_recently: 近一個月內睇過
   watch_later_unavailable: 攞唔到呢條片嘅陣間至睇資料
   watch_later_update_failed: 更新陣間至睇失敗
   feedback_unavailable: 攞唔到意見選項
@@ -1656,7 +1592,6 @@ home:
   weekly_no_matching_series: 搵唔到相符嘅期數
   precious: 入站必睇
   live: 直播
-  moments: 動向
   uploaders_with_updates: '{count} 個 UP 主有更新'
 ranking:
   all: 全部
@@ -1699,13 +1634,10 @@ history:
   sort_oldest: 最早睇過（已載入紀錄）
   select_results: 全選目前結果
   filters:
-    title: 進階篩選
-    period: 觀看時間
     period_all: 全部時間
     period_today: 今日
     period_yesterday: 尋日
     period_week: 近一星期
-    by_device: 按裝置篩選
     device_all: 全部裝置
     device_pc: PC
     device_phone: 手機
@@ -1714,7 +1646,6 @@ history:
   all_history: 全部紀錄
   media: 劇集 / 影視
   unknown_date: 日期不明
-  clear_failed: 清空歷史記錄失敗，請再試
   title: 收睇記錄
   turn_on_watch_history: 開返收睇記錄
   pause_watch_history: 暫停進行收睇記錄
@@ -1773,19 +1704,10 @@ favorites:
   search_description_only: 只搜描述
   search_season: 搜尋合集或目前合集入面嘅影片
   search_article: 搜尋目前分類嘅收藏
-  collected_season_prefix: 合集
   video_section_title: 收藏嘅影片
-  folder_section_title: 所有收藏夾
   season_section_title: 訂閱嘅收藏夾同合集
-  article_section_title: 收藏嘅圖文
-  video_count: 影片數：{count}
-  article_count: 圖文數：{count}
   article_load_failed: 圖文收藏載入失敗，請遲啲再試
   unfavorite: 唔愛喇
-  unfavorite_confirm: |-
-    係咪要剷走你揀過啲片呀？
-    噉做冇得返轉頭噃，你確定要剷走你揀過啲片？
-  batch_manage: 批量管理
   batch_select_all: 揀晒本頁
   batch_unselect_all: 取消全選
   batch_select_item: 揀影片
@@ -1796,7 +1718,6 @@ favorites:
   batch_move_dialog_title: 移動到收藏夾
   batch_copy_dialog_desc: 揀目標收藏夾，確認後會複製已揀嘅 {count} 條片。
   batch_move_dialog_desc: 揀目標收藏夾，確認後會移動已揀嘅 {count} 條片。
-  batch_target_folder: 目標收藏夾
   batch_unfavorite: 唔愛喇
   batch_unfavorite_confirm: |-
     係咪要剷走已揀嘅 {count} 條片呀？
@@ -1806,23 +1727,16 @@ favorites:
   season_play_all_fallback: 未能確認起播位置，改用原生列表入口
   sidebar_manage: 管理
   sidebar_manage_exit: 退出管理
-  select_all: 全選
-  unselect_all: 取消全選
   edit_folder: 編輯收藏夾
   edit_folder_dialog_title: 編輯收藏夾
-  edit_folder_title_placeholder: 請輸入收藏夾名稱
   edit_folder_title_empty: 收藏夾名稱唔可以為空
-  edit_folder_failed: 收藏夾修改失敗，請遲啲再試
   folder_visibility: 收藏夾可見性
   folder_public: 公開
   folder_private: 私密
-  default_folder_locked: 預設收藏夾唔可以編輯或者刪除
   delete_folders_confirm: |-
     要刪除已選嘅 {count} 個收藏夾嗎？
     入面影片嘅收藏關係會一併移除，呢個操作無法撤銷。
-  delete_folders_failed: 收藏夾刪除失敗，請稍後再試
   unfav_seasons_confirm: 確定取消收藏已選嘅 {count} 個合集嗎？
-  unfav_seasons_failed: '{count} 個合集取消收藏失敗'
   search_all_folders: 全部收藏夾
   search_current_folder: 目前收藏夾
   search_placeholder: 搜尋目前收藏
@@ -1851,12 +1765,8 @@ watch_later:
     duration_medium: 10–30分鐘
     duration_long: 30–60分鐘
     duration_extraLong: 60分鐘以上
-  sort_order: 顯示次序
   sort_newest: 最近加入
   sort_oldest: 最早加入
-  batch_manage: 批量管理
-  select_all: 全選
-  unselect_all: 取消全選
   remove_selected: 移除所選（{count}）
   auto_remove_failed: 自動移出陣間至睇失敗，請稍後手動重試。
   open_tabs:
@@ -1911,14 +1821,14 @@ widescreen:
   listen: 聽影片
   listen_play: 播放
   listen_pause: 暫停
-  return_video: 返去睇片
+  listen_lyrics: 歌詞
+  listen_lyrics_language: 字幕語言
   collapse_info: 收埋影片資訊
   expand_info: 展開影片資訊
   collapse_episodes: 收埋選集
   expand_episodes: 展開選集
   listen_not_ready: 播放器未準備好，請一陣再試。
   listen_unavailable: 呢段影片冇可以獨立播放嘅音軌。
-  listen_btr_companion_required: 目前嘅 BTR 需要安裝支援聽影片交接 v1 嘅配套修補程式。
   overview: 簡介
   panel_load_incomplete: 內容未能載入完成，可以重新整理頁面或者退出 Bewly 播放頁後再試
   reload_page: 重新整理頁面
@@ -1934,8 +1844,6 @@ widescreen:
   danmaku_style: 彈幕樣式
   send_danmaku: 發送彈幕
   player_feedback: 播放回報
-  playlist: 選集
-  recommendations: 推介
   up_next: 跟住播
   playback_navigation: 影片播放導覽
   previous_video: 上一條睇過嘅片
@@ -1986,8 +1894,6 @@ search_bar:
   search_in: '喺{page}度搜尋'
   search_settings: 搜尋設定
 search_page:
-  hot_search_ranking: 熱搜排行榜
-  loading: 載入緊...
   no_hot_search_data: 暫時冇熱搜資料
   view_all_esports: 睇晒所有電競賽事
 
@@ -2083,7 +1989,6 @@ search:
     episode_count: 共 {count} 話
     premiere: '首播：{date}'
     watch_now: 即刻睇
-    other: 其他
   sections:
     activities: 活動
     schedule: 賽程日曆

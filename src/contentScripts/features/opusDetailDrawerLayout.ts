@@ -208,7 +208,7 @@ html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .opus-toc {
 }
 .bewly-opus-iframe-loading__media { border-radius: var(--bew-thumb-radius, 12px); }
 .bewly-opus-iframe-loading__copy { display: grid; align-content: start; gap: var(--bew-space-4, 16px); }
-.bewly-opus-iframe-loading__copy > span { height: var(--bew-line-height-body, 24px); border-radius: var(--bew-radius-tiny, 4px); }
+.bewly-opus-iframe-loading__copy > span { height: var(--bew-line-height-body, 16px); border-radius: var(--bew-radius-tiny, 4px); }
 .bewly-opus-iframe-loading__copy > span:first-child { height: var(--bew-space-12, 48px); }
 `
 

@@ -62,7 +62,8 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
     const activity = (type, target) => handles[type]({ isTrusted: true, composedPath: () => [target, host, document] })
     const assertHidden = (hidden) => {
       assert.equal(host.dataset.playerControlsHidden, String(hidden))
-      assert.equal(document.body.classList.contains(events.BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS), hidden)
+      assert.equal(state.playerEl.hasAttribute(events.BEWLY_WIDESCREEN_CONTROLS_HIDDEN_ATTRIBUTE), hidden)
+      assert.equal(document.body.className, '', 'the card state never touches body')
     }
     try {
       controls.syncNativePlayerControlVisibility(state)
@@ -134,7 +135,6 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       state.activeControlCleanup()
       sessionModule.session.current = null
       host.remove()
-      document.body.classList.remove(events.BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS)
     }
   })
 
@@ -223,7 +223,6 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       state.activeControlCleanup?.()
       sessionModule.session.current = null
       fixture.remove()
-      document.body.classList.remove(events.BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS)
     }
   })
 

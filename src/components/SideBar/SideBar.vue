@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { useMediaQuery, useMutationObserver } from '@vueuse/core'
+import { useEventListener, useMediaQuery, useMutationObserver } from '@vueuse/core'
 
 import Button from '~/components/Button.vue'
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'
-import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } from '~/constants/globalEvents'
+import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_ATTRIBUTE, BEWLY_WIDESCREEN_CONTROLS_VISIBILITY } from '~/constants/globalEvents'
 import type { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import {
@@ -29,15 +29,17 @@ const { isDark, toggleDark } = useDark()
 const sidebarPosition = useLayoutEditSettingValue('navigation.sidebar.position', () => settings.value.sidebarPosition)
 
 const widescreenDocked = ref(document.body.classList.contains('bewly-widescreen-active'))
-const widescreenControlsHidden = ref(document.body.classList.contains(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS))
+const widescreenControlsHidden = ref(!!document.querySelector(`[${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_ATTRIBUTE}]`))
 useMutationObserver(
   document.body,
   () => {
     widescreenDocked.value = document.body.classList.contains('bewly-widescreen-active')
-    widescreenControlsHidden.value = document.body.classList.contains(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS)
   },
   { attributes: true, attributeFilter: ['class'] },
 )
+useEventListener(window, BEWLY_WIDESCREEN_CONTROLS_VISIBILITY, (event: Event) => {
+  widescreenControlsHidden.value = (event as CustomEvent<boolean>).detail
+})
 
 const tooltipPlacement = computed<'left' | 'right' | 'top'>(() => {
   if (widescreenDocked.value)
@@ -247,7 +249,7 @@ function openPlayerFeedback() {
   }
 
   &:active {
-    transform: scale(0.9);
+    transform: scale(var(--bew-icon-press-scale));
   }
 }
 
@@ -318,7 +320,7 @@ function openPlayerFeedback() {
   .ctrl-btn.ctrl-btn {
     --b-button-border-width: 0px;
     --b-button-color: transparent;
-    --b-button-color-hover: var(--bew-fill-2);
+    --b-button-color-hover: var(--bew-hover-bg);
     --b-button-text-color: var(--bew-text-1);
     --b-button-shadow: none;
     --b-button-shadow-hover: none;
@@ -331,13 +333,13 @@ function openPlayerFeedback() {
     backdrop-filter: none;
 
     &:hover {
-      background: var(--bew-fill-2);
+      background: var(--bew-hover-bg);
       box-shadow: none;
       transform: none;
     }
 
     &:active {
-      background: var(--bew-fill-3);
+      background: var(--bew-pressed-bg);
       transform: none;
     }
   }
@@ -351,13 +353,13 @@ function openPlayerFeedback() {
   }
 
   :deep(.page-mode-switcher--sidebar:hover:not(:disabled)) {
-    background: var(--bew-fill-2);
+    background: var(--bew-hover-bg);
     box-shadow: none;
     transform: none;
   }
 
   :deep(.page-mode-switcher--sidebar:active:not(:disabled)) {
-    background: var(--bew-fill-3);
+    background: var(--bew-pressed-bg);
     transform: none;
   }
 

@@ -24,15 +24,16 @@ interface ReadyPageTransitionOptions {
  * that time and the new view mounts only after it settles (at most 300ms).
  */
 export function useReadyPageTransition<T>(source: () => T, prepare: (component: T) => Promise<unknown>, options: ReadyPageTransitionOptions = {}): TransitionProps {
-  let generation = 0
-  let initialized = false
-  let ready = false
-  let leavingGeneration: number | undefined
-  let finishLeave: (() => void) | undefined
-  let leaveElement: Element | undefined
-  let leaveAnimation: Animation | undefined
-  let enterAnimation: Animation | undefined
-  let enterElement: Element | undefined
+  interface Destination { phase: 'initial' | 'preparing' | 'ready' | 'disposed' }
+  let destination: Destination = { phase: 'initial' }
+  let departure: {
+    phase: 'waiting' | 'leaving'
+    element: Element
+    done: () => void
+    target?: Destination
+    animation?: Animation
+  } | undefined
+  let arrival: { element: Element, animation: Animation } | undefined
   const interruptedOpacity = new WeakMap<Element, string>()
 
   function opacity(element: Element) {
@@ -55,53 +56,53 @@ export function useReadyPageTransition<T>(source: () => T, prepare: (component: 
   }
 
   async function finishReadyLeave() {
-    const done = finishLeave
-    const element = leaveElement
-    const version = generation
-    if (!ready || !done || !element || leavingGeneration === version)
+    const leaving = departure
+    const target = destination
+    if (target.phase !== 'ready' || !leaving || (leaving.phase === 'leaving' && leaving.target === target))
       return
-    leavingGeneration = version
+    leaving.phase = 'leaving'
+    leaving.target = target
+    const { element, done } = leaving
+    const isCurrent = () => destination === target && departure === leaving && target.phase === 'ready'
     // out-in's done() immediately updates BaseTransition. Even a cached module
     // must wait until Vue has installed the current patch's placeholder vnode.
     await nextTick()
-    if (version !== generation || !ready || finishLeave !== done)
+    if (!isCurrent())
       return
     const from = opacity(element)
-    leaveAnimation?.cancel()
+    leaving.animation?.cancel()
     // Stretch the exit across the triggering slide instead of idling blank.
     const animation = animate(element, [{ opacity: from }, { opacity: 0 }], false, options.motion ? getMotionRemaining(options.motion) : 0)
-    leaveAnimation = animation
+    leaving.animation = animation
     if (animation) {
       await animation.finished.catch(() => undefined)
-      if (version !== generation || finishLeave !== done)
+      if (!isCurrent())
         return
     }
     if (options.motion)
       await afterMotion(options.motion)
-    if (version !== generation || finishLeave !== done)
+    if (!isCurrent())
       return
-    finishLeave = undefined
-    leaveElement = undefined
-    leaveAnimation = undefined
-    leavingGeneration = undefined
+    departure = undefined
     options.onSwap?.()
     done()
     animation?.cancel()
   }
   watch(source, async (component) => {
-    const version = ++generation
-    ready = false
-    leavingGeneration = undefined
+    const initialized = destination.phase !== 'initial'
+    const target: Destination = { phase: 'preparing' }
+    destination = target
+    if (departure)
+      departure.phase = 'waiting'
     if (initialized)
       options.onStart?.()
-    initialized = true
-    if (leaveAnimation && leaveElement) {
+    if (departure?.animation) {
       // A later destination may still be loading. Retarget the old page back
       // toward visible instead of leaving it transparent while code is fetched.
-      const from = opacity(leaveElement)
-      leaveAnimation.cancel()
-      leaveAnimation = animate(leaveElement, [{ opacity: from }, { opacity: 1 }], false)
-      void leaveAnimation?.finished.catch(() => {})
+      const from = opacity(departure.element)
+      departure.animation.cancel()
+      departure.animation = animate(departure.element, [{ opacity: from }, { opacity: 1 }], false)
+      void departure.animation?.finished.catch(() => {})
     }
     try {
       await prepare(component)
@@ -110,19 +111,21 @@ export function useReadyPageTransition<T>(source: () => T, prepare: (component: 
       // The async component owns its load error/retry UI; do not retain the old
       // page indefinitely when preloading fails.
     }
-    if (version !== generation)
+    if (destination !== target)
       return
-    ready = true
+    target.phase = 'ready'
     await finishReadyLeave()
   }, { immediate: true, flush: 'sync' })
   onScopeDispose(() => {
-    generation++
-    finishLeave = undefined
-    if (leaveElement)
-      restoreRetiringElement(leaveElement)
-    leaveElement = undefined
-    leaveAnimation?.cancel()
-    enterAnimation?.cancel()
+    destination = { phase: 'disposed' }
+    if (departure) {
+      restoreRetiringElement(departure.element)
+      departure.animation?.cancel()
+      departure = undefined
+    }
+    const entering = arrival
+    arrival = undefined
+    entering?.animation.cancel()
   })
   return {
     ...retiringTransition,
@@ -139,54 +142,49 @@ export function useReadyPageTransition<T>(source: () => T, prepare: (component: 
       }
     },
     onLeave: (element, done) => {
-      finishLeave = done
-      leaveElement = element
+      departure = { phase: 'waiting', element, done }
       void finishReadyLeave()
     },
     onLeaveCancelled: (element) => {
-      leaveAnimation?.cancel()
-      leaveAnimation = undefined
-      finishLeave = undefined
-      leaveElement = undefined
-      leavingGeneration = undefined
+      departure?.animation?.cancel()
+      departure = undefined
       restoreRetiringElement(element)
       options.onSettled?.()
     },
     onEnter: (element, done) => {
-      enterAnimation?.cancel()
+      arrival?.animation.cancel()
+      arrival = undefined
       options.onEnter?.(element)
       const reduced = prefersReducedMotion()
       const rise = !reduced && options.rise?.() === true
       const animation = animate(element, rise
         ? [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }]
         : [{ opacity: 0 }, { opacity: 1 }], true)
-      enterAnimation = animation
-      enterElement = element
       if (!animation) {
         done()
         return
       }
+      const entering = { element, animation }
+      arrival = entering
       void animation.finished.then(() => {
-        if (enterAnimation !== animation)
+        if (arrival !== entering)
           return
-        enterAnimation = undefined
-        enterElement = undefined
+        arrival = undefined
         animation.cancel()
         done()
       }, () => {
-        if (enterAnimation !== animation)
+        if (arrival !== entering)
           return
-        enterAnimation = undefined
-        enterElement = undefined
+        arrival = undefined
         done()
       })
     },
     onEnterCancelled: (element) => {
-      if (enterAnimation && enterElement === element)
+      if (arrival?.element === element)
         interruptedOpacity.set(element, opacity(element))
-      enterAnimation?.cancel()
-      enterAnimation = undefined
-      enterElement = undefined
+      const entering = arrival
+      arrival = undefined
+      entering?.animation.cancel()
     },
     onAfterEnter: () => options.onSettled?.(),
   }

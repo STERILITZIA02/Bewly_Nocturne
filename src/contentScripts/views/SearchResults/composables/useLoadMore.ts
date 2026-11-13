@@ -1,15 +1,18 @@
 import { computed, getCurrentScope, nextTick, onScopeDispose, ref } from 'vue'
 
+import type { SearchViewState } from './useSearchRequest'
+
 export interface LoadMoreOptions {
   cooldownMs?: number
   retryDelayMs?: number
   maxAutoFillAttempts?: number
   isLoading?: () => boolean
+  view?: SearchViewState
 }
 
 export interface LoadMoreState {
-  pending: boolean
-  running: boolean
+  phase: 'idle' | 'loading'
+  schedule: 'idle' | 'waiting'
   lastTriggered: number
   lastCompleted: number
   lastAppended: number
@@ -35,11 +38,13 @@ export function useLoadMore(
   const hasMore = ref(true)
   const exhausted = ref(false)
   const autoFillPaused = ref(false)
+  for (const [name, field] of Object.entries({ hasMore, exhausted, autoFillPaused }))
+    options.view?.retain(name, field)
   const needsManualLoadMore = computed(() => autoFillPaused.value && hasMore.value && !exhausted.value)
 
   const state = ref<LoadMoreState>({
-    pending: false,
-    running: false,
+    phase: 'idle',
+    schedule: 'idle',
     lastTriggered: 0,
     lastCompleted: 0,
     lastAppended: 0,
@@ -51,6 +56,7 @@ export function useLoadMore(
   let disposed = false
   let renderFrame: number | undefined
   let finishRenderWait: (() => void) | undefined
+  let completion: { phase: 'rendering' | 'measuring', promise: Promise<void> } | undefined
 
   function cancelRenderWait() {
     if (renderFrame !== undefined)
@@ -85,6 +91,7 @@ export function useLoadMore(
       clearTimeout(loadMoreTimer)
       loadMoreTimer = undefined
     }
+    state.value.schedule = 'idle'
   }
 
   /**
@@ -94,13 +101,13 @@ export function useLoadMore(
     if (disposed || autoFillPaused.value)
       return
     if (isLoading()) {
-      state.value.pending = false
+      clearTimer()
       return
     }
 
     clearTimer()
     const effectiveDelay = Math.max(delay, 0)
-    state.value.pending = true
+    state.value.schedule = 'waiting'
 
     loadMoreTimer = window.setTimeout(() => {
       loadMoreTimer = undefined
@@ -112,22 +119,22 @@ export function useLoadMore(
    * 尝试加载更多
    */
   async function attemptLoadMore() {
-    if (disposed || autoFillPaused.value || state.value.running)
+    if (disposed || autoFillPaused.value || state.value.phase === 'loading')
       return
 
     if (isLoading()) {
-      state.value.pending = false
+      clearTimer()
       return
     }
 
     if (!hasMore.value || exhausted.value) {
-      state.value.pending = false
+      clearTimer()
       state.value.autoFillAttempts = 0
       return
     }
 
-    state.value.pending = false
-    state.value.running = true
+    clearTimer()
+    state.value.phase = 'loading'
     state.value.lastTriggered = Date.now()
     const requestGeneration = generation
 
@@ -144,7 +151,6 @@ export function useLoadMore(
         // Pause automatic requests, while retaining an explicit continuation.
         if (result.appendedCount === 0) {
           autoFillPaused.value = true
-          state.value.pending = false
           clearTimer()
         }
       }
@@ -152,7 +158,7 @@ export function useLoadMore(
     finally {
       if (!disposed && requestGeneration === generation) {
         state.value.lastCompleted = Date.now()
-        state.value.running = false
+        state.value.phase = 'idle'
       }
     }
   }
@@ -161,7 +167,7 @@ export function useLoadMore(
    * 请求加载更多（带防抖）
    */
   function requestLoadMore() {
-    if (disposed || autoFillPaused.value || !hasMore.value || exhausted.value || isLoading() || state.value.running)
+    if (disposed || autoFillPaused.value || !hasMore.value || exhausted.value || isLoading() || state.value.phase === 'loading')
       return
 
     const now = Date.now()
@@ -170,7 +176,7 @@ export function useLoadMore(
 
     // 如果在冷却期内，标记为pending并调度延迟加载
     if (elapsed < cooldownMs) {
-      if (!state.value.pending) {
+      if (state.value.schedule !== 'waiting') {
         const remainingCooldown = cooldownMs - elapsed
         scheduleAttempt(remainingCooldown)
       }
@@ -181,7 +187,7 @@ export function useLoadMore(
   }
 
   function resumeLoadMore() {
-    if (disposed || isLoading() || state.value.running)
+    if (disposed || isLoading() || state.value.phase === 'loading')
       return
     autoFillPaused.value = false
     state.value.autoFillAttempts = 0
@@ -192,13 +198,27 @@ export function useLoadMore(
    * 处理加载完成后的自动填充逻辑
    * @param haveScrollbar 检查是否有滚动条的函数
    */
-  async function handleLoadMoreCompletion(haveScrollbar: () => Promise<boolean>) {
+  function handleLoadMoreCompletion(haveScrollbar: () => Promise<boolean>): Promise<void> {
+    if (disposed)
+      return Promise.resolve()
+    if (completion)
+      return completion.promise
+    const task = { phase: 'rendering' as 'rendering' | 'measuring', promise: Promise.resolve() }
+    completion = task
+    task.promise = completeLoadMore(haveScrollbar, task).finally(() => {
+      if (completion === task)
+        completion = undefined
+    })
+    return task.promise
+  }
+
+  async function completeLoadMore(haveScrollbar: () => Promise<boolean>, task: NonNullable<typeof completion>) {
     const requestGeneration = generation
     if (!await waitForRender(requestGeneration))
       return
 
     if (isLoading()) {
-      state.value.pending = false
+      clearTimer()
       return
     }
 
@@ -208,7 +228,7 @@ export function useLoadMore(
     const remainingCooldown = Math.max(cooldownMs - elapsed, 0)
 
     // 如果有挂起的请求，继续调度
-    if (state.value.pending && hasMore.value) {
+    if (state.value.schedule === 'waiting' && hasMore.value) {
       scheduleAttempt(Math.max(remainingCooldown, retryDelayMs))
       return
     }
@@ -230,6 +250,7 @@ export function useLoadMore(
       return
     }
 
+    task.phase = 'measuring'
     const hasScrollBar = await haveScrollbar()
     if (disposed || requestGeneration !== generation)
       return
@@ -247,14 +268,15 @@ export function useLoadMore(
    */
   function reset() {
     generation++
+    completion = undefined
     cancelRenderWait()
     autoFillPaused.value = false
     page.value = 0
     hasMore.value = true
     exhausted.value = false
     state.value = {
-      pending: false,
-      running: false,
+      phase: 'idle',
+      schedule: 'idle',
       lastTriggered: 0,
       lastCompleted: 0,
       lastAppended: 0,
@@ -281,6 +303,7 @@ export function useLoadMore(
     onScopeDispose(() => {
       disposed = true
       generation++
+      completion = undefined
       clearTimer()
       cancelRenderWait()
     })

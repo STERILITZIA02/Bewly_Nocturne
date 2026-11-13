@@ -13,7 +13,7 @@ import {
   SEARCH_PAGE_URL,
   VIDEO_LIST_URL,
 } from '~/components/TopBar/constants/urls'
-import type { PrivilegeInfo, UnReadDm, UnReadMessage, UserInfo } from '~/components/TopBar/types'
+import type { PrivilegeInfo, TopBarLiveMomentPage, TopBarMomentAuthor, TopBarMomentItem, TopBarMomentPage, TopBarMomentSource, UnReadDm, UnReadMessage, UserInfo } from '~/components/TopBar/types'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import type {
   TopBarFavoritesChanged,
@@ -123,7 +123,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     return snapshot && snapshot.accountId === userInfo.mid ? snapshot.count ?? 0 : 0
   })
   // 添加稍后再看列表
-  const watchLaterList = reactive<VideoItem[]>([])
+  const watchLaterList = shallowReactive<VideoItem[]>([])
   const favoriteStateVersion = ref(0)
   const favoriteStateChange = shallowRef<TopBarFavoritesChanged>()
   const isLoadingWatchLater = ref<boolean>(false)
@@ -132,14 +132,14 @@ export const useTopBarStore = defineStore('topBar', () => {
   const watchLaterPageState = ref<'ready' | 'failed' | 'stalled' | 'complete'>('ready')
   const watchLaterPageKeys = new Map<number, number[]>()
   // 添加 Moments 相关状态
-  const moments = shallowReactive<any[]>([])
+  const moments = shallowReactive<TopBarMomentItem[]>([])
   const isLoadingMoments = ref<boolean>(false)
   const isLoadingMomentsCount = ref<boolean>(false)
   const noMoreMomentsContent = ref<boolean>(false)
   const livePage = ref<number>(1)
   const momentUpdateBaseline = ref<string>('')
   const momentOffset = ref<string>('')
-  const collaborativeVideoMap = new Map<string, { item: any, moment?: any }>()
+  const collaborativeVideoMap = new Map<string, { item: TopBarMomentSource, moment?: TopBarMomentItem }>()
   let momentsRequestGeneration = 0
   let momentsCountRequestGeneration = 0
   const momentEntrySnapshot = shallowRef<MomentUnreadSnapshot>()
@@ -997,10 +997,10 @@ export const useTopBarStore = defineStore('topBar', () => {
     const current = () => !controller.signal.aborted && generation === momentsRequestGeneration && isCurrentAccount(accountId)
     try {
       const result = await fetchNewerMoments(async (offset) => {
-        const response = await api.moment.getTopBarMoments({ type: 'video', offset }, { signal: controller.signal })
+        const response: TopBarMomentPage = await api.moment.getTopBarMoments({ type: 'video', offset }, { signal: controller.signal })
         if (!current() || response.code !== 0 || !Array.isArray(response.data?.items) || typeof response.data.has_more !== 'boolean')
           throw new Error('Invalid Moments page')
-        return { items: response.data.items as any[], offset: response.data.offset, hasMore: Boolean(response.data.has_more) }
+        return { items: response.data.items, offset: response.data.offset, hasMore: Boolean(response.data.has_more) }
       }, gap, item => item.id_str)
       if (!current())
         return
@@ -1040,8 +1040,8 @@ export const useTopBarStore = defineStore('topBar', () => {
       getTopBarLiveMoments()
   }
 
-  function acceptTopBarMoments(items: any[], selectedType: string, beforeId?: string) {
-    const accepted: any[] = []
+  function acceptTopBarMoments(items: TopBarMomentSource[], selectedType: string, beforeId?: string) {
+    const accepted: TopBarMomentItem[] = []
 
     // 添加新内容
     if (items?.length) {
@@ -1053,17 +1053,17 @@ export const useTopBarStore = defineStore('topBar', () => {
       if (selectedType === 'video') {
         if (settings.value.filterArticlesInMoments) {
           // 开启过滤专栏：只保留视频（type: 8）
-          filteredItems = items.filter((item: any) => item.type === 8)
+          filteredItems = items.filter(item => item.type === 8)
         }
         else {
           // 关闭过滤专栏：保留视频和专栏（type: 8 或 64）
-          filteredItems = items.filter((item: any) => item.type === 8 || item.type === 64)
+          filteredItems = items.filter(item => item.type === 8 || item.type === 64)
         }
       }
 
       const latestVideoTimes = filteredItems
-        .filter((item: any) => item.type === 8)
-        .flatMap((item: any) => {
+        .filter(item => item.type === 8)
+        .flatMap((item) => {
           const time = parseTopBarPublicationTime(item.pub_time)
           if (!time)
             return []
@@ -1071,10 +1071,9 @@ export const useTopBarStore = defineStore('topBar', () => {
           const authors = Array.isArray(item.authors) && item.authors.length > 0
             ? item.authors
             : [item.author]
-          return authors.map((author: any) => ({
-            mid: author?.mid,
-            time,
-          }))
+          return authors.flatMap(author => author?.mid === undefined
+            ? []
+            : [{ mid: author.mid, time }])
         })
       void recordUploaderLatestVideoTimes(latestVideoTimes, 'topbar-pop')
 
@@ -1084,7 +1083,7 @@ export const useTopBarStore = defineStore('topBar', () => {
         ? mergeCollaborativeVideos(filteredItems)
         : filteredItems
 
-      processedItems.forEach((item: any) => {
+      processedItems.forEach((item) => {
         const idStr = resolveStableMomentKey(item, 'moment')
         const momentItem = {
           id_str: idStr,
@@ -1092,7 +1091,7 @@ export const useTopBarStore = defineStore('topBar', () => {
           unread: item.bewlyUnread === true || entryUnreadIds.has(item.id_str),
           type: selectedType,
           title: item.title,
-          author: item.authors ? item.authors.map((a: any) => a.name).join(' / ') : item.author?.name,
+          author: item.authors ? item.authors.map(a => a.name).join(' / ') : item.author?.name,
           authorFace: item.author?.face,
           authorJumpUrl: item.author?.jump_url,
           pubTime: item.pub_time,
@@ -1119,7 +1118,7 @@ export const useTopBarStore = defineStore('topBar', () => {
       })
     }
     if (beforeId) {
-      const index = moments.findIndex(item => dynamicId(item.dynamicId) && BigInt(item.dynamicId) <= BigInt(beforeId))
+      const index = moments.findIndex(item => item.dynamicId && dynamicId(item.dynamicId) && BigInt(item.dynamicId) <= BigInt(beforeId))
       moments.splice(index < 0 ? moments.length : index, 0, ...accepted)
     }
     else {
@@ -1137,18 +1136,18 @@ export const useTopBarStore = defineStore('topBar', () => {
     momentReadController = controller
     isLoadingMoments.value = true
     try {
-      const res = await api.moment.getTopBarMoments({
+      const res: TopBarMomentPage = await api.moment.getTopBarMoments({
         type: selectedType,
         update_baseline: momentUpdateBaseline.value || undefined,
         offset: requestOffset || (!advanceRead && selectedType === 'video' ? MOMENTS_LATEST_OFFSET : ''),
       }, { signal: controller.signal })
       if (controller.signal.aborted || !isCurrentAccount(accountId) || requestGeneration !== momentsRequestGeneration)
         return
-      if (res.code !== 0 || !Array.isArray(res.data?.items) || typeof res.data.has_more !== 'boolean' || res.data.items.some((item: any) => !dynamicId(item.id_str)))
+      if (res.code !== 0 || !Array.isArray(res.data?.items) || typeof res.data.has_more !== 'boolean' || res.data.items.some(item => !dynamicId(item.id_str)))
         throw new Error('Invalid Moments page')
       const raw = res.data.items
-      const items = raw.filter((item: any) => !momentRawIds.has(item.id_str))
-      raw.forEach((item: any) => momentRawIds.add(item.id_str))
+      const items = raw.filter(item => !momentRawIds.has(item.id_str))
+      raw.forEach(item => momentRawIds.add(item.id_str))
       momentNewestRawId ||= raw[0]?.id_str ?? ''
       acceptTopBarMoments(items, selectedType)
       momentUpdateBaseline.value = res.data.update_baseline
@@ -1172,7 +1171,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     }
   }
 
-  function extractBvid(item: any): string | null {
+  function extractBvid(item: TopBarMomentSource): string | null {
     const jumpUrl = typeof item.jump_url === 'string' ? item.jump_url : ''
     const bvMatch = jumpUrl.match(/\/(BV\w+)/)
     if (bvMatch?.[1])
@@ -1183,7 +1182,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     return typeof directBvid === 'string' && directBvid ? directBvid : null
   }
 
-  function normalizeAuthor(author: any) {
+  function normalizeAuthor(author: TopBarMomentAuthor): TopBarMomentAuthor {
     return {
       name: author?.name,
       face: author?.face,
@@ -1191,7 +1190,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     }
   }
 
-  function collectAuthors(item: any): any[] {
+  function collectAuthors(item: TopBarMomentSource): TopBarMomentAuthor[] {
     if (Array.isArray(item.authors) && item.authors.length > 0)
       return item.authors.map(normalizeAuthor)
     if (item.author)
@@ -1199,7 +1198,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     return []
   }
 
-  function mergeAuthors(targetItem: any, incomingItem: any) {
+  function mergeAuthors(targetItem: TopBarMomentSource, incomingItem: TopBarMomentSource) {
     const incomingAuthors = collectAuthors(incomingItem)
     if (incomingAuthors.length === 0)
       return
@@ -1210,7 +1209,7 @@ export const useTopBarStore = defineStore('topBar', () => {
 
     incomingAuthors.forEach((author) => {
       const authorKey = author.jump_url || author.name
-      const exists = targetAuthors.some((a: any) => (a.jump_url || a.name) === authorKey)
+      const exists = targetAuthors.some(a => (a.jump_url || a.name) === authorKey)
       if (!exists)
         targetAuthors.push(author)
     })
@@ -1219,11 +1218,11 @@ export const useTopBarStore = defineStore('topBar', () => {
       targetItem.authors = targetAuthors
   }
 
-  function updateMomentCollaborative(moment: any, item: any) {
+  function updateMomentCollaborative(moment: TopBarMomentItem, item: TopBarMomentSource) {
     if (Array.isArray(item.authors) && item.authors.length > 1) {
       moment.isCollaborative = true
       moment.authors = item.authors
-      moment.author = item.authors.map((a: any) => a.name).join(' / ')
+      moment.author = item.authors.map(a => a.name).join(' / ')
     }
     const index = moments.findIndex(entry => entry.id_str === moment.id_str)
     if (index >= 0)
@@ -1231,10 +1230,10 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   // 合并联合投稿视频的辅助函数（跨页合并）
-  function mergeCollaborativeVideos(items: any[]) {
-    const newItems: any[] = []
+  function mergeCollaborativeVideos(items: TopBarMomentSource[]) {
+    const newItems: TopBarMomentSource[] = []
 
-    items.forEach((item: any) => {
+    items.forEach((item) => {
       const bvid = extractBvid(item)
       if (!bvid) {
         newItems.push(item)
@@ -1274,12 +1273,12 @@ export const useTopBarStore = defineStore('topBar', () => {
       page: livePage.value,
       pagesize: pageSize,
     })
-      .then((res: any) => {
+      .then((res: TopBarLiveMomentPage) => {
         if (res.code === 0 && isCurrentAccount(accountId) && requestGeneration === momentsRequestGeneration) {
           const list = Array.isArray(res.data?.list) ? res.data.list : []
 
           const existingMomentKeys = new Set(moments.map(moment => moment.id_str))
-          const liveMoments = list.flatMap((item: any) => {
+          const liveMoments = list.flatMap((item) => {
             const idStr = resolveStableMomentKey(item, 'live')
             if (existingMomentKeys.has(idStr))
               return []

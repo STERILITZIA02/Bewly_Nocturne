@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useDebounceFn, useResizeObserver } from '@vueuse/core'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useResizeObserver } from '@vueuse/core'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ALink from '~/components/ALink.vue'
@@ -80,18 +80,6 @@ useResizeObserver(containerRef, (entries) => {
   const shouldReset = width > lastObservedWidth
   lastObservedWidth = width
   void adjustVisibility(shouldReset)
-})
-
-const handleWindowResize = useDebounceFn(() => {
-  void adjustVisibility(true)
-}, 120)
-
-onMounted(() => {
-  window.addEventListener('resize', handleWindowResize)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', handleWindowResize)
 })
 
 async function adjustVisibility(reset = false) {
@@ -266,8 +254,8 @@ function arraysEqual<T>(a: T[], b: T[]): boolean {
     font-weight: var(--bew-control-label-weight);
     line-height: var(--bew-control-label-line-height);
     transition:
-      background-color var(--bew-duration-normal, 200ms) ease,
-      color var(--bew-duration-normal, 200ms) ease;
+      background-color var(--bew-duration-normal, 200ms) var(--bew-ease-standard),
+      color var(--bew-duration-normal, 200ms) var(--bew-ease-standard);
 
     &:hover {
       color: var(--bew-segment-item-hover-color);

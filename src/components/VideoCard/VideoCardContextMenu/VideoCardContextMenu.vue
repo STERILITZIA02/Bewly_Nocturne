@@ -590,7 +590,7 @@ const unfollowUser = () => writeRelation(2)
 
   &:hover,
   &:focus-visible {
-    background: var(--bew-fill-2);
+    background: var(--bew-hover-bg);
   }
 
   &:focus-visible {

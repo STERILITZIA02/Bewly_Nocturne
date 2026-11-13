@@ -5,7 +5,7 @@ import { useToast } from 'vue-toastification'
 import Button from '~/components/Button.vue'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { COMMENT_REPLY_BATCH_MAX, COMMENT_REPLY_CONTAINER_HEIGHT } from '~/constants/commentReading'
-import { DOCK_POSITIONS } from '~/constants/dock'
+import { DOCK_BADGE_MODES, DOCK_POSITIONS } from '~/constants/dock'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { originalSettings, settings } from '~/logic'
@@ -13,6 +13,7 @@ import type { Settings } from '~/logic/storage'
 import { videoCardContextMenuKeys } from '~/logic/storage'
 import { isAppearanceColorsInput } from '~/utils/appearance'
 import { LOCAL_LOUDNESS_RANGE } from '~/utils/localLoudnessProtocol'
+import { isPlainObject } from '~/utils/plainObject'
 import { isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
 import SettingsItem from '../components/SettingsItem.vue'
@@ -41,6 +42,7 @@ const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   momentsCardOpenMode: ['dialog', 'newTab', 'background'],
   dockCollapseMode: ['button', 'hidden', 'automatic'],
   dockPosition: DOCK_POSITIONS,
+  dockBadgeMode: DOCK_BADGE_MODES,
   pageMode: ['original', 'bewly', 'custom'],
   sidebarPosition: ['left', 'right'],
   theme: ['light', 'dark', 'auto', 'scheduled'],
@@ -63,13 +65,6 @@ const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   savedVideoAspectRatio: [null, '0:0', '4:3', '16:9'],
   defaultCustomPlayOrder: ['sequential', 'reverse', 'random'],
   randomPlayMode: ['manual', 'auto'],
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    return false
-  const prototype = Object.getPrototypeOf(value)
-  return prototype === Object.prototype || prototype === null
 }
 
 function hasExactProperties(value: Record<string, unknown>, properties: string[]): boolean {

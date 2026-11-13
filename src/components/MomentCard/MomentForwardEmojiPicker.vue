@@ -178,8 +178,8 @@ watch(() => [props.accountId, props.business], () => {
   height: var(--bew-control-height);
 }
 .moment-forward-emoji-picker__categories button[aria-selected="true"] {
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 .moment-forward-emoji-picker__categories img,
 .moment-forward-emoji-picker__grid img {
@@ -203,7 +203,7 @@ watch(() => [props.accountId, props.business], () => {
 }
 .moment-forward-emoji-picker__categories button:hover,
 .moment-forward-emoji-picker__grid button:hover {
-  background: var(--bew-fill-1);
+  background: var(--bew-hover-bg);
 }
 .moment-forward-emoji-picker button:focus-visible {
   outline: var(--bew-focus-ring, 1px solid CanvasText);

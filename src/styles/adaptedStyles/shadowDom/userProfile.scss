@@ -59,7 +59,7 @@
     outline-offset: var(--bew-space-0-5);
   }
   #action button:disabled {
-    opacity: 0.5;
+    opacity: var(--bew-disabled-opacity);
     cursor: not-allowed;
   }
   @media (prefers-reduced-motion: reduce) {

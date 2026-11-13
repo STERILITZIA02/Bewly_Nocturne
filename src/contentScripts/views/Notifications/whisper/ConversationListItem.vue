@@ -27,7 +27,7 @@ const assistantLabel = computed(() => props.session.assistantType
   ? t(`notifications.whisper.assistants.${props.session.assistantType}`)
   : '')
 
-const displayName = computed(() => props.session.name || t('notifications.whisper.unknown_user'))
+const displayName = computed(() => props.session.name || t('notifications.unknown_user'))
 const displaySummary = computed(() => props.session.summary || t('notifications.whisper.summary_unavailable'))
 const dateLocale = computed(() => normalizePrivateSessionLocale(locale.value))
 const profileUrl = computed(() => props.session.capabilities.canOpenProfile && /^[1-9]\d*$/.test(props.session.talkerId)
@@ -151,7 +151,7 @@ watch(() => props.session.avatar, () => {
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: var(--bew-surface-radius);
+  border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   transition:
     color var(--bew-duration-fast) var(--bew-ease-standard),
@@ -224,7 +224,7 @@ watch(() => props.session.avatar, () => {
 }
 
 .conversation-list-item:hover {
-  background: var(--bew-fill-1);
+  background: var(--bew-hover-bg);
 }
 
 .conversation-list-item--pinned {

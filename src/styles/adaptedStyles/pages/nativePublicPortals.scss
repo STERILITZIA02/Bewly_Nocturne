@@ -168,8 +168,8 @@ html.bewly-design[data-bewly-native-site="marketing-public"] {
     corner-shape: var(--bew-corner-shape);
 
     &.active {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
   }
 
@@ -510,8 +510,8 @@ html.bewly-design[data-bewly-native-site="brand-public"] {
   }
 
   .select-item-hover {
-    background-color: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface);
+    background-color: var(--bew-selected-bg);
+    color: var(--bew-text-1);
   }
 
   .title-line {
@@ -627,8 +627,8 @@ html.bewly-design[data-bewly-native-site="mcn-public"] #app {
   }
 
   .mcn-entry-page > .body .number-icon {
-    background: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
     corner-shape: var(--bew-corner-shape-round);
   }
 
@@ -892,7 +892,7 @@ html.bewly-design[data-bewly-native-site="jobs-public"] {
 
   .bup-pc-dir-cell:is(:hover, :focus-visible),
   .bup-pc-hl.active {
-    background: var(--bew-theme-surface);
+    background: var(--bew-selected-bg);
   }
 
   :is(.bup-pc-intro-p, .bup-pc-dir-txt .cn, .bup-pc-step-label, .bup-pc-faq-q-text) {
@@ -923,8 +923,8 @@ html.bewly-design[data-bewly-native-site="jobs-public"] {
 
   .bup-pc-hl-no,
   .bup-pc-tag {
-    color: var(--bew-on-theme-surface);
-    background: var(--bew-theme-surface);
+    color: var(--bew-text-1);
+    background: var(--bew-selected-bg);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -1237,8 +1237,8 @@ html.bewly-design[data-bewly-native-site="security-public"] {
     }
 
     .archive a {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
   }
 
@@ -1418,8 +1418,8 @@ html.bewly-design[data-bewly-native-site="investor-public"] {
     corner-shape: var(--bew-corner-shape);
 
     &.active {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
       border-color: var(--bew-focus-ring-color);
     }
   }
@@ -1659,8 +1659,8 @@ html.bewly-design[data-bewly-native-site="investor-public"] {
       corner-shape: var(--bew-corner-shape);
 
       &.active {
-        color: var(--bew-on-theme-surface);
-        background: var(--bew-theme-surface);
+        color: var(--bew-text-1);
+        background: var(--bew-selected-bg);
         border-color: var(--bew-focus-ring-color);
       }
     }

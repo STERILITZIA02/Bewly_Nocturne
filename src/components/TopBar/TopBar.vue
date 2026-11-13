@@ -386,7 +386,8 @@ onKeyStroke('Escape', (event: KeyboardEvent) => {
 @media (min-width: 901px) {
   .top-bar--player-start :deep(.top-bar-header) {
     padding-inline-end: calc(
-      100% - var(--bewly-widescreen-card-width, 100vw * 2 / 3) + var(--bewly-widescreen-card-inset, var(--bew-space-3))
+      100% - var(--bewly-widescreen-card-width, calc(100vw * 2 / 3)) +
+        var(--bewly-widescreen-card-inset, var(--bew-space-3))
     );
   }
 }

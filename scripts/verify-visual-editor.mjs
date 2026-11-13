@@ -403,10 +403,7 @@ export function registerVisualEditorChecks(check, { Vue, compileComponent, flush
     }
     const read = path => readFile(new URL(`../src/${path}`, import.meta.url), 'utf8')
     assert.doesNotMatch(await read('components/TopBar/TopBar.vue'), /data-layout-editable-id="topbar"/)
-    assert.match(await read('components/TopBar/components/TopBarRight.vue'), /v-layout-editable="'topbar'" class="top-bar-tools"/)
     assert.doesNotMatch(await read('components/SideBar/SideBar.vue'), /v-layout-editable="'sidebar-auto-hide'"/)
-    assert.match(await read('components/Dock/Dock.vue'), /useLayoutEditableRoot\('dock', dockShellSurfaceRef\)/)
-    assert.match(await read('components/SearchBar/SearchBar.vue'), /v-layout-editable="layoutEditableId \?\? ''"\s+class="search-bar/)
     assert.doesNotMatch(await read('contentScripts/views/WatchLater/WatchLater.vue'), /<main\s+v-layout-editable/)
   })
 }

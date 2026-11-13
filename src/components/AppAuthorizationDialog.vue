@@ -29,62 +29,65 @@ const { t } = useI18n()
 const toast = useToast()
 const dialogRef = ref<DialogExpose | null>(null)
 const loginQRCodeUrl = ref('')
-const authCode = ref('')
 const qrcodeMsg = ref('')
-let authorizationTimer: ReturnType<typeof setTimeout> | undefined
-let authorizationGeneration = 0
-let authorizationDeadline = 0
-let authorizationSucceeded = false
-let authorizationClosing = false
-let authorizationController: AbortController | undefined
-let authorizationAuthGeneration = 0
+interface AuthorizationAttempt {
+  phase: 'requesting' | 'waiting' | 'scanned' | 'failed' | 'succeeded'
+  controller: AbortController
+  authGeneration: number
+  deadline: number
+  authCode: string
+  timer?: ReturnType<typeof setTimeout>
+}
+const authorization = shallowRef<AuthorizationAttempt>()
+const lifetime = ref<'active' | 'closing' | 'closed' | 'disposed'>('active')
+const authorizationSucceeded = computed(() => authorization.value?.phase === 'succeeded')
+const authorizationClosing = computed(() => lifetime.value !== 'active')
+const isCurrentAuthorization = (attempt: AuthorizationAttempt) => authorization.value === attempt && lifetime.value === 'active' && !attempt.controller.signal.aborted
 
-function clearAuthorizationTimer() {
-  if (authorizationTimer != null)
-    clearTimeout(authorizationTimer)
-  authorizationTimer = undefined
+function setAuthorizationPhase(attempt: AuthorizationAttempt, phase: AuthorizationAttempt['phase']) {
+  attempt.phase = phase
+  triggerRef(authorization)
 }
 
 function invalidateAuthorization() {
-  authorizationGeneration++
-  authorizationController?.abort()
-  authorizationController = undefined
-  clearAuthorizationTimer()
+  const attempt = authorization.value
+  if (!attempt)
+    return
+  attempt.controller.abort()
+  clearTimeout(attempt.timer)
+  attempt.timer = undefined
 }
 
-function scheduleAuthorizationPoll(generation: number, expectedAuthCode: string) {
-  clearAuthorizationTimer()
-  if (
-    generation !== authorizationGeneration
-    || expectedAuthCode !== authCode.value
-    || !expectedAuthCode
-  ) {
+function scheduleAuthorizationPoll(attempt: AuthorizationAttempt) {
+  clearTimeout(attempt.timer)
+  if (!isCurrentAuthorization(attempt) || !attempt.authCode)
     return
-  }
 
-  if (Date.now() >= authorizationDeadline) {
+  if (Date.now() >= attempt.deadline) {
+    setAuthorizationPhase(attempt, 'failed')
     qrcodeMsg.value = t('common.load_failed')
     return
   }
 
-  authorizationTimer = setTimeout(async () => {
-    authorizationTimer = undefined
-    if (generation !== authorizationGeneration || expectedAuthCode !== authCode.value)
+  attempt.timer = setTimeout(async () => {
+    attempt.timer = undefined
+    if (!isCurrentAuthorization(attempt))
       return
 
     try {
-      const response = await pollAppLoginQRCode(expectedAuthCode, authorizationController?.signal)
-      if (generation !== authorizationGeneration || expectedAuthCode !== authCode.value)
+      const response = await pollAppLoginQRCode(attempt.authCode, attempt.controller.signal)
+      if (!isCurrentAuthorization(attempt))
         return
 
       qrcodeMsg.value = response?.message || ''
       if (response?.code === 0 && response.data) {
-        if (!saveAppAuthTokens(response.data, authorizationAuthGeneration)) {
+        if (!saveAppAuthTokens(response.data, attempt.authGeneration)) {
+          setAuthorizationPhase(attempt, 'failed')
           invalidateAuthorization()
           qrcodeMsg.value = t('common.load_failed')
           return
         }
-        authorizationSucceeded = true
+        setAuthorizationPhase(attempt, 'succeeded')
         invalidateAuthorization()
         toast.success(t('settings.app_authorization_success'))
         dialogRef.value?.close()
@@ -92,12 +95,18 @@ function scheduleAuthorizationPoll(generation: number, expectedAuthCode: string)
       }
 
       // 86039: waiting for scan; 86090: scanned and awaiting confirmation.
-      if (response?.code === 86039 || response?.code === 86090)
-        scheduleAuthorizationPoll(generation, expectedAuthCode)
+      if (response?.code === 86039 || response?.code === 86090) {
+        setAuthorizationPhase(attempt, response.code === 86039 ? 'waiting' : 'scanned')
+        scheduleAuthorizationPoll(attempt)
+      }
+      else {
+        setAuthorizationPhase(attempt, 'failed')
+      }
     }
     catch (error) {
-      if (generation !== authorizationGeneration)
+      if (!isCurrentAuthorization(attempt))
         return
+      setAuthorizationPhase(attempt, 'failed')
       qrcodeMsg.value = t('common.load_failed')
       console.error('Failed to poll APP recommendation authorization:', error)
     }
@@ -105,49 +114,55 @@ function scheduleAuthorizationPoll(generation: number, expectedAuthCode: string)
 }
 
 async function startAuthorization() {
-  if (authorizationClosing || authorizationSucceeded)
+  if (authorizationClosing.value || authorizationSucceeded.value)
     return
 
   invalidateAuthorization()
-  authorizationController = new AbortController()
-  const generation = authorizationGeneration
   beginAppAuthorization(appAuthTokens.value.accessToken)
-  authorizationAuthGeneration = appAuthTokens.value.generation
-  authorizationSucceeded = false
+  const attempt: AuthorizationAttempt = {
+    phase: 'requesting',
+    controller: new AbortController(),
+    authGeneration: appAuthTokens.value.generation,
+    deadline: Date.now() + AUTHORIZATION_DEADLINE,
+    authCode: '',
+  }
+  authorization.value = attempt
   loginQRCodeUrl.value = ''
-  authCode.value = ''
   qrcodeMsg.value = ''
-  authorizationDeadline = Date.now() + AUTHORIZATION_DEADLINE
 
   try {
-    const response = await getAppLoginQRCode(authorizationController.signal)
-    if (generation !== authorizationGeneration)
+    const response = await getAppLoginQRCode(attempt.controller.signal)
+    if (!isCurrentAuthorization(attempt))
       return
     if (response?.code !== 0 || !response.data?.url || !response.data?.auth_code) {
+      setAuthorizationPhase(attempt, 'failed')
       qrcodeMsg.value = response?.message || t('common.load_failed')
       return
     }
 
     loginQRCodeUrl.value = response.data.url
-    authCode.value = response.data.auth_code
-    scheduleAuthorizationPoll(generation, response.data.auth_code)
+    attempt.authCode = response.data.auth_code
+    setAuthorizationPhase(attempt, 'waiting')
+    scheduleAuthorizationPoll(attempt)
   }
   catch (error) {
-    if (generation !== authorizationGeneration)
+    if (!isCurrentAuthorization(attempt))
       return
+    setAuthorizationPhase(attempt, 'failed')
     qrcodeMsg.value = t('common.load_failed')
     console.error('Failed to start APP recommendation authorization:', error)
   }
 }
 
 function handleBeforeClose() {
-  authorizationClosing = true
+  lifetime.value = 'closing'
   invalidateAuthorization()
 }
 
 function handleClosed() {
+  lifetime.value = 'closed'
   invalidateAuthorization()
-  if (authorizationSucceeded && appAuthTokens.value.accessToken)
+  if (authorizationSucceeded.value && appAuthTokens.value.accessToken)
     completeAppAuthorization(appAuthTokens.value.accessToken)
   else
     dismissAppAuthorization()
@@ -159,8 +174,10 @@ watch(() => [
   appAuthTokens.value.accessTokenExpiresAt,
   appAuthTokens.value.refreshTokenExpiresAt,
 ], () => {
-  if (!authorizationClosing && hasValidAppAuthTokens()) {
-    authorizationSucceeded = true
+  if (!authorizationClosing.value && hasValidAppAuthTokens()) {
+    if (authorization.value)
+      setAuthorizationPhase(authorization.value, 'succeeded')
+    invalidateAuthorization()
     dialogRef.value?.close()
   }
 })
@@ -169,7 +186,10 @@ onMounted(() => {
   void startAuthorization()
 })
 
-onBeforeUnmount(invalidateAuthorization)
+onBeforeUnmount(() => {
+  lifetime.value = 'disposed'
+  invalidateAuthorization()
+})
 </script>
 
 <template>

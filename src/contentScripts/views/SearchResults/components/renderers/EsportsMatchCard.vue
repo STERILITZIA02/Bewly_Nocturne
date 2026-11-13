@@ -88,12 +88,11 @@ const awayScore = computed(() => {
   <a
     :href="matchUrl"
     target="_blank"
-    class="esports-match-card bew-surface-border"
+    class="esports-match-card"
     :style="cardStyle"
     rounded="$bew-surface-radius"
     block
     cursor="pointer"
-    duration-300
     @click.stop=""
   >
     <div class="card-content">
@@ -160,26 +159,22 @@ const awayScore = computed(() => {
 </template>
 
 <style scoped lang="scss">
-.esports-match-card {
-  background: var(--bew-elevated);
-  transition:
-    background-color 0.3s ease,
-    color 0.3s ease,
-    border-color 0.3s ease,
-    box-shadow 0.3s ease,
-    transform 0.3s ease;
-  aspect-ratio: 5 / 3; // 固定宽高比 5:3
-  overflow: hidden;
+@use "../../../../../styles/contentCard";
 
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  }
+// The search result card surface (mediaResults.scss), lifted like other surface cards.
+.esports-match-card {
+  box-sizing: border-box;
+  background: var(--bew-content-solid);
+  border: var(--bew-hairline) solid var(--bew-edge-color);
+  corner-shape: var(--bew-corner-shape);
+  aspect-ratio: 5 / 3;
+  overflow: hidden;
+  @include contentCard.surface($press: false);
 }
 
 .card-content {
   height: 100%;
-  padding: 0.75rem;
+  padding: var(--bew-space-3);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -189,8 +184,8 @@ const awayScore = computed(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--bew-space-2);
+  margin-bottom: var(--bew-space-2);
 }
 
 .season-title {
@@ -203,7 +198,7 @@ const awayScore = computed(() => {
 }
 
 .status-badge {
-  padding: 0.125rem 0.5rem;
+  padding: var(--bew-space-0-5) var(--bew-space-2);
   border-radius: var(--bew-radius-tiny);
   corner-shape: var(--bew-corner-shape);
   font-size: var(--bew-font-size-control);
@@ -218,13 +213,13 @@ const awayScore = computed(() => {
   }
 
   &.live {
-    background: #ff4d4f;
-    color: white;
+    background: var(--bew-error-color-10);
+    color: var(--bew-error-foreground);
   }
 
   &.upcoming {
-    background: var(--bew-theme-surface-hover);
-    color: var(--bew-on-theme-surface);
+    background: var(--bew-pressed-bg);
+    color: var(--bew-text-1);
   }
 }
 
@@ -232,8 +227,8 @@ const awayScore = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--bew-space-2);
+  margin-bottom: var(--bew-space-2);
   color: var(--bew-text-3);
 }
 
@@ -249,7 +244,7 @@ const awayScore = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: var(--bew-space-4);
   flex: 1;
 }
 
@@ -263,12 +258,13 @@ const awayScore = computed(() => {
 
 .team-logo {
   width: 100%;
-  max-width: 4rem;
+  max-width: calc(var(--bew-space-8) * 2);
   aspect-ratio: 1;
   border-radius: var(--bew-thumb-radius);
   corner-shape: var(--bew-corner-shape);
   object-fit: cover;
-  margin-bottom: 0.375rem;
+  // 6px: half-way between the 4px and 8px steps, under a logo.
+  margin-bottom: calc(var(--bew-space-1) + var(--bew-space-0-5));
 }
 
 .team-name {
@@ -281,9 +277,9 @@ const awayScore = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: var(--bew-space-2);
   flex-shrink: 0;
-  min-width: 5rem;
+  min-width: calc(var(--bew-space-10) * 2);
 }
 
 .score {
@@ -293,7 +289,7 @@ const awayScore = computed(() => {
   font-weight: var(--bew-font-weight-regular);
   color: var(--bew-text-1);
   line-height: var(--bew-line-height-data);
-  min-width: 1.5rem;
+  min-width: var(--bew-space-6);
   text-align: center;
 }
 
@@ -310,17 +306,10 @@ const awayScore = computed(() => {
   line-height: var(--bew-line-height-data);
 }
 
-.footer-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 0.75rem;
-}
-
 .game-stage {
   font-size: var(--bew-font-size-control);
   color: var(--bew-text-3);
-  padding: 0.25rem 0.5rem;
+  padding: var(--bew-space-1) var(--bew-space-2);
   background: var(--bew-fill-2);
   border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-capsule);

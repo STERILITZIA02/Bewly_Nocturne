@@ -1,5 +1,7 @@
 import type { InjectionKey } from 'vue'
 
+import { asObject } from '~/utils/plainObject'
+
 export type MomentDisclosure = 'none' | 'comments' | 'forward'
 export type MomentForwardState = 'idle' | 'editing' | 'submitting' | 'success' | 'error'
 
@@ -145,10 +147,6 @@ export interface MomentForwardSubmissionController {
   submit: () => Promise<MomentForwardSubmitResult>
   invalidate: (clearDraft?: boolean) => void
   dispose: () => void
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? value as Record<string, unknown> : {}
 }
 
 function normalizeHttpsUrl(value: unknown): string {
@@ -333,22 +331,22 @@ export function buildMomentForwardSubmitCheck(tokens: MomentForwardToken[]) {
 }
 
 export function getMomentForwardResponseCode(response: unknown): number {
-  return Number(asRecord(response).code)
+  return Number(asObject(response).code)
 }
 
 export function getMomentForwardResponseMessage(response: unknown): string {
-  const message = asRecord(response).message
+  const message = asObject(response).message
   return typeof message === 'string' ? message : ''
 }
 
 export function resolveForwardCountAfterSuccess(response: unknown, currentCount: number): number {
-  const data = asRecord(asRecord(response).data)
+  const data = asObject(asObject(response).data)
   const candidates = [
     data.forward_count,
-    asRecord(data.forward).count,
+    asObject(data.forward).count,
     data.count,
-    asRecord(data.dyn).forward_count,
-    asRecord(asRecord(asRecord(asRecord(data.dyn).modules).module_stat).forward).count,
+    asObject(data.dyn).forward_count,
+    asObject(asObject(asObject(asObject(data.dyn).modules).module_stat).forward).count,
   ]
   for (const candidate of candidates) {
     const count = Number(candidate)
@@ -359,14 +357,14 @@ export function resolveForwardCountAfterSuccess(response: unknown, currentCount:
 }
 
 export function normalizeMomentForwardEmotePackages(response: unknown): MomentForwardEmotePackage[] {
-  const packages = asRecord(asRecord(response).data).packages
+  const packages = asObject(asObject(response).data).packages
   if (!Array.isArray(packages))
     return []
   return packages.flatMap((packageValue) => {
-    const rawPackage = asRecord(packageValue)
+    const rawPackage = asObject(packageValue)
     const emotes = Array.isArray(rawPackage.emote)
       ? rawPackage.emote.flatMap((emoteValue) => {
-          const rawEmote = asRecord(emoteValue)
+          const rawEmote = asObject(emoteValue)
           const text = typeof rawEmote.text === 'string' ? rawEmote.text.trim() : ''
           const url = normalizeHttpsUrl(rawEmote.webp_url || rawEmote.gif_url || rawEmote.url)
           const type = Number(rawEmote.type ?? rawPackage.type)
@@ -387,12 +385,12 @@ export function normalizeMomentForwardEmotePackages(response: unknown): MomentFo
 }
 
 export function normalizeMomentTopics(response: unknown): SelectedMomentTopic[] {
-  const topicItems = asRecord(asRecord(response).data).topic_items
+  const topicItems = asObject(asObject(response).data).topic_items
   if (!Array.isArray(topicItems))
     return []
   const seenIds = new Set<string>()
   return topicItems.flatMap((value) => {
-    const raw = asRecord(value)
+    const raw = asObject(value)
     const id = raw.id as number | string
     const idKey = String(id ?? '').trim()
     const name = typeof raw.name === 'string' ? raw.name.trim() : ''

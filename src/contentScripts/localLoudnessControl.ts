@@ -1,3 +1,4 @@
+// @unocss-include
 import { watch } from 'vue'
 
 import { audioDelayMs, localLoudnessPanelOpen, localLoudnessState, notifyLocalLoudnessPanel, observeLocalLoudnessState, setAudioDelay, setLocalAudioConfiguration, setLocalLoudnessMediaToken } from '~/composables/useLocalLoudness'
@@ -83,7 +84,7 @@ export function setupLocalLoudnessControl() {
     button.tabIndex = 0
     button.setAttribute('aria-label', label())
     button.setAttribute('aria-haspopup', 'dialog')
-    button.innerHTML = '<div class="bpx-player-ctrl-btn-icon"><span class="bpx-common-svg-icon"><svg viewBox="0 0 88 88" aria-hidden="true"><path d="M24 36v16m10-27v38m10-47v56m10-47v38m10-27v16" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></span></div>'
+    button.innerHTML = '<div class="bpx-player-ctrl-btn-icon"><i class="i-tabler:adjustments bewly-player-glyph" aria-hidden="true"></i></div>'
     button.append(createPlayerControlTooltip(label()))
     button.addEventListener('click', () => open(button!))
     button.addEventListener('keydown', (event) => {

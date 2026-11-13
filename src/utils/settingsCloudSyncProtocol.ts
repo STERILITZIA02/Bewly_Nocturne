@@ -89,8 +89,6 @@ const LOCAL_ONLY_RUNTIME_FIELDS = new Set([
   'savedVideoAspectRatio',
   'savedVideoQuality',
   'lastAcknowledgedVersion',
-  // Removed volume-normalization field; keep it local while legacy storage is cleaned up.
-  'targetVolume',
 ])
 
 function hasOwn(record: Record<string, unknown>, key: string) {

@@ -217,8 +217,6 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
   const data = createStorageRef(createInitialValue(initialValue), shallow)
   const initializationState = ref<StorageInitializationState>('loading')
 
-  let ready = false
-  let initialReadSucceeded = false
   let dirtyBeforeReady = false
   let hasStoredValue = false
   let dataRevision = 0
@@ -226,7 +224,6 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
   let assigningFromStorage = false
   let storageChangeGeneration = 0
   let syncStarted = false
-  let degraded = false
   let hasDegradedEdits = false
   let disposed = false
   let recoveryTimer: ReturnType<typeof setTimeout> | undefined
@@ -271,7 +268,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
     data,
     () => {
       dataRevision++
-      if (!ready && !assigningFromStorage)
+      if (initializationState.value === 'loading' && !assigningFromStorage)
         dirtyBeforeReady = true
     },
     { deep, flush: 'sync' },
@@ -350,7 +347,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
       stopSyncWatch = watch(
         data,
         () => {
-          if (!ready || !isOwnerActive())
+          if (initializationState.value === 'loading' || !isOwnerActive())
             return
 
           const revision = dataRevision
@@ -360,7 +357,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
           }
           suppressedWriteRevision = null
 
-          if (degraded)
+          if (initializationState.value === 'degraded')
             hasDegradedEdits = true
 
           runWithFilter(eventFilter, persistValue, (error) => {
@@ -392,7 +389,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
       const generation = ++storageChangeGeneration
       // Subscribe before get(): an event received while the initial snapshot
       // or serializer is pending is newer than that snapshot, including deletion.
-      if (!ready) {
+      if (initializationState.value === 'loading') {
         initializationChange = change
         return
       }
@@ -411,8 +408,6 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
         if (!isOwnerActive() || generation !== storageChangeGeneration)
           return
         assignStorageValue(nextValue)
-        initialReadSucceeded = true
-        degraded = false
         initializationState.value = 'loaded'
         hasDegradedEdits = false
         clearRecoveryTimer()
@@ -432,7 +427,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
   }
 
   const scheduleRecoveryRead = () => {
-    if (!isOwnerActive() || !degraded || recoveryTimer != null)
+    if (!isOwnerActive() || initializationState.value !== 'degraded' || recoveryTimer != null)
       return
 
     recoveryTimer = runtime.setTimeout(async () => {
@@ -481,8 +476,6 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
               return
           }
         }
-        initialReadSucceeded = true
-        degraded = false
         initializationState.value = 'loaded'
       }
       catch (error) {
@@ -512,6 +505,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
 
   startStorageListener()
   void (async () => {
+    let initialReadSucceeded = false
     let result: Record<string, unknown> | undefined
     let lastReadError: unknown
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -545,7 +539,6 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
         initialReadSucceeded = true
       if (!initialReadSucceeded) {
         reportError(lastReadError)
-        degraded = true
       }
       else {
         while (isOwnerActive()) {
@@ -583,13 +576,11 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
         return
       reportError(error)
       initialReadSucceeded = false
-      degraded = true
     }
 
     if (!isOwnerActive())
       return
     initializationChange = undefined
-    ready = true
     initializationState.value = initialReadSucceeded ? 'loaded' : 'degraded'
     startSync()
     if (!isOwnerActive())

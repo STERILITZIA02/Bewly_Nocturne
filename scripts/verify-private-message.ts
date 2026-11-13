@@ -4391,6 +4391,34 @@ verify('a response msg_key missing from bounded history fails the protocol gate 
   assert.equal(sendRequests, 1)
 })
 
+verify('accepted text stays unconfirmed when history reconciliation rejects and cannot be resent', async () => {
+  const { useExperimentalPrivateMessageWrites } = await import('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites')
+  let sends = 0
+  const controller = useExperimentalPrivateMessageWrites(ref('100'), ref('200'), {
+    getCsrf: () => 'fixture-csrf',
+    createLocalId: () => 'accepted-before-read-failure',
+    sendMessage: async () => {
+      sends++
+      return { code: 0, data: {} }
+    },
+    refreshHistory: async () => { throw new Error('history unavailable') },
+  })
+  try {
+    controller.setDraft('200', 'accepted text')
+    assert.equal(await controller.sendDraft('200'), false)
+    const state = controller.getState('200')
+    assert.equal(state.items[0]?.sendState, 'accepted-but-unconfirmed')
+    assert.equal(state.lastTextSendOutcome, 'accepted-but-unconfirmed')
+    assert.equal(state.draft, '', 'an accepted message must not be restored as a fresh draft')
+    assert.equal(state.sending, false)
+    assert.equal(await controller.retrySend('200', 'accepted-before-read-failure'), false)
+    assert.equal(sends, 1)
+  }
+  finally {
+    controller.dispose()
+  }
+})
+
 verify('failed optimistic sends retain text and retry remains single-flight', async ({
   experimentalPrivateMessage: privateMessage,
   privateMessageWorkspace: writeWorkspace,
@@ -4598,13 +4626,13 @@ verify('image upload failure retries upload while send failure reuses the upload
   assert.equal(state.items.length, 0, 'selection must not create an optimistic message')
   assert.equal(uploadAttempts, 0, 'selection must not upload immediately')
   assert.equal(await controller.sendImage('200'), false)
-  assert.equal(state.imageDraft?.failureKind, 'upload-failed')
+  assert.equal(controller.getState('200').imageDraft?.failureKind, 'upload-failed')
   assert.equal(state.items[0]?.sendState, 'failed')
   assert.equal(uploadAttempts, 1)
   assert.equal(sendAttempts, 0)
 
   assert.equal(await controller.retryImage('200', 'image-local-1'), false)
-  assert.equal(state.imageDraft?.failureKind, 'send-failed')
+  assert.equal(controller.getState('200').imageDraft?.failureKind, 'send-failed')
   assert.equal(uploadAttempts, 2)
   assert.equal(sendAttempts, 1)
 
@@ -5021,6 +5049,41 @@ verify('block words distinguish valid emptiness, read failure, retry and unconfi
   controller.dispose()
   assert.equal(controller.state.blockWords.errorKind, null)
   assert.equal(controller.state.blockWords.loaded, false)
+})
+
+verify('accepted message settings require matching readback and retry verification without another write', async ({ useMessageServerSettings }) => {
+  let value = 3
+  let failRead = false
+  let writes = 0
+  const controller = useMessageServerSettings.useMessageServerSettings({
+    getAccountId: () => 1,
+    fetchSettings: async () => failRead ? { code: -1 } : { code: 0, data: { msg_notify: value } },
+    setSetting: async () => {
+      writes++
+      return { code: 0 }
+    },
+    fetchBlockWords: async () => ({ code: 0, data: { words: [], max_word_length: 12, max_words_size: 3 } }),
+    addBlockWord: async () => ({ code: 0 }),
+    deleteBlockWord: async () => ({ code: 0 }),
+  })
+  await controller.load()
+  assert.equal(await controller.updateSetting('msg_notify', 1), false, 'an unchanged readback is not confirmation')
+  assert.equal(controller.state.settings.msg_notify.serverValue, 3)
+  assert.equal(await controller.updateSetting('msg_notify', 1), false)
+  assert.equal(writes, 1, 'a retry only rereads the accepted intent')
+  value = 1
+  assert.equal(await controller.updateSetting('msg_notify', 1), true)
+  assert.equal(writes, 1)
+  failRead = true
+  assert.equal(await controller.updateSetting('msg_notify', 3), false)
+  assert.equal(await controller.updateSetting('msg_notify', 3), false)
+  assert.equal(writes, 2, 'failed reconciliation cannot reopen the send boundary')
+  failRead = false
+  value = 3
+  await controller.refresh()
+  assert.equal(controller.state.settings.msg_notify.serverValue, 3)
+  assert.equal(controller.state.settings.msg_notify.errorKind, null)
+  controller.dispose()
 })
 
 verify('private recipient search normalizes, bounds, parses, and reuses authoritative sessions', ({ privateRecipientSearch, privateSession }) => {

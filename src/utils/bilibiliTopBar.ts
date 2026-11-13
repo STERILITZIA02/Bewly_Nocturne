@@ -1,3 +1,4 @@
+import { BILIBILI_LOGIN_URL } from '~/utils/bilibiliLogin'
 import { SVG_ICONS } from '~/utils/svgIcons'
 
 let cachedOriginalTopBar: HTMLElement | null = null
@@ -575,13 +576,12 @@ function setupLoginButtonClickHandlers(doc: Document) {
     return existingCleanup
   existingCleanup?.()
 
-  const LOGIN_URL = 'https://passport.bilibili.com/login'
   const boundButtons = new Map<HTMLElement, string>()
 
   function handleLoginButtonClick(event: MouseEvent) {
     event.preventDefault()
     event.stopPropagation()
-    window.location.href = LOGIN_URL
+    window.location.href = BILIBILI_LOGIN_URL
   }
 
   // Function to handle login button binding

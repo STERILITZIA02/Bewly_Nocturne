@@ -20,7 +20,7 @@ const displayedActors = computed(() => props.item.actors.length > 0
   ? props.item.actors.slice(0, 3)
   : [fallbackActor])
 const remainingActorCount = computed(() => Math.max(props.item.actorCount - displayedActors.value.length, 0))
-const actorName = computed(() => primaryActor.value.name || t('notifications.native.unknown_user'))
+const actorName = computed(() => primaryActor.value.name || t('notifications.unknown_user'))
 const actorUrl = computed(() => getActorUrl(primaryActor.value))
 const sourceUrl = computed(() => props.item.sourceUrl || props.item.originalUrl)
 const sourceTitle = computed(() => props.item.sourceTitle || t('notifications.native.original_content'))
@@ -68,7 +68,7 @@ function markAvatarFailed(index: number) {
         :href="getActorUrl(actor)"
         type="content"
         class="native-notification-item__avatar"
-        :aria-label="actor.name || t('notifications.native.unknown_user')"
+        :aria-label="actor.name || t('notifications.unknown_user')"
       >
         <img
           v-if="actor.avatar && !failedAvatarIndexes.has(index)"

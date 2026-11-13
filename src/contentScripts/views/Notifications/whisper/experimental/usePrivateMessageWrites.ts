@@ -20,7 +20,7 @@ import {
   reconcileOptimisticPrivateMessages,
 } from './privateMessageTransactions'
 import { createTextSendDiagnostic, extractSentMessageKey, extractUploadedImage } from './privateMessageWriteResponse'
-import type { PrivateConversationWriteState, PrivateImageDraftState, PrivateImageFailureKind, PrivateMessageWritesController, PrivateMessageWritesDependencies, PrivateTextSendDiagnostic } from './privateMessageWriteTypes'
+import type { PrivateConversationWriteState, PrivateImageDeliveryState, PrivateImageFailureKind, PrivateMessageWritesController, PrivateMessageWritesDependencies, PrivateTextSendDiagnostic } from './privateMessageWriteTypes'
 
 export const PRIVATE_TEXT_SEND_HISTORY_RETRY_DELAYS_MS = [250, 750, 1500] as const
 
@@ -32,7 +32,7 @@ interface PrivateImageTask {
   talkerId: string
   uploaded?: UploadedPrivateImage
   uploadRequestId?: string
-  failureKind: PrivateImageFailureKind | null
+  delivery: 'unsent' | 'accepted'
 }
 
 function createConversationState(talkerId: string): PrivateConversationWriteState {
@@ -41,7 +41,8 @@ function createConversationState(talkerId: string): PrivateConversationWriteStat
     items: [],
     generation: 0,
     draft: '',
-    sending: false,
+    operation: 'idle' as PrivateConversationWriteState['operation'],
+    get sending() { return this.operation !== 'idle' },
     imageDraft: null,
     lastTextSendOutcome: null,
     lastTextSendDiagnostic: null,
@@ -178,17 +179,13 @@ export function useExperimentalPrivateMessageWrites(
   function updateImageState(
     state: PrivateConversationWriteState,
     task: PrivateImageTask,
-    status: PrivateImageDraftState['status'],
-    failureKind: PrivateImageFailureKind | null = null,
+    delivery: PrivateImageDeliveryState,
   ) {
     const message = state.items.find(item => item.localId === task.localId)
-    if (message && status !== 'ready')
-      message.sendState = status
-    if (state.imageDraft?.localId === task.localId) {
-      state.imageDraft.status = status
-      state.imageDraft.failureKind = failureKind
-    }
-    task.failureKind = failureKind
+    if (message && delivery.status !== 'ready')
+      message.sendState = delivery.status
+    if (state.imageDraft?.localId === task.localId)
+      state.imageDraft = { ...state.imageDraft, ...delivery }
   }
 
   function releaseImageTask(task: PrivateImageTask, removeOptimistic: boolean) {
@@ -215,7 +212,7 @@ export function useExperimentalPrivateMessageWrites(
     imageRequests.delete(talkerId)
     const state = states.get(talkerId)
     if (state && !sendRequests.has(talkerId))
-      state.sending = false
+      state.operation = 'idle'
   }
 
   function releaseImages(talkerId?: string) {
@@ -280,7 +277,8 @@ export function useExperimentalPrivateMessageWrites(
     optimistic.serverMsgKey = undefined
     state.lastTextSendOutcome = null
     state.lastTextSendDiagnostic = null
-    state.sending = true
+    state.operation = 'text'
+    let delivery: 'sending' | 'accepted' | 'confirmed' = 'sending'
     let failureDiagnostic: PrivateTextSendDiagnostic | null = null
 
     const request = (async () => {
@@ -294,6 +292,7 @@ export function useExperimentalPrivateMessageWrites(
         failureDiagnostic = createTextSendDiagnostic(response)
         throw new Error('private message send failed')
       }
+      delivery = 'accepted'
       if (!isCurrentAccountState(mid, requestAccountGeneration, state))
         return false
 
@@ -322,13 +321,22 @@ export function useExperimentalPrivateMessageWrites(
         return false
       }
 
+      delivery = 'confirmed'
       state.lastTextSendOutcome = 'confirmed'
       dependencies.markSessionSent?.(talkerId, text, currentOptimistic.timestamp)
       await dependencies.refreshSessions?.().catch(() => {})
       return true
     })().catch(() => {
+      if (delivery === 'confirmed')
+        return true
       if (isCurrentAccountState(mid, requestAccountGeneration, state)) {
         const currentOptimistic = state.items.find(item => item.localId === localId)
+        if (delivery === 'accepted') {
+          if (currentOptimistic)
+            currentOptimistic.sendState = 'accepted-but-unconfirmed'
+          state.lastTextSendOutcome = currentOptimistic?.serverMsgKey ? 'protocol-mismatch' : 'accepted-but-unconfirmed'
+          return false
+        }
         if (currentOptimistic)
           currentOptimistic.sendState = 'failed'
         if (!state.draft)
@@ -339,7 +347,7 @@ export function useExperimentalPrivateMessageWrites(
       return false
     }).finally(() => {
       if (isCurrentAccountState(mid, requestAccountGeneration, state))
-        state.sending = false
+        state.operation = 'idle'
       if (sendRequests.get(talkerId) === request) {
         sendRequests.delete(talkerId)
         evictCachedConversations()
@@ -454,14 +462,14 @@ export function useExperimentalPrivateMessageWrites(
       && isCurrentRequest(mid, requestAccountGeneration, state, conversationGeneration)
       && imageTasks.get(localId) === task
     )
-    state.sending = true
+    state.operation = 'image'
 
     const request = (async () => {
-      let failedKind: PrivateImageFailureKind = task.failureKind ?? 'upload-failed'
+      let failedKind: PrivateImageFailureKind = task.delivery === 'accepted' ? 'reconcile-failed' : 'upload-failed'
       try {
-        if (task.failureKind !== 'reconcile-failed') {
+        if (task.delivery === 'unsent') {
           if (!task.bytes) {
-            updateImageState(state, task, 'preparing')
+            updateImageState(state, task, { status: 'preparing', failureKind: null })
             task.bytes = await readFileBytes(task.file)
             if (!isCurrent())
               return false
@@ -469,7 +477,7 @@ export function useExperimentalPrivateMessageWrites(
 
           if (!task.uploaded) {
             failedKind = 'upload-failed'
-            updateImageState(state, task, 'uploading')
+            updateImageState(state, task, { status: 'uploading', failureKind: null })
             const requestId = createUploadRequestId()
             task.uploadRequestId = requestId
             const uploadResponse = await uploadImage({
@@ -493,7 +501,7 @@ export function useExperimentalPrivateMessageWrites(
           }
 
           failedKind = 'send-failed'
-          updateImageState(state, task, 'sending')
+          updateImageState(state, task, { status: 'sending', failureKind: null })
           const sendResponse = await sendImageMessage({
             csrf,
             senderId: mid,
@@ -502,6 +510,7 @@ export function useExperimentalPrivateMessageWrites(
           })
           if (asResponse(sendResponse)?.code !== 0)
             throw new Error('send failed')
+          task.delivery = 'accepted'
           if (!isCurrent())
             return false
 
@@ -512,7 +521,7 @@ export function useExperimentalPrivateMessageWrites(
         }
 
         failedKind = 'reconcile-failed'
-        updateImageState(state, task, 'reconciling')
+        updateImageState(state, task, { status: 'reconciling', failureKind: null })
         const confirmed = await pullLatestAfterSend(talkerId, localId, mid, requestAccountGeneration, state)
         if (!isCurrent())
           return false
@@ -528,13 +537,13 @@ export function useExperimentalPrivateMessageWrites(
       }
       catch {
         if (isCurrent())
-          updateImageState(state, task, 'failed', failedKind)
+          updateImageState(state, task, { status: 'failed', failureKind: failedKind })
         return false
       }
     })().finally(() => {
       if (imageRequests.get(talkerId) === request) {
         if (isCurrentAccountState(mid, requestAccountGeneration, state))
-          state.sending = false
+          state.operation = 'idle'
         imageRequests.delete(talkerId)
         evictCachedConversations()
       }
@@ -567,7 +576,7 @@ export function useExperimentalPrivateMessageWrites(
       const localId = createLocalId()
       objectUrl = createObjectUrl(file)
       imageTasks.set(localId, {
-        failureKind: null,
+        delivery: 'unsent',
         file,
         localId,
         objectUrl,
@@ -634,7 +643,6 @@ export function useExperimentalPrivateMessageWrites(
     if (
       !task
       || task.talkerId !== talkerId
-      || !task.failureKind
       || state?.imageDraft?.localId !== localId
       || state.imageDraft.status !== 'failed'
     ) {
@@ -666,7 +674,7 @@ export function useExperimentalPrivateMessageWrites(
       state.generation++
       state.items = []
       state.draft = ''
-      state.sending = false
+      state.operation = 'idle'
     }
     states.clear()
     sendRequests.clear()

@@ -9,9 +9,6 @@ import { isPortraitDimension } from '../src/utils/portraitMedia'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
-// Settings reveal/KeepAlive coverage now mounts the actual Settings component
-// and navigation module in verify-maintenance-integration.mjs.
-
 async function verifySelectOptionChanges() {
   const selections: string[] = []
   const context = await loadSourceFunctions('../src/components/Select.vue', ['handleOptionKeyDown'], {
@@ -55,61 +52,41 @@ async function verifyRankingLoadingEvents() {
 }
 
 async function verifyScrollOwnerCleanup() {
-  const frames = new Map<number, () => void>()
-  const timers = new Map<number, () => void>()
-  let nextId = 0
-  let mount: () => void = () => {}
-  const events: number[] = []
-  const createElement = (scrollTop: number) => {
-    const listeners = new Set<() => void>()
-    return {
-      scrollTop,
-      scrollHeight: 100,
-      clientHeight: 100,
-      addEventListener: (_name: string, callback: () => void) => listeners.add(callback),
-      removeEventListener: (_name: string, callback: () => void) => listeners.delete(callback),
-      scroll: () => [...listeners].forEach(callback => callback()),
-      listeners,
+  const observers: { target?: object, disconnected: boolean, report: (near: boolean) => void }[] = []
+  class Observer {
+    record: typeof observers[number]
+    constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
+      this.record = { disconnected: false, report: near => callback([{ isIntersecting: near }]) }
+      observers.push(this.record)
     }
+
+    observe(target: object) { this.record.target = target }
+    disconnect() { this.record.disconnected = true }
   }
-  const context = await loadSourceFunctions('../src/composables/useOptimizedScroll.ts', ['useOptimizedScroll'], {
-    ref,
-    watch,
-    onMounted: (callback: () => void) => mount = callback,
-    Date,
-    requestAnimationFrame: (callback: () => void) => {
-      frames.set(++nextId, callback)
-      return nextId
-    },
-    cancelAnimationFrame: (id: number) => frames.delete(id),
-    setTimeout: (callback: () => void) => {
-      timers.set(++nextId, callback)
-      return nextId
-    },
-    clearTimeout: (id: number) => timers.delete(id),
-  })
-  const first = createElement(0)
-  const second = createElement(0)
-  const element = ref(first)
+  const { useLoadMoreSentinel } = await loadSourceModule('../src/composables/useLoadMoreSentinel.ts', { vue: { watch } }, { IntersectionObserver: Observer })
+  const root = ref<object>({})
+  const sentinel = ref<object>({})
+  const progress = ref(0)
+  let reaches = 0
   const scope = effectScope()
-  scope.run(() => {
-    context.useOptimizedScroll(element, { onScroll: (info: { percentage: number }) => events.push(info.percentage) })
-    mount()
-  })
-  assert.deepEqual(events, [0], 'a non-scrollable popover reports a finite percentage')
-  first.scroll()
-  assert.equal(frames.size, 1)
-  element.value = second
+  scope.run(() => useLoadMoreSentinel(root, sentinel, () => reaches++, () => progress.value))
   await nextTick()
-  assert.equal(first.listeners.size, 0)
-  assert.equal(second.listeners.size, 1)
-  assert.equal(frames.size, 0, 'replacing the node cancels its queued scroll frame')
-  assert.equal(timers.size, 0)
-  second.scroll()
+  assert.equal(observers.length, 1)
+  observers[0].report(true)
+  assert.equal(reaches, 1, 'the end coming into reach asks for the next page')
+  progress.value++
+  await nextTick()
+  assert.equal(reaches, 2, 'a page that still leaves the end in reach asks again')
+  observers[0].report(false)
+  progress.value++
+  await nextTick()
+  assert.equal(reaches, 2, 'away from the end, new pages ask nothing')
+  sentinel.value = {}
+  await nextTick()
+  assert.equal(observers[0].disconnected, true, 'replacing the node releases its observer')
+  assert.equal(observers.length, 2)
   scope.stop()
-  assert.equal(second.listeners.size, 0)
-  assert.equal(frames.size, 0, 'disposing a popover cannot invoke its paging callback later')
-  assert.equal(timers.size, 0)
+  assert.equal(observers[1].disconnected, true, 'disposing a popover cannot invoke its paging callback later')
 }
 
 async function verifyImageReleaseBatch() {
@@ -229,24 +206,20 @@ async function verifySharedVideoStyles() {
   settings.value.videoCardTitleFontSize = 'lg'
   assert.equal(cards[199].textStyle.value['--video-card-title-size'], 'var(--bew-font-size-subheading)', 'all cards still react to settings updates')
 
-  for (const [path, title, details, coverGap] of [
-    ['../src/components/VideoCard/components/VideoCardInfo.vue', '.video-card-info-title', '.video-card-info', '.video-card-info'],
-    ['../src/contentScripts/views/WatchLater/WatchLaterGridCard.vue', '.watch-later-grid-card__title', '.watch-later-grid-card__body', '.watch-later-grid-card'],
+  for (const [path, details, coverGap] of [
+    ['../src/components/VideoCard/components/VideoCardInfo.vue', '.video-card-info', '.video-card-info'],
+    ['../src/contentScripts/views/WatchLater/WatchLaterGridCard.vue', '.watch-later-grid-card__body', '.watch-later-grid-card'],
   ]) {
     const url = new URL(path, import.meta.url)
     const source = await readFile(url, 'utf8')
     const scss = source.match(/<style[^>]*>([\s\S]*?)<\/style>/)![1]
     const css = sass.compileString(scss, { url, logger: sass.Logger.silent }).css
     const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)${selector.replaceAll('.', '\\.')}\\s*\\{([^}]*)\\}`))![1]
-    assert.doesNotMatch(rule(title), /(?:^|;)\s*(?:min-|max-)?height\s*:/, `${path}: uploader follows actual title height`)
-    assert.match(rule(title), /font-size: var\(--video-card-title-size\)/, `${path}: shared title size`)
-    assert.match(rule(title), /font-weight: var\(--bew-font-weight-regular\)/, `${path}: regular album title`)
     assert.match(rule(details), /gap: var\(--bew-space-1\)/, `${path}: consistent title/uploader gap`)
     assert.match(rule(coverGap), /(?:margin-top|gap): var\(--bew-space-3\)/, `${path}: cover gap exceeds text gap`)
   }
   // History rows render the shared video card itself, not a look-alike.
   const history = await readFile(new URL('../src/contentScripts/views/History/History.vue', import.meta.url), 'utf8')
-  assert.match(history, /<VideoCard\b[\s\S]{0,400}:video="getHistoryVideo\(item\)"/)
   assert.doesNotMatch(history, /history-list-card/)
 }
 

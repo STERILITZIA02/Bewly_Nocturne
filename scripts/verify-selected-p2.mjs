@@ -10,6 +10,7 @@ import { compileScript, parse } from 'vue/compiler-sfc'
 
 import { installMediaQueryFixture } from './browserMediaFixture.mjs'
 import { historySearchResponse } from './fixtures/historyResponses'
+import { installObserverFixture } from './observerFixture.mjs'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { dataFormatterFixture, globalComponentFixture, loadSourceModule } from './sourceModuleHarness'
 import { registerAccountTransactionChecks } from './verify-account-transactions.mjs'
@@ -103,6 +104,7 @@ dom.window.HTMLElement.prototype.getClientRects = function () {
 dom.window.HTMLElement.prototype.scrollIntoView = function () {}
 Object.defineProperty(document, 'scrollingElement', { configurable: true, get: () => document.documentElement })
 const restoreMediaQueries = installMediaQueryFixture(window)
+installObserverFixture(globalThis, dom.window)
 
 const Vue = await import('vue')
 const VueUse = await import('@vueuse/core')
@@ -476,9 +478,15 @@ check('P2-07 filtered empty pages pause automation without marking server exhaus
   assert.equal(controller.page.value, 0)
   assert.equal(controller.needsManualLoadMore.value, false)
   const renderWait = controller.handleLoadMoreCompletion(async () => false)
+  let renderCompletions = 0
+  void renderWait.then(() => renderCompletions++)
+  const sameRenderWait = controller.handleLoadMoreCompletion(async () => false)
+  void sameRenderWait.then(() => renderCompletions++)
   await Vue.nextTick()
   scope.stop()
-  await renderWait
+  await flush()
+  assert.equal(renderCompletions, 2, 'all callers awaiting the retired render must settle')
+  await Promise.all([renderWait, sameRenderWait])
   controller.requestLoadMore()
   assert.equal(requests.length, 3)
 })
@@ -724,7 +732,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     LibraryFilterMenu: { props: ['label', 'groups', 'disabled'], emits: ['select'], setup: (props, { emit }) => () => Vue.h('div', { class: 'library-filter-menu-stub' }, props.groups.flatMap(group => group.options.map(option => Vue.h('button', {
       'type': 'button',
       'data-filter': `${group.key}:${option.value}`,
-      'aria-checked': String(group.value === option.value),
+      'aria-checked': String(group.toggle ? Boolean(option.checked) : group.value === option.value),
       'onClick': () => emit('select', group.key, option.value),
     }, option.label)))) },
     LibraryDateRange: { props: ['open', 'start', 'end', 'invalid', 'disabled', 'title'], emits: ['update'], render: () => null },
@@ -768,6 +776,8 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     if (text.includes(`'${path}'`) && !modules[path]) {
       modules[path] = { default: await compileComponent('../src/contentScripts/views/Moments/MomentsSidebar.vue', {
         '~/logic': modules['~/logic'] ?? { settings: Vue.ref({}) },
+        '~/composables/useAppProvider': { useBewlyApp: () => ({ openSettingsAt() {} }) },
+        '~/constants/momentFilters': await import('../src/constants/momentFilters'),
         '~/logic/layoutEdit': { vLayoutEditable: {} },
         '~/utils/dataFormatter': { numFormatter: String },
         'vue-i18n': modules['vue-i18n'] ?? { useI18n: () => ({ t: key => key }) },
@@ -839,6 +849,11 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   for (const [name, path] of [
     ['~/composables/usePageSearchIntent', '../src/composables/usePageSearchIntent'],
     ['~/utils/appearance', '../src/utils/appearance'],
+    ['~/utils/bilibiliLogin', '../src/utils/bilibiliLogin'],
+    ['~/utils/festivalPage', '../src/utils/festivalPage'],
+    ['~/utils/lvIcons', '../src/utils/lvIcons'],
+    ['~/utils/plainObject', '../src/utils/plainObject'],
+    ['~/utils/themeColor', '../src/utils/themeColor'],
     ['~/composables/useIframeImageViewerBridge', '../src/composables/useIframeImageViewerBridge'],
     ['./usePrivateMessages', '../src/contentScripts/views/Notifications/whisper/usePrivateMessages'],
     ['./usePrivateSessionActions', '../src/contentScripts/views/Notifications/whisper/usePrivateSessionActions'],
@@ -888,6 +903,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     ShadowRoot,
     Node,
     ResizeObserver: globalThis.ResizeObserver,
+    IntersectionObserver: globalThis.IntersectionObserver,
     getComputedStyle,
     setTimeout,
     clearTimeout,

@@ -1,4 +1,5 @@
 import { isAudioCdnHost } from '~/constants/audioCdn'
+import type { NativeAudioSettings } from '~/utils/nativeLoudness'
 
 import { getBilibiliLogicalPathname } from './bilibiliLocale'
 import type { NativePlaybackUnit } from './videoMetadataBridge'
@@ -6,7 +7,7 @@ import { isPgcPlaybackPage, matchesPlaybackUnit } from './videoMetadataBridge'
 
 export const LISTEN_GATE = 'bewly:listen:gate'
 export const LISTEN_RELEASE = 'bewly:listen:release'
-export { LISTEN_ATTRIBUTE } from '~/constants/globalEvents'
+export { LISTEN_ATTRIBUTE, LISTEN_LEAVING_ATTRIBUTE, LISTEN_TONED_ATTRIBUTE } from '~/constants/globalEvents'
 export const LISTEN_SAVE = 'bewly:listen:save'
 export const LISTEN_RECOVER = 'bewly:listen:recover'
 
@@ -19,6 +20,8 @@ export interface ListenSession {
   rate: number
   href: string
   gate: number
+  /** Preserve a paused external owner instead of blocking its media requests. */
+  retainNative?: boolean
 }
 
 export function matchesListenUnit(href: string, unit: NativePlaybackUnit) {
@@ -39,6 +42,7 @@ export function isListenSession(value: unknown, href: string): value is ListenSe
     && Number.isFinite(state.time) && state.time >= 0 && Number.isFinite(state.rate) && state.rate > 0
     && Number.isFinite(state.volume) && state.volume >= 0 && state.volume <= 1
     && Number.isSafeInteger(state.gate) && state.gate > 0
+    && (state.retainNative === undefined || typeof state.retainNative === 'boolean')
 }
 
 export function returnVideoUrl({ unit, time, href }: ListenSession) {
@@ -72,6 +76,36 @@ interface AudioTrack {
 interface PlayInfo {
   dash?: { audio?: AudioTrack[] }
   is_drm?: boolean | number
+  volume?: {
+    measured_i?: number | string
+    multi_scene_args?: { normal_target_i?: number | string, high_dynamic_target_i?: number | string, undersized_target_i?: number | string }
+  }
+}
+
+/**
+ * The stream's measured loudness and the targets Bilibili's player normalizes
+ * it to (its parseLoudnessParams): none when unmeasured, or quieter than the
+ * floor the player leaves alone.
+ */
+export interface ListenLoudness { measured: number, normal: number, dynamic: number }
+
+/** The player's 音量均衡 option: off, standard or dynamic. */
+export type NativeLoudnessOption = 0 | 1 | 2
+
+export function getListenLoudness(response: { data?: PlayInfo, result?: PlayInfo }): ListenLoudness | undefined {
+  const volume = (response.data ?? response.result)?.volume
+  const args = volume?.multi_scene_args
+  if (!volume?.measured_i || !args)
+    return
+  const loudness = { measured: Number(volume.measured_i), normal: Number(args.normal_target_i), dynamic: Number(args.high_dynamic_target_i) }
+  if (Object.values(loudness).every(Number.isFinite) && loudness.measured >= Number(args.undersized_target_i))
+    return loudness
+}
+
+/** The gain the player puts on the picture for this stream, in dB. */
+export function listenGainDb(loudness: ListenLoudness | undefined, settings: NativeAudioSettings) {
+  // Native sound enhancement suspends normalization while its manual gain is set.
+  return settings.gain || (loudness && settings.loudness ? (settings.loudness === 2 ? loudness.dynamic : loudness.normal) - loudness.measured : 0)
 }
 
 /** Only separate audio representations are eligible, including on CDN failover. */

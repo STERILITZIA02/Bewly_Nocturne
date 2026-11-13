@@ -247,17 +247,17 @@ async function importTheme(event: Event) {
       <SettingsItem setting-id="settings.visual_style.preset" :title="$t('settings.visual_style.preset')" :desc="$t(separateModes ? 'settings.visual_style.preset_single' : 'settings.visual_style.preset_pair')" right-width="auto">
         <div class="appearance-settings__actions">
           <Tooltip :content="$t('settings.visual_style.import')">
-            <IconButton :label="$t('settings.visual_style.import')" :disabled="importing" class="bew-icon-button--control" @click="importFile?.click()">
+            <IconButton :label="$t('settings.visual_style.import')" :disabled="importing" variant="filled" size="control" @click="importFile?.click()">
               <i i-tabler:upload />
             </IconButton>
           </Tooltip>
           <Tooltip :content="$t('settings.visual_style.export')">
-            <IconButton :label="$t('settings.visual_style.export')" class="bew-icon-button--control" @click="exportTheme">
+            <IconButton :label="$t('settings.visual_style.export')" variant="filled" size="control" @click="exportTheme">
               <i i-tabler:download />
             </IconButton>
           </Tooltip>
           <Tooltip :content="$t('settings.visual_style.copy')">
-            <IconButton :label="$t('settings.visual_style.copy')" class="bew-icon-button--control" @click="copyTheme">
+            <IconButton :label="$t('settings.visual_style.copy')" variant="filled" size="control" @click="copyTheme">
               <i i-tabler:copy />
             </IconButton>
           </Tooltip>

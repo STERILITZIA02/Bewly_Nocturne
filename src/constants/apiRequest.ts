@@ -1,5 +1,5 @@
 export const API_REQUEST_PORT = 'bewly-api-read'
-export const CANCELLABLE_API_FUNCTIONS = ['anonymousSearch', 'getDefaultSearchRecommendation', 'getWatchLaterListByPage', 'getWatchLaterLibrary'] as const
+export const CANCELLABLE_API_FUNCTIONS = ['anonymousSearch', 'getDefaultSearchRecommendation', 'getWatchLaterListByPage', 'getWatchLaterLibrary', 'getSubtitleBody'] as const
 
 export type ApiPortResponse = {
   ok: true

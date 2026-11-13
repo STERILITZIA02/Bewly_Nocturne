@@ -174,8 +174,9 @@ const forwardCountOverrides = new Map<string, number>()
 
 /** 封面宽高比（宽/高），用于单图布局、详情视频比例兜底和虚拟列表测量 */
 
-const isLoading = ref(false)
-const isInitialLoading = ref(!viewState.restored)
+const requestPhase = ref<'boot' | 'idle' | 'initial' | 'older' | 'newer'>(viewState.restored ? 'idle' : 'boot')
+const isLoading = computed(() => requestPhase.value === 'initial' || requestPhase.value === 'older')
+const isInitialLoading = computed(() => requestPhase.value === 'boot' || requestPhase.value === 'initial')
 const feedRequestFailed = ref(false)
 /** The server reports more but a page made no progress: pause automation, not "no more". */
 const noMoreContent = viewState.ref('noMoreContent', false)
@@ -189,7 +190,7 @@ const newerGap = viewState.shallowRef<MomentGap | undefined>('newerGap', undefin
 const newestRawId = viewState.ref('newestRawId', '')
 const atLatest = viewState.ref('atLatest', true)
 const joinStatus = viewState.ref<MomentJoinStatus>('joinStatus', 'connected')
-const loadingNewer = ref(false)
+const loadingNewer = computed(() => requestPhase.value === 'newer')
 const readingBoundary = viewState.shallowRef<{ id: string, local: boolean } | undefined>('readingBoundary', undefined)
 /** The card at the top of the reader's view, updated as they scroll; empty at the top of a fresh list. */
 const readingAnchorId = viewState.ref('readingAnchorId', '')
@@ -542,7 +543,7 @@ async function reapplyMomentFiltersFromCache() {
 
   const requestToken = ++feedRequestToken
   feedReader.cancel()
-  loadingNewer.value = false
+  requestPhase.value = 'idle'
   const requestType = activeMomentFilter.value
   const requestHostMid = selectedHostMid.value
   const filteredItems = sourceItems
@@ -555,8 +556,6 @@ async function reapplyMomentFiltersFromCache() {
     scrollToPosition(scrollViewportRef.value, 0)
 
   appendMoments(filteredItems)
-  isInitialLoading.value = false
-  isLoading.value = false
 
   if (filteredItems.length > 0 || noMoreContent.value) {
     await nextTick()
@@ -771,7 +770,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     clearTimeout(autoFillTimer)
     autoFillTimer = undefined
     feedRequestFailed.value = false
-    isInitialLoading.value = true
     clearMomentPresentationForRefresh([])
   }
   const requestToken = feedRequestToken
@@ -790,14 +788,13 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
         noMoreContent: noMoreContent.value,
       }
     : null
-  isLoading.value = true
+  requestPhase.value = reset || isInitialLoading.value ? 'initial' : 'older'
   if (reset) {
     feedReader.reset()
     offset.value = ''
     updateBaseline.value = ''
     momentsFeedPage.value = 1
     noMoreContent.value = false
-    loadingNewer.value = false
     newerGap.value = undefined
     newestRawId.value = ''
     atLatest.value = true
@@ -898,8 +895,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
       momentsExtensionContextInvalidated = true
       feedRequestToken += 1
       portalRequestToken += 1
-      isLoading.value = false
-      isInitialLoading.value = false
+      requestPhase.value = 'idle'
       isPortalLoading.value = false
       return
     }
@@ -919,8 +915,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   finally {
     // The network request ends here; layout settling below is separate work.
     if (isFeedRequestCurrent(requestToken, requestType, requestHostMid)) {
-      isLoading.value = false
-      isInitialLoading.value = false
+      requestPhase.value = 'idle'
     }
   }
 
@@ -1014,7 +1009,6 @@ async function loadMomentsPortal() {
 }
 
 function refresh() {
-  isInitialLoading.value = moments.value.length === 0
   void loadMoments(true, 0, true, 'latest', true)
   void loadMomentsPortal()
 }
@@ -1040,16 +1034,23 @@ async function jumpToLastSeen() {
  * the top first, then load the newest posts, so the list is not replaced
  * under a running glide.
  */
-let returningToLatest = false
+let latestNavigation: { token: number, type: MomentFilter, host: string } | undefined
 async function returnToLatest() {
   const viewport = scrollViewportRef.value
-  if (returningToLatest || !viewport)
+  if (!viewport || (latestNavigation && isFeedRequestCurrent(latestNavigation.token, latestNavigation.type, latestNavigation.host)))
     return
-  returningToLatest = true
+  const navigation = { token: feedRequestToken, type: activeMomentFilter.value, host: selectedHostMid.value }
+  latestNavigation = navigation
   previews.clear()
-  await scrollToPosition(viewport, 0, 'smooth')
-  returningToLatest = false
-  refresh()
+  try {
+    await scrollToPosition(viewport, 0, 'smooth')
+    if (latestNavigation === navigation && isFeedRequestCurrent(navigation.token, navigation.type, navigation.host))
+      refresh()
+  }
+  finally {
+    if (latestNavigation === navigation)
+      latestNavigation = undefined
+  }
 }
 
 async function loadNewerMoments() {
@@ -1060,7 +1061,7 @@ async function loadNewerMoments() {
   const host = selectedHostMid.value
   const anchor = keepMomentAnchorInterval(momentLayout.captureAnchor(), newerGap.value)
   const gap = newerGap.value ?? { cursor: MOMENTS_LATEST_OFFSET, targetId: newestRawId.value }
-  loadingNewer.value = true
+  requestPhase.value = 'newer'
   try {
     const result = await feedReader.readNewer(type, gap, () => isFeedRequestCurrent(token, type, host))
     if (!result || !isFeedRequestCurrent(token, type, host))
@@ -1082,7 +1083,7 @@ async function loadNewerMoments() {
   }
   finally {
     if (isFeedRequestCurrent(token, type, host)) {
-      loadingNewer.value = false
+      requestPhase.value = 'idle'
       maybeLoadMoreNearBottom()
     }
   }
@@ -1100,7 +1101,6 @@ function resetMomentsAccountState() {
   momentSearch.value = EMPTY_MOMENT_SEARCH
   readingAnchorId.value = ''
   newerGap.value = undefined
-  loadingNewer.value = false
   commentSessions.setAccount(commentAccountIdentity())
   commentSessions.clear()
   feedRequestToken++
@@ -1116,8 +1116,7 @@ function resetMomentsAccountState() {
   momentsFeedPage.value = 1
   noMoreContent.value = false
   feedRequestFailed.value = false
-  isLoading.value = false
-  isInitialLoading.value = true
+  requestPhase.value = 'boot'
   layoutCommit++
   clearMomentsPortalState()
   previews.clear()
@@ -1766,7 +1765,7 @@ function appendMoments(items: DisplayMoment[]) {
   border-color: var(--bew-selected-bg);
 }
 .moments-page__empty button:not(.b-button):disabled {
-  opacity: 0.55;
+  opacity: var(--bew-disabled-opacity);
   cursor: not-allowed;
 }
 .moments-grid {
@@ -1815,7 +1814,7 @@ function appendMoments(items: DisplayMoment[]) {
   visibility: hidden;
   opacity: 0;
   overflow-anchor: none;
-  transition: opacity 0.16s ease;
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
 }
 .moments-page__loading.is-visible {
   visibility: visible;
@@ -1908,7 +1907,7 @@ function appendMoments(items: DisplayMoment[]) {
   font-size: var(--bew-font-size-control);
   pointer-events: auto;
   opacity: 1;
-  transition: opacity 0.18s ease;
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
 }
 .moment-detail-frame:not(.is-loading) .moment-detail-frame__loading {
   opacity: 0;
@@ -1947,12 +1946,12 @@ function appendMoments(items: DisplayMoment[]) {
   opacity: 0.92;
   cursor: pointer;
   transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+    opacity var(--bew-duration-normal) var(--bew-ease-standard),
+    transform var(--bew-duration-normal) var(--bew-ease-standard);
 }
 .moment-detail-frame__close {
   // A space-2 inside the frame's corner, its corner nested in the frame's.
-  --bew-close-button-radius: calc(var(--bew-surface-radius) - var(--bew-space-2));
+  --bew-icon-button-radius: calc(var(--bew-surface-radius) - var(--bew-space-2));
   position: absolute;
   top: var(--bew-space-2);
   right: var(--bew-space-2);

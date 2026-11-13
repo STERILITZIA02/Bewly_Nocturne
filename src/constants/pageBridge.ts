@@ -1,3 +1,5 @@
+import { isPlainObject } from '~/utils/plainObject'
+
 export const PAGE_BRIDGE_PROTOCOL = 'bewly:v1'
 
 export const PAGE_BRIDGE_MESSAGE = {
@@ -71,13 +73,6 @@ export function postPageBridgeMessage(
     // The document may become detached between validating its origin and posting.
     return false
   }
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (Object.prototype.toString.call(value) !== '[object Object]')
-    return false
-  const prototype = Object.getPrototypeOf(value)
-  return prototype === null || prototype === Object.prototype
 }
 
 function isPageBridgeMessageType(value: unknown): value is PageBridgeMessageType {

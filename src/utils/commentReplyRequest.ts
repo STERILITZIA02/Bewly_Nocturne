@@ -1,4 +1,8 @@
 import type { CommentReplyPage, CommentReplyPageIdentity } from './commentReplyPageCache'
+import { isRecord } from './plainObject'
+
+/** Native fields remain opaque until a renderer or relation reader consumes them. */
+export type NativeCommentReply = Record<string, unknown>
 
 export interface CommentReplyReadRequest {
   requestId: string
@@ -25,11 +29,11 @@ export function readCommentReplyRequest(value: unknown): CommentReplyReadRequest
   return { requestId, identity: { context: identity.context, account: identity.account, oid: identity.oid, type: identity.type, root: identity.root, sort: identity.sort, pageSize: identity.pageSize }, page: page! }
 }
 
-export function normalizeNativeCommentReplyPage(response: unknown, request: CommentReplyReadRequest): CommentReplyPage<Record<string, any>> {
-  const value = response as { code?: number, message?: string, data?: { replies?: Array<Record<string, any>> | null, page?: { num?: number, size?: number, count?: number } } } | null
+export function normalizeNativeCommentReplyPage(response: unknown, request: CommentReplyReadRequest): CommentReplyPage<NativeCommentReply> {
+  const value = response as { code?: number, message?: string, data?: { replies?: NativeCommentReply[] | null, page?: { num?: number, size?: number, count?: number } } } | null
   const data = value?.data
   if (value?.code !== 0 || !data || (data.replies !== null && !Array.isArray(data.replies))
-    || (data.replies && (data.replies.length > request.identity.pageSize || data.replies.some(reply => !reply || typeof reply !== 'object'
+    || (data.replies && (data.replies.length > request.identity.pageSize || data.replies.some(reply => !isRecord(reply)
       || (reply.root_str && reply.root_str !== request.identity.root)
       || (reply.oid_str && reply.oid_str !== request.identity.oid))))
     || (data.page?.num !== undefined && data.page.num !== request.page)

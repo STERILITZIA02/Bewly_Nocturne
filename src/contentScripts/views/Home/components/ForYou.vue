@@ -48,17 +48,9 @@ defineExpose({ initData, undoRefresh, goForward, canGoBack, canGoForward })
       </Button>
     </div>
 
-    <Empty v-if="needToLoginFirst" mt-6 :description="$t('common.please_log_in_first')">
-      <Button type="primary" @click="jumpToLoginPage()">
-        {{ $t('common.login') }}
-      </Button>
-    </Empty>
+    <Empty v-if="needToLoginFirst" mt-6 :description="$t('common.please_log_in_first')" :action-label="$t('common.login')" @action="jumpToLoginPage()" />
 
-    <Empty v-else-if="appAuthorizationRequired" mt-6 :description="$t('home.app_authorization_required')">
-      <Button type="primary" @click="handleAppAuthorization">
-        {{ $t('home.reauthorize_app') }}
-      </Button>
-    </Empty>
+    <Empty v-else-if="appAuthorizationRequired" mt-6 :description="$t('home.app_authorization_required')" :action-label="$t('home.reauthorize_app')" @action="handleAppAuthorization" />
   </div>
 </template>
 

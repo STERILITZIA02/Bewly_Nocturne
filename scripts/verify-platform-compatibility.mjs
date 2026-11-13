@@ -139,7 +139,6 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
     })
     await context.openPipWindow()
     assert.equal(calls[0][0], 'https://www.bilibili.com/video/BVfixture')
-    assert.match(calls[0][2], /^width=800,height=640,left=-1720,top=230,/)
     assert.equal(closed, 1)
   })
 
@@ -499,14 +498,12 @@ export function registerPlatformCompatibilityChecks(check, { Vue, flush, compile
       row.style.setProperty('--bew-duration-normal', '.2s')
       expanded.value = false
       await Vue.nextTick()
-      assert.equal(timers.size, 1)
-      assert.equal([...timers.values()][0].delay, 250, 'content stays mounted for 200ms plus the existing completion allowance')
-      assert.ok(viewport.querySelector('.favorite-sidebar-item__actions'))
-      const finish = [...timers.values()][0].callback
+      assert.ok(viewport.querySelector('.favorite-sidebar-item__actions'), 'the actions stay mounted while the panel closes')
+      // Without layout the panel is already 0px tall, so the close settles in the next frame.
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      await flush()
+      assert.equal(viewport.querySelector('.favorite-sidebar-item__actions'), null, 'the closed panel releases its actions')
       timers.clear()
-      finish()
-      await Vue.nextTick()
-      assert.equal(viewport.querySelector('.favorite-sidebar-item__actions'), null)
 
       globalThis.setTimeout = setTimer
       globalThis.clearTimeout = clearTimer

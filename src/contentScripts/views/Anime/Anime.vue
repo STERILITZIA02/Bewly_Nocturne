@@ -287,18 +287,14 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
           </Button>
         </div>
 
-        <Empty v-if="watchListRequestFailed" :description="$t('common.load_failed')" role="alert">
-          <Button type="primary" @click="getAnimeWatchList()">
-            {{ $t('common.operation.refresh') }}
-          </Button>
-        </Empty>
-        <HorizontalScrollView v-else w="[calc(100%+1.5rem)]">
+        <Empty v-if="watchListRequestFailed" :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')" role="alert" @action="getAnimeWatchList()" />
+        <HorizontalScrollView v-else w="[calc(100%+var(--bew-space-6))]">
           <div w-full flex>
             <template v-if="isLoadingAnimeWatchList">
               <BangumiCardSkeleton
                 v-for="item in 6"
                 :key="item"
-                w="2xl:[calc(100%/6-1.5rem)] xl:[calc(100%/5-1.5rem)] lg:[calc(100%/4-1.5rem)] md:[calc(100%/3-1.5rem)] sm:[calc(100%/2-1.5rem)] [calc(100%-1.5rem)]"
+                w="2xl:[calc(100%/6-var(--bew-space-6))] xl:[calc(100%/5-var(--bew-space-6))] lg:[calc(100%/4-var(--bew-space-6))] md:[calc(100%/3-var(--bew-space-6))] sm:[calc(100%/2-var(--bew-space-6))] [calc(100%-var(--bew-space-6))]"
                 last:w="2xl:1/6 xl:1/5 lg:1/4 md:1/3 sm:1/2 full"
                 shrink-0
                 mr-6 important-mb-0
@@ -330,7 +326,7 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
                   bgColorDark: item.badge_info.bg_color_night || '',
                 },
               }"
-              w="2xl:[calc(100%/6-1.5rem)] xl:[calc(100%/5-1.5rem)] lg:[calc(100%/4-1.5rem)] md:[calc(100%/3-1.5rem)] sm:[calc(100%/2-1.5rem)] [calc(100%-1.5rem)]"
+              w="2xl:[calc(100%/6-var(--bew-space-6))] xl:[calc(100%/5-var(--bew-space-6))] lg:[calc(100%/4-var(--bew-space-6))] md:[calc(100%/3-var(--bew-space-6))] sm:[calc(100%/2-var(--bew-space-6))] [calc(100%-var(--bew-space-6))]"
               last:w="2xl:1/6 xl:1/5 lg:1/4 md:1/3 sm:1/2 full"
               shrink-0
               mr-6 important-mb-0
@@ -357,13 +353,13 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
           </Button>
         </div>
 
-        <HorizontalScrollView w="[calc(100%+1.5rem)]">
+        <HorizontalScrollView w="[calc(100%+var(--bew-space-6))]">
           <div w-full flex>
             <template v-if="isLoadingPopularAnime">
               <BangumiCardSkeleton
                 v-for="item in 6"
                 :key="item"
-                w="2xl:[calc(100%/6-1.5rem)] xl:[calc(100%/5-1.5rem)] lg:[calc(100%/4-1.5rem)] md:[calc(100%/3-1.5rem)] sm:[calc(100%/2-1.5rem)] [calc(100%-1.5rem)]"
+                w="2xl:[calc(100%/6-var(--bew-space-6))] xl:[calc(100%/5-var(--bew-space-6))] lg:[calc(100%/4-var(--bew-space-6))] md:[calc(100%/3-var(--bew-space-6))] sm:[calc(100%/2-var(--bew-space-6))] [calc(100%-var(--bew-space-6))]"
                 last:w="2xl:1/6 xl:1/5 lg:1/4 md:1/3 sm:1/2 full"
                 shrink-0
                 mr-6 important-mb-0
@@ -373,7 +369,7 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
             <BangumiCard
               v-for="item in popularAnimeList"
               :key="item.url"
-              w="2xl:[calc(100%/6-1.5rem)] xl:[calc(100%/5-1.5rem)] lg:[calc(100%/4-1.5rem)] md:[calc(100%/3-1.5rem)] sm:[calc(100%/2-1.5rem)] [calc(100%-1.5rem)]"
+              w="2xl:[calc(100%/6-var(--bew-space-6))] xl:[calc(100%/5-var(--bew-space-6))] lg:[calc(100%/4-var(--bew-space-6))] md:[calc(100%/3-var(--bew-space-6))] sm:[calc(100%/2-var(--bew-space-6))] [calc(100%-var(--bew-space-6))]"
               last:w="2xl:1/6 xl:1/5 lg:1/4 md:1/3 sm:1/2 full"
               shrink-0
               mr-6 important-mb-0
@@ -396,11 +392,7 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
         </HorizontalScrollView>
       </section>
 
-      <Empty v-if="popularRequestFailed" :description="$t('common.load_failed')" role="alert">
-        <Button type="primary" @click="getPopularAnimeList()">
-          {{ $t('common.operation.refresh') }}
-        </Button>
-      </Empty>
+      <Empty v-if="popularRequestFailed" :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')" role="alert" @action="getPopularAnimeList()" />
 
       <!-- Anime Timetable -->
       <section class="anime-section">
@@ -410,7 +402,7 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
           </h3>
         </div>
 
-        <AnimeTimeTable ref="animeTimeTableRef" w="[calc(100%+1.5rem)]" />
+        <AnimeTimeTable ref="animeTimeTableRef" w="[calc(100%+var(--bew-space-6))]" />
       </section>
 
       <!-- Recommended for you -->
@@ -442,11 +434,7 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
             />
           </template>
         </div>
-        <Empty v-if="recommendRequestFailed" :description="$t('common.load_failed')">
-          <Button type="tertiary" @click="getRecommendAnimeList()">
-            {{ $t('common.operation.refresh') }}
-          </Button>
-        </Empty>
+        <Empty v-if="recommendRequestFailed" :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')" @action="getRecommendAnimeList()" />
       </section>
     </div>
 

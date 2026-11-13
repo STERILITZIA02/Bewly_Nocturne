@@ -16,8 +16,8 @@ export const MISSING_COMMENT_PARENT_CSS = `
     gap: var(--bew-space-2, 8px);
     padding-block: var(--bew-space-3, 12px);
     color: var(--bew-text-2, var(--text2));
-    font-size: var(--bew-font-size-caption, 12px);
-    line-height: var(--bew-line-height-caption, 16px);
+    font-size: var(--bew-font-size-caption, 11px);
+    line-height: var(--bew-line-height-caption, 14px);
     overflow-wrap: anywhere;
   }
   ${MISSING_COMMENT_PARENT_SELECTOR} .bewly-comment-missing-parent__avatar {

@@ -1,6 +1,6 @@
 import type { Data as VideoInfoData } from '~/models/video/videoInfo'
 import type { ActionRoll } from '~/utils/bewlyWidescreen/actionRolls'
-import type { WidescreenDisplayMode, WidescreenRect, WidescreenZoomFrame } from '~/utils/bewlyWidescreenPolicy'
+import type { WidescreenDisplayMode, WidescreenRect, WidescreenSidebarHydrationPhase, WidescreenZoomFrame } from '~/utils/bewlyWidescreenPolicy'
 
 export type BewlyWidescreenTab = 'overview' | 'comment' | 'danmaku'
 
@@ -90,13 +90,14 @@ export interface BewlyWidescreenState {
   actionRollEvents?: AbortController
   layoutEventCleanup?: () => void
   settingsWatchCleanup?: Array<() => void>
-  sidebarHydrationTimer?: ReturnType<typeof setTimeout>
-  /** Waits for a hidden page to show again before hydration resumes. */
-  sidebarHydrationResumeCleanup?: () => void
+  hydration?: {
+    phase: WidescreenSidebarHydrationPhase | 'paused'
+    timer?: ReturnType<typeof setTimeout>
+    resumeCleanup?: () => void
+    reloadRequested: boolean
+  }
   sidebarHydrationWarningShown?: boolean
   sidebarHydrationTimedOut?: boolean
-  /** One native reload per hydration budget for a first comment page that never arrives. */
-  commentListReloadRequested?: boolean
   sidebarReadyCleanup?: () => void
   /** Reopens bounded body-wide host discovery after a rebuild or navigation. */
   restartDomDiscovery?: () => void
@@ -111,6 +112,8 @@ export interface BewlyWidescreenState {
   /** The mode whose at-rest styles stay applied until a running zoom settles. */
   heldRestMode?: WidescreenDisplayMode
   activeControlCleanup?: () => void
+  /** Stops sampling what is under the column head's glass (railHeadTone.ts). */
+  railHeadToneCleanup?: () => void
   descriptionCleanup?: () => void
   playlistToggleCleanup?: () => void
   danmakuActivationTimer?: ReturnType<typeof setTimeout>

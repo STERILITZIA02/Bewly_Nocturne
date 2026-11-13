@@ -11,7 +11,7 @@ import { isAccountRequestCurrent, resolveAuthenticatedAccountId, resolveCookieMa
 import api from '~/utils/api'
 import { resolveConfiguredLinkAction } from '~/utils/configuredLinkNavigation'
 import { numFormatter } from '~/utils/dataFormatter'
-import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON, LV6_LIGHTNING_ICON } from '~/utils/lvIcons'
+import { getLvIcon } from '~/utils/lvIcons'
 import { getCSRF, getUserID } from '~/utils/main'
 import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/utils/messaging'
 import { openLinkInBackground } from '~/utils/tabs'
@@ -204,24 +204,6 @@ async function logout() {
     console.error('Failed to log out:', error)
     topBarStore.reconcileLocalLoginState()
   }
-}
-
-const levelIcons: string[] = [
-  LV0_ICON,
-  LV1_ICON,
-  LV2_ICON,
-  LV3_ICON,
-  LV4_ICON,
-  LV5_ICON,
-  LV6_ICON,
-  LV6_LIGHTNING_ICON,
-]
-
-function getLvIcon(level: number, isSigma: boolean = false): string {
-  if (level === 6 && isSigma) {
-    return LV6_LIGHTNING_ICON
-  }
-  return levelIcons[level] || ''
 }
 
 function handleClickChannel() {

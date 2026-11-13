@@ -3,7 +3,6 @@ import Dialog from '~/components/Dialog.vue'
 import type { Video } from '~/components/VideoCard/types'
 
 const props = defineProps<{
-  modelValue: boolean
   video: Video
 }>()
 

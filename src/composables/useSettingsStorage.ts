@@ -5,6 +5,7 @@ import browser from 'webextension-polyfill'
 import type { StorageRef } from '~/composables/useStorageLocal'
 import { waitForDelay, waitWithSignal, withRequestDeadline } from '~/utils/abort'
 import { isExtensionContextInvalidatedError, sendMessage } from '~/utils/messaging'
+import { asObject } from '~/utils/plainObject'
 import type { SettingsStoragePatch, SettingsStoragePatchRequest, SettingsStoragePatchResponse } from '~/utils/settingsStorageProtocol'
 import {
   applySettingsStoragePatch,
@@ -62,10 +63,6 @@ function cloneValue<T>(value: T): T {
   }
 }
 
-function asRecord(value: object): Record<string, unknown> {
-  return value as Record<string, unknown>
-}
-
 /** Reconcile JSON settings in place so unchanged subtrees keep their consumers. */
 function reconcileSettingsValue(current: unknown, next: unknown): unknown {
   if (Object.is(current, next))
@@ -74,8 +71,8 @@ function reconcileSettingsValue(current: unknown, next: unknown): unknown {
     || Array.isArray(current) !== Array.isArray(next)) {
     return cloneValue(next)
   }
-  const target = asRecord(current)
-  const source = asRecord(next)
+  const target = asObject(current)
+  const source = asObject(next)
   for (const key of Object.keys(target)) {
     if (!Object.hasOwn(source, key))
       Reflect.deleteProperty(target, key)
@@ -173,28 +170,28 @@ export function useSettingsStorage<T extends object>(
   const onError = options.onError ?? ((error: unknown) => console.error(error))
 
   let applyingCanonicalValue = false
-  let canonicalValue = asRecord(cloneValue(defaults))
+  let canonicalValue = asObject(cloneValue(defaults))
   let currentEpoch = ''
   const retiredEpochs = new Set<string>()
   let canonicalRevision = 0
   let canonicalFingerprint: string | null = null
   // Immutable per-field snapshots: unchanged fields keep their identity, and
   // no snapshot shares a mutable reference with the edited `data`.
-  let observedValue = asRecord(cloneValue(data.value))
+  let observedValue = asObject(cloneValue(data.value))
   /** Last full-normalize input/output and the fields it depended on. */
   let lastNormalizeInput: Record<string, unknown> | undefined
   let lastNormalized: Record<string, unknown> | undefined
   let normalizeDependencies: Set<string> | undefined
   let queuedPatch = createEmptySettingsStoragePatch()
-  let inFlightPatch: SettingsStoragePatch | null = null
-  let failedPatchRequest: SettingsStoragePatchRequest | null = null
+  type WriteState
+    = | { phase: 'idle' }
+      | { phase: 'sending' | 'retryable' | 'importing', request: SettingsStoragePatchRequest }
+  let write: WriteState = { phase: 'idle' }
   const clientId = createClientId()
   let nextOperationId = 1
   let ready = false
   let persistenceReady = false
-  let disposed = false
-  let contextInvalidated = false
-  let importingOperation: number | null = null
+  let lifetime: 'active' | 'draining' | 'invalidated' = 'active'
   let storageGeneration = 0
   let readInFlightGeneration: number | null = null
   const initializationState = ref<SettingsStorageInitializationState>('loading')
@@ -205,9 +202,9 @@ export function useSettingsStorage<T extends object>(
 
   /** Compares field by field; only changed fields are cloned into the next snapshot. */
   function captureLocalChanges() {
-    if (disposed || contextInvalidated || applyingCanonicalValue)
+    if (lifetime !== 'active' || applyingCanonicalValue)
       return
-    const current = asRecord(toRaw(data.value))
+    const current = asObject(toRaw(data.value))
     const patch = createEmptySettingsStoragePatch()
     let next: Record<string, unknown> | undefined
     for (const key of Object.keys(current)) {
@@ -258,7 +255,7 @@ export function useSettingsStorage<T extends object>(
         return { value: normalized, reused: true }
       }
     }
-    const working = asRecord(cloneValue(input))
+    const working = asObject(cloneValue(input))
     normalizeDependencies = runRecordedNormalize(working, options.normalize)
     lastNormalizeInput = input
     lastNormalized = working
@@ -267,7 +264,7 @@ export function useSettingsStorage<T extends object>(
 
   const storageIsIdle = () => ready
     && persistenceReady
-    && !inFlightPatch
+    && write.phase === 'idle'
     && isSettingsStoragePatchEmpty(queuedPatch)
 
   const resolveFlushWaitersIfIdle = () => {
@@ -291,8 +288,8 @@ export function useSettingsStorage<T extends object>(
   const renderCanonicalValue = (fullNormalize = false) => {
     captureLocalChanges()
     let nextValue = canonicalValue
-    if (inFlightPatch)
-      nextValue = applySettingsStoragePatch(nextValue, inFlightPatch)
+    if (write.phase !== 'idle')
+      nextValue = applySettingsStoragePatch(nextValue, write.request.patch)
     nextValue = applySettingsStoragePatch(nextValue, queuedPatch)
     const { value: normalized, reused } = normalizeRendered(nextValue, fullNormalize)
 
@@ -327,7 +324,7 @@ export function useSettingsStorage<T extends object>(
     const raw = parseStoredSettings(storedValue)
     // Defaults and parsed values are shared immutable field snapshots.
     canonicalValue = {
-      ...asRecord(defaults),
+      ...asObject(defaults),
       ...raw,
     }
     renderCanonicalValue(true)
@@ -342,12 +339,11 @@ export function useSettingsStorage<T extends object>(
     currentEpoch = epoch
     canonicalRevision = 0
     canonicalFingerprint = null
-    canonicalValue = { ...asRecord(defaults) }
+    canonicalValue = { ...asObject(defaults) }
     queuedPatch = createEmptySettingsStoragePatch()
-    inFlightPatch = null
-    failedPatchRequest = null
+    write = { phase: 'idle' }
     // Discard even edits that Vue has not delivered to the batched watcher yet.
-    observedValue = asRecord(cloneValue(data.value))
+    observedValue = asObject(cloneValue(data.value))
     persistenceReady = false
     initializationState.value = 'loading'
     if (renderDefaults)
@@ -359,7 +355,7 @@ export function useSettingsStorage<T extends object>(
       let lastError: unknown
 
       for (let attempt = 0; attempt < MAX_MESSAGE_ATTEMPTS; attempt++) {
-        if (contextInvalidated || generation !== storageGeneration)
+        if (lifetime === 'invalidated' || generation !== storageGeneration)
           throw new StaleStorageGenerationError()
 
         try {
@@ -389,28 +385,28 @@ export function useSettingsStorage<T extends object>(
   }
 
   const flushQueuedPatch = async () => {
-    if (contextInvalidated) {
+    if (lifetime === 'invalidated') {
       return
     }
 
-    if (!ready || !persistenceReady || (inFlightPatch && !failedPatchRequest)
-      || (!failedPatchRequest && isSettingsStoragePatchEmpty(queuedPatch))) {
+    if (!ready || !persistenceReady || write.phase === 'sending' || write.phase === 'importing'
+      || (write.phase === 'idle' && isSettingsStoragePatchEmpty(queuedPatch))) {
       resolveFlushWaitersIfIdle()
       return
     }
 
-    const patch = failedPatchRequest?.patch ?? queuedPatch
     const generation = storageGeneration
-    if (!failedPatchRequest)
+    const request = write.phase === 'retryable'
+      ? write.request
+      : {
+          clientId,
+          epoch: currentEpoch,
+          operationId: nextOperationId++,
+          patch: queuedPatch,
+        }
+    if (write.phase === 'idle')
       queuedPatch = createEmptySettingsStoragePatch()
-    inFlightPatch = patch
-    const request = failedPatchRequest ?? {
-      clientId,
-      epoch: currentEpoch,
-      operationId: nextOperationId++,
-      patch,
-    }
-    failedPatchRequest = null
+    write = { phase: 'sending', request }
 
     try {
       const response = await sendWithRetry<SettingsStoragePatchResponse>(SETTINGS_STORAGE_PATCH_MESSAGE, request, generation)
@@ -428,7 +424,7 @@ export function useSettingsStorage<T extends object>(
         return
       }
 
-      inFlightPatch = null
+      write = { phase: 'idle' }
       if (!applyCanonicalValue(response.storedValue, response.revision))
         renderCanonicalValue()
       void flushQueuedPatch()
@@ -440,7 +436,7 @@ export function useSettingsStorage<T extends object>(
 
       // Keep the original operation identity after an unknown acknowledgement.
       // Retrying it cannot overwrite a newer remote edit if it already committed.
-      failedPatchRequest = request
+      write = { phase: 'retryable', request }
       renderCanonicalValue()
       if (isExtensionContextInvalidatedError(error)) {
         invalidateContext(error)
@@ -452,7 +448,7 @@ export function useSettingsStorage<T extends object>(
   }
 
   const flushPendingWrites = (): Promise<void> => {
-    if (contextInvalidated)
+    if (lifetime === 'invalidated')
       return Promise.reject(new Error('Settings storage was disposed before pending writes were flushed'))
 
     captureLocalChanges()
@@ -470,7 +466,7 @@ export function useSettingsStorage<T extends object>(
   const stopWatch = watch(
     data,
     () => {
-      if (disposed || contextInvalidated || applyingCanonicalValue)
+      if (lifetime !== 'active' || applyingCanonicalValue)
         return
       captureLocalChanges()
       void flushQueuedPatch()
@@ -483,7 +479,7 @@ export function useSettingsStorage<T extends object>(
       return
 
     ready = true
-    if (!disposed)
+    if (lifetime === 'active')
       options.onReady?.(data.value)
     void flushQueuedPatch()
   }
@@ -495,9 +491,8 @@ export function useSettingsStorage<T extends object>(
   }
 
   function invalidateContext(error: unknown) {
-    contextInvalidated = true
-    failedPatchRequest = null
-    disposed = true
+    lifetime = 'invalidated'
+    write = { phase: 'idle' }
     storageGeneration++
     initializationState.value = 'invalidated'
     stopWatch()
@@ -507,11 +502,11 @@ export function useSettingsStorage<T extends object>(
   }
 
   async function applyLocalSnapshot(generation: number) {
-    if (ready || disposed || generation !== storageGeneration)
+    if (ready || lifetime !== 'active' || generation !== storageGeneration)
       return
     try {
       const stored = await withRequestDeadline(() => browser.storage.local.get([SETTINGS_STORAGE_KEY, SETTINGS_STORAGE_META_KEY]), {}, INITIAL_READ_FALLBACK_DELAY)
-      if (ready || disposed || generation !== storageGeneration)
+      if (ready || lifetime !== 'active' || generation !== storageGeneration)
         return
       const meta = normalizeSettingsStorageWriteMeta(stored[SETTINGS_STORAGE_META_KEY])
       if (retiredEpochs.has(meta.epoch))
@@ -530,11 +525,11 @@ export function useSettingsStorage<T extends object>(
     catch (error) {
       if (isExtensionContextInvalidatedError(error))
         invalidateContext(error)
-      else if (!disposed && generation === storageGeneration)
+      else if (lifetime === 'active' && generation === storageGeneration)
         onError(error)
     }
     finally {
-      if (!disposed && generation === storageGeneration && initializationState.value !== 'loaded') {
+      if (lifetime === 'active' && generation === storageGeneration && initializationState.value !== 'loaded') {
         // Local/default display is usable, but no patch can be sent until an
         // authoritative coordinator snapshot has established this epoch.
         initializationState.value = 'degraded'
@@ -544,7 +539,7 @@ export function useSettingsStorage<T extends object>(
   }
 
   function scheduleRecoveryRead() {
-    if (disposed || initializationState.value === 'loaded' || recoveryReadTimer != null || recoveryReadAttempt >= RECOVERY_READ_DELAYS.length)
+    if (lifetime !== 'active' || initializationState.value === 'loaded' || recoveryReadTimer != null || recoveryReadAttempt >= RECOVERY_READ_DELAYS.length)
       return
 
     const delay = RECOVERY_READ_DELAYS[recoveryReadAttempt++]
@@ -586,7 +581,7 @@ export function useSettingsStorage<T extends object>(
       const wasLoaded = initializationState.value === 'loaded'
       initializationState.value = 'loaded'
       displayReady.value = true
-      if (!wasLoaded && !disposed)
+      if (!wasLoaded && lifetime === 'active')
         options.onLoaded?.(data.value)
       void flushQueuedPatch()
     }
@@ -610,7 +605,7 @@ export function useSettingsStorage<T extends object>(
       clearTimeout(fallbackTimer)
       if (readInFlightGeneration === generation)
         readInFlightGeneration = null
-      if (markReadyWhenFinished && !contextInvalidated && generation === storageGeneration)
+      if (markReadyWhenFinished && lifetime !== 'invalidated' && generation === storageGeneration)
         markReady()
     }
   }
@@ -619,14 +614,13 @@ export function useSettingsStorage<T extends object>(
     changes: Record<string, browser.Storage.StorageChange>,
     areaName: string,
   ) {
-    if (contextInvalidated || areaName !== 'local')
+    if (lifetime === 'invalidated' || areaName !== 'local')
       return
 
     const settingsChange = changes[SETTINGS_STORAGE_KEY]
     const metaChange = changes[SETTINGS_STORAGE_META_KEY]
     const metaWasRemoved = metaChange?.oldValue != null && metaChange.newValue == null
     if (metaWasRemoved) {
-      importingOperation = null
       resetStorageGeneration('')
       void refreshCanonicalValue()
       return
@@ -636,7 +630,7 @@ export function useSettingsStorage<T extends object>(
     if (meta?.epoch && retiredEpochs.has(meta.epoch))
       return
     const epochChanged = Boolean(meta?.epoch && currentEpoch && meta.epoch !== currentEpoch)
-    const ownImport = importingOperation != null && meta?.recentOperationIds.includes(`${clientId}:${importingOperation}`)
+    const ownImport = write.phase === 'importing' && meta?.recentOperationIds.includes(`${clientId}:${write.request.operationId}`)
     if (epochChanged && ownImport) {
       retiredEpochs.add(currentEpoch)
       currentEpoch = meta!.epoch
@@ -644,7 +638,6 @@ export function useSettingsStorage<T extends object>(
       canonicalFingerprint = null
     }
     else if (epochChanged) {
-      importingOperation = null
       resetStorageGeneration(meta!.epoch, !settingsChange)
     }
     else if (meta?.epoch && !currentEpoch) {
@@ -676,31 +669,26 @@ export function useSettingsStorage<T extends object>(
   }
 
   async function importSettings(values: Partial<T>) {
-    if (!persistenceReady || disposed || contextInvalidated)
+    if (!persistenceReady || lifetime !== 'active')
       throw new Error('Settings authority is not ready')
     const operationId = nextOperationId++
     const previousCanonicalValue = canonicalValue
     resetStorageGeneration(currentEpoch, false)
     canonicalValue = previousCanonicalValue
-    importingOperation = operationId
     persistenceReady = false
     const importPatch: SettingsStoragePatch = { set: cloneValue(values) as Record<string, unknown>, remove: [] }
-    inFlightPatch = importPatch
+    const request = { clientId, epoch: currentEpoch, operationId, patch: importPatch }
+    write = { phase: 'importing', request }
     // Imported values may carry retired fields or cross-field state: full normalize.
     renderCanonicalValue(true)
     const generation = storageGeneration
     try {
-      const response = await sendWithRetry<SettingsStoragePatchResponse>(SETTINGS_STORAGE_IMPORT_MESSAGE, {
-        clientId,
-        epoch: currentEpoch,
-        operationId,
-        patch: importPatch,
-      }, generation)
+      const response = await sendWithRetry<SettingsStoragePatchResponse>(SETTINGS_STORAGE_IMPORT_MESSAGE, request, generation)
       if (!isPatchResponse(response) || !response.accepted)
         throw new Error('Settings import was superseded')
       currentEpoch = response.epoch
       persistenceReady = true
-      inFlightPatch = null
+      write = { phase: 'idle' }
       applyCanonicalValue(response.storedValue, response.revision, true)
       void flushQueuedPatch()
     }
@@ -709,14 +697,10 @@ export function useSettingsStorage<T extends object>(
         invalidateContext(error)
       }
       else if (generation === storageGeneration) {
-        inFlightPatch = null
+        write = { phase: 'idle' }
         void refreshCanonicalValue()
       }
       throw error
-    }
-    finally {
-      if (importingOperation === operationId)
-        importingOperation = null
     }
   }
 
@@ -724,13 +708,14 @@ export function useSettingsStorage<T extends object>(
   if (getCurrentScope()) {
     onScopeDispose(() => {
       captureLocalChanges()
-      disposed = true
+      if (lifetime !== 'invalidated')
+        lifetime = 'draining'
       stopWatch()
       clearRecoveryReadTimer()
       browser.storage.onChanged.removeListener(onStorageChanged)
       // Ordinary scope teardown drains the captured edits; an invalid runtime
       // instead terminates immediately through invalidateContext.
-      if (!contextInvalidated && !persistenceReady && (!isSettingsStoragePatchEmpty(queuedPatch) || inFlightPatch))
+      if (lifetime !== 'invalidated' && !persistenceReady && (!isSettingsStoragePatchEmpty(queuedPatch) || write.phase !== 'idle'))
         void refreshCanonicalValue()
       void flushQueuedPatch()
     })

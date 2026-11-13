@@ -77,7 +77,8 @@ const commentRemovals = ref(0)
 useLayoutMotion(listRef, commentRemovals, { selector: '.moment-comments__item', key: 'data-comment-id' })
 let restoredScrollTop = 0
 const resolvingTarget = ref(false)
-const comments = ref<MomentCommentItem[]>([])
+// Replaced whole on every change, rows included (pages can hold hundreds of threads).
+const comments = shallowRef<MomentCommentItem[]>([])
 const loading = ref(false)
 const loadingMore = ref(false)
 const loadError = ref('')
@@ -477,10 +478,11 @@ function replyPosted(raw: unknown) {
   const reply = normalizeMomentComment(raw)
   if (reply) {
     if (reply.rootRpid && reply.rootRpid !== reply.rpid) {
-      const root = comments.value.find(comment => comment.rpid === reply.rootRpid)
-      if (root) {
-        root.replyCount += 1
-        root.replies = mergeMomentComments(root.replies, [reply])
+      const index = comments.value.findIndex(comment => comment.rpid === reply.rootRpid)
+      if (index >= 0) {
+        const previous = comments.value[index]
+        const root = { ...previous, replyCount: previous.replyCount + 1, replies: mergeMomentComments(previous.replies, [reply]) }
+        comments.value = comments.value.with(index, root)
         collapsedIds.delete(root.id)
         seedThread(root)
       }
@@ -537,15 +539,15 @@ function applyCommentDeletion(comment: MomentCommentItem) {
     comments.value = comments.value.filter(item => item.rpid !== comment.rpid)
   }
   else {
-    const root = comments.value.find(item => item.rpid === comment.rootRpid)
-    if (root) {
-      root.replyCount = Math.max(0, root.replyCount - 1)
-      root.replies = sessions.pruneComments(sessionLease.value, root.replies)
+    const index = comments.value.findIndex(item => item.rpid === comment.rootRpid)
+    if (index >= 0) {
+      const previous = comments.value[index]
+      const root = { ...previous, replyCount: Math.max(0, previous.replyCount - 1), replies: sessions.pruneComments(sessionLease.value, previous.replies) }
       const state = getThreadState(root)
       if (state)
         state.items = sessions.pruneComments(sessionLease.value, state.items)
+      comments.value = comments.value.with(index, root)
     }
-    comments.value = [...comments.value]
   }
   collapsedIds.delete(comment.id)
   if (replyTarget.value && sessions.isCommentRemoved(sessionLease.value, replyTarget.value))
@@ -767,7 +769,7 @@ onBeforeUnmount(() => {
             :style="getTreeNodeStyle(node.layout)"
           >
             <IconButton
-              v-if="node.layout.hasChildren" class="moment-comments__branch-toggle" shape="circle"
+              v-if="node.layout.hasChildren" class="moment-comments__branch-toggle"
               :label="t(collapsedIds.has(node.layout.id) ? 'moment_card.comments_expand_thread' : 'moment_card.comments_collapse_thread')"
               :aria-expanded="!collapsedIds.has(node.layout.id)" @click="toggleCommentBranch(node.layout.id)"
             >
@@ -946,7 +948,7 @@ onBeforeUnmount(() => {
 .moment-comments__thread-more button:hover,
 .moment-comments__state button:hover {
   color: var(--bew-text-1);
-  background: var(--bew-fill-1);
+  background: var(--bew-hover-bg);
 }
 .moment-comments__refresh:focus-visible,
 .moment-comments__thread-more button:focus-visible,
@@ -959,7 +961,7 @@ onBeforeUnmount(() => {
 .moment-comments__thread-more button:disabled,
 .moment-comments__action:disabled {
   cursor: default;
-  opacity: 0.55;
+  opacity: var(--bew-disabled-opacity);
 }
 .moment-comments__state {
   display: flex;

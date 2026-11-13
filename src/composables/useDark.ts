@@ -5,6 +5,7 @@ import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { applyAppearanceStyle, getAppearanceStyle, resolveAppearanceAccent } from '~/utils/appearance'
+import { isFestivalPage } from '~/utils/festivalPage'
 import { createIframeDocumentClient } from '~/utils/iframeDocument'
 import { getParentMessageData } from '~/utils/iframeMessage'
 import { isVideoPlaybackPage, setCookie } from '~/utils/main'
@@ -12,7 +13,7 @@ import { getMotionDuration } from '~/utils/motionTiming'
 import { applyMotionPreference, prefersReducedMotion } from '~/utils/reducedMotion'
 
 const currentMinuteOfDay = ref(getCurrentMinuteOfDay())
-let scheduleClockInterval: number | null = null
+let scheduleClockTimer: ReturnType<typeof setTimeout> | undefined
 let lastThemeChangeState: boolean | undefined
 
 function getCurrentMinuteOfDay(): number {
@@ -44,28 +45,25 @@ function isWithinLightSchedule(current: number, startTime: string, endTime: stri
   return current >= start || current < end
 }
 
-function startScheduleClock() {
-  if (scheduleClockInterval !== null || typeof window === 'undefined')
-    return
+function msUntilMinuteOfDay(target: number): number {
+  const now = new Date()
+  const elapsed = ((now.getHours() * 60 + now.getMinutes()) * 60 + now.getSeconds()) * 1000 + now.getMilliseconds()
+  const ms = target * 60_000 - elapsed
+  return ms > 0 ? ms : ms + 24 * 60 * 60_000
+}
 
+// The clock only wakes at the schedule's next switch, never polling; becoming
+// visible again re-reads the time (sleep can skip a timer).
+function startScheduleClock(startTime: string, endTime: string) {
+  stopScheduleClock()
   currentMinuteOfDay.value = getCurrentMinuteOfDay()
-  scheduleClockInterval = window.setInterval(() => {
-    currentMinuteOfDay.value = getCurrentMinuteOfDay()
-  }, 30_000)
+  const next = Math.min(msUntilMinuteOfDay(parseTime(startTime, 6 * 60)), msUntilMinuteOfDay(parseTime(endTime, 18 * 60)))
+  scheduleClockTimer = setTimeout(startScheduleClock, next, startTime, endTime)
 }
 
 function stopScheduleClock() {
-  if (scheduleClockInterval !== null) {
-    clearInterval(scheduleClockInterval)
-    scheduleClockInterval = null
-  }
-}
-
-/**
- * Check if current page is festival page
- */
-function isFestivalPage(): boolean {
-  return /https?:\/\/(?:www\.)?bilibili\.com\/festival\/.*/.test(document.URL)
+  clearTimeout(scheduleClockTimer)
+  scheduleClockTimer = undefined
 }
 
 function syncBilibiliTheme(isDark: boolean, persist = true) {
@@ -84,10 +82,10 @@ function syncBilibiliTheme(isDark: boolean, persist = true) {
 
 function createDarkState(observeRoute = true, syncNativeTheme = true) {
   const parentTheme = shallowRef<{ isDark: boolean }>()
-  watch([() => settings.value.theme, () => Boolean(parentTheme.value)], ([theme, inherited], _previous, onCleanup) => {
+  watch([() => settings.value.theme, () => Boolean(parentTheme.value), () => settings.value.themeScheduleStart, () => settings.value.themeScheduleEnd], ([theme, inherited, start, end], _previous, onCleanup) => {
     const syncClock = () => {
       if (theme === 'scheduled' && !inherited && !document.hidden)
-        startScheduleClock()
+        startScheduleClock(start, end)
       else stopScheduleClock()
     }
     if (theme === 'scheduled' && !inherited)
@@ -234,11 +232,6 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
         document.documentElement.classList.remove('bili_dark')
       }
     }
-    // else {
-    //   if (!document.documentElement.classList.contains('bili_dark')) {
-    //     document.documentElement.classList.add('bili_dark')
-    //   }
-    // }
   }
 
   let cancelAppearanceTransition: (() => void) | undefined

@@ -150,8 +150,8 @@ html.bewly-design[data-bewly-native-site="public-help"] {
 
   .el-menu-item.is-active {
     // Element UI writes the original selected blue directly on each menu item.
-    color: var(--bew-on-theme-surface) !important;
-    background: var(--bew-theme-surface) !important;
+    color: var(--bew-text-1) !important;
+    background: var(--bew-selected-bg) !important;
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -409,8 +409,8 @@ html.bewly-design[data-bewly-native-site="customer-service"] {
     corner-shape: var(--bew-corner-shape);
 
     &.tag-item__active {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
   }
 
@@ -474,8 +474,8 @@ html.bewly-design[data-bewly-native-site="copyright-intro"] {
       corner-shape: var(--bew-corner-shape);
 
       &:not(.is-disabled):is(:hover, :focus) {
-        background: var(--bew-theme-surface);
-        color: var(--bew-on-theme-surface);
+        background: var(--bew-selected-bg);
+        color: var(--bew-text-1);
       }
     }
 
@@ -547,8 +547,8 @@ html.bewly-design[data-bewly-native-site="topics"] {
       corner-shape: var(--bew-corner-shape);
 
       &.on {
-        background: var(--bew-theme-surface);
-        color: var(--bew-on-theme-surface);
+        background: var(--bew-selected-bg);
+        color: var(--bew-text-1);
         border-color: var(--bew-focus-ring-color);
       }
 

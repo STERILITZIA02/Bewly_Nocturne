@@ -37,7 +37,9 @@ const cloudSyncDialogRef = ref<DialogExpose | null>(null)
 const cloudSyncControlRevision = ref(0)
 const cloudSyncAvailabilityError = ref<'incompatible' | 'failed' | ''>('')
 const showCloudSyncConflictDialog = ref(false)
-const cloudSyncRequestPending = ref(false)
+type CloudSyncControlPhase = 'idle' | 'checking' | 'choosing' | 'enabling' | 'settling' | 'disposed'
+const cloudSyncOperation = shallowRef<{ phase: CloudSyncControlPhase }>({ phase: 'idle' })
+const cloudSyncRequestPending = computed(() => ['checking', 'enabling'].includes(cloudSyncOperation.value.phase))
 const settingsCloudSyncStatus = useStorageLocal(
   SETTINGS_CLOUD_SYNC_STATUS_KEY,
   DEFAULT_SETTINGS_CLOUD_SYNC_STATUS,
@@ -49,9 +51,13 @@ const unsyncedCloudFieldCount = computed(() => settingsCloudSyncStatus.value.pen
 
 watch(settingsCloudSyncPreference, (enabled) => {
   cloudSyncControlRevision.value++
+  // Enabling itself publishes the preference before initialization settles.
+  // Its own response still owns success/failure; only a new UI intent retires it.
+  if (['checking', 'choosing'].includes(cloudSyncOperation.value.phase))
+    cloudSyncOperation.value = { phase: 'idle' }
   if (enabled)
     cloudSyncDialogRef.value?.close()
-})
+}, { flush: 'sync' })
 function isCloudSyncAvailability(value: unknown): value is SettingsCloudSyncAvailability {
   if (!value || typeof value !== 'object')
     return false
@@ -71,10 +77,12 @@ function isCloudSyncEnableResponse(value: unknown): value is SettingsCloudSyncEn
 }
 
 async function enableSettingsCloudSync(mode: SettingsCloudSyncMode) {
-  if (cloudSyncRequestPending.value)
+  if (cloudSyncRequestPending.value || cloudSyncOperation.value.phase === 'disposed')
     return
 
-  cloudSyncRequestPending.value = true
+  const operation = { phase: 'enabling' as CloudSyncControlPhase }
+  cloudSyncOperation.value = operation
+  const current = () => cloudSyncOperation.value === operation
   try {
     const request: SettingsCloudSyncEnableRequest = {
       mode,
@@ -84,13 +92,17 @@ async function enableSettingsCloudSync(mode: SettingsCloudSyncMode) {
       SETTINGS_CLOUD_SYNC_ENABLE_MESSAGE,
       request,
     )
+    if (!current())
+      return
     if (!isCloudSyncEnableResponse(response))
       throw new TypeError('Invalid cloud sync enable response')
     if (response.ok) {
       cloudSyncAvailabilityError.value = ''
-      cloudSyncRequestPending.value = false
+      operation.phase = 'settling'
+      triggerRef(cloudSyncOperation)
       await nextTick()
-      cloudSyncDialogRef.value?.close()
+      if (current())
+        cloudSyncDialogRef.value?.close()
       return
     }
 
@@ -108,21 +120,27 @@ async function enableSettingsCloudSync(mode: SettingsCloudSyncMode) {
     }
   }
   catch (error) {
+    if (!current())
+      return
     cloudSyncAvailabilityError.value = 'failed'
     console.error('Failed to enable settings cloud sync:', error)
     toast.error(t('settings.sync_cloud_enable_failed'))
   }
   finally {
-    cloudSyncRequestPending.value = false
+    if (current())
+      cloudSyncOperation.value = { phase: 'idle' }
   }
 }
 
 async function handleSettingsCloudSyncToggle(nextValue: boolean) {
+  if (cloudSyncOperation.value.phase === 'disposed')
+    return
   // Radio's native checkbox toggles before this async controlled flow resolves.
   // Remount immediately so its visual state continues to reflect persistence.
   cloudSyncControlRevision.value++
   cloudSyncAvailabilityError.value = ''
   if (!nextValue) {
+    cloudSyncOperation.value = { phase: 'idle' }
     cloudSyncDialogRef.value?.close()
     settingsCloudSyncPreference.value = false
     return
@@ -130,11 +148,15 @@ async function handleSettingsCloudSyncToggle(nextValue: boolean) {
   if (cloudSyncRequestPending.value)
     return
 
-  cloudSyncRequestPending.value = true
+  const operation = { phase: 'checking' as CloudSyncControlPhase }
+  cloudSyncOperation.value = operation
+  const current = () => cloudSyncOperation.value === operation
   try {
     const availability = await sendMessage<undefined, SettingsCloudSyncAvailability>(
       SETTINGS_CLOUD_SYNC_AVAILABILITY_MESSAGE,
     )
+    if (!current())
+      return
     if (!isCloudSyncAvailability(availability))
       throw new TypeError('Invalid cloud sync availability response')
 
@@ -145,21 +167,25 @@ async function handleSettingsCloudSyncToggle(nextValue: boolean) {
       return
     }
     if (decision.action === 'choose') {
+      cloudSyncOperation.value = { phase: 'choosing' }
       showCloudSyncConflictDialog.value = true
       return
     }
     if (decision.action === 'enable') {
-      cloudSyncRequestPending.value = false
+      cloudSyncOperation.value = { phase: 'idle' }
       await enableSettingsCloudSync(decision.mode)
     }
   }
   catch (error) {
+    if (!current())
+      return
     cloudSyncAvailabilityError.value = 'failed'
     console.error('Failed to read settings cloud sync availability:', error)
     toast.error(t('settings.sync_cloud_status_failed'))
   }
   finally {
-    cloudSyncRequestPending.value = false
+    if (current())
+      cloudSyncOperation.value = { phase: 'idle' }
   }
 }
 
@@ -170,7 +196,11 @@ function requestCloseCloudSyncConflictDialog() {
 
 function handleCloudSyncConflictDialogClosed() {
   showCloudSyncConflictDialog.value = false
+  if (cloudSyncOperation.value.phase === 'choosing')
+    cloudSyncOperation.value = { phase: 'idle' }
 }
+
+onScopeDispose(() => cloudSyncOperation.value = { phase: 'disposed' })
 </script>
 
 <template>

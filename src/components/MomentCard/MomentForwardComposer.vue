@@ -404,7 +404,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   overflow-y: auto;
 }
 .moment-forward-composer textarea:disabled {
-  opacity: 0.65;
+  opacity: var(--bew-disabled-opacity);
 }
 .moment-forward-composer__topic {
   display: inline-flex;
@@ -415,8 +415,8 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   padding-left: var(--bew-space-2);
   border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-capsule);
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
 }
@@ -434,7 +434,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   corner-shape: var(--bew-corner-shape-round);
 }
 .moment-forward-composer__topic button:hover {
-  background: var(--bew-theme-surface-hover);
+  background: var(--bew-pressed-bg);
 }
 .moment-forward-composer__error {
   margin: var(--bew-space-2) 0 0;
@@ -478,8 +478,8 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   background: var(--bew-hover-bg);
 }
 .moment-forward-composer__tools button[aria-expanded="true"] {
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 .moment-forward-composer__tools span {
   font-size: var(--bew-icon-size-sm);
@@ -494,6 +494,6 @@ watch(accountId, (nextAccountId, previousAccountId) => {
 .moment-forward-composer__submit:disabled,
 .moment-forward-composer__topic button:disabled {
   cursor: default;
-  opacity: 0.55;
+  opacity: var(--bew-disabled-opacity);
 }
 </style>

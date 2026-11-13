@@ -518,7 +518,7 @@ watch(tabContentLoading, (loading) => {
         </div>
 
         <div class="home-header-actions">
-          <ContentFilterEntry v-if="activatedPage === HomeSubPage.ForYou" kind="recommendation" />
+          <ContentFilterEntry v-if="activatedPage === HomeSubPage.ForYou" />
           <RecommendationModeSwitcher
             v-if="reserveRecommendationModeSwitcher"
             class="home-control-surface"

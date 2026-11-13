@@ -105,7 +105,7 @@ function getSkeletonItemKey() {
 .all-search-skeleton__samples {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: var(--bew-space-3);
+  gap: var(--bew-grid-gutter);
   margin-top: var(--bew-space-3);
 }
 
@@ -121,7 +121,7 @@ function getSkeletonItemKey() {
 .all-search-skeleton__article-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--bew-space-4);
+  gap: var(--bew-grid-gutter);
 }
 
 @media (max-width: breakpoints.$grid-lg) {

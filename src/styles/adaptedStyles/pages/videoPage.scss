@@ -35,8 +35,8 @@
     }
 
     .video-pod .simple-base-item.active {
-      background-color: var(--bew-theme-surface) !important;
-      color: var(--bew-on-theme-surface) !important;
+      background-color: var(--bew-selected-bg) !important;
+      color: var(--bew-text-1) !important;
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
 
@@ -81,9 +81,9 @@
   :not(foobar) {
     .video-custom-interactive-layer-entry {
       .video-custom-interactive-layer-card {
-        background: var(--bew-theme-surface) !important;
+        background: var(--bew-selected-bg) !important;
         border-color: var(--bew-edge-color) !important;
-        color: var(--bew-on-theme-surface) !important;
+        color: var(--bew-text-1) !important;
       }
 
       :is(.video-custom-interactive-layer-text, .video-custom-interactive-layer-link-icon) {
@@ -95,7 +95,7 @@
       }
 
       &:is(:hover, :focus-visible, :active) .video-custom-interactive-layer-card {
-        background: var(--bew-theme-surface-hover) !important;
+        background: var(--bew-pressed-bg) !important;
       }
 
       &:focus-visible {
@@ -170,6 +170,14 @@
     .note-list .list-note-operation:hover,
     .user-card-m-exp .user-info-wrapper .info .btn-box .like:not(.liked):hover,
     .coin-operated-m-exp .coin-bottom .bi-btn:hover,
+    .note-up .up-desc-container .desc-top .attention-btn-container:not(.is-attention):hover,
+    .report-dialog .vui_dialog--footer .report-dialog-footer .button-wrap .comfirm-report:hover,
+    .collection-m-exp .bottom .btn:not(.disable):hover {
+      background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+    }
+
+    // Secondary buttons (copy link, already followed, charge, note tools) stay neutral.
     .video-share-popover
       .video-share-dropdown
       .dropdown-top
@@ -177,18 +185,11 @@
       .capture-bar
       .bar-right
       .copy-link:hover,
-    .note-up .up-desc-container .desc-top .attention-btn-container:hover,
     .note-up .up-desc-container .desc-top .attention-btn-container.is-attention:hover,
-    .report-dialog .vui_dialog--footer .report-dialog-footer .button-wrap .comfirm-report:hover,
-    .collection-m-exp .bottom .btn:not(.disable):hover,
-    .upinfo-btn-panel .following-charge-btn:hover {
-      background-color: var(--bew-theme-color);
-      color: var(--bew-on-theme-color);
-    }
-
+    .upinfo-btn-panel .following-charge-btn:hover,
     .note-pc .note-container .note-header .note-operation:hover {
-      background-color: var(--bew-theme-color);
-      color: var(--bew-on-theme-color);
+      background-color: var(--bew-hover-bg);
+      color: var(--bew-text-1);
     }
 
     .upinfo-btn-panel .follow-btn.not-follow:hover {
@@ -317,8 +318,8 @@
               box-sizing: border-box;
 
               &:hover {
-                color: var(--bew-on-theme-surface);
-                background-color: var(--bew-theme-surface);
+                color: var(--bew-text-1);
+                background-color: var(--bew-selected-bg);
                 border-color: var(--bew-focus-ring-color);
               }
             }
@@ -440,11 +441,11 @@
     .collection-m-exp .content .group-list .add-group .input-group .submit,
     .collection-m-exp.bewly-enlarged-favorite-dialog .content .group-list .add-group .input-group .submit,
     .follow-dialog-wrap-exp .follow-dialog-window .content .group-list .add-group .input-group .submitGroup {
-      background-color: var(--bew-theme-surface) !important;
-      color: var(--bew-on-theme-surface) !important;
+      background-color: var(--bew-selected-bg) !important;
+      color: var(--bew-text-1) !important;
 
       &:hover {
-        background-color: var(--bew-theme-surface-hover) !important;
+        background-color: var(--bew-pressed-bg) !important;
       }
     }
 
@@ -475,9 +476,9 @@
         border-color var(--bew-duration-normal) var(--bew-ease-standard) !important;
 
       &:hover {
-        color: var(--bew-on-theme-surface) !important;
+        color: var(--bew-text-1) !important;
         border-color: var(--bew-focus-ring-color) !important;
-        background-color: var(--bew-theme-surface) !important;
+        background-color: var(--bew-selected-bg) !important;
       }
     }
 

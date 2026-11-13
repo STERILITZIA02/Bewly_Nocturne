@@ -1,3 +1,4 @@
+// @unocss-include
 import { watch } from 'vue'
 
 import { useRouteState } from '~/composables/useRouteState'
@@ -10,11 +11,6 @@ import { captureVideoScreenshot, handleVideoScreenshotShortcut, videoScreenshotB
 import { registerPlayerControlFit } from './playerControlFit'
 import { createPlayerControlTooltip, updatePlayerControlTooltip } from './playerControlTooltip'
 import { observePlayerDom } from './playerDomLifecycle'
-
-const screenshotIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88" style="width: 100%; height: 100%;">
-  <path d="M25 29h9l4-6h12l4 6h9a6 6 0 0 1 6 6v26a6 6 0 0 1-6 6H25a6 6 0 0 1-6-6V35a6 6 0 0 1 6-6Z" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
-  <circle cx="44" cy="48" r="11" fill="none" stroke="#fff" stroke-width="5"/>
-</svg>`
 
 let controlContainer: HTMLElement | null = null
 let hasInitialized = false
@@ -54,10 +50,10 @@ function createControlContainer(): HTMLElement {
   const icon = document.createElement('div')
   icon.className = 'bpx-player-ctrl-btn-icon bewly-video-screenshot-icon'
 
-  const iconWrapper = document.createElement('span')
-  iconWrapper.className = 'bpx-common-svg-icon'
-  iconWrapper.innerHTML = screenshotIcon
-  icon.appendChild(iconWrapper)
+  const glyph = document.createElement('i')
+  glyph.className = 'i-tabler:camera bewly-player-glyph'
+  glyph.setAttribute('aria-hidden', 'true')
+  icon.appendChild(glyph)
   container.append(icon, createPlayerControlTooltip(label))
 
   container.addEventListener('click', () => {

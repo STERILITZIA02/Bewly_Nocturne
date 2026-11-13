@@ -434,7 +434,7 @@ const weekDays = computed(() => [
         :aria-controls="showPicker ? pickerId : undefined"
         @click="openPicker"
       >
-        <div class="i-tabler:calendar" w-4 h-4 />
+        <div class="i-tabler:calendar" w="$bew-icon-size-sm" h="$bew-icon-size-sm" />
       </button>
     </div>
 
@@ -452,22 +452,22 @@ const weekDays = computed(() => [
           <div class="picker-header">
             <div class="year-controls">
               <button type="button" class="header-btn" :aria-label="$t('search.date_picker.previous_year')" @click="prevYear">
-                <div class="i-tabler:chevron-left" w-4 h-4 />
+                <div class="i-tabler:chevron-left" w="$bew-icon-size-sm" h="$bew-icon-size-sm" />
               </button>
               <span class="year-text">{{ $t('search.date_picker.year', { year: currentYear }) }}</span>
               <button type="button" class="header-btn" :aria-label="$t('search.date_picker.next_year')" @click="nextYear">
-                <div class="i-tabler:chevron-right" w-4 h-4 />
+                <div class="i-tabler:chevron-right" w="$bew-icon-size-sm" h="$bew-icon-size-sm" />
               </button>
             </div>
             <div class="month-controls">
               <button type="button" class="header-btn" :aria-label="$t('search.date_picker.previous_month')" @click="prevMonth">
-                <div class="i-tabler:chevron-up" w-5 h-5 />
+                <div class="i-tabler:chevron-up" w="$bew-icon-size-md" h="$bew-icon-size-md" />
               </button>
               <div class="month-text">
                 {{ monthNames[currentMonth] }}
               </div>
               <button type="button" class="header-btn" :aria-label="$t('search.date_picker.next_month')" @click="nextMonth">
-                <div class="i-tabler:chevron-down" w-5 h-5 />
+                <div class="i-tabler:chevron-down" w="$bew-icon-size-md" h="$bew-icon-size-md" />
               </button>
             </div>
           </div>
@@ -539,8 +539,8 @@ const weekDays = computed(() => [
     &:focus-visible {
       outline: none;
       box-shadow: none;
-      color: var(--bew-on-theme-surface);
-      background: var(--bew-theme-surface);
+      color: var(--bew-text-1);
+      background: var(--bew-selected-bg);
     }
   }
 }
@@ -621,7 +621,7 @@ const weekDays = computed(() => [
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(var(--bew-item-press-scale));
   }
 }
 
@@ -660,7 +660,7 @@ const weekDays = computed(() => [
 .date-picker-panel .footer-btn:disabled,
 .date-picker .calendar-icon:disabled {
   color: var(--bew-text-3);
-  opacity: 0.5;
+  opacity: var(--bew-disabled-opacity);
   cursor: not-allowed;
   transform: none;
 }
@@ -711,12 +711,12 @@ const weekDays = computed(() => [
     transform var(--bew-duration-normal) var(--bew-ease-out);
 
   &:hover {
-    background: var(--bew-fill-1);
+    background: var(--bew-hover-bg);
     color: var(--bew-text-1);
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(var(--bew-item-press-scale));
   }
 }
 
@@ -767,7 +767,7 @@ const weekDays = computed(() => [
     transform var(--bew-duration-normal) var(--bew-ease-out);
 
   &:hover:not(.disabled) {
-    background: var(--bew-fill-1);
+    background: var(--bew-hover-bg);
   }
 
   &.other-month {
@@ -777,7 +777,7 @@ const weekDays = computed(() => [
   &.disabled {
     color: var(--bew-text-4);
     cursor: not-allowed;
-    opacity: 0.5;
+    opacity: var(--bew-disabled-opacity);
   }
 
   &.today {
@@ -796,7 +796,7 @@ const weekDays = computed(() => [
   }
 
   &:active:not(.disabled) {
-    transform: scale(0.95);
+    transform: scale(var(--bew-item-press-scale));
   }
 }
 
@@ -833,7 +833,7 @@ const weekDays = computed(() => [
     color: var(--bew-text-2);
 
     &:hover:not(:disabled) {
-      background: var(--bew-fill-1);
+      background: var(--bew-hover-bg);
       color: var(--bew-text-1);
     }
   }
@@ -842,12 +842,12 @@ const weekDays = computed(() => [
     color: var(--bew-text-1);
 
     &:hover:not(:disabled) {
-      background: var(--bew-theme-surface);
+      background: var(--bew-selected-bg);
     }
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(var(--bew-item-press-scale));
   }
 }
 

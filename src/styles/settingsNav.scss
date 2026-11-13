@@ -1,3 +1,4 @@
+@use "hoverState";
 @use "truncateFade";
 
 // The settings window's navigation columns (user-specified, after Claude
@@ -38,7 +39,7 @@ $row-inset: var(--bew-space-3);
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  min-height: var(--bew-space-8);
+  min-height: var(--bew-row-height);
   padding: var(--bew-space-1) $row-inset;
   color: var(--bew-text-1);
   text-align: left;
@@ -50,9 +51,7 @@ $row-inset: var(--bew-space-3);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   cursor: pointer;
-  transition:
-    background-color var(--bew-duration-fast) var(--bew-ease-standard),
-    color var(--bew-duration-fast) var(--bew-ease-standard);
+  @include hoverState.transition($hover: "&:is(:hover, :focus-visible)");
 
   // The icon is quieter than the label until the row is open.
   > .settings-nav-icon {

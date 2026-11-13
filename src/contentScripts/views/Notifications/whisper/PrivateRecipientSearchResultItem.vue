@@ -60,7 +60,7 @@ const emit = defineEmits<{
 }
 
 .private-recipient-result:hover {
-  background: var(--bew-fill-1);
+  background: var(--bew-hover-bg);
 }
 .private-recipient-result.is-selected {
   background: var(--bew-selected-bg);

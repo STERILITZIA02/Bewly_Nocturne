@@ -112,8 +112,5 @@ export async function getManifest() {
     },
   }
 
-  if (isDev)
-    manifest.permissions?.push('webNavigation')
-
   return manifest
 }

@@ -1,4 +1,5 @@
 import { resolveCommentPagination } from '~/utils/commentPagination'
+import { asObject } from '~/utils/plainObject'
 
 export interface MomentCommentAuthor {
   id: string
@@ -42,10 +43,6 @@ export interface MomentCommentPage {
   nextPage: number
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? value as Record<string, unknown> : {}
-}
-
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : []
 }
@@ -87,8 +84,8 @@ export function normalizeMomentCommentPictureUrl(value: unknown): string {
 }
 
 export function normalizeMomentCommentPictures(contentValue: unknown): MomentCommentPicture[] {
-  return asArray(asRecord(contentValue).pictures).flatMap((value) => {
-    const raw = asRecord(value)
+  return asArray(asObject(contentValue).pictures).flatMap((value) => {
+    const raw = asObject(value)
     const url = normalizeMomentCommentPictureUrl(raw.img_src)
     if (!url)
       return []
@@ -114,38 +111,38 @@ function appendText(segments: MomentCommentSegment[], text: string) {
 
 function getRichNodeReplacements(content: Record<string, unknown>): Map<string, MomentCommentSegment> {
   const replacements = new Map<string, MomentCommentSegment>()
-  const emoteMap = asRecord(content.emote)
+  const emoteMap = asObject(content.emote)
 
   Object.entries(emoteMap).forEach(([text, value]) => {
-    const emote = asRecord(value)
+    const emote = asObject(value)
     const url = firstString(emote.url, emote.gif_url, emote.webp_url)
     if (text && isSafeRemoteUrl(url))
       replacements.set(text, { type: 'emote', text, url })
   })
 
   asArray(content.members).forEach((value) => {
-    const member = asRecord(value)
+    const member = asObject(value)
     const mid = toId(member.mid)
     const name = firstString(member.uname, member.name)
     if (mid && name)
       replacements.set(`@${name}`, { type: 'mention', text: `@${name}`, mid })
   })
 
-  Object.entries(asRecord(content.at_name_to_mid)).forEach(([name, value]) => {
+  Object.entries(asObject(content.at_name_to_mid)).forEach(([name, value]) => {
     const mid = toId(value)
     if (mid && name)
       replacements.set(`@${name}`, { type: 'mention', text: `@${name}`, mid })
   })
 
-  Object.entries(asRecord(content.jump_url)).forEach(([text, value]) => {
-    const jump = asRecord(value)
+  Object.entries(asObject(content.jump_url)).forEach(([text, value]) => {
+    const jump = asObject(value)
     const url = firstString(jump.pc_url, jump.url, jump.app_url)
     if (text && isSafeRemoteUrl(url))
       replacements.set(text, { type: 'link', text, url })
   })
 
   asArray(content.rich_text_nodes).forEach((value) => {
-    const node = asRecord(value)
+    const node = asObject(value)
     const text = firstString(node.text, node.orig_text)
     const type = firstString(node.type).toUpperCase()
     if (!text)
@@ -159,7 +156,7 @@ function getRichNodeReplacements(content: Record<string, unknown>): Map<string, 
     }
 
     if (type.includes('EMOJI')) {
-      const emoji = asRecord(node.emoji)
+      const emoji = asObject(node.emoji)
       const url = firstString(node.icon_url, emoji.icon_url, emoji.url)
       if (isSafeRemoteUrl(url))
         replacements.set(text, { type: 'emote', text, url })
@@ -182,7 +179,7 @@ export function normalizeMomentCommentSegments(
 ): MomentCommentSegment[] {
   if (!message)
     return []
-  const replacements = Array.from(getRichNodeReplacements(asRecord(contentValue)).values())
+  const replacements = Array.from(getRichNodeReplacements(asObject(contentValue)).values())
     .sort((left, right) => right.text.length - left.text.length)
   if (!replacements.length)
     return [{ type: 'text', text: message }]
@@ -214,12 +211,12 @@ export function normalizeMomentCommentSegments(
 }
 
 export function normalizeMomentComment(value: unknown): MomentCommentItem | null {
-  const raw = asRecord(value)
-  const member = asRecord(raw.member)
-  const vip = asRecord(member.vip)
-  const content = asRecord(raw.content)
+  const raw = asObject(value)
+  const member = asObject(raw.member)
+  const vip = asObject(member.vip)
+  const content = asObject(raw.content)
   const richNodeMessage = asArray(content.rich_text_nodes)
-    .map(node => firstString(asRecord(node).text, asRecord(node).orig_text))
+    .map(node => firstString(asObject(node).text, asObject(node).orig_text))
     .join('')
   const message = firstString(content.message, richNodeMessage).trim()
   const pictures = normalizeMomentCommentPictures(content)
@@ -235,8 +232,8 @@ export function normalizeMomentComment(value: unknown): MomentCommentItem | null
     .map(normalizeMomentComment)
     .filter((item): item is MomentCommentItem => Boolean(item)))
 
-  const action = asRecord(raw.action)
-  const upAction = asRecord(raw.up_action)
+  const action = asObject(raw.action)
+  const upAction = asObject(raw.up_action)
 
   return {
     id,
@@ -304,11 +301,11 @@ export function normalizeMomentCommentPage(
   requestedPage: number,
   requestedPageSize: number,
 ): MomentCommentPage {
-  const root = asRecord(response)
+  const root = asObject(response)
   if (Number(root.code) !== 0)
     throw new Error(typeof root.message === 'string' && root.message ? root.message : 'Comment request failed')
 
-  const data = asRecord(root.data)
+  const data = asObject(root.data)
   if (!root.data || (data.replies !== null && !Array.isArray(data.replies)))
     throw new Error('Invalid comment page')
   const replies = asArray(data.replies)
@@ -333,16 +330,16 @@ export function normalizeMomentCommentRepliesPage(
   requestedPage: number,
   requestedPageSize: number,
 ): MomentCommentPage {
-  const root = asRecord(response)
+  const root = asObject(response)
   if (Number(root.code) !== 0)
     throw new Error(typeof root.message === 'string' && root.message ? root.message : 'Comment reply request failed')
 
-  const data = asRecord(root.data)
+  const data = asObject(root.data)
   if (!root.data || (data.replies !== null && !Array.isArray(data.replies)))
     throw new Error('Invalid comment reply page')
   const source = mergeMomentComments([], [
     ...asArray(data.replies),
-    ...asArray(asRecord(data.root).replies),
+    ...asArray(asObject(data.root).replies),
   ].map(normalizeMomentComment).filter((item): item is MomentCommentItem => Boolean(item)))
   const items = flattenMomentCommentReplies(source)
   return {

@@ -1,6 +1,8 @@
 import type { MaybeRefOrGetter } from 'vue'
 import { computed, ref, shallowReactive, toValue, watch } from 'vue'
 
+import { resolvePaginationPhase, withPaginationState } from '~/utils/paginationState'
+
 import type { NotificationPageParams } from '../notificationFeedParsing'
 import {
   buildNextPageParams,
@@ -20,6 +22,7 @@ import type {
   NotificationFailedOperation,
   NotificationFeedState,
   NotificationReadCandidate,
+  NotificationReadCommit,
 } from './notificationFeedState'
 
 export type { NotificationPageParams } from '../notificationFeedParsing'
@@ -51,7 +54,7 @@ export function useNotificationFeed(
   const accountMid = ref(resolvedMid.value)
   const readCandidate = ref<NotificationReadCandidate | null>(null)
   const itemIds = new Set<string>()
-  const state = shallowReactive<NotificationFeedState>({
+  const state = shallowReactive<NotificationFeedState>(withPaginationState({
     items: shallowReactive([]),
     cursorId: '',
     cursorTime: 0,
@@ -61,19 +64,18 @@ export function useNotificationFeed(
     loadedAt: 0,
     unreadCountAtFetch: 0,
     lastObservedUnreadCount: 0,
-    noMore: false,
     errorKind: null,
     failedOperation: null,
     failedFirstPageApplyMode: null,
     hasLoadedMore: false,
-    paginationStalled: false,
     generation: 0,
     scrollTop: 0,
     firstPageRequestSerial: 0,
-    currentReadCommitId: '',
-    serverReadCommitted: false,
-    badgeReconciled: false,
-  })
+    readCommit: { phase: 'idle' } as NotificationReadCommit,
+    get currentReadCommitId() { return this.readCommit.phase === 'idle' ? '' : this.readCommit.id },
+    get serverReadCommitted() { return this.readCommit.phase === 'committed' || this.readCommit.phase === 'reconciled' },
+    get badgeReconciled() { return this.readCommit.phase === 'reconciled' },
+  }))
 
   let initialRequest: Promise<void> | null = null
   let loadMoreRequest: Promise<void> | null = null
@@ -91,17 +93,14 @@ export function useNotificationFeed(
     state.loadedAt = 0
     state.unreadCountAtFetch = 0
     state.lastObservedUnreadCount = 0
-    state.noMore = false
+    state.pagination = 'ready'
     state.errorKind = null
     state.failedOperation = null
     state.failedFirstPageApplyMode = null
     state.hasLoadedMore = false
-    state.paginationStalled = false
     state.scrollTop = 0
     state.firstPageRequestSerial = 0
-    state.currentReadCommitId = ''
-    state.serverReadCommitted = false
-    state.badgeReconciled = false
+    state.readCommit = { phase: 'idle' }
     readCandidate.value = null
     initialRequest = null
     loadMoreRequest = null
@@ -144,9 +143,8 @@ export function useNotificationFeed(
         itemIds.add(item.id)
       state.cursorId = applied.cursorId
       state.cursorTime = applied.cursorTime
-      state.noMore = applied.noMore
+      state.pagination = resolvePaginationPhase(applied.noMore, !applied.paginationStalled)
       state.hasLoadedMore = applied.hasLoadedMore
-      state.paginationStalled = applied.paginationStalled
       state.loaded = true
       state.loadedAt = loadedAt
       state.unreadCountAtFetch = unreadCount
@@ -156,7 +154,7 @@ export function useNotificationFeed(
         state.failedFirstPageApplyMode = null
       }
       const serverReadCommitted = result.page.serverReadCommitted ?? true
-      state.serverReadCommitted = serverReadCommitted
+      state.readCommit = { phase: serverReadCommitted ? 'committed' : 'uncommitted', id: state.currentReadCommitId }
       // Reply, At, and Like commit read in their successful first-page GET.
       // System's adapter publishes its first page only after update_cursor.
       readCandidate.value = serverReadCommitted
@@ -207,9 +205,7 @@ export function useNotificationFeed(
       state.failedOperation = null
       state.failedFirstPageApplyMode = null
     }
-    state.currentReadCommitId = createReadCommitId(section, requestMid, requestGeneration, requestSerial)
-    state.serverReadCommitted = false
-    state.badgeReconciled = false
+    state.readCommit = { phase: 'uncommitted', id: createReadCommitId(section, requestMid, requestGeneration, requestSerial) }
     readCandidate.value = null
     loadMoreRequest = null
     const request = requestInitialPage(
@@ -262,7 +258,7 @@ export function useNotificationFeed(
         noMore: result.page.noMore,
       })
       if (progress.stalled) {
-        state.paginationStalled = true
+        state.pagination = 'stalled'
         state.errorKind = 'invalid-response'
         state.failedOperation = 'load-more'
         return
@@ -276,9 +272,8 @@ export function useNotificationFeed(
       state.errorKind = null
       state.failedOperation = null
       state.failedFirstPageApplyMode = null
-      state.noMore = result.page.noMore
+      state.pagination = resolvePaginationPhase(result.page.noMore)
       state.hasLoadedMore = true
-      state.paginationStalled = false
     }
     catch {
       if (isCurrentPageRequest(requestGeneration, requestMid, requestSerial)) {
@@ -359,7 +354,7 @@ export function useNotificationFeed(
       })
     }
     if (state.failedOperation === 'load-more') {
-      state.paginationStalled = false
+      state.pagination = 'ready'
       state.errorKind = null
       state.failedOperation = null
       return loadMore()
@@ -398,7 +393,7 @@ export function useNotificationFeed(
     if (!isReadCandidateCurrent(candidate))
       return false
 
-    state.badgeReconciled = true
+    state.readCommit = { phase: 'reconciled', id: candidate.readCommitId }
     return true
   }
 

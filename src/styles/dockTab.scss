@@ -46,7 +46,7 @@
   }
 
   &:active:not(:disabled) #{$glyph} {
-    transform: scale(0.9);
+    transform: scale(var(--bew-icon-press-scale));
   }
 
   &:focus-visible {

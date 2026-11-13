@@ -1,36 +1,42 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import LoadingRing from '~/components/LoadingRing.vue'
 import { getMomentThumbnailUrl } from '~/components/MomentCard/utils'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useDark } from '~/composables/useDark'
 import { useImageTone } from '~/composables/useImageTone'
 import api from '~/utils/api'
 import { readCoverField } from '~/utils/coverField'
+import type { LyricLine, LyricTrack } from '~/utils/listenLyrics'
+import { pickLyricTrack, readLyricLines, readLyricTracks } from '~/utils/listenLyrics'
+import { LISTEN_TONED_ATTRIBUTE } from '~/utils/listenPlayback'
 import { listenStage } from '~/utils/listenStage'
-import { hasLoadedPicture, rememberLoadedPicture } from '~/utils/pictureRevealMemory'
+import { getUserID } from '~/utils/main'
+import { getPlaybackVideoInfo } from '~/utils/playbackVideoInfo'
 import { prefersReducedMotion } from '~/utils/reducedMotion'
 import { springTiming } from '~/utils/spring'
 import type { NativePlaybackUnit } from '~/utils/videoMetadataBridge'
 import { claimNativeMediaSession, getNativePlaybackUnitKey } from '~/utils/videoMetadataBridge'
 
+import ListenLyrics from './ListenLyrics.vue'
+import ListenTurntable from './ListenTurntable.vue'
+
 /**
- * Listening to a video: the cover takes the picture's place on a field of its
- * own colours, under Bpx's control bar, which plays the audio
- * (listenNativeBar). The cover
- * comes forward while the sound plays and recedes when it stops; the field
- * turns slowly only while it plays.
+ * Listening to a video: a record player takes the picture's place on a field
+ * of the cover's own colours, under Bpx's control bar, which plays the audio
+ * (listenNativeBar). The record carries the cover as its label
+ * (ListenTurntable); a video with subtitles shows them beside or below it as
+ * scrolling lyrics (ListenLyrics). The field turns slowly with the record,
+ * running up and down at its pace.
  */
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { isDark } = useDark()
 const stage = listenStage
 
 // ---- What is playing --------------------------------------------------------
 
 interface ListenMeta { title: string, cover: string, author?: string, authorMid?: number, detail?: string }
-interface VideoInfo { pic?: string, title?: string, owner?: { mid?: number, name?: string }, pages?: { cid: number, page: number, part: string }[] }
 interface Episode { id?: number, ep_id?: number, cover?: string, title?: string, long_title?: string, show_title?: string }
 interface Season { season_title?: string, title?: string, cover?: string, episodes?: Episode[], section?: { episodes?: Episode[] }[] }
 
@@ -48,7 +54,7 @@ async function readMeta(unit: NativePlaybackUnit, signal: AbortSignal): Promise<
       detail: episode?.show_title || [episode?.title, episode?.long_title].filter(Boolean).join(' '),
     }
   }
-  const response = await api.video.getVideoInfo(unit.bvid ? { bvid: unit.bvid } : { aid: String(unit.aid) }, { signal }) as { code: number, data?: VideoInfo }
+  const response = await getPlaybackVideoInfo(unit.bvid ? { bvid: unit.bvid } : { aid: String(unit.aid) }, signal)
   const info = response?.code === 0 ? response.data : undefined
   if (!info)
     return null
@@ -73,8 +79,11 @@ watch(() => stage.value && getNativePlaybackUnitKey(stage.value.unit), async (ke
   const controller = new AbortController()
   onCleanup(() => controller.abort())
   try {
-    meta.value = await readMeta(unit, controller.signal)
-    metaFailed.value = !meta.value
+    const result = await readMeta(unit, controller.signal)
+    if (!controller.signal.aborted) {
+      meta.value = result
+      metaFailed.value = !result
+    }
   }
   catch {
     if (!controller.signal.aborted)
@@ -82,15 +91,33 @@ watch(() => stage.value && getNativePlaybackUnitKey(stage.value.unit), async (ke
   }
 }, { immediate: true })
 
-const cover = computed(() => meta.value?.cover ? getMomentThumbnailUrl(meta.value.cover, 960) : '')
-const coverLoaded = ref(false)
-watch(cover, src => coverLoaded.value = !!src && hasLoadedPicture(src), { immediate: true })
-function handleCoverLoad() {
-  coverLoaded.value = true
-  rememberLoadedPicture(cover.value)
-}
+const cover = computed(() => meta.value?.cover ? getMomentThumbnailUrl(meta.value.cover, 480) : '')
 // The whole cover's average colour, with black or white text on it.
 const tone = useImageTone(() => ({ portrait: !!meta.value?.cover, image: meta.value?.cover, edge: 'all' }))
+
+// The playback page's control card is glass in the page's colours; under the
+// stage it takes the stage's (user-approved 2026-11-12). The tone goes on the
+// player root, where videoPlayer.scss derives the card's tokens from it, and
+// leaves with the session, before the stage dissolves. The root is read from
+// each published stage: Bilibili may rebuild the player and the stage host
+// moves to the new one (listenControl.ts) with the same mount.
+function playerRoot() {
+  const current = stage.value
+  return current && !current.leaving ? (current.mount.getRootNode() as ShadowRoot).host?.parentElement ?? null : null
+}
+watch([tone, playerRoot], ([colors, root], _previous, onCleanup) => {
+  if (!root || !colors)
+    return
+  const names = Object.keys(colors)
+  for (const name of names)
+    root.style.setProperty(name, String(colors[name as keyof typeof colors]))
+  root.setAttribute(LISTEN_TONED_ATTRIBUTE, '')
+  onCleanup(() => {
+    for (const name of names)
+      root.style.removeProperty(name)
+    root.removeAttribute(LISTEN_TONED_ATTRIBUTE)
+  })
+}, { immediate: true })
 
 // ---- The audio's state --------------------------------------------------------
 
@@ -113,7 +140,7 @@ watch(() => stage.value?.audio, (audio, _previous, onCleanup) => {
     audio.addEventListener(name, () => buffering.value = false, { signal: controller.signal })
 }, { immediate: true })
 
-const loading = computed(() => !!stage.value && !stage.value.failed && (stage.value.loading || !stage.value.audio || buffering.value))
+const loading = computed(() => !!stage.value && !stage.value.failed && !stage.value.leaving && (stage.value.loading || !stage.value.audio || buffering.value))
 const unavailable = computed(() => !stage.value?.audio || !!stage.value.failed)
 
 function toggle() {
@@ -126,34 +153,106 @@ function toggle() {
     audio.pause()
 }
 
-// ---- The cover comes forward while the sound plays ----------------------------
-
-const RECEDED = 0.88
-const art = ref<HTMLElement>()
-let artMotion: Animation | undefined
 const present = computed(() => playing.value && !stage.value?.failed)
 
-function settleArt(from?: number) {
-  const element = art.value
-  if (!element)
+// ---- Lyrics: the video's subtitles ----------------------------------------------
+
+// Read for the signed-in account, one request per part and per track
+// (listenLyrics.ts); a new part, another track or leaving cancels the wait.
+const tracks = shallowRef<LyricTrack[]>([])
+const chosenTrack = ref<string>()
+const lines = shallowRef<LyricLine[]>([])
+watch(() => stage.value && getNativePlaybackUnitKey(stage.value.unit), async (key, _previous, onCleanup) => {
+  tracks.value = []
+  chosenTrack.value = undefined
+  const unit = stage.value?.unit
+  if (!key || !unit)
     return
-  const target = present.value ? 1 : RECEDED
-  const start = from ?? (Number(getComputedStyle(element).scale) || target)
-  artMotion?.cancel()
-  element.style.scale = String(target)
-  if (prefersReducedMotion() || Math.abs(start - target) < 0.001)
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  try {
+    const result = await readLyricTracks(unit, getUserID(), controller.signal)
+    if (!controller.signal.aborted)
+      tracks.value = result
+  }
+  catch { /* A video without readable subtitles has no lyrics. */ }
+}, { immediate: true })
+const track = computed(() => tracks.value.find(item => item.id === chosenTrack.value) ?? pickLyricTrack(tracks.value, locale.value))
+watch(track, async (current, _previous, onCleanup) => {
+  if (!current) {
+    lines.value = []
     return
-  artMotion = element.animate({ scale: [String(start), String(target)] }, springTiming(0.3, Math.abs(target - start) * element.offsetWidth))
+  }
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  try {
+    // The lines shown stay until the other track's arrive.
+    const result = await readLyricLines(current, getUserID(), controller.signal)
+    if (!controller.signal.aborted)
+      lines.value = result
+  }
+  catch {
+    if (!controller.signal.aborted)
+      lines.value = []
+  }
+}, { immediate: true })
+const hasLyrics = computed(() => lines.value.length > 0)
+
+// The record and its title give way to the lyrics, or take the stage back,
+// in one move from where they were painted.
+const main = ref<HTMLElement>()
+watch(hasLyrics, async () => {
+  const element = main.value
+  if (!element || prefersReducedMotion() || typeof element.animate !== 'function')
+    return
+  const before = element.getBoundingClientRect()
+  await nextTick()
+  const after = element.getBoundingClientRect()
+  if (!before.width || !after.width)
+    return
+  const x = before.left - after.left
+  const y = before.top - after.top
+  element.animate(
+    { transformOrigin: ['0 0', '0 0'], transform: [`translate(${x}px, ${y}px) scale(${before.width / after.width})`, 'none'] },
+    springTiming(0.3, Math.hypot(x, y)),
+  )
+})
+
+// ---- Arriving -----------------------------------------------------------------------
+
+// The picture's last frame lies under the stage while it fades in
+// (listenStageMotion.ts) and goes once the stage covers it.
+let arrived = prefersReducedMotion()
+function handleArrived() {
+  arrived = true
+  stage.value?.frame?.remove()
 }
-watch(present, () => settleArt(), { flush: 'post' })
-// The stage arrives with its cover rising from further back.
-watch(art, element => element && settleArt(RECEDED * 0.92), { flush: 'post' })
+watch(() => stage.value?.frame, frame => arrived && frame?.remove(), { immediate: true })
 
 // ---- A field in the cover's colours ---------------------------------------------
 
 // Scaled up from the shared 64px field (coverField.ts), so turning it costs a
 // transform, not a filter, per frame.
 const field = ref<string | null>(null)
+const fieldLayers = ref<HTMLElement[]>([])
+
+/**
+ * The field turns at the record's pace: the record's own ramp (ListenTurntable)
+ * sets the speed of the layers' endless turns, so the whole stage runs up and
+ * settles together. The turns are CSS animations, paused until then; reduced
+ * motion has none.
+ */
+function paceField(rate: number) {
+  for (const layer of fieldLayers.value) {
+    for (const animation of layer.getAnimations()) {
+      animation.playbackRate = rate
+      if (rate)
+        animation.play()
+      else
+        animation.pause()
+    }
+  }
+}
 watch(() => meta.value?.cover, async (source, _previous, onCleanup) => {
   field.value = null
   if (!source)
@@ -211,9 +310,10 @@ watch([meta, () => stage.value?.audio], ([info, audio]) => {
     <div class="bewly-wrapper" :class="{ dark: isDark }">
       <section
         class="listen-stage"
-        :class="{ 'is-playing': playing }"
+        :class="{ 'is-leaving': stage.leaving }"
         :style="tone"
         :aria-label="t('widescreen.listen')"
+        @animationend.self="handleArrived"
       >
         <div class="listen-stage__surface">
           <div
@@ -222,68 +322,70 @@ watch([meta, () => stage.value?.audio], ([info, audio]) => {
             :style="field ? { '--listen-field': `url(${field})` } : undefined"
             aria-hidden="true"
           >
-            <span v-for="index in 2" :key="index" class="listen-field__layer" />
+            <span v-for="index in 2" :key="index" ref="fieldLayers" class="listen-field__layer" />
           </div>
 
-          <div class="listen-stage__body">
-            <button
-              ref="art"
-              type="button"
-              class="listen-art"
-              :aria-label="t(playing ? 'widescreen.listen_pause' : 'widescreen.listen_play')"
-              :disabled="unavailable"
-              @click="toggle"
-            >
-              <span class="listen-art__face">
-                <img
-                  v-if="cover"
-                  class="listen-art__image"
-                  :class="{ 'is-loaded': coverLoaded }"
-                  :src="cover"
-                  alt=""
-                  decoding="async"
-                  @load="handleCoverLoad"
-                >
-                <SkeletonBlock v-else-if="!metaFailed" class="listen-art__image" height="100%" radius="media" />
-                <span v-if="loading || stage.failed" class="listen-art__state">
-                  <i v-if="stage.failed" class="i-tabler:alert-circle listen-art__glyph" aria-hidden="true" />
-                  <LoadingRing v-else :loading="loading" size="var(--bew-icon-size-xl)" />
-                </span>
-              </span>
-            </button>
+          <div class="listen-stage__body" :class="{ 'has-lyrics': hasLyrics }">
+            <div ref="main" class="listen-main">
+              <ListenTurntable
+                class="listen-main__deck"
+                :cover="cover"
+                :pending="!meta && !metaFailed"
+                :playing="present"
+                :audio="stage.audio"
+                :loading="loading"
+                :failed="stage.failed"
+                :disabled="unavailable"
+                :label="t(playing ? 'widescreen.listen_pause' : 'widescreen.listen_play')"
+                @toggle="toggle"
+                @rate="paceField"
+              />
 
-            <div class="listen-meta">
-              <template v-if="meta">
-                <h2 class="listen-meta__title keep-two-lines">
-                  {{ meta.title }}
-                </h2>
-                <p v-if="meta.author || meta.detail" class="listen-meta__detail keep-one-line">
-                  <a
-                    v-if="meta.author && meta.authorMid"
-                    class="listen-meta__author"
-                    :href="`https://space.bilibili.com/${meta.authorMid}`"
-                    target="_blank"
-                    rel="noopener"
-                  >{{ meta.author }}</a>
-                  <template v-if="meta.author && meta.detail">
-                    ·
-                  </template>
-                  <template v-if="meta.detail">
-                    {{ meta.detail }}
-                  </template>
-                </p>
-              </template>
-              <template v-else-if="!metaFailed">
-                <SkeletonBlock class="listen-meta__skeleton-title" height="var(--bew-line-height-display)" />
-                <SkeletonBlock class="listen-meta__skeleton-detail" height="var(--bew-line-height-subheading)" />
-              </template>
-              <div v-if="stage.failed" class="listen-meta__error" role="alert">
-                <span>{{ t('common.load_failed') }}</span>
-                <button type="button" class="listen-meta__retry" :disabled="stage.loading" @click="stage.retry()">
-                  {{ t('common.retry') }}
-                </button>
+              <div class="listen-meta">
+                <template v-if="meta">
+                  <h2 class="listen-meta__title keep-two-lines">
+                    {{ meta.title }}
+                  </h2>
+                  <p v-if="meta.author || meta.detail" class="listen-meta__detail keep-one-line">
+                    <a
+                      v-if="meta.author && meta.authorMid"
+                      class="listen-meta__author"
+                      :href="`https://space.bilibili.com/${meta.authorMid}`"
+                      target="_blank"
+                      rel="noopener"
+                    >{{ meta.author }}</a>
+                    <template v-if="meta.author && meta.detail">
+                      ·
+                    </template>
+                    <template v-if="meta.detail">
+                      {{ meta.detail }}
+                    </template>
+                  </p>
+                </template>
+                <template v-else-if="!metaFailed">
+                  <SkeletonBlock class="listen-meta__skeleton-title" height="var(--bew-line-height-heading)" />
+                  <SkeletonBlock class="listen-meta__skeleton-detail" height="var(--bew-line-height-callout)" />
+                </template>
+                <div v-if="stage.failed" class="listen-meta__error" role="alert">
+                  <span>{{ t('common.load_failed') }}</span>
+                  <button type="button" class="listen-meta__retry" :disabled="stage.loading" @click="stage.retry()">
+                    {{ t('common.retry') }}
+                  </button>
+                </div>
               </div>
             </div>
+
+            <Transition name="listen-lyrics">
+              <ListenLyrics
+                v-if="hasLyrics"
+                class="listen-stage__lyrics"
+                :lines="lines"
+                :audio="stage.audio"
+                :tracks="tracks"
+                :track-id="track?.id ?? ''"
+                @select="chosenTrack = $event.id"
+              />
+            </Transition>
           </div>
         </div>
       </section>
@@ -292,7 +394,7 @@ watch([meta, () => stage.value?.audio], ([info, audio]) => {
 </template>
 
 <style scoped lang="scss">
-@use "../../styles/contentCard";
+@use "../../styles/hoverState";
 @use "../../styles/imageTone" as *;
 
 // The fallbacks sit on the host and the overrides on the surface (as in
@@ -308,28 +410,13 @@ watch([meta, () => stage.value?.audio], ([info, audio]) => {
   --listen-card: calc(
     var(--bewly-widescreen-controls-glass-height, var(--bew-control-height) * 2) + var(--listen-inset) * 2
   );
-  --listen-meta: calc(var(--bew-line-height-display) * 2 + var(--bew-line-height-subheading) + var(--bew-space-1));
-  --listen-gap: var(--bew-space-5);
-  // As wide as the box allows, the cover and its title fitting between the
-  // header and the card.
-  --listen-art-width: min(
-    640px,
-    64cqw,
-    calc(
-      (
-          100cqh - var(--listen-top) - var(--listen-card) - var(--bew-space-6) *
-            2 - var(--listen-meta) - var(--listen-gap)
-        ) *
-        40 / 21
-    )
-  );
 
   position: absolute;
   inset: 0;
   overflow: hidden;
   container-type: size;
   transition: $tone-transition;
-  animation: listen-stage-enter var(--bew-duration-moderate) var(--bew-ease-standard) both;
+  animation: listen-stage-enter var(--bew-duration-moderate) var(--bew-ease-standard) backwards;
 }
 
 .listen-stage__surface {
@@ -372,7 +459,12 @@ watch([meta, () => stage.value?.audio], ([info, audio]) => {
   width: 160cqmax;
   height: 160cqmax;
   background: var(--listen-field) center / cover no-repeat;
-  transform: translate(-50%, -50%);
+  // Individual properties only: they compose translate, rotate, scale, so the
+  // mirror below flips the square in place. A `scale` beside a `transform`
+  // translate would mirror it about its untranslated centre and push it a
+  // whole side off, its corner turning in at the box's edge.
+  translate: -50% -50%;
+  // Paused here; the record's ramp plays and paces it (paceField).
   animation: listen-field-turn 60s linear infinite paused;
 
   // Mirrored, so the two pass different colours over each other.
@@ -384,117 +476,148 @@ watch([meta, () => stage.value?.audio], ([info, audio]) => {
   }
 }
 
-.listen-stage.is-playing .listen-field__layer {
-  animation-play-state: running;
-}
+// ---- Layout ----
 
-// ---- Cover and title ----
-
+// Between the header and the control card. The record is sized from what the
+// box leaves: its own square plus the arm's reach above it (0.19 of its
+// width) and the title under it. Alone it takes the middle; with lyrics it
+// shares the box with them, below it in a box that is square or upright and
+// beside it in a wide one (user-specified). Its largest sizes are multiples of
+// a spacing step, so they follow the interface size like the rest.
 .listen-stage__body {
+  --listen-pad: var(--bew-space-6);
+  --listen-gap: var(--bew-space-5);
+  --listen-height: calc(100cqh - var(--listen-top) - var(--listen-card) - var(--listen-pad) * 2);
+  --listen-width: calc(100cqw - var(--listen-pad) * 2);
+  // The title under the record: the gap to it, two lines and the detail line.
+  --listen-title-gap: var(--bew-space-4);
+  --listen-meta: calc(
+    var(--listen-title-gap) + var(--bew-line-height-heading) * 2 + var(--bew-line-height-callout) + var(--bew-space-1)
+  );
+  --listen-disc: min(
+    calc(var(--bew-space-10) * 14),
+    calc(var(--listen-width) / 1.4),
+    calc((var(--listen-height) - var(--listen-meta)) / 1.19)
+  );
+  --listen-lyric-size: var(--bew-font-size-heading);
+  --listen-lyric-line: var(--bew-line-height-heading);
+
   position: absolute;
   inset: var(--listen-top) 0 var(--listen-card);
   display: grid;
+  grid-template-columns: minmax(0, auto);
   place-content: center;
-  justify-items: start;
+  justify-items: center;
   gap: var(--listen-gap);
-  padding: var(--bew-space-6);
-}
+  padding: var(--listen-pad);
 
-.listen-art {
-  @include contentCard.media-frame;
-  position: relative;
-  display: block;
-  width: var(--listen-art-width);
-  aspect-ratio: 40 / 21;
-  padding: 0;
-  border: 0;
-  border-radius: var(--bew-media-radius);
-  corner-shape: var(--bew-corner-shape);
-  background: var(--bew-fill-2);
-  box-shadow: var(--bew-shadow-4);
-  cursor: pointer;
-  scale: 0.88;
+  // Below the record: it keeps half the height, the lyrics take the rest.
+  &.has-lyrics {
+    --listen-disc: min(
+      calc(var(--bew-space-10) * 12),
+      calc(var(--listen-width) / 1.4),
+      calc((var(--listen-height) - var(--listen-gap) - var(--listen-meta)) * 0.5 / 1.19)
+    );
 
-  &:disabled {
-    cursor: default;
-  }
-
-  &:focus-visible {
-    outline: var(--bew-focus-ring, 1px solid CanvasText);
-    outline-offset: var(--bew-space-1);
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: stretch;
   }
 }
 
-// Hover and press move the face; the cover's own spring moves the frame.
-.listen-art__face {
-  position: absolute;
-  inset: 0;
-  display: block;
-  border-radius: inherit;
-  corner-shape: inherit;
-  overflow: hidden;
-  transition: transform var(--bew-duration-fast) var(--bew-ease-standard);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .listen-art:not(:disabled):hover .listen-art__face {
-    transform: scale(1.015);
-  }
-}
-
-.listen-art:not(:disabled):active .listen-art__face {
-  transform: scale(var(--bew-control-press-scale));
-}
-
-.listen-art__image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0;
-  transition: opacity var(--bew-duration-moderate) var(--bew-ease-standard);
-
-  &.is-loaded,
-  &[data-bew-skeleton] {
-    opacity: 1;
-  }
-}
-
-.listen-art__state {
-  position: absolute;
-  inset: 0;
+// The arm stands above the record's top edge.
+.listen-main {
   display: grid;
-  place-items: center;
-  color: #fff;
-  background: var(--bew-cover-scrim);
+  justify-items: center;
+  gap: var(--listen-title-gap);
+  min-width: 0;
+  padding-top: calc(var(--listen-disc) * 0.19);
 }
 
-.listen-art__glyph {
-  width: var(--bew-icon-size-xl);
-  height: var(--bew-icon-size-xl);
+// Transform only: fading the record would cut its glass off from the field
+// behind it for the length of the fade.
+.listen-main__deck {
+  animation: listen-settle var(--bew-duration-moderate) var(--bew-ease-standard) backwards;
+  transition: transform var(--bew-duration-moderate) var(--bew-ease-standard);
 }
+
+.listen-stage__lyrics {
+  --listen-lyric-align: center;
+
+  align-self: stretch;
+  justify-self: center;
+  width: min(var(--listen-width), calc(var(--bew-space-10) * 14));
+  animation: listen-rise var(--bew-duration-moderate) var(--bew-ease-standard) backwards;
+}
+
+.listen-lyrics-leave-active {
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.listen-lyrics-leave-to {
+  opacity: 0;
+}
+
+@container (min-aspect-ratio: 3 / 2) {
+  // Beside the record, across the arm's reach on its right.
+  .listen-stage__body.has-lyrics {
+    --listen-disc: min(
+      calc(var(--bew-space-10) * 13),
+      calc(var(--listen-width) * 0.36),
+      calc((var(--listen-height) - var(--listen-meta)) / 1.19)
+    );
+    --listen-lyric-size: var(--bew-font-size-display);
+    --listen-lyric-line: var(--bew-line-height-display);
+
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, calc(var(--bew-space-10) * 12));
+    align-items: center;
+    column-gap: var(--bew-space-12);
+  }
+
+  .listen-stage__lyrics {
+    --listen-lyric-align: start;
+    --listen-lyric-origin: 0 50%;
+
+    width: 100%;
+  }
+}
+
+// Leaving: the record settles back as the needle lifts; the host fades the
+// whole stage over the returning picture (listenStageMotion.ts).
+.listen-stage.is-leaving .listen-main__deck {
+  transform: scale(0.94);
+}
+
+// ---- Title ----
+
+// The record is the stage's one subject (user-approved 2026-11-12): the title
+// is a heading under it, not a display line beside it.
 
 .listen-meta {
   display: grid;
+  justify-items: center;
   gap: var(--bew-space-1);
-  width: var(--listen-art-width);
+  width: min(var(--listen-width), calc(var(--listen-disc) * 1.4));
   min-width: 0;
+  text-align: center;
+  animation: listen-rise var(--bew-duration-moderate) var(--bew-ease-standard) backwards;
 }
 
 .listen-meta__title {
+  max-width: 100%;
   margin: 0;
   color: var(--bew-text-1);
-  font-size: var(--bew-font-size-display);
+  font-size: var(--bew-font-size-heading);
   font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-display);
+  line-height: var(--bew-line-height-heading);
 }
 
 .listen-meta__detail {
+  max-width: 100%;
   margin: 0;
   color: var(--bew-text-2);
-  font-size: var(--bew-font-size-subheading);
-  line-height: var(--bew-line-height-subheading);
+  font-size: var(--bew-font-size-callout);
+  line-height: var(--bew-line-height-callout);
 }
 
 .listen-meta__author {
@@ -533,24 +656,30 @@ watch([meta, () => stage.value?.audio], ([info, audio]) => {
   border-radius: var(--bew-pill-radius);
   corner-shape: var(--bew-corner-shape-capsule);
   color: var(--bew-text-1);
-  background: var(--bew-fill-2);
+  background: var(--bew-fill-1);
   font: inherit;
   cursor: pointer;
+  @include hoverState.transition(background-color, "&:hover:not(:disabled)");
 
   &:hover:not(:disabled) {
-    background: var(--bew-fill-3);
+    background: var(--bew-fill-2);
   }
 
   &:disabled {
     cursor: default;
-    opacity: 0.45;
+    opacity: var(--bew-disabled-opacity);
   }
 }
 
-// A short box keeps the title and the card; the cover gives way.
+// A short box keeps the title and the card; the record and the lyrics give way.
 @container (max-height: 300px) {
-  .listen-art {
+  .listen-main__deck,
+  .listen-stage__lyrics {
     display: none;
+  }
+
+  .listen-main {
+    padding-top: 0;
   }
 }
 
@@ -560,14 +689,30 @@ watch([meta, () => stage.value?.audio], ([info, audio]) => {
   }
 }
 
+@keyframes listen-settle {
+  from {
+    transform: translateY(var(--bew-space-3)) scale(0.94);
+  }
+}
+
+@keyframes listen-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--bew-space-3));
+  }
+}
+
 @keyframes listen-field-turn {
   to {
-    transform: translate(-50%, -50%) rotate(1turn);
+    rotate: 1turn;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .listen-stage {
+  .listen-stage,
+  .listen-main__deck,
+  .listen-meta,
+  .listen-stage__lyrics {
     animation: none;
   }
 
@@ -575,12 +720,9 @@ watch([meta, () => stage.value?.audio], ([info, audio]) => {
     animation: none;
   }
 
-  .listen-art__face {
+  .listen-main__deck,
+  .listen-lyrics-leave-active {
     transition: none;
-  }
-
-  .listen-art:not(:disabled):is(:hover, :active) .listen-art__face {
-    transform: none;
   }
 }
 </style>

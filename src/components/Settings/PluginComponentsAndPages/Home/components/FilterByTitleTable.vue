@@ -154,7 +154,7 @@ onKeyStroke('Escape', (e: KeyboardEvent) => {
       <ListItem
         v-for="(item, index) in settings.filterByTitle" :key="item.keyword" :data-motion-key="item.keyword"
         :style="{
-          background: editingIndex === index ? 'var(--bew-theme-surface) !important' : '',
+          background: editingIndex === index ? 'var(--bew-selected-bg) !important' : '',
         }"
       >
         <div max-w-50px>

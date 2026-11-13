@@ -1,4 +1,5 @@
 import type { MasonryWindowSnapshot } from '~/utils/momentColumnIndex'
+import type { PaginationState } from '~/utils/paginationState'
 
 import type { DisplayNotification } from '../notification'
 import type { NativeNotificationSection } from '../notificationSections'
@@ -19,7 +20,11 @@ export type NotificationFailedOperation
 
 export type FirstPageApplyMode = 'replace' | 'merge-head'
 
-export interface NotificationFeedState {
+export type NotificationReadCommit
+  = | { phase: 'idle' }
+    | { phase: 'uncommitted' | 'committed' | 'reconciled', id: string }
+
+export interface NotificationFeedState extends PaginationState {
   items: DisplayNotification[]
   masonrySnapshot?: MasonryWindowSnapshot
   cursorId: string
@@ -27,21 +32,20 @@ export interface NotificationFeedState {
   loading: boolean
   loadingMore: boolean
   loaded: boolean
-  noMore: boolean
   errorKind: NotificationErrorKind | null
   failedOperation: NotificationFailedOperation
   failedFirstPageApplyMode: FirstPageApplyMode | null
   hasLoadedMore: boolean
-  paginationStalled: boolean
   generation: number
   scrollTop: number
   loadedAt: number
   unreadCountAtFetch: number
   lastObservedUnreadCount: number
   firstPageRequestSerial: number
-  currentReadCommitId: string
-  serverReadCommitted: boolean
-  badgeReconciled: boolean
+  readCommit: NotificationReadCommit
+  readonly currentReadCommitId: string
+  readonly serverReadCommitted: boolean
+  readonly badgeReconciled: boolean
 }
 
 export interface NotificationReadCandidate {

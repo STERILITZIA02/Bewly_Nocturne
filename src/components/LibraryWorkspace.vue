@@ -117,7 +117,8 @@ const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () =>
   min-width: 0;
 }
 // The search and the button row under it end with an edge-to-edge hairline
-// (user-specified), like the rail's other separators.
+// where a list follows (user-specified), like the rail's other separators.
+// Full-width action rows right under the search need no line.
 .library-rail-tools--ruled {
   box-sizing: border-box;
   // Wider than the content box by its bleed (lifts the rail children's 100% cap).
@@ -126,18 +127,12 @@ const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () =>
   padding: 0 var(--bew-sidebar-inline-padding) var(--bew-space-3);
   border-bottom: var(--bew-hairline) solid var(--bew-separator-color);
 }
-.library-rail-content .b-button {
-  border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-capsule);
-}
 .library-rail-actions {
   display: grid;
   gap: 0;
   min-width: 0;
 }
 .library-rail-content .library-rail-segments {
-  --bew-control-radius: var(--bew-pill-radius);
-  --bew-control-item-radius: var(--bew-pill-radius);
   --bew-liquid-indicator-bg: var(--bew-segment-item-active-bg);
   --bew-liquid-indicator-shadow: var(--bew-segment-item-active-shadow);
   width: 100%;
@@ -158,28 +153,6 @@ const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () =>
 }
 .library-rail-content .bew-cover-sidebar__action:not(.b-button--type-primary):hover:not(:disabled) {
   background: var(--bew-fill-2);
-}
-.library-rail-field {
-  display: grid;
-  gap: var(--bew-space-2);
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-}
-.library-rail-field input,
-.library-rail-field select {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  height: var(--bew-control-height);
-  padding: 0 var(--bew-space-3);
-  border: 0;
-  border-radius: var(--bew-pill-radius);
-  corner-shape: var(--bew-corner-shape-capsule);
-  color: var(--bew-text-1);
-  background: var(--bew-fill-1);
-  font: inherit;
-  color-scheme: inherit;
 }
 
 @media (max-width: breakpoints.$mobile-max) {

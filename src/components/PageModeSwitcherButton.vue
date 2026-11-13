@@ -119,7 +119,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
   }
 
   &:active:not(:disabled) {
-    transform: scale(0.9);
+    transform: scale(var(--bew-icon-press-scale));
   }
 
   &:focus-visible {
@@ -129,7 +129,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
 
   &:disabled {
     cursor: not-allowed;
-    opacity: 0.45;
+    opacity: var(--bew-disabled-opacity);
     transform: none;
   }
 

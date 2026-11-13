@@ -133,7 +133,7 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
   line-height: var(--bew-line-height-control);
   transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
   &:hover {
-    background: var(--bew-fill-1);
+    background: var(--bew-hover-bg);
   }
   &:focus-visible {
     outline: var(--bew-focus-ring);

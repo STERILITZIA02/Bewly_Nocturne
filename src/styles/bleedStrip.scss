@@ -86,7 +86,7 @@
     outline-offset: var(--bew-space-0-5);
   }
   &:disabled {
-    opacity: 0.45;
+    opacity: var(--bew-disabled-opacity);
     cursor: not-allowed;
   }
 }

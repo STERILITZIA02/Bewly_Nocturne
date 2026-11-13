@@ -311,6 +311,20 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       video.dispatchEvent(controlClick)
       assert.equal(activations, 0)
       assert.equal(controlClick.defaultPrevented, false, 'native media control defaults are preserved')
+      assert.ok(host.querySelector('.moment-video-preview--interactive'), 'native controls capture pointer interaction')
+      settings.value.momentsEnableVideoControls = false
+      await flush()
+      assert.equal(host.querySelector('.moment-video-preview--interactive'), null, 'default preview passes pointer events through to cover links')
+      settings.value.momentsEnableVideoPreviewSwipeSeek = true
+      await flush()
+      assert.ok(host.querySelector('.moment-video-preview--interactive'), 'swipe-seek captures pointer interaction while ready')
+      video.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      assert.equal(activations, 1, 'plain click opens link while swipe-seek is active')
+      host.querySelector('.moment-video-preview').dispatchEvent(new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }))
+      assert.equal(activations, 2, 'middle click opens link while swipe-seek is active')
+      settings.value.momentsEnableVideoPreviewSwipeSeek = false
+      settings.value.momentsEnableVideoControls = true
+      await flush()
       const oldVideo = video
       moment.value = { ...moment.value, id: 'hls' }
       url = 'https://example.com/preview.m3u8'
@@ -646,5 +660,180 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
     assert.equal(result.isVideo, false)
     quoted.orig = quoted
     assert.equal(adapter.mapMoment(raw).forward.video, undefined, 'invalid cycles cannot manufacture a video identity')
+  })
+
+  check('moment card preview click: opens top and quoted video pages while hover loading or playing', async () => {
+    const settings = Vue.ref({
+      momentsEnableVideoPreview: true,
+      momentsEnableLivePreview: true,
+      momentsEnableVideoControls: false,
+      momentsEnableVideoPreviewSwipeSeek: false,
+      momentsOnlyCoverVideoPreview: true,
+      momentsVideoPreviewDelayed: false,
+    })
+    const blank = { render: () => null }
+    const gesture = await loadSourceModule('../src/composables/useVideoPreviewSwipeSeek.ts', { vue: Vue }, { performance })
+    const Preview = await compileComponent('../src/components/MomentCard/MomentVideoPreview.vue', {
+      'vue': Vue,
+      '~/logic': { settings },
+      '~/composables/useVideoPreviewSwipeSeek': gesture,
+      '~/utils/fullscreenChange': { subscribeFullscreenChange: () => () => {} },
+    })
+    const MediaStage = await compileComponent('../src/components/MomentCard/MomentMediaStage.vue', {
+      'vue': Vue,
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      '~/components/LiveMark.vue': { default: blank },
+      '~/components/ProgressiveBlur.vue': { default: blank },
+      '~/composables/useImageViewer': { useImageViewer: () => ({ open() {} }) },
+      '~/composables/usePictureReveal': { usePictureReveal: () => ({ isRevealed: () => true, reveal() {} }) },
+      '~/utils/crossfadeLayers': await import('../src/utils/crossfadeLayers'),
+      '~/utils/elasticScroll': { createElasticWheelScroll: () => ({ handleWheel() {}, dispose() {} }) },
+      '~/utils/motionTiming': { getMotionDuration: () => 0 },
+      '~/utils/pictureRevealMemory': await import('../src/utils/pictureRevealMemory'),
+      '~/utils/portraitMedia': await import('../src/utils/portraitMedia'),
+      '~/utils/reducedMotion': { prefersReducedMotion: () => true },
+      '~/utils/sideSwipe': { createSideSwipe: () => ({ consumeClick: () => false, wheel() {}, pointerdown() {}, pointerup() {}, pointercancel() {} }) },
+      './utils': await import('../src/components/MomentCard/utils'),
+    })
+    const MomentCard = await compileComponent('../src/components/MomentCard/MomentCard.vue', {
+      'vue': Vue,
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      '~/logic': { settings },
+      '~/logic/layoutEdit': { findLayoutEditableTarget: () => undefined },
+      '~/stores/topBarStore': { useTopBarStore: () => ({ userInfo: { mid: 1 } }) },
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ mainAppRef: Vue.ref(document.body) }) },
+      '~/composables/useHoverLiftHold': { useHoverLiftHold: () => ({ held: Vue.ref(false), hold() {} }) },
+      '~/composables/useImageTone': { useImageTone: () => Vue.ref({}) },
+      '~/composables/useMeasuredDisclosure': { useMeasuredDisclosure: () => ({ height: Vue.ref(undefined), moving: Vue.ref(false), onTransitionEnd() {} }) },
+      '~/constants/globalEvents': await import('../src/constants/globalEvents'),
+      '~/utils/dataFormatter': { numFormatter: String },
+      '~/utils/dialogFocus': { getDeepActiveElement: () => null },
+      '~/utils/floatingMenu': { computeFloatingMenuPosition: () => ({}), getContextMenuPlacement: () => ({ styles: {}, anchor: { x: 0, y: 0 }, trigger: null }) },
+      '~/utils/linkNavigation': await import('../src/utils/linkNavigation'),
+      '~/utils/mediaResources': { releaseElementImages() {} },
+      '~/utils/momentCardLayout': await import('../src/utils/momentCardLayout'),
+      '~/utils/momentDescription': { isMomentDescriptionOverflowing: () => false },
+      '~/utils/momentUrl': await import('../src/utils/momentUrl'),
+      '~/utils/motionTiming': { getMotionDuration: () => 0 },
+      '~/utils/portraitMedia': await import('../src/utils/portraitMedia'),
+      '~/utils/reducedMotion': { prefersReducedMotion: () => true },
+      '~/utils/viewportGeometry': { getLayoutHeight: () => 0 },
+      '~/components/MomentPromotionBadge.vue': { default: blank },
+      '~/components/VideoWatchedTag.vue': { default: blank },
+      './MomentCommentSection.vue': { default: blank },
+      './MomentForwardComposer.vue': { default: blank },
+      './MomentMediaStage.vue': { default: MediaStage },
+      './MomentMoreMenu.vue': { default: blank },
+      './MomentVideoPreview.vue': { default: Preview },
+      './MomentVote.vue': { default: blank },
+      './momentForwardContent': await import('../src/components/MomentCard/momentForwardContent'),
+      './utils': await import('../src/components/MomentCard/utils'),
+    })
+    const topMoment = {
+      id: 'top-1',
+      url: 'https://t.bilibili.com/top-1',
+      videoUrl: 'https://www.bilibili.com/video/BVtop123',
+      bvid: 'BVtop123',
+      title: 'Top Video',
+      text: '',
+      richText: [],
+      images: ['https://example.com/top.jpg'],
+      isVideo: true,
+      isLive: false,
+      isForward: false,
+      isArticle: false,
+      isChargeExclusive: false,
+      author: { name: 'Author', mid: '1', face: '' },
+      likeCount: 0,
+      commentCount: 0,
+      forwardCount: 0,
+    }
+    const forwardMoment = {
+      ...topMoment,
+      id: 'fwd-1',
+      url: 'https://t.bilibili.com/fwd-1',
+      bvid: '',
+      videoUrl: '',
+      images: [],
+      isVideo: false,
+      isForward: true,
+      forward: {
+        author: 'OrigAuthor',
+        authorMid: '2',
+        authorFace: '',
+        text: '',
+        fallback: '',
+        video: {
+          bvid: 'BVfwd123',
+          url: 'https://www.bilibili.com/video/BVfwd123',
+          title: 'Forwarded Video',
+          cover: 'https://example.com/fwd.jpg',
+        },
+      },
+    }
+    const currentMoment = Vue.ref(topMoment)
+    const previewLoading = Vue.ref(true)
+    const openedDetails = []
+    const openedVideos = []
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ render: () => Vue.h(MomentCard, {
+      moment: currentMoment.value,
+      ready: true,
+      previewActive: true,
+      previewUrl: 'https://example.com/preview.mp4',
+      previewLoading: previewLoading.value,
+      previewGeneration: 1,
+      isWatchLaterAdded: () => false,
+      isWatchLaterLoading: () => false,
+      onOpenDetail: item => openedDetails.push(item.id),
+      onOpenVideoLink: url => openedVideos.push(url),
+    }) })
+    app.mount(host)
+    try {
+      const topVideo = host.querySelector('video')
+      assert.ok(topVideo)
+      assert.equal(host.querySelector('.moment-video-preview--interactive'), null, 'hover loading passes clicks through to cover link')
+      topVideo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      assert.deepEqual(openedDetails, ['top-1'], 'clicking video while hover loading opens top video')
+
+      topVideo.dispatchEvent(new Event('loadeddata'))
+      previewLoading.value = false
+      await flush()
+      assert.equal(host.querySelector('.moment-video-preview--interactive'), null)
+      topVideo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      assert.deepEqual(openedDetails, ['top-1', 'top-1'], 'clicking playing preview opens top video')
+
+      settings.value.momentsEnableVideoPreviewSwipeSeek = true
+      await flush()
+      assert.ok(host.querySelector('.moment-video-preview--interactive'))
+      topVideo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      assert.deepEqual(openedDetails, ['top-1', 'top-1', 'top-1'], 'clicking top preview in swipe-seek mode opens top video')
+
+      settings.value.momentsEnableVideoControls = true
+      await flush()
+      topVideo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      assert.equal(openedDetails.length, 3, 'native controls keep clicks instead of opening top video')
+
+      settings.value.momentsEnableVideoControls = false
+      settings.value.momentsEnableVideoPreviewSwipeSeek = false
+      currentMoment.value = forwardMoment
+      previewLoading.value = true
+      await flush()
+      const fwdVideo = host.querySelector('video')
+      assert.ok(fwdVideo)
+      fwdVideo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      assert.deepEqual(openedVideos, ['https://www.bilibili.com/video/BVfwd123'], 'clicking quoted video while hover loading opens quoted video')
+      fwdVideo.dispatchEvent(new Event('loadeddata'))
+      previewLoading.value = false
+      settings.value.momentsEnableVideoPreviewSwipeSeek = true
+      await flush()
+      fwdVideo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      assert.deepEqual(openedVideos, ['https://www.bilibili.com/video/BVfwd123', 'https://www.bilibili.com/video/BVfwd123'], 'clicking quoted playing preview opens quoted video')
+      assert.equal(openedDetails.length, 3, 'clicking quoted preview never opens the outer forward moment')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
   })
 }

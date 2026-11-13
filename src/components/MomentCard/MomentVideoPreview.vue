@@ -20,7 +20,8 @@ let cancelFirstFrame: (() => void) | undefined
 const fullscreen = ref(false)
 let leaveFrame: number | undefined
 const controls = computed(() => !props.live && !props.loading && frameReady.value && (props.controls ?? settings.value.momentsEnableVideoControls))
-const swipe = computed(() => !props.live && !props.loading && settings.value.momentsEnableVideoPreviewSwipeSeek)
+const swipe = computed(() => !props.live && !props.loading && frameReady.value && settings.value.momentsEnableVideoPreviewSwipeSeek)
+const interactive = computed(() => controls.value || swipe.value)
 const gestureSource = computed(() => `${props.generation ?? 0}:${props.url}`)
 const gesture = useVideoPreviewSwipeSeek(videoRef, swipe, controls, gestureSource)
 const interaction = computed(() => fullscreen.value || gesture.isScrubbing.value)
@@ -73,7 +74,7 @@ function syncFullscreen() {
 
 function reconcileHover() {
   const surface = props.hoverSurface ?? (settings.value.momentsOnlyCoverVideoPreview
-    ? '.moment-card__forward-video-cover, .moment-card__cover--media'
+    ? '.moment-media__cover--video'
     : '.moment-card')
   if (!interaction.value && !videoRef.value?.closest(surface)?.matches(':hover'))
     emit('leave')
@@ -117,7 +118,11 @@ onBeforeUnmount(() => {
 <template>
   <span
     class="moment-video-preview"
-    :class="{ 'moment-video-preview--scrubbable': swipe, 'moment-video-preview--ready': frameReady }"
+    :class="{
+      'moment-video-preview--interactive': interactive,
+      'moment-video-preview--scrubbable': swipe,
+      'moment-video-preview--ready': frameReady,
+    }"
     :aria-busy="loading || (!!url && !frameReady && !frameFailed)"
     @pointerdown="gesture.handlePreviewPointerDown"
     @pointermove="gesture.handlePreviewPointerMove"
@@ -125,6 +130,7 @@ onBeforeUnmount(() => {
     @pointercancel="finishGesture($event, true)"
     @dragstart="swipe && gesture.handlePreviewDragStart($event)"
     @click="handleClick"
+    @auxclick="!controls && $event.button === 1 && emit('activate', $event)"
     @keydown.stop
   >
     <video
@@ -147,6 +153,8 @@ onBeforeUnmount(() => {
   display: block;
   border-radius: inherit;
   corner-shape: inherit;
+  // Pass clicks through to the underlying cover link while loading or without preview controls.
+  pointer-events: none;
 
   video {
     display: block;
@@ -158,6 +166,10 @@ onBeforeUnmount(() => {
     opacity: 0;
     transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
   }
+}
+
+.moment-video-preview--interactive {
+  pointer-events: auto;
 }
 
 .moment-video-preview--ready video {

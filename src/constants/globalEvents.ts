@@ -10,8 +10,15 @@ export interface BewlyWidescreenManualToggleDetail {
   action: 'enter' | 'exit'
   userInitiated: true
 }
-export const BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS = 'bewly-widescreen-controls-hidden'
+/** On the anchored native player while the playback page's control card is hidden. */
+export const BEWLY_WIDESCREEN_CONTROLS_HIDDEN_ATTRIBUTE = 'data-bewly-controls-hidden'
+/** Window event, `detail` = hidden; the docked SideBar follows the control card. */
+export const BEWLY_WIDESCREEN_CONTROLS_VISIBILITY = 'bewlyWidescreenControlsVisibility'
 export const LISTEN_ATTRIBUTE = 'data-bew-listening'
+/** On the player root while a finished session's stage dissolves over the picture. */
+export const LISTEN_LEAVING_ATTRIBUTE = 'data-bew-listen-leaving'
+/** On the player root while the listening stage's colours are known: the playback page's control card takes them. */
+export const LISTEN_TONED_ATTRIBUTE = 'data-bew-listen-toned'
 export const BEWLY_DRAWER_ESCAPE_HANDLED = 'BEWLY_DRAWER_ESCAPE_HANDLED'
 export const BEWLY_DRAWER_CLOSE_REQUEST = 'BEWLY_DRAWER_CLOSE_REQUEST'
 export const IFRAME_DARK_MODE_CHANGE = 'iframeDarkModeChange'

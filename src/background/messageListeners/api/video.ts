@@ -1,5 +1,9 @@
+import type Browser from 'webextension-polyfill'
+
+import type { ReadRequestOptions } from '~/utils/abort'
+
 import type { APIMAP } from '../../utils'
-import { AHS } from '../../utils'
+import { AHS, doRequest } from '../../utils'
 
 const WEB_RECOMMEND_URL = 'https://api.bilibili.com/x/web-interface/wbi/index/top/feed/rcmd'
 
@@ -12,6 +16,23 @@ const WEB_RECOMMEND_PARAMS = {
   fresh_idx_1h: 1, // 翻页号(一小时前?)，默认与 fresh_idx 相同
   fetch_row: undefined as number | undefined, // 本次抓取的最后一行行号（可选）
   last_showlist: '', // 上次抓取的视频av号列表（可选）
+}
+
+/**
+ * A subtitle file, from the address the player info gives. The address is the
+ * caller's, so only Bilibili's static hosts are read, over HTTPS and without
+ * credentials (the address carries its own signature).
+ */
+function requestSubtitleBody(message: Record<string, unknown>, _sender?: Browser.Runtime.MessageSender, options?: ReadRequestOptions) {
+  const url = new URL(String(message.url ?? ''), 'https://www.bilibili.com/')
+  url.protocol = 'https:'
+  if (!url.hostname.endsWith('.hdslb.com') || url.port || url.username || url.password)
+    throw new TypeError('Unexpected subtitle address')
+  return doRequest(
+    { contentScriptQuery: 'getSubtitleBody' },
+    { url: url.href, _fetch: { method: 'get', credentials: 'omit', strictParams: true }, afterHandle: AHS.J_D },
+    options,
+  )
 }
 
 const API_VIDEO = {
@@ -101,6 +122,7 @@ const API_VIDEO = {
       qn: 32,
       fnver: 0,
       fnval: 1,
+      voice_balance: undefined as number | undefined,
       avid: undefined as number | undefined,
       bvid: '',
       cid: 0,
@@ -108,6 +130,23 @@ const API_VIDEO = {
     },
     afterHandle: AHS.J_D,
   },
+  // https://socialsisteryi.github.io/bilibili-API-collect/docs/video/player.html
+  // The subtitle list is empty for a signed-out viewer.
+  getPlayerInfo: {
+    url: 'https://api.bilibili.com/x/player/wbi/v2',
+    _fetch: {
+      method: 'get',
+    },
+    params: {
+      aid: undefined as number | undefined,
+      bvid: '',
+      cid: 0,
+      ep_id: undefined as number | undefined,
+      season_id: undefined as number | undefined,
+    },
+    afterHandle: AHS.J_D,
+  },
+  getSubtitleBody: requestSubtitleBody,
 } satisfies APIMAP
 
 export default API_VIDEO

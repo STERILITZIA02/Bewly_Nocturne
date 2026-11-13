@@ -101,7 +101,7 @@ function handleClick(evt: MouseEvent) {
 
   &:disabled {
     cursor: not-allowed;
-    opacity: 0.5;
+    opacity: var(--bew-disabled-opacity);
     background: var(--b-button-color);
     box-shadow: var(--b-button-shadow);
     transform: none;

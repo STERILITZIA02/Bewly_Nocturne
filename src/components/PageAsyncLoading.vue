@@ -85,11 +85,11 @@ const emptyItems: never[] = []
             <SkeletonBlock v-if="page === AppPage.WatchLater" width="var(--bew-space-10)" height="var(--bew-space-6)" radius="full" />
             <SkeletonBlock v-if="page !== AppPage.WatchLater" width="40%" height="var(--bew-line-height-control)" />
           </div>
-          <div class="library-rail-tools library-rail-tools--ruled">
+          <div class="library-rail-tools" :class="{ 'library-rail-tools--ruled': page === AppPage.Favorites }">
             <SkeletonBlock height="var(--bew-control-height)" radius="full" />
             <div v-if="page === AppPage.Favorites" class="bew-page-async-loading__favorite-order bew-segment-control--track">
-              <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-item-height)" radius="full" />
-              <SkeletonBlock width="var(--bew-control-item-height)" height="var(--bew-control-item-height)" radius="circle" />
+              <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-item-height)" radius="interactive" />
+              <SkeletonBlock width="var(--bew-control-item-height)" height="var(--bew-control-item-height)" radius="interactive" />
             </div>
           </div>
           <FavoriteSidebarSkeleton v-if="page === AppPage.Favorites" />
@@ -236,16 +236,6 @@ const emptyItems: never[] = []
   flex: none;
   flex-direction: column;
   gap: var(--bew-space-2);
-}
-.bew-page-async-loading__sidebar {
-  display: grid;
-  align-content: start;
-  gap: var(--bew-space-4);
-  padding: var(--bew-space-6);
-  box-sizing: border-box;
-}
-.bew-page-async-loading__cover {
-  aspect-ratio: 16 / 9;
 }
 .bew-page-async-loading__anime {
   display: grid;

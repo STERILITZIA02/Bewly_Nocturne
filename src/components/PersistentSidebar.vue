@@ -138,16 +138,14 @@ export default defineComponent({
     // out, so nothing re-lays out frame by frame; only the glass, still on screen,
     // glides from its last laid-out width, scaled on the compositor.
     let laidOutWidth = 0
-    const widthObserver = typeof ResizeObserver === 'undefined'
-      ? undefined
-      : new ResizeObserver(([entry]) => {
-          laidOutWidth = entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width
-        })
+    const widthObserver = new ResizeObserver(([entry]) => {
+      laidOutWidth = entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width
+    })
     watch(surface, (element, previous) => {
       if (previous)
-        widthObserver?.unobserve(previous)
+        widthObserver.unobserve(previous)
       if (element)
-        widthObserver?.observe(element)
+        widthObserver.observe(element)
     })
     watch(() => props.wide, async () => {
       resizing?.cancel()

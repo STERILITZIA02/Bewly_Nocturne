@@ -21,7 +21,7 @@
   line-height: var(--bew-line-height-control);
   font-weight: var(--bew-font-weight-regular);
   cursor: pointer;
-  transition: background-color var(--bew-duration-fast) ease;
+  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
 
   &:focus-visible {
     outline: var(--bew-focus-ring);
@@ -31,7 +31,7 @@
     background: var(--bew-fill-2);
   }
   &:disabled {
-    opacity: 0.5;
+    opacity: var(--bew-disabled-opacity);
     cursor: default;
   }
 }

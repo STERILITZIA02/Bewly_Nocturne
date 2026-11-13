@@ -1,0 +1,14 @@
+// Bewly's own fallback text on the playback page (shown when the native info
+// nodes are missing) truncates like every other Bewly surface: the end fades,
+// no ellipsis. The page's stylesheet is a template string (layout.ts) and
+// cannot include the mixins itself; it inlines this file.
+@use "./truncateFade";
+
+.bewly-widescreen-fallback-stat-label,
+.bewly-widescreen-fallback-owner-name {
+  @include truncateFade.line;
+}
+
+.bewly-widescreen-fallback-description {
+  @include truncateFade.lines(3);
+}

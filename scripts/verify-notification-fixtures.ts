@@ -1165,7 +1165,7 @@ verify('extension-invalidated empty and loading states do not throw during setup
   assert.equal(emptySource.includes('browser.runtime.getURL'), false)
   assert.match(loadingSource, /<SkeletonBlock/)
   assert.doesNotMatch(loadingSource, /loading\.gif|<img\b/)
-  assert.ok(emptySource.includes('v-if="!textOnly && emptyImg"'))
+  assert.doesNotMatch(emptySource, /<img\b/)
 })
 
 async function main() {

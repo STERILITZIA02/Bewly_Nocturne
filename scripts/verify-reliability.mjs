@@ -14,7 +14,7 @@ export function registerReliabilityChecks(
     async () => {
       const { prepareListenAudio } = await loadSourceModule(
         '../src/contentScripts/listenAudio.ts',
-        {},
+        { '~/utils/listenPlayback': await import('../src/utils/listenPlayback') },
       )
       for (const playing of [false, true]) {
         const state = {
@@ -471,7 +471,7 @@ export function registerReliabilityChecks(
         })
       }
       try {
-        module.bindListenNativeBar(root, audio, owner.signal)
+        module.bindListenNativeBar(root, audio, owner.signal, { aid: 1, cid: 10, page: 1 })
         draw()
         assert.equal(reads, 3)
         assert.equal(root.querySelector('video').volume, 0.31)
@@ -1103,6 +1103,7 @@ export function registerReliabilityChecks(
               const results = Vue.shallowRef(null)
               return {
                 results,
+                view: { restored: false, retain() {} },
                 requestScope: Vue.ref('initial'),
                 isLoading: Vue.ref(false),
                 error: Vue.ref(''),

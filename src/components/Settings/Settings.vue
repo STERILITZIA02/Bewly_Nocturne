@@ -959,7 +959,7 @@ function changeMenuItem(menuItem: MenuType) {
     transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
 
     &:hover {
-      background: var(--bew-fill-2);
+      background: var(--bew-hover-bg);
     }
 
     &.active {
@@ -1001,8 +1001,8 @@ function changeMenuItem(menuItem: MenuType) {
 .settings-search-popover-enter-active,
 .settings-search-popover-leave-active {
   transition:
-    opacity 0.24s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity var(--bew-duration-normal) var(--bew-ease-decelerate),
+    transform var(--bew-duration-normal) var(--bew-ease-decelerate);
 }
 
 .settings-search-popover-enter-from,

@@ -1,4 +1,4 @@
-import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } from '~/constants/globalEvents'
+import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_ATTRIBUTE, BEWLY_WIDESCREEN_CONTROLS_VISIBILITY } from '~/constants/globalEvents'
 import { MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR } from '~/utils/bewlyWidescreen/constants'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
@@ -40,8 +40,12 @@ export function syncNativePlayerControlVisibility(
     currentState.root.dataset.playerControlsReady = String(ready)
   if (currentState.root.dataset.playerControlsHidden !== String(hidden))
     currentState.root.dataset.playerControlsHidden = String(hidden)
-  if (document.body.classList.contains(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS) !== hidden)
-    document.body.classList.toggle(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS, hidden)
+  // The state lives on the player, never on body: the card toggles every few
+  // seconds and a body class restyles the whole page.
+  if (currentState.playerEl.hasAttribute(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_ATTRIBUTE) !== hidden) {
+    currentState.playerEl.toggleAttribute(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_ATTRIBUTE, hidden)
+    window.dispatchEvent(new CustomEvent(BEWLY_WIDESCREEN_CONTROLS_VISIBILITY, { detail: hidden }))
+  }
   currentState.updateIdleProgress?.()
 }
 

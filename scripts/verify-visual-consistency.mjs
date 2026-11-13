@@ -153,7 +153,7 @@ export function registerVisualConsistencyChecks(check, { Vue, compileComponent, 
     const module = await loadSourceFunctions('../src/contentScripts/views/SearchResults/searchTransforms.ts', [
       'extractBangumiEpisodes',
       'resolveEpisodeNumber',
-    ], { removeHighlight: value => String(value ?? '') })
+    ], { removeHighlight: value => String(value ?? ''), ...(await import('../src/utils/plainObject')) })
     const data = module.extractBangumiEpisodes({ eps: [
       { id: 12, title: '第2话', url: 'https://www.bilibili.com/bangumi/play/ep12' },
       { ep_id: 16, title: '第6话' },

@@ -32,7 +32,7 @@ const { t } = useI18n()
     <template v-else-if="loading">
       <SkeletonBlock width="8em" height="var(--bew-space-8)" />
       <div class="favorite-folder-social__buttons">
-        <SkeletonBlock v-for="index in 3" :key="index" width="5em" height="var(--bew-control-height)" radius="full" />
+        <SkeletonBlock v-for="index in 3" :key="index" width="5em" height="var(--bew-control-height)" radius="interactive" />
       </div>
     </template>
     <button v-else-if="failed" type="button" @click="emit('retry')">
@@ -74,15 +74,15 @@ const { t } = useI18n()
       color var(--bew-duration-fast),
       background-color var(--bew-duration-fast);
     &:hover:not(:disabled) {
-      color: var(--bew-on-theme-surface);
-      background: var(--bew-theme-surface);
+      color: var(--bew-text-1);
+      background: var(--bew-selected-bg);
     }
     &[aria-pressed="true"] {
       color: var(--bew-text-1);
       background: var(--bew-selected-bg);
     }
     &:disabled {
-      opacity: 0.5;
+      opacity: var(--bew-disabled-opacity);
       cursor: default;
     }
     span:first-child {

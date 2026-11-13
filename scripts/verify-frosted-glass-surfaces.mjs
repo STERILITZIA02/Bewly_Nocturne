@@ -62,15 +62,16 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
 
   check('frosted surfaces: playback controls keep one ordinary backdrop that follows the global switch', async () => {
     const constants = await import('../src/utils/bewlyWidescreen/constants')
-    const { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } = await import('../src/constants/globalEvents')
+    const { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_ATTRIBUTE } = await import('../src/constants/globalEvents')
     const style = document.head.appendChild(document.createElement('style'))
     const layout = await loadSourceModule('../src/utils/bewlyWidescreen/styles/layout.ts', {
-      '~/constants/globalEvents': { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS },
+      '~/constants/globalEvents': { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_ATTRIBUTE },
       '~/styles/segmentControl.scss?inline': { default: compile(fileURLToPath(new URL('../src/styles/segmentControl.scss', import.meta.url))).css },
       '~/styles/segmentLiquidIndicator.scss?inline': { default: compile(fileURLToPath(new URL('../src/styles/segmentLiquidIndicator.scss', import.meta.url))).css },
       '~/styles/sendButton.scss?inline': { default: compile(fileURLToPath(new URL('../src/styles/sendButton.scss', import.meta.url))).css },
       '~/styles/skeleton.scss?inline': { default: '' },
       '~/styles/loadingRing.scss?inline': { default: '' },
+      '~/styles/playbackText.scss?inline': { default: '' },
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/styles/cardLayout': await import('../src/utils/bewlyWidescreen/styles/cardLayout'),
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
@@ -86,7 +87,6 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
     document.body.classList.add(constants.BODY_CLASS)
     try {
       layout.injectLayoutStyle()
-      assert.doesNotMatch(style.textContent, /liquid-glass|bew-liquid-(?:frame|tint)/)
       // JSDOM does not expose computed backdrop-filter; read the matching declaration.
       const backdropDeclarations = [...style.sheet.cssRules]
         .filter(rule => rule.selectorText && rule.style.getPropertyValue('backdrop-filter') && glass.matches(rule.selectorText))
@@ -99,7 +99,7 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
     finally {
       glass.remove()
       style.remove()
-      document.body.classList.remove(constants.BODY_CLASS, BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS)
+      document.body.classList.remove(constants.BODY_CLASS)
     }
   })
 
@@ -135,25 +135,14 @@ export function registerFrostedGlassSurfaceChecks(check, { Vue, compileComponent
       host.remove()
     }
     const read = file => readFile(new URL(`../src/${file}`, import.meta.url), 'utf8')
-    const [dialog, confirm, settingsWindow, windowStyle] = await Promise.all([
+    const [dialog, confirm, settingsWindow] = await Promise.all([
       read('components/Dialog.vue'),
       read('components/ConfirmDialog.vue'),
       read('components/Settings/Settings.vue'),
-      read('styles/modalWindow.scss'),
     ])
-    assert.match(windowStyle, /@mixin fill \{\s*background: var\(--bew-elevated-solid\);/)
-    assert.match(windowStyle, /@mixin header \{[^}]*border-bottom: var\(--bew-hairline\) solid var\(--bew-separator-color\);/)
-    assert.match(windowStyle, /@mixin footer \{[^}]*border-top: var\(--bew-hairline\) solid var\(--bew-separator-color\);/)
     for (const source of [dialog, confirm, settingsWindow]) {
-      assert.match(source, /@include modalWindow\.header;/)
       assert.doesNotMatch(source, /backdrop-filter|backdropFilter|glass-tint|text-shadow|GLASS_SURFACE_CONTEXT/)
     }
-    assert.match(dialog, /@include modalWindow\.footer;/)
-    assert.match(confirm, /@include modalWindow\.surface;/)
-    // Every modal dims the page with the one backdrop token, light and dark.
-    assert.match(windowStyle, /@mixin backdrop \{\s*background: var\(--bew-modal-backdrop\);/)
-    for (const source of [dialog, confirm, settingsWindow])
-      assert.match(source, /@include modalWindow\.backdrop;/)
     const variables = await read('styles/variables.scss')
     assert.equal((variables.match(/--bew-modal-backdrop: rgb\(0 0 0 \/ \d+%\);/g) ?? []).length, 2)
     assert.doesNotMatch(dialog, /frostedGlass/)

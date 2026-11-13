@@ -54,7 +54,9 @@ const emit = defineEmits(['beforeClose', 'close', 'confirm'])
 
 const showShortcut = ref<boolean>(false)
 const { mainAppRef, scrollViewportRef } = useBewlyApp()
-const showDialog = ref<boolean>(false)
+const phase = ref<'mounting' | 'open' | 'confirming' | 'closing' | 'closed'>('mounting')
+const showDialog = computed(() => phase.value === 'open' || phase.value === 'confirming')
+const isClosing = computed(() => phase.value === 'closing' || phase.value === 'closed')
 const dialogRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 // The close protocol releases this after leave; template refs clear before leave starts.
@@ -78,17 +80,13 @@ provide(DIALOG_FOCUS_OWNER, dialogId)
 provide(DIALOG_TELEPORT_TARGET, dialogRef)
 let previousFocus: HTMLElement | null = null
 const getTrigger = usePanelTrigger()
-let focusRestored = false
 /**
  * Closing protocol:
- * 1) handleClose only sets showDialog=false (starts leave transition)
+ * 1) handleClose enters closing (starts leave transition)
  * 2) @after-leave emits `close` so parents can v-if-unmount after DOM is clean
  * Never emit close + parent-unmount while Transition/Teleport still patching
  * (that caused insertBefore NotFoundError and "works only once" ghost overlays).
  */
-let isClosing = false
-let closeEmitted = false
-let isConfirmPending = false
 
 function isDialogEnterEditingContext(event: KeyboardEvent) {
   return event.composedPath().some((target) => {
@@ -112,7 +110,7 @@ function isDialogKeyboardOwner(event: KeyboardEvent) {
 
 function handleDialogKeyboardEvent(event: KeyboardEvent, eventType: 'keydown' | 'keyup') {
   const decision = resolveDialogKeyboardAction({
-    closing: isClosing,
+    closing: isClosing.value,
     defaultPrevented: event.defaultPrevented,
     editingContext: event.key === 'Enter' && isDialogEnterEditingContext(event),
     eventType,
@@ -139,7 +137,7 @@ function handleDialogKeyboardEvent(event: KeyboardEvent, eventType: 'keydown' | 
 onKeyStroke('Enter', event => handleDialogKeyboardEvent(event, 'keydown'))
 onKeyStroke('Escape', event => handleDialogKeyboardEvent(event, 'keydown'))
 onKeyStroke('Tab', (event) => {
-  if (!event.defaultPrevented && !event.isComposing && event.keyCode !== 229 && showDialog.value && !isClosing && dialogRef.value && panelRef.value && isDialogKeyboardOwner(event))
+  if (!event.defaultPrevented && !event.isComposing && event.keyCode !== 229 && showDialog.value && !isClosing.value && dialogRef.value && panelRef.value && isDialogKeyboardOwner(event))
     moveDialogTabFocus(dialogRef.value, panelRef.value, event)
 })
 
@@ -191,10 +189,12 @@ onKeyStroke('Alt', event => handleDialogKeyboardEvent(event, 'keyup'), { eventNa
 onMounted(() => {
   const active = getDeepActiveElement(document)
   previousFocus = getTrigger() ?? (active instanceof HTMLElement ? active : null)
-  showDialog.value = true
+  if (phase.value !== 'mounting')
+    return
+  phase.value = 'open'
   void nextTick(() => {
     const dialog = dialogRef.value
-    if (isClosing || !dialog || getTopDialog(dialog.getRootNode() as ParentNode) !== dialog)
+    if (isClosing.value || !dialog || getTopDialog(dialog.getRootNode() as ParentNode) !== dialog)
       return
     // A detail iframe may already have acquired focus through its load owner.
     if (!dialog.contains(getDeepActiveElement(document))) {
@@ -205,9 +205,6 @@ onMounted(() => {
 })
 
 function restoreDialogFocus() {
-  if (focusRestored)
-    return
-  focusRestored = true
   dialogRef.value?.removeAttribute('data-bewly-dialog-active')
   const target = previousFocus
   previousFocus = null
@@ -221,10 +218,9 @@ onBeforeUnmount(() => {
 })
 
 function emitCloseOnce() {
-  if (closeEmitted)
+  if (phase.value === 'closed')
     return
-  closeEmitted = true
-  isClosing = true
+  phase.value = 'closed'
   stopScrollLock()
   restoreDialogFocus()
   emit('close')
@@ -236,35 +232,36 @@ function onAfterLeave() {
 }
 
 function handleClose() {
-  if (isClosing || closeEmitted)
+  if (isClosing.value)
     return
   if (props.loading && props.preventCloseWhenLoading)
     return
 
-  isClosing = true
+  const wasVisible = showDialog.value
+  phase.value = 'closing'
   dialogRef.value?.removeAttribute('data-bewly-dialog-active')
   showShortcut.value = false
   emit('beforeClose')
   // Already hidden (e.g. closed before enter finished) — no leave hook will run.
-  if (!showDialog.value) {
+  if (!wasVisible) {
     emitCloseOnce()
-    return
   }
-  showDialog.value = false
   // `close` is emitted in onAfterLeave after the leaving node is removed from DOM.
 }
 
 defineExpose({ close: handleClose })
 
 async function handleConfirm() {
-  if (props.loading || isClosing || closeEmitted || isConfirmPending)
+  if (props.loading || isClosing.value || phase.value === 'confirming')
     return
 
-  isConfirmPending = true
+  phase.value = 'confirming'
   emit('confirm')
   await nextTick()
-  isConfirmPending = false
-  if (props.closeOnConfirm && !props.loading && showDialog.value && !isClosing)
+  if (phase.value !== 'confirming')
+    return
+  phase.value = 'open'
+  if (props.closeOnConfirm && !props.loading)
     handleClose()
 }
 </script>
@@ -342,7 +339,7 @@ async function handleConfirm() {
               <CloseButton
                 class="dialog__close"
                 :label="$t('common.close')"
-                size="medium"
+                size="md"
                 @click="handleClose"
               />
             </header>

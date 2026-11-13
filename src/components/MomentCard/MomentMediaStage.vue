@@ -412,6 +412,7 @@ function getImageLabel(index: number) {
   top: var(--bew-cover-overlay-inset);
   left: var(--bew-cover-overlay-inset);
   z-index: 2;
+  pointer-events: none;
 }
 
 // A short gradient blur, strongest at the cover's bottom edge, then a colour

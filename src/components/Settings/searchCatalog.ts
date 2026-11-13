@@ -308,6 +308,7 @@ const entries: SettingsSearchEntry[] = [
     'settings.moments_preview_swipe',
     'settings.moments_preview_delay',
     'settings.moments_preview_cover_only',
+    'settings.show_video_watched_badge',
     'settings.moments_filter_video_dynamic',
     'settings.moments_filter_draw_dynamic',
     'settings.moments_filter_ugc_season_dynamic',
@@ -349,7 +350,6 @@ const entries: SettingsSearchEntry[] = [
     'settings.group_video_card_content',
     'settings.show_video_card_author_name',
     'settings.show_video_card_publish_time',
-    'settings.show_video_watched_badge',
     'settings.group_video_card_context_menu',
     'common.save_to_watch_later',
     'settings.video_card_context_menu_follow_user',
@@ -426,7 +426,6 @@ const entries: SettingsSearchEntry[] = [
     'settings.show_dock_back_to_top',
     'settings.hide_dock_refresh_button',
     'settings.show_dock_item_names',
-    'settings.show_dock_badges',
     'settings.dock_content_adjustment',
     'settings.show_bewly_or_bili_page_switcher',
     'settings.disable_light_dark_mode_switcher',
@@ -435,6 +434,9 @@ const entries: SettingsSearchEntry[] = [
     'settings.group_sidebar',
     'settings.auto_hide_sidebar',
   ]),
+  ...createEntries(dockRoute, [
+    'settings.dock_badges',
+  ], { keywordKeys: ['settings.dock_badges_opt.number', 'settings.dock_badges_opt.dot', 'settings.dock_badges_opt.none'] }),
   ...createEntries(dockRoute, [
     'settings.dock_position',
   ], { keywordKeys: ['common.position.left', 'common.position.right', 'common.position.bottom'] }),

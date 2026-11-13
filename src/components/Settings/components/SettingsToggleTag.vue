@@ -55,9 +55,9 @@ function toggle() {
   line-height: var(--bew-line-height-control);
   cursor: pointer;
   transition:
-    color 0.18s ease,
-    border-color 0.18s ease,
-    background-color 0.18s ease;
+    color var(--bew-duration-fast) var(--bew-ease-standard),
+    border-color var(--bew-duration-fast) var(--bew-ease-standard),
+    background-color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
 .settings-toggle-tag:hover {

@@ -132,6 +132,8 @@ function goToNextPage() {
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/hoverState";
+
 .pagination {
   container-type: inline-size;
   display: flex;
@@ -162,10 +164,7 @@ function goToNextPage() {
   font-family: var(--bew-fonts-monospace);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-  transition:
-    background-color var(--bew-duration-moderate) var(--bew-ease-out),
-    color var(--bew-duration-moderate) var(--bew-ease-out),
-    opacity var(--bew-duration-moderate) var(--bew-ease-out);
+  @include hoverState.transition((background-color, color, opacity));
 
   &:hover:not(:disabled):not(.active) {
     background-color: var(--bew-hover-bg);
@@ -182,7 +181,7 @@ function goToNextPage() {
 
   &:disabled {
     cursor: not-allowed;
-    opacity: 0.4;
+    opacity: var(--bew-disabled-opacity);
   }
 
   &.loading {

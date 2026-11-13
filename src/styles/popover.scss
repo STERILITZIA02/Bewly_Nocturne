@@ -1,3 +1,4 @@
+@use "./hoverState";
 @use "./modalWindow";
 @use "./truncateFade";
 .bew-popover-surface {
@@ -86,9 +87,7 @@
   corner-shape: var(--bew-corner-shape-round);
   font-size: var(--bew-icon-size-sm);
   cursor: pointer;
-  transition:
-    color var(--bew-duration-fast) var(--bew-ease-standard),
-    background-color var(--bew-duration-fast) var(--bew-ease-standard);
+  @include hoverState.transition($hover: "&:is(:hover, :focus-visible)");
 }
 
 .bew-popover__action:is(:hover, :focus-visible):not(:disabled) {
@@ -161,13 +160,11 @@
   padding: var(--bew-space-2) var(--bew-space-3);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
-  transition:
-    color var(--bew-duration-fast) var(--bew-ease-standard),
-    background-color var(--bew-duration-fast) var(--bew-ease-standard);
+  @include hoverState.transition;
 }
 
 .bew-popover-row:hover {
-  background: var(--bew-fill-2);
+  background: var(--bew-hover-bg);
 }
 
 .slide-in-enter-active,

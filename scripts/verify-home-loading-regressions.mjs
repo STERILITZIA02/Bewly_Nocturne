@@ -96,6 +96,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
     const homeDependencies = {
       '@iconify/vue': { Icon: blank },
       '@vueuse/core': { useThrottleFn: fn => fn, useMediaQuery: () => shortViewport },
+      '~/components/ContentFilterEntry.vue': { default: blank },
       '~/components/LiquidSegmentIndicator.vue': { default: blank },
       '~/components/PageAsyncLoading.vue': { default: blank },
       '~/composables/useAppProvider': { useBewlyApp: () => provider },

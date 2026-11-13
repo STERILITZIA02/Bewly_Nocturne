@@ -75,7 +75,7 @@ function injectStyle() {
       box-shadow: var(--bew-shadow-2) !important;
       filter: none !important;
       font-size: var(--bew-font-size-control, 13px) !important;
-      line-height: var(--bew-line-height-control, 18px) !important;
+      line-height: var(--bew-line-height-control, 16px) !important;
       cursor: pointer !important;
       user-select: none !important;
     }
@@ -351,7 +351,7 @@ function syncButtonLabel() {
     return
 
   const zoomed = currentHost.classList.contains(ZOOMED_CLASS)
-  const label = String(i18n.global.t(zoomed ? 'moments.zoom_out' : 'moments.zoom_in', settings.value.language))
+  const label = String(i18n.global.t(zoomed ? 'image_viewer.zoom_out' : 'image_viewer.zoom_in', settings.value.language))
   if (button.textContent !== label)
     button.textContent = label
   if (button.getAttribute('aria-pressed') !== String(zoomed))

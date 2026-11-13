@@ -31,7 +31,7 @@ function enter(event: MouseEvent) {
   if (!bvid.value || !previews || event.buttons || prefersReducedMotion())
     return
   void previews.handleMediaEnter(media.value, event)
-  if (!observer && root.value && typeof IntersectionObserver !== 'undefined') {
+  if (!observer && root.value) {
     observer = new IntersectionObserver((entries) => {
       if (entries.some(entry => !entry.isIntersecting))
         leave()

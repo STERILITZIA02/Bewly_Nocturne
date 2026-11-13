@@ -1,5 +1,4 @@
 <script setup lang="ts" generic="T = any">
-import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
 import LoadingFill from '~/components/LoadingFill.vue'
 import AdvertisementCard from '~/components/VideoCard/AdvertisementCard.vue'
@@ -139,7 +138,7 @@ interface VideoCardGridProps<T = any> {
    */
   emptyDescription?: string
   /** Sidebar workspaces use centered text states and no completed-page footer. */
-  textOnlyStates?: boolean
+  inlineStates?: boolean
   /**
    * The result count is unknown (a filter scan): loading shows the ring in the
    * middle instead of skeletons, and the tail ring instead of loading-more
@@ -376,7 +375,6 @@ function triggerLoadMore() {
   }
 }
 
-const supportsIntersectionObserver = typeof window !== 'undefined' && 'IntersectionObserver' in window
 let intersectionObserver: IntersectionObserver | null = null
 let isGridActive = false
 let scrollListenersActive = false
@@ -393,7 +391,7 @@ function cleanupIntersectionObserver() {
 }
 
 function setupIntersectionObserver() {
-  if (!supportsIntersectionObserver || !isGridActive)
+  if (!isGridActive)
     return
 
   cleanupIntersectionObserver()
@@ -451,12 +449,12 @@ function checkShouldPreload(fromScroll = false) {
     return
 
   // 优先使用 IntersectionObserver 的结果。
-  if (supportsIntersectionObserver && isLoadMoreSentinelIntersecting.value) {
+  if (isLoadMoreSentinelIntersecting.value) {
     triggerLoadMore()
     return
   }
 
-  if (fromScroll && supportsIntersectionObserver)
+  if (fromScroll)
     return
 
   // observer 不会为停留在区内的哨兵再次回调；用同一轮的视口快照兜底。
@@ -768,9 +766,6 @@ function setupGridResizeObserver() {
     return
 
   measureGridGeometry()
-  if (typeof ResizeObserver === 'undefined')
-    return
-
   gridResizeObserver = new ResizeObserver((entries) => {
     const width = entries[0]?.contentRect.width
     if (!width || (pendingGridWidth === undefined && Math.abs(width - gridContainerWidth.value) <= 0.5))
@@ -1078,38 +1073,29 @@ function getUniqueKey(item: T, index: number): string | number {
 </script>
 
 <template>
-  <div class="video-card-grid-root" :class="{ 'video-card-grid-root--empty': pendingPresent || (textOnlyStates && (needToLoginFirst || showErrorState || showEmptyState)) }">
+  <div class="video-card-grid-root" :class="{ 'video-card-grid-root--empty': pendingPresent || (inlineStates && (needToLoginFirst || showErrorState || showEmptyState)) }">
     <!-- 需要登录 -->
     <Empty
-      v-if="needToLoginFirst" :class="{ 'mt-6': !textOnlyStates }" :text-only="textOnlyStates" :fill="textOnlyStates" :description="$t('common.please_log_in_first')"
-      :action-label="textOnlyStates ? (loginButtonText || $t('common.login')) : undefined"
+      v-if="needToLoginFirst" :class="{ 'mt-6': !inlineStates }" :fill="inlineStates" :description="$t('common.please_log_in_first')"
+      :action-label="loginButtonText || $t('common.login')"
       @action="handleLogin"
-    >
-      <Button v-if="!textOnlyStates" type="primary" @click="handleLogin">
-        {{ loginButtonText || $t('common.login') }}
-      </Button>
-    </Empty>
+    />
 
     <LoadingFill v-else-if="pendingPresent" ref="pendingRef" :loading="pendingLoading" />
 
     <Empty
-      v-else-if="showErrorState" :class="{ 'mt-6': !textOnlyStates }" :text-only="textOnlyStates" :fill="textOnlyStates" :description="$t('common.load_failed')"
-      :action-label="textOnlyStates ? (refreshButtonText || $t('common.operation.refresh')) : undefined"
+      v-else-if="showErrorState" :class="{ 'mt-6': !inlineStates }" :fill="inlineStates" :description="$t('common.load_failed')"
+      :action-label="refreshButtonText || $t('common.operation.refresh')"
       @action="handleRefresh"
-    >
-      <Button v-if="!textOnlyStates" type="primary" @click="handleRefresh">
-        {{ refreshButtonText || $t('common.operation.refresh') }}
-      </Button>
-    </Empty>
+    />
 
     <!-- 空列表 -->
     <template v-else-if="showEmptyState">
       <slot name="empty">
-        <Empty :class="{ 'mt-6': !textOnlyStates }" :text-only="textOnlyStates" :fill="textOnlyStates" :description="emptyDescription || $t(textOnlyStates ? 'common.no_data' : 'common.no_more_content')">
-          <Button v-if="!textOnlyStates" type="primary" @click="handleRefresh">
-            {{ refreshButtonText || $t('common.operation.refresh') }}
-          </Button>
-        </Empty>
+        <Empty
+          :class="{ 'mt-6': !inlineStates }" :fill="inlineStates" :description="emptyDescription || $t(inlineStates ? 'common.no_data' : 'common.no_more_content')"
+          :action-label="inlineStates ? undefined : (refreshButtonText || $t('common.operation.refresh'))" @action="handleRefresh"
+        />
       </slot>
     </template>
 
@@ -1181,18 +1167,13 @@ function getUniqueKey(item: T, index: number): string | number {
 
     <!-- 无更多内容提示（仅在有数据时显示，避免与空列表提示重复） -->
     <Empty
-      v-if="requestFailed && !loading && !needToLoginFirst && items.length > 0" :text-only="textOnlyStates" class="pb-4" :description="$t('common.load_failed')" role="alert"
-      :action-label="textOnlyStates ? (refreshButtonText || $t('common.operation.refresh')) : undefined" @action="handleRefresh"
-    >
-      <Button v-if="!textOnlyStates" type="primary" @click="handleRefresh">
-        {{ refreshButtonText || $t('common.operation.refresh') }}
-      </Button>
-    </Empty>
-    <Empty v-else-if="!textOnlyStates && noMoreContent && !needToLoginFirst && items.length > 0" class="pb-4" :description="$t('common.no_more_content')">
-      <Button type="primary" @click="handleRefresh">
-        {{ refreshButtonText || $t('common.operation.refresh') }}
-      </Button>
-    </Empty>
+      v-if="requestFailed && !loading && !needToLoginFirst && items.length > 0" class="pb-4" :description="$t('common.load_failed')" role="alert"
+      :action-label="refreshButtonText || $t('common.operation.refresh')" @action="handleRefresh"
+    />
+    <Empty
+      v-else-if="!inlineStates && noMoreContent && !needToLoginFirst && items.length > 0" class="pb-4" :description="$t('common.no_more_content')"
+      :action-label="refreshButtonText || $t('common.operation.refresh')" @action="handleRefresh"
+    />
   </div>
 </template>
 

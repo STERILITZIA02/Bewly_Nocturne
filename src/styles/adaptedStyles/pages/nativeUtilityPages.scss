@@ -312,8 +312,8 @@ html.bewly-design[data-bewly-native-site="live"] {
     }
 
     [class*="index_active_"] {
-      background: var(--bew-theme-surface);
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
       border-color: var(--bew-focus-ring-color);
     }
   }
@@ -815,8 +815,8 @@ html.bewly-design[data-bewly-native-site="game"] {
     corner-shape: var(--bew-corner-shape);
 
     &:is(.qa-active, .cur) {
-      color: var(--bew-on-theme-surface);
-      background: var(--bew-theme-surface);
+      color: var(--bew-text-1);
+      background: var(--bew-selected-bg);
     }
   }
 
@@ -844,8 +844,8 @@ html.bewly-design[data-bewly-native-site="game"] {
       }
 
       &.qa-active {
-        color: var(--bew-on-theme-surface) !important;
-        background: var(--bew-theme-surface) !important;
+        color: var(--bew-text-1) !important;
+        background: var(--bew-selected-bg) !important;
       }
     }
 
@@ -952,8 +952,8 @@ html.bewly-design[data-bewly-native-site="game"] {
     }
 
     &.cur {
-      background: var(--bew-theme-surface) !important;
-      color: var(--bew-on-theme-surface);
+      background: var(--bew-selected-bg) !important;
+      color: var(--bew-text-1);
     }
   }
 
@@ -1130,8 +1130,8 @@ html.bewly-design[data-bewly-native-site="login"] {
   .hom-card-btn {
     min-height: var(--bew-control-height);
     line-height: var(--bew-control-height);
-    background: var(--bew-theme-surface);
-    color: var(--bew-on-theme-surface);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
     border-color: var(--bew-separator-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);

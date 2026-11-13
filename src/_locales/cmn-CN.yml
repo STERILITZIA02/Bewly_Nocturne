@@ -10,7 +10,6 @@ library_tools:
   date_custom: 自定义日期
   date_range: 自定义日期范围
   days: 按日期跳转
-  resume_at: '看到 {time} / {total}'
   video_count: '{count} 个视频'
   item_count: '{count} 项'
   switch_to: '切换到 {name}'
@@ -21,11 +20,7 @@ library_tools:
   search_scope: 搜索范围
   selected_tabs: '已选 {count} / {total} 个标签页'
   search_results: '“{query}”的搜索结果'
-  load_more_matches: 继续查找更早记录
   no_matches: 没有匹配的内容
-  date: 选择日期
-  all_dates: 所有日期
-  content_type: 内容类型
   type_all: 全部内容
   type_archive: 视频
   type_pgc: 番剧与影视
@@ -33,22 +28,13 @@ library_tools:
   type_article: 专栏
   clear_search: 清除搜索
   watch_later_search: 搜索标题或 UP 主
-  playback_state: 观看状态
-  state_all: 全部进度
-  state_unstarted: 未开始
-  state_watching: 观看中
-  state_completed: 已看完
-  state_unknown: 进度未知
-  duration: 视频时长
-  duration_all: 全部时长
-  duration_short: 10 分钟以内
-  duration_medium: 10–30 分钟
-  duration_long: 30 分钟以上
   find_messages: 查找本会话已加载的消息
   previous_match: 上一个匹配
   next_match: 下一个匹配
-  load_more_videos: 继续加载视频
 common:
+  batch_manage: 批量管理
+  select_all: 全选
+  unselect_all: 取消全选
   volume: 音量 {volume}%
   pagination_stalled: 列表未能继续加载，请重试。
   advertisement: 广告
@@ -65,19 +51,9 @@ common:
   undo: 还原
   days: 天
   view: '{count}次'
-  viewWithoutNum: 次
-  danmaku: '{count} 弹幕'
-  danmakuWithoutNum: 弹幕
-  like: '{count} 点赞'
-  likeWithoutNum: 点赞
   anime_follow_count: '{count}人关注'
-  year: 年前
-  month: 个月前
-  week: 个星期前
-  day: 天前
   hour: 小时前
   minute: 分钟前
-  second: 秒前
   yesterday: 昨天
   just_now: 刚刚
   please_log_in_first: 请先登录
@@ -87,8 +63,6 @@ common:
   add_to_watch_later: 添加到稍后再看
   added_to_watch_later: 已添加到稍后再看
   remove_from_watch_later: 从稍后再看中移除
-  added: 已添加
-  performance_impact_warn: 这个功能可能会影响性能！
   no_data: 暂无数据
   no_more_content: 没有更多内容了
   load_failed: 加载失败，请稍后重试
@@ -98,12 +72,9 @@ common:
   load_more: 加载更多
   operation:
     add: 新增
-    edit: 编辑
     delete: 删除
     confirm: 确定
     cancel: 取消
-    enable: 启用
-    disable: 禁用
     refresh: 刷新
     reset: 重置
     import: 导入
@@ -115,7 +86,6 @@ common:
   table:
     index: 索引
     title: 标题
-    name: 名称
     remark: 备注
     operations: 操作
   position:
@@ -250,8 +220,12 @@ settings:
   show_dock_back_to_top: 显示 Dock 回顶按钮
   show_dock_back_to_top_desc: 只控制回顶入口，刷新和撤销仍可使用。
   show_dock_item_names: 显示 Dock 名称
-  show_dock_badges: 显示 Dock 角标
-  show_dock_badges_desc: 只控制显示，不会标记已读。
+  dock_badges: Dock 角标
+  dock_badges_desc: 只控制显示，不会标记已读。
+  dock_badges_opt:
+    number: 数字
+    dot: 圆点
+    none: 不显示
   show_search_identity_switcher: 显示搜索身份快捷切换
   show_search_identity_switcher_desc: 在搜索结果中切换账号或游客请求，不退出账号，保留关键词和筛选。
   search_identity: 搜索身份
@@ -1019,20 +993,12 @@ topbar:
     log_out: 退出登录
     last_login_time: 最后登录
     last_login_location: 登录地点
-  noti_dropdown:
-    replys: 回复我的
-    mentions: 提到我的
-    likes: 收到的赞
-    messages: 系统消息
-    chats: 我的消息
   moments_dropdown:
     tabs:
       videos: 视频
       all: 全部
       live: 直播
       articles: 专栏
-    uploaded: 上传了：
-    now_streaming: 正在直播：
     live_status: 直播中
   upload_dropdown:
     article: 上传专栏
@@ -1041,6 +1007,7 @@ topbar:
     video: 上传视频
     manager: 投稿管理
 notifications:
+  unknown_user: 未知用户
   insights:
     activity: 会话最近活动
     activity_scope: 近 7 天 · 已载入会话
@@ -1066,13 +1033,8 @@ notifications:
   section_aria: 打开{section}
   unread_count: '{count} 条未读消息'
   actions:
-    refresh: 刷新
-    refresh_aria: 刷新当前消息分类
-    refresh_tooltip: 重新加载当前消息分类
     retry: 重试
     open_original: 在原版中打开
-    open_original_aria: 在哔哩哔哩原版中打开{section}
-    open_original_tooltip: 使用哔哩哔哩原版消息页打开
   sections:
     whisper:
       label: 私信
@@ -1169,7 +1131,6 @@ notifications:
       official-assistant: 官方助手
     empty: 暂无私信会话
     empty_filtered: 没有符合条件的会话
-    unknown_user: 未知用户
     user_fallback: '用户 {talkerId}'
     summary_unavailable: 暂无消息摘要
     select_conversation: 选择与{name}的会话
@@ -1260,7 +1221,6 @@ notifications:
       api-error: 私信加载失败，请重试
       wbi-unavailable: 私信签名暂时不可用
   native:
-    unknown_user: 未知用户
     original_content: 原始内容
     view_source: 查看原内容
     loading:
@@ -1365,7 +1325,6 @@ moments:
   vote_submitting: 正在提交…
   vote_submit_failed: 投票失败，请重试
   login_to_vote: 请先登录再投票
-  live_popularity: '{count} 人气'
   charge_exclusive: 充电专属
   charge_unlock_hint: 加入当前 UP 主的充电即可解锁观看
   charge_exclusive_moment: 充电专属动态
@@ -1373,8 +1332,6 @@ moments:
   forwarded_moment: 转发了动态
   bilibili_user: B站用户
   original_author: 原作者
-  live_moment: 直播动态
-  video_moment: 视频动态
   image_moment: 图文动态
   text_moment: 纯文字动态
   original_moment: 原动态
@@ -1384,7 +1341,6 @@ moments:
   login_to_watch_later: 登录后才能添加稍后再看
   watch_later_unavailable: 无法获取该视频的稍后再看信息
   watch_later_failed_retry: 稍后再看操作失败，请稍后重试
-  user_info: 动态用户信息
   following: 关注
   followers: 粉丝
   moments: 动态
@@ -1406,11 +1362,9 @@ moments:
   search_time_week: 一周内
   search_time_month: 一个月内
   search_time_year: 一年内
-  live_now: 正在直播
   live_badge: 直播中
   live_preview_unavailable: 暂时无法预览
   feed_bar: 动态栏
-  feed_groups: 动态分组
   all_moments: 全部动态
   scroll_frequent_left: 向左滚动经常访问列表
   scroll_frequent_right: 向右滚动经常访问列表
@@ -1418,21 +1372,13 @@ moments:
   scroll_right: 向右滚动
   frequent_uploaders: 经常访问的 UP 主
   has_update: 有更新
-  initial_loading: 正在准备动态和图片…
   empty: 暂时没有可展示的动态
-  loading: 正在加载…
   no_more: 没有更多动态了
   live_room: 直播间
   video_playback: 视频播放
   detail: 动态详情
-  opening_live: 正在打开直播间…
-  opening_video: 正在打开视频…
-  opening_forward: 正在打开转发动态…
-  loading_detail: 正在加载动态详情…
   author_detail: '{author} 的详情'
   open_new_tab: 新建标签页打开
-  zoom_out: 缩小
-  zoom_in: 放大
 moment_card:
   video_post: 视频投稿
   copy_link: 复制动态链接
@@ -1469,11 +1415,6 @@ moment_card:
   open_detail: 打开 {author} 的动态详情
   open_origin_moment: 查看 {name} 的原动态
   just_now: 刚刚
-  charge_exclusive: 充电专属
-  watch_later_added: 已添加到稍后再看
-  add_watch_later: 添加到稍后再看
-  added: 已添加
-  watch_later: 稍后再看
   expand_text: 展开正文
   collapse_text: 收起正文
   live_moment: 直播动态
@@ -1482,10 +1423,7 @@ moment_card:
   additional_content: 附加内容
   view_hot_comment: 查看热门评论
   hot_comment: 热门评论
-  open_dialog: 在弹窗中打开
-  open_dialog_short: 弹窗
   open_new_tab: 在新标签页打开
-  open_new_tab_short: 新标签页
   view_comments: 查看评论
   collapse_comments: 收起评论
   comments: 评论
@@ -1598,12 +1536,10 @@ video_card:
   group_contribution: '{firstAuthor} 等 {num} 人联合创作'
   followed: 已关注
   video_removed: 视频已移除
-  watched: 已观看
   browsed: 已浏览
   played: 已播放
   completed: 已看完
   played_progress: '已看到 {time}'
-  visited_recently: 近一个月内浏览过
   watch_later_unavailable: 无法获取该视频的稍后再看信息
   watch_later_update_failed: 更新稍后再看失败
   feedback_unavailable: 无法获取反馈选项
@@ -1656,7 +1592,6 @@ home:
   weekly_no_matching_series: 未找到匹配的期号
   precious: 入站必刷
   live: 直播
-  moments: 动态
   uploaders_with_updates: '{count} 个 UP 主有更新'
 ranking:
   all: 全部
@@ -1699,13 +1634,10 @@ history:
   sort_oldest: 最早观看（已载入记录）
   select_results: 全选当前结果
   filters:
-    title: 高级筛选
-    period: 观看时间
     period_all: 全部时间
     period_today: 今天
     period_yesterday: 昨天
     period_week: 近一周
-    by_device: 按设备筛选
     device_all: 全部设备
     device_pc: PC
     device_phone: 手机
@@ -1714,7 +1646,6 @@ history:
   all_history: 全部历史
   media: 剧集 / 影视
   unknown_date: 日期未知
-  clear_failed: 清空历史记录失败，请重试
   clear_all_watch_history: 清除所有观看历史
   clear_all_watch_history_confirm: |-
     要清除所有观看历史吗？
@@ -1773,19 +1704,10 @@ favorites:
   search_description_only: 仅描述
   search_season: 搜索合集或当前合集内的视频
   search_article: 搜索当前分类的收藏
-  collected_season_prefix: 合集
   video_section_title: 收藏的视频
-  folder_section_title: 所有收藏夹
   season_section_title: 订阅的收藏夹与合集
-  article_section_title: 收藏的图文
-  video_count: 视频数：{count}
-  article_count: 图文数：{count}
   article_load_failed: 图文收藏加载失败，请稍后重试
   unfavorite: 取消收藏
-  unfavorite_confirm: |-
-    要取消收藏选中的视频吗？
-    该操作无法撤销，你确定要取消收藏选中的视频吗？
-  batch_manage: 批量管理
   batch_select_all: 全选本页
   batch_unselect_all: 取消全选
   batch_select_item: 选择视频
@@ -1796,7 +1718,6 @@ favorites:
   batch_move_dialog_title: 移动到收藏夹
   batch_copy_dialog_desc: 选择目标收藏夹，确认后将复制已选的 {count} 个视频。
   batch_move_dialog_desc: 选择目标收藏夹，确认后将移动已选的 {count} 个视频。
-  batch_target_folder: 目标收藏夹
   batch_unfavorite: 取消收藏
   batch_unfavorite_confirm: |-
     要取消收藏已选的 {count} 个视频吗？
@@ -1809,23 +1730,16 @@ favorites:
   season_play_all_fallback: 无法确认起播位置，改用原生列表入口
   sidebar_manage: 管理
   sidebar_manage_exit: 退出管理
-  select_all: 全选
-  unselect_all: 取消全选
   edit_folder: 编辑收藏夹
   edit_folder_dialog_title: 编辑收藏夹
-  edit_folder_title_placeholder: 请输入收藏夹名称
   edit_folder_title_empty: 收藏夹名称不能为空
-  edit_folder_failed: 收藏夹修改失败，请稍后重试
   folder_visibility: 收藏夹可见性
   folder_public: 公开
   folder_private: 私密
-  default_folder_locked: 默认收藏夹不可编辑或删除
   delete_folders_confirm: |-
     要删除已选的 {count} 个收藏夹吗？
     夹内视频的收藏关系将一并移除，该操作无法撤销。
-  delete_folders_failed: 收藏夹删除失败，请稍后重试
   unfav_seasons_confirm: 确定取消收藏已选的 {count} 个合集吗？
-  unfav_seasons_failed: '{count} 个合集取消收藏失败'
 version_reminder:
   trigger: 新版本说明
   title: Bewly Nocturne 已更新
@@ -1851,12 +1765,8 @@ watch_later:
     duration_medium: 10–30分钟
     duration_long: 30–60分钟
     duration_extraLong: 60分钟以上
-  sort_order: 显示顺序
   sort_newest: 最近添加
   sort_oldest: 最早添加
-  batch_manage: 批量管理
-  select_all: 全选
-  unselect_all: 取消全选
   remove_selected: 移除所选（{count}）
   auto_remove_failed: 自动移出稍后再看失败，请稍后手动重试。
   open_tabs:
@@ -1911,14 +1821,14 @@ widescreen:
   listen: 听视频
   listen_play: 播放
   listen_pause: 暂停
-  return_video: 返回视频
+  listen_lyrics: 歌词
+  listen_lyrics_language: 字幕语言
   collapse_info: 收起视频信息
   expand_info: 展开视频信息
   collapse_episodes: 收起选集
   expand_episodes: 展开选集
   listen_not_ready: 播放器尚未就绪，请稍后再试。
   listen_unavailable: 这段视频没有可单独播放的音轨。
-  listen_btr_companion_required: 当前 BTR 需要安装支持听视频交接 v1 的配套补丁。
   overview: 简介
   panel_load_incomplete: 内容未能完成加载，可刷新页面或退出 Bewly 播放页后重试
   reload_page: 刷新页面
@@ -1934,8 +1844,6 @@ widescreen:
   danmaku_style: 弹幕样式
   send_danmaku: 发送弹幕
   player_feedback: 播放反馈
-  playlist: 选集
-  recommendations: 推荐
   up_next: 接下来播放
   playback_navigation: 视频播放导航
   previous_video: 上一个看过的视频
@@ -1986,8 +1894,6 @@ search_bar:
   search_in: '在{page}中搜索'
   search_settings: 搜索设置
 search_page:
-  hot_search_ranking: 热搜排行榜
-  loading: 加载中...
   no_hot_search_data: 暂无热搜数据
   view_all_esports: 查看全部赛事
 
@@ -2083,7 +1989,6 @@ search:
     episode_count: 共 {count} 话
     premiere: '首播：{date}'
     watch_now: 立即观看
-    other: 其它
   sections:
     activities: 活动
     schedule: 赛程日历

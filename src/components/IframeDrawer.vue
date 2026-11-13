@@ -28,7 +28,6 @@ import { resolveMomentsDialogPlayerModeOverride } from '~/utils/player'
 
 const props = defineProps<{
   url: string
-  title?: string
   playbackContext?: IframePlaybackContext
 }>()
 
@@ -39,12 +38,16 @@ const emit = defineEmits<{
 const { activeDrawer, setActiveDrawer } = useBewlyApp()
 const sourceTrigger = usePanelTrigger()() ?? getDeepActiveElement(document)
 
-const show = ref(false)
+const drawerPhase = ref<'mounting' | 'open' | 'closing' | 'leaving' | 'closed' | 'disposed'>('mounting')
+const show = computed(() => drawerPhase.value === 'open' || drawerPhase.value === 'closing')
+const closing = computed(() => ['closing', 'leaving', 'closed'].includes(drawerPhase.value))
+const disposed = computed(() => drawerPhase.value === 'disposed')
 const headerShow = ref(true)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const currentUrl = ref<string>(props.url)
-const showIframe = ref<boolean>(false)
-const renderIframe = ref<boolean>(true)
+const framePhase = ref<'loading' | 'ready' | 'released'>('loading')
+const showIframe = computed(() => framePhase.value === 'ready')
+const renderIframe = computed(() => framePhase.value !== 'released')
 const iframeKey = ref(0)
 const delayCloseTimer = ref<NodeJS.Timeout | null>(null)
 const removeTopBarClassInjected = ref<boolean>(false)
@@ -64,8 +67,6 @@ let focusFrame: number | null = null
 let iframeGeneration = 0
 let navigationVersion = 0
 let focusVersion = 0
-let disposed = false
-let closing = false
 let iframeEscapeHandledGeneration = 0
 let iframeDrawerHostClaimed = false
 const escapeArbitrationTimers = new Set<number>()
@@ -117,7 +118,7 @@ const iframeStyles = computed(() => {
 
 disposers.push(useEventListener(window, 'popstate', updateIframeUrl))
 
-const { currentHref: reportedHref } = useIframeDocumentHost(iframeRef, () => show.value && !closing && !disposed)
+const { currentHref: reportedHref } = useIframeDocumentHost(iframeRef, () => show.value && !closing.value && !disposed.value)
 const externalHref = computed(() => resolveIframeExternalUrl(iframeRef.value, reportedHref.value, props.url))
 
 function syncExternalHref(event: Event) {
@@ -125,7 +126,7 @@ function syncExternalHref(event: Event) {
 }
 
 watch(() => props.url, async (newUrl, oldUrl) => {
-  if (disposed || closing || !show.value || newUrl === oldUrl)
+  if (disposed.value || closing.value || !show.value || newUrl === oldUrl)
     return
 
   history.replaceState(history.state, '', newUrl.replace(/\/$/, ''))
@@ -216,12 +217,12 @@ function focusIframe(retryCount = 3) {
   const version = focusVersion
 
   nextTick(() => {
-    if (disposed || closing || version !== focusVersion)
+    if (disposed.value || closing.value || version !== focusVersion)
       return
     focusFrame = requestAnimationFrame(() => {
       focusFrame = null
       const iframe = iframeRef.value
-      if (disposed || closing || version !== focusVersion || !iframe || !show.value || activeDrawer.value !== DrawerType.IframeDrawer)
+      if (disposed.value || closing.value || version !== focusVersion || !iframe || !show.value || activeDrawer.value !== DrawerType.IframeDrawer)
         return
 
       iframe.focus({ preventScroll: true })
@@ -258,7 +259,7 @@ function handleIframeLoad(event: Event) {
   if (!(iframe instanceof HTMLIFrameElement)
     || iframe !== iframeRef.value
     || currentUrl.value === 'about:blank'
-    || !show.value || disposed || closing) {
+    || !show.value || disposed.value || closing.value) {
     return
   }
 
@@ -280,18 +281,18 @@ function handleIframeLoad(event: Event) {
     stopIframePopStateListener = useEventListener(iframeWindow, 'popstate', updateCurrentUrl)
     stopIframeDOMContentLoadedListener = useEventListener(iframeWindow, 'DOMContentLoaded', injectStyleClass)
   }
-  showIframe.value = true
+  framePhase.value = 'ready'
   focusIframe()
 }
 
 async function remountIframe(url: string) {
   const version = ++navigationVersion
   await releaseIframeResources()
-  if (disposed || closing || version !== navigationVersion)
+  if (disposed.value || closing.value || version !== navigationVersion)
     return
   currentUrl.value = url
   iframeKey.value += 1
-  renderIframe.value = true
+  framePhase.value = 'loading'
   await nextTick()
 }
 
@@ -309,10 +310,10 @@ onMounted(() => {
     releaseIframeDrawerHost()
     throw error
   }
-  show.value = true
+  drawerPhase.value = 'open'
   headerShow.value = true
   currentUrl.value = props.url
-  renderIframe.value = true
+  framePhase.value = 'loading'
   setActiveDrawer(DrawerType.IframeDrawer) // 设置为当前活跃抽屉
   if (!isPageScrollLocked.value) {
     lockPageScroll()
@@ -321,7 +322,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(async () => {
-  disposed = true
+  drawerPhase.value = 'disposed'
   navigationVersion++
   for (const dispose of disposers)
     dispose()
@@ -362,7 +363,7 @@ function updateCurrentUrl(e: any) {
 async function updateIframeUrl() {
   if (readIframeDrawerHistory(history.state, window.location.href)?.id !== historyEntryId)
     historyEntryDeparted = true
-  if (disposed || closing)
+  if (disposed.value || closing.value)
     return
   if (isHomePage() || readIframeDrawerHistory(history.state, window.location.href)?.id !== historyEntryId) {
     await handleClose()
@@ -372,9 +373,9 @@ async function updateIframeUrl() {
 }
 
 async function handleClose() {
-  if (disposed || closing)
+  if (disposed.value || closing.value)
     return
-  closing = true
+  drawerPhase.value = 'closing'
   navigationVersion++
   clearEscapeConfirmation()
   clearEscapeArbitrationTimers()
@@ -386,14 +387,15 @@ async function handleClose() {
     isPageScrollLocked.value = false
   }
   await releaseIframeResources()
-  if (disposed)
+  if (disposed.value)
     return
-  show.value = false
+  drawerPhase.value = 'leaving'
   headerShow.value = false
   setActiveDrawer(DrawerType.None) // 清除活跃抽屉状态
   if (readIframeDrawerHistory(history.state, window.location.href)?.id === historyEntryId)
     history.back()
   delayCloseTimer.value = setTimeout(() => {
+    drawerPhase.value = 'closed'
     releaseIframeDrawerHost()
     emit('close')
     void nextTick(() => {
@@ -410,7 +412,6 @@ async function releaseIframeResources() {
   reportedPlayerMode.value = undefined
   clearFocusRetryTimer()
   cleanupIframeWindowListeners()
-  showIframe.value = false
   removeTopBarClassInjected.value = false
 
   const iframe = iframeRef.value
@@ -418,7 +419,7 @@ async function releaseIframeResources() {
   currentUrl.value = 'about:blank'
 
   // Now safe to remove from DOM
-  renderIframe.value = false
+  framePhase.value = 'released'
   isPageFullscreen.value = false
   disableEscPress.value = false
   removeTopBarClassInjected.value = false
@@ -426,7 +427,7 @@ async function releaseIframeResources() {
 }
 
 function handleOpenInNewTab(event: MouseEvent) {
-  if (closing || disposed) {
+  if (closing.value || disposed.value) {
     event.preventDefault()
     return
   }
@@ -488,7 +489,7 @@ onMounted(() => {
 })
 
 function handleIframeMessage(event: MessageEvent) {
-  if (isInIframe() || disposed || closing || !show.value)
+  if (isInIframe() || disposed.value || closing.value || !show.value)
     return
 
   const message = getIframeMessageData(event, iframeRef.value)

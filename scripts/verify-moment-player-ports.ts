@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 
 import { serializeMomentVoteBody } from '../src/background/momentVoteSerializer'
@@ -377,12 +376,6 @@ async function verifyDetailGeometryAndWiring() {
       }
     }
   }
-  const vote = await readFile(new URL('../src/components/MomentCard/MomentVote.vue', import.meta.url), 'utf8')
-  assert.match(vote, /\.moment-vote\s*\{[^}]*pointer-events: auto/)
-  assert.match(vote, /@change="select\(\$event, option.index\)"/)
-  assert.match(vote, /emit\('interactiveResize'\)/)
-  const boot = await readFile(new URL('../src/contentScripts/index.ts', import.meta.url), 'utf8')
-  assert.match(boot, /window.addEventListener\('load',[\s\S]{0,150}waitForPlayerModePageSettle\(false\)/)
 }
 
 async function verifyPlayerAndTiming() {

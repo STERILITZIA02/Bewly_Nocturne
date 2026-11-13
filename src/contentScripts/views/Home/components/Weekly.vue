@@ -412,7 +412,7 @@ defineExpose({ initData })
 }
 
 .series-item.active {
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 </style>

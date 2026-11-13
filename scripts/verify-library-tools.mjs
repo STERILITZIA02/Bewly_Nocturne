@@ -24,6 +24,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
       groups: [
         { key: 'scope', title: 'Scope', value: 'current', options: [{ value: 'current', label: 'Current', icon: 'i-a' }, { value: 'all', label: 'All', icon: 'i-b' }] },
         { key: 'partition', title: 'Partition', value: 'all', options: [{ value: 'all', label: 'All', icon: 'i-c', pending: true }, { value: 'retry', label: 'Retry', icon: 'i-d', action: true }] },
+        { key: 'shown', title: 'Shown', toggle: true, options: [{ value: 'a', label: 'A', icon: 'i-e', checked: true }, { value: 'b', label: 'B', icon: 'i-f' }, { value: 'settings', label: 'Settings', icon: 'i-g', action: true, leaves: true }] },
       ],
       onOpen: () => events.push(['open']),
       onSelect: (key, value) => events.push([key, value]),
@@ -39,9 +40,13 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
         ['scope:all', 'Scope', 'radio', false],
         ['partition:all', 'Partition', 'radio', true],
         ['partition:retry', 'Partition', undefined, undefined],
+        ['shown:a', 'Shown', 'toggle', true],
+        ['shown:b', 'Shown', 'toggle', false],
+        ['shown:settings', 'Shown', undefined, undefined],
       ])
       assert.equal(options[2].pending, true, 'a group still loading rings in its check')
-      assert.ok(options.every(option => option.closeOnSelect === false), 'the menu stays open while choices apply')
+      assert.ok(options.slice(0, -1).every(option => option.closeOnSelect === false), 'the menu stays open while choices apply')
+      assert.equal(options.at(-1).closeOnSelect, true, 'an action that goes elsewhere closes it')
       shown.at(-1).emit('select', 'partition:retry')
       assert.deepEqual(events.at(-1), ['partition', 'retry'])
     }
@@ -307,8 +312,11 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
   })
   check('Moments sidebar keeps category navigation when modules are hidden and preserves live/profile links and known loading data', async () => {
     const settings = Vue.ref({ momentsSidebarShowUserCard: true, momentsSidebarShowPublish: true, momentsSidebarShowLive: true })
+    const destinations = []
     const Sidebar = await compileComponent('../src/contentScripts/views/Moments/MomentsSidebar.vue', {
       '~/logic': { settings },
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ openSettingsAt: target => destinations.push(target) }) },
+      '~/constants/momentFilters': await import('../src/constants/momentFilters'),
       '~/logic/layoutEdit': { vLayoutEditable: {} },
       '~/utils/dataFormatter': { numFormatter: String },
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
@@ -336,6 +344,18 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
       assert.equal(host.querySelector('[aria-selected="true"]').getAttribute('aria-controls'), 'fixture-moments')
       assert.equal(host.querySelector('.moments-user-card__profile').href, 'https://space.bilibili.com/42')
       assert.equal(host.querySelector('.moments-live-row__link').href, 'https://live.bilibili.com/99')
+      // The content filter lives in the search field's funnel, without types the search's own type choice repeats.
+      assert.equal(host.querySelector('[data-filter="shown:momentsHideVideoDynamics"]'), null, 'video is chosen once, under the search type')
+      const seasons = host.querySelector('[data-filter="shown:momentsHideUgcSeasonDynamics"]')
+      assert.equal(seasons.getAttribute('aria-checked'), 'true', 'shown types are checked, just like Settings')
+      seasons.click()
+      await flush()
+      assert.equal(settings.value.momentsHideUgcSeasonDynamics, true)
+      assert.equal(host.querySelector('[data-filter="shown:momentsHideUgcSeasonDynamics"]').getAttribute('aria-checked'), 'false')
+      host.querySelector('[data-filter="filter:keyword"]').click()
+      assert.equal(settings.value.momentsEnableKeywordFilter, true)
+      host.querySelector('[data-filter="filter:settings"]').click()
+      assert.equal(destinations.at(-1).settingId, 'settings.moments_filtered_types')
       loading.value = true
       await flush()
       assert.ok(host.textContent.includes('Fixture user'))
@@ -823,7 +843,7 @@ export function registerLibraryToolChecks(check, { Vue, compileComponent, flush 
       assert.deepEqual(selectOpenTabsTaskItems(task.value, calls[0][1]).map(item => item.tabId), [1, 3])
       assert.throws(() => selectOpenTabsTaskItems(task.value, []))
       assert.throws(() => selectOpenTabsTaskItems(task.value, [999]))
-      const selectButton = () => [...fixture.host.querySelectorAll('button')].find(button => /favorites\.(?:unselect_all|select_all)/.test(button.textContent))
+      const selectButton = () => [...fixture.host.querySelectorAll('button')].find(button => /common\.(?:unselect_all|select_all)/.test(button.textContent))
       selectButton().click()
       await flush()
       selectButton().click()

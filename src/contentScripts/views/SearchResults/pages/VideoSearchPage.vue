@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, watch } from 'vue'
 
+import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
@@ -9,7 +10,7 @@ import Pagination from '../components/Pagination.vue'
 import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useSearchListPage } from '../composables/useSearchListPage'
 import { convertLiveRoomData, convertVideoData, isAdVideo } from '../searchTransforms'
-import type { VideoSearchFilters } from '../types'
+import type { SearchLiveResult, SearchVideoResult, VideoSearchFilters } from '../types'
 import { buildVideoSearchParams } from '../utils/searchHelpers'
 
 const props = defineProps<{
@@ -23,7 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const gridLayout = computed<GridLayoutType>(() => 'adaptive')
-const { paginationMode, isLoading, error, results, totalResults, hasMore, requestLoadMore, needsManualLoadMore, resumeLoadMore, currentPage, totalPages, handlePageChange, refreshCurrentPage, restorePage, exhausted, resetAll, performSearch } = useSearchListPage<any>({
+const { paginationMode, isLoading, error, results, totalResults, hasMore, requestLoadMore, needsManualLoadMore, resumeLoadMore, currentPage, totalPages, handlePageChange, refreshCurrentPage, restorePage, exhausted, resetAll, performSearch } = useSearchListPage<Video, SearchVideoResult | SearchLiveResult>({
   category: 'video',
   keyword: () => props.keyword,
   initialPage: () => props.initialPage,
@@ -35,7 +36,7 @@ const { paginationMode, isLoading, error, results, totalResults, hasMore, reques
     ...buildVideoSearchParams({ loadMore, context, filters: props.filters }),
   }),
   transformItems: items => items.map(item => ({
-    ...(item.type === 'live_room' ? convertLiveRoomData(item) : convertVideoData(item)),
+    ...(item.type === 'live_room' ? convertLiveRoomData(item as SearchLiveResult) : convertVideoData(item as SearchVideoResult)),
     isAdvertisement: isAdVideo(item),
   })),
   itemKey: item => item.advertisementKey ?? String(item.aid ?? item.bvid ?? item.id ?? item.roomid),
@@ -71,11 +72,6 @@ function handleLoadMore() {
   requestLoadMore()
 }
 
-// Transform 函数：数据已经转换过了，直接返回
-function transformVideo(video: any) {
-  return video
-}
-
 // 暴露给父组件
 defineExpose({
   isLoading,
@@ -106,8 +102,8 @@ defineExpose({
         :loading="isLoading"
         :no-more-content="paginationMode === 'scroll' && !hasMore"
         :request-failed="!!error"
-        :transform-item="transformVideo"
-        :get-item-key="(video: any) => video.advertisementKey || video.aid || video.id"
+        :transform-item="(video: Video) => video"
+        :get-item-key="(video: Video) => video.advertisementKey || video.aid || video.id"
         :empty-description="$t('common.no_data')"
         :show-loading-more-skeleton="true"
         :show-load-more-indicator="false"
@@ -136,11 +132,11 @@ defineExpose({
 <style scoped lang="scss">
 .video-search-page {
   width: 100%;
-  padding-bottom: 2rem;
+  padding-bottom: var(--bew-space-8);
 }
 
 .error-message {
-  padding: 2rem;
+  padding: var(--bew-space-8);
   text-align: center;
   color: var(--bew-error-color);
 }

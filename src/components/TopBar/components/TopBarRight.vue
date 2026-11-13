@@ -8,6 +8,7 @@ import { usePageDim } from '~/composables/usePageDim'
 import { settings } from '~/logic'
 import { getTopBarItemLayoutEditableId, vLayoutEditable } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { BILIBILI_LOGIN_URL } from '~/utils/bilibiliLogin'
 import { getUserID, isInIframe, removeHttpFromUrl } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
 import { holdMotion, PAGE_MOTION } from '~/utils/motionPriority'
@@ -167,7 +168,7 @@ const showCreateGroup = computed(() => isComponentVisible('creatorCenter') || is
         class="right-side-item"
         important-w-auto
       >
-        <a href="https://passport.bilibili.com/login" class="login">
+        <a :href="BILIBILI_LOGIN_URL" class="login">
           <div i-tabler:user-circle class="text-xl mr-2" />{{
             $t('topbar.sign_in')
           }}

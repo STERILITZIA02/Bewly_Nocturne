@@ -11,7 +11,7 @@ import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import Progress from '~/components/Progress.vue'
 import Tooltip from '~/components/Tooltip.vue'
-import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
+import { useLoadMoreSentinel } from '~/composables/useLoadMoreSentinel'
 import type { HistoryResult, List as HistoryItem } from '~/models/history/history'
 import { Business } from '~/models/history/history'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -110,7 +110,6 @@ watch(currentAccountId, () => {
   loadActiveTab()
 }, { immediate: true })
 
-// 使用 useOptimizedScroll 处理滚动加载
 function handleReachBottom() {
   if (isLoading.value || loadError.value || noMoreContent.value || historys.length === 0)
     return
@@ -126,11 +125,8 @@ function handleReachBottom() {
   }
 }
 
-useOptimizedScroll(
-  historysWrap,
-  { onReachBottom: handleReachBottom },
-  { bottomThreshold: 400, throttleDelay: 100 },
-)
+const loadMoreSentinel = ref<HTMLElement>()
+useLoadMoreSentinel(historysWrap, loadMoreSentinel, handleReachBottom, () => historys.length)
 
 onBeforeUnmount(() => {
   requestGeneration++
@@ -333,7 +329,7 @@ defineExpose({
 
       <Empty
         v-else-if="historys.length === 0"
-        class="bew-popover__state"
+        :description="t('common.no_data')" class="bew-popover__state"
       />
 
       <!-- historys -->
@@ -410,6 +406,7 @@ defineExpose({
           </Button>
         </div>
       </Transition>
+      <div ref="loadMoreSentinel" aria-hidden="true" />
     </main>
   </div>
 </template>

@@ -1,0 +1,17 @@
+// Hover arrives quickly and leaves gently, so a pointer sweeping a list or a
+// row of buttons does not flicker. `$hover` is the state that speeds it up.
+@mixin transition(
+  $properties: (
+    background-color,
+    color,
+  ),
+  $hover: "&:hover"
+) {
+  transition-property: $properties;
+  transition-duration: var(--bew-duration-moderate);
+  transition-timing-function: var(--bew-ease-standard);
+
+  #{$hover} {
+    transition-duration: var(--bew-duration-fast);
+  }
+}

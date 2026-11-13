@@ -142,7 +142,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
 
   &:hover,
   &:focus-within {
-    background: var(--bew-fill-2);
+    background: var(--bew-hover-bg);
   }
 }
 

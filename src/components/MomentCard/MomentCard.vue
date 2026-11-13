@@ -694,11 +694,25 @@ function onMediaLeave() {
     emit('mediaLeave', moment)
 }
 
-function activateForwardPreviewLink(event: MouseEvent) {
+function activateMediaPreviewLink(event: MouseEvent) {
   event.stopPropagation()
-  // Reuse the existing link's navigation and visit tracking exactly once.
-  const surface = event.currentTarget as HTMLElement
-  surface.parentElement?.querySelector<HTMLAnchorElement>('.moment-media__link')?.click()
+  if (navigationGuard.prevent(event))
+    return
+  // Reuse the cover link's navigation and visit tracking; preserve modified/middle opens when preview handles pointers.
+  const surface = event.currentTarget
+  const link = surface instanceof HTMLElement
+    ? surface.parentElement?.querySelector<HTMLAnchorElement>('.moment-media__link')
+    : null
+  if (!link)
+    return
+  if (event.button === 1 || hasNavigationModifier(event)) {
+    if (link.href)
+      window.open(link.href, '_blank', 'noopener,noreferrer')
+    return
+  }
+  if (event.button !== 0)
+    return
+  link.click()
 }
 
 // The quoted cover opens the video, or the live room through its link; never
@@ -830,6 +844,7 @@ onBeforeUnmount(() => {
           @video="handlePreviewVideo"
           @interaction-change="previewInteracting = $event"
           @leave="onMediaLeave"
+          @activate="activateMediaPreviewLink"
         />
       </MomentMediaStage>
       <header class="moment-card__header">
@@ -1004,7 +1019,7 @@ onBeforeUnmount(() => {
                   @video="handlePreviewVideo"
                   @interaction-change="previewInteracting = $event"
                   @leave="onMediaLeave"
-                  @activate="activateForwardPreviewLink"
+                  @activate="activateMediaPreviewLink"
                 />
               </MomentMediaStage>
               <MomentMediaStage
@@ -1266,6 +1281,7 @@ onBeforeUnmount(() => {
 <style lang="scss" scoped>
 @use "../../styles/truncateFade";
 @use "../../styles/contentCard";
+@use "../../styles/hoverState";
 @use "../../styles/breakpoints";
 @use "../../styles/momentDisclosure";
 @use "../../styles/imageTone" as *;
@@ -1427,7 +1443,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: var(--bew-space-3);
   color: var(--bew-text-2);
-  background: var(--bew-theme-surface);
+  background: var(--bew-selected-bg);
 }
 
 .moment-card__text-cover--video {
@@ -1472,8 +1488,8 @@ onBeforeUnmount(() => {
   align-self: flex-start;
   padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-interactive-radius);
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
   line-height: var(--bew-line-height-control);
 }
 
@@ -1572,13 +1588,11 @@ onBeforeUnmount(() => {
   line-height: var(--bew-line-height-control);
   text-decoration: none;
   white-space: nowrap;
-  transition:
-    color var(--bew-duration-normal) var(--bew-ease-standard),
-    background-color var(--bew-duration-normal) var(--bew-ease-standard);
+  @include hoverState.transition;
 }
 
 .moment-card__additional-action:hover {
-  background: var(--bew-theme-surface);
+  background: var(--bew-selected-bg);
 }
 
 .moment-card__additional-action.is-reserved {
@@ -1593,7 +1607,7 @@ onBeforeUnmount(() => {
 
 .moment-card__additional-action:disabled {
   cursor: wait;
-  opacity: 0.65;
+  opacity: var(--bew-disabled-opacity);
 }
 
 .moment-card__avatar {
@@ -1618,14 +1632,11 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font: inherit;
   white-space: nowrap;
-  transition:
-    color 0.16s ease,
-    background-color 0.16s ease,
-    transform 0.16s ease;
+  @include hoverState.transition((color, background-color, transform));
 }
 
 .moment-card__likes:active {
-  transform: scale(0.94);
+  transform: scale(var(--bew-item-press-scale));
 }
 
 .moment-card__likes.is-liked {
@@ -1634,7 +1645,7 @@ onBeforeUnmount(() => {
 
 .moment-card__likes:disabled {
   cursor: wait;
-  opacity: 0.65;
+  opacity: var(--bew-disabled-opacity);
 }
 
 .moment-card__likes.is-unavailable {
@@ -1777,14 +1788,12 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font: inherit;
   font-size: var(--bew-icon-size-md);
-  transition:
-    color var(--bew-duration-normal) var(--bew-ease-standard),
-    background-color var(--bew-duration-normal) var(--bew-ease-standard);
+  @include hoverState.transition;
 }
 
 .moment-card__more-btn:hover {
   color: var(--bew-text-1);
-  background: var(--bew-fill-2);
+  background: var(--bew-hover-bg);
 }
 
 .moment-card__more-btn.is-open {
@@ -1937,7 +1946,6 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__more,
-.moment-card__reserve-mark,
 .moment-card__media-meta--live,
 .moment-card__additional,
 .moment-card__additional img,
@@ -2096,9 +2104,7 @@ onBeforeUnmount(() => {
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
   text-align: left;
-  transition:
-    color var(--bew-duration-normal) var(--bew-ease-standard),
-    background-color var(--bew-duration-normal) var(--bew-ease-standard);
+  @include hoverState.transition;
 }
 
 .moment-card__hot-comment:hover {
@@ -2107,13 +2113,13 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__hot-comment.is-active {
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 
 .moment-card__hot-comment:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: var(--bew-disabled-opacity);
 }
 
 .moment-card__hot-comment-label {
@@ -2163,9 +2169,7 @@ onBeforeUnmount(() => {
   font: inherit;
   text-decoration: none;
   cursor: pointer;
-  transition:
-    color 0.16s ease,
-    background-color 0.16s ease;
+  @include hoverState.transition;
 }
 
 .moment-card__footer-stat {
@@ -2173,7 +2177,7 @@ onBeforeUnmount(() => {
 }
 
 // States are translucent washes of the card's own foreground, so they darken a
-// light card and lighten a dark or image-toned one (`--bew-theme-surface` is
+// light card and lighten a dark or image-toned one (`--bew-selected-bg` is
 // resolved once on the root as an opaque grey and ignores the card's tone).
 // Hover, open and pressed step up in strength; the text lifts to text-1.
 .moment-card__footer > a:hover,
@@ -2194,7 +2198,7 @@ onBeforeUnmount(() => {
 
 .moment-card__footer > button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: var(--bew-disabled-opacity);
 }
 
 .moment-card__footer .moment-card__likes:active {
@@ -2203,7 +2207,7 @@ onBeforeUnmount(() => {
 
 .moment-card__footer .moment-card__likes:disabled {
   cursor: wait;
-  opacity: 0.65;
+  opacity: var(--bew-disabled-opacity);
 }
 
 .moment-card__comments,

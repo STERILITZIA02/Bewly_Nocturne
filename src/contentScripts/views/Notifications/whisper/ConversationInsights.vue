@@ -338,10 +338,10 @@ const privateShare = computed(() => {
   corner-shape: var(--bew-corner-shape);
   text-align: start;
   cursor: pointer;
-  transition: background-color 180ms ease;
+  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
 
   &:hover {
-    background: var(--bew-fill-1);
+    background: var(--bew-hover-bg);
   }
   &:active {
     background: var(--bew-fill-2);

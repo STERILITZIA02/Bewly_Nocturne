@@ -16,7 +16,7 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     const item = { page: AppPage.Home, visible: true, icon: '', dockIcon: '', i18nKey: 'Home' }
     const items = [item, ...[AppPage.Notifications, AppPage.Moments, AppPage.WatchLater].map(page => ({ ...item, page, i18nKey: page }))]
     const topBarStore = Vue.reactive({ isLogin: true, unReadMessageCount: 120, newMomentsCount: 3, watchLaterCount: 12 })
-    const settings = Vue.ref({ dockPosition: 'bottom', dockCollapseMode: 'button', dockItemsConfig: [item], pageMode: 'bewly', useSearchPageModeOnHomePage: true, showBewlyOrBiliPageSwitcher: true, showDockItemNames: true, showDockBadges: true, disableFrostedGlass: false, frostedGlassBlurIntensity: 20 })
+    const settings = Vue.ref({ dockPosition: 'bottom', dockCollapseMode: 'button', dockItemsConfig: [item], pageMode: 'bewly', useSearchPageModeOnHomePage: true, showBewlyOrBiliPageSwitcher: true, showDockItemNames: true, dockBadgeMode: 'number', disableFrostedGlass: false, frostedGlassBlurIntensity: 20 })
     const passthrough = { setup: (_props, { slots }) => () => Vue.h('div', slots.default?.()) }
     settings.value.dockItemsConfig = items
     const Badge = await compileComponent('../src/components/CountBadge.vue')
@@ -78,10 +78,15 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     topBarStore.newMomentsCount = Number.NaN
     await flush()
     assert.deepEqual([...host.querySelectorAll('.dock-count-badge')].map(badge => badge.textContent), ['12'])
-    settings.value.showDockBadges = false
+    settings.value.dockBadgeMode = 'dot'
     await flush()
-    assert.equal(host.querySelectorAll('.dock-count-badge').length, 0, 'badges can be turned off')
-    settings.value.showDockBadges = true
+    assert.equal(host.querySelectorAll('.dock-count-badge').length, 0, 'dot mode hides count badges')
+    assert.equal(host.querySelectorAll('.dock-dot-badge').length, 1, 'dot mode shows dot badge for remaining non-zero count')
+    assert.equal(host.querySelector('.dock-dot-badge').closest('button').getAttribute('aria-label'), 'dock.pending_videos:12')
+    settings.value.dockBadgeMode = 'none'
+    await flush()
+    assert.equal(host.querySelectorAll('.dock-count-badge, .dock-dot-badge').length, 0, 'badges can be turned off')
+    settings.value.dockBadgeMode = 'number'
     settings.value.showDockItemNames = false
     await flush()
     assert.equal(host.querySelectorAll('.dock-tab__label').length, 0, 'names can be hidden')

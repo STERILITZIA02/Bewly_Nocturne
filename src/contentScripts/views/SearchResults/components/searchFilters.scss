@@ -1,3 +1,5 @@
+@use "../../../../styles/hoverState";
+
 .bew-search-filters {
   display: flex;
   flex-direction: column;
@@ -54,11 +56,11 @@
   line-height: var(--bew-line-height-control);
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
+  @include hoverState.transition;
 
   &:hover {
     color: var(--bew-text-1);
-    background: var(--bew-fill-1);
+    background: var(--bew-hover-bg);
   }
 }
 
